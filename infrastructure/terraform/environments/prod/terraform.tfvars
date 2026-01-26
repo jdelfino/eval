@@ -17,18 +17,16 @@ region       = "us-east-2"
 # -----------------------------------------------------------------------------
 
 vpc_cidr           = "10.1.0.0/16"
-availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"]
+availability_zones = ["us-east-2a", "us-east-2b"]
 
 private_subnet_cidrs = [
   "10.1.1.0/24",
-  "10.1.2.0/24",
-  "10.1.3.0/24"
+  "10.1.2.0/24"
 ]
 
 public_subnet_cidrs = [
   "10.1.101.0/24",
-  "10.1.102.0/24",
-  "10.1.103.0/24"
+  "10.1.102.0/24"
 ]
 
 # -----------------------------------------------------------------------------
@@ -39,20 +37,20 @@ eks_cluster_version = "1.28"
 
 # -----------------------------------------------------------------------------
 # RDS Configuration
-# Production uses larger instance sizes for capacity.
+# Start small, scale up when needed. Instance resize is quick (~30s downtime).
 # -----------------------------------------------------------------------------
 
-rds_instance_class    = "db.r6g.large"
-rds_allocated_storage = 100
+rds_instance_class    = "db.t3.small"
+rds_allocated_storage = 20
 database_name         = "eval"
 
 # -----------------------------------------------------------------------------
 # Redis Configuration
-# Production uses larger nodes and multi-node cluster.
+# Start small, scale up when needed. Node resize is quick.
 # -----------------------------------------------------------------------------
 
-redis_node_type       = "cache.r6g.large"
-redis_num_cache_nodes = 2
+redis_node_type       = "cache.t3.micro"
+redis_num_cache_nodes = 1
 
 # -----------------------------------------------------------------------------
 # Cognito Configuration
