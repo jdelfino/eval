@@ -3,6 +3,7 @@
   "image": "mcr.microsoft.com/devcontainers/base:trixie",
 
   "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/node:1": { "version": "22", "installYarnUsingApt": false },
     "ghcr.io/devcontainers/features/go:1": { "version": "1.22" },
     "ghcr.io/devcontainers/features/github-cli:1": {},
