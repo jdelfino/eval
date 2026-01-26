@@ -5,8 +5,16 @@ deps-up:
 	docker-compose up -d
 
 wait-deps:
+	@echo "Waiting for postgres..."
 	@until pg_isready -h localhost -p 5432 -q; do sleep 0.5; done
+	@echo "Postgres is ready"
+	@echo "Waiting for redis..."
 	@until redis-cli -h localhost ping > /dev/null 2>&1; do sleep 0.5; done
+	@echo "Redis is ready"
+	@echo "Waiting for cognito-local..."
+	@until curl -sf http://localhost:9229 > /dev/null 2>&1; do sleep 0.5; done
+	@echo "Cognito-local is ready"
+	@echo "All dependencies are ready"
 
 seed:
 	psql "postgresql://app:localdev@localhost:5432/app" -f scripts/seed.sql
@@ -16,3 +24,9 @@ reset-db:
 	docker-compose up -d postgres
 	@until pg_isready -h localhost -p 5432 -q; do sleep 0.5; done
 	$(MAKE) seed
+
+status:
+	@docker-compose ps
+	@echo ""
+	@echo "Service health:"
+	@docker-compose ps --format json | jq -r '.[] | "\(.Name): \(.Health // "N/A")"'
