@@ -10,7 +10,7 @@
 environment  = "prod"
 project_name = "eval"
 project_id   = "eval-prod-485520"
-region       = "us-east-1"
+region       = "us-east1"
 
 # -----------------------------------------------------------------------------
 # VPC Configuration

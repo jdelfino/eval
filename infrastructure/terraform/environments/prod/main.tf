@@ -21,8 +21,10 @@ provider "kubernetes" {
   cluster_ca_certificate = base64decode(module.gke.ca_certificate)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "gcloud"
-    args        = ["container", "clusters", "get-credentials", module.gke.cluster_name, "--region", var.region, "--project", var.project_id]
+    command     = "gke-gcloud-auth-plugin"
+    env = {
+      USE_GKE_GCLOUD_AUTH_PLUGIN = "True"
+    }
   }
 }
 
