@@ -72,7 +72,7 @@ cloudsql_deletion_protection = true
 # -----------------------------------------------------------------------------
 
 authorized_domains = [
-  "eval.example.com",
+  "eval.delquillan.com",
   "localhost"
 ]
 
