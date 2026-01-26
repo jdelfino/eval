@@ -1,0 +1,22 @@
+{
+  "name": "eval",
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22", "installYarnUsingApt": false },
+    "ghcr.io/devcontainers/features/go:1": { "version": "1.22" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "initializeCommand": "./.devcontainer/init-1password.sh",
+  "onCreateCommand": "./.devcontainer/install-1password-cli.sh && curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash && curl -fsSL https://claude.ai/install.sh | bash",
+  "postCreateCommand": "./.devcontainer/setup.sh",
+  "postStartCommand": "./.devcontainer/setup-secrets.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "planet57.vscode-beads"
+      ]
+    }
+  }
+}

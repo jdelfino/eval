@@ -1,0 +1,12 @@
+# Beads Configuration File
+# This file configures default behavior for all bd commands in this repository
+# All settings can also be set via environment variables (BD_* prefix)
+# or overridden with command-line flags
+
+# Issue prefix for this repository (used by bd init)
+# If not set, bd init will auto-detect from directory name
+# issue-prefix: ""
+
+# Git branch for beads commits (bd sync will commit to this branch)
+# IMPORTANT: Set this for team projects so all clones use the same sync branch.
+sync-branch: "beads-sync"

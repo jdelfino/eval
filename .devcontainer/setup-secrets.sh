@@ -1,0 +1,26 @@
+#!/bin/bash
+# setup-secrets.sh - Load secrets from 1Password into .env.local
+# Runs via postStartCommand (every container start)
+#
+# Add 1Password references to .env.1password, then this script will inject them.
+set -e
+
+if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+    echo "Note: OP_SERVICE_ACCOUNT_TOKEN not set, skipping secrets injection"
+    exit 0
+fi
+
+export OP_VAULT="eval-dev"
+
+if [ -f ".env.1password" ] && [ -s ".env.1password" ]; then
+    echo "Loading secrets from 1Password..."
+    envsubst < .env.1password | op inject -o .env.local
+    echo "Secrets loaded into .env.local"
+fi
+
+echo ""
+echo "========================================"
+echo "  ✅ eval is ready!"
+echo "  Run: devpod ssh eval"
+echo "========================================"
+echo ""
