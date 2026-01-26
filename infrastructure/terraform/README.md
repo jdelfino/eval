@@ -1,36 +1,22 @@
 # Terraform Infrastructure
 
-This directory contains the Terraform configuration for the eval platform infrastructure.
+This directory contains the Terraform configuration for the eval platform infrastructure on Google Cloud Platform.
 
 ## Directory Structure
 
 ```
 infrastructure/terraform/
-├── bootstrap/                    # One-time state backend setup
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── versions.tf
-│   └── README.md
 ├── modules/                      # Reusable modules (no env-specific values)
-│   ├── vpc/
-│   ├── eks/
-│   ├── rds/
-│   ├── cognito/
-│   ├── ses/
-│   └── redis/
+│   ├── vpc/                      # VPC with subnets for GKE and Cloud SQL
+│   ├── gke/                      # GKE Autopilot cluster
+│   ├── cloudsql/                 # Cloud SQL PostgreSQL
+│   ├── identity-platform/        # Identity Platform (authentication)
+│   └── nat/                      # NAT VM for outbound internet access
 └── environments/                 # Environment-specific instantiation
-    ├── staging/
-    │   ├── main.tf               # Instantiates modules
-    │   ├── backend.tf            # S3 state with staging/ prefix
-    │   ├── variables.tf          # Variable definitions
-    │   ├── terraform.tfvars      # Staging-specific values
-    │   ├── outputs.tf
-    │   └── versions.tf
     └── prod/
-        ├── main.tf
-        ├── backend.tf            # S3 state with prod/ prefix
-        ├── variables.tf
+        ├── main.tf               # Instantiates modules
+        ├── backend.tf            # GCS state backend
+        ├── variables.tf          # Variable definitions
         ├── terraform.tfvars      # Prod-specific values
         ├── outputs.tf
         └── versions.tf
@@ -38,19 +24,18 @@ infrastructure/terraform/
 
 ## Environment Strategy
 
-| Environment | Purpose | AWS Resources |
+| Environment | Purpose | GCP Resources |
 |-------------|---------|---------------|
 | Local | Fast dev, unit tests | None (Docker Compose) |
-| Staging | CI/CD, E2E tests, integration | Full AWS stack |
-| Prod | Real users | Full AWS stack (isolated) |
+| Prod | Real users | Full GCP stack |
 
 ## Module Design Principles
 
 1. **Modules are environment-agnostic** - no hardcoded values
 2. **Required variables have no defaults** - forces explicit config per env
 3. **Environment configs provide all values** - via tfvars
-4. **State isolation** - separate S3 prefixes per environment
-5. **Same module, different tfvars** - staging and prod use identical module code
+4. **State isolation** - GCS bucket with separate prefixes per environment
+5. **Same module, different tfvars** - environments use identical module code
 
 ## Common Variables
 
@@ -60,24 +45,31 @@ Every module accepts these standard variables:
 |----------|-------------|
 | `environment` | Environment name ("staging" or "prod") |
 | `project_name` | Project name for resource naming/tagging |
-| `region` | AWS region |
+| `project_id` | GCP project ID |
+| `region` | GCP region |
 
 ## Getting Started
 
-### 1. Bootstrap State Backend
+### 1. Set Up GCP Project
 
-First, create the S3 bucket and DynamoDB table for remote state:
+Ensure you have:
+- A GCP project with billing enabled
+- Required APIs enabled: compute, container, sqladmin, identitytoolkit, iam, storage
+- Application Default Credentials configured: `gcloud auth application-default login`
+
+### 2. Create State Bucket
+
+Create a GCS bucket for Terraform state:
 
 ```bash
-cd infrastructure/terraform/bootstrap
-terraform init
-terraform apply -var="project_name=eval" -var="region=us-east-2"
+gsutil mb -l us-east1 gs://<project-id>-terraform-state
+gsutil versioning set on gs://<project-id>-terraform-state
 ```
 
-### 2. Deploy an Environment
+### 3. Deploy an Environment
 
 ```bash
-cd infrastructure/terraform/environments/staging
+cd infrastructure/terraform/environments/prod
 terraform init
 terraform plan
 terraform apply
@@ -90,8 +82,8 @@ Infrastructure modules export outputs that applications need (connection strings
 ```
 ┌─────────────────┐     ┌─────────────────────┐     ┌─────────────┐
 │ Module outputs  │ ──▶ │ Environment TF      │ ──▶ │ K8s Pod     │
-│ (cognito, rds)  │     │ creates ConfigMap/  │     │ gets env    │
-│                 │     │ Secret              │     │ vars        │
+│ (identity,      │     │ creates ConfigMap/  │     │ gets env    │
+│  cloudsql)      │     │ Secret              │     │ vars        │
 └─────────────────┘     └─────────────────────┘     └─────────────┘
 ```
 
@@ -100,24 +92,26 @@ Infrastructure modules export outputs that applications need (connection strings
 Environment Terraform creates Kubernetes resources that expose module outputs:
 
 ```hcl
-# environments/staging/main.tf
+# environments/prod/main.tf
 resource "kubernetes_config_map" "app_config" {
   metadata { name = "app-config" }
   data = {
-    COGNITO_USER_POOL_ID = module.cognito.user_pool_id
-    COGNITO_CLIENT_ID    = module.cognito.client_id
-    COGNITO_DOMAIN       = module.cognito.domain_url
-    AWS_REGION           = var.region
-    DATABASE_HOST        = module.rds.endpoint
-    REDIS_HOST           = module.redis.endpoint
+    GCP_PROJECT_ID                = var.project_id
+    GCP_REGION                    = var.region
+    IDENTITY_PLATFORM_API_KEY     = module.identity_platform.api_key
+    IDENTITY_PLATFORM_AUTH_DOMAIN = module.identity_platform.auth_domain
+    DATABASE_HOST                 = module.cloudsql.database_host
+    DATABASE_PORT                 = module.cloudsql.database_port
+    DATABASE_NAME                 = module.cloudsql.database_name
   }
 }
 
 resource "kubernetes_secret" "app_secrets" {
   metadata { name = "app-secrets" }
   data = {
-    COGNITO_CLIENT_SECRET = module.cognito.client_secret
-    DATABASE_PASSWORD     = module.rds.password
+    OAUTH_CLIENT_SECRET = module.identity_platform.oauth_client_secret
+    DATABASE_PASSWORD   = module.cloudsql.database_password
+    DATABASE_URL        = module.cloudsql.connection_string_full
   }
 }
 ```
@@ -141,16 +135,16 @@ spec:
                 name: app-secrets
 ```
 
-### Module Output Example: Cognito
+### Module Output Example: Identity Platform
 
 Modules export all values needed by applications:
 
 ```hcl
-# modules/cognito/outputs.tf
-output "user_pool_id" { value = aws_cognito_user_pool.main.id }
-output "client_id" { value = aws_cognito_user_pool_client.main.id }
-output "client_secret" { value = aws_cognito_user_pool_client.main.client_secret sensitive = true }
-output "domain_url" { value = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.region}.amazoncognito.com" }
+# modules/identity-platform/outputs.tf
+output "api_key" { value = google_identity_platform_config.main.client[0].api_key sensitive = true }
+output "auth_domain" { value = "${var.project_id}.firebaseapp.com" }
+output "oauth_client_id" { value = var.oauth_client_id }
+output "oauth_client_secret" { value = var.oauth_client_secret sensitive = true }
 ```
 
 ## Local Development
@@ -159,7 +153,7 @@ For local development, the same environment variables are provided via `.env` fi
 
 Application code reads environment variables the same way in all environments - only the source differs:
 - **Local**: `.env` file (loaded by Docker Compose or dotenv)
-- **Staging/Prod**: Kubernetes ConfigMap and Secret
+- **Prod**: Kubernetes ConfigMap and Secret
 
 This ensures consistent behavior across environments.
 
@@ -167,26 +161,24 @@ This ensures consistent behavior across environments.
 
 | Environment | State Location |
 |-------------|----------------|
-| Bootstrap | Local (terraform.tfstate) |
-| Staging | s3://eval-terraform-state/staging/terraform.tfstate |
-| Prod | s3://eval-terraform-state/prod/terraform.tfstate |
+| Prod | gs://eval-prod-485520-terraform-state/terraform/prod |
 
-State locking uses DynamoDB to prevent concurrent modifications.
+State locking is built into the GCS backend.
 
 ## Adding New Modules
 
 1. Create module directory under `modules/`
 2. Define `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf`
-3. Include common variables (`environment`, `project_name`, `region`)
+3. Include common variables (`environment`, `project_name`, `project_id`, `region`)
 4. Export all values needed by applications
-5. Instantiate in both `environments/staging/main.tf` and `environments/prod/main.tf`
+5. Instantiate in `environments/prod/main.tf`
 6. Add module outputs to ConfigMap/Secret resources
 7. Update `.env.example` with local development equivalents
 
 ## Security Notes
 
 - Secrets are managed via Kubernetes Secrets (created by Terraform)
-- RDS passwords are generated and stored in Terraform state (encrypted)
-- Cognito client secrets are sensitive outputs
+- Cloud SQL passwords are generated and stored in Terraform state (encrypted)
+- OAuth client secrets are sensitive outputs
 - Never commit `.tfvars` files with real secrets
-- Use AWS Secrets Manager for additional secret management if needed
+- Use GCP Secret Manager for additional secret management if needed
