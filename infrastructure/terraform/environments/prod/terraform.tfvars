@@ -63,7 +63,7 @@ gke_master_authorized_networks = [
 database_name                = "eval"
 cloudsql_tier                = "db-g1-small"
 cloudsql_disk_size           = 20
-cloudsql_availability_type   = "REGIONAL"
+cloudsql_availability_type   = "ZONAL"  # Use REGIONAL for HA when needed
 cloudsql_deletion_protection = true
 
 # -----------------------------------------------------------------------------
