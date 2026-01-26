@@ -57,6 +57,8 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+secrets.tfvars
+*.secret.tfvars
 
 # Misc
 *.bak
