@@ -2,48 +2,109 @@
 
 ## Overview
 
-Greenfield build on AWS with Go backend, EKS orchestration, and managed services. No data or user migration from existing systems - clean cutover when ready.
+Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and managed services. No data or user migration from existing systems - clean cutover when ready.
 
 ```
-                    +-----------------------------------------------------------+
-                    |                          AWS                               |
-                    |                                                            |
-+------------+      |  +---------+    +------------------------------------+     |
-| CloudFront |------+->|   ALB   |--->|           EKS/Fargate              |     |
-+------------+      |  +---------+    |  +------------+  +--------------+  |     |
-                    |        |        |  | Go API     |  | Centrifugo   |  |     |
-                    |        |        |  | (1-N pods) |  | (2 replicas) |  |     |
-                    |        |        |  +-----+------+  +--------------+  |     |
-                    |        |        |        |                           |     |
-                    |        |        |  +-----v-----------------------+   |     |
-                    |        |        |  | Executor Service (0-N pods) |   |     |
-                    |        |        |  | KEDA auto-scales to zero    |   |     |
-                    |        |        |  | nsjail sandbox per execution|   |     |
-                    |        |        |  +-----------------------------+   |     |
-                    |        |        +------------------------------------+     |
-                    |        |                    |                              |
-                    |  +-----v-----+    +---------+---------+                    |
-                    |  |  Cognito  |    |                   |                    |
-                    |  |  + SAML   |    v                   v                    |
-                    |  +-----------+ +----------+     +----------+               |
-                    |                |ElastiCache|    |   RDS    |               |
-                    |                |  (Redis)  |    |(Postgres)|               |
-                    |                +----------+     +----------+               |
-                    +-----------------------------------------------------------+
+                           +----------------------------------------------------------+
+                           |                     GCP (us-east1)                        |
+                           |                 Project: eval-prod-485520                 |
+                           |                                                           |
++----------------+         |  +------------------+                                     |
+|    Internet    |---------+->| Cloud Load       |                                     |
++----------------+         |  | Balancing        |                                     |
+                           |  +--------+---------+                                     |
+                           |           |                                               |
+                           |           v                                               |
+                           |  +------------------------------------------------+      |
+                           |  |              GKE Autopilot Cluster              |      |
+                           |  |              (Private Subnet)                   |      |
+                           |  |                                                 |      |
+                           |  |  +------------+  +--------------+               |      |
+                           |  |  | Go API     |  | Centrifugo   |               |      |
+                           |  |  | (1-N pods) |  | (2 replicas) |               |      |
+                           |  |  +-----+------+  +--------------+               |      |
+                           |  |        |                                        |      |
+                           |  |  +-----v-----------------------------+          |      |
+                           |  |  | Executor Service (0-N pods)       |          |      |
+                           |  |  | KEDA auto-scales to zero          |          |      |
+                           |  |  | nsjail sandbox per execution      |          |      |
+                           |  |  +-----------------------------------+          |      |
+                           |  +------------------------------------------------+      |
+                           |           |                    |                          |
+                           |           |                    |                          |
+                           |  +--------v--------+  +--------v----------+               |
+                           |  | Identity        |  | Cloud SQL         |               |
+                           |  | Platform        |  | PostgreSQL        |               |
+                           |  | (Auth)          |  | (Private Service  |               |
+                           |  +-----------------+  |  Access)          |               |
+                           |                       +-------------------+               |
+                           |                                                           |
+                           |  +-----------------+  +-------------------+               |
+                           |  | NAT VM          |  | GCS               |               |
+                           |  | (Public Subnet) |  | (Terraform State) |               |
+                           |  | e2-micro        |  +-------------------+               |
+                           |  +-----------------+                                      |
+                           +----------------------------------------------------------+
 ```
+
+## Infrastructure Cost Estimate (~$77/month)
+
+| Component | GCP Service | Monthly Cost |
+|-----------|-------------|--------------|
+| Kubernetes | GKE Autopilot | $0 control plane + ~$35 pods |
+| Database | Cloud SQL (db-g1-small) | ~$15 |
+| Authentication | Identity Platform | Free tier |
+| NAT Gateway | NAT VM (e2-micro) | ~$6 |
+| Load Balancer | Cloud Load Balancing | ~$20 |
+| State Storage | Cloud Storage (GCS) | < $1 |
+| **Total** | | **~$77** |
 
 ## Technology Choices
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | Backend | Go | Separate from Next.js frontend, good k8s tooling |
-| Orchestration | EKS + Fargate | Managed k8s, no node management |
-| Database | RDS PostgreSQL | With RLS via session variables |
-| Auth | Cognito + SAML | Enterprise IdP federation |
+| Orchestration | GKE Autopilot | Fully managed k8s, no node management, automatic scaling |
+| Database | Cloud SQL PostgreSQL | With RLS via session variables, Private Service Access |
+| Auth | Identity Platform | Enterprise IdP federation, SAML support |
 | Real-time | Centrifugo | Managed WS server, Go API just publishes |
 | Code Execution | Executor service + KEDA | Auto-scales 0-N, nsjail sandbox |
-| Cache/Pub-Sub | ElastiCache Redis | Stateless message routing |
+| Cache/Pub-Sub | Memorystore Redis | Stateless message routing |
 | IaC | Terraform | Industry standard |
+
+## GCP-Specific Patterns
+
+### Private GKE with NAT VM
+
+GKE Autopilot runs in a private subnet with no public IPs. Outbound internet access (for pulling container images, external APIs) routes through a NAT VM:
+
+- **Cost optimization**: NAT VM (e2-micro) costs ~$6/mo vs Cloud NAT ~$30+/mo
+- **Trade-off**: Single point of failure, but acceptable for non-critical outbound traffic
+- **Implementation**: NAT VM in public subnet with IP forwarding enabled
+
+### Cloud SQL Private Service Access
+
+Cloud SQL PostgreSQL connects via Private Service Access (PSA):
+
+- No public IP on database
+- VPC peering for private connectivity
+- Automatic DNS resolution within VPC
+
+### Identity Platform Authentication
+
+Identity Platform provides enterprise-grade auth:
+
+- SAML federation for enterprise IdPs
+- Built-in user management
+- JWT tokens for stateless auth
+- Free tier covers typical usage
+
+### GKE Autopilot Benefits
+
+- Zero node management
+- Pay only for pod resources
+- Automatic security hardening
+- Built-in workload identity
 
 ## Core Library
 
@@ -78,7 +139,7 @@ go-backend/
 ├── cmd/server/           # main.go, startup
 ├── internal/
 │   ├── config/           # Environment, feature flags
-│   ├── auth/             # Cognito JWT validation, RBAC
+│   ├── auth/             # Identity Platform JWT validation, RBAC
 │   ├── middleware/       # Logging, rate limit, RLS context
 │   ├── db/               # Connection pool, transactions
 │   ├── repository/       # Data access layer
@@ -144,7 +205,7 @@ spec:
 
 ### Database Schema
 
-RDS PostgreSQL with row-level security via session variables.
+Cloud SQL PostgreSQL with row-level security via session variables.
 
 ```sql
 -- RLS using session variables (not Supabase auth.uid())
@@ -158,12 +219,13 @@ All state must be externalized:
 
 | Data Type | Storage |
 |-----------|---------|
-| Persistent data | RDS PostgreSQL |
-| User sessions | Stateless JWT (Cognito) |
+| Persistent data | Cloud SQL PostgreSQL |
+| User sessions | Stateless JWT (Identity Platform) |
 | WebSocket routing | Centrifugo (Redis-backed) |
-| Rate limits | Redis |
+| Rate limits | Memorystore Redis |
 | Code execution | Stateless service (nsjail per-execution) |
-| Caching | Redis |
+| Caching | Memorystore Redis |
+| Terraform state | Cloud Storage (GCS) |
 
 **Forbidden:**
 - In-memory caches
@@ -185,9 +247,27 @@ All state must be externalized:
 
 ~55 total endpoints.
 
+## Network Architecture
+
+### VPC Layout
+
+| Subnet | CIDR | Purpose |
+|--------|------|---------|
+| GKE | 10.0.0.0/20 | GKE Autopilot pods and services |
+| Cloud SQL | 10.0.16.0/24 | Private Service Access for Cloud SQL |
+| Public | 10.0.32.0/24 | NAT VM, bastion (if needed) |
+
+### Firewall Rules
+
+- Ingress: Cloud Load Balancing to GKE (HTTPS)
+- Egress: GKE to Cloud SQL (PostgreSQL 5432)
+- Egress: GKE to NAT VM for internet access
+- Internal: All VPC traffic allowed
+
 ## Open Decisions
 
 | Decision | Options |
 |----------|---------|
 | Go HTTP framework | Chi, Echo, or Gin |
 | Domain/DNS | Same domain or new |
+| Redis deployment | Memorystore vs self-managed on GKE |

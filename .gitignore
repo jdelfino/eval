@@ -45,6 +45,21 @@ htmlcov/
 .pytest_cache/
 .nyc_output/
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+secrets.tfvars
+*.secret.tfvars
+
 # Misc
 *.bak
 *.tmp

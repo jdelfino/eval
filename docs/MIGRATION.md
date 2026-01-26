@@ -7,7 +7,7 @@ Build the new architecture from scratch alongside any existing app. No data migr
 | Aspect | Implication |
 |--------|-------------|
 | No data migration | Skip schema/data sync complexity |
-| No user migration | Fresh Cognito user pool, no password reset flow |
+| No user migration | Fresh Identity Platform config, no password reset flow |
 | Parallel development | Old app untouched until cutover |
 | Incremental build | Build in any order that makes sense |
 
@@ -15,31 +15,29 @@ Build the new architecture from scratch alongside any existing app. No data migr
 
 ### Phase 1: Infrastructure Foundation
 
-Build AWS infrastructure first - everything else depends on it.
+Build GCP infrastructure first - everything else depends on it.
 
 **Terraform modules:**
-- networking/ - VPC, subnets, security groups
-- eks/ - EKS cluster, Fargate profiles, KEDA addon
-- rds/ - PostgreSQL instance
-- elasticache/ - Redis cluster
-- cognito/ - User pool, SAML providers
-- ecr/ - Container registry
-- alb/ - Load balancer, target groups
+- vpc/ - VPC, subnets, firewall rules
+- gke/ - GKE Autopilot cluster
+- cloudsql/ - Cloud SQL PostgreSQL
+- identity-platform/ - Authentication
+- nat/ - NAT VM for outbound internet
 
-**Deliverable:** Working EKS cluster with all supporting services.
+**Deliverable:** Working GKE cluster with all supporting services.
 
 ### Phase 2: Auth + Database Schema
 
 Can work in parallel once infrastructure exists.
 
-**Cognito Setup:**
-- User pool with email/password
-- SAML identity provider configuration
-- App client for Go backend
+**Identity Platform Setup:**
+- Email/password authentication
+- SAML identity provider configuration (via Console)
+- OAuth client for web app
 - JWT validation configuration
 
 **Database Schema:**
-- Apply migrations to fresh RDS
+- Apply migrations to fresh Cloud SQL
 - RLS policies using `current_setting('app.user_id')`
 - No Supabase-specific references
 
@@ -50,11 +48,11 @@ Can work in parallel once infrastructure exists.
 Core application scaffolding.
 
 - Project structure with config, auth, middleware, db layers
-- Cognito JWT validation
+- Identity Platform JWT validation
 - RLS context middleware
 - Health checks and basic observability
 
-**Deliverable:** Skeleton app deployed to EKS, health checks passing.
+**Deliverable:** Skeleton app deployed to GKE, health checks passing.
 
 ### Phase 4: Core API Routes
 
@@ -68,7 +66,7 @@ Build API routes by functional area, ordered by dependency:
 
 ### Phase 5: Real-time (Centrifugo)
 
-Deploy Centrifugo to EKS with Redis backend.
+Deploy Centrifugo to GKE with in-cluster Redis.
 
 - Configure JWT authentication
 - Set up channel patterns
@@ -95,7 +93,7 @@ Deploy executor service with KEDA autoscaling.
 
 Minimal changes to Next.js client:
 
-- Switch auth provider to Cognito SDK
+- Switch auth provider to Firebase Auth SDK (for Identity Platform)
 - Update API client base URL
 - Replace Supabase real-time with centrifuge-js
 - Update WebSocket hooks
@@ -125,8 +123,8 @@ Minimal changes to Next.js client:
 | Removed Complexity | Why |
 |--------------------|-----|
 | Data migration | No existing data to move |
-| User migration | Fresh Cognito pool |
+| User migration | Fresh Identity Platform |
 | Password reset flow | New users register fresh |
 | Dual system operation | Old app untouched |
 | Schema compatibility | Fresh schema design |
-| RLS policy migration | Write RLS fresh for RDS |
+| RLS policy migration | Write RLS fresh for Cloud SQL |
