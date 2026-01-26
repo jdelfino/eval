@@ -10,7 +10,7 @@
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "helm": "none", "minikube": "none" }
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
-  "onCreateCommand": "./.devcontainer/install-1password-cli.sh && curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash && curl -fsSL https://claude.ai/install.sh | bash",
+  "onCreateCommand": "./.devcontainer/install-1password-cli.sh && curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash && curl -fsSL https://claude.ai/install.sh | bash && go install github.com/air-verse/air@latest",
   "postCreateCommand": "./.devcontainer/setup.sh",
   "postStartCommand": "./.devcontainer/setup-secrets.sh",
 
