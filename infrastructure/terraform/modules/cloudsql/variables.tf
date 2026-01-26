@@ -196,10 +196,10 @@ variable "maintenance_window_update_track" {
 # Security Configuration
 # -----------------------------------------------------------------------------
 
-variable "require_ssl" {
-  description = "Require SSL connections to the database"
-  type        = bool
-  default     = true
+variable "ssl_mode" {
+  description = "SSL mode: ALLOW_UNENCRYPTED_AND_ENCRYPTED, ENCRYPTED_ONLY, or TRUSTED_CLIENT_CERTIFICATE_REQUIRED"
+  type        = string
+  default     = "ENCRYPTED_ONLY"
 }
 
 variable "deletion_protection" {
