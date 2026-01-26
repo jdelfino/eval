@@ -17,8 +17,13 @@ variable "project_name" {
   type        = string
 }
 
+variable "project_id" {
+  description = "GCP project ID"
+  type        = string
+}
+
 variable "region" {
-  description = "AWS region for all resources"
+  description = "GCP region for all resources"
   type        = string
 }
 
@@ -26,78 +31,128 @@ variable "region" {
 # VPC Variables
 # -----------------------------------------------------------------------------
 
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
+variable "gke_subnet_cidr" {
+  description = "CIDR block for the GKE nodes subnet"
   type        = string
 }
 
-variable "availability_zones" {
-  description = "List of availability zones to use"
-  type        = list(string)
+variable "gke_pods_cidr" {
+  description = "Secondary CIDR range for GKE pods"
+  type        = string
 }
 
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
+variable "gke_services_cidr" {
+  description = "Secondary CIDR range for GKE services"
+  type        = string
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
+variable "cloudsql_subnet_cidr" {
+  description = "CIDR block for Cloud SQL private services"
+  type        = string
 }
 
-# -----------------------------------------------------------------------------
-# EKS Variables
-# -----------------------------------------------------------------------------
+variable "private_service_access_cidr" {
+  description = "CIDR block for Private Service Access (Cloud SQL VPC peering)"
+  type        = string
+}
 
-variable "eks_cluster_version" {
-  description = "Kubernetes version for the EKS cluster"
+variable "public_subnet_cidr" {
+  description = "CIDR block for the public subnet (NAT, bastion, etc.)"
   type        = string
 }
 
 # -----------------------------------------------------------------------------
-# RDS Variables
+# NAT Variables
 # -----------------------------------------------------------------------------
 
-variable "rds_instance_class" {
-  description = "RDS instance class"
+variable "nat_zone" {
+  description = "GCP zone for the NAT VM instance"
   type        = string
 }
 
-variable "rds_allocated_storage" {
-  description = "Allocated storage for RDS in GB"
-  type        = number
+# -----------------------------------------------------------------------------
+# GKE Variables
+# -----------------------------------------------------------------------------
+
+variable "gke_release_channel" {
+  description = "Release channel for GKE upgrades (RAPID, REGULAR, STABLE)"
+  type        = string
+  default     = "REGULAR"
 }
+
+variable "gke_deletion_protection" {
+  description = "Whether to enable deletion protection on the GKE cluster"
+  type        = bool
+  default     = true
+}
+
+variable "gke_master_ipv4_cidr_block" {
+  description = "The IP range in CIDR notation for the hosted master network"
+  type        = string
+  default     = "172.16.0.0/28"
+}
+
+variable "gke_master_authorized_networks" {
+  description = "List of networks authorized to access the Kubernetes master"
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = []
+}
+
+# -----------------------------------------------------------------------------
+# Cloud SQL Variables
+# -----------------------------------------------------------------------------
 
 variable "database_name" {
   description = "Name of the database to create"
   type        = string
 }
 
-# -----------------------------------------------------------------------------
-# Redis Variables
-# -----------------------------------------------------------------------------
-
-variable "redis_node_type" {
-  description = "ElastiCache Redis node type"
+variable "cloudsql_tier" {
+  description = "Cloud SQL instance tier (machine type)"
   type        = string
+  default     = "db-g1-small"
 }
 
-variable "redis_num_cache_nodes" {
-  description = "Number of cache nodes in the Redis cluster"
+variable "cloudsql_disk_size" {
+  description = "Storage capacity in GB"
   type        = number
+  default     = 10
+}
+
+variable "cloudsql_availability_type" {
+  description = "Availability type: REGIONAL (HA) or ZONAL"
+  type        = string
+  default     = "ZONAL"
+}
+
+variable "cloudsql_deletion_protection" {
+  description = "Prevent accidental deletion of the instance"
+  type        = bool
+  default     = true
 }
 
 # -----------------------------------------------------------------------------
-# Cognito Variables
+# Identity Platform Variables
 # -----------------------------------------------------------------------------
 
-variable "cognito_callback_urls" {
-  description = "Allowed callback URLs for Cognito"
+variable "authorized_domains" {
+  description = "List of domains authorized for OAuth redirects"
   type        = list(string)
+  default     = []
 }
 
-variable "cognito_logout_urls" {
-  description = "Allowed logout URLs for Cognito"
-  type        = list(string)
+variable "oauth_client_id" {
+  description = "OAuth 2.0 client ID (created manually in GCP Console)"
+  type        = string
+  default     = ""
+}
+
+variable "oauth_client_secret" {
+  description = "OAuth 2.0 client secret (created manually in GCP Console)"
+  type        = string
+  default     = ""
+  sensitive   = true
 }

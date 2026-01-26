@@ -1,44 +1,28 @@
 # Production Environment
 #
-# Instantiates reusable modules with production-specific configuration.
+# Instantiates reusable GCP modules with production-specific configuration.
 # All values come from terraform.tfvars - no hardcoded environment values.
 
-terraform {
-  required_version = ">= 1.5.0"
+provider "google" {
+  project = var.project_id
+  region  = var.region
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.23"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
+  default_labels = {
+    project     = var.project_name
+    environment = var.environment
+    managed_by  = "terraform"
   }
 }
 
 # Kubernetes provider configuration
-# Configured after EKS module creates the cluster
+# Configured after GKE module creates the cluster
 provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
+  host                   = "https://${module.gke.endpoint}"
+  cluster_ca_certificate = base64decode(module.gke.ca_certificate)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    command     = "gcloud"
+    args        = ["container", "clusters", "get-credentials", module.gke.cluster_name, "--region", var.region, "--project", var.project_id]
   }
 }
 
@@ -51,71 +35,86 @@ module "vpc" {
 
   environment  = var.environment
   project_name = var.project_name
+  project_id   = var.project_id
   region       = var.region
 
-  vpc_cidr             = var.vpc_cidr
-  availability_zones   = var.availability_zones
-  private_subnet_cidrs = var.private_subnet_cidrs
-  public_subnet_cidrs  = var.public_subnet_cidrs
+  gke_subnet_cidr             = var.gke_subnet_cidr
+  gke_pods_cidr               = var.gke_pods_cidr
+  gke_services_cidr           = var.gke_services_cidr
+  cloudsql_subnet_cidr        = var.cloudsql_subnet_cidr
+  private_service_access_cidr = var.private_service_access_cidr
+  public_subnet_cidr          = var.public_subnet_cidr
 }
 
-module "eks" {
-  source = "../../modules/eks"
+module "nat" {
+  source = "../../modules/nat"
 
   environment  = var.environment
   project_name = var.project_name
+  project_id   = var.project_id
   region       = var.region
+  zone         = var.nat_zone
 
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-
-  cluster_version = var.eks_cluster_version
+  network_id          = module.vpc.vpc_id
+  public_subnet_id    = module.vpc.public_subnet_id
+  private_subnet_cidr = var.gke_subnet_cidr
 }
 
-module "rds" {
-  source = "../../modules/rds"
+module "gke" {
+  source = "../../modules/gke"
 
   environment  = var.environment
   project_name = var.project_name
+  project_id   = var.project_id
   region       = var.region
 
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
+  network             = module.vpc.vpc_name
+  subnetwork          = module.vpc.gke_subnet_name
+  pods_range_name     = module.vpc.gke_pods_range_name
+  services_range_name = module.vpc.gke_services_range_name
 
-  instance_class    = var.rds_instance_class
-  allocated_storage = var.rds_allocated_storage
-  database_name     = var.database_name
+  release_channel            = var.gke_release_channel
+  deletion_protection        = var.gke_deletion_protection
+  master_ipv4_cidr_block     = var.gke_master_ipv4_cidr_block
+  master_authorized_networks = var.gke_master_authorized_networks
 }
 
-module "redis" {
-  source = "../../modules/redis"
+module "cloudsql" {
+  source = "../../modules/cloudsql"
 
   environment  = var.environment
   project_name = var.project_name
+  project_id   = var.project_id
   region       = var.region
 
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_network_id      = module.vpc.vpc_id
+  database_name       = var.database_name
+  tier                = var.cloudsql_tier
+  disk_size           = var.cloudsql_disk_size
+  availability_type   = var.cloudsql_availability_type
+  deletion_protection = var.cloudsql_deletion_protection
 
-  node_type       = var.redis_node_type
-  num_cache_nodes = var.redis_num_cache_nodes
+  # Wait for Private Service Access to be ready
+  depends_on = [module.vpc]
 }
 
-module "cognito" {
-  source = "../../modules/cognito"
+module "identity_platform" {
+  source = "../../modules/identity-platform"
 
   environment  = var.environment
   project_name = var.project_name
+  project_id   = var.project_id
   region       = var.region
 
-  callback_urls = var.cognito_callback_urls
-  logout_urls   = var.cognito_logout_urls
+  authorized_domains  = var.authorized_domains
+  oauth_client_id     = var.oauth_client_id
+  oauth_client_secret = var.oauth_client_secret
 }
 
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------
-# These resources expose infrastructure outputs to applications running in EKS.
+# These resources expose infrastructure outputs to applications running in GKE.
 # Apps read environment variables from ConfigMaps and Secrets.
 
 resource "kubernetes_config_map" "app_config" {
@@ -125,25 +124,25 @@ resource "kubernetes_config_map" "app_config" {
   }
 
   data = {
-    # AWS Configuration
-    AWS_REGION = var.region
+    # GCP Configuration
+    GCP_PROJECT_ID = var.project_id
+    GCP_REGION     = var.region
 
-    # Cognito Configuration
-    COGNITO_USER_POOL_ID = module.cognito.user_pool_id
-    COGNITO_CLIENT_ID    = module.cognito.client_id
-    COGNITO_DOMAIN       = module.cognito.domain_url
+    # Identity Platform Configuration
+    IDENTITY_PLATFORM_API_KEY     = module.identity_platform.api_key
+    IDENTITY_PLATFORM_AUTH_DOMAIN = module.identity_platform.auth_domain
+    OAUTH_CLIENT_ID               = module.identity_platform.oauth_client_id
 
     # Database Configuration (non-secret)
-    DATABASE_HOST = module.rds.endpoint
-    DATABASE_PORT = "5432"
-    DATABASE_NAME = var.database_name
+    DATABASE_HOST = module.cloudsql.database_host
+    DATABASE_PORT = tostring(module.cloudsql.database_port)
+    DATABASE_NAME = module.cloudsql.database_name
 
-    # Redis Configuration
-    REDIS_HOST = module.redis.endpoint
-    REDIS_PORT = "6379"
+    # Cloud SQL Connection Name (for Cloud SQL Proxy)
+    CLOUDSQL_CONNECTION_NAME = module.cloudsql.instance_connection_name
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.gke]
 }
 
 resource "kubernetes_secret" "app_secrets" {
@@ -153,12 +152,13 @@ resource "kubernetes_secret" "app_secrets" {
   }
 
   data = {
-    COGNITO_CLIENT_SECRET = module.cognito.client_secret
-    DATABASE_PASSWORD     = module.rds.password
-    DATABASE_URL          = "postgresql://${module.rds.username}:${module.rds.password}@${module.rds.endpoint}:5432/${var.database_name}"
+    OAUTH_CLIENT_SECRET = module.identity_platform.oauth_client_secret
+    DATABASE_USER       = module.cloudsql.database_user
+    DATABASE_PASSWORD   = module.cloudsql.database_password
+    DATABASE_URL        = module.cloudsql.connection_string_full
   }
 
   type = "Opaque"
 
-  depends_on = [module.eks]
+  depends_on = [module.gke]
 }

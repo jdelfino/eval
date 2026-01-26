@@ -7,67 +7,94 @@
 # -----------------------------------------------------------------------------
 
 output "vpc_id" {
-  description = "ID of the VPC"
+  description = "ID of the VPC network"
   value       = module.vpc.vpc_id
 }
 
-output "private_subnet_ids" {
-  description = "IDs of private subnets"
-  value       = module.vpc.private_subnet_ids
+output "vpc_name" {
+  description = "Name of the VPC network"
+  value       = module.vpc.vpc_name
 }
 
-output "public_subnet_ids" {
-  description = "IDs of public subnets"
-  value       = module.vpc.public_subnet_ids
+output "gke_subnet_id" {
+  description = "ID of the GKE subnet"
+  value       = module.vpc.gke_subnet_id
 }
 
-# -----------------------------------------------------------------------------
-# EKS Outputs
-# -----------------------------------------------------------------------------
-
-output "eks_cluster_name" {
-  description = "Name of the EKS cluster"
-  value       = module.eks.cluster_name
+output "cloudsql_subnet_id" {
+  description = "ID of the Cloud SQL subnet"
+  value       = module.vpc.cloudsql_subnet_id
 }
 
-output "eks_cluster_endpoint" {
-  description = "Endpoint for the EKS cluster"
-  value       = module.eks.cluster_endpoint
+output "public_subnet_id" {
+  description = "ID of the public subnet"
+  value       = module.vpc.public_subnet_id
 }
 
 # -----------------------------------------------------------------------------
-# RDS Outputs
+# NAT Outputs
 # -----------------------------------------------------------------------------
 
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = module.rds.endpoint
+output "nat_external_ip" {
+  description = "External IP address of the NAT VM"
+  value       = module.nat.nat_external_ip
 }
 
 # -----------------------------------------------------------------------------
-# Redis Outputs
+# GKE Outputs
 # -----------------------------------------------------------------------------
 
-output "redis_endpoint" {
-  description = "Redis cluster endpoint"
-  value       = module.redis.endpoint
+output "gke_cluster_name" {
+  description = "Name of the GKE cluster"
+  value       = module.gke.cluster_name
+}
+
+output "gke_cluster_endpoint" {
+  description = "Endpoint for the GKE cluster"
+  value       = module.gke.endpoint
+  sensitive   = true
+}
+
+output "gke_get_credentials_command" {
+  description = "gcloud command to get cluster credentials"
+  value       = module.gke.get_credentials_command
 }
 
 # -----------------------------------------------------------------------------
-# Cognito Outputs
+# Cloud SQL Outputs
 # -----------------------------------------------------------------------------
 
-output "cognito_user_pool_id" {
-  description = "Cognito User Pool ID"
-  value       = module.cognito.user_pool_id
+output "cloudsql_instance_name" {
+  description = "Cloud SQL instance name"
+  value       = module.cloudsql.instance_name
 }
 
-output "cognito_client_id" {
-  description = "Cognito App Client ID"
-  value       = module.cognito.client_id
+output "cloudsql_connection_name" {
+  description = "Cloud SQL instance connection name for Cloud SQL Proxy"
+  value       = module.cloudsql.instance_connection_name
 }
 
-output "cognito_domain" {
-  description = "Cognito domain URL"
-  value       = module.cognito.domain_url
+output "cloudsql_private_ip" {
+  description = "Cloud SQL instance private IP address"
+  value       = module.cloudsql.private_ip_address
+}
+
+# -----------------------------------------------------------------------------
+# Identity Platform Outputs
+# -----------------------------------------------------------------------------
+
+output "identity_platform_auth_domain" {
+  description = "Identity Platform authentication domain"
+  value       = module.identity_platform.auth_domain
+}
+
+output "identity_platform_api_key" {
+  description = "Identity Platform Web API key"
+  value       = module.identity_platform.api_key
+  sensitive   = true
+}
+
+output "identity_platform_setup_instructions" {
+  description = "Manual setup instructions for Identity Platform"
+  value       = module.identity_platform.manual_setup_instructions
 }

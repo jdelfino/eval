@@ -9,57 +9,73 @@
 
 environment  = "prod"
 project_name = "eval"
-region       = "us-east-2"
+project_id   = "eval-prod-485520"
+region       = "us-east-1"
 
 # -----------------------------------------------------------------------------
 # VPC Configuration
 # Production uses a separate CIDR range from staging for isolation.
 # -----------------------------------------------------------------------------
 
-vpc_cidr           = "10.1.0.0/16"
-availability_zones = ["us-east-2a", "us-east-2b"]
+# GKE node subnet
+gke_subnet_cidr = "10.1.0.0/20"
 
-private_subnet_cidrs = [
-  "10.1.1.0/24",
-  "10.1.2.0/24"
+# Secondary ranges for GKE pods and services
+gke_pods_cidr     = "10.4.0.0/14"
+gke_services_cidr = "10.8.0.0/20"
+
+# Cloud SQL subnet
+cloudsql_subnet_cidr = "10.1.16.0/24"
+
+# Private Service Access CIDR for Cloud SQL VPC peering
+private_service_access_cidr = "10.100.0.0/16"
+
+# Public subnet for NAT gateway
+public_subnet_cidr = "10.1.32.0/24"
+
+# -----------------------------------------------------------------------------
+# NAT Configuration
+# -----------------------------------------------------------------------------
+
+nat_zone = "us-east1-b"
+
+# -----------------------------------------------------------------------------
+# GKE Configuration
+# -----------------------------------------------------------------------------
+
+gke_release_channel        = "REGULAR"
+gke_deletion_protection    = true
+gke_master_ipv4_cidr_block = "172.16.0.0/28"
+
+gke_master_authorized_networks = [
+  # Add authorized networks as needed
+  # {
+  #   cidr_block   = "0.0.0.0/0"
+  #   display_name = "All networks (not recommended for production)"
+  # }
 ]
 
-public_subnet_cidrs = [
-  "10.1.101.0/24",
-  "10.1.102.0/24"
+# -----------------------------------------------------------------------------
+# Cloud SQL Configuration
+# Start small, scale up when needed.
+# -----------------------------------------------------------------------------
+
+database_name                = "eval"
+cloudsql_tier                = "db-g1-small"
+cloudsql_disk_size           = 20
+cloudsql_availability_type   = "REGIONAL"
+cloudsql_deletion_protection = true
+
+# -----------------------------------------------------------------------------
+# Identity Platform Configuration
+# OAuth client ID and secret must be created manually in GCP Console
+# -----------------------------------------------------------------------------
+
+authorized_domains = [
+  "eval.example.com",
+  "localhost"
 ]
 
-# -----------------------------------------------------------------------------
-# EKS Configuration
-# -----------------------------------------------------------------------------
-
-eks_cluster_version = "1.28"
-
-# -----------------------------------------------------------------------------
-# RDS Configuration
-# Start small, scale up when needed. Instance resize is quick (~30s downtime).
-# -----------------------------------------------------------------------------
-
-rds_instance_class    = "db.t3.small"
-rds_allocated_storage = 20
-database_name         = "eval"
-
-# -----------------------------------------------------------------------------
-# Redis Configuration
-# Start small, scale up when needed. Node resize is quick.
-# -----------------------------------------------------------------------------
-
-redis_node_type       = "cache.t3.micro"
-redis_num_cache_nodes = 1
-
-# -----------------------------------------------------------------------------
-# Cognito Configuration
-# -----------------------------------------------------------------------------
-
-cognito_callback_urls = [
-  "https://eval.example.com/auth/callback"
-]
-
-cognito_logout_urls = [
-  "https://eval.example.com"
-]
+# These values are placeholders - update with actual values from GCP Console
+oauth_client_id     = ""
+oauth_client_secret = ""
