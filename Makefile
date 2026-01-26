@@ -1,8 +1,13 @@
+.PHONY: dev deps-up deps-down wait-deps seed reset-db status test logs
+
 dev: deps-up wait-deps
 	cd go-backend && air
 
 deps-up:
 	docker-compose up -d
+
+deps-down:
+	docker-compose down
 
 wait-deps:
 	@echo "Waiting for postgres..."
@@ -30,3 +35,9 @@ status:
 	@echo ""
 	@echo "Service health:"
 	@docker-compose ps --format json | jq -r '.[] | "\(.Name): \(.Health // "N/A")"'
+
+test:
+	cd go-backend && go test ./...
+
+logs:
+	docker-compose logs -f
