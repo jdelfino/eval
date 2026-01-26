@@ -1,0 +1,18 @@
+{
+  "token_hmac_secret_key": "local-dev-secret-key-not-for-production",
+  "api_key": "local-api-key",
+  "admin": true,
+  "admin_password": "admin",
+  "admin_secret": "admin-secret",
+  "health": true,
+  "allowed_origins": ["http://localhost:3000", "http://localhost:8080"],
+  "namespaces": [
+    {
+      "name": "session",
+      "presence": true,
+      "join_leave": true,
+      "history_size": 10,
+      "history_ttl": "5m"
+    }
+  ]
+}

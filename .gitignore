@@ -64,3 +64,6 @@ secrets.tfvars
 *.bak
 *.tmp
 .cache/
+
+# Air hot reload build output
+go-backend/tmp/
