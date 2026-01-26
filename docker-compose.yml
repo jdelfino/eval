@@ -28,5 +28,18 @@ services:
       timeout: 5s
       retries: 5
 
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    command: centrifugo -c config.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./centrifugo.json:/centrifugo/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
