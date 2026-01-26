@@ -48,11 +48,10 @@ gke_deletion_protection    = true
 gke_master_ipv4_cidr_block = "172.16.0.0/28"
 
 gke_master_authorized_networks = [
-  # Add authorized networks as needed
-  # {
-  #   cidr_block   = "0.0.0.0/0"
-  #   display_name = "All networks (not recommended for production)"
-  # }
+  {
+    cidr_block   = "108.26.187.103/32"
+    display_name = "devcontainer"
+  }
 ]
 
 # -----------------------------------------------------------------------------
