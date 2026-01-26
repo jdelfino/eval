@@ -68,7 +68,6 @@ cloudsql_deletion_protection = true
 
 # -----------------------------------------------------------------------------
 # Identity Platform Configuration
-# OAuth client ID and secret must be created manually in GCP Console
 # -----------------------------------------------------------------------------
 
 authorized_domains = [
@@ -76,6 +75,8 @@ authorized_domains = [
   "localhost"
 ]
 
-# These values are placeholders - update with actual values from GCP Console
-oauth_client_id     = ""
-oauth_client_secret = ""
+# OAuth credentials are created in GCP Console > APIs & Services > Credentials
+# Provide via environment variables (don't commit secrets):
+#   export TF_VAR_oauth_client_id="xxx.apps.googleusercontent.com"
+#   export TF_VAR_oauth_client_secret="xxx"
+# Or via: terraform apply -var-file="secrets.tfvars" (gitignored)
