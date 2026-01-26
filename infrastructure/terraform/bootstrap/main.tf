@@ -11,17 +11,6 @@
 # After running, the state for this module is stored locally.
 # All other modules use the S3 backend created here.
 
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
 provider "aws" {
   region = var.region
 
@@ -35,7 +24,6 @@ provider "aws" {
 }
 
 # S3 bucket for Terraform state
-# Placeholder - full implementation in PLAT-03e.8
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "${var.project_name}-terraform-state"
 
@@ -56,7 +44,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -72,7 +60,7 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 
 # DynamoDB table for state locking
 resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "${var.project_name}-terraform-locks"
+  name         = "terraform-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 

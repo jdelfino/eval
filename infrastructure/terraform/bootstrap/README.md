@@ -20,10 +20,10 @@ cd infrastructure/terraform/bootstrap
 terraform init
 
 # Review the plan
-terraform plan -var="project_name=eval" -var="region=us-west-2"
+terraform plan -var="project_name=eval" -var="region=us-east-2"
 
 # Apply
-terraform apply -var="project_name=eval" -var="region=us-west-2"
+terraform apply -var="project_name=eval" -var="region=us-east-2"
 ```
 
 ## After Bootstrap
@@ -36,7 +36,7 @@ terraform {
   backend "s3" {
     bucket         = "<state_bucket_name from output>"
     key            = "staging/terraform.tfstate"
-    region         = "us-west-2"
+    region         = "us-east-2"
     dynamodb_table = "<dynamodb_table_name from output>"
     encrypt        = true
   }
@@ -53,5 +53,5 @@ The bootstrap module's own state is stored **locally** in `terraform.tfstate`. T
 
 ```bash
 # Only if you're sure!
-terraform destroy -var="project_name=eval" -var="region=us-west-2"
+terraform destroy -var="project_name=eval" -var="region=us-east-2"
 ```

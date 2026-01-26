@@ -5,11 +5,10 @@
 
 terraform {
   backend "s3" {
-    # Update these values after running bootstrap module
     bucket         = "eval-terraform-state"
     key            = "prod/terraform.tfstate"
-    region         = "us-west-2"
-    dynamodb_table = "eval-terraform-locks"
+    region         = "us-east-2"
+    dynamodb_table = "terraform-locks"
     encrypt        = true
   }
 }
