@@ -71,7 +71,7 @@ First, create the S3 bucket and DynamoDB table for remote state:
 ```bash
 cd infrastructure/terraform/bootstrap
 terraform init
-terraform apply -var="project_name=eval" -var="region=us-west-2"
+terraform apply -var="project_name=eval" -var="region=us-east-2"
 ```
 
 ### 2. Deploy an Environment
