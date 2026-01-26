@@ -4,8 +4,23 @@
 # All values come from terraform.tfvars - no hardcoded environment values.
 
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
+
+  default_labels = {
+    project     = var.project_name
+    environment = var.environment
+    managed_by  = "terraform"
+  }
+}
+
+provider "google-beta" {
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
 
   default_labels = {
     project     = var.project_name
