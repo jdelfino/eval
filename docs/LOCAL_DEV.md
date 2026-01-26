@@ -13,19 +13,20 @@ make dev
 ```
 
 This single command:
-1. Starts all dependency containers (Postgres, Redis, Centrifugo, Cognito-local)
+1. Starts all dependency containers (Postgres, Redis, Centrifugo)
 2. Waits for services to be healthy
 3. Starts the Go backend with hot reload via Air
 
 ## Test Credentials
 
-| Service | Username/Email | Password |
-|---------|----------------|----------|
-| Cognito | test@example.com | Test1234!$ |
-| Postgres | app | localdev |
+| Service | Username | Password |
+|---------|----------|----------|
+| Postgres | eval | eval_local_password |
 | Centrifugo Admin | admin | admin |
 
-The test user has the `instructor` role in the `test-u` namespace.
+## Authentication
+
+Local development uses mock auth middleware or the Firebase Auth Emulator (Identity Platform). See `.env.example` for configuration.
 
 ## Common Commands
 
@@ -45,10 +46,9 @@ The test user has the `instructor` role in the `test-u` namespace.
 | Service | Port | URL/Connection |
 |---------|------|----------------|
 | Go Backend | 8080 | http://localhost:8080 |
-| PostgreSQL | 5432 | postgresql://app:localdev@localhost:5432/app |
+| PostgreSQL | 5432 | postgresql://eval:eval_local_password@localhost:5432/eval |
 | Redis | 6379 | redis://localhost:6379 |
 | Centrifugo | 8000 | http://localhost:8000 |
-| Cognito-local | 9229 | http://localhost:9229 |
 
 ## Troubleshooting
 
@@ -69,19 +69,6 @@ make status
 If unhealthy, restart:
 ```bash
 docker-compose restart postgres
-```
-
-### Cognito authentication fails
-
-Verify the cognito-local container is running:
-```bash
-docker-compose logs cognito
-```
-
-The `.cognito/db.json` file contains the user pool configuration. If corrupted, delete and recreate:
-```bash
-rm -rf .cognito
-make deps-down && make deps-up
 ```
 
 ### Hot reload not working

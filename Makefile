@@ -16,13 +16,10 @@ wait-deps:
 	@echo "Waiting for redis..."
 	@until redis-cli -h localhost ping > /dev/null 2>&1; do sleep 0.5; done
 	@echo "Redis is ready"
-	@echo "Waiting for cognito-local..."
-	@until curl -sf http://localhost:9229 > /dev/null 2>&1; do sleep 0.5; done
-	@echo "Cognito-local is ready"
 	@echo "All dependencies are ready"
 
 seed:
-	psql "postgresql://app:localdev@localhost:5432/app" -f scripts/seed.sql
+	psql "postgresql://eval:eval_local_password@localhost:5432/eval" -f scripts/seed.sql
 
 reset-db:
 	docker-compose down -v postgres

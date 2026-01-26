@@ -6,7 +6,7 @@ INSERT INTO namespaces (id, name, slug)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Test University', 'test-u')
 ON CONFLICT DO NOTHING;
 
--- Test user (matches cognito-local user)
+-- Test user
 INSERT INTO users (id, email, namespace_id, role)
 VALUES ('00000000-0000-0000-0000-000000000002', 'test@example.com',
         '00000000-0000-0000-0000-000000000001', 'instructor')
