@@ -14,3 +14,8 @@ variable "region" {
   description = "GCP region"
   type        = string
 }
+
+variable "ci_service_account_email" {
+  description = "Email of the CI service account that needs to submit Cloud Build jobs"
+  type        = string
+}

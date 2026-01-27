@@ -153,9 +153,10 @@ module "workload_identity_federation" {
 module "cloud_build" {
   source = "../../modules/cloud-build"
 
-  project_id     = var.project_id
-  project_number = var.project_number
-  region         = var.region
+  project_id               = var.project_id
+  project_number           = var.project_number
+  region                   = var.region
+  ci_service_account_email = module.workload_identity_federation.service_account_email
 }
 
 # -----------------------------------------------------------------------------
