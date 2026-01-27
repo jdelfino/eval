@@ -7,12 +7,17 @@
     "ghcr.io/devcontainers/features/node:1": { "version": "22", "installYarnUsingApt": false },
     "ghcr.io/devcontainers/features/go:1": { "version": "1.22" },
     "ghcr.io/devcontainers/features/github-cli:1": {},
-        "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "helm": "none", "minikube": "none" }
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": { "helm": "none", "minikube": "none" },
+    "ghcr.io/devcontainers/features/terraform:1": {}
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
   "onCreateCommand": "./.devcontainer/install-1password-cli.sh && curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash && curl -fsSL https://claude.ai/install.sh | bash && go install github.com/air-verse/air@latest && sudo apt-get update && sudo apt-get install -y postgresql-client redis-tools apt-transport-https ca-certificates gnupg && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list && sudo apt-get update && sudo apt-get install -y google-cloud-cli",
   "postCreateCommand": "./.devcontainer/setup.sh",
   "postStartCommand": "./.devcontainer/setup-secrets.sh",
+
+  "remoteEnv": {
+    "BD_SOCKET": "/tmp/beads.sock"
+  },
 
   "customizations": {
     "vscode": {
