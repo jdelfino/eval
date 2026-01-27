@@ -77,7 +77,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Deploy via Cloud Build
         run: |
-          gcloud builds submit go-backend/ \
+          gcloud builds submit --no-source \
             --config=go-backend/cloudbuild.yaml \
             --substitutions=_IMAGE=$REGISTRY/$IMAGE_NAME:${{ github.sha }},_GKE_CLUSTER=${{ secrets.GKE_CLUSTER }},_GKE_LOCATION=${{ secrets.GKE_LOCATION }} \
             --region=${{ secrets.GKE_LOCATION }}
