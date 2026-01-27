@@ -37,27 +37,3 @@ func TestLogger(t *testing.T) {
 		t.Errorf("log output missing path: %s", logOutput)
 	}
 }
-
-func TestResponseWriterCapturesStatus(t *testing.T) {
-	rw := newResponseWriter(httptest.NewRecorder())
-	rw.WriteHeader(http.StatusNotFound)
-
-	if rw.status != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", rw.status, http.StatusNotFound)
-	}
-
-	// Second call should not change status
-	rw.WriteHeader(http.StatusOK)
-	if rw.status != http.StatusNotFound {
-		t.Errorf("status changed to %d after second WriteHeader", rw.status)
-	}
-}
-
-func TestResponseWriterDefaultStatus(t *testing.T) {
-	rw := newResponseWriter(httptest.NewRecorder())
-	_, _ = rw.Write([]byte("hello"))
-
-	if rw.status != http.StatusOK {
-		t.Errorf("status = %d, want %d", rw.status, http.StatusOK)
-	}
-}

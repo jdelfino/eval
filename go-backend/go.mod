@@ -12,6 +12,8 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jdelfino/eval/pkg/httplog v0.0.0-00010101000000-000000000000
+	github.com/jdelfino/eval/pkg/slogutil v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 )
@@ -40,3 +42,7 @@ require (
 )
 
 replace github.com/jdelfino/eval/pkg/executorapi => ../pkg/executorapi
+
+replace github.com/jdelfino/eval/pkg/httplog => ../pkg/httplog
+
+replace github.com/jdelfino/eval/pkg/slogutil => ../pkg/slogutil

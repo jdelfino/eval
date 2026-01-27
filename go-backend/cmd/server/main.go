@@ -13,6 +13,7 @@ import (
 	"github.com/jdelfino/eval/internal/db"
 	"github.com/jdelfino/eval/internal/server"
 	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/pkg/slogutil"
 )
 
 func main() {
@@ -24,16 +25,7 @@ func main() {
 	}
 
 	// Configure logger based on environment
-	var logger *slog.Logger
-	if cfg.Environment == "local" {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: parseLogLevel(cfg.LogLevel),
-		}))
-	} else {
-		logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: parseLogLevel(cfg.LogLevel),
-		}))
-	}
+	logger := slogutil.NewLogger(cfg.Environment, cfg.LogLevel)
 	slog.SetDefault(logger)
 
 	// Create database connection pool
@@ -80,17 +72,4 @@ func main() {
 	}
 
 	logger.Info("server stopped")
-}
-
-func parseLogLevel(level string) slog.Level {
-	switch level {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
 }
