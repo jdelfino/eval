@@ -10,5 +10,5 @@ spec:
       app: go-api
   endpoints:
     - port: 8080
-      interval: 30s
+      interval: 60s
       path: /metrics
