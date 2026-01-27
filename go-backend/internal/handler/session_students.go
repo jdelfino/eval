@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -56,9 +57,12 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.publisher.StudentJoined(r.Context(), sessionID.String(), authUser.ID.String(), req.Name); err != nil {
-		h.logger.Error("failed to publish student_joined", "error", err, "session_id", sessionID)
-	}
+	pubCtx := context.WithoutCancel(r.Context())
+	go func() {
+		if err := h.publisher.StudentJoined(pubCtx, sessionID.String(), authUser.ID.String(), req.Name); err != nil {
+			h.logger.Error("failed to publish student_joined", "error", err, "session_id", sessionID)
+		}
+	}()
 
 	httputil.WriteJSON(w, http.StatusCreated, student)
 }
@@ -96,9 +100,12 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code); err != nil {
-		h.logger.Error("failed to publish code_updated", "error", err, "session_id", sessionID)
-	}
+	pubCtx := context.WithoutCancel(r.Context())
+	go func() {
+		if err := h.publisher.CodeUpdated(pubCtx, sessionID.String(), authUser.ID.String(), req.Code); err != nil {
+			h.logger.Error("failed to publish code_updated", "error", err, "session_id", sessionID)
+		}
+	}()
 
 	httputil.WriteJSON(w, http.StatusOK, student)
 }

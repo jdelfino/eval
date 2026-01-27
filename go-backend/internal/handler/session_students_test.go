@@ -490,7 +490,7 @@ func TestJoinSession_PublishesStudentJoined(t *testing.T) {
 			return ss, nil
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"name": "Alice"})
@@ -506,6 +506,9 @@ func TestJoinSession_PublishesStudentJoined(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.studentJoinedCalls) != 1 {
 		t.Fatalf("expected 1 StudentJoined call, got %d", len(pub.studentJoinedCalls))
 	}
@@ -529,7 +532,7 @@ func TestJoinSession_SucceedsWhenPublisherFails(t *testing.T) {
 			return ss, nil
 		},
 	}
-	pub := &mockSessionPublisher{err: errors.New("publish failed")}
+	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"name": "Alice"})
@@ -553,7 +556,7 @@ func TestJoinSession_DBError_NoPublish(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"name": "Alice"})
@@ -570,6 +573,9 @@ func TestJoinSession_DBError_NoPublish(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
 	}
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.studentJoinedCalls) != 0 {
 		t.Errorf("expected no StudentJoined calls when DB fails, got %d", len(pub.studentJoinedCalls))
 	}
@@ -585,7 +591,7 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 			return ss, nil
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"code": "print('hello')"})
@@ -601,6 +607,9 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.codeUpdatedCalls) != 1 {
 		t.Fatalf("expected 1 CodeUpdated call, got %d", len(pub.codeUpdatedCalls))
 	}
@@ -625,7 +634,7 @@ func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 			return ss, nil
 		},
 	}
-	pub := &mockSessionPublisher{err: errors.New("publish failed")}
+	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"code": "x"})
@@ -649,7 +658,7 @@ func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionStudentHandler(repo, pub, testLogger())
 
 	sessionID := uuid.New()
@@ -666,6 +675,9 @@ func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
 	}
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.codeUpdatedCalls) != 0 {
 		t.Errorf("expected no CodeUpdated calls when DB fails, got %d", len(pub.codeUpdatedCalls))
 	}

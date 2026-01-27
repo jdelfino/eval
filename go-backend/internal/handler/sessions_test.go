@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,13 +46,16 @@ func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, param
 }
 
 // mockSessionPublisher records calls to SessionPublisher methods.
+// Thread-safe for use with async publish goroutines.
 type mockSessionPublisher struct {
+	mu                          sync.Mutex
 	studentJoinedCalls          []studentJoinedCall
 	codeUpdatedCalls            []codeUpdatedCall
 	sessionEndedCalls           []sessionEndedCall
 	featuredStudentChangedCalls []featuredStudentChangedCall
 	problemUpdatedCalls         []problemUpdatedCall
-	err                         error // error to return from all methods
+	err                         error     // error to return from all methods
+	done                        chan struct{} // closed after each call, for async sync
 }
 
 type studentJoinedCall struct {
@@ -70,24 +74,59 @@ type problemUpdatedCall struct {
 	sessionID, problemID string
 }
 
+func newMockPublisher() *mockSessionPublisher {
+	return &mockSessionPublisher{done: make(chan struct{}, 10)}
+}
+
+func newMockPublisherWithErr(err error) *mockSessionPublisher {
+	return &mockSessionPublisher{done: make(chan struct{}, 10), err: err}
+}
+
+// waitForCalls waits for n publish calls with a timeout.
+func (m *mockSessionPublisher) waitForCalls(t *testing.T, n int) {
+	t.Helper()
+	for range n {
+		select {
+		case <-m.done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for async publish call")
+		}
+	}
+}
+
 func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userID, displayName string) error {
+	m.mu.Lock()
 	m.studentJoinedCalls = append(m.studentJoinedCalls, studentJoinedCall{sessionID, userID, displayName})
+	m.mu.Unlock()
+	m.done <- struct{}{}
 	return m.err
 }
 func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string) error {
+	m.mu.Lock()
 	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code})
+	m.mu.Unlock()
+	m.done <- struct{}{}
 	return m.err
 }
 func (m *mockSessionPublisher) SessionEnded(_ context.Context, sessionID, reason string) error {
+	m.mu.Lock()
 	m.sessionEndedCalls = append(m.sessionEndedCalls, sessionEndedCall{sessionID, reason})
+	m.mu.Unlock()
+	m.done <- struct{}{}
 	return m.err
 }
 func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string) error {
+	m.mu.Lock()
 	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code})
+	m.mu.Unlock()
+	m.done <- struct{}{}
 	return m.err
 }
 func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, problemID string) error {
+	m.mu.Lock()
 	m.problemUpdatedCalls = append(m.problemUpdatedCalls, problemUpdatedCall{sessionID, problemID})
+	m.mu.Unlock()
+	m.done <- struct{}{}
 	return m.err
 }
 
@@ -760,7 +799,7 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 			return sess, nil
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
@@ -778,6 +817,9 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.sessionEndedCalls) != 1 {
 		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
 	}
@@ -801,7 +843,7 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 			return sess, nil
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{
@@ -822,6 +864,9 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.featuredStudentChangedCalls) != 1 {
 		t.Fatalf("expected 1 FeaturedStudentChanged call, got %d", len(pub.featuredStudentChangedCalls))
 	}
@@ -848,7 +893,7 @@ func TestUpdateSession_EndSession_SucceedsWhenPublisherFails(t *testing.T) {
 			return sess, nil
 		},
 	}
-	pub := &mockSessionPublisher{err: errors.New("publish failed")}
+	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
@@ -874,7 +919,7 @@ func TestUpdateSession_DBError_NoPublish(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	pub := &mockSessionPublisher{}
+	pub := newMockPublisher()
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	id := uuid.New()
@@ -893,6 +938,11 @@ func TestUpdateSession_DBError_NoPublish(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
 	}
+	// No goroutine spawned on DB error, so no need to wait.
+	// Brief sleep to confirm no spurious calls arrive.
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
 	if len(pub.sessionEndedCalls) != 0 {
 		t.Errorf("expected no SessionEnded calls when DB fails, got %d", len(pub.sessionEndedCalls))
 	}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -172,20 +173,26 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Publish real-time events after successful update
+	// Publish real-time events asynchronously after successful update.
+	// Use a detached context since r.Context() is cancelled after response.
+	pubCtx := context.WithoutCancel(r.Context())
 	if req.Status != nil && *req.Status == "completed" {
-		if err := h.publisher.SessionEnded(r.Context(), id.String(), "completed"); err != nil {
-			h.logger.Error("failed to publish session_ended", "error", err, "session_id", id)
-		}
+		go func() {
+			if err := h.publisher.SessionEnded(pubCtx, id.String(), "completed"); err != nil {
+				h.logger.Error("failed to publish session_ended", "error", err, "session_id", id)
+			}
+		}()
 	}
 	if req.FeaturedStudentID != nil {
 		code := ""
 		if req.FeaturedCode != nil {
 			code = *req.FeaturedCode
 		}
-		if err := h.publisher.FeaturedStudentChanged(r.Context(), id.String(), req.FeaturedStudentID.String(), code); err != nil {
-			h.logger.Error("failed to publish featured_student_changed", "error", err, "session_id", id)
-		}
+		go func() {
+			if err := h.publisher.FeaturedStudentChanged(pubCtx, id.String(), req.FeaturedStudentID.String(), code); err != nil {
+				h.logger.Error("failed to publish featured_student_changed", "error", err, "session_id", id)
+			}
+		}()
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
