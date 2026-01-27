@@ -1,6 +1,7 @@
 package db
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -49,6 +50,8 @@ func TestPoolConfigConnectionString(t *testing.T) {
 				"password=secret",
 				"pool_max_conns=10",
 				"pool_min_conns=2",
+				"pool_max_conn_lifetime=30m",
+				"pool_max_conn_idle_time=5m",
 			},
 		},
 		{
@@ -72,7 +75,7 @@ func TestPoolConfigConnectionString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			connStr := tt.cfg.ConnectionString()
 			for _, want := range tt.contains {
-				if !containsString(connStr, want) {
+				if !strings.Contains(connStr, want) {
 					t.Errorf("ConnectionString() = %q, want to contain %q", connStr, want)
 				}
 			}
@@ -93,10 +96,10 @@ func TestPoolConfigConnectionStringNoZeroPoolSettings(t *testing.T) {
 
 	connStr := cfg.ConnectionString()
 
-	if containsString(connStr, "pool_max_conns") {
+	if strings.Contains(connStr, "pool_max_conns") {
 		t.Errorf("ConnectionString() = %q, should not contain pool_max_conns when zero", connStr)
 	}
-	if containsString(connStr, "pool_min_conns") {
+	if strings.Contains(connStr, "pool_min_conns") {
 		t.Errorf("ConnectionString() = %q, should not contain pool_min_conns when zero", connStr)
 	}
 }
@@ -141,16 +144,3 @@ func TestHealthStatusHealthy(t *testing.T) {
 	}
 }
 
-// containsString checks if the string s contains the substring substr.
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
