@@ -2,6 +2,9 @@ package realtime
 
 import "context"
 
+// Compile-time interface compliance check.
+var _ SessionPublisher = NoOpSessionPublisher{}
+
 // NoOpSessionPublisher is a SessionPublisher that does nothing.
 // Used when Centrifugo is not configured (e.g. tests, local dev).
 type NoOpSessionPublisher struct{}
