@@ -211,6 +211,61 @@ type SectionRepository interface {
 	DeleteSection(ctx context.Context, id uuid.UUID) error
 }
 
+// Session represents a coding session within a section.
+type Session struct {
+	ID                uuid.UUID       `json:"id"`
+	NamespaceID       string          `json:"namespace_id"`
+	SectionID         uuid.UUID       `json:"section_id"`
+	SectionName       string          `json:"section_name"`
+	Problem           json.RawMessage `json:"problem"`
+	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
+	FeaturedCode      *string         `json:"featured_code"`
+	CreatorID         uuid.UUID       `json:"creator_id"`
+	Participants      []uuid.UUID     `json:"participants"`
+	Status            string          `json:"status"`
+	CreatedAt         time.Time       `json:"created_at"`
+	LastActivity      time.Time       `json:"last_activity"`
+	EndedAt           *time.Time      `json:"ended_at"`
+}
+
+// CreateSessionParams contains the fields for creating a session.
+type CreateSessionParams struct {
+	NamespaceID string
+	SectionID   uuid.UUID
+	SectionName string
+	Problem     json.RawMessage
+	CreatorID   uuid.UUID
+}
+
+// UpdateSessionParams contains the fields that can be updated on a session.
+type UpdateSessionParams struct {
+	FeaturedStudentID *uuid.UUID
+	FeaturedCode      *string
+	Status            *string
+	EndedAt           *time.Time
+}
+
+// SessionFilters contains optional filters for listing sessions.
+type SessionFilters struct {
+	SectionID *uuid.UUID
+	Status    *string
+}
+
+// SessionRepository defines the interface for session data access.
+type SessionRepository interface {
+	// ListSessions retrieves all sessions visible to the current user (RLS-filtered).
+	// Results can be filtered by section_id and/or status.
+	ListSessions(ctx context.Context, filters SessionFilters) ([]Session, error)
+	// GetSession retrieves a session by ID.
+	// Returns ErrNotFound if the session does not exist.
+	GetSession(ctx context.Context, id uuid.UUID) (*Session, error)
+	// CreateSession creates a new session and returns it.
+	CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error)
+	// UpdateSession updates a session's mutable fields and returns the updated session.
+	// Returns ErrNotFound if the session does not exist.
+	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
+}
+
 // MembershipRepository defines the interface for section membership data access.
 type MembershipRepository interface {
 	// GetSectionByJoinCode retrieves a section by its join code.

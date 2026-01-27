@@ -115,6 +115,7 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
 
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
+			r.Mount("/sessions", handler.NewSessionHandler(s).Routes())
 		}
 	})
 
