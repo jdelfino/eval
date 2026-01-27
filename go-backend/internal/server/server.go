@@ -101,6 +101,13 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 			r.Mount("/classes", handler.NewClassHandler(s).Routes())
+
+			sectionHandler := handler.NewSectionHandler(s)
+			r.Mount("/sections", sectionHandler.Routes())
+			r.Route("/classes/{classID}/sections", func(r chi.Router) {
+				r.Mount("/", sectionHandler.ClassRoutes())
+			})
+
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 		}
 	})

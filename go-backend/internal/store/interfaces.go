@@ -165,6 +165,52 @@ type ProblemRepository interface {
 	DeleteProblem(ctx context.Context, id uuid.UUID) error
 }
 
+// Section represents a section (offering) of a class.
+type Section struct {
+	ID          uuid.UUID `json:"id"`
+	NamespaceID string    `json:"namespace_id"`
+	ClassID     uuid.UUID `json:"class_id"`
+	Name        string    `json:"name"`
+	Semester    *string   `json:"semester"`
+	JoinCode    string    `json:"join_code"`
+	Active      bool      `json:"active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateSectionParams contains the fields for creating a section.
+type CreateSectionParams struct {
+	NamespaceID string
+	ClassID     uuid.UUID
+	Name        string
+	Semester    *string
+	JoinCode    string
+}
+
+// UpdateSectionParams contains the fields that can be updated on a section.
+type UpdateSectionParams struct {
+	Name     *string
+	Semester *string
+	Active   *bool
+}
+
+// SectionRepository defines the interface for section data access.
+type SectionRepository interface {
+	// ListSectionsByClass retrieves all sections for a given class (RLS-filtered).
+	ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]Section, error)
+	// GetSection retrieves a section by ID.
+	// Returns ErrNotFound if the section does not exist.
+	GetSection(ctx context.Context, id uuid.UUID) (*Section, error)
+	// CreateSection creates a new section and returns it.
+	CreateSection(ctx context.Context, params CreateSectionParams) (*Section, error)
+	// UpdateSection updates a section's mutable fields and returns the updated section.
+	// Returns ErrNotFound if the section does not exist.
+	UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSectionParams) (*Section, error)
+	// DeleteSection deletes a section by ID.
+	// Returns ErrNotFound if the section does not exist.
+	DeleteSection(ctx context.Context, id uuid.UUID) error
+}
+
 // UserRepository defines the interface for user data access.
 type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.
