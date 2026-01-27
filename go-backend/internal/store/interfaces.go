@@ -211,6 +211,20 @@ type SectionRepository interface {
 	DeleteSection(ctx context.Context, id uuid.UUID) error
 }
 
+// MembershipRepository defines the interface for section membership data access.
+type MembershipRepository interface {
+	// GetSectionByJoinCode retrieves a section by its join code.
+	// Returns ErrNotFound if no section has the given code.
+	GetSectionByJoinCode(ctx context.Context, code string) (*Section, error)
+	// CreateMembership creates a new section membership and returns it.
+	CreateMembership(ctx context.Context, params CreateMembershipParams) (*SectionMembership, error)
+	// DeleteMembership deletes a user's membership from a section.
+	// Returns ErrNotFound if the membership does not exist.
+	DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error
+	// ListMembers retrieves all memberships for a given section.
+	ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error)
+}
+
 // UserRepository defines the interface for user data access.
 type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.

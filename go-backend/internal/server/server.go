@@ -102,11 +102,17 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 			r.Mount("/classes", handler.NewClassHandler(s).Routes())
 
+			membershipHandler := handler.NewMembershipHandler(s)
+			r.Post("/sections/join", membershipHandler.Join)
+
 			sectionHandler := handler.NewSectionHandler(s)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
 				r.Mount("/", sectionHandler.ClassRoutes())
 			})
+
+			r.Get("/sections/{id}/members", membershipHandler.ListMembers)
+			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
 
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 		}
