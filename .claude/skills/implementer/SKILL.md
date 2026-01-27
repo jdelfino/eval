@@ -62,7 +62,21 @@ All work happens in the worktree, not the main checkout.
 
 ## Quality Gates
 
-Run your project's test and lint commands before committing.
+Run ALL of these commands before committing:
+
+**For Go projects:**
+```bash
+go build ./...           # Must compile
+go test ./...            # All tests must pass
+golangci-lint run ./...  # Zero lint issues (including errcheck)
+```
+
+**For TypeScript/JavaScript projects:**
+```bash
+npm run build            # Must compile
+npm test                 # All tests must pass
+npm run lint             # Zero lint issues
+```
 
 **All checks must pass with zero errors.** If they don't, fix the issues before committing.
 

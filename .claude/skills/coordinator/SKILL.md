@@ -189,10 +189,11 @@ bd close <task-id> --reason "Implemented and reviewed" --json
 → Task is complete. Any tasks that depended on this one are now unblocked.
 
 **On CHANGES NEEDED (minor):**
-- Fix the issues directly yourself
+- Fix ALL issues directly yourself (the default is to fix, not skip)
 - Re-run quality gates
-- Spawn reviewer again to verify fixes
-- Close the task only after reviewer approves
+- Close the task after fixes verified (no re-review needed for trivial fixes)
+
+**Note**: Most reviewer suggestions should be acted upon. Only skip fixes if the change would be very large AND the value is genuinely low.
 
 **On CHANGES NEEDED (major):**
 ```bash

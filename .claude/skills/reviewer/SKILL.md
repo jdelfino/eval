@@ -33,9 +33,23 @@ cd <worktree-path>
 
 ### 2. Verify Quality Gates Pass
 
-Run your project's test and lint commands.
+Run ALL quality gates for the project:
 
-If any fail, the review automatically fails. Note the specific failures.
+**For Go projects:**
+```bash
+go build ./...           # Must compile
+go test ./...            # All tests must pass
+golangci-lint run ./...  # Zero lint issues (including errcheck)
+```
+
+**For TypeScript/JavaScript projects:**
+```bash
+npm run build            # Must compile
+npm test                 # All tests must pass
+npm run lint             # Zero lint issues
+```
+
+If any check fails, the review automatically fails. Note the specific failures.
 
 ### 3. Review the Code Changes
 
@@ -67,16 +81,24 @@ Check for:
 
 ### 4. Assess Severity of Issues
 
-**Minor issues** (coordinator can fix directly):
+**Minor issues** (coordinator should fix before closing):
 - Typos in error messages or comments
 - Missing test for one edge case
 - Slightly unclear variable name
+- Lint warnings or style issues
+- Redundant code that could be simplified
 
 **Major issues** (needs re-implementation):
 - Tests missing entirely for changed files
 - Logic errors that would cause bugs
 - Security vulnerabilities
 - Completely wrong approach
+
+**IMPORTANT**: The default should be to fix ALL issues found, including minor ones. The point of review is to improve code quality. Only skip a fix if:
+1. The change would be very large (significant refactoring), AND
+2. The value is genuinely low (purely cosmetic in non-public code)
+
+When in doubt, fix it. "Non-blocking" should be rare.
 
 ### 5. File Blocking Issues (if needed)
 
