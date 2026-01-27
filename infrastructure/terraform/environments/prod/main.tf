@@ -203,6 +203,9 @@ resource "kubernetes_config_map" "app_config" {
 
     # Cloud SQL Connection Name (for Cloud SQL Proxy)
     CLOUDSQL_CONNECTION_NAME = module.cloudsql.instance_connection_name
+
+    # Centrifugo Configuration
+    CENTRIFUGO_URL = "http://centrifugo:8000"
   }
 
   depends_on = [module.gke]
@@ -219,6 +222,10 @@ resource "kubernetes_secret" "app_secrets" {
     DATABASE_USER       = module.cloudsql.database_user
     DATABASE_PASSWORD   = module.cloudsql.database_password
     DATABASE_URL        = module.cloudsql.connection_string_full
+
+    # Centrifugo Secrets
+    CENTRIFUGO_API_KEY      = var.centrifugo_api_key
+    CENTRIFUGO_TOKEN_SECRET = var.centrifugo_token_secret
   }
 
   type = "Opaque"
