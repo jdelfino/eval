@@ -45,28 +45,28 @@ func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
 		header := r.Header.Get("Authorization")
 		if header == "" {
 			a.logger.Warn("missing authorization header")
-			writeJSONError(w, http.StatusUnauthorized, "authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
 		token, ok := strings.CutPrefix(header, "Bearer ")
 		if !ok || token == "" {
 			a.logger.Warn("malformed authorization header")
-			writeJSONError(w, http.StatusUnauthorized, "authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
 		claims, err := a.validator.Validate(r.Context(), token)
 		if err != nil {
 			a.logger.Warn("token validation failed", "error", err)
-			writeJSONError(w, http.StatusUnauthorized, "authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
 		record, err := a.users.GetUserByExternalID(r.Context(), claims.Subject)
 		if err != nil {
 			a.logger.Warn("user lookup failed", "external_id", claims.Subject, "error", err)
-			writeJSONError(w, http.StatusUnauthorized, "authentication required")
+			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 

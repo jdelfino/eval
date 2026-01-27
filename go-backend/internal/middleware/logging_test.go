@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+	"github.com/jdelfino/eval/internal/auth"
 )
 
 func TestLogger(t *testing.T) {
@@ -125,6 +127,58 @@ func TestLogger(t *testing.T) {
 
 		if logEntry["status"] != float64(201) {
 			t.Errorf("status = %v, want 201", logEntry["status"])
+		}
+	})
+
+	t.Run("includes user_id when authenticated", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		userID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+		req := httptest.NewRequest(http.MethodGet, "/authed", nil)
+		ctx := auth.WithUser(req.Context(), &auth.User{
+			ID:    userID,
+			Email: "test@example.com",
+			Role:  auth.RoleStudent,
+		})
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		var logEntry map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
+			t.Fatalf("Failed to parse log output: %v\nLog: %s", err, buf.String())
+		}
+
+		if logEntry["user_id"] != userID.String() {
+			t.Errorf("user_id = %v, want %s", logEntry["user_id"], userID.String())
+		}
+	})
+
+	t.Run("omits user_id when unauthenticated", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/unauthed", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		var logEntry map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
+			t.Fatalf("Failed to parse log output: %v", err)
+		}
+
+		if _, exists := logEntry["user_id"]; exists {
+			t.Errorf("user_id should not be present for unauthenticated requests, got %v", logEntry["user_id"])
 		}
 	})
 
