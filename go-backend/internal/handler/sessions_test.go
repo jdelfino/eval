@@ -5,11 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,141 +14,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 )
-
-// mockSessionRepo implements store.SessionRepository for testing.
-type mockSessionRepo struct {
-	listSessionsFn  func(ctx context.Context, filters store.SessionFilters) ([]store.Session, error)
-	getSessionFn    func(ctx context.Context, id uuid.UUID) (*store.Session, error)
-	createSessionFn func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
-	updateSessionFn func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
-}
-
-func (m *mockSessionRepo) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
-	return m.listSessionsFn(ctx, filters)
-}
-
-func (m *mockSessionRepo) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
-	return m.getSessionFn(ctx, id)
-}
-
-func (m *mockSessionRepo) CreateSession(ctx context.Context, params store.CreateSessionParams) (*store.Session, error) {
-	return m.createSessionFn(ctx, params)
-}
-
-func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
-	return m.updateSessionFn(ctx, id, params)
-}
-
-// mockSessionPublisher records calls to SessionPublisher methods.
-// Thread-safe for use with async publish goroutines.
-type mockSessionPublisher struct {
-	mu                          sync.Mutex
-	studentJoinedCalls          []studentJoinedCall
-	codeUpdatedCalls            []codeUpdatedCall
-	sessionEndedCalls           []sessionEndedCall
-	featuredStudentChangedCalls []featuredStudentChangedCall
-	problemUpdatedCalls         []problemUpdatedCall
-	err                         error     // error to return from all methods
-	done                        chan struct{} // closed after each call, for async sync
-}
-
-type studentJoinedCall struct {
-	sessionID, userID, displayName string
-}
-type codeUpdatedCall struct {
-	sessionID, userID, code string
-}
-type sessionEndedCall struct {
-	sessionID, reason string
-}
-type featuredStudentChangedCall struct {
-	sessionID, userID, code string
-}
-type problemUpdatedCall struct {
-	sessionID, problemID string
-}
-
-func newMockPublisher() *mockSessionPublisher {
-	return &mockSessionPublisher{done: make(chan struct{}, 10)}
-}
-
-func newMockPublisherWithErr(err error) *mockSessionPublisher {
-	return &mockSessionPublisher{done: make(chan struct{}, 10), err: err}
-}
-
-// waitForCalls waits for n publish calls with a timeout.
-func (m *mockSessionPublisher) waitForCalls(t *testing.T, n int) {
-	t.Helper()
-	for range n {
-		select {
-		case <-m.done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("timed out waiting for async publish call")
-		}
-	}
-}
-
-func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userID, displayName string) error {
-	m.mu.Lock()
-	m.studentJoinedCalls = append(m.studentJoinedCalls, studentJoinedCall{sessionID, userID, displayName})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string) error {
-	m.mu.Lock()
-	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-func (m *mockSessionPublisher) SessionEnded(_ context.Context, sessionID, reason string) error {
-	m.mu.Lock()
-	m.sessionEndedCalls = append(m.sessionEndedCalls, sessionEndedCall{sessionID, reason})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string) error {
-	m.mu.Lock()
-	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, problemID string) error {
-	m.mu.Lock()
-	m.problemUpdatedCalls = append(m.problemUpdatedCalls, problemUpdatedCall{sessionID, problemID})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
-func noopPublisher() realtime.SessionPublisher {
-	return realtime.NoOpSessionPublisher{}
-}
-
-func testSession() *store.Session {
-	return &store.Session{
-		ID:           uuid.MustParse("11111111-2222-3333-4444-555555555555"),
-		NamespaceID:  "test-ns",
-		SectionID:    uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-		SectionName:  "Section A",
-		Problem:      json.RawMessage(`{"title":"Two Sum","description":"Add two numbers"}`),
-		CreatorID:    uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-		Participants: []uuid.UUID{},
-		Status:       "active",
-		CreatedAt:    time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		LastActivity: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-	}
-}
 
 func TestListSessions_Success(t *testing.T) {
 	sess := testSession()

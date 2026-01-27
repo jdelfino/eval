@@ -74,7 +74,7 @@ func (c *Client) Publish(ctx context.Context, channel string, data any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		c.logger.Error("centrifugo API error", "status", resp.StatusCode, "body", string(body))
 		return &APIError{
 			StatusCode: resp.StatusCode,

@@ -59,6 +59,12 @@ variable "redis_version" {
 # Network Configuration
 # -----------------------------------------------------------------------------
 
+variable "connect_mode" {
+  description = "Connection mode: DIRECT_PEERING or PRIVATE_SERVICE_ACCESS"
+  type        = string
+  default     = "PRIVATE_SERVICE_ACCESS"
+}
+
 variable "vpc_network_id" {
   description = "VPC network ID for private connectivity"
   type        = string

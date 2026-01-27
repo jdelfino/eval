@@ -174,25 +174,15 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Publish real-time events asynchronously after successful update.
-	// Use a detached context since r.Context() is cancelled after response.
-	pubCtx := context.WithoutCancel(r.Context())
 	if req.Status != nil && *req.Status == "completed" {
-		go func() {
-			if err := h.publisher.SessionEnded(pubCtx, id.String(), "completed"); err != nil {
-				h.logger.Error("failed to publish session_ended", "error", err, "session_id", id)
-			}
-		}()
+		publishAsync(r, h.logger, id, func(ctx context.Context) error {
+			return h.publisher.SessionEnded(ctx, id.String(), "completed")
+		})
 	}
-	if req.FeaturedStudentID != nil {
-		code := ""
-		if req.FeaturedCode != nil {
-			code = *req.FeaturedCode
-		}
-		go func() {
-			if err := h.publisher.FeaturedStudentChanged(pubCtx, id.String(), req.FeaturedStudentID.String(), code); err != nil {
-				h.logger.Error("failed to publish featured_student_changed", "error", err, "session_id", id)
-			}
-		}()
+	if req.FeaturedStudentID != nil && req.FeaturedCode != nil {
+		publishAsync(r, h.logger, id, func(ctx context.Context) error {
+			return h.publisher.FeaturedStudentChanged(ctx, id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode)
+		})
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)

@@ -35,6 +35,7 @@ resource "google_redis_instance" "main" {
   redis_version      = var.redis_version
   display_name       = "${var.project_name} ${var.environment} Redis"
   authorized_network = var.vpc_network_id
+  connect_mode       = var.connect_mode
 
   labels = local.labels
 

@@ -4,6 +4,19 @@
 # Uses Redis as the broker/presence engine.
 
 # -----------------------------------------------------------------------------
+# Local Values
+# -----------------------------------------------------------------------------
+
+locals {
+  labels = {
+    project     = var.project_name
+    environment = var.environment
+    managed_by  = "terraform"
+    module      = "centrifugo"
+  }
+}
+
+# -----------------------------------------------------------------------------
 # ConfigMap — Centrifugo configuration file
 # -----------------------------------------------------------------------------
 
@@ -63,9 +76,9 @@ resource "kubernetes_deployment" "centrifugo" {
   metadata {
     name      = "centrifugo"
     namespace = var.namespace
-    labels = {
+    labels = merge(local.labels, {
       app = "centrifugo"
-    }
+    })
   }
 
   spec {
@@ -170,9 +183,9 @@ resource "kubernetes_service" "centrifugo" {
   metadata {
     name      = "centrifugo"
     namespace = var.namespace
-    labels = {
+    labels = merge(local.labels, {
       app = "centrifugo"
-    }
+    })
   }
 
   spec {

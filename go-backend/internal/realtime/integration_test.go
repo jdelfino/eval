@@ -47,10 +47,13 @@ func newSubscriber(t *testing.T, userID string) *centrifuge.Client {
 	return c
 }
 
-// subscribeAndCollect subscribes to a channel and sends received publications to the returned channel.
+// subscribeAndCollect subscribes to a channel and blocks until the server confirms
+// the subscription is active. Returns received publications and a cleanup function.
 func subscribeAndCollect(t *testing.T, client *centrifuge.Client, channel string) (<-chan []byte, func()) {
 	t.Helper()
 	ch := make(chan []byte, 10)
+	ready := make(chan struct{})
+
 	sub, err := client.NewSubscription(channel)
 	if err != nil {
 		t.Fatalf("creating subscription: %v", err)
@@ -58,14 +61,21 @@ func subscribeAndCollect(t *testing.T, client *centrifuge.Client, channel string
 	sub.OnPublication(func(e centrifuge.PublicationEvent) {
 		ch <- e.Data
 	})
-
-	errCh := make(chan error, 1)
+	sub.OnSubscribed(func(_ centrifuge.SubscribedEvent) {
+		close(ready)
+	})
 	sub.OnError(func(e centrifuge.SubscriptionErrorEvent) {
-		errCh <- e.Error
+		t.Errorf("subscription error on %s: %v", channel, e.Error)
 	})
 
 	if err := sub.Subscribe(); err != nil {
 		t.Fatalf("subscribing: %v", err)
+	}
+
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timeout waiting for subscription to %s", channel)
 	}
 
 	cleanup := func() {
@@ -115,9 +125,6 @@ func TestPublish_IntegrationWithCentrifugo(t *testing.T) {
 	pubCh, cleanup := subscribeAndCollect(t, sub, "session:test-session-1")
 	defer cleanup()
 
-	// Small delay to ensure subscription is active on Centrifugo side.
-	time.Sleep(200 * time.Millisecond)
-
 	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "student_joined", Data: "hello"}
 	ctx := context.Background()
@@ -155,8 +162,6 @@ func TestPublish_MultipleSubscribers(t *testing.T) {
 	defer cleanup1()
 	ch2, cleanup2 := subscribeAndCollect(t, sub2, "session:multi-test")
 	defer cleanup2()
-
-	time.Sleep(200 * time.Millisecond)
 
 	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "code_update", Data: "payload"}
@@ -196,8 +201,6 @@ func TestPublish_DifferentChannels(t *testing.T) {
 
 	chA, cleanup := subscribeAndCollect(t, sub, "session:channel-a")
 	defer cleanup()
-
-	time.Sleep(200 * time.Millisecond)
 
 	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "ping", Data: "wrong-channel"}

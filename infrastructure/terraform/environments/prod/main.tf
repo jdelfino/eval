@@ -236,6 +236,11 @@ resource "kubernetes_secret" "app_secrets" {
 module "centrifugo" {
   source = "../../modules/centrifugo"
 
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
   api_key         = var.centrifugo_api_key
   token_secret    = var.centrifugo_token_secret
   allowed_origins = var.centrifugo_allowed_origins

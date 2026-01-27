@@ -57,12 +57,9 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pubCtx := context.WithoutCancel(r.Context())
-	go func() {
-		if err := h.publisher.StudentJoined(pubCtx, sessionID.String(), authUser.ID.String(), req.Name); err != nil {
-			h.logger.Error("failed to publish student_joined", "error", err, "session_id", sessionID)
-		}
-	}()
+	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
+		return h.publisher.StudentJoined(ctx, sessionID.String(), authUser.ID.String(), req.Name)
+	})
 
 	httputil.WriteJSON(w, http.StatusCreated, student)
 }
@@ -100,12 +97,9 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	pubCtx := context.WithoutCancel(r.Context())
-	go func() {
-		if err := h.publisher.CodeUpdated(pubCtx, sessionID.String(), authUser.ID.String(), req.Code); err != nil {
-			h.logger.Error("failed to publish code_updated", "error", err, "session_id", sessionID)
-		}
-	}()
+	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
+		return h.publisher.CodeUpdated(ctx, sessionID.String(), authUser.ID.String(), req.Code)
+	})
 
 	httputil.WriteJSON(w, http.StatusOK, student)
 }

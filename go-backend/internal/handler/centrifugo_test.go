@@ -15,66 +15,40 @@ import (
 	"github.com/jdelfino/eval/internal/store"
 )
 
-// --- mock token generator ---
-
-type mockTokenGenerator struct {
-	connToken string
-	subToken  string
-	err       error
+// sessionRepoReturning creates a mockSessionRepo that returns the given session/error from GetSession.
+func sessionRepoReturning(session *store.Session, err error) *mockSessionRepo {
+	return &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return session, err
+		},
+		listSessionsFn: func(_ context.Context, _ store.SessionFilters) ([]store.Session, error) {
+			return nil, nil
+		},
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return nil, nil
+		},
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return nil, nil
+		},
+	}
 }
 
-func (m *mockTokenGenerator) ConnectionToken(userID string, _ time.Duration) (string, error) {
-	return m.connToken, m.err
-}
-
-func (m *mockTokenGenerator) SubscriptionToken(userID, channel string, _ time.Duration) (string, error) {
-	return m.subToken, m.err
-}
-
-// --- mock session repo ---
-
-type centrifugoMockSessionRepo struct {
-	session *store.Session
-	err     error
-}
-
-func (m *centrifugoMockSessionRepo) GetSession(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-	return m.session, m.err
-}
-
-func (m *centrifugoMockSessionRepo) ListSessions(_ context.Context, _ store.SessionFilters) ([]store.Session, error) {
-	return nil, nil
-}
-
-func (m *centrifugoMockSessionRepo) CreateSession(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
-	return nil, nil
-}
-
-func (m *centrifugoMockSessionRepo) UpdateSession(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-	return nil, nil
-}
-
-// --- mock session student repo ---
-
-type centrifugoMockStudentRepo struct {
-	student *store.SessionStudent
-	err     error
-}
-
-func (m *centrifugoMockStudentRepo) GetSessionStudent(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
-	return m.student, m.err
-}
-
-func (m *centrifugoMockStudentRepo) JoinSession(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
-	return nil, nil
-}
-
-func (m *centrifugoMockStudentRepo) UpdateCode(_ context.Context, _, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
-	return nil, nil
-}
-
-func (m *centrifugoMockStudentRepo) ListSessionStudents(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
-	return nil, nil
+// studentRepoReturning creates a mockSessionStudentRepo that returns the given student/error from GetSessionStudent.
+func studentRepoReturning(student *store.SessionStudent, err error) *mockSessionStudentRepo {
+	return &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return student, err
+		},
+		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
+			return nil, nil
+		},
+		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+			return nil, nil
+		},
+		listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
+			return nil, nil
+		},
+	}
 }
 
 // --- tests ---
@@ -82,8 +56,8 @@ func (m *centrifugoMockStudentRepo) ListSessionStudents(_ context.Context, _ uui
 func TestCentrifugoHandler_ConnectionToken(t *testing.T) {
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{connToken: "conn-jwt"},
-		&centrifugoMockSessionRepo{},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, nil),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -110,8 +84,8 @@ func TestCentrifugoHandler_ConnectionToken(t *testing.T) {
 func TestCentrifugoHandler_ConnectionToken_Unauthenticated(t *testing.T) {
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{connToken: "conn-jwt"},
-		&centrifugoMockSessionRepo{},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, nil),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -127,8 +101,8 @@ func TestCentrifugoHandler_ConnectionToken_Unauthenticated(t *testing.T) {
 func TestCentrifugoHandler_ConnectionToken_GenerationError(t *testing.T) {
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{err: errors.New("signing failure")},
-		&centrifugoMockSessionRepo{},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, nil),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -150,8 +124,8 @@ func TestCentrifugoHandler_SubscriptionToken_StudentParticipant(t *testing.T) {
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
-		&centrifugoMockStudentRepo{student: &store.SessionStudent{SessionID: sessionID, UserID: userID}},
+		sessionRepoReturning(&store.Session{ID: sessionID}, nil),
+		studentRepoReturning(&store.SessionStudent{SessionID: sessionID, UserID: userID}, nil),
 		15*time.Minute,
 	)
 
@@ -180,8 +154,8 @@ func TestCentrifugoHandler_SubscriptionToken_StudentNotInSession(t *testing.T) {
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
-		&centrifugoMockStudentRepo{err: store.ErrNotFound},
+		sessionRepoReturning(&store.Session{ID: sessionID}, nil),
+		studentRepoReturning(nil, store.ErrNotFound),
 		15*time.Minute,
 	)
 
@@ -202,8 +176,8 @@ func TestCentrifugoHandler_SubscriptionToken_StudentDBError(t *testing.T) {
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{},
-		&centrifugoMockStudentRepo{err: errors.New("db connection lost")},
+		sessionRepoReturning(nil, nil),
+		studentRepoReturning(nil, errors.New("db connection lost")),
 		15*time.Minute,
 	)
 
@@ -224,8 +198,8 @@ func TestCentrifugoHandler_SubscriptionToken_Instructor(t *testing.T) {
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(&store.Session{ID: sessionID}, nil),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -246,8 +220,8 @@ func TestCentrifugoHandler_SubscriptionToken_InstructorDBError(t *testing.T) {
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{err: errors.New("db connection lost")},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, errors.New("db connection lost")),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -266,8 +240,8 @@ func TestCentrifugoHandler_SubscriptionToken_InstructorDBError(t *testing.T) {
 func TestCentrifugoHandler_SubscriptionToken_InvalidChannel(t *testing.T) {
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, nil),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
@@ -288,8 +262,8 @@ func TestCentrifugoHandler_SubscriptionToken_InstructorSessionNotFound(t *testin
 
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
-		&centrifugoMockSessionRepo{err: store.ErrNotFound},
-		&centrifugoMockStudentRepo{},
+		sessionRepoReturning(nil, store.ErrNotFound),
+		studentRepoReturning(nil, nil),
 		15*time.Minute,
 	)
 
