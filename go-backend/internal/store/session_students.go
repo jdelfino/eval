@@ -13,7 +13,7 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx) // no-op after commit
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
 	const insertQuery = `
 		INSERT INTO session_students (session_id, user_id, name)
@@ -63,7 +63,7 @@ func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, cod
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx) // no-op after commit
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
 	const updateQuery = `
 		UPDATE session_students SET code = $3, last_update = now()
