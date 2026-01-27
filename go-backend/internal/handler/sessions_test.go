@@ -537,6 +537,135 @@ func TestUpdateSession_InvalidID(t *testing.T) {
 	}
 }
 
+func TestCreateSession_MissingRequiredFields(t *testing.T) {
+	h := NewSessionHandler(&mockSessionRepo{})
+	// Missing section_id, section_name, problem
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateSession_InvalidBody(t *testing.T) {
+	h := NewSessionHandler(&mockSessionRepo{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateSession_InvalidStatus(t *testing.T) {
+	id := uuid.New()
+	h := NewSessionHandler(&mockSessionRepo{})
+	body, _ := json.Marshal(map[string]any{"status": "invalid_status"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateSession_InvalidBody(t *testing.T) {
+	id := uuid.New()
+	h := NewSessionHandler(&mockSessionRepo{})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateSession_InternalError(t *testing.T) {
+	repo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	h := NewSessionHandler(repo)
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestGetSession_InternalError(t *testing.T) {
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	h := NewSessionHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
 func TestUpdateSession_RBACForbidden(t *testing.T) {
 	repo := &mockSessionRepo{}
 	h := NewSessionHandler(repo)

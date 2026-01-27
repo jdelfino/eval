@@ -531,6 +531,165 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 	}
 }
 
+func TestCreateSection_MissingName(t *testing.T) {
+	classID := uuid.New()
+	h := NewSectionHandler(&mockSectionRepo{})
+	body, _ := json.Marshal(map[string]any{"semester": "Fall 2025"})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateSection_InvalidBody(t *testing.T) {
+	classID := uuid.New()
+	h := NewSectionHandler(&mockSectionRepo{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateSection_InvalidID(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{})
+	body, _ := json.Marshal(map[string]any{"name": "New Name"})
+	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "not-a-uuid")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateSection_InvalidBody(t *testing.T) {
+	id := uuid.New()
+	h := NewSectionHandler(&mockSectionRepo{})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateSection_InternalError(t *testing.T) {
+	repo := &mockSectionRepo{
+		updateSectionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSectionParams) (*store.Section, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	body, _ := json.Marshal(map[string]any{"name": "New Name"})
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestGetSection_InternalError(t *testing.T) {
+	repo := &mockSectionRepo{
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestDeleteSection_InternalError(t *testing.T) {
+	repo := &mockSectionRepo{
+		deleteSectionFn: func(_ context.Context, _ uuid.UUID) error {
+			return errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
 func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 	classID := uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
 	sec := testSection()

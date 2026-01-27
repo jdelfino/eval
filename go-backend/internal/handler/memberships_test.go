@@ -271,6 +271,22 @@ func TestJoin_CreateError(t *testing.T) {
 	}
 }
 
+func TestJoin_MissingJoinCode(t *testing.T) {
+	h := NewMembershipHandler(&mockMembershipRepo{})
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Join(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListMembers_Unauthorized(t *testing.T) {
 	h := NewMembershipHandler(&mockMembershipRepo{})
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/members", nil)

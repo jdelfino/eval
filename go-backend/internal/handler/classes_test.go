@@ -438,6 +438,184 @@ func TestDeleteClass_InvalidID(t *testing.T) {
 	}
 }
 
+func TestCreateClass_MissingName(t *testing.T) {
+	h := NewClassHandler(&mockClassRepo{})
+	body, _ := json.Marshal(map[string]any{"description": "no name"})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateClass_InvalidBody(t *testing.T) {
+	h := NewClassHandler(&mockClassRepo{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateClass_InternalError(t *testing.T) {
+	repo := &mockClassRepo{
+		createClassFn: func(_ context.Context, _ store.CreateClassParams) (*store.Class, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "CS 101"})
+	h := NewClassHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateClass_InvalidID(t *testing.T) {
+	repo := &mockClassRepo{}
+	h := NewClassHandler(repo)
+	body, _ := json.Marshal(map[string]any{"name": "New Name"})
+	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "not-a-uuid")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateClass_InvalidBody(t *testing.T) {
+	id := uuid.New()
+	h := NewClassHandler(&mockClassRepo{})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateClass_InternalError(t *testing.T) {
+	repo := &mockClassRepo{
+		updateClassFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateClassParams) (*store.Class, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	body, _ := json.Marshal(map[string]any{"name": "New Name"})
+	h := NewClassHandler(repo)
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestGetClass_InternalError(t *testing.T) {
+	repo := &mockClassRepo{
+		getClassFn: func(_ context.Context, _ uuid.UUID) (*store.Class, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	h := NewClassHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestDeleteClass_InternalError(t *testing.T) {
+	repo := &mockClassRepo{
+		deleteClassFn: func(_ context.Context, _ uuid.UUID) error {
+			return errors.New("db error")
+		},
+	}
+
+	id := uuid.New()
+	h := NewClassHandler(repo)
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
 func TestDeleteClass_RBACForbidden(t *testing.T) {
 	repo := &mockClassRepo{}
 	h := NewClassHandler(repo)

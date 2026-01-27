@@ -323,6 +323,24 @@ func TestUpdateCode_InternalError(t *testing.T) {
 	}
 }
 
+func TestUpdateCode_MissingCode(t *testing.T) {
+	h := NewSessionStudentHandler(&mockSessionStudentRepo{})
+	body, _ := json.Marshal(map[string]any{})
+	sessionID := uuid.New()
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestUpdateCode_InvalidBody(t *testing.T) {
 	h := NewSessionStudentHandler(&mockSessionStudentRepo{})
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+uuid.New().String()+"/code", bytes.NewReader([]byte("not json")))

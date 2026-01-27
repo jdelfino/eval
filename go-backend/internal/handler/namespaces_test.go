@@ -346,6 +346,129 @@ func TestUpdateNamespace_NotFound(t *testing.T) {
 	}
 }
 
+func TestCreateNamespace_MissingRequiredFields(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{})
+	// Missing both id and display_name
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateNamespace_InvalidBody(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateNamespace_InternalError(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		createNamespaceFn: func(_ context.Context, _ store.CreateNamespaceParams) (*store.Namespace, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"id":           "test-ns",
+		"display_name": "Test Namespace",
+	})
+	h := NewNamespaceHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetNamespace_InternalError(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	h := NewNamespaceHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/test-ns", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestUpdateNamespace_InvalidBody(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{})
+	req := httptest.NewRequest(http.MethodPatch, "/test-ns", bytes.NewReader([]byte("not json")))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateNamespace_InternalError(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"display_name": "Updated"})
+	h := NewNamespaceHandler(repo)
+	req := httptest.NewRequest(http.MethodPatch, "/test-ns", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
 func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 	repo := &mockNamespaceRepo{}
 	h := NewNamespaceHandler(repo)
