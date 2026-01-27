@@ -280,6 +280,38 @@ type MembershipRepository interface {
 	ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error)
 }
 
+// SessionStudent represents a student's participation in a session.
+type SessionStudent struct {
+	ID                uuid.UUID       `json:"id"`
+	SessionID         uuid.UUID       `json:"session_id"`
+	UserID            uuid.UUID       `json:"user_id"`
+	Name              string          `json:"name"`
+	Code              string          `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	LastUpdate        time.Time       `json:"last_update"`
+}
+
+// JoinSessionParams contains the fields for joining a session.
+type JoinSessionParams struct {
+	SessionID uuid.UUID
+	UserID    uuid.UUID
+	Name      string
+}
+
+// SessionStudentRepository defines the interface for session student data access.
+type SessionStudentRepository interface {
+	// JoinSession adds a student to a session (idempotent via ON CONFLICT).
+	JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error)
+	// UpdateCode updates a student's code in a session.
+	// Returns ErrNotFound if the student is not in the session.
+	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*SessionStudent, error)
+	// ListSessionStudents retrieves all students in a session.
+	ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error)
+	// GetSessionStudent retrieves a single student's record in a session.
+	// Returns ErrNotFound if the student is not in the session.
+	GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error)
+}
+
 // Revision represents a code revision within a session.
 type Revision struct {
 	ID              uuid.UUID       `json:"id"`

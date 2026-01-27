@@ -2,43 +2,9 @@ package store
 
 import (
 	"context"
-	"encoding/json"
-	"time"
 
 	"github.com/google/uuid"
 )
-
-// SessionStudent represents a student's participation in a session.
-type SessionStudent struct {
-	ID                uuid.UUID       `json:"id"`
-	SessionID         uuid.UUID       `json:"session_id"`
-	UserID            uuid.UUID       `json:"user_id"`
-	Name              string          `json:"name"`
-	Code              string          `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	LastUpdate        time.Time       `json:"last_update"`
-}
-
-// JoinSessionParams contains the fields for joining a session.
-type JoinSessionParams struct {
-	SessionID uuid.UUID
-	UserID    uuid.UUID
-	Name      string
-}
-
-// SessionStudentRepository defines the interface for session student data access.
-type SessionStudentRepository interface {
-	// JoinSession adds a student to a session (idempotent via ON CONFLICT).
-	JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error)
-	// UpdateCode updates a student's code in a session.
-	// Returns ErrNotFound if the student is not in the session.
-	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*SessionStudent, error)
-	// ListSessionStudents retrieves all students in a session.
-	ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error)
-	// GetSessionStudent retrieves a single student's record in a session.
-	// Returns ErrNotFound if the student is not in the session.
-	GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error)
-}
 
 // JoinSession adds a student to a session. If the student is already in the session,
 // the name is updated (idempotent). Also appends the user to the session's participants array.
