@@ -9,7 +9,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
+
+const defaultHTTPTimeout = 5 * time.Second
 
 // Publisher sends events to Centrifugo channels via the HTTP API.
 type Publisher interface {
@@ -31,14 +34,16 @@ type Client struct {
 	apiURL     string
 	apiKey     string
 	httpClient *http.Client
+	logger     *slog.Logger
 }
 
-// NewClient creates a new Centrifugo API client.
-func NewClient(apiURL, apiKey string) *Client {
+// NewClient creates a new Centrifugo API client with a default 5-second timeout.
+func NewClient(apiURL, apiKey string, logger *slog.Logger) *Client {
 	return &Client{
 		apiURL:     apiURL,
 		apiKey:     apiKey,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: defaultHTTPTimeout},
+		logger:     logger,
 	}
 }
 
@@ -70,7 +75,7 @@ func (c *Client) Publish(ctx context.Context, channel string, data any) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		slog.Error("centrifugo API error", "status", resp.StatusCode, "body", string(body))
+		c.logger.Error("centrifugo API error", "status", resp.StatusCode, "body", string(body))
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Body:       string(body),

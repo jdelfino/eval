@@ -5,6 +5,7 @@ package realtime_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jdelfino/eval/internal/realtime"
 )
+
+var integTestLogger = slog.Default()
 
 const (
 	centrifugoURL    = "http://localhost:8000"
@@ -115,7 +118,7 @@ func TestPublish_IntegrationWithCentrifugo(t *testing.T) {
 	// Small delay to ensure subscription is active on Centrifugo side.
 	time.Sleep(200 * time.Millisecond)
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey)
+	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "student_joined", Data: "hello"}
 	ctx := context.Background()
 	if err := client.Publish(ctx, "session:test-session-1", event); err != nil {
@@ -155,7 +158,7 @@ func TestPublish_MultipleSubscribers(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey)
+	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "code_update", Data: "payload"}
 	if err := client.Publish(context.Background(), "session:multi-test", event); err != nil {
 		t.Fatalf("publish failed: %v", err)
@@ -196,7 +199,7 @@ func TestPublish_DifferentChannels(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey)
+	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
 	event := testEvent{Type: "ping", Data: "wrong-channel"}
 	if err := client.Publish(context.Background(), "session:channel-b", event); err != nil {
 		t.Fatalf("publish failed: %v", err)
@@ -211,7 +214,7 @@ func TestPublish_DifferentChannels(t *testing.T) {
 }
 
 func TestPublish_InvalidAPIKey(t *testing.T) {
-	client := realtime.NewClient(centrifugoURL, "wrong-api-key")
+	client := realtime.NewClient(centrifugoURL, "wrong-api-key", integTestLogger)
 	event := testEvent{Type: "test", Data: "data"}
 	err := client.Publish(context.Background(), "session:test", event)
 	if err == nil {

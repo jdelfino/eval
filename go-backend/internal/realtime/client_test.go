@@ -7,11 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/jdelfino/eval/internal/realtime"
 )
+
+var testLogger = slog.Default()
 
 func TestPublish_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +51,7 @@ func TestPublish_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := realtime.NewClient(srv.URL, "test-key")
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
 	err := client.Publish(context.Background(), "session:abc", map[string]string{"type": "student_joined"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -70,7 +73,7 @@ func TestPublish_ArbitraryData(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := realtime.NewClient(srv.URL, "test-key")
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
 
 	type nested struct {
 		Count int      `json:"count"`
@@ -98,7 +101,7 @@ func TestPublish_4xxError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := realtime.NewClient(srv.URL, "test-key")
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
 	err := client.Publish(context.Background(), "ch", "data")
 	if err == nil {
 		t.Fatal("expected error for 4xx response")
@@ -120,7 +123,7 @@ func TestPublish_5xxError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := realtime.NewClient(srv.URL, "test-key")
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
 	err := client.Publish(context.Background(), "ch", "data")
 	if err == nil {
 		t.Fatal("expected error for 5xx response")
@@ -142,7 +145,7 @@ func TestPublish_ContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := realtime.NewClient(srv.URL, "test-key")
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -153,7 +156,7 @@ func TestPublish_ContextCancellation(t *testing.T) {
 }
 
 func TestPublish_InvalidURL(t *testing.T) {
-	client := realtime.NewClient("http://invalid.localhost:0", "key")
+	client := realtime.NewClient("http://invalid.localhost:0", "key", testLogger)
 	err := client.Publish(context.Background(), "ch", "data")
 	if err == nil {
 		t.Fatal("expected error for invalid URL")
@@ -161,7 +164,7 @@ func TestPublish_InvalidURL(t *testing.T) {
 }
 
 func TestPublish_MarshalError(t *testing.T) {
-	client := realtime.NewClient("http://localhost", "key")
+	client := realtime.NewClient("http://localhost", "key", testLogger)
 	// Channels (chan int) cannot be marshaled to JSON.
 	err := client.Publish(context.Background(), "ch", make(chan int))
 	if err == nil {
