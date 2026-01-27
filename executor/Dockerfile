@@ -1,0 +1,61 @@
+# Multi-stage Dockerfile for the executor service.
+#
+# NOTE: nsjail requires Linux kernel capabilities at runtime.
+# The Kubernetes pod spec must grant securityContext with at minimum
+# CAP_SYS_ADMIN (for user namespaces), CAP_SYS_CHROOT, CAP_SETUID,
+# CAP_SETGID, and CAP_NET_ADMIN. For local development, use:
+#   docker run --privileged -p 8081:8081 executor
+#
+# The runtime image uses debian (not alpine/scratch) because nsjail
+# requires glibc and libnl.
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build nsjail from source
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim AS nsjail-builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential git protobuf-compiler pkg-config \
+    libprotobuf-dev libnl-3-dev libnl-route-3-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/google/nsjail.git /nsjail
+
+WORKDIR /nsjail
+
+RUN make
+
+# ---------------------------------------------------------------------------
+# Stage 2: Build Go binary
+# ---------------------------------------------------------------------------
+FROM golang:1.24-alpine AS go-builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s" \
+    -o /app/executor \
+    ./cmd/executor
+
+# ---------------------------------------------------------------------------
+# Stage 3: Runtime
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-stdlib ca-certificates \
+    libprotobuf32 libnl-3-200 libnl-route-3-200 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=nsjail-builder /nsjail/nsjail /usr/bin/nsjail
+COPY --from=go-builder /app/executor /executor
+
+USER 65534:65534
+
+EXPOSE 8081
+
+ENTRYPOINT ["/executor"]
