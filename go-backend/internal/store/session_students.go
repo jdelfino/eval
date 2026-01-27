@@ -59,10 +59,11 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 // UpdateCode updates a student's code in a session and refreshes the session's last_activity.
 // Returns ErrNotFound if the student is not in the session.
 func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*SessionStudent, error) {
-	conn, err := s.conn(ctx)
+	tx, err := s.beginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback(ctx) // no-op after commit
 
 	const updateQuery = `
 		UPDATE session_students SET code = $3, last_update = now()
@@ -70,7 +71,7 @@ func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, cod
 		RETURNING id, session_id, user_id, name, code, execution_settings, last_update`
 
 	var ss SessionStudent
-	err = conn.QueryRow(ctx, updateQuery, sessionID, userID, code).Scan(
+	err = tx.QueryRow(ctx, updateQuery, sessionID, userID, code).Scan(
 		&ss.ID,
 		&ss.SessionID,
 		&ss.UserID,
@@ -84,8 +85,12 @@ func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, cod
 	}
 
 	// Update session last_activity
-	_, err = conn.Exec(ctx, "UPDATE sessions SET last_activity = now() WHERE id = $1", sessionID)
+	_, err = tx.Exec(ctx, "UPDATE sessions SET last_activity = now() WHERE id = $1", sessionID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
