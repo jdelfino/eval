@@ -4,9 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -80,13 +77,12 @@ func (h *MembershipHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")
+	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
-	err = h.memberships.DeleteMembership(r.Context(), sectionID, authUser.ID)
+	err := h.memberships.DeleteMembership(r.Context(), sectionID, authUser.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "membership not found")
@@ -106,9 +102,8 @@ func (h *MembershipHandler) ListMembers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sectionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")
+	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 

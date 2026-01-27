@@ -69,9 +69,8 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/problems/{id} — returns a single problem.
 func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid problem id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -141,9 +140,8 @@ type updateProblemRequest struct {
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
 func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid problem id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -174,13 +172,12 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/problems/{id} — deletes a problem (author or system-admin, enforced by RLS).
 func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid problem id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
-	err = h.problems.DeleteProblem(r.Context(), id)
+	err := h.problems.DeleteProblem(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")

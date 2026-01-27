@@ -74,9 +74,8 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/sessions/{id} — returns a single session.
 func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -137,9 +136,8 @@ type updateSessionRequest struct {
 
 // Update handles PATCH /api/v1/sessions/{id} — updates a session (instructor+).
 func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 

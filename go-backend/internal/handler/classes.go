@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
 	custommw "github.com/jdelfino/eval/internal/middleware"
@@ -58,9 +57,8 @@ func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/classes/{id} — returns a single class.
 func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid class id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -118,9 +116,8 @@ type updateClassRequest struct {
 
 // Update handles PATCH /api/v1/classes/{id} — updates a class (author or system-admin, enforced by RLS).
 func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid class id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -147,13 +144,12 @@ func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/classes/{id} — deletes a class (author or system-admin, enforced by RLS).
 func (h *ClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid class id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
-	err = h.classes.DeleteClass(r.Context(), id)
+	err := h.classes.DeleteClass(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")

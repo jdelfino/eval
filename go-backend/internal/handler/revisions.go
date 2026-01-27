@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
@@ -24,9 +23,8 @@ func NewRevisionHandler(revisions store.RevisionRepository) *RevisionHandler {
 
 // List handles GET /api/v1/sessions/{sessionID}/revisions — returns revisions for a session.
 func (h *RevisionHandler) List(w http.ResponseWriter, r *http.Request) {
-	sessionID, err := uuid.Parse(chi.URLParam(r, "sessionID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	sessionID, ok := httputil.ParseUUIDParam(w, r, "sessionID")
+	if !ok {
 		return
 	}
 
@@ -70,9 +68,8 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, err := uuid.Parse(chi.URLParam(r, "sessionID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	sessionID, ok := httputil.ParseUUIDParam(w, r, "sessionID")
+	if !ok {
 		return
 	}
 

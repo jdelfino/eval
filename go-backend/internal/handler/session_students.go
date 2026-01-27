@@ -4,9 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -35,9 +32,8 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -72,9 +68,8 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sessionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -103,9 +98,8 @@ func (h *SessionStudentHandler) ListStudents(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	sessionID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid session id")
+	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
