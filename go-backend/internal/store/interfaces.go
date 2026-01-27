@@ -280,6 +280,40 @@ type MembershipRepository interface {
 	ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error)
 }
 
+// Revision represents a code revision within a session.
+type Revision struct {
+	ID              uuid.UUID       `json:"id"`
+	NamespaceID     string          `json:"namespace_id"`
+	SessionID       uuid.UUID       `json:"session_id"`
+	UserID          uuid.UUID       `json:"user_id"`
+	Timestamp       time.Time       `json:"timestamp"`
+	IsDiff          bool            `json:"is_diff"`
+	Diff            *string         `json:"diff"`
+	FullCode        *string         `json:"full_code"`
+	BaseRevisionID  *uuid.UUID      `json:"base_revision_id"`
+	ExecutionResult json.RawMessage `json:"execution_result"`
+}
+
+// CreateRevisionParams contains the fields for creating a revision.
+type CreateRevisionParams struct {
+	NamespaceID     string
+	SessionID       uuid.UUID
+	UserID          uuid.UUID
+	IsDiff          bool
+	Diff            *string
+	FullCode        *string
+	BaseRevisionID  *uuid.UUID
+	ExecutionResult json.RawMessage
+}
+
+// RevisionRepository defines the interface for revision data access.
+type RevisionRepository interface {
+	// ListRevisions retrieves all revisions for a session, optionally filtered by user.
+	ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]Revision, error)
+	// CreateRevision creates a new revision and returns it.
+	CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error)
+}
+
 // UserRepository defines the interface for user data access.
 type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.
