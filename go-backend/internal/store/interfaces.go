@@ -67,6 +67,48 @@ type NamespaceRepository interface {
 	UpdateNamespace(ctx context.Context, id string, params UpdateNamespaceParams) (*Namespace, error)
 }
 
+// Class represents a class (course) in the database.
+type Class struct {
+	ID          uuid.UUID  `json:"id"`
+	NamespaceID string     `json:"namespace_id"`
+	Name        string     `json:"name"`
+	Description *string    `json:"description"`
+	CreatedBy   uuid.UUID  `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// CreateClassParams contains the fields for creating a class.
+type CreateClassParams struct {
+	NamespaceID string
+	Name        string
+	Description *string
+	CreatedBy   uuid.UUID
+}
+
+// UpdateClassParams contains the fields that can be updated on a class.
+type UpdateClassParams struct {
+	Name        *string
+	Description *string
+}
+
+// ClassRepository defines the interface for class data access.
+type ClassRepository interface {
+	// ListClasses retrieves all classes visible to the current user (RLS-filtered).
+	ListClasses(ctx context.Context) ([]Class, error)
+	// GetClass retrieves a class by ID.
+	// Returns ErrNotFound if the class does not exist.
+	GetClass(ctx context.Context, id uuid.UUID) (*Class, error)
+	// CreateClass creates a new class and returns it.
+	CreateClass(ctx context.Context, params CreateClassParams) (*Class, error)
+	// UpdateClass updates a class's mutable fields and returns the updated class.
+	// Returns ErrNotFound if the class does not exist.
+	UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClassParams) (*Class, error)
+	// DeleteClass deletes a class by ID.
+	// Returns ErrNotFound if the class does not exist.
+	DeleteClass(ctx context.Context, id uuid.UUID) error
+}
+
 // UserRepository defines the interface for user data access.
 type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.
