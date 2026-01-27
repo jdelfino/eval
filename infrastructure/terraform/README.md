@@ -11,7 +11,9 @@ infrastructure/terraform/
 │   ├── gke/                      # GKE Autopilot cluster
 │   ├── cloudsql/                 # Cloud SQL PostgreSQL
 │   ├── identity-platform/        # Identity Platform (authentication)
-│   └── nat/                      # NAT VM for outbound internet access
+│   ├── nat/                      # NAT VM for outbound internet access
+│   ├── artifact-registry/        # Artifact Registry for container images
+│   └── workload-identity-federation/  # WIF for GitHub Actions auth
 └── environments/                 # Environment-specific instantiation
     └── prod/
         ├── main.tf               # Instantiates modules

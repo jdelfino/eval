@@ -137,6 +137,19 @@ module "artifact_registry" {
   region       = var.region
 }
 
+module "workload_identity_federation" {
+  source = "../../modules/workload-identity-federation"
+
+  environment    = var.environment
+  project_name   = var.project_name
+  project_id     = var.project_id
+  project_number = var.project_number
+  region         = var.region
+
+  github_owner = var.github_owner
+  github_repo  = var.github_repo
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------

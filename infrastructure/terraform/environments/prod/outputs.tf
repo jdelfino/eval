@@ -107,3 +107,22 @@ output "artifact_registry_url" {
   description = "Artifact Registry repository URL for Docker operations"
   value       = module.artifact_registry.repository_url
 }
+
+# -----------------------------------------------------------------------------
+# Workload Identity Federation Outputs
+# -----------------------------------------------------------------------------
+
+output "wif_provider" {
+  description = "Workload Identity Provider for GitHub Actions auth"
+  value       = module.workload_identity_federation.workload_identity_provider
+}
+
+output "wif_service_account" {
+  description = "Service account email for GitHub Actions"
+  value       = module.workload_identity_federation.service_account_email
+}
+
+output "github_secrets_setup" {
+  description = "Instructions for configuring GitHub Actions secrets"
+  value       = module.workload_identity_federation.github_secrets_setup
+}

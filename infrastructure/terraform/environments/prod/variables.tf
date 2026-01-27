@@ -156,3 +156,22 @@ variable "oauth_client_secret" {
   default     = ""
   sensitive   = true
 }
+
+# -----------------------------------------------------------------------------
+# Workload Identity Federation Variables
+# -----------------------------------------------------------------------------
+
+variable "project_number" {
+  description = "GCP project number (numeric ID, required for WIF)"
+  type        = string
+}
+
+variable "github_owner" {
+  description = "GitHub repository owner (user or organization)"
+  type        = string
+}
+
+variable "github_repo" {
+  description = "GitHub repository name"
+  type        = string
+}
