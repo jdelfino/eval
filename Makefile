@@ -38,3 +38,18 @@ test:
 
 logs:
 	docker-compose logs -f
+
+# Go Backend targets
+.PHONY: go-build go-test go-lint docker-build
+
+go-build:
+	cd go-backend && go build -o ./tmp/server ./cmd/server
+
+go-test:
+	cd go-backend && go test -v -race ./...
+
+go-lint:
+	cd go-backend && golangci-lint run ./...
+
+docker-build:
+	docker build -t go-api:local go-backend/
