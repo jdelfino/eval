@@ -212,6 +212,106 @@ func TestGetUserByID_SystemAdmin(t *testing.T) {
 	}
 }
 
+// getUserByExternalIDWithConn is a test helper that uses a provided querier.
+func getUserByExternalIDWithConn(ctx context.Context, conn Querier, externalID string) (*User, error) {
+	const query = `
+		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
+		FROM users
+		WHERE external_id = $1`
+
+	var user User
+	err := conn.QueryRow(ctx, query, externalID).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.Email,
+		&user.Role,
+		&user.NamespaceID,
+		&user.DisplayName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &user, nil
+}
+
+func TestGetUserByExternalID_Success(t *testing.T) {
+	now := time.Now().Truncate(time.Microsecond)
+	userID := uuid.New()
+	externalID := "firebase-uid-123"
+	namespaceID := "test-namespace"
+	displayName := "Test User"
+
+	mock := &mockQuerier{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			if len(args) > 0 {
+				if eid, ok := args[0].(string); ok && eid != externalID {
+					return &mockRow{err: pgx.ErrNoRows}
+				}
+			}
+			return &mockRow{
+				values: []any{
+					userID,
+					externalID,
+					"test@example.com",
+					"instructor",
+					namespaceID,
+					displayName,
+					now,
+					now,
+				},
+			}
+		},
+	}
+
+	ctx := context.Background()
+
+	user, err := getUserByExternalIDWithConn(ctx, mock, externalID)
+	if err != nil {
+		t.Fatalf("GetUserByExternalID() error = %v", err)
+	}
+
+	if user.ID != userID {
+		t.Errorf("user.ID = %v, want %v", user.ID, userID)
+	}
+	if user.ExternalID == nil || *user.ExternalID != externalID {
+		t.Errorf("user.ExternalID = %v, want %v", user.ExternalID, externalID)
+	}
+	if user.Email != "test@example.com" {
+		t.Errorf("user.Email = %q, want %q", user.Email, "test@example.com")
+	}
+	if user.Role != "instructor" {
+		t.Errorf("user.Role = %q, want %q", user.Role, "instructor")
+	}
+}
+
+func TestGetUserByExternalID_NotFound(t *testing.T) {
+	mock := &mockQuerier{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{err: pgx.ErrNoRows}
+		},
+	}
+
+	ctx := context.Background()
+
+	_, err := getUserByExternalIDWithConn(ctx, mock, "nonexistent-uid")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetUserByExternalID() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestGetUserByExternalID_NoConnection(t *testing.T) {
+	store := New(nil)
+	ctx := context.Background()
+
+	_, err := store.GetUserByExternalID(ctx, "some-uid")
+	if !errors.Is(err, ErrNoConnection) {
+		t.Errorf("GetUserByExternalID() error = %v, want ErrNoConnection", err)
+	}
+}
+
 func TestGetUserByID_DatabaseError(t *testing.T) {
 	dbErr := errors.New("connection refused")
 	mock := &mockQuerier{

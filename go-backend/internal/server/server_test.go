@@ -3,15 +3,18 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/db"
+	"github.com/jdelfino/eval/internal/store"
 )
 
 // mockPool implements DatabasePool for testing
@@ -33,7 +36,7 @@ func TestNew(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
 
-	s := New(cfg, logger, pool)
+	s := New(cfg, logger, pool, nil)
 
 	if s == nil {
 		t.Fatal("New() returned nil")
@@ -56,7 +59,7 @@ func TestRoutes(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool)
+	s := New(cfg, logger, pool, nil)
 
 	tests := []struct {
 		name           string
@@ -140,7 +143,7 @@ func TestReadyzUnhealthyPool(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: false, Message: "connection failed"}}
-	s := New(cfg, logger, pool)
+	s := New(cfg, logger, pool, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()
@@ -174,7 +177,7 @@ func TestNotFoundRoute(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool)
+	s := New(cfg, logger, pool, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	rr := httptest.NewRecorder()
@@ -190,7 +193,7 @@ func TestAPIRoutePrefix(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool)
+	s := New(cfg, logger, pool, nil)
 
 	// API v1 route prefix exists (even if no routes are registered yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1", nil)
@@ -203,4 +206,30 @@ func TestAPIRoutePrefix(t *testing.T) {
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("status code = %d, want %d", rr.Code, http.StatusNotFound)
 	}
+}
+
+func TestNewWithUserRepo_BuildsWithoutError(t *testing.T) {
+	// Verify that server construction works when a UserRepository is provided.
+	// This exercises the auth middleware wiring path (JWKS provider, validator, adapter).
+	cfg := &config.Config{Port: 8080, GCPProjectID: "test-project"}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
+	repo := &stubUserRepo{}
+
+	s := New(cfg, logger, pool, repo)
+
+	if s == nil {
+		t.Fatal("New() returned nil when userRepo is provided")
+	}
+}
+
+// stubUserRepo is a minimal store.UserRepository for server_test.
+type stubUserRepo struct{}
+
+func (s *stubUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *stubUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
+	return nil, errors.New("not implemented")
 }
