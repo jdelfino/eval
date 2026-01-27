@@ -89,25 +89,13 @@ func TestReadyzHandler_HealthyDatabase(t *testing.T) {
 		t.Errorf("ReadyzHandler returned status %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	var resp readyzResponse
+	var resp healthResponse
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
 	if resp.Status != "ok" {
 		t.Errorf("ReadyzHandler returned status %q, want %q", resp.Status, "ok")
-	}
-
-	if !resp.Checks.Database.Healthy {
-		t.Error("ReadyzHandler returned database healthy=false, want true")
-	}
-
-	if resp.Checks.Database.TotalConns != 5 {
-		t.Errorf("ReadyzHandler returned total_conns=%d, want 5", resp.Checks.Database.TotalConns)
-	}
-
-	if resp.Checks.Database.IdleConns != 3 {
-		t.Errorf("ReadyzHandler returned idle_conns=%d, want 3", resp.Checks.Database.IdleConns)
 	}
 
 	contentType := rr.Header().Get("Content-Type")
@@ -136,7 +124,7 @@ func TestReadyzHandler_UnhealthyDatabase(t *testing.T) {
 		t.Errorf("ReadyzHandler returned status %d, want %d", rr.Code, http.StatusServiceUnavailable)
 	}
 
-	var resp readyzResponse
+	var resp healthResponse
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -145,12 +133,84 @@ func TestReadyzHandler_UnhealthyDatabase(t *testing.T) {
 		t.Errorf("ReadyzHandler returned status %q, want %q", resp.Status, "unhealthy")
 	}
 
-	if resp.Checks.Database.Healthy {
-		t.Error("ReadyzHandler returned database healthy=true, want false")
-	}
-
 	contentType := rr.Header().Get("Content-Type")
 	if contentType != "application/json" {
 		t.Errorf("ReadyzHandler returned Content-Type %q, want %q", contentType, "application/json")
+	}
+}
+
+func TestReadyzHandler_VerboseHealthy(t *testing.T) {
+	mock := &mockHealthChecker{
+		status: db.HealthStatus{
+			Healthy:    true,
+			TotalConns: 5,
+			IdleConns:  3,
+			Message:    "OK",
+		},
+	}
+
+	handler := NewReadyzHandler(mock)
+	req := httptest.NewRequest(http.MethodGet, "/readyz?verbose", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("ReadyzHandler verbose returned status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var resp verboseReadyzResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode verbose response: %v", err)
+	}
+
+	if resp.Status != "ok" {
+		t.Errorf("status = %q, want %q", resp.Status, "ok")
+	}
+
+	if resp.Components.Database.Status != "ok" {
+		t.Errorf("database status = %q, want %q", resp.Components.Database.Status, "ok")
+	}
+
+	if resp.Components.Database.Connections.TotalConns != 5 {
+		t.Errorf("total_conns = %d, want 5", resp.Components.Database.Connections.TotalConns)
+	}
+
+	if resp.Components.Database.Connections.IdleConns != 3 {
+		t.Errorf("idle_conns = %d, want 3", resp.Components.Database.Connections.IdleConns)
+	}
+}
+
+func TestReadyzHandler_VerboseUnhealthy(t *testing.T) {
+	mock := &mockHealthChecker{
+		status: db.HealthStatus{
+			Healthy:    false,
+			TotalConns: 0,
+			IdleConns:  0,
+			Message:    "ping failed",
+		},
+	}
+
+	handler := NewReadyzHandler(mock)
+	req := httptest.NewRequest(http.MethodGet, "/readyz?verbose", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("ReadyzHandler verbose returned status %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp verboseReadyzResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode verbose response: %v", err)
+	}
+
+	if resp.Status != "unhealthy" {
+		t.Errorf("status = %q, want %q", resp.Status, "unhealthy")
+	}
+
+	if resp.Components.Database.Status != "unhealthy" {
+		t.Errorf("database status = %q, want %q", resp.Components.Database.Status, "unhealthy")
 	}
 }

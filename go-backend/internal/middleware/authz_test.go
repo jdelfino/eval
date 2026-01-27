@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jdelfino/eval/internal/auth"
 )
@@ -125,4 +127,54 @@ func TestRequireRole(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestErrorResponseIncludesRequestID(t *testing.T) {
+	okHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	t.Run("error response includes request_id when present", func(t *testing.T) {
+		mw := RequireRole(auth.RoleInstructor)
+		wrapped := mw(okHandler)
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		ctx := context.WithValue(req.Context(), chimiddleware.RequestIDKey, "req-abc-123")
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		wrapped.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+		}
+
+		var body map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode JSON body: %v", err)
+		}
+
+		if body["request_id"] != "req-abc-123" {
+			t.Errorf("request_id = %q, want %q", body["request_id"], "req-abc-123")
+		}
+	})
+
+	t.Run("error response omits request_id when not present", func(t *testing.T) {
+		mw := RequireRole(auth.RoleInstructor)
+		wrapped := mw(okHandler)
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+
+		rr := httptest.NewRecorder()
+		wrapped.ServeHTTP(rr, req)
+
+		var body map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode JSON body: %v", err)
+		}
+
+		if _, exists := body["request_id"]; exists {
+			t.Errorf("request_id should not be present when no request ID in context")
+		}
+	})
 }
