@@ -105,9 +105,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
-        with:
-          install_components: kubectl,gke-gcloud-auth-plugin
+      - run: gcloud components install gke-gcloud-auth-plugin --quiet
       - name: Get GKE credentials via Connect Gateway
         run: |
           gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
