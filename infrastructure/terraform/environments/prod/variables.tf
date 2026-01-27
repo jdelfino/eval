@@ -175,3 +175,41 @@ variable "github_repo" {
   description = "GitHub repository name"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# Redis Variables
+# -----------------------------------------------------------------------------
+
+variable "redis_tier" {
+  description = "Redis service tier: BASIC or STANDARD_HA"
+  type        = string
+  default     = "BASIC"
+}
+
+variable "redis_memory_size_gb" {
+  description = "Memory size in GB for the Redis instance"
+  type        = number
+  default     = 1
+}
+
+# -----------------------------------------------------------------------------
+# Centrifugo Variables
+# -----------------------------------------------------------------------------
+
+variable "centrifugo_api_key" {
+  description = "API key for Centrifugo server API authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "centrifugo_token_secret" {
+  description = "HMAC secret for Centrifugo JWT token verification"
+  type        = string
+  sensitive   = true
+}
+
+variable "centrifugo_allowed_origins" {
+  description = "List of allowed origins for Centrifugo CORS"
+  type        = list(string)
+  default     = []
+}

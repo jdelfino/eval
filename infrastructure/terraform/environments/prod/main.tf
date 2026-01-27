@@ -159,6 +159,21 @@ module "monitoring" {
   region       = var.region
 }
 
+module "redis" {
+  source = "../../modules/redis"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  tier           = var.redis_tier
+  memory_size_gb = var.redis_memory_size_gb
+  vpc_network_id = module.vpc.vpc_id
+
+  depends_on = [module.vpc]
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------
@@ -207,6 +222,192 @@ resource "kubernetes_secret" "app_secrets" {
   }
 
   type = "Opaque"
+
+  depends_on = [module.gke]
+}
+
+# -----------------------------------------------------------------------------
+# Centrifugo Kubernetes Resources
+# -----------------------------------------------------------------------------
+# Deploys Centrifugo v5 for real-time WebSocket messaging.
+# Uses Memorystore Redis as the broker/presence engine.
+
+resource "kubernetes_config_map" "centrifugo_config" {
+  metadata {
+    name      = "centrifugo-config"
+    namespace = "default"
+  }
+
+  data = {
+    "config.json" = jsonencode({
+      token_hmac_secret_key = "$${CENTRIFUGO_TOKEN_HMAC_SECRET_KEY}"
+      api_key               = "$${CENTRIFUGO_API_KEY}"
+      admin                 = false
+      health                = true
+      allowed_origins       = var.centrifugo_allowed_origins
+      engine                = "redis"
+      redis_address         = "${module.redis.host}:${module.redis.port}"
+      client_channel_limit  = 128
+      client_queue_max_size = 1048576
+      namespaces = [
+        {
+          name         = "session"
+          presence     = true
+          join_leave   = true
+          history_size = 10
+          history_ttl  = "5m"
+        }
+      ]
+    })
+  }
+
+  depends_on = [module.gke]
+}
+
+resource "kubernetes_secret" "centrifugo_secrets" {
+  metadata {
+    name      = "centrifugo-secrets"
+    namespace = "default"
+  }
+
+  data = {
+    CENTRIFUGO_API_KEY              = var.centrifugo_api_key
+    CENTRIFUGO_TOKEN_HMAC_SECRET_KEY = var.centrifugo_token_secret
+  }
+
+  type = "Opaque"
+
+  depends_on = [module.gke]
+}
+
+resource "kubernetes_deployment" "centrifugo" {
+  metadata {
+    name      = "centrifugo"
+    namespace = "default"
+    labels = {
+      app = "centrifugo"
+    }
+  }
+
+  spec {
+    replicas = 2
+
+    selector {
+      match_labels = {
+        app = "centrifugo"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "centrifugo"
+        }
+      }
+
+      spec {
+        container {
+          name  = "centrifugo"
+          image = "centrifugo/centrifugo:v5"
+
+          args = ["centrifugo", "-c", "/centrifugo/config.json"]
+
+          port {
+            container_port = 8000
+            name           = "http"
+          }
+
+          env {
+            name = "CENTRIFUGO_API_KEY"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.centrifugo_secrets.metadata[0].name
+                key  = "CENTRIFUGO_API_KEY"
+              }
+            }
+          }
+
+          env {
+            name = "CENTRIFUGO_TOKEN_HMAC_SECRET_KEY"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.centrifugo_secrets.metadata[0].name
+                key  = "CENTRIFUGO_TOKEN_HMAC_SECRET_KEY"
+              }
+            }
+          }
+
+          volume_mount {
+            name       = "centrifugo-config"
+            mount_path = "/centrifugo"
+            read_only  = true
+          }
+
+          resources {
+            requests = {
+              cpu    = "100m"
+              memory = "128Mi"
+            }
+            limits = {
+              memory = "256Mi"
+            }
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8000
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 15
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8000
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 10
+          }
+        }
+
+        volume {
+          name = "centrifugo-config"
+          config_map {
+            name = kubernetes_config_map.centrifugo_config.metadata[0].name
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [module.gke]
+}
+
+resource "kubernetes_service" "centrifugo" {
+  metadata {
+    name      = "centrifugo"
+    namespace = "default"
+    labels = {
+      app = "centrifugo"
+    }
+  }
+
+  spec {
+    type = "ClusterIP"
+
+    selector = {
+      app = "centrifugo"
+    }
+
+    port {
+      port        = 8000
+      target_port = 8000
+      protocol    = "TCP"
+      name        = "http"
+    }
+  }
 
   depends_on = [module.gke]
 }
