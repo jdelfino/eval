@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 )
@@ -526,6 +528,118 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for student DELETE, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
+	classID := uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
+	sec := testSection()
+	callCount := 0
+
+	repo := &mockSectionRepo{
+		createSectionFn: func(_ context.Context, params store.CreateSectionParams) (*store.Section, error) {
+			callCount++
+			if callCount == 1 {
+				return nil, &pgconn.PgError{Code: "23505", ConstraintName: "sections_join_code_key"}
+			}
+			return sec, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "Section A"})
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 calls to CreateSection, got %d", callCount)
+	}
+}
+
+func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
+	classID := uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
+	callCount := 0
+
+	repo := &mockSectionRepo{
+		createSectionFn: func(_ context.Context, _ store.CreateSectionParams) (*store.Section, error) {
+			callCount++
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "sections_join_code_key"}
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "Section A"})
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if callCount != 3 {
+		t.Fatalf("expected 3 calls to CreateSection, got %d", callCount)
+	}
+}
+
+func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
+	classID := uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
+	callCount := 0
+
+	repo := &mockSectionRepo{
+		createSectionFn: func(_ context.Context, _ store.CreateSectionParams) (*store.Section, error) {
+			callCount++
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "sections_pkey"}
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "Section A"})
+	h := NewSectionHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 call to CreateSection (no retry), got %d", callCount)
 	}
 }
 

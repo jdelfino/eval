@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
 	custommw "github.com/jdelfino/eval/internal/middleware"
@@ -57,9 +56,8 @@ func (h *SectionHandler) ClassRoutes() chi.Router {
 
 // ListByClass handles GET /api/v1/classes/{classID}/sections — returns all sections for a class.
 func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
-	classID, err := uuid.Parse(chi.URLParam(r, "classID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid class id")
+	classID, ok := httputil.ParseUUIDParam(w, r, "classID")
+	if !ok {
 		return
 	}
 
@@ -78,9 +76,8 @@ func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/sections/{id} — returns a single section.
 func (h *SectionHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -111,9 +108,8 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	classID, err := uuid.Parse(chi.URLParam(r, "classID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid class id")
+	classID, ok := httputil.ParseUUIDParam(w, r, "classID")
+	if !ok {
 		return
 	}
 
@@ -122,20 +118,33 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	joinCode, err := generateJoinCode()
-	if err != nil {
+	const maxJoinCodeRetries = 3
+	var section *store.Section
+	for attempt := 0; attempt < maxJoinCodeRetries; attempt++ {
+		joinCode, err := generateJoinCode()
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+		section, err = h.sections.CreateSection(r.Context(), store.CreateSectionParams{
+			NamespaceID: authUser.NamespaceID,
+			ClassID:     classID,
+			Name:        req.Name,
+			Semester:    req.Semester,
+			JoinCode:    joinCode,
+		})
+		if err == nil {
+			break
+		}
+		if store.IsUniqueViolation(err, "sections_join_code_key") {
+			continue
+		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	section, err := h.sections.CreateSection(r.Context(), store.CreateSectionParams{
-		NamespaceID: authUser.NamespaceID,
-		ClassID:     classID,
-		Name:        req.Name,
-		Semester:    req.Semester,
-		JoinCode:    joinCode,
-	})
-	if err != nil {
+	if section == nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -152,9 +161,8 @@ type updateSectionRequest struct {
 
 // Update handles PATCH /api/v1/sections/{id} — updates a section (instructor+).
 func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -182,13 +190,12 @@ func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/sections/{id} — deletes a section (instructor+).
 func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
-	err = h.sections.DeleteSection(r.Context(), id)
+	err := h.sections.DeleteSection(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")

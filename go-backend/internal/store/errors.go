@@ -45,3 +45,13 @@ func HandleDuplicate(err error) error {
 	}
 	return err
 }
+
+// IsUniqueViolation checks whether the error is a PostgreSQL unique constraint
+// violation (23505) on the given constraint name. Returns false for nil errors.
+func IsUniqueViolation(err error, constraintName string) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == constraintName
+}
