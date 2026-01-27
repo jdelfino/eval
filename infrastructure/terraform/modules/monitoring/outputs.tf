@@ -7,5 +7,5 @@ output "dashboard_id" {
 
 output "dashboard_name" {
   description = "The resource name of the monitoring dashboard"
-  value       = google_monitoring_dashboard.go_api.dashboard_json
+  value       = google_monitoring_dashboard.go_api.name
 }

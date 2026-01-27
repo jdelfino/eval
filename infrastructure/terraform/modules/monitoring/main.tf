@@ -9,6 +9,7 @@ locals {
 }
 
 resource "google_monitoring_dashboard" "go_api" {
+  project = var.project_id
   dashboard_json = jsonencode({
     displayName = local.display_name
     mosaicLayout = {
