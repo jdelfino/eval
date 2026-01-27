@@ -1,0 +1,168 @@
+package config
+
+import (
+	"os"
+	"testing"
+)
+
+func TestLoad_Defaults(t *testing.T) {
+	// Clear any environment variables that might interfere
+	envVars := []string{
+		"PORT", "ENVIRONMENT", "LOG_LEVEL",
+		"GCP_PROJECT_ID", "GCP_REGION",
+		"DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME",
+		"DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_URL",
+		"REDIS_HOST", "REDIS_PORT",
+		"CENTRIFUGO_URL", "CENTRIFUGO_API_KEY", "CENTRIFUGO_TOKEN_SECRET",
+		"IDENTITY_PLATFORM_API_KEY", "IDENTITY_PLATFORM_AUTH_DOMAIN",
+		"OAUTH_CLIENT_ID", "OAUTH_CLIENT_SECRET",
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	// Check defaults
+	if cfg.Port != 8080 {
+		t.Errorf("Port = %d, want 8080", cfg.Port)
+	}
+	if cfg.Environment != "local" {
+		t.Errorf("Environment = %q, want %q", cfg.Environment, "local")
+	}
+	if cfg.LogLevel != "info" {
+		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
+	}
+	if cfg.GCPProjectID != "" {
+		t.Errorf("GCPProjectID = %q, want empty string", cfg.GCPProjectID)
+	}
+	if cfg.GCPRegion != "" {
+		t.Errorf("GCPRegion = %q, want empty string", cfg.GCPRegion)
+	}
+}
+
+func TestLoad_CustomValues(t *testing.T) {
+	// Set custom environment variables
+	os.Setenv("PORT", "9000")
+	os.Setenv("ENVIRONMENT", "production")
+	os.Setenv("LOG_LEVEL", "debug")
+	os.Setenv("GCP_PROJECT_ID", "my-project")
+	os.Setenv("GCP_REGION", "us-central1")
+	os.Setenv("DATABASE_HOST", "db.example.com")
+	os.Setenv("DATABASE_PORT", "5433")
+	os.Setenv("DATABASE_NAME", "testdb")
+	os.Setenv("DATABASE_USER", "testuser")
+	os.Setenv("DATABASE_PASSWORD", "testpass")
+	os.Setenv("DATABASE_URL", "postgresql://testuser:testpass@db.example.com:5433/testdb")
+	os.Setenv("REDIS_HOST", "redis.example.com")
+	os.Setenv("REDIS_PORT", "6380")
+	os.Setenv("CENTRIFUGO_URL", "http://centrifugo.example.com:8000")
+	os.Setenv("CENTRIFUGO_API_KEY", "test-api-key")
+	os.Setenv("CENTRIFUGO_TOKEN_SECRET", "test-token-secret")
+	os.Setenv("IDENTITY_PLATFORM_API_KEY", "test-identity-key")
+	os.Setenv("IDENTITY_PLATFORM_AUTH_DOMAIN", "auth.example.com")
+	os.Setenv("OAUTH_CLIENT_ID", "test-client-id")
+	os.Setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
+	defer func() {
+		os.Unsetenv("PORT")
+		os.Unsetenv("ENVIRONMENT")
+		os.Unsetenv("LOG_LEVEL")
+		os.Unsetenv("GCP_PROJECT_ID")
+		os.Unsetenv("GCP_REGION")
+		os.Unsetenv("DATABASE_HOST")
+		os.Unsetenv("DATABASE_PORT")
+		os.Unsetenv("DATABASE_NAME")
+		os.Unsetenv("DATABASE_USER")
+		os.Unsetenv("DATABASE_PASSWORD")
+		os.Unsetenv("DATABASE_URL")
+		os.Unsetenv("REDIS_HOST")
+		os.Unsetenv("REDIS_PORT")
+		os.Unsetenv("CENTRIFUGO_URL")
+		os.Unsetenv("CENTRIFUGO_API_KEY")
+		os.Unsetenv("CENTRIFUGO_TOKEN_SECRET")
+		os.Unsetenv("IDENTITY_PLATFORM_API_KEY")
+		os.Unsetenv("IDENTITY_PLATFORM_AUTH_DOMAIN")
+		os.Unsetenv("OAUTH_CLIENT_ID")
+		os.Unsetenv("OAUTH_CLIENT_SECRET")
+	}()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	// Verify custom values
+	if cfg.Port != 9000 {
+		t.Errorf("Port = %d, want 9000", cfg.Port)
+	}
+	if cfg.Environment != "production" {
+		t.Errorf("Environment = %q, want %q", cfg.Environment, "production")
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "debug")
+	}
+	if cfg.GCPProjectID != "my-project" {
+		t.Errorf("GCPProjectID = %q, want %q", cfg.GCPProjectID, "my-project")
+	}
+	if cfg.GCPRegion != "us-central1" {
+		t.Errorf("GCPRegion = %q, want %q", cfg.GCPRegion, "us-central1")
+	}
+	if cfg.DatabaseHost != "db.example.com" {
+		t.Errorf("DatabaseHost = %q, want %q", cfg.DatabaseHost, "db.example.com")
+	}
+	if cfg.DatabasePort != 5433 {
+		t.Errorf("DatabasePort = %d, want 5433", cfg.DatabasePort)
+	}
+	if cfg.DatabaseName != "testdb" {
+		t.Errorf("DatabaseName = %q, want %q", cfg.DatabaseName, "testdb")
+	}
+	if cfg.DatabaseUser != "testuser" {
+		t.Errorf("DatabaseUser = %q, want %q", cfg.DatabaseUser, "testuser")
+	}
+	if cfg.DatabasePassword != "testpass" {
+		t.Errorf("DatabasePassword = %q, want %q", cfg.DatabasePassword, "testpass")
+	}
+	if cfg.DatabaseURL != "postgresql://testuser:testpass@db.example.com:5433/testdb" {
+		t.Errorf("DatabaseURL = %q, want %q", cfg.DatabaseURL, "postgresql://testuser:testpass@db.example.com:5433/testdb")
+	}
+	if cfg.RedisHost != "redis.example.com" {
+		t.Errorf("RedisHost = %q, want %q", cfg.RedisHost, "redis.example.com")
+	}
+	if cfg.RedisPort != 6380 {
+		t.Errorf("RedisPort = %d, want 6380", cfg.RedisPort)
+	}
+	if cfg.CentrifugoURL != "http://centrifugo.example.com:8000" {
+		t.Errorf("CentrifugoURL = %q, want %q", cfg.CentrifugoURL, "http://centrifugo.example.com:8000")
+	}
+	if cfg.CentrifugoAPIKey != "test-api-key" {
+		t.Errorf("CentrifugoAPIKey = %q, want %q", cfg.CentrifugoAPIKey, "test-api-key")
+	}
+	if cfg.CentrifugoTokenSecret != "test-token-secret" {
+		t.Errorf("CentrifugoTokenSecret = %q, want %q", cfg.CentrifugoTokenSecret, "test-token-secret")
+	}
+	if cfg.IdentityPlatformAPIKey != "test-identity-key" {
+		t.Errorf("IdentityPlatformAPIKey = %q, want %q", cfg.IdentityPlatformAPIKey, "test-identity-key")
+	}
+	if cfg.IdentityPlatformAuthDomain != "auth.example.com" {
+		t.Errorf("IdentityPlatformAuthDomain = %q, want %q", cfg.IdentityPlatformAuthDomain, "auth.example.com")
+	}
+	if cfg.OAuthClientID != "test-client-id" {
+		t.Errorf("OAuthClientID = %q, want %q", cfg.OAuthClientID, "test-client-id")
+	}
+	if cfg.OAuthClientSecret != "test-client-secret" {
+		t.Errorf("OAuthClientSecret = %q, want %q", cfg.OAuthClientSecret, "test-client-secret")
+	}
+}
+
+func TestLoad_InvalidPort(t *testing.T) {
+	os.Setenv("PORT", "not-a-number")
+	defer os.Unsetenv("PORT")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("Load() should return error for invalid PORT")
+	}
+}
