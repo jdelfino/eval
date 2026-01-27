@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,6 +21,8 @@ import (
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 )
+
+var registerDBPoolOnce sync.Once
 
 // DatabasePool is the interface for database pool operations needed by the server.
 // This allows for easy testing with mock implementations.
@@ -54,9 +57,23 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 	// Metrics endpoint
 	r.Handle("/metrics", promhttp.Handler())
 
-	// Register DB pool metrics if pool is available
+	// Register DB pool metrics if pool is available (once to avoid panic on re-registration)
 	if pgxPool := pool.PgxPool(); pgxPool != nil {
-		prometheus.MustRegister(metrics.NewDBPoolCollector(pgxPool))
+		registerDBPoolOnce.Do(func() {
+			prometheus.MustRegister(metrics.NewDBPoolCollector(func() metrics.PoolStats {
+				s := pgxPool.Stat()
+				return metrics.PoolStats{
+					AcquireCount:         s.AcquireCount(),
+					AcquiredConns:        s.AcquiredConns(),
+					IdleConns:            s.IdleConns(),
+					ConstructingConns:    s.ConstructingConns(),
+					TotalConns:           s.TotalConns(),
+					MaxConns:             s.MaxConns(),
+					EmptyAcquireCount:    s.EmptyAcquireCount(),
+					CanceledAcquireCount: s.CanceledAcquireCount(),
+				}
+			}))
+		})
 	}
 
 	// Health endpoints
