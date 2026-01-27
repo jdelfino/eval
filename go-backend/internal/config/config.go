@@ -2,7 +2,10 @@
 package config
 
 import (
+	"time"
+
 	"github.com/caarlos0/env/v11"
+	"github.com/jdelfino/eval/internal/db"
 )
 
 // Config holds all configuration values for the application.
@@ -17,12 +20,16 @@ type Config struct {
 	GCPRegion    string `env:"GCP_REGION"`
 
 	// Database Configuration
-	DatabaseHost     string `env:"DATABASE_HOST"`
-	DatabasePort     int    `env:"DATABASE_PORT" envDefault:"5432"`
-	DatabaseName     string `env:"DATABASE_NAME"`
-	DatabaseUser     string `env:"DATABASE_USER"`
-	DatabasePassword string `env:"DATABASE_PASSWORD"`
-	DatabaseURL      string `env:"DATABASE_URL"`
+	DatabaseHost            string        `env:"DATABASE_HOST"`
+	DatabasePort            int           `env:"DATABASE_PORT" envDefault:"5432"`
+	DatabaseName            string        `env:"DATABASE_NAME"`
+	DatabaseUser            string        `env:"DATABASE_USER"`
+	DatabasePassword        string        `env:"DATABASE_PASSWORD"`
+	DatabaseURL             string        `env:"DATABASE_URL"`
+	DatabaseMaxConns        int32         `env:"DATABASE_MAX_CONNS" envDefault:"25"`
+	DatabaseMinConns        int32         `env:"DATABASE_MIN_CONNS" envDefault:"5"`
+	DatabaseMaxConnLifetime time.Duration `env:"DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
+	DatabaseMaxConnIdleTime time.Duration `env:"DATABASE_MAX_CONN_IDLE" envDefault:"30m"`
 
 	// Redis Configuration
 	RedisHost string `env:"REDIS_HOST"`
@@ -47,4 +54,19 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// DatabasePoolConfig returns a db.PoolConfig populated from this Config.
+func (c *Config) DatabasePoolConfig() db.PoolConfig {
+	return db.PoolConfig{
+		Host:            c.DatabaseHost,
+		Database:        c.DatabaseName,
+		User:            c.DatabaseUser,
+		Password:        c.DatabasePassword,
+		Port:            c.DatabasePort,
+		MaxConns:        c.DatabaseMaxConns,
+		MinConns:        c.DatabaseMinConns,
+		MaxConnLifetime: c.DatabaseMaxConnLifetime,
+		MaxConnIdleTime: c.DatabaseMaxConnIdleTime,
+	}
 }

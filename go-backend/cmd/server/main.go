@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jdelfino/eval/internal/config"
+	"github.com/jdelfino/eval/internal/db"
 	"github.com/jdelfino/eval/internal/server"
 )
 
@@ -33,8 +35,22 @@ func main() {
 	}
 	slog.SetDefault(logger)
 
+	// Create database connection pool
+	ctx := context.Background()
+	pool, err := db.NewPool(ctx, cfg.DatabasePoolConfig())
+	if err != nil {
+		logger.Error("failed to create database pool", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close() // Graceful shutdown of pool
+
+	logger.Info("database pool created",
+		"max_conns", cfg.DatabaseMaxConns,
+		"min_conns", cfg.DatabaseMinConns,
+	)
+
 	// Create and start server
-	srv := server.New(cfg, logger)
+	srv := server.New(cfg, logger, pool)
 
 	// Graceful shutdown
 	go func() {
@@ -43,7 +59,12 @@ func main() {
 		<-sigCh
 
 		logger.Info("shutting down server")
-		if err := srv.Shutdown(context.Background()); err != nil {
+
+		// Give active requests time to complete
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
 			logger.Error("server shutdown error", "error", err)
 		}
 	}()

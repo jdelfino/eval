@@ -9,20 +9,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/handler"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 )
 
+// DatabasePool is the interface for database pool operations needed by the server.
+// This allows for easy testing with mock implementations.
+type DatabasePool interface {
+	handler.HealthChecker
+	// PgxPool returns the underlying pgxpool.Pool for middleware that need direct access.
+	// Returns nil in tests where actual database access is not needed.
+	PgxPool() *pgxpool.Pool
+}
+
 // Server wraps the HTTP server with its configuration and logger.
 type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
+	pool       DatabasePool
 }
 
 // New creates a new Server with the configured middleware chain and routes.
-func New(cfg *config.Config, logger *slog.Logger) *Server {
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool) *Server {
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -34,11 +45,19 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 
 	// Health endpoints
 	r.Get("/healthz", handler.Healthz)
-	r.Get("/readyz", handler.Readyz)
+	r.Handle("/readyz", handler.NewReadyzHandler(pool))
 
-	// API routes placeholder
+	// API routes with RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
-		// Future routes here
+		// Auth middleware position (PLAT-nqj will add)
+		// r.Use(authMiddleware.Authenticate)
+
+		// RLS middleware - after auth, only if pool is available (not in tests)
+		if pgxPool := pool.PgxPool(); pgxPool != nil {
+			r.Use(custommw.RLSContextMiddleware(pgxPool))
+		}
+
+		// Protected routes will be added here
 	})
 
 	return &Server{
@@ -47,6 +66,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 			Handler: r,
 		},
 		logger: logger,
+		pool:   pool,
 	}
 }
 

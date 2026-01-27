@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go-backend/go.sum
       - name: Build
         run: go build ./...
         working-directory: go-backend
@@ -39,12 +40,33 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go-backend/go.sum
       - uses: golangci/golangci-lint-action@v4
         with:
           working-directory: go-backend
+          args: --timeout=3m
+
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go-backend/go.sum
+      - name: Start dependencies
+        run: docker compose up -d postgres --wait
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable
+        run: go test -v -race ./...
+        working-directory: go-backend
+      - name: Stop dependencies
+        if: always()
+        run: docker compose down
 
   build-push:
-    needs: [test, lint]
+    needs: [test, lint, integration-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -140,5 +141,108 @@ func TestLoad_InvalidPort(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Error("Load() should return error for invalid PORT")
+	}
+}
+
+func TestLoad_DatabasePoolDefaults(t *testing.T) {
+	// Clear any environment variables that might interfere
+	envVars := []string{
+		"DATABASE_MAX_CONNS", "DATABASE_MIN_CONNS",
+		"DATABASE_MAX_CONN_LIFETIME", "DATABASE_MAX_CONN_IDLE",
+	}
+	for _, v := range envVars {
+		t.Setenv(v, "")
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	// Check defaults for pool configuration
+	if cfg.DatabaseMaxConns != 25 {
+		t.Errorf("DatabaseMaxConns = %d, want 25", cfg.DatabaseMaxConns)
+	}
+	if cfg.DatabaseMinConns != 5 {
+		t.Errorf("DatabaseMinConns = %d, want 5", cfg.DatabaseMinConns)
+	}
+	if cfg.DatabaseMaxConnLifetime != time.Hour {
+		t.Errorf("DatabaseMaxConnLifetime = %v, want %v", cfg.DatabaseMaxConnLifetime, time.Hour)
+	}
+	if cfg.DatabaseMaxConnIdleTime != 30*time.Minute {
+		t.Errorf("DatabaseMaxConnIdleTime = %v, want %v", cfg.DatabaseMaxConnIdleTime, 30*time.Minute)
+	}
+}
+
+func TestLoad_DatabasePoolCustomValues(t *testing.T) {
+	t.Setenv("DATABASE_MAX_CONNS", "50")
+	t.Setenv("DATABASE_MIN_CONNS", "10")
+	t.Setenv("DATABASE_MAX_CONN_LIFETIME", "2h")
+	t.Setenv("DATABASE_MAX_CONN_IDLE", "15m")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.DatabaseMaxConns != 50 {
+		t.Errorf("DatabaseMaxConns = %d, want 50", cfg.DatabaseMaxConns)
+	}
+	if cfg.DatabaseMinConns != 10 {
+		t.Errorf("DatabaseMinConns = %d, want 10", cfg.DatabaseMinConns)
+	}
+	if cfg.DatabaseMaxConnLifetime != 2*time.Hour {
+		t.Errorf("DatabaseMaxConnLifetime = %v, want %v", cfg.DatabaseMaxConnLifetime, 2*time.Hour)
+	}
+	if cfg.DatabaseMaxConnIdleTime != 15*time.Minute {
+		t.Errorf("DatabaseMaxConnIdleTime = %v, want %v", cfg.DatabaseMaxConnIdleTime, 15*time.Minute)
+	}
+}
+
+func TestConfig_DatabasePoolConfig(t *testing.T) {
+	t.Setenv("DATABASE_HOST", "db.example.com")
+	t.Setenv("DATABASE_PORT", "5433")
+	t.Setenv("DATABASE_NAME", "testdb")
+	t.Setenv("DATABASE_USER", "testuser")
+	t.Setenv("DATABASE_PASSWORD", "testpass")
+	t.Setenv("DATABASE_MAX_CONNS", "40")
+	t.Setenv("DATABASE_MIN_CONNS", "8")
+	t.Setenv("DATABASE_MAX_CONN_LIFETIME", "45m")
+	t.Setenv("DATABASE_MAX_CONN_IDLE", "10m")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	poolCfg := cfg.DatabasePoolConfig()
+
+	// Verify all fields are mapped correctly
+	if poolCfg.Host != "db.example.com" {
+		t.Errorf("PoolConfig.Host = %q, want %q", poolCfg.Host, "db.example.com")
+	}
+	if poolCfg.Port != 5433 {
+		t.Errorf("PoolConfig.Port = %d, want 5433", poolCfg.Port)
+	}
+	if poolCfg.Database != "testdb" {
+		t.Errorf("PoolConfig.Database = %q, want %q", poolCfg.Database, "testdb")
+	}
+	if poolCfg.User != "testuser" {
+		t.Errorf("PoolConfig.User = %q, want %q", poolCfg.User, "testuser")
+	}
+	if poolCfg.Password != "testpass" {
+		t.Errorf("PoolConfig.Password = %q, want %q", poolCfg.Password, "testpass")
+	}
+	if poolCfg.MaxConns != 40 {
+		t.Errorf("PoolConfig.MaxConns = %d, want 40", poolCfg.MaxConns)
+	}
+	if poolCfg.MinConns != 8 {
+		t.Errorf("PoolConfig.MinConns = %d, want 8", poolCfg.MinConns)
+	}
+	if poolCfg.MaxConnLifetime != 45*time.Minute {
+		t.Errorf("PoolConfig.MaxConnLifetime = %v, want %v", poolCfg.MaxConnLifetime, 45*time.Minute)
+	}
+	if poolCfg.MaxConnIdleTime != 10*time.Minute {
+		t.Errorf("PoolConfig.MaxConnIdleTime = %v, want %v", poolCfg.MaxConnIdleTime, 10*time.Minute)
 	}
 }
