@@ -95,14 +95,16 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - uses: actions/checkout@v4
       - uses: google-github-actions/setup-gcloud@v2
         with:
-          install_components: kubectl
+          install_components: kubectl,gke-gcloud-auth-plugin
       - name: Get GKE credentials via Connect Gateway
         run: |
           gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
             --project=eval-prod-485520
       - name: Deploy
         run: |
-          kubectl set image deployment/go-api \
-            go-api=$REGISTRY/$IMAGE_NAME:${{ github.sha }}
+          cd k8s/base
+          kustomize edit set image go-api=$REGISTRY/$IMAGE_NAME:${{ github.sha }}
+          kubectl apply -k .
