@@ -10,6 +10,7 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/executor"
+	"github.com/jdelfino/eval/pkg/executorapi"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -50,7 +51,7 @@ type executeRequest struct {
 type executionSettingsJSON struct {
 	Stdin      *string         `json:"stdin,omitempty"`
 	RandomSeed *int            `json:"random_seed,omitempty"`
-	Files      []executor.File `json:"files,omitempty"`
+	Files      []executorapi.File `json:"files,omitempty"`
 }
 
 // Execute handles POST /api/v1/sessions/{id}/execute.

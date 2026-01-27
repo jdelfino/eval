@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+func intPtr(n int) *int { return &n }
+
 func TestExecute_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -151,8 +153,8 @@ func TestExecute_RequestFields(t *testing.T) {
 		if req.RandomSeed == nil || *req.RandomSeed != 42 {
 			t.Errorf("unexpected random_seed: %v", req.RandomSeed)
 		}
-		if req.TimeoutMs != 5000 {
-			t.Errorf("unexpected timeout_ms: %d", req.TimeoutMs)
+		if req.TimeoutMs == nil || *req.TimeoutMs != 5000 {
+			t.Errorf("unexpected timeout_ms: %v", req.TimeoutMs)
 		}
 
 		resp := ExecuteResponse{Success: true, Output: "ok"}
@@ -167,7 +169,7 @@ func TestExecute_RequestFields(t *testing.T) {
 		Stdin:      "input data",
 		Files:      []File{{Name: "data.txt", Content: "hello"}},
 		RandomSeed: &seed,
-		TimeoutMs:  5000,
+		TimeoutMs:  intPtr(5000),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

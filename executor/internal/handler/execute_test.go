@@ -16,6 +16,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
+	"github.com/jdelfino/eval/pkg/executorapi"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 )
@@ -93,14 +94,14 @@ func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
 }
 
 func TestExecute_Success(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"print('hello')"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp handler.ExecuteResponse
+	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
@@ -116,14 +117,14 @@ func TestExecute_Success(t *testing.T) {
 }
 
 func TestExecute_CodeFailure(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), failRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), failRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"print(x)"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp handler.ExecuteResponse
+	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
@@ -136,14 +137,14 @@ func TestExecute_CodeFailure(t *testing.T) {
 }
 
 func TestExecute_Timeout(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), timeoutRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), timeoutRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"while True: pass"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp handler.ExecuteResponse
+	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestExecute_Timeout(t *testing.T) {
 }
 
 func TestExecute_InternalError(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), errorRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), errorRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"print(1)"}`)
 
 	if w.Code != http.StatusInternalServerError {
@@ -165,7 +166,7 @@ func TestExecute_InternalError(t *testing.T) {
 }
 
 func TestExecute_EmptyCode(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":""}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -174,7 +175,7 @@ func TestExecute_EmptyCode(t *testing.T) {
 }
 
 func TestExecute_MissingCode(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -183,7 +184,7 @@ func TestExecute_MissingCode(t *testing.T) {
 }
 
 func TestExecute_InvalidJSON(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `not json`)
 
 	if w.Code != http.StatusBadRequest {
@@ -194,7 +195,7 @@ func TestExecute_InvalidJSON(t *testing.T) {
 func TestExecute_CodeTooLarge(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.MaxCodeBytes = 10
-	h := handler.Execute(cfg, noopLogger(), successRunner, nil)
+	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"print('this is way too long')"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -205,7 +206,7 @@ func TestExecute_CodeTooLarge(t *testing.T) {
 func TestExecute_StdinTooLarge(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.MaxStdinBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, nil)
+	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -216,7 +217,7 @@ func TestExecute_StdinTooLarge(t *testing.T) {
 func TestExecute_TooManyFiles(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.MaxFiles = 1
-	h := handler.Execute(cfg, noopLogger(), successRunner, nil)
+	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	w := doRequest(h, body)
 
@@ -228,7 +229,7 @@ func TestExecute_TooManyFiles(t *testing.T) {
 func TestExecute_FileTooLarge(t *testing.T) {
 	cfg := defaultCfg()
 	cfg.MaxFileBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, nil)
+	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
 	w := doRequest(h, body)
 
@@ -238,7 +239,7 @@ func TestExecute_FileTooLarge(t *testing.T) {
 }
 
 func TestExecute_EmptyFileName(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	body := `{"code":"x=1","files":[{"name":"","content":"data"}]}`
 	w := doRequest(h, body)
 
@@ -248,7 +249,7 @@ func TestExecute_EmptyFileName(t *testing.T) {
 }
 
 func TestExecute_EmptyFileContent(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":""}]}`
 	w := doRequest(h, body)
 
@@ -258,7 +259,7 @@ func TestExecute_EmptyFileContent(t *testing.T) {
 }
 
 func TestExecute_NegativeTimeout(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":-1}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -267,7 +268,7 @@ func TestExecute_NegativeTimeout(t *testing.T) {
 }
 
 func TestExecute_TimeoutTooLarge(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":99999}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -276,10 +277,10 @@ func TestExecute_TimeoutTooLarge(t *testing.T) {
 }
 
 func TestExecute_StdinEchoed(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1","stdin":"my input"}`)
 
-	var resp handler.ExecuteResponse
+	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +291,7 @@ func TestExecute_StdinEchoed(t *testing.T) {
 
 func TestExecute_CustomTimeout(t *testing.T) {
 	cap := &captureRunner{}
-	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":5000}`)
 
 	if w.Code != http.StatusOK {
@@ -303,7 +304,7 @@ func TestExecute_CustomTimeout(t *testing.T) {
 
 func TestExecute_DefaultTimeout(t *testing.T) {
 	cap := &captureRunner{}
-	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, metrics.NewNoop())
 	w := doRequest(h, `{"code":"x=1"}`)
 
 	if w.Code != http.StatusOK {
@@ -316,7 +317,7 @@ func TestExecute_DefaultTimeout(t *testing.T) {
 
 func TestExecute_FilesPassedToSandbox(t *testing.T) {
 	cap := &captureRunner{}
-	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), cap.run, metrics.NewNoop())
 	body := `{"code":"x=1","files":[{"name":"data.txt","content":"hello"}],"random_seed":42}`
 	w := doRequest(h, body)
 
@@ -335,7 +336,7 @@ func TestExecute_FilesPassedToSandbox(t *testing.T) {
 }
 
 func TestExecute_BodyTooLarge(t *testing.T) {
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, nil)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, metrics.NewNoop())
 	// Create a body larger than 1MB
 	large := bytes.Repeat([]byte("x"), 2*1024*1024)
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(large))
@@ -348,21 +349,6 @@ func TestExecute_BodyTooLarge(t *testing.T) {
 	}
 }
 
-// Ensure the runner receives context from the request.
-func TestExecute_ContextPassed(t *testing.T) {
-	var gotCtx bool
-	runner := func(ctx context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
-		if ctx != nil {
-			gotCtx = true
-		}
-		return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
-	}
-	h := handler.Execute(defaultCfg(), noopLogger(), runner, nil)
-	doRequest(h, `{"code":"x=1"}`)
-	if !gotCtx {
-		t.Error("expected context to be passed to runner")
-	}
-}
 
 func newTestMetrics(t *testing.T) *metrics.Metrics {
 	t.Helper()

@@ -15,6 +15,18 @@ type Metrics struct {
 	Ready                  prometheus.Gauge
 }
 
+// NewNoop creates metrics that discard all observations. Use in tests.
+func NewNoop() *Metrics {
+	return New(noopRegisterer{})
+}
+
+// noopRegisterer discards all registrations.
+type noopRegisterer struct{}
+
+func (noopRegisterer) Register(prometheus.Collector) error  { return nil }
+func (noopRegisterer) MustRegister(...prometheus.Collector) {}
+func (noopRegisterer) Unregister(prometheus.Collector) bool { return true }
+
 // New creates and registers all executor metrics with the given registerer.
 func New(reg prometheus.Registerer) *Metrics {
 	m := &Metrics{

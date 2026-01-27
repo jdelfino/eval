@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdelfino/eval/executor/internal/handler"
+	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
 // executorURL returns the base URL or skips the test.
@@ -42,7 +42,7 @@ func executorURL(t *testing.T) string {
 }
 
 // executeRequest sends a request and decodes the response.
-func executeRequest(t *testing.T, baseURL string, req handler.ExecuteRequest) handler.ExecuteResponse {
+func executeRequest(t *testing.T, baseURL string, req executorapi.ExecuteRequest) executorapi.ExecuteResponse {
 	t.Helper()
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -60,7 +60,7 @@ func executeRequest(t *testing.T, baseURL string, req handler.ExecuteRequest) ha
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	var result handler.ExecuteResponse
+	var result executorapi.ExecuteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -71,7 +71,7 @@ func intPtr(n int) *int { return &n }
 
 func TestIntegration_HelloWorld(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: `print("hello")`,
 	})
 	if !resp.Success {
@@ -84,7 +84,7 @@ func TestIntegration_HelloWorld(t *testing.T) {
 
 func TestIntegration_Stdin(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:  "name = input()\nprint(f'hi {name}')",
 		Stdin: "Alice\n",
 	})
@@ -98,7 +98,7 @@ func TestIntegration_Stdin(t *testing.T) {
 
 func TestIntegration_SyntaxError(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: `print(`,
 	})
 	if resp.Success {
@@ -111,7 +111,7 @@ func TestIntegration_SyntaxError(t *testing.T) {
 
 func TestIntegration_RuntimeError(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: `x`,
 	})
 	if resp.Success {
@@ -124,7 +124,7 @@ func TestIntegration_RuntimeError(t *testing.T) {
 
 func TestIntegration_Timeout(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      "import time; time.sleep(60)",
 		TimeoutMs: intPtr(1000),
 	})
@@ -139,7 +139,7 @@ func TestIntegration_Timeout(t *testing.T) {
 func TestIntegration_RandomSeed(t *testing.T) {
 	u := executorURL(t)
 	seed := 42
-	req := handler.ExecuteRequest{
+	req := executorapi.ExecuteRequest{
 		Code:       "import random; print(random.randint(1,1000))",
 		RandomSeed: &seed,
 	}
@@ -155,9 +155,9 @@ func TestIntegration_RandomSeed(t *testing.T) {
 
 func TestIntegration_FileAttachment(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: "with open('data.txt') as f: print(f.read().strip())",
-		Files: []handler.FileRequest{
+		Files: []executorapi.File{
 			{Name: "data.txt", Content: "file contents here"},
 		},
 	})
@@ -172,7 +172,7 @@ func TestIntegration_FileAttachment(t *testing.T) {
 func TestIntegration_LargeOutputTruncation(t *testing.T) {
 	u := executorURL(t)
 	// Print ~2MB of output.
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: "print('x' * 2_000_000)",
 	})
 	if !resp.Success {
@@ -186,7 +186,7 @@ func TestIntegration_LargeOutputTruncation(t *testing.T) {
 
 func TestIntegration_StderrSanitization(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: "raise ValueError('test error')",
 	})
 	if resp.Success {
@@ -200,7 +200,7 @@ func TestIntegration_StderrSanitization(t *testing.T) {
 
 func TestIntegration_NetworkDisabled(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      "import socket; s = socket.socket(); s.connect(('8.8.8.8', 53))",
 		TimeoutMs: intPtr(5000),
 	})
@@ -213,7 +213,7 @@ func TestIntegration_NetworkDisabled(t *testing.T) {
 
 func TestIntegration_MemoryLimit(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
 		TimeoutMs: intPtr(5000),
 	})
@@ -224,7 +224,7 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 
 func TestIntegration_StdinEchoed(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, handler.ExecuteRequest{
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:  "print('ok')",
 		Stdin: "my input",
 	})

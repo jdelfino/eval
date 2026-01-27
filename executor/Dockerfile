@@ -54,7 +54,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=nsjail-builder /nsjail/nsjail /usr/bin/nsjail
 COPY --from=go-builder /app/executor /executor
 
-USER 65534:65534
+# NOTE: The executor process must run as root so nsjail can create namespaces
+# and chroot. Student code runs as nobody (UID 65534) inside the jail via
+# nsjail's --user flag.
 
 EXPOSE 8081
 

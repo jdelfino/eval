@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -175,30 +174,7 @@ func TestRunNsjailNotFound(t *testing.T) {
 	}
 }
 
-func TestRunWritesMainPyWithRandomSeed(t *testing.T) {
-	// We can't run nsjail in tests, but we can verify the code preparation
-	// by testing the helper functions and checking that Run fails gracefully
-	// when nsjail is not available.
-	seed := 42
-	req := Request{
-		Code:       "print(random.randint(1, 100))",
-		RandomSeed: &seed,
-		TimeoutMs:  5000,
-	}
-
-	cfg := Config{
-		NsjailPath:     "/nonexistent/nsjail",
-		PythonPath:     "/usr/bin/python3",
-		MaxOutputBytes: MaxOutputBytes,
-	}
-
-	_, err := Run(context.Background(), cfg, req)
-	if err == nil {
-		t.Fatal("expected error when nsjail not found")
-	}
-}
-
-func TestRunWritesAttachedFiles(t *testing.T) {
+func TestRunRejectsMainPyFilename(t *testing.T) {
 	cfg := Config{
 		NsjailPath:     "/nonexistent/nsjail",
 		PythonPath:     "/usr/bin/python3",
@@ -207,19 +183,18 @@ func TestRunWritesAttachedFiles(t *testing.T) {
 	req := Request{
 		Code: "print('hello')",
 		Files: []File{
-			{Name: "data.csv", Content: "a,b,c"},
-			{Name: "../evil.txt", Content: "nope"},
+			{Name: "main.py", Content: "malicious code"},
 		},
 		TimeoutMs: 5000,
 	}
 
-	// Should fail at nsjail lookup, not at file writing.
+	// Should fail before nsjail lookup — main.py is reserved.
 	_, err := Run(context.Background(), cfg, req)
 	if err == nil {
-		t.Fatal("expected error")
+		t.Fatal("expected error for reserved filename main.py")
 	}
-	if !strings.Contains(err.Error(), "nsjail binary not found") {
-		t.Errorf("expected nsjail not found error, got: %v", err)
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("expected reserved filename error, got: %v", err)
 	}
 }
 
@@ -250,11 +225,6 @@ func TestSanitizeStderrSingleQuotePath(t *testing.T) {
 	}
 }
 
-// limitedReader is not part of the package but we use bytes.Buffer test
-// to verify the Write interface contract.
-func TestLimitedBufferImplementsWriter(t *testing.T) {
-	var _ interface{ Write([]byte) (int, error) } = &limitedBuffer{}
-}
 
 // TestRunContextCancelled verifies that a cancelled context is handled.
 func TestRunContextCancelled(t *testing.T) {
@@ -296,16 +266,3 @@ func TestTruncationSuffix(t *testing.T) {
 	}
 }
 
-// Test stdin is properly set up (verified indirectly through buffer).
-func TestStdinSetup(t *testing.T) {
-	// Verify our stdin setup logic by checking strings.NewReader behavior.
-	r := strings.NewReader("test input")
-	var buf bytes.Buffer
-	_, err := buf.ReadFrom(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if buf.String() != "test input" {
-		t.Errorf("got %q, want %q", buf.String(), "test input")
-	}
-}

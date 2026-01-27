@@ -12,6 +12,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
+	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
 // maxBodyBytes is the maximum allowed request body size (1 MB).
@@ -19,30 +20,6 @@ const maxBodyBytes = 1 * 1024 * 1024
 
 // maxTimeoutMs is the hard cap on timeout_ms.
 const maxTimeoutMs = 30000
-
-// ExecuteRequest is the JSON request body for code execution.
-type ExecuteRequest struct {
-	Code       string        `json:"code"`
-	Stdin      string        `json:"stdin"`
-	Files      []FileRequest `json:"files"`
-	RandomSeed *int          `json:"random_seed"`
-	TimeoutMs  *int          `json:"timeout_ms"`
-}
-
-// FileRequest is an attached file in the execute request.
-type FileRequest struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
-// ExecuteResponse is the JSON response for code execution.
-type ExecuteResponse struct {
-	Success         bool   `json:"success"`
-	Output          string `json:"output"`
-	Error           string `json:"error"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
-	Stdin           string `json:"stdin"`
-}
 
 // SandboxRunner is the function signature for sandbox.Run, allowing injection in tests.
 type SandboxRunner func(ctx context.Context, cfg sandbox.Config, req sandbox.Request) (*sandbox.Result, error)
@@ -55,18 +32,16 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 		// Limit body size.
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 
-		var req ExecuteRequest
+		var req executorapi.ExecuteRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			if m != nil {
-				m.ValidationErrorsTotal.WithLabelValues("invalid_request").Inc()
-			}
+			m.ValidationErrorsTotal.WithLabelValues("invalid_request").Inc()
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 
 		// Validate request.
-		if reason, errMsg := validateRequestWithReason(cfg, &req); errMsg != "" {
-			if m != nil && reason != "" {
+		if reason, errMsg := validateRequest(cfg, &req); errMsg != "" {
+			if reason != "" {
 				m.ValidationErrorsTotal.WithLabelValues(reason).Inc()
 			}
 			writeError(w, http.StatusBadRequest, errMsg)
@@ -74,9 +49,7 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 		}
 
 		// Observe code size.
-		if m != nil {
-			m.CodeSizeBytes.Observe(float64(len(req.Code)))
-		}
+		m.CodeSizeBytes.Observe(float64(len(req.Code)))
 
 		// Determine timeout.
 		timeoutMs := cfg.DefaultTimeoutMS
@@ -112,25 +85,19 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 		)
 
 		// Track active executions.
-		if m != nil {
-			m.ActiveExecutions.Inc()
-			defer m.ActiveExecutions.Dec()
-		}
+		m.ActiveExecutions.Inc()
+		defer m.ActiveExecutions.Dec()
 
 		start := time.Now()
 		result, err := runner(r.Context(), sandboxCfg, sandboxReq)
 		duration := time.Since(start)
 
 		// Observe duration.
-		if m != nil {
-			m.ExecutionDuration.Observe(duration.Seconds())
-		}
+		m.ExecutionDuration.Observe(duration.Seconds())
 
 		if err != nil {
 			logger.Error("sandbox execution failed", "error", err, "duration_ms", duration.Milliseconds())
-			if m != nil {
-				m.ExecutionsTotal.WithLabelValues("error").Inc()
-			}
+			m.ExecutionsTotal.WithLabelValues("error").Inc()
 			writeError(w, http.StatusInternalServerError, "internal execution error")
 			return
 		}
@@ -138,15 +105,13 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 		success := result.ExitCode == 0 && !result.TimedOut
 
 		// Record execution status.
-		if m != nil {
-			switch {
-			case result.TimedOut:
-				m.ExecutionsTotal.WithLabelValues("timeout").Inc()
-			case success:
-				m.ExecutionsTotal.WithLabelValues("success").Inc()
-			default:
-				m.ExecutionsTotal.WithLabelValues("failure").Inc()
-			}
+		switch {
+		case result.TimedOut:
+			m.ExecutionsTotal.WithLabelValues("timeout").Inc()
+		case success:
+			m.ExecutionsTotal.WithLabelValues("success").Inc()
+		default:
+			m.ExecutionsTotal.WithLabelValues("failure").Inc()
 		}
 
 		// Build output and error strings.
@@ -156,7 +121,7 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 			errOutput = "execution timed out"
 		}
 
-		resp := ExecuteResponse{
+		resp := executorapi.ExecuteResponse{
 			Success:         success,
 			Output:          output,
 			Error:           errOutput,
@@ -174,7 +139,7 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 	}
 }
 
-func validateRequestWithReason(cfg *config.Config, req *ExecuteRequest) (string, string) {
+func validateRequest(cfg *config.Config, req *executorapi.ExecuteRequest) (string, string) {
 	if req.Code == "" {
 		return "invalid_request", "code is required and must be non-empty"
 	}
@@ -199,8 +164,8 @@ func validateRequestWithReason(cfg *config.Config, req *ExecuteRequest) (string,
 		}
 	}
 	if req.TimeoutMs != nil {
-		if *req.TimeoutMs < 0 {
-			return "invalid_request", "timeout_ms must not be negative"
+		if *req.TimeoutMs <= 0 {
+			return "invalid_request", "timeout_ms must be a positive integer"
 		}
 		if *req.TimeoutMs > maxTimeoutMs {
 			return "invalid_request", fmt.Sprintf("timeout_ms exceeds maximum of %d", maxTimeoutMs)

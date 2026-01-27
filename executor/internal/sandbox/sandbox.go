@@ -53,6 +53,14 @@ type Result struct {
 
 // Run executes Python code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	// Validate attached filenames before doing any work.
+	for _, f := range req.Files {
+		name := sanitizeFilename(f.Name)
+		if name == "main.py" {
+			return nil, fmt.Errorf("file name %q is reserved", f.Name)
+		}
+	}
+
 	// Verify nsjail binary exists.
 	if _, err := exec.LookPath(cfg.NsjailPath); err != nil {
 		return nil, fmt.Errorf("nsjail binary not found at %s: %w", cfg.NsjailPath, err)

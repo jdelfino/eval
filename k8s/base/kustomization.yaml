@@ -9,6 +9,7 @@ resources:
   - executor-service.yaml
   - executor-configmap.yaml
   - executor-scaledobject.yaml
+  - executor-networkpolicy.yaml
 
 images:
   - name: go-api

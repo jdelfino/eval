@@ -4,6 +4,8 @@ go 1.24.0
 
 toolchain go1.24.12
 
+require github.com/jdelfino/eval/pkg/executorapi v0.0.0
+
 require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/go-chi/chi/v5 v5.2.4
@@ -36,3 +38,5 @@ require (
 	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
+
+replace github.com/jdelfino/eval/pkg/executorapi => ../pkg/executorapi

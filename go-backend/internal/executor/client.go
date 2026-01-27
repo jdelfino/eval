@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
 // Client communicates with the executor service over HTTP.
@@ -27,29 +29,14 @@ func NewClient(baseURL string, timeout time.Duration) *Client {
 	}
 }
 
-// ExecuteRequest is the payload sent to the executor service.
-type ExecuteRequest struct {
-	Code       string `json:"code"`
-	Stdin      string `json:"stdin,omitempty"`
-	Files      []File `json:"files,omitempty"`
-	RandomSeed *int   `json:"random_seed,omitempty"`
-	TimeoutMs  int    `json:"timeout_ms,omitempty"`
-}
+// ExecuteRequest is an alias for the shared request type.
+type ExecuteRequest = executorapi.ExecuteRequest
 
-// File represents an auxiliary file provided to the execution environment.
-type File struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
+// File is an alias for the shared file type.
+type File = executorapi.File
 
-// ExecuteResponse is the response from the executor service.
-type ExecuteResponse struct {
-	Success         bool   `json:"success"`
-	Output          string `json:"output"`
-	Error           string `json:"error"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
-	Stdin           string `json:"stdin,omitempty"`
-}
+// ExecuteResponse is an alias for the shared response type.
+type ExecuteResponse = executorapi.ExecuteResponse
 
 // Execute sends code to the executor service and returns the result.
 func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResponse, error) {
@@ -70,7 +57,8 @@ func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteRespo
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	// Limit response body to 5MB to prevent OOM from malformed responses.
+	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 5<<20))
 	if err != nil {
 		return nil, fmt.Errorf("executor: read response: %w", err)
 	}

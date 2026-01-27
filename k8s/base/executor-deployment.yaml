@@ -37,6 +37,9 @@ spec:
             capabilities:
               add:
                 - SYS_ADMIN
+                - SYS_CHROOT
+                - SETUID
+                - SETGID
                 - NET_ADMIN
               drop:
                 - ALL
