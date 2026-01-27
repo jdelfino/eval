@@ -41,9 +41,9 @@ type Server struct {
 }
 
 // New creates a new Server with the configured middleware chain and routes.
-// userRepo may be nil (e.g. in tests without a database); when nil, the
+// s may be nil (e.g. in tests without a database); when nil, the
 // authentication middleware is skipped on API routes.
-func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo store.UserRepository) *Server {
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store) *Server {
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -83,10 +83,10 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
 		// Auth middleware - validates JWT and populates user context
-		if userRepo != nil {
+		if s != nil {
 			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
 			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
-			adapter := NewUserLookupAdapter(userRepo)
+			adapter := NewUserLookupAdapter(s)
 			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
 			r.Use(authenticator.Authenticate)
 		}
@@ -97,8 +97,9 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 		}
 
 		// Protected routes
-		if userRepo != nil {
-			r.Mount("/auth", handler.NewAuthHandler(userRepo).Routes())
+		if s != nil {
+			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
+			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 		}
 	})
 
