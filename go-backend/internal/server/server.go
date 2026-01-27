@@ -116,6 +116,11 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 			r.Mount("/sessions", handler.NewSessionHandler(s).Routes())
+
+			sessionStudentHandler := handler.NewSessionStudentHandler(s)
+			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
+			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
+			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
 		}
 	})
 
