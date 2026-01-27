@@ -530,7 +530,10 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 }
 
 func TestGenerateJoinCode_Format(t *testing.T) {
-	code := generateJoinCode()
+	code, err := generateJoinCode()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	pattern := regexp.MustCompile(`^[A-Z]{3}-[0-9]{3}-[A-Z]{3}$`)
 	if !pattern.MatchString(code) {
 		t.Errorf("join code %q does not match expected format ABC-123-XYZ", code)
@@ -540,7 +543,10 @@ func TestGenerateJoinCode_Format(t *testing.T) {
 func TestGenerateJoinCode_Unique(t *testing.T) {
 	codes := make(map[string]bool)
 	for i := 0; i < 100; i++ {
-		code := generateJoinCode()
+		code, err := generateJoinCode()
+		if err != nil {
+			t.Fatalf("unexpected error on iteration %d: %v", i, err)
+		}
 		codes[code] = true
 	}
 	// With 26^6 * 10^3 possible codes, 100 should all be unique

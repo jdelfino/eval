@@ -9,10 +9,11 @@ import (
 // JoinSession adds a student to a session. If the student is already in the session,
 // the name is updated (idempotent). Also appends the user to the session's participants array.
 func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error) {
-	conn, err := s.conn(ctx)
+	tx, err := s.beginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback(ctx) // no-op after commit
 
 	const insertQuery = `
 		INSERT INTO session_students (session_id, user_id, name)
@@ -21,7 +22,7 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 		RETURNING id, session_id, user_id, name, code, execution_settings, last_update`
 
 	var ss SessionStudent
-	err = conn.QueryRow(ctx, insertQuery,
+	err = tx.QueryRow(ctx, insertQuery,
 		params.SessionID,
 		params.UserID,
 		params.Name,
@@ -43,8 +44,12 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 		UPDATE sessions SET participants = array_append(participants, $2)
 		WHERE id = $1 AND NOT ($2 = ANY(participants))`
 
-	_, err = conn.Exec(ctx, updateParticipants, params.SessionID, params.UserID)
+	_, err = tx.Exec(ctx, updateParticipants, params.SessionID, params.UserID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 

@@ -122,12 +122,18 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	joinCode, err := generateJoinCode()
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	section, err := h.sections.CreateSection(r.Context(), store.CreateSectionParams{
 		NamespaceID: authUser.NamespaceID,
 		ClassID:     classID,
 		Name:        req.Name,
 		Semester:    req.Semester,
-		JoinCode:    generateJoinCode(),
+		JoinCode:    joinCode,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -196,7 +202,7 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // generateJoinCode generates a join code in the format ABC-123-XYZ.
-func generateJoinCode() string {
+func generateJoinCode() (string, error) {
 	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	const digits = "0123456789"
 
@@ -204,23 +210,23 @@ func generateJoinCode() string {
 	for i := 0; i < 3; i++ {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
-			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+			return "", fmt.Errorf("crypto/rand failed: %w", err)
 		}
 		b[i] = letters[n.Int64()]
 	}
 	for i := 3; i < 6; i++ {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
 		if err != nil {
-			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+			return "", fmt.Errorf("crypto/rand failed: %w", err)
 		}
 		b[i] = digits[n.Int64()]
 	}
 	for i := 6; i < 9; i++ {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
-			panic(fmt.Sprintf("crypto/rand failed: %v", err))
+			return "", fmt.Errorf("crypto/rand failed: %w", err)
 		}
 		b[i] = letters[n.Int64()]
 	}
-	return string(b[:3]) + "-" + string(b[3:6]) + "-" + string(b[6:9])
+	return string(b[:3]) + "-" + string(b[3:6]) + "-" + string(b[6:9]), nil
 }

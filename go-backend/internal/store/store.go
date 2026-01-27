@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -46,4 +47,22 @@ func (s *Store) conn(ctx context.Context) (Querier, error) {
 		return nil, ErrNoConnection
 	}
 	return querier, nil
+}
+
+// txBeginner is implemented by *pgxpool.Conn (and pgx.Tx for nested tx).
+type txBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// beginTx starts a transaction on the RLS-configured connection from the context.
+func (s *Store) beginTx(ctx context.Context) (pgx.Tx, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	beginner, ok := conn.(txBeginner)
+	if !ok {
+		return nil, fmt.Errorf("connection does not support transactions")
+	}
+	return beginner.Begin(ctx)
 }

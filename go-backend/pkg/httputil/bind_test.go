@@ -211,6 +211,35 @@ func TestBindJSON_ValidationError_AgeOutOfRange(t *testing.T) {
 	}
 }
 
+func TestBindJSON_BodyTooLarge(t *testing.T) {
+	// Create a body larger than 1MB
+	largeBody := strings.Repeat("a", 1<<20+1)
+	body := `{"name": "` + largeBody + `", "email": "john@example.com", "age": 30}`
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	result, err := BindJSON[TestPayload](rr, req)
+
+	if err == nil {
+		t.Fatal("BindJSON should return error for oversized body")
+	}
+	if result != nil {
+		t.Fatal("BindJSON should return nil result for oversized body")
+	}
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusRequestEntityTooLarge)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&errResp); err != nil {
+		t.Fatalf("Failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "request body too large" {
+		t.Errorf("Error message = %q, want %q", errResp["error"], "request body too large")
+	}
+}
+
 func TestWriteJSON(t *testing.T) {
 	rr := httptest.NewRecorder()
 	data := map[string]string{"message": "hello"}
