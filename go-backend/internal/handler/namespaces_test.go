@@ -53,8 +53,6 @@ func testNamespace() *store.Namespace {
 	}
 }
 
-func intPtr(i int) *int       { return &i }
-func boolPtr(b bool) *bool    { return &b }
 
 func TestListNamespaces_Success(t *testing.T) {
 	ns := testNamespace()
