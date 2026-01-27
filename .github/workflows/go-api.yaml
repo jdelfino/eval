@@ -91,15 +91,18 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Deploy via Cloud Build
+        with:
+          install_components: kubectl
+      - name: Get GKE credentials via Connect Gateway
         run: |
-          gcloud builds submit --no-source \
-            --config=go-backend/cloudbuild.yaml \
-            --substitutions=_IMAGE=$REGISTRY/$IMAGE_NAME:${{ github.sha }},_GKE_CLUSTER=${{ secrets.GKE_CLUSTER }},_GKE_LOCATION=${{ secrets.GKE_LOCATION }} \
-            --region=${{ secrets.GKE_LOCATION }}
+          gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
+            --project=eval-prod-485520
+      - name: Deploy
+        run: |
+          kubectl set image deployment/go-api \
+            go-api=$REGISTRY/$IMAGE_NAME:${{ github.sha }}
