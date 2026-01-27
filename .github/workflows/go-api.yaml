@@ -41,6 +41,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v4
         with:
           working-directory: go-backend
+          args: --timeout=3m
 
   integration-test:
     runs-on: ubuntu-latest
