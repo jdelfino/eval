@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
@@ -14,13 +15,15 @@ import (
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
-const tokenExpiry = 15 * time.Minute
+// defaultTokenExpiry is the fallback expiry when none is configured.
+const defaultTokenExpiry = 15 * time.Minute
 
 // CentrifugoHandler issues Centrifugo connection and subscription tokens.
 type CentrifugoHandler struct {
-	tokens   realtime.TokenGenerator
-	sessions store.SessionRepository
-	members  store.SessionStudentRepository
+	tokens      realtime.TokenGenerator
+	sessions    store.SessionRepository
+	members     store.SessionStudentRepository
+	tokenExpiry time.Duration
 }
 
 // NewCentrifugoHandler creates a new CentrifugoHandler.
@@ -28,12 +31,24 @@ func NewCentrifugoHandler(
 	tokens realtime.TokenGenerator,
 	sessions store.SessionRepository,
 	members store.SessionStudentRepository,
+	tokenExpiry time.Duration,
 ) *CentrifugoHandler {
-	return &CentrifugoHandler{
-		tokens:   tokens,
-		sessions: sessions,
-		members:  members,
+	if tokenExpiry <= 0 {
+		tokenExpiry = defaultTokenExpiry
 	}
+	return &CentrifugoHandler{
+		tokens:      tokens,
+		sessions:    sessions,
+		members:     members,
+		tokenExpiry: tokenExpiry,
+	}
+}
+
+// Routes returns a chi.Router with the centrifugo routes mounted.
+func (h *CentrifugoHandler) Routes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/token", h.GetToken)
+	return r
 }
 
 // tokenResponse is the JSON envelope for issued tokens.
@@ -56,7 +71,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 
 	// Connection token: any authenticated user.
 	if channel == "" {
-		tok, err := h.tokens.ConnectionToken(authUser.ID.String(), tokenExpiry)
+		tok, err := h.tokens.ConnectionToken(authUser.ID.String(), h.tokenExpiry)
 		if err != nil {
 			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 			return
@@ -82,7 +97,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tok, err := h.tokens.SubscriptionToken(authUser.ID.String(), channel, tokenExpiry)
+	tok, err := h.tokens.SubscriptionToken(authUser.ID.String(), channel, h.tokenExpiry)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

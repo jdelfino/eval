@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -83,9 +84,10 @@ func TestCentrifugoHandler_ConnectionToken(t *testing.T) {
 		&mockTokenGenerator{connToken: "conn-jwt"},
 		&centrifugoMockSessionRepo{},
 		&centrifugoMockStudentRepo{},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token", nil)
 	user := &auth.User{ID: uuid.New(), Role: auth.RoleStudent}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 
@@ -110,14 +112,35 @@ func TestCentrifugoHandler_ConnectionToken_Unauthenticated(t *testing.T) {
 		&mockTokenGenerator{connToken: "conn-jwt"},
 		&centrifugoMockSessionRepo{},
 		&centrifugoMockStudentRepo{},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token", nil)
 	rr := httptest.NewRecorder()
 	h.GetToken(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestCentrifugoHandler_ConnectionToken_GenerationError(t *testing.T) {
+	h := NewCentrifugoHandler(
+		&mockTokenGenerator{err: errors.New("signing failure")},
+		&centrifugoMockSessionRepo{},
+		&centrifugoMockStudentRepo{},
+		15*time.Minute,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token", nil)
+	user := &auth.User{ID: uuid.New(), Role: auth.RoleStudent}
+	req = req.WithContext(auth.WithUser(req.Context(), user))
+
+	rr := httptest.NewRecorder()
+	h.GetToken(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
 	}
 }
 
@@ -129,9 +152,10 @@ func TestCentrifugoHandler_SubscriptionToken_StudentParticipant(t *testing.T) {
 		&mockTokenGenerator{subToken: "sub-jwt"},
 		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
 		&centrifugoMockStudentRepo{student: &store.SessionStudent{SessionID: sessionID, UserID: userID}},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token?channel=session:"+sessionID.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
 	user := &auth.User{ID: userID, Role: auth.RoleStudent}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 
@@ -158,9 +182,10 @@ func TestCentrifugoHandler_SubscriptionToken_StudentNotInSession(t *testing.T) {
 		&mockTokenGenerator{subToken: "sub-jwt"},
 		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
 		&centrifugoMockStudentRepo{err: store.ErrNotFound},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token?channel=session:"+sessionID.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
 	user := &auth.User{ID: uuid.New(), Role: auth.RoleStudent}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 
@@ -172,6 +197,28 @@ func TestCentrifugoHandler_SubscriptionToken_StudentNotInSession(t *testing.T) {
 	}
 }
 
+func TestCentrifugoHandler_SubscriptionToken_StudentDBError(t *testing.T) {
+	sessionID := uuid.New()
+
+	h := NewCentrifugoHandler(
+		&mockTokenGenerator{subToken: "sub-jwt"},
+		&centrifugoMockSessionRepo{},
+		&centrifugoMockStudentRepo{err: errors.New("db connection lost")},
+		15*time.Minute,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
+	user := &auth.User{ID: uuid.New(), Role: auth.RoleStudent}
+	req = req.WithContext(auth.WithUser(req.Context(), user))
+
+	rr := httptest.NewRecorder()
+	h.GetToken(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestCentrifugoHandler_SubscriptionToken_Instructor(t *testing.T) {
 	sessionID := uuid.New()
 
@@ -179,9 +226,10 @@ func TestCentrifugoHandler_SubscriptionToken_Instructor(t *testing.T) {
 		&mockTokenGenerator{subToken: "sub-jwt"},
 		&centrifugoMockSessionRepo{session: &store.Session{ID: sessionID}},
 		&centrifugoMockStudentRepo{},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token?channel=session:"+sessionID.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
 	user := &auth.User{ID: uuid.New(), Role: auth.RoleInstructor}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 
@@ -193,14 +241,37 @@ func TestCentrifugoHandler_SubscriptionToken_Instructor(t *testing.T) {
 	}
 }
 
+func TestCentrifugoHandler_SubscriptionToken_InstructorDBError(t *testing.T) {
+	sessionID := uuid.New()
+
+	h := NewCentrifugoHandler(
+		&mockTokenGenerator{subToken: "sub-jwt"},
+		&centrifugoMockSessionRepo{err: errors.New("db connection lost")},
+		&centrifugoMockStudentRepo{},
+		15*time.Minute,
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
+	user := &auth.User{ID: uuid.New(), Role: auth.RoleInstructor}
+	req = req.WithContext(auth.WithUser(req.Context(), user))
+
+	rr := httptest.NewRecorder()
+	h.GetToken(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestCentrifugoHandler_SubscriptionToken_InvalidChannel(t *testing.T) {
 	h := NewCentrifugoHandler(
 		&mockTokenGenerator{subToken: "sub-jwt"},
 		&centrifugoMockSessionRepo{},
 		&centrifugoMockStudentRepo{},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token?channel=invalid:xyz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=invalid:xyz", nil)
 	user := &auth.User{ID: uuid.New(), Role: auth.RoleStudent}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 
@@ -219,9 +290,10 @@ func TestCentrifugoHandler_SubscriptionToken_InstructorSessionNotFound(t *testin
 		&mockTokenGenerator{subToken: "sub-jwt"},
 		&centrifugoMockSessionRepo{err: store.ErrNotFound},
 		&centrifugoMockStudentRepo{},
+		15*time.Minute,
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/centrifugo-token?channel=session:"+sessionID.String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(), nil)
 	user := &auth.User{ID: uuid.New(), Role: auth.RoleInstructor}
 	req = req.WithContext(auth.WithUser(req.Context(), user))
 

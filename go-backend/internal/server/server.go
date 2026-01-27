@@ -101,12 +101,14 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 		if s != nil {
 			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
 
-			// Centrifugo token endpoint
+			// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
 				tokenGen, err := realtime.NewHMACTokenGenerator(cfg.CentrifugoTokenSecret)
-				if err == nil {
-					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, s, s)
-					r.Get("/auth/centrifugo-token", centrifugoHandler.GetToken)
+				if err != nil {
+					logger.Warn("failed to create centrifugo token generator; token endpoint unavailable", "error", err)
+				} else {
+					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, s, s, cfg.CentrifugoTokenExpiry)
+					r.Mount("/realtime", centrifugoHandler.Routes())
 				}
 			}
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
@@ -129,7 +131,7 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			// Create real-time publisher (no-op if Centrifugo is not configured)
 			var sessionPub realtime.SessionPublisher
 			if cfg.CentrifugoURL != "" && cfg.CentrifugoAPIKey != "" {
-				client := realtime.NewClient(cfg.CentrifugoURL, cfg.CentrifugoAPIKey)
+				client := realtime.NewClient(cfg.CentrifugoURL, cfg.CentrifugoAPIKey, logger)
 				sessionPub = realtime.NewSessionPublisher(client)
 			} else {
 				sessionPub = realtime.NoOpSessionPublisher{}
