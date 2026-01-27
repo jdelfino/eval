@@ -10,10 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/handler"
+	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 )
@@ -46,6 +49,15 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 	r.Use(custommw.Logger(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(custommw.Metrics)
+
+	// Metrics endpoint
+	r.Handle("/metrics", promhttp.Handler())
+
+	// Register DB pool metrics if pool is available
+	if pgxPool := pool.PgxPool(); pgxPool != nil {
+		prometheus.MustRegister(metrics.NewDBPoolCollector(pgxPool))
+	}
 
 	// Health endpoints
 	r.Get("/healthz", handler.Healthz)
