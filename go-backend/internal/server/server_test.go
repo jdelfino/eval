@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -8,14 +9,31 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/config"
+	"github.com/jdelfino/eval/internal/db"
 )
+
+// mockPool implements DatabasePool for testing
+type mockPool struct {
+	healthStatus db.HealthStatus
+}
+
+func (m *mockPool) Health(ctx context.Context) db.HealthStatus {
+	return m.healthStatus
+}
+
+// PgxPool returns nil in tests (no real database connection needed)
+func (m *mockPool) PgxPool() *pgxpool.Pool {
+	return nil
+}
 
 func TestNew(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
 
-	s := New(cfg, logger)
+	s := New(cfg, logger, pool)
 
 	if s == nil {
 		t.Fatal("New() returned nil")
@@ -26,6 +44,9 @@ func TestNew(t *testing.T) {
 	if s.logger == nil {
 		t.Error("Server.logger is nil")
 	}
+	if s.pool == nil {
+		t.Error("Server.pool is nil")
+	}
 	if s.httpServer.Addr != ":8080" {
 		t.Errorf("Server.httpServer.Addr = %q, want %q", s.httpServer.Addr, ":8080")
 	}
@@ -34,7 +55,8 @@ func TestNew(t *testing.T) {
 func TestRoutes(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	s := New(cfg, logger)
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
+	s := New(cfg, logger, pool)
 
 	tests := []struct {
 		name           string
@@ -59,17 +81,27 @@ func TestRoutes(t *testing.T) {
 			},
 		},
 		{
-			name:           "readyz returns 200",
+			name:           "readyz returns 200 with healthy pool",
 			method:         http.MethodGet,
 			path:           "/readyz",
 			wantStatusCode: http.StatusOK,
 			checkBody: func(t *testing.T, body []byte) {
-				var resp map[string]string
+				var resp struct {
+					Status string `json:"status"`
+					Checks struct {
+						Database struct {
+							Healthy bool `json:"healthy"`
+						} `json:"database"`
+					} `json:"checks"`
+				}
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to decode response: %v", err)
 				}
-				if resp["status"] != "ok" {
-					t.Errorf("status = %q, want %q", resp["status"], "ok")
+				if resp.Status != "ok" {
+					t.Errorf("status = %q, want %q", resp.Status, "ok")
+				}
+				if !resp.Checks.Database.Healthy {
+					t.Error("expected database check to be healthy")
 				}
 			},
 		},
@@ -104,10 +136,45 @@ func TestRoutes(t *testing.T) {
 	}
 }
 
+func TestReadyzUnhealthyPool(t *testing.T) {
+	cfg := &config.Config{Port: 8080}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: false, Message: "connection failed"}}
+	s := New(cfg, logger, pool)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	s.httpServer.Handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp struct {
+		Status string `json:"status"`
+		Checks struct {
+			Database struct {
+				Healthy bool `json:"healthy"`
+			} `json:"database"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if resp.Status != "unhealthy" {
+		t.Errorf("status = %q, want %q", resp.Status, "unhealthy")
+	}
+	if resp.Checks.Database.Healthy {
+		t.Error("expected database check to be unhealthy")
+	}
+}
+
 func TestNotFoundRoute(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	s := New(cfg, logger)
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
+	s := New(cfg, logger, pool)
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	rr := httptest.NewRecorder()
@@ -122,7 +189,8 @@ func TestNotFoundRoute(t *testing.T) {
 func TestAPIRoutePrefix(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	s := New(cfg, logger)
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
+	s := New(cfg, logger, pool)
 
 	// API v1 route prefix exists (even if no routes are registered yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1", nil)

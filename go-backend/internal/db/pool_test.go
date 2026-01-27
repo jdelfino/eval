@@ -1,9 +1,12 @@
 package db
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestPoolConfigConnectionString(t *testing.T) {
@@ -142,5 +145,20 @@ func TestHealthStatusHealthy(t *testing.T) {
 	if status.Message != "OK" {
 		t.Errorf("HealthStatus Message = %q, want %q", status.Message, "OK")
 	}
+}
+
+// TestPoolImplementsServerInterface verifies that Pool implements the interface
+// needed by the server package at compile time.
+func TestPoolImplementsServerInterface(t *testing.T) {
+	// This test verifies compile-time interface compliance.
+	// The interface is defined in the server package, but we verify
+	// the methods exist here.
+	var _ interface {
+		Health(ctx context.Context) HealthStatus
+		PgxPool() *pgxpool.Pool
+		Close()
+	} = (*Pool)(nil)
+
+	t.Log("Pool implements required interface methods")
 }
 

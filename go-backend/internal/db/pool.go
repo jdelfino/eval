@@ -105,3 +105,9 @@ func (p *Pool) Health(ctx context.Context) HealthStatus {
 func (p *Pool) Close() {
 	p.Pool.Close()
 }
+
+// PgxPool returns the underlying pgxpool.Pool.
+// This is used by middleware that need direct access to the pool.
+func (p *Pool) PgxPool() *pgxpool.Pool {
+	return p.Pool
+}
