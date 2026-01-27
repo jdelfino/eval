@@ -1,0 +1,14 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: go-api
+  labels:
+    app: go-api
+spec:
+  selector:
+    matchLabels:
+      app: go-api
+  endpoints:
+    - port: 8080
+      interval: 60s
+      path: /metrics
