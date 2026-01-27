@@ -24,6 +24,10 @@ func (m *mockUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.
 	return m.user, m.err
 }
 
+func (m *mockUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
+	return m.user, m.err
+}
+
 func TestUserLookupAdapter_GetUserByExternalID(t *testing.T) {
 	nsID := "ns-1"
 	userID := uuid.New()

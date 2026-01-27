@@ -25,9 +25,18 @@ type ValidationError struct {
 // On validation error: writes 422 Unprocessable Entity with {"errors": [...]}
 // On success: returns pointer to decoded value, nil error
 func BindJSON[T any](w http.ResponseWriter, r *http.Request) (*T, error) {
+	// Limit request body to 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var payload T
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		// Check for body too large
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return nil, err
+		}
 		// Handle empty body or malformed JSON
 		if errors.Is(err, io.EOF) || err != nil {
 			WriteError(w, http.StatusBadRequest, "invalid JSON body")

@@ -41,9 +41,9 @@ type Server struct {
 }
 
 // New creates a new Server with the configured middleware chain and routes.
-// userRepo may be nil (e.g. in tests without a database); when nil, the
+// s may be nil (e.g. in tests without a database); when nil, the
 // authentication middleware is skipped on API routes.
-func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo store.UserRepository) *Server {
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store) *Server {
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -83,10 +83,10 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
 		// Auth middleware - validates JWT and populates user context
-		if userRepo != nil {
+		if s != nil {
 			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
 			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
-			adapter := NewUserLookupAdapter(userRepo)
+			adapter := NewUserLookupAdapter(s)
 			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
 			r.Use(authenticator.Authenticate)
 		}
@@ -96,7 +96,36 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 			r.Use(custommw.RLSContextMiddleware(pgxPool))
 		}
 
-		// Protected routes will be added here
+		// Protected routes
+		if s != nil {
+			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
+			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
+			r.Mount("/classes", handler.NewClassHandler(s).Routes())
+
+			membershipHandler := handler.NewMembershipHandler(s)
+			r.Post("/sections/join", membershipHandler.Join)
+
+			sectionHandler := handler.NewSectionHandler(s)
+			r.Mount("/sections", sectionHandler.Routes())
+			r.Route("/classes/{classID}/sections", func(r chi.Router) {
+				r.Mount("/", sectionHandler.ClassRoutes())
+			})
+
+			r.Get("/sections/{id}/members", membershipHandler.ListMembers)
+			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
+
+			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
+			r.Mount("/sessions", handler.NewSessionHandler(s).Routes())
+
+			revisionHandler := handler.NewRevisionHandler(s)
+			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
+			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
+
+			sessionStudentHandler := handler.NewSessionStudentHandler(s)
+			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
+			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
+			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
+		}
 	})
 
 	return &Server{

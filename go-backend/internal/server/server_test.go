@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/db"
@@ -230,28 +228,17 @@ func TestAPIRoutePrefix(t *testing.T) {
 	}
 }
 
-func TestNewWithUserRepo_BuildsWithoutError(t *testing.T) {
-	// Verify that server construction works when a UserRepository is provided.
+func TestNewWithStore_BuildsWithoutError(t *testing.T) {
+	// Verify that server construction works when a Store is provided.
 	// This exercises the auth middleware wiring path (JWKS provider, validator, adapter).
 	cfg := &config.Config{Port: 8080, GCPProjectID: "test-project"}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	repo := &stubUserRepo{}
+	st := store.New(nil)
 
-	s := New(cfg, logger, pool, repo)
+	s := New(cfg, logger, pool, st)
 
 	if s == nil {
-		t.Fatal("New() returned nil when userRepo is provided")
+		t.Fatal("New() returned nil when store is provided")
 	}
-}
-
-// stubUserRepo is a minimal store.UserRepository for server_test.
-type stubUserRepo struct{}
-
-func (s *stubUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (s *stubUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
-	return nil, errors.New("not implemented")
 }

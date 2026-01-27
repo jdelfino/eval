@@ -1,0 +1,167 @@
+package store
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
+
+// ListClasses retrieves all classes visible to the current user.
+// RLS policies filter results based on the user's role and namespace.
+func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
+		FROM classes
+		ORDER BY created_at`
+
+	rows, err := conn.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var classes []Class
+	for rows.Next() {
+		var c Class
+		if err := rows.Scan(
+			&c.ID,
+			&c.NamespaceID,
+			&c.Name,
+			&c.Description,
+			&c.CreatedBy,
+			&c.CreatedAt,
+			&c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		classes = append(classes, c)
+	}
+	return classes, rows.Err()
+}
+
+// GetClass retrieves a class by its ID.
+// Returns ErrNotFound if the class does not exist.
+func (s *Store) GetClass(ctx context.Context, id uuid.UUID) (*Class, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
+		FROM classes
+		WHERE id = $1`
+
+	var c Class
+	err = conn.QueryRow(ctx, query, id).Scan(
+		&c.ID,
+		&c.NamespaceID,
+		&c.Name,
+		&c.Description,
+		&c.CreatedBy,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &c, nil
+}
+
+// CreateClass creates a new class and returns the created record.
+func (s *Store) CreateClass(ctx context.Context, params CreateClassParams) (*Class, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		INSERT INTO classes (namespace_id, name, description, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
+
+	var c Class
+	err = conn.QueryRow(ctx, query,
+		params.NamespaceID,
+		params.Name,
+		params.Description,
+		params.CreatedBy,
+	).Scan(
+		&c.ID,
+		&c.NamespaceID,
+		&c.Name,
+		&c.Description,
+		&c.CreatedBy,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}
+
+// UpdateClass updates a class's mutable fields and returns the updated record.
+// Returns ErrNotFound if the class does not exist.
+func (s *Store) UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClassParams) (*Class, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE classes
+		SET name        = COALESCE($2, name),
+		    description = COALESCE($3, description),
+		    updated_at  = now()
+		WHERE id = $1
+		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
+
+	var c Class
+	err = conn.QueryRow(ctx, query,
+		id,
+		params.Name,
+		params.Description,
+	).Scan(
+		&c.ID,
+		&c.NamespaceID,
+		&c.Name,
+		&c.Description,
+		&c.CreatedBy,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &c, nil
+}
+
+// DeleteClass deletes a class by its ID.
+// Returns ErrNotFound if the class does not exist.
+func (s *Store) DeleteClass(ctx context.Context, id uuid.UUID) error {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return err
+	}
+
+	tag, err := conn.Exec(ctx, "DELETE FROM classes WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Compile-time check that Store implements ClassRepository.
+var _ ClassRepository = (*Store)(nil)
