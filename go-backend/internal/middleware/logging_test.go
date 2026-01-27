@@ -111,7 +111,7 @@ func TestLogger(t *testing.T) {
 
 		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte("created"))
+			_, _ = w.Write([]byte("created"))
 		}))
 
 		req := httptest.NewRequest(http.MethodPost, "/create", nil)
@@ -133,7 +133,7 @@ func TestLogger(t *testing.T) {
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
 
 		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 		}))
 
 		req := httptest.NewRequest(http.MethodGet, "/default", nil)

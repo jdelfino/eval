@@ -15,7 +15,7 @@ type healthResponse struct {
 func Healthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
+	_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
 }
 
 // Readyz is the readiness probe handler for Kubernetes.
@@ -23,5 +23,5 @@ func Healthz(w http.ResponseWriter, r *http.Request) {
 func Readyz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
+	_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
 }

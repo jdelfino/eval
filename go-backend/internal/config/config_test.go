@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"testing"
 )
 
@@ -18,7 +17,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"OAUTH_CLIENT_ID", "OAUTH_CLIENT_SECRET",
 	}
 	for _, v := range envVars {
-		os.Unsetenv(v)
+		t.Setenv(v, "")
 	}
 
 	cfg, err := Load()
@@ -45,49 +44,27 @@ func TestLoad_Defaults(t *testing.T) {
 }
 
 func TestLoad_CustomValues(t *testing.T) {
-	// Set custom environment variables
-	os.Setenv("PORT", "9000")
-	os.Setenv("ENVIRONMENT", "production")
-	os.Setenv("LOG_LEVEL", "debug")
-	os.Setenv("GCP_PROJECT_ID", "my-project")
-	os.Setenv("GCP_REGION", "us-central1")
-	os.Setenv("DATABASE_HOST", "db.example.com")
-	os.Setenv("DATABASE_PORT", "5433")
-	os.Setenv("DATABASE_NAME", "testdb")
-	os.Setenv("DATABASE_USER", "testuser")
-	os.Setenv("DATABASE_PASSWORD", "testpass")
-	os.Setenv("DATABASE_URL", "postgresql://testuser:testpass@db.example.com:5433/testdb")
-	os.Setenv("REDIS_HOST", "redis.example.com")
-	os.Setenv("REDIS_PORT", "6380")
-	os.Setenv("CENTRIFUGO_URL", "http://centrifugo.example.com:8000")
-	os.Setenv("CENTRIFUGO_API_KEY", "test-api-key")
-	os.Setenv("CENTRIFUGO_TOKEN_SECRET", "test-token-secret")
-	os.Setenv("IDENTITY_PLATFORM_API_KEY", "test-identity-key")
-	os.Setenv("IDENTITY_PLATFORM_AUTH_DOMAIN", "auth.example.com")
-	os.Setenv("OAUTH_CLIENT_ID", "test-client-id")
-	os.Setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
-	defer func() {
-		os.Unsetenv("PORT")
-		os.Unsetenv("ENVIRONMENT")
-		os.Unsetenv("LOG_LEVEL")
-		os.Unsetenv("GCP_PROJECT_ID")
-		os.Unsetenv("GCP_REGION")
-		os.Unsetenv("DATABASE_HOST")
-		os.Unsetenv("DATABASE_PORT")
-		os.Unsetenv("DATABASE_NAME")
-		os.Unsetenv("DATABASE_USER")
-		os.Unsetenv("DATABASE_PASSWORD")
-		os.Unsetenv("DATABASE_URL")
-		os.Unsetenv("REDIS_HOST")
-		os.Unsetenv("REDIS_PORT")
-		os.Unsetenv("CENTRIFUGO_URL")
-		os.Unsetenv("CENTRIFUGO_API_KEY")
-		os.Unsetenv("CENTRIFUGO_TOKEN_SECRET")
-		os.Unsetenv("IDENTITY_PLATFORM_API_KEY")
-		os.Unsetenv("IDENTITY_PLATFORM_AUTH_DOMAIN")
-		os.Unsetenv("OAUTH_CLIENT_ID")
-		os.Unsetenv("OAUTH_CLIENT_SECRET")
-	}()
+	// Set custom environment variables using t.Setenv (auto-cleanup)
+	t.Setenv("PORT", "9000")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("GCP_PROJECT_ID", "my-project")
+	t.Setenv("GCP_REGION", "us-central1")
+	t.Setenv("DATABASE_HOST", "db.example.com")
+	t.Setenv("DATABASE_PORT", "5433")
+	t.Setenv("DATABASE_NAME", "testdb")
+	t.Setenv("DATABASE_USER", "testuser")
+	t.Setenv("DATABASE_PASSWORD", "testpass")
+	t.Setenv("DATABASE_URL", "postgresql://testuser:testpass@db.example.com:5433/testdb")
+	t.Setenv("REDIS_HOST", "redis.example.com")
+	t.Setenv("REDIS_PORT", "6380")
+	t.Setenv("CENTRIFUGO_URL", "http://centrifugo.example.com:8000")
+	t.Setenv("CENTRIFUGO_API_KEY", "test-api-key")
+	t.Setenv("CENTRIFUGO_TOKEN_SECRET", "test-token-secret")
+	t.Setenv("IDENTITY_PLATFORM_API_KEY", "test-identity-key")
+	t.Setenv("IDENTITY_PLATFORM_AUTH_DOMAIN", "auth.example.com")
+	t.Setenv("OAUTH_CLIENT_ID", "test-client-id")
+	t.Setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
 
 	cfg, err := Load()
 	if err != nil {
@@ -158,8 +135,7 @@ func TestLoad_CustomValues(t *testing.T) {
 }
 
 func TestLoad_InvalidPort(t *testing.T) {
-	os.Setenv("PORT", "not-a-number")
-	defer os.Unsetenv("PORT")
+	t.Setenv("PORT", "not-a-number")
 
 	_, err := Load()
 	if err == nil {
