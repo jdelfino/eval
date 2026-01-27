@@ -55,7 +55,7 @@ variable "service_account_roles" {
   default = [
     "roles/artifactregistry.writer",
     "roles/container.developer",
-    "roles/gkehub.gatewayReader",
+    "roles/gkehub.gatewayEditor",
     "roles/gkehub.viewer"
   ]
 }
