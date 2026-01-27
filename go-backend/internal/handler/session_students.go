@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -12,11 +15,13 @@ import (
 // SessionStudentHandler handles session student participation routes.
 type SessionStudentHandler struct {
 	sessionStudents store.SessionStudentRepository
+	publisher       realtime.SessionPublisher
+	logger          *slog.Logger
 }
 
 // NewSessionStudentHandler creates a new SessionStudentHandler with the given repository.
-func NewSessionStudentHandler(sessionStudents store.SessionStudentRepository) *SessionStudentHandler {
-	return &SessionStudentHandler{sessionStudents: sessionStudents}
+func NewSessionStudentHandler(sessionStudents store.SessionStudentRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionStudentHandler {
+	return &SessionStudentHandler{sessionStudents: sessionStudents, publisher: publisher, logger: logger}
 }
 
 // joinSessionRequest is the request body for POST /sessions/{id}/join.
@@ -51,6 +56,10 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
+		return h.publisher.StudentJoined(ctx, sessionID.String(), authUser.ID.String(), req.Name)
+	})
 
 	httputil.WriteJSON(w, http.StatusCreated, student)
 }
@@ -87,6 +96,10 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
+		return h.publisher.CodeUpdated(ctx, sessionID.String(), authUser.ID.String(), req.Code)
+	})
 
 	httputil.WriteJSON(w, http.StatusOK, student)
 }

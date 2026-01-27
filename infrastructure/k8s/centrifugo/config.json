@@ -1,0 +1,20 @@
+{
+  "token_hmac_secret_key": "${CENTRIFUGO_TOKEN_HMAC_SECRET_KEY}",
+  "api_key": "${CENTRIFUGO_API_KEY}",
+  "admin": false,
+  "health": true,
+  "allowed_origins": ["${CENTRIFUGO_ALLOWED_ORIGIN}"],
+  "engine": "redis",
+  "redis_address": "${CENTRIFUGO_REDIS_ADDRESS}",
+  "client_channel_limit": 128,
+  "client_queue_max_size": 1048576,
+  "namespaces": [
+    {
+      "name": "session",
+      "presence": true,
+      "join_leave": true,
+      "history_size": 10,
+      "history_ttl": "5m"
+    }
+  ]
+}
