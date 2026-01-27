@@ -150,6 +150,15 @@ module "workload_identity_federation" {
   github_repo  = var.github_repo
 }
 
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------
