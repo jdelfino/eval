@@ -111,16 +111,17 @@ func TestReadyz_BinariesMissing(t *testing.T) {
 	}
 }
 
-func TestExecutePlaceholder(t *testing.T) {
+func TestExecuteRoute(t *testing.T) {
 	srv := newTestServer(t)
 
+	// POST with no body should get 400 (invalid JSON), proving the route is wired.
 	req := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec := httptest.NewRecorder()
 
 	srv.httpServer.Handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotImplemented)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 

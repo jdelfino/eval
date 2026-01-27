@@ -14,7 +14,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/jdelfino/eval/executor/internal/config"
+	"github.com/jdelfino/eval/executor/internal/handler"
 	custommw "github.com/jdelfino/eval/executor/internal/middleware"
+	"github.com/jdelfino/eval/executor/internal/sandbox"
 )
 
 // Server wraps the HTTP server with its configuration and logger.
@@ -58,12 +60,8 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 
 	r.Get("/readyz", readyzHandler(cfg))
 
-	// Execute endpoint (placeholder, wired in later task)
-	r.Post("/execute", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not implemented"})
-	})
+	// Execute endpoint
+	r.Post("/execute", handler.Execute(cfg, logger, sandbox.Run))
 
 	return &Server{
 		httpServer: &http.Server{
