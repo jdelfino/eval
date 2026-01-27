@@ -18,6 +18,15 @@ if [ -f ".env.1password" ] && [ -s ".env.1password" ]; then
     echo "Secrets loaded into .env.local"
 fi
 
+# Terraform secrets
+TF_SECRETS_TEMPLATE="infrastructure/terraform/environments/prod/secrets.tfvars.1password"
+TF_SECRETS_OUTPUT="infrastructure/terraform/environments/prod/secrets.tfvars"
+if [ -f "$TF_SECRETS_TEMPLATE" ] && [ -s "$TF_SECRETS_TEMPLATE" ]; then
+    echo "Loading Terraform secrets from 1Password..."
+    envsubst < "$TF_SECRETS_TEMPLATE" | op inject -o "$TF_SECRETS_OUTPUT"
+    echo "Terraform secrets loaded into $TF_SECRETS_OUTPUT"
+fi
+
 echo ""
 echo "========================================"
 echo "  ✅ eval is ready!"
