@@ -19,6 +19,7 @@ import (
 	"github.com/jdelfino/eval/internal/handler"
 	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
+	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 )
 
@@ -99,6 +100,15 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 		// Protected routes
 		if s != nil {
 			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
+
+			// Centrifugo token endpoint
+			if cfg.CentrifugoTokenSecret != "" {
+				tokenGen, err := realtime.NewHMACTokenGenerator(cfg.CentrifugoTokenSecret)
+				if err == nil {
+					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, s, s)
+					r.Get("/auth/centrifugo-token", centrifugoHandler.GetToken)
+				}
+			}
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 			r.Mount("/classes", handler.NewClassHandler(s).Routes())
 
