@@ -15,7 +15,7 @@
 FROM debian:bookworm-slim AS nsjail-builder
 
 RUN apt-get update && apt-get install -y \
-    build-essential git protobuf-compiler pkg-config \
+    build-essential git protobuf-compiler pkg-config flex bison \
     libprotobuf-dev libnl-3-dev libnl-route-3-dev \
   && rm -rf /var/lib/apt/lists/*
 
@@ -36,7 +36,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 go build \
     -ldflags="-w -s" \
     -o /app/executor \
     ./cmd/executor
@@ -47,7 +47,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-stdlib ca-certificates \
+    python3 ca-certificates \
     libprotobuf32 libnl-3-200 libnl-route-3-200 \
   && rm -rf /var/lib/apt/lists/*
 

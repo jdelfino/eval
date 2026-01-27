@@ -56,7 +56,7 @@ services:
       DEFAULT_TIMEOUT_MS: "10000"
     privileged: true
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/healthz"]
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/healthz\")'"]
       interval: 10s
       timeout: 5s
       retries: 3
