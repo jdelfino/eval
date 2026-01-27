@@ -11,7 +11,7 @@
 -- 6. Updated_at triggers
 --
 -- Key differences from Supabase schema:
--- - Combined user_profiles into users table with external_id for Cognito
+-- - Combined user_profiles into users table with external_id for Identity Platform
 -- - RLS uses current_setting('app.*') instead of auth.uid()
 -- - No Supabase-specific features (realtime, auth.users)
 
@@ -91,11 +91,11 @@ COMMENT ON COLUMN namespaces.id IS 'URL-safe slug (kebab-case, e.g., stanford, m
 COMMENT ON COLUMN namespaces.max_instructors IS 'Maximum instructors allowed (NULL = unlimited)';
 COMMENT ON COLUMN namespaces.max_students IS 'Maximum students allowed (NULL = unlimited)';
 
--- 2. users - Application users with Cognito integration
+-- 2. users - Application users with Identity Platform integration
 -- Combines Supabase auth.users + user_profiles into one table
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  external_id TEXT UNIQUE,  -- Cognito sub (external identity provider ID)
+  external_id TEXT UNIQUE,  -- Identity Platform uid (external identity provider ID)
   email TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('system-admin', 'namespace-admin', 'instructor', 'student')),
   namespace_id TEXT REFERENCES namespaces(id) ON DELETE CASCADE,  -- NULL for system-admin
@@ -110,8 +110,8 @@ CREATE TABLE users (
   )
 );
 
-COMMENT ON TABLE users IS 'Application users - integrates with Cognito via external_id';
-COMMENT ON COLUMN users.external_id IS 'Cognito sub or other external identity provider ID';
+COMMENT ON TABLE users IS 'Application users - integrates with Identity Platform via external_id';
+COMMENT ON COLUMN users.external_id IS 'Identity Platform uid or other external identity provider ID';
 COMMENT ON COLUMN users.role IS 'User role: system-admin, namespace-admin, instructor, student';
 
 CREATE INDEX idx_users_namespace ON users(namespace_id);

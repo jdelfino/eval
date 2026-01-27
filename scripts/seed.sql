@@ -24,25 +24,25 @@ ON CONFLICT (id) DO NOTHING;
 -- System admin (no namespace)
 INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
 VALUES
-  ('00000000-0000-0000-0000-000000000001', 'cognito-admin-001', 'admin@test.local', 'system-admin', NULL, 'System Admin')
+  ('00000000-0000-0000-0000-000000000001', 'test-admin-001', 'admin@test.local', 'system-admin', NULL, 'System Admin')
 ON CONFLICT (id) DO NOTHING;
 
 -- Instructor (in test-school namespace)
 INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
 VALUES
-  ('00000000-0000-0000-0000-000000000002', 'cognito-instructor-001', 'instructor@test.local', 'instructor', 'test-school', 'Test Instructor')
+  ('00000000-0000-0000-0000-000000000002', 'test-instructor-001', 'instructor@test.local', 'instructor', 'test-school', 'Test Instructor')
 ON CONFLICT (id) DO NOTHING;
 
 -- Student 1 (in test-school namespace)
 INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
 VALUES
-  ('00000000-0000-0000-0000-000000000003', 'cognito-student-001', 'student1@test.local', 'student', 'test-school', 'Alice Student')
+  ('00000000-0000-0000-0000-000000000003', 'test-student-001', 'student1@test.local', 'student', 'test-school', 'Alice Student')
 ON CONFLICT (id) DO NOTHING;
 
 -- Student 2 (in test-school namespace)
 INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
 VALUES
-  ('00000000-0000-0000-0000-000000000004', 'cognito-student-002', 'student2@test.local', 'student', 'test-school', 'Bob Student')
+  ('00000000-0000-0000-0000-000000000004', 'test-student-002', 'student2@test.local', 'student', 'test-school', 'Bob Student')
 ON CONFLICT (id) DO NOTHING;
 
 -- Update namespace created_by now that we have an admin user
@@ -179,12 +179,12 @@ ON CONFLICT (id) DO NOTHING;
 -- TEST CREDENTIALS SUMMARY
 -- ============================================================================
 --
--- Email                    | External ID             | Role
--- -------------------------+-------------------------+---------------
--- admin@test.local         | cognito-admin-001       | system-admin
--- instructor@test.local    | cognito-instructor-001  | instructor
--- student1@test.local      | cognito-student-001     | student
--- student2@test.local      | cognito-student-002     | student
+-- Email                    | External ID           | Role
+-- -------------------------+-----------------------+---------------
+-- admin@test.local         | test-admin-001        | system-admin
+-- instructor@test.local    | test-instructor-001   | instructor
+-- student1@test.local      | test-student-001      | student
+-- student2@test.local      | test-student-002      | student
 --
 -- Join Code: ABC-123-XYZ (for Section A of CS 101)
 -- ============================================================================
