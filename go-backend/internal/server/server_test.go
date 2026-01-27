@@ -233,3 +233,7 @@ func (s *stubUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User,
 func (s *stubUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
 	return nil, errors.New("not implemented")
 }
+
+func (s *stubUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
+	return nil, errors.New("not implemented")
+}

@@ -67,7 +67,10 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo st
 			r.Use(custommw.RLSContextMiddleware(pgxPool))
 		}
 
-		// Protected routes will be added here
+		// Protected routes
+		if userRepo != nil {
+			r.Mount("/auth", handler.NewAuthHandler(userRepo).Routes())
+		}
 	})
 
 	return &Server{
