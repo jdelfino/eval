@@ -44,7 +44,8 @@ jobs:
 
   build-push:
     needs: [test, lint]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # DISABLED: Waiting for WIF setup (see PLAT-ayl)
+    if: false && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
