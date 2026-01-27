@@ -79,3 +79,11 @@ authorized_domains = [
 #   export TF_VAR_oauth_client_id="xxx.apps.googleusercontent.com"
 #   export TF_VAR_oauth_client_secret="xxx"
 # Or via: terraform apply -var-file="secrets.tfvars" (gitignored)
+
+# -----------------------------------------------------------------------------
+# Workload Identity Federation Configuration
+# -----------------------------------------------------------------------------
+
+project_number = "580381260766"
+github_owner   = "jdelfino"
+github_repo    = "eval"
