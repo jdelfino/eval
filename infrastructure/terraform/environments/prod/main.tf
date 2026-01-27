@@ -271,7 +271,7 @@ resource "kubernetes_secret" "centrifugo_secrets" {
   }
 
   data = {
-    CENTRIFUGO_API_KEY              = var.centrifugo_api_key
+    CENTRIFUGO_API_KEY               = var.centrifugo_api_key
     CENTRIFUGO_TOKEN_HMAC_SECRET_KEY = var.centrifugo_token_secret
   }
 
