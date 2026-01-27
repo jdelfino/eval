@@ -98,3 +98,12 @@ output "identity_platform_setup_instructions" {
   description = "Manual setup instructions for Identity Platform"
   value       = module.identity_platform.manual_setup_instructions
 }
+
+# -----------------------------------------------------------------------------
+# Artifact Registry Outputs
+# -----------------------------------------------------------------------------
+
+output "artifact_registry_url" {
+  description = "Artifact Registry repository URL for Docker operations"
+  value       = module.artifact_registry.repository_url
+}

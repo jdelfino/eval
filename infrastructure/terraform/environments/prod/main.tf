@@ -128,6 +128,15 @@ module "identity_platform" {
   oauth_client_secret = var.oauth_client_secret
 }
 
+module "artifact_registry" {
+  source = "../../modules/artifact-registry"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------
