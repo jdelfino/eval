@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: go-api
+  labels:
+    app: go-api
+  annotations:
+    kubernetes.io/ingress.class: gce
+spec:
+  defaultBackend:
+    service:
+      name: go-api
+      port:
+        number: 80
+  rules:
+    - http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: go-api
+                port:
+                  number: 80
