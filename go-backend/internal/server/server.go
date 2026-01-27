@@ -101,6 +101,7 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 			r.Mount("/classes", handler.NewClassHandler(s).Routes())
+			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 		}
 	})
 

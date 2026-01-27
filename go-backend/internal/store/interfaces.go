@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,6 +108,61 @@ type ClassRepository interface {
 	// DeleteClass deletes a class by ID.
 	// Returns ErrNotFound if the class does not exist.
 	DeleteClass(ctx context.Context, id uuid.UUID) error
+}
+
+// Problem represents a coding exercise in the database.
+type Problem struct {
+	ID                uuid.UUID       `json:"id"`
+	NamespaceID       string          `json:"namespace_id"`
+	Title             string          `json:"title"`
+	Description       *string         `json:"description"`
+	StarterCode       *string         `json:"starter_code"`
+	TestCases         json.RawMessage `json:"test_cases"`
+	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	AuthorID          uuid.UUID       `json:"author_id"`
+	ClassID           *uuid.UUID      `json:"class_id"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// CreateProblemParams contains the fields for creating a problem.
+type CreateProblemParams struct {
+	NamespaceID       string
+	Title             string
+	Description       *string
+	StarterCode       *string
+	TestCases         json.RawMessage
+	ExecutionSettings json.RawMessage
+	AuthorID          uuid.UUID
+	ClassID           *uuid.UUID
+}
+
+// UpdateProblemParams contains the fields that can be updated on a problem.
+type UpdateProblemParams struct {
+	Title             *string
+	Description       *string
+	StarterCode       *string
+	TestCases         json.RawMessage
+	ExecutionSettings json.RawMessage
+	ClassID           *uuid.UUID
+}
+
+// ProblemRepository defines the interface for problem data access.
+type ProblemRepository interface {
+	// ListProblems retrieves all problems visible to the current user (RLS-filtered).
+	// If classID is non-nil, results are filtered to that class.
+	ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem, error)
+	// GetProblem retrieves a problem by ID.
+	// Returns ErrNotFound if the problem does not exist.
+	GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error)
+	// CreateProblem creates a new problem and returns it.
+	CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error)
+	// UpdateProblem updates a problem's mutable fields and returns the updated problem.
+	// Returns ErrNotFound if the problem does not exist.
+	UpdateProblem(ctx context.Context, id uuid.UUID, params UpdateProblemParams) (*Problem, error)
+	// DeleteProblem deletes a problem by ID.
+	// Returns ErrNotFound if the problem does not exist.
+	DeleteProblem(ctx context.Context, id uuid.UUID) error
 }
 
 // UserRepository defines the interface for user data access.
