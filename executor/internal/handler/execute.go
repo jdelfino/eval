@@ -2,14 +2,15 @@
 package handler
 
 import (
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/jdelfino/eval/executor/internal/config"
+	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 )
 
@@ -47,7 +48,7 @@ type ExecuteResponse struct {
 type SandboxRunner func(ctx context.Context, cfg sandbox.Config, req sandbox.Request) (*sandbox.Result, error)
 
 // Execute returns an HTTP handler that runs code in a sandbox.
-func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner) http.HandlerFunc {
+func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -56,14 +57,25 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner) http
 
 		var req ExecuteRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if m != nil {
+				m.ValidationErrorsTotal.WithLabelValues("invalid_request").Inc()
+			}
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 
 		// Validate request.
-		if errMsg := validateRequest(cfg, &req); errMsg != "" {
+		if reason, errMsg := validateRequestWithReason(cfg, &req); errMsg != "" {
+			if m != nil && reason != "" {
+				m.ValidationErrorsTotal.WithLabelValues(reason).Inc()
+			}
 			writeError(w, http.StatusBadRequest, errMsg)
 			return
+		}
+
+		// Observe code size.
+		if m != nil {
+			m.CodeSizeBytes.Observe(float64(len(req.Code)))
 		}
 
 		// Determine timeout.
@@ -79,11 +91,11 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner) http
 		}
 
 		sandboxReq := sandbox.Request{
-			Code:      req.Code,
-			Stdin:     req.Stdin,
-			Files:     files,
+			Code:       req.Code,
+			Stdin:      req.Stdin,
+			Files:      files,
 			RandomSeed: req.RandomSeed,
-			TimeoutMs: timeoutMs,
+			TimeoutMs:  timeoutMs,
 		}
 
 		sandboxCfg := sandbox.Config{
@@ -99,17 +111,43 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner) http
 			"timeout_ms", timeoutMs,
 		)
 
+		// Track active executions.
+		if m != nil {
+			m.ActiveExecutions.Inc()
+			defer m.ActiveExecutions.Dec()
+		}
+
 		start := time.Now()
 		result, err := runner(r.Context(), sandboxCfg, sandboxReq)
 		duration := time.Since(start)
 
+		// Observe duration.
+		if m != nil {
+			m.ExecutionDuration.Observe(duration.Seconds())
+		}
+
 		if err != nil {
 			logger.Error("sandbox execution failed", "error", err, "duration_ms", duration.Milliseconds())
+			if m != nil {
+				m.ExecutionsTotal.WithLabelValues("error").Inc()
+			}
 			writeError(w, http.StatusInternalServerError, "internal execution error")
 			return
 		}
 
 		success := result.ExitCode == 0 && !result.TimedOut
+
+		// Record execution status.
+		if m != nil {
+			switch {
+			case result.TimedOut:
+				m.ExecutionsTotal.WithLabelValues("timeout").Inc()
+			case success:
+				m.ExecutionsTotal.WithLabelValues("success").Inc()
+			default:
+				m.ExecutionsTotal.WithLabelValues("failure").Inc()
+			}
+		}
 
 		// Build output and error strings.
 		output := result.Stdout
@@ -136,39 +174,45 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner) http
 	}
 }
 
-func validateRequest(cfg *config.Config, req *ExecuteRequest) string {
+// validationResult holds a reason code and error message for validation failures.
+type validationResult struct {
+	reason string
+	msg    string
+}
+
+func validateRequestWithReason(cfg *config.Config, req *ExecuteRequest) (string, string) {
 	if req.Code == "" {
-		return "code is required and must be non-empty"
+		return "invalid_request", "code is required and must be non-empty"
 	}
 	if len(req.Code) > cfg.MaxCodeBytes {
-		return fmt.Sprintf("code exceeds maximum size of %d bytes", cfg.MaxCodeBytes)
+		return "code_too_large", fmt.Sprintf("code exceeds maximum size of %d bytes", cfg.MaxCodeBytes)
 	}
 	if len(req.Stdin) > cfg.MaxStdinBytes {
-		return fmt.Sprintf("stdin exceeds maximum size of %d bytes", cfg.MaxStdinBytes)
+		return "stdin_too_large", fmt.Sprintf("stdin exceeds maximum size of %d bytes", cfg.MaxStdinBytes)
 	}
 	if len(req.Files) > cfg.MaxFiles {
-		return fmt.Sprintf("too many files: maximum is %d", cfg.MaxFiles)
+		return "too_many_files", fmt.Sprintf("too many files: maximum is %d", cfg.MaxFiles)
 	}
 	for _, f := range req.Files {
 		if f.Name == "" {
-			return "file name must not be empty"
+			return "invalid_request", "file name must not be empty"
 		}
 		if f.Content == "" {
-			return "file content must not be empty"
+			return "invalid_request", "file content must not be empty"
 		}
 		if len(f.Content) > cfg.MaxFileBytes {
-			return fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, cfg.MaxFileBytes)
+			return "file_too_large", fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, cfg.MaxFileBytes)
 		}
 	}
 	if req.TimeoutMs != nil {
 		if *req.TimeoutMs < 0 {
-			return "timeout_ms must not be negative"
+			return "invalid_request", "timeout_ms must not be negative"
 		}
 		if *req.TimeoutMs > maxTimeoutMs {
-			return fmt.Sprintf("timeout_ms exceeds maximum of %d", maxTimeoutMs)
+			return "invalid_request", fmt.Sprintf("timeout_ms exceeds maximum of %d", maxTimeoutMs)
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

@@ -11,10 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
+	"github.com/jdelfino/eval/executor/internal/metrics"
 	custommw "github.com/jdelfino/eval/executor/internal/middleware"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 )
@@ -24,6 +26,7 @@ type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
 	cfg        *config.Config
+	metrics    *metrics.Metrics
 }
 
 // healthResponse represents the JSON response for health endpoints.
@@ -39,6 +42,13 @@ type readyResponse struct {
 
 // New creates a new Server with the configured middleware chain and routes.
 func New(cfg *config.Config, logger *slog.Logger) *Server {
+	return NewWithRegistry(cfg, logger, prometheus.DefaultRegisterer)
+}
+
+// NewWithRegistry creates a new Server using the provided Prometheus registerer.
+func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Registerer) *Server {
+	m := metrics.New(reg)
+
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -58,23 +68,24 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
 	})
 
-	r.Get("/readyz", readyzHandler(cfg))
+	r.Get("/readyz", readyzHandler(cfg, m))
 
 	// Execute endpoint
-	r.Post("/execute", handler.Execute(cfg, logger, sandbox.Run))
+	r.Post("/execute", handler.Execute(cfg, logger, sandbox.Run, m))
 
 	return &Server{
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
 			Handler: r,
 		},
-		logger: logger,
-		cfg:    cfg,
+		logger:  logger,
+		cfg:     cfg,
+		metrics: m,
 	}
 }
 
 // readyzHandler returns an HTTP handler that checks if nsjail and python3 binaries are accessible.
-func readyzHandler(cfg *config.Config) http.HandlerFunc {
+func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -98,8 +109,10 @@ func readyzHandler(cfg *config.Config) http.HandlerFunc {
 		status := "ok"
 		if !healthy {
 			status = "unhealthy"
+			m.Ready.Set(0)
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
+			m.Ready.Set(1)
 			w.WriteHeader(http.StatusOK)
 		}
 
