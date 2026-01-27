@@ -105,7 +105,9 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      - run: sudo apt-get install -y google-cloud-cli-gke-gcloud-auth-plugin
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: gke-gcloud-auth-plugin
       - name: Get GKE credentials via Connect Gateway
         run: |
           gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
