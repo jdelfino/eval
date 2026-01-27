@@ -16,6 +16,7 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/config"
+	"github.com/jdelfino/eval/internal/executor"
 	"github.com/jdelfino/eval/internal/handler"
 	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
@@ -120,6 +121,10 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			revisionHandler := handler.NewRevisionHandler(s)
 			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
 			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
+
+			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
+			executeHandler := handler.NewExecuteHandler(s, s, execClient)
+			r.Post("/sessions/{id}/execute", executeHandler.Execute)
 
 			sessionStudentHandler := handler.NewSessionStudentHandler(s)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
