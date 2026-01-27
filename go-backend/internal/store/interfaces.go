@@ -24,4 +24,8 @@ type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.
 	// Returns ErrNotFound if the user does not exist.
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
+
+	// GetUserByExternalID retrieves a user by their Identity Platform uid (external_id).
+	// Returns ErrNotFound if the user does not exist.
+	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
 }
