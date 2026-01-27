@@ -12,6 +12,7 @@ import (
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/db"
 	"github.com/jdelfino/eval/internal/server"
+	"github.com/jdelfino/eval/internal/store"
 )
 
 func main() {
@@ -49,8 +50,11 @@ func main() {
 		"min_conns", cfg.DatabaseMinConns,
 	)
 
+	// Create store for user lookups
+	userStore := store.New(pool.PgxPool())
+
 	// Create and start server
-	srv := server.New(cfg, logger, pool)
+	srv := server.New(cfg, logger, pool, userStore)
 
 	// Graceful shutdown
 	go func() {

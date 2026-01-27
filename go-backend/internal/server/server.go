@@ -11,9 +11,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/handler"
 	custommw "github.com/jdelfino/eval/internal/middleware"
+	"github.com/jdelfino/eval/internal/store"
 )
 
 // DatabasePool is the interface for database pool operations needed by the server.
@@ -33,7 +35,9 @@ type Server struct {
 }
 
 // New creates a new Server with the configured middleware chain and routes.
-func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool) *Server {
+// userRepo may be nil (e.g. in tests without a database); when nil, the
+// authentication middleware is skipped on API routes.
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userRepo store.UserRepository) *Server {
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -47,10 +51,16 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool) *Server {
 	r.Get("/healthz", handler.Healthz)
 	r.Handle("/readyz", handler.NewReadyzHandler(pool))
 
-	// API routes with RLS middleware
+	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
-		// Auth middleware position (PLAT-nqj will add)
-		// r.Use(authMiddleware.Authenticate)
+		// Auth middleware - validates JWT and populates user context
+		if userRepo != nil {
+			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
+			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+			adapter := NewUserLookupAdapter(userRepo)
+			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
+			r.Use(authenticator.Authenticate)
+		}
 
 		// RLS middleware - after auth, only if pool is available (not in tests)
 		if pgxPool := pool.PgxPool(); pgxPool != nil {
