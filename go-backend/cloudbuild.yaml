@@ -1,0 +1,24 @@
+# Cloud Build configuration for deploying to GKE
+#
+# Triggered by GitHub Actions after successful image push.
+# Runs inside GCP so it can reach the private GKE cluster.
+
+steps:
+  - name: 'gcr.io/cloud-builders/kubectl'
+    id: 'deploy'
+    args:
+      - 'set'
+      - 'image'
+      - 'deployment/go-api'
+      - 'go-api=$_IMAGE'
+    env:
+      - 'CLOUDSDK_COMPUTE_REGION=$_GKE_LOCATION'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=$_GKE_CLUSTER'
+
+substitutions:
+  _IMAGE: 'us-east1-docker.pkg.dev/eval-prod-485520/go-api/go-api:latest'
+  _GKE_CLUSTER: 'eval-prod-gke'
+  _GKE_LOCATION: 'us-east1'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

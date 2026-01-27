@@ -54,6 +54,6 @@ variable "service_account_roles" {
   type        = list(string)
   default = [
     "roles/artifactregistry.writer",
-    "roles/container.developer"
+    "roles/cloudbuild.builds.editor"
   ]
 }

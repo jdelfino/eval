@@ -150,6 +150,14 @@ module "workload_identity_federation" {
   github_repo  = var.github_repo
 }
 
+module "cloud_build" {
+  source = "../../modules/cloud-build"
+
+  project_id     = var.project_id
+  project_number = var.project_number
+  region         = var.region
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------

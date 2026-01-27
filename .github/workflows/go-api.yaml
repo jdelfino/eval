@@ -69,14 +69,15 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ secrets.GKE_CLUSTER }}
-          location: ${{ secrets.GKE_LOCATION }}
-      - run: |
-          kubectl set image deployment/go-api \
-            go-api=$REGISTRY/$IMAGE_NAME:${{ github.sha }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy via Cloud Build
+        run: |
+          gcloud builds submit go-backend/ \
+            --config=go-backend/cloudbuild.yaml \
+            --substitutions=_IMAGE=$REGISTRY/$IMAGE_NAME:${{ github.sha }},_GKE_CLUSTER=${{ secrets.GKE_CLUSTER }},_GKE_LOCATION=${{ secrets.GKE_LOCATION }} \
+            --region=${{ secrets.GKE_LOCATION }}
