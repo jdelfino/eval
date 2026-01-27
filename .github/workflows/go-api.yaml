@@ -44,33 +44,21 @@ jobs:
 
   integration-test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: eval
-          POSTGRES_USER: eval
-          POSTGRES_PASSWORD: eval_test_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Apply migrations
-        run: |
-          PGPASSWORD=eval_test_password psql -h localhost -U eval -d eval -f migrations/001_initial_schema.up.sql
+      - name: Start dependencies
+        run: docker compose up -d postgres --wait
       - name: Run integration tests
         env:
-          DATABASE_URL: postgres://eval:eval_test_password@localhost:5432/eval?sslmode=disable
+          DATABASE_URL: postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable
         run: go test -v -race ./...
         working-directory: go-backend
+      - name: Stop dependencies
+        if: always()
+        run: docker compose down
 
   build-push:
     needs: [test, lint, integration-test]
