@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 )
 
@@ -39,6 +42,61 @@ func (m *mockSessionRepo) CreateSession(ctx context.Context, params store.Create
 
 func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 	return m.updateSessionFn(ctx, id, params)
+}
+
+// mockSessionPublisher records calls to SessionPublisher methods.
+type mockSessionPublisher struct {
+	studentJoinedCalls          []studentJoinedCall
+	codeUpdatedCalls            []codeUpdatedCall
+	sessionEndedCalls           []sessionEndedCall
+	featuredStudentChangedCalls []featuredStudentChangedCall
+	problemUpdatedCalls         []problemUpdatedCall
+	err                         error // error to return from all methods
+}
+
+type studentJoinedCall struct {
+	sessionID, userID, displayName string
+}
+type codeUpdatedCall struct {
+	sessionID, userID, code string
+}
+type sessionEndedCall struct {
+	sessionID, reason string
+}
+type featuredStudentChangedCall struct {
+	sessionID, userID, code string
+}
+type problemUpdatedCall struct {
+	sessionID, problemID string
+}
+
+func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userID, displayName string) error {
+	m.studentJoinedCalls = append(m.studentJoinedCalls, studentJoinedCall{sessionID, userID, displayName})
+	return m.err
+}
+func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string) error {
+	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code})
+	return m.err
+}
+func (m *mockSessionPublisher) SessionEnded(_ context.Context, sessionID, reason string) error {
+	m.sessionEndedCalls = append(m.sessionEndedCalls, sessionEndedCall{sessionID, reason})
+	return m.err
+}
+func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string) error {
+	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code})
+	return m.err
+}
+func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, problemID string) error {
+	m.problemUpdatedCalls = append(m.problemUpdatedCalls, problemUpdatedCall{sessionID, problemID})
+	return m.err
+}
+
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func noopPublisher() realtime.SessionPublisher {
+	return realtime.NoOpSessionPublisher{}
 }
 
 func testSession() *store.Session {
@@ -70,7 +128,7 @@ func TestListSessions_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -110,7 +168,7 @@ func TestListSessions_WithSectionIDFilter(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/?section_id="+sectionID.String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -138,7 +196,7 @@ func TestListSessions_WithStatusFilter(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/?status=active", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -153,7 +211,7 @@ func TestListSessions_WithStatusFilter(t *testing.T) {
 
 func TestListSessions_InvalidSectionID(t *testing.T) {
 	repo := &mockSessionRepo{}
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/?section_id=not-a-uuid", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -173,7 +231,7 @@ func TestListSessions_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -198,7 +256,7 @@ func TestListSessions_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -222,7 +280,7 @@ func TestGetSession_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/"+sess.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sess.ID.String())
@@ -254,7 +312,7 @@ func TestGetSession_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -272,7 +330,7 @@ func TestGetSession_NotFound(t *testing.T) {
 
 func TestGetSession_InvalidID(t *testing.T) {
 	repo := &mockSessionRepo{}
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -312,7 +370,7 @@ func TestCreateSession_Success(t *testing.T) {
 		"section_name": "Section A",
 		"problem":      json.RawMessage(`{"title":"Two Sum"}`),
 	})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -339,7 +397,7 @@ func TestCreateSession_Success(t *testing.T) {
 }
 
 func TestCreateSession_Unauthorized(t *testing.T) {
-	h := NewSessionHandler(&mockSessionRepo{})
+	h := NewSessionHandler(&mockSessionRepo{}, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -352,7 +410,7 @@ func TestCreateSession_Unauthorized(t *testing.T) {
 
 func TestCreateSession_RBACForbidden(t *testing.T) {
 	repo := &mockSessionRepo{}
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -388,7 +446,7 @@ func TestCreateSession_InternalError(t *testing.T) {
 		"section_name": "Section A",
 		"problem":      json.RawMessage(`{"title":"Two Sum"}`),
 	})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -426,7 +484,7 @@ func TestUpdateSession_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"featured_student_id": featuredID.String(),
 	})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -475,7 +533,7 @@ func TestUpdateSession_EndSession(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"status": "completed",
 	})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -501,7 +559,7 @@ func TestUpdateSession_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -520,7 +578,7 @@ func TestUpdateSession_NotFound(t *testing.T) {
 
 func TestUpdateSession_InvalidID(t *testing.T) {
 	repo := &mockSessionRepo{}
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -538,7 +596,7 @@ func TestUpdateSession_InvalidID(t *testing.T) {
 }
 
 func TestCreateSession_MissingRequiredFields(t *testing.T) {
-	h := NewSessionHandler(&mockSessionRepo{})
+	h := NewSessionHandler(&mockSessionRepo{}, noopPublisher(), testLogger())
 	// Missing section_id, section_name, problem
 	body, _ := json.Marshal(map[string]any{})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -559,7 +617,7 @@ func TestCreateSession_MissingRequiredFields(t *testing.T) {
 }
 
 func TestCreateSession_InvalidBody(t *testing.T) {
-	h := NewSessionHandler(&mockSessionRepo{})
+	h := NewSessionHandler(&mockSessionRepo{}, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -579,7 +637,7 @@ func TestCreateSession_InvalidBody(t *testing.T) {
 
 func TestUpdateSession_InvalidStatus(t *testing.T) {
 	id := uuid.New()
-	h := NewSessionHandler(&mockSessionRepo{})
+	h := NewSessionHandler(&mockSessionRepo{}, noopPublisher(), testLogger())
 	body, _ := json.Marshal(map[string]any{"status": "invalid_status"})
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -599,7 +657,7 @@ func TestUpdateSession_InvalidStatus(t *testing.T) {
 
 func TestUpdateSession_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewSessionHandler(&mockSessionRepo{})
+	h := NewSessionHandler(&mockSessionRepo{}, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -625,7 +683,7 @@ func TestUpdateSession_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -650,7 +708,7 @@ func TestGetSession_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -668,7 +726,7 @@ func TestGetSession_InternalError(t *testing.T) {
 
 func TestUpdateSession_RBACForbidden(t *testing.T) {
 	repo := &mockSessionRepo{}
-	h := NewSessionHandler(repo)
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	router := h.Routes()
 
 	id := uuid.New()
@@ -686,5 +744,156 @@ func TestUpdateSession_RBACForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for student PATCH, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- Publisher integration tests ---
+
+func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
+	sess := testSession()
+	now := time.Now()
+	sess.Status = "completed"
+	sess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+	pub := &mockSessionPublisher{}
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(pub.sessionEndedCalls) != 1 {
+		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
+	}
+	if pub.sessionEndedCalls[0].sessionID != sess.ID.String() {
+		t.Errorf("expected session_id %q, got %q", sess.ID, pub.sessionEndedCalls[0].sessionID)
+	}
+	if pub.sessionEndedCalls[0].reason != "completed" {
+		t.Errorf("expected reason %q, got %q", "completed", pub.sessionEndedCalls[0].reason)
+	}
+}
+
+func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testing.T) {
+	sess := testSession()
+	featuredID := uuid.New()
+	sess.FeaturedStudentID = &featuredID
+	featuredCode := "print('featured')"
+	sess.FeaturedCode = &featuredCode
+
+	repo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+	pub := &mockSessionPublisher{}
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	body, _ := json.Marshal(map[string]any{
+		"featured_student_id": featuredID.String(),
+		"featured_code":       featuredCode,
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(pub.featuredStudentChangedCalls) != 1 {
+		t.Fatalf("expected 1 FeaturedStudentChanged call, got %d", len(pub.featuredStudentChangedCalls))
+	}
+	call := pub.featuredStudentChangedCalls[0]
+	if call.sessionID != sess.ID.String() {
+		t.Errorf("expected session_id %q, got %q", sess.ID, call.sessionID)
+	}
+	if call.userID != featuredID.String() {
+		t.Errorf("expected user_id %q, got %q", featuredID, call.userID)
+	}
+	if call.code != featuredCode {
+		t.Errorf("expected code %q, got %q", featuredCode, call.code)
+	}
+}
+
+func TestUpdateSession_EndSession_SucceedsWhenPublisherFails(t *testing.T) {
+	sess := testSession()
+	now := time.Now()
+	sess.Status = "completed"
+	sess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+	pub := &mockSessionPublisher{err: errors.New("publish failed")}
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 even when publisher fails, got %d", rec.Code)
+	}
+}
+
+func TestUpdateSession_DBError_NoPublish(t *testing.T) {
+	repo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return nil, errors.New("db error")
+		},
+	}
+	pub := &mockSessionPublisher{}
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	id := uuid.New()
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	if len(pub.sessionEndedCalls) != 0 {
+		t.Errorf("expected no SessionEnded calls when DB fails, got %d", len(pub.sessionEndedCalls))
 	}
 }

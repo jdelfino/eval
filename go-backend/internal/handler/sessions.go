@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,18 +12,21 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	custommw "github.com/jdelfino/eval/internal/middleware"
+	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
 // SessionHandler handles session management routes.
 type SessionHandler struct {
-	sessions store.SessionRepository
+	sessions  store.SessionRepository
+	publisher realtime.SessionPublisher
+	logger    *slog.Logger
 }
 
 // NewSessionHandler creates a new SessionHandler with the given repository.
-func NewSessionHandler(sessions store.SessionRepository) *SessionHandler {
-	return &SessionHandler{sessions: sessions}
+func NewSessionHandler(sessions store.SessionRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{sessions: sessions, publisher: publisher, logger: logger}
 }
 
 // Routes returns a chi.Router with session routes mounted.
@@ -166,6 +170,22 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Publish real-time events after successful update
+	if req.Status != nil && *req.Status == "completed" {
+		if err := h.publisher.SessionEnded(r.Context(), id.String(), "completed"); err != nil {
+			h.logger.Error("failed to publish session_ended", "error", err, "session_id", id)
+		}
+	}
+	if req.FeaturedStudentID != nil {
+		code := ""
+		if req.FeaturedCode != nil {
+			code = *req.FeaturedCode
+		}
+		if err := h.publisher.FeaturedStudentChanged(r.Context(), id.String(), req.FeaturedStudentID.String(), code); err != nil {
+			h.logger.Error("failed to publish featured_student_changed", "error", err, "session_id", id)
+		}
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
