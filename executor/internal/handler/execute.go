@@ -174,12 +174,6 @@ func Execute(cfg *config.Config, logger *slog.Logger, runner SandboxRunner, m *m
 	}
 }
 
-// validationResult holds a reason code and error message for validation failures.
-type validationResult struct {
-	reason string
-	msg    string
-}
-
 func validateRequestWithReason(cfg *config.Config, req *ExecuteRequest) (string, string) {
 	if req.Code == "" {
 		return "invalid_request", "code is required and must be non-empty"

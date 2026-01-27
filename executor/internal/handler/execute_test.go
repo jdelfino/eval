@@ -17,6 +17,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 )
 
 func defaultCfg() *config.Config {
@@ -360,5 +361,137 @@ func TestExecute_ContextPassed(t *testing.T) {
 	doRequest(h, `{"code":"x=1"}`)
 	if !gotCtx {
 		t.Error("expected context to be passed to runner")
+	}
+}
+
+func newTestMetrics(t *testing.T) *metrics.Metrics {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	return metrics.New(reg)
+}
+
+func getCounterValue(t *testing.T, cv *prometheus.CounterVec, label string) float64 {
+	t.Helper()
+	m := &io_prometheus_client.Metric{}
+	if err := cv.WithLabelValues(label).Write(m); err != nil {
+		t.Fatalf("failed to write metric: %v", err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+func getGaugeValue(t *testing.T, g prometheus.Gauge) float64 {
+	t.Helper()
+	m := &io_prometheus_client.Metric{}
+	if err := g.Write(m); err != nil {
+		t.Fatalf("failed to write metric: %v", err)
+	}
+	return m.GetGauge().GetValue()
+}
+
+func TestExecute_MetricsSuccess(t *testing.T) {
+	m := newTestMetrics(t)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, m)
+	w := doRequest(h, `{"code":"print('hello')"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	if v := getCounterValue(t, m.ExecutionsTotal, "success"); v != 1 {
+		t.Errorf("expected executions_total{status=success}=1, got %v", v)
+	}
+	// Active executions should be 0 after completion.
+	if v := getGaugeValue(t, m.ActiveExecutions); v != 0 {
+		t.Errorf("expected active_executions=0 after completion, got %v", v)
+	}
+}
+
+func TestExecute_MetricsFailure(t *testing.T) {
+	m := newTestMetrics(t)
+	h := handler.Execute(defaultCfg(), noopLogger(), failRunner, m)
+	doRequest(h, `{"code":"print(x)"}`)
+
+	if v := getCounterValue(t, m.ExecutionsTotal, "failure"); v != 1 {
+		t.Errorf("expected executions_total{status=failure}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsTimeout(t *testing.T) {
+	m := newTestMetrics(t)
+	h := handler.Execute(defaultCfg(), noopLogger(), timeoutRunner, m)
+	doRequest(h, `{"code":"while True: pass"}`)
+
+	if v := getCounterValue(t, m.ExecutionsTotal, "timeout"); v != 1 {
+		t.Errorf("expected executions_total{status=timeout}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsError(t *testing.T) {
+	m := newTestMetrics(t)
+	h := handler.Execute(defaultCfg(), noopLogger(), errorRunner, m)
+	doRequest(h, `{"code":"print(1)"}`)
+
+	if v := getCounterValue(t, m.ExecutionsTotal, "error"); v != 1 {
+		t.Errorf("expected executions_total{status=error}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
+	m := newTestMetrics(t)
+	cfg := defaultCfg()
+	cfg.MaxCodeBytes = 10
+	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	doRequest(h, `{"code":"print('this is way too long')"}`)
+
+	if v := getCounterValue(t, m.ValidationErrorsTotal, "code_too_large"); v != 1 {
+		t.Errorf("expected validation_errors_total{reason=code_too_large}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
+	m := newTestMetrics(t)
+	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, m)
+	doRequest(h, `not json`)
+
+	if v := getCounterValue(t, m.ValidationErrorsTotal, "invalid_request"); v != 1 {
+		t.Errorf("expected validation_errors_total{reason=invalid_request}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
+	m := newTestMetrics(t)
+	cfg := defaultCfg()
+	cfg.MaxStdinBytes = 5
+	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
+
+	if v := getCounterValue(t, m.ValidationErrorsTotal, "stdin_too_large"); v != 1 {
+		t.Errorf("expected validation_errors_total{reason=stdin_too_large}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
+	m := newTestMetrics(t)
+	cfg := defaultCfg()
+	cfg.MaxFiles = 1
+	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
+	doRequest(h, body)
+
+	if v := getCounterValue(t, m.ValidationErrorsTotal, "too_many_files"); v != 1 {
+		t.Errorf("expected validation_errors_total{reason=too_many_files}=1, got %v", v)
+	}
+}
+
+func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
+	m := newTestMetrics(t)
+	cfg := defaultCfg()
+	cfg.MaxFileBytes = 5
+	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
+	doRequest(h, body)
+
+	if v := getCounterValue(t, m.ValidationErrorsTotal, "file_too_large"); v != 1 {
+		t.Errorf("expected validation_errors_total{reason=file_too_large}=1, got %v", v)
 	}
 }

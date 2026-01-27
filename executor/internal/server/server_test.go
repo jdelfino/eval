@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/jdelfino/eval/executor/internal/config"
 )
 
@@ -21,7 +23,8 @@ func newTestServer(t *testing.T) *Server {
 		PythonPath:  "/usr/bin/python3",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	return New(cfg, logger)
+	reg := prometheus.NewRegistry()
+	return NewWithRegistry(cfg, logger, reg)
 }
 
 func TestHealthz(t *testing.T) {
@@ -46,7 +49,6 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestReadyz_BinariesExist(t *testing.T) {
-	// Use binaries that exist on any system
 	cfg := &config.Config{
 		Port:        8081,
 		Environment: "local",
@@ -54,7 +56,8 @@ func TestReadyz_BinariesExist(t *testing.T) {
 		PythonPath:  os.Args[0],
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	srv := New(cfg, logger)
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rec := httptest.NewRecorder()
@@ -88,7 +91,8 @@ func TestReadyz_BinariesMissing(t *testing.T) {
 		PythonPath:  "/nonexistent/python3",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	srv := New(cfg, logger)
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rec := httptest.NewRecorder()
