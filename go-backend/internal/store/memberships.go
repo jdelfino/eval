@@ -80,7 +80,7 @@ func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipPar
 		&m.JoinedAt,
 	)
 	if err != nil {
-		return nil, err
+		return nil, HandleDuplicate(err)
 	}
 
 	return &m, nil

@@ -61,6 +61,10 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 		Role:      "student",
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			httputil.WriteError(w, http.StatusConflict, "already a member of this section")
+			return
+		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -97,6 +101,11 @@ func (h *MembershipHandler) Leave(w http.ResponseWriter, r *http.Request) {
 
 // ListMembers handles GET /api/v1/sections/{id}/members — list section members.
 func (h *MembershipHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	if auth.UserFromContext(r.Context()) == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	sectionID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid section id")

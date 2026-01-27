@@ -219,6 +219,74 @@ func TestJoin_InternalError(t *testing.T) {
 	}
 }
 
+func TestJoin_Duplicate(t *testing.T) {
+	sec := testMembershipSection()
+	repo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return sec, nil
+		},
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return nil, store.ErrDuplicate
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	h := NewMembershipHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Join(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestJoin_CreateError(t *testing.T) {
+	sec := testMembershipSection()
+	repo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return sec, nil
+		},
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	h := NewMembershipHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Join(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListMembers_Unauthorized(t *testing.T) {
+	h := NewMembershipHandler(&mockMembershipRepo{})
+	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/members", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", uuid.New().String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListMembers(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
 // --- Leave tests ---
 
 func TestLeave_Success(t *testing.T) {

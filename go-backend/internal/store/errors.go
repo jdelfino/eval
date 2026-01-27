@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Sentinel errors for store operations.
@@ -16,6 +17,8 @@ var (
 	// ErrNoConnection indicates no database connection is available in the context.
 	// This typically means the RLS middleware did not set up a connection.
 	ErrNoConnection = errors.New("no database connection in context")
+	// ErrDuplicate indicates a unique constraint violation.
+	ErrDuplicate = errors.New("duplicate record")
 )
 
 // HandleNotFound converts pgx.ErrNoRows to ErrNotFound.
@@ -26,6 +29,19 @@ func HandleNotFound(err error) error {
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
+	}
+	return err
+}
+
+// HandleDuplicate converts PostgreSQL unique violation (23505) to ErrDuplicate.
+// Other errors are returned unchanged. Nil errors return nil.
+func HandleDuplicate(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrDuplicate
 	}
 	return err
 }
