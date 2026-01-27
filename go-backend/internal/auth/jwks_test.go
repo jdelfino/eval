@@ -4,11 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -16,68 +13,58 @@ import (
 	"time"
 )
 
-// helper: generate a self-signed cert and return PEM-encoded certificate string + private key.
-func generateTestCert(t *testing.T) (string, *rsa.PrivateKey) {
-	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("generate RSA key: %v", err)
-	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "test"},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(time.Hour),
-	}
-	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatalf("create certificate: %v", err)
-	}
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	return string(certPEM), key
-}
-
-// buildJWKSResponse builds a JWKS-style JSON response with the given kid->cert mappings.
-func buildJWKSResponse(t *testing.T, certs map[string]string) []byte {
+// buildJWKSResponse builds a JWKS JSON response with n/e RSA parameters.
+func buildJWKSResponse(t *testing.T, keys map[string]*rsa.PublicKey) []byte {
 	t.Helper()
 	type keyEntry struct {
 		Kid string `json:"kid"`
-		X5c string `json:"x5c"`
+		Kty string `json:"kty"`
+		Alg string `json:"alg"`
+		N   string `json:"n"`
+		E   string `json:"e"`
+		Use string `json:"use"`
 	}
-	var keys []keyEntry
-	for kid, cert := range certs {
-		// Strip PEM header/footer to get raw base64
-		block, _ := pem.Decode([]byte(cert))
-		if block == nil {
-			t.Fatalf("failed to decode PEM for kid %s", kid)
-		}
-		keys = append(keys, keyEntry{
+	var entries []keyEntry
+	for kid, pub := range keys {
+		entries = append(entries, keyEntry{
 			Kid: kid,
-			X5c: cert,
+			Kty: "RSA",
+			Alg: "RS256",
+			N:   base64.RawURLEncoding.EncodeToString(pub.N.Bytes()),
+			E:   base64.RawURLEncoding.EncodeToString([]byte{1, 0, 1}), // 65537
+			Use: "sig",
 		})
 	}
-	data, err := json.Marshal(map[string]interface{}{"keys": keys})
+	data, err := json.Marshal(map[string]any{"keys": entries})
 	if err != nil {
 		t.Fatalf("marshal jwks: %v", err)
 	}
 	return data
 }
 
+func generateTestKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
+	}
+	return key
+}
+
 func TestCachedJWKSProvider_GetKey(t *testing.T) {
-	certPEM, privateKey := generateTestCert(t)
+	privateKey := generateTestKey(t)
 
 	var fetchCount atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fetchCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(buildJWKSResponse(t, map[string]string{"kid1": certPEM}))
+		_, _ = w.Write(buildJWKSResponse(t, map[string]*rsa.PublicKey{"kid1": &privateKey.PublicKey}))
 	}))
 	defer srv.Close()
 
 	provider := NewCachedJWKSProvider(srv.URL, srv.Client())
 	ctx := context.Background()
 
-	// First call should fetch.
 	key, err := provider.GetKey(ctx, "kid1")
 	if err != nil {
 		t.Fatalf("GetKey() error: %v", err)
@@ -91,20 +78,19 @@ func TestCachedJWKSProvider_GetKey(t *testing.T) {
 }
 
 func TestCachedJWKSProvider_CacheHit(t *testing.T) {
-	certPEM, _ := generateTestCert(t)
+	privateKey := generateTestKey(t)
 
 	var fetchCount atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fetchCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(buildJWKSResponse(t, map[string]string{"kid1": certPEM}))
+		_, _ = w.Write(buildJWKSResponse(t, map[string]*rsa.PublicKey{"kid1": &privateKey.PublicKey}))
 	}))
 	defer srv.Close()
 
 	provider := NewCachedJWKSProvider(srv.URL, srv.Client())
 	ctx := context.Background()
 
-	// Two calls for the same kid; second should be cached.
 	_, _ = provider.GetKey(ctx, "kid1")
 	_, err := provider.GetKey(ctx, "kid1")
 	if err != nil {
@@ -116,13 +102,13 @@ func TestCachedJWKSProvider_CacheHit(t *testing.T) {
 }
 
 func TestCachedJWKSProvider_CacheTTLExpiry(t *testing.T) {
-	certPEM, _ := generateTestCert(t)
+	privateKey := generateTestKey(t)
 
 	var fetchCount atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fetchCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(buildJWKSResponse(t, map[string]string{"kid1": certPEM}))
+		_, _ = w.Write(buildJWKSResponse(t, map[string]*rsa.PublicKey{"kid1": &privateKey.PublicKey}))
 	}))
 	defer srv.Close()
 
@@ -146,23 +132,21 @@ func TestCachedJWKSProvider_CacheTTLExpiry(t *testing.T) {
 }
 
 func TestCachedJWKSProvider_UnknownKidTriggersRefresh(t *testing.T) {
-	certPEM, _ := generateTestCert(t)
+	privateKey := generateTestKey(t)
 
 	var fetchCount atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fetchCount.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(buildJWKSResponse(t, map[string]string{"kid1": certPEM}))
+		_, _ = w.Write(buildJWKSResponse(t, map[string]*rsa.PublicKey{"kid1": &privateKey.PublicKey}))
 	}))
 	defer srv.Close()
 
 	provider := NewCachedJWKSProvider(srv.URL, srv.Client())
 	ctx := context.Background()
 
-	// Populate cache first.
 	_, _ = provider.GetKey(ctx, "kid1")
 
-	// Unknown kid should trigger refresh, then return error.
 	_, err := provider.GetKey(ctx, "unknown-kid")
 	if err == nil {
 		t.Fatal("GetKey() expected error for unknown kid, got nil")
@@ -173,7 +157,7 @@ func TestCachedJWKSProvider_UnknownKidTriggersRefresh(t *testing.T) {
 }
 
 func TestCachedJWKSProvider_HTTPFetchFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -188,9 +172,9 @@ func TestCachedJWKSProvider_HTTPFetchFailure(t *testing.T) {
 }
 
 func TestCachedJWKSProvider_MalformedJWKS(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"keys": [{"kid": "bad", "x5c": "not-a-cert"}]}`))
+		_, _ = w.Write([]byte(`{"keys": [{"kid": "bad", "n": "", "e": ""}]}`))
 	}))
 	defer srv.Close()
 
@@ -199,6 +183,6 @@ func TestCachedJWKSProvider_MalformedJWKS(t *testing.T) {
 
 	_, err := provider.GetKey(ctx, "bad")
 	if err == nil {
-		t.Fatal("GetKey() expected error for malformed cert, got nil")
+		t.Fatal("GetKey() expected error for malformed key, got nil")
 	}
 }
