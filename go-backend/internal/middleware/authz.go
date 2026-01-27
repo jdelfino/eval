@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jdelfino/eval/internal/auth"
 )
 
@@ -31,12 +32,12 @@ func RequireRole(roles ...auth.Role) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := auth.UserFromContext(r.Context())
 			if user == nil {
-				writeJSONError(w, http.StatusUnauthorized, "authentication required")
+				writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 				return
 			}
 
 			if _, ok := allowed[user.Role]; !ok {
-				writeJSONError(w, http.StatusForbidden, "insufficient permissions")
+				writeJSONError(w, r, http.StatusForbidden, "insufficient permissions")
 				return
 			}
 
@@ -45,9 +46,14 @@ func RequireRole(roles ...auth.Role) func(http.Handler) http.Handler {
 	}
 }
 
-// writeJSONError writes a JSON error response with the given status code and message.
-func writeJSONError(w http.ResponseWriter, status int, message string) {
+// writeJSONError writes a JSON error response with the given status code, message,
+// and request_id for correlation.
+func writeJSONError(w http.ResponseWriter, r *http.Request, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+	resp := map[string]string{"error": message}
+	if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+		resp["request_id"] = reqID
+	}
+	_ = json.NewEncoder(w).Encode(resp)
 }

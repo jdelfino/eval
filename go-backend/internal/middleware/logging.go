@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jdelfino/eval/internal/auth"
 )
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -55,14 +56,22 @@ func Logger(logger *slog.Logger) func(next http.Handler) http.Handler {
 			// Calculate duration
 			duration := time.Since(start)
 
-			// Log the request
-			logger.Info("http request",
+			// Build log attributes
+			attrs := []slog.Attr{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", wrapped.status),
 				slog.Float64("duration_ms", float64(duration.Nanoseconds())/1e6),
 				slog.String("request_id", requestID),
-			)
+			}
+
+			// Include user_id when the request is authenticated
+			if user := auth.UserFromContext(r.Context()); user != nil {
+				attrs = append(attrs, slog.String("user_id", user.ID.String()))
+			}
+
+			// Log the request
+			logger.LogAttrs(r.Context(), slog.LevelInfo, "http request", attrs...)
 		})
 	}
 }

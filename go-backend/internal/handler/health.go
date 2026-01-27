@@ -36,24 +36,6 @@ type HealthChecker interface {
 	Health(ctx context.Context) db.HealthStatus
 }
 
-// databaseCheck represents the database health check result in the response.
-type databaseCheck struct {
-	Healthy    bool  `json:"healthy"`
-	TotalConns int32 `json:"total_conns"`
-	IdleConns  int32 `json:"idle_conns"`
-}
-
-// readyzChecks represents all health checks in the response.
-type readyzChecks struct {
-	Database databaseCheck `json:"database"`
-}
-
-// readyzResponse represents the full readiness response.
-type readyzResponse struct {
-	Status string       `json:"status"`
-	Checks readyzChecks `json:"checks"`
-}
-
 // ReadyzHandler is an HTTP handler that checks service readiness including database health.
 type ReadyzHandler struct {
 	pool HealthChecker
@@ -64,30 +46,69 @@ func NewReadyzHandler(pool HealthChecker) *ReadyzHandler {
 	return &ReadyzHandler{pool: pool}
 }
 
+// verboseDBConnections represents database connection stats in verbose output.
+type verboseDBConnections struct {
+	TotalConns int32 `json:"total_conns"`
+	IdleConns  int32 `json:"idle_conns"`
+}
+
+// verboseDBComponent represents the database component in verbose output.
+type verboseDBComponent struct {
+	Status      string               `json:"status"`
+	Connections verboseDBConnections `json:"connections"`
+}
+
+// verboseComponents holds all component statuses in verbose output.
+type verboseComponents struct {
+	Database verboseDBComponent `json:"database"`
+}
+
+// verboseReadyzResponse represents the verbose readiness response.
+type verboseReadyzResponse struct {
+	Status     string            `json:"status"`
+	Components verboseComponents `json:"components"`
+}
+
 // ServeHTTP handles the readiness probe request.
 // It returns 200 OK if the database is healthy, 503 Service Unavailable otherwise.
+// When the ?verbose query parameter is present, it returns detailed component statuses.
 func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status := h.pool.Health(r.Context())
 
-	response := readyzResponse{
-		Status: "ok",
-		Checks: readyzChecks{
-			Database: databaseCheck{
-				Healthy:    status.Healthy,
-				TotalConns: status.TotalConns,
-				IdleConns:  status.IdleConns,
-			},
-		},
+	healthy := status.Healthy
+	overallStatus := "ok"
+	if !healthy {
+		overallStatus = "unhealthy"
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if !status.Healthy {
-		response.Status = "unhealthy"
+	if !healthy {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	_ = json.NewEncoder(w).Encode(response)
+	verbose := r.URL.Query().Has("verbose")
+	if verbose {
+		dbStatus := "ok"
+		if !healthy {
+			dbStatus = "unhealthy"
+		}
+		response := verboseReadyzResponse{
+			Status: overallStatus,
+			Components: verboseComponents{
+				Database: verboseDBComponent{
+					Status: dbStatus,
+					Connections: verboseDBConnections{
+						TotalConns: status.TotalConns,
+						IdleConns:  status.IdleConns,
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	} else {
+		_ = json.NewEncoder(w).Encode(healthResponse{Status: overallStatus})
+	}
 }

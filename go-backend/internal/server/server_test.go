@@ -92,20 +92,12 @@ func TestRoutes(t *testing.T) {
 			checkBody: func(t *testing.T, body []byte) {
 				var resp struct {
 					Status string `json:"status"`
-					Checks struct {
-						Database struct {
-							Healthy bool `json:"healthy"`
-						} `json:"database"`
-					} `json:"checks"`
 				}
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to decode response: %v", err)
 				}
 				if resp.Status != "ok" {
 					t.Errorf("status = %q, want %q", resp.Status, "ok")
-				}
-				if !resp.Checks.Database.Healthy {
-					t.Error("expected database check to be healthy")
 				}
 			},
 		},
