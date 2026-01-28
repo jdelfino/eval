@@ -9,10 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jdelfino/eval/internal/config"
-	"github.com/jdelfino/eval/internal/db"
-	"github.com/jdelfino/eval/internal/server"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/executor/internal/config"
+	"github.com/jdelfino/eval/executor/internal/server"
 	"github.com/jdelfino/eval/pkg/slogutil"
 )
 
@@ -28,25 +26,8 @@ func main() {
 	logger := slogutil.NewLogger(cfg.Environment, cfg.LogLevel)
 	slog.SetDefault(logger)
 
-	// Create database connection pool
-	ctx := context.Background()
-	pool, err := db.NewPool(ctx, cfg.DatabasePoolConfig())
-	if err != nil {
-		logger.Error("failed to create database pool", "error", err)
-		os.Exit(1)
-	}
-	defer pool.Close() // Graceful shutdown of pool
-
-	logger.Info("database pool created",
-		"max_conns", cfg.DatabaseMaxConns,
-		"min_conns", cfg.DatabaseMinConns,
-	)
-
-	// Create store for user lookups
-	userStore := store.New(pool.PgxPool())
-
 	// Create and start server
-	srv := server.New(cfg, logger, pool, userStore)
+	srv := server.New(cfg, logger)
 
 	// Graceful shutdown
 	go func() {
@@ -56,7 +37,6 @@ func main() {
 
 		logger.Info("shutting down server")
 
-		// Give active requests time to complete
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 

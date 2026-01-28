@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: executor-allow-api-only
+spec:
+  podSelector:
+    matchLabels:
+      app: executor
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: go-api
+      ports:
+        - protocol: TCP
+          port: 8081
+  egress: []

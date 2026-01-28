@@ -41,5 +41,25 @@ services:
       timeout: 5s
       retries: 5
 
+  executor:
+    build:
+      context: ./executor
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: "8081"
+      ENVIRONMENT: local
+      LOG_LEVEL: debug
+      NSJAIL_PATH: /usr/bin/nsjail
+      PYTHON_PATH: /usr/bin/python3
+      DEFAULT_TIMEOUT_MS: "10000"
+    privileged: true
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/healthz\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   postgres_data:

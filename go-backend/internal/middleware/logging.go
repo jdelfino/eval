@@ -4,74 +4,23 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/pkg/httplog"
 )
-
-// responseWriter wraps http.ResponseWriter to capture the status code.
-type responseWriter struct {
-	http.ResponseWriter
-	status      int
-	wroteHeader bool
-}
-
-func newResponseWriter(w http.ResponseWriter) *responseWriter {
-	return &responseWriter{ResponseWriter: w}
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	if !rw.wroteHeader {
-		rw.status = code
-		rw.wroteHeader = true
-	}
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *responseWriter) Write(b []byte) (int, error) {
-	if !rw.wroteHeader {
-		rw.WriteHeader(http.StatusOK)
-	}
-	return rw.ResponseWriter.Write(b)
-}
 
 // Logger returns a middleware that logs HTTP requests using structured logging.
 // It logs the request method, path, status code, duration in milliseconds,
 // and request ID (from chi's middleware.RequestID context).
+// Authenticated requests also include the user_id.
 func Logger(logger *slog.Logger) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
+	return httplog.Logger(logger, userIDAttr)
+}
 
-			// Wrap the response writer to capture status code
-			wrapped := newResponseWriter(w)
-
-			// Call the next handler
-			next.ServeHTTP(wrapped, r)
-
-			// Get request ID from context (set by chi's RequestID middleware)
-			requestID := middleware.GetReqID(r.Context())
-
-			// Calculate duration
-			duration := time.Since(start)
-
-			// Build log attributes
-			attrs := []slog.Attr{
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.Int("status", wrapped.status),
-				slog.Float64("duration_ms", float64(duration.Nanoseconds())/1e6),
-				slog.String("request_id", requestID),
-			}
-
-			// Include user_id when the request is authenticated
-			if user := auth.UserFromContext(r.Context()); user != nil {
-				attrs = append(attrs, slog.String("user_id", user.ID.String()))
-			}
-
-			// Log the request
-			logger.LogAttrs(r.Context(), slog.LevelInfo, "http request", attrs...)
-		})
+// userIDAttr enriches log entries with the authenticated user's ID.
+func userIDAttr(r *http.Request) []slog.Attr {
+	if user := auth.UserFromContext(r.Context()); user != nil {
+		return []slog.Attr{slog.String("user_id", user.ID.String())}
 	}
+	return nil
 }

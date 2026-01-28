@@ -1,0 +1,84 @@
+// Package executor provides an HTTP client for the code execution service.
+package executor
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/jdelfino/eval/pkg/executorapi"
+)
+
+// Client communicates with the executor service over HTTP.
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+}
+
+// NewClient creates a new executor client with the given base URL and timeout.
+func NewClient(baseURL string, timeout time.Duration) *Client {
+	return &Client{
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
+// ExecuteRequest is an alias for the shared request type.
+type ExecuteRequest = executorapi.ExecuteRequest
+
+// File is an alias for the shared file type.
+type File = executorapi.File
+
+// ExecuteResponse is an alias for the shared response type.
+type ExecuteResponse = executorapi.ExecuteResponse
+
+// Execute sends code to the executor service and returns the result.
+func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("executor: marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/execute", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("executor: create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("executor: send request: %w", err)
+	}
+	defer func() { _ = httpResp.Body.Close() }()
+
+	// Limit response body to 5MB to prevent OOM from malformed responses.
+	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 5<<20))
+	if err != nil {
+		return nil, fmt.Errorf("executor: read response: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		snippet := string(respBody)
+		if len(snippet) > 200 {
+			snippet = snippet[:200]
+		}
+		return nil, fmt.Errorf("executor: unexpected status %d: %s", httpResp.StatusCode, snippet)
+	}
+
+	var resp ExecuteResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		snippet := string(respBody)
+		if len(snippet) > 200 {
+			snippet = snippet[:200]
+		}
+		return nil, fmt.Errorf("executor: decode response: %w (body: %s)", err, snippet)
+	}
+
+	return &resp, nil
+}

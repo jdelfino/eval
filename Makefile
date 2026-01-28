@@ -40,7 +40,7 @@ logs:
 	docker-compose logs -f
 
 # Go Backend targets
-.PHONY: go-build go-test go-lint docker-build
+.PHONY: go-build go-test go-lint docker-build test-integration
 
 go-build:
 	cd go-backend && go build -o ./tmp/server ./cmd/server
@@ -53,3 +53,8 @@ go-lint:
 
 docker-build:
 	docker build -t go-api:local go-backend/
+
+test-integration: ## Run executor integration tests (requires Docker)
+	docker-compose up -d executor --wait
+	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
+	docker-compose down executor

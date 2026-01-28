@@ -41,6 +41,10 @@ type Config struct {
 	CentrifugoTokenSecret string        `env:"CENTRIFUGO_TOKEN_SECRET"`
 	CentrifugoTokenExpiry time.Duration `env:"CENTRIFUGO_TOKEN_EXPIRY" envDefault:"15m"`
 
+	// Executor Service Configuration
+	ExecutorURL     string        `env:"EXECUTOR_URL" envDefault:"http://localhost:8081"`
+	ExecutorTimeout time.Duration `env:"EXECUTOR_TIMEOUT" envDefault:"35s"`
+
 	// Identity Platform Configuration
 	IdentityPlatformAPIKey     string `env:"IDENTITY_PLATFORM_API_KEY"`
 	IdentityPlatformAuthDomain string `env:"IDENTITY_PLATFORM_AUTH_DOMAIN"`

@@ -5,7 +5,14 @@ resources:
   - deployment.yaml
   - service.yaml
   - pod-monitoring.yaml
+  - executor-deployment.yaml
+  - executor-service.yaml
+  - executor-configmap.yaml
+  - executor-scaledobject.yaml
+  - executor-networkpolicy.yaml
 
 images:
   - name: go-api
     newName: go-api
+  - name: executor
+    newName: executor

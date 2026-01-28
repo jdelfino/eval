@@ -16,11 +16,13 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/config"
+	"github.com/jdelfino/eval/internal/executor"
 	"github.com/jdelfino/eval/internal/handler"
 	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
 
 var registerDBPoolOnce sync.Once
@@ -45,6 +47,13 @@ type Server struct {
 // s may be nil (e.g. in tests without a database); when nil, the
 // authentication middleware is skipped on API routes.
 func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store) *Server {
+	return NewWithRegistry(cfg, logger, pool, s, prometheus.DefaultRegisterer)
+}
+
+// NewWithRegistry creates a new Server using the provided Prometheus registerer.
+func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store, reg prometheus.Registerer) *Server {
+	httpMetrics := httpmiddleware.NewHTTPMetrics(reg)
+
 	r := chi.NewRouter()
 
 	// Middleware chain
@@ -53,10 +62,14 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 	r.Use(custommw.Logger(logger))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(custommw.Metrics)
+	r.Use(httpMetrics.Middleware)
 
-	// Metrics endpoint
-	r.Handle("/metrics", promhttp.Handler())
+	// Metrics endpoint - use registry-specific handler if available
+	if gatherer, ok := reg.(prometheus.Gatherer); ok {
+		r.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
+	} else {
+		r.Handle("/metrics", promhttp.Handler())
+	}
 
 	// Register DB pool metrics if pool is available (once to avoid panic on re-registration)
 	if pgxPool := pool.PgxPool(); pgxPool != nil {
@@ -142,6 +155,10 @@ func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.St
 			revisionHandler := handler.NewRevisionHandler(s)
 			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
 			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
+
+			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
+			executeHandler := handler.NewExecuteHandler(s, s, execClient)
+			r.Post("/sessions/{id}/execute", executeHandler.Execute)
 
 			sessionStudentHandler := handler.NewSessionStudentHandler(s, sessionPub, logger)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
