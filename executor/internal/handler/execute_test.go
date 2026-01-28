@@ -205,9 +205,9 @@ func TestExecute_InvalidJSON(t *testing.T) {
 }
 
 func TestExecute_CodeTooLarge(t *testing.T) {
-	cfg := defaultCfg()
-	cfg.MaxCodeBytes = 10
-	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
+	opts := defaultOpts()
+	opts.maxCodeBytes = 10
+	h := newHandler(successRunner, metrics.NewNoop(), opts)
 	w := doRequest(h, `{"code":"print('this is way too long')"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -216,9 +216,9 @@ func TestExecute_CodeTooLarge(t *testing.T) {
 }
 
 func TestExecute_StdinTooLarge(t *testing.T) {
-	cfg := defaultCfg()
-	cfg.MaxStdinBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
+	opts := defaultOpts()
+	opts.maxStdinBytes = 5
+	h := newHandler(successRunner, metrics.NewNoop(), opts)
 	w := doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -227,9 +227,9 @@ func TestExecute_StdinTooLarge(t *testing.T) {
 }
 
 func TestExecute_TooManyFiles(t *testing.T) {
-	cfg := defaultCfg()
-	cfg.MaxFiles = 1
-	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
+	opts := defaultOpts()
+	opts.maxFiles = 1
+	h := newHandler(successRunner, metrics.NewNoop(), opts)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	w := doRequest(h, body)
 
@@ -239,9 +239,9 @@ func TestExecute_TooManyFiles(t *testing.T) {
 }
 
 func TestExecute_FileTooLarge(t *testing.T) {
-	cfg := defaultCfg()
-	cfg.MaxFileBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, metrics.NewNoop())
+	opts := defaultOpts()
+	opts.maxFileBytes = 5
+	h := newHandler(successRunner, metrics.NewNoop(), opts)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
 	w := doRequest(h, body)
 
@@ -388,7 +388,7 @@ func getGaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 
 func TestExecute_MetricsSuccess(t *testing.T) {
 	m := newTestMetrics(t)
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, m)
+	h := newHandler(successRunner, m, defaultOpts())
 	w := doRequest(h, `{"code":"print('hello')"}`)
 
 	if w.Code != http.StatusOK {
@@ -406,7 +406,7 @@ func TestExecute_MetricsSuccess(t *testing.T) {
 
 func TestExecute_MetricsFailure(t *testing.T) {
 	m := newTestMetrics(t)
-	h := handler.Execute(defaultCfg(), noopLogger(), failRunner, m)
+	h := newHandler(failRunner, m, defaultOpts())
 	doRequest(h, `{"code":"print(x)"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "failure"); v != 1 {
@@ -416,7 +416,7 @@ func TestExecute_MetricsFailure(t *testing.T) {
 
 func TestExecute_MetricsTimeout(t *testing.T) {
 	m := newTestMetrics(t)
-	h := handler.Execute(defaultCfg(), noopLogger(), timeoutRunner, m)
+	h := newHandler(timeoutRunner, m, defaultOpts())
 	doRequest(h, `{"code":"while True: pass"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "timeout"); v != 1 {
@@ -426,7 +426,7 @@ func TestExecute_MetricsTimeout(t *testing.T) {
 
 func TestExecute_MetricsError(t *testing.T) {
 	m := newTestMetrics(t)
-	h := handler.Execute(defaultCfg(), noopLogger(), errorRunner, m)
+	h := newHandler(errorRunner, m, defaultOpts())
 	doRequest(h, `{"code":"print(1)"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "error"); v != 1 {
@@ -436,9 +436,9 @@ func TestExecute_MetricsError(t *testing.T) {
 
 func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	cfg := defaultCfg()
-	cfg.MaxCodeBytes = 10
-	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	opts := defaultOpts()
+	opts.maxCodeBytes = 10
+	h := newHandler(successRunner, m, opts)
 	doRequest(h, `{"code":"print('this is way too long')"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "code_too_large"); v != 1 {
@@ -448,7 +448,7 @@ func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 
 func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 	m := newTestMetrics(t)
-	h := handler.Execute(defaultCfg(), noopLogger(), successRunner, m)
+	h := newHandler(successRunner, m, defaultOpts())
 	doRequest(h, `not json`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "invalid_request"); v != 1 {
@@ -458,9 +458,9 @@ func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 
 func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	cfg := defaultCfg()
-	cfg.MaxStdinBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	opts := defaultOpts()
+	opts.maxStdinBytes = 5
+	h := newHandler(successRunner, m, opts)
 	doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "stdin_too_large"); v != 1 {
@@ -470,9 +470,9 @@ func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
 
 func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
 	m := newTestMetrics(t)
-	cfg := defaultCfg()
-	cfg.MaxFiles = 1
-	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	opts := defaultOpts()
+	opts.maxFiles = 1
+	h := newHandler(successRunner, m, opts)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	doRequest(h, body)
 
@@ -483,9 +483,9 @@ func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
 
 func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	cfg := defaultCfg()
-	cfg.MaxFileBytes = 5
-	h := handler.Execute(cfg, noopLogger(), successRunner, m)
+	opts := defaultOpts()
+	opts.maxFileBytes = 5
+	h := newHandler(successRunner, m, opts)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
 	doRequest(h, body)
 
