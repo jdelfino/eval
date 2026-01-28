@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"

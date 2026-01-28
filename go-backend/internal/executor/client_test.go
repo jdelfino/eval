@@ -137,6 +137,21 @@ func TestExecute_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestExecute_MalformedJSONResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "{not valid json")
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "x"})
+	if err == nil {
+		t.Fatal("expected error for malformed JSON response")
+	}
+}
+
 func TestExecute_RequestFields(t *testing.T) {
 	seed := 42
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -301,6 +301,52 @@ func TestExecute_500ExecutorError(t *testing.T) {
 	}
 }
 
+func TestExecute_401MissingAuthContext(t *testing.T) {
+	handler := setupExecuteHandler(&mockSessionRepo{}, &execMockSessionStudentRepo{}, &mockExecutorClient{})
+	body := newExecuteReq(testStudentID, "code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// No auth context set
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestExecute_400InvalidUUID(t *testing.T) {
+	handler := setupExecuteHandler(&mockSessionRepo{}, &execMockSessionStudentRepo{}, &mockExecutorClient{})
+	body := newExecuteReq(testStudentID, "code")
+	req := httptest.NewRequest(http.MethodPost, "/sessions/not-a-uuid/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestExecute_400InvalidJSONBody(t *testing.T) {
+	handler := setupExecuteHandler(&mockSessionRepo{}, &execMockSessionStudentRepo{}, &mockExecutorClient{})
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader([]byte("{invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
 	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)

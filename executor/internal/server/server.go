@@ -71,7 +71,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	r.Get("/readyz", readyzHandler(cfg, m))
 
 	// Execute endpoint
-	r.Post("/execute", handler.Execute(cfg, logger, sandbox.Run, m))
+	execHandler := handler.NewExecuteHandler(
+		logger, sandbox.Run, m,
+		cfg.NsjailPath, cfg.PythonPath, cfg.MaxOutputBytes,
+		cfg.DefaultTimeoutMS, cfg.MaxCodeBytes, cfg.MaxStdinBytes,
+		cfg.MaxFiles, cfg.MaxFileBytes,
+	)
+	r.Post("/execute", execHandler.ServeHTTP)
 
 	return &Server{
 		httpServer: &http.Server{
