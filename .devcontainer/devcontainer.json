@@ -18,7 +18,7 @@
     "ghcr.io/devcontainers/features/terraform:1": {}
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
-  "postCreateCommand": "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/jdelfino/eval.git /tmp/eval-clone && cp -a /tmp/eval-clone/. /workspaces/eval/ && rm -rf /tmp/eval-clone && /workspaces/eval/.devcontainer/post-create.sh",
+  "postCreateCommand": "curl -sL https://github.com/jdelfino/eval/archive/refs/heads/main.tar.gz | tar xz --strip-components=1 -C /workspaces/eval && /workspaces/eval/.devcontainer/post-create.sh",
   "postStartCommand": "/workspaces/eval/.devcontainer/setup-secrets.sh",
 
   "remoteEnv": {
