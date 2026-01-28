@@ -18,8 +18,7 @@
     "ghcr.io/devcontainers/features/terraform:1": {}
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
-  "postCreateCommand": "/workspaces/eval/.devcontainer/post-create.sh",
-  "postStartCommand": "/workspaces/eval/.devcontainer/setup-secrets.sh",
+  "postCreateCommand": "ls -la /workspaces/eval/.devcontainer/ && echo CWD=$(pwd) && ls -la .devcontainer/ || echo 'relative path failed'",
 
   "remoteEnv": {
     "BD_SOCKET": "/tmp/beads.sock"
