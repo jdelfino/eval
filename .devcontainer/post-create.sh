@@ -6,8 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Install 1Password CLI
 "$SCRIPT_DIR/install-1password-cli.sh"
 
-# Install beads
+# Install beads and git hooks
 curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
+bd hooks install 2>/dev/null || true
 
 # Install Claude Code
 curl -fsSL https://claude.ai/install.sh | bash
