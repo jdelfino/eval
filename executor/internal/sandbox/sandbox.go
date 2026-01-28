@@ -123,7 +123,6 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--env", "HOME=/tmp",
 		"--env", "PYTHONDONTWRITEBYTECODE=1",
 		"--env", "PYTHONUNBUFFERED=1",
-		"--disable_clone_newnet",
 		"--really_quiet",
 		"--", cfg.PythonPath, "/tmp/work/main.py",
 	}
