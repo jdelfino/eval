@@ -159,6 +159,21 @@ module "monitoring" {
   region       = var.region
 }
 
+module "redis" {
+  source = "../../modules/redis"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  tier           = var.redis_tier
+  memory_size_gb = var.redis_memory_size_gb
+  vpc_network_id = module.vpc.vpc_id
+
+  depends_on = [module.vpc]
+}
+
 # -----------------------------------------------------------------------------
 # Kubernetes Resources for Application Configuration
 # -----------------------------------------------------------------------------
@@ -188,6 +203,9 @@ resource "kubernetes_config_map" "app_config" {
 
     # Cloud SQL Connection Name (for Cloud SQL Proxy)
     CLOUDSQL_CONNECTION_NAME = module.cloudsql.instance_connection_name
+
+    # Centrifugo Configuration
+    CENTRIFUGO_URL = "http://centrifugo:8000"
   }
 
   depends_on = [module.gke]
@@ -204,9 +222,30 @@ resource "kubernetes_secret" "app_secrets" {
     DATABASE_USER       = module.cloudsql.database_user
     DATABASE_PASSWORD   = module.cloudsql.database_password
     DATABASE_URL        = module.cloudsql.connection_string_full
+
+    # Centrifugo Secrets
+    CENTRIFUGO_API_KEY      = var.centrifugo_api_key
+    CENTRIFUGO_TOKEN_SECRET = var.centrifugo_token_secret
   }
 
   type = "Opaque"
+
+  depends_on = [module.gke]
+}
+
+module "centrifugo" {
+  source = "../../modules/centrifugo"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  api_key         = var.centrifugo_api_key
+  token_secret    = var.centrifugo_token_secret
+  allowed_origins = var.centrifugo_allowed_origins
+  redis_host      = module.redis.host
+  redis_port      = module.redis.port
 
   depends_on = [module.gke]
 }

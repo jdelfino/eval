@@ -14,6 +14,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_URL",
 		"REDIS_HOST", "REDIS_PORT",
 		"CENTRIFUGO_URL", "CENTRIFUGO_API_KEY", "CENTRIFUGO_TOKEN_SECRET",
+		"CENTRIFUGO_TOKEN_EXPIRY",
 		"IDENTITY_PLATFORM_API_KEY", "IDENTITY_PLATFORM_AUTH_DOMAIN",
 		"OAUTH_CLIENT_ID", "OAUTH_CLIENT_SECRET",
 	}
@@ -35,6 +36,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
+	}
+	if cfg.CentrifugoTokenExpiry != 15*time.Minute {
+		t.Errorf("CentrifugoTokenExpiry = %v, want %v", cfg.CentrifugoTokenExpiry, 15*time.Minute)
 	}
 	if cfg.GCPProjectID != "" {
 		t.Errorf("GCPProjectID = %q, want empty string", cfg.GCPProjectID)
@@ -68,6 +72,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("CENTRIFUGO_URL", "http://centrifugo.example.com:8000")
 	t.Setenv("CENTRIFUGO_API_KEY", "test-api-key")
 	t.Setenv("CENTRIFUGO_TOKEN_SECRET", "test-token-secret")
+	t.Setenv("CENTRIFUGO_TOKEN_EXPIRY", "30m")
 	t.Setenv("IDENTITY_PLATFORM_API_KEY", "test-identity-key")
 	t.Setenv("IDENTITY_PLATFORM_AUTH_DOMAIN", "auth.example.com")
 	t.Setenv("OAUTH_CLIENT_ID", "test-client-id")
@@ -126,6 +131,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.CentrifugoTokenSecret != "test-token-secret" {
 		t.Errorf("CentrifugoTokenSecret = %q, want %q", cfg.CentrifugoTokenSecret, "test-token-secret")
+	}
+	if cfg.CentrifugoTokenExpiry != 30*time.Minute {
+		t.Errorf("CentrifugoTokenExpiry = %v, want %v", cfg.CentrifugoTokenExpiry, 30*time.Minute)
 	}
 	if cfg.IdentityPlatformAPIKey != "test-identity-key" {
 		t.Errorf("IdentityPlatformAPIKey = %q, want %q", cfg.IdentityPlatformAPIKey, "test-identity-key")

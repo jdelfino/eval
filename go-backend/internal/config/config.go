@@ -38,7 +38,8 @@ type Config struct {
 	// Centrifugo Configuration
 	CentrifugoURL         string `env:"CENTRIFUGO_URL"`
 	CentrifugoAPIKey      string `env:"CENTRIFUGO_API_KEY"`
-	CentrifugoTokenSecret string `env:"CENTRIFUGO_TOKEN_SECRET"`
+	CentrifugoTokenSecret string        `env:"CENTRIFUGO_TOKEN_SECRET"`
+	CentrifugoTokenExpiry time.Duration `env:"CENTRIFUGO_TOKEN_EXPIRY" envDefault:"15m"`
 
 	// Executor Service Configuration
 	ExecutorURL     string        `env:"EXECUTOR_URL" envDefault:"http://localhost:8081"`

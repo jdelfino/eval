@@ -20,6 +20,7 @@ import (
 	"github.com/jdelfino/eval/internal/handler"
 	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
+	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
@@ -112,6 +113,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 		// Protected routes
 		if s != nil {
 			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
+
+			// Centrifugo realtime token endpoint
+			if cfg.CentrifugoTokenSecret != "" {
+				tokenGen, err := realtime.NewHMACTokenGenerator(cfg.CentrifugoTokenSecret)
+				if err != nil {
+					logger.Warn("failed to create centrifugo token generator; token endpoint unavailable", "error", err)
+				} else {
+					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, s, s, cfg.CentrifugoTokenExpiry)
+					r.Mount("/realtime", centrifugoHandler.Routes())
+				}
+			}
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
 			r.Mount("/classes", handler.NewClassHandler(s).Routes())
 
@@ -128,7 +140,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
 
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
-			r.Mount("/sessions", handler.NewSessionHandler(s).Routes())
+
+			// Create real-time publisher (no-op if Centrifugo is not configured)
+			var sessionPub realtime.SessionPublisher
+			if cfg.CentrifugoURL != "" && cfg.CentrifugoAPIKey != "" {
+				client := realtime.NewClient(cfg.CentrifugoURL, cfg.CentrifugoAPIKey, logger)
+				sessionPub = realtime.NewSessionPublisher(client)
+			} else {
+				sessionPub = realtime.NoOpSessionPublisher{}
+			}
+
+			r.Mount("/sessions", handler.NewSessionHandler(s, sessionPub, logger).Routes())
 
 			revisionHandler := handler.NewRevisionHandler(s)
 			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
@@ -138,7 +160,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			executeHandler := handler.NewExecuteHandler(s, s, execClient)
 			r.Post("/sessions/{id}/execute", executeHandler.Execute)
 
-			sessionStudentHandler := handler.NewSessionStudentHandler(s)
+			sessionStudentHandler := handler.NewSessionStudentHandler(s, sessionPub, logger)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
 			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
 			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
