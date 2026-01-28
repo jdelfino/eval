@@ -2,8 +2,8 @@
 # setup.sh - Configure 1Password access for project secrets
 # Runs via postCreateCommand (container creation)
 #
-# SSH, git identity, and GitHub CLI are handled by devcontainer/DevPod forwarding.
-# This script only sets up 1Password access for project-specific secrets.
+# SSH and git identity are handled by devcontainer/DevPod forwarding.
+# GitHub CLI auth and project secrets are handled via 1Password.
 set -euo pipefail
 
 echo "=== Devcontainer Setup ==="
