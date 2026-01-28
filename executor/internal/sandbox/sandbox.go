@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -210,14 +211,19 @@ func sanitizeFilename(name string) string {
 	return s
 }
 
+// tmpWorkPathRe matches /tmp/work/<filename> in both quoted and unquoted contexts.
+var tmpWorkPathRe = regexp.MustCompile(`/tmp/work/([^\s"',;:)\]]+)`)
+
 // sanitizeStderr cleans error output to hide internal paths and OS details.
 func sanitizeStderr(stderr string) string {
-	// Replace file paths.
-	result := stderr
-	// Replace /tmp/work/main.py paths with <student code>.
-	result = strings.ReplaceAll(result, `"/tmp/work/main.py"`, `"<student code>"`)
-	// Also handle single-quoted variants.
-	result = strings.ReplaceAll(result, `'/tmp/work/main.py'`, `'<student code>'`)
+	// Replace all /tmp/work/<file> paths.
+	result := tmpWorkPathRe.ReplaceAllStringFunc(stderr, func(match string) string {
+		filename := match[len("/tmp/work/"):]
+		if filename == "main.py" {
+			return "<student code>"
+		}
+		return filename
+	})
 
 	// Replace [Errno N] with [Error].
 	result = replaceErrno(result)

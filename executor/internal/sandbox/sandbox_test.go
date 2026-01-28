@@ -66,6 +66,31 @@ func TestSanitizeStderr(t *testing.T) {
 			`NameError: name 'foo' is not defined`,
 			`NameError: name 'foo' is not defined`,
 		},
+		{
+			"replace attached file path double quotes",
+			`File "/tmp/work/data.txt", line 1`,
+			`File "data.txt", line 1`,
+		},
+		{
+			"replace attached file path single quotes",
+			`File '/tmp/work/helper.py', line 10`,
+			`File 'helper.py', line 10`,
+		},
+		{
+			"replace unquoted tmp path",
+			`Error in /tmp/work/data.csv while reading`,
+			`Error in data.csv while reading`,
+		},
+		{
+			"replace main.py unquoted",
+			`Error in /tmp/work/main.py while running`,
+			`Error in <student code> while running`,
+		},
+		{
+			"multiple paths in one line",
+			`"/tmp/work/main.py" imports "/tmp/work/utils.py"`,
+			`"<student code>" imports "utils.py"`,
+		},
 	}
 
 	for _, tt := range tests {
