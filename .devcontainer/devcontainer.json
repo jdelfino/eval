@@ -15,6 +15,10 @@
   "postCreateCommand": "./.devcontainer/setup.sh",
   "postStartCommand": "./.devcontainer/setup-secrets.sh",
 
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+  ],
+
   "remoteEnv": {
     "BD_SOCKET": "/tmp/beads.sock"
   },
