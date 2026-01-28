@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier
+_commit: 52eb987
+_src_path: gh:jdelfino/devcontainer-template
+_subdirectory: template
+project_name: eval
+project_description: ""
+base_container: go
+add_python: false
+add_node: true
+add_java: false
+add_rust: false
+use_1password: true
+op_vault: eval-dev
