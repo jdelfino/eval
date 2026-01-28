@@ -277,7 +277,10 @@ func TestRunRejectsDuplicateSanitizedFilenames(t *testing.T) {
 	}
 }
 
-// TestRunContextCancelled verifies that a cancelled context is handled.
+// TestRunContextCancelled verifies that Run returns an error when nsjail is
+// not found even when the context is already cancelled. This does NOT test
+// actual context cancellation of a running process — that requires nsjail
+// and is covered by integration tests.
 func TestRunContextCancelled(t *testing.T) {
 	cfg := Config{
 		NsjailPath:     "/nonexistent/nsjail",
@@ -293,9 +296,11 @@ func TestRunContextCancelled(t *testing.T) {
 	cancel() // cancel immediately
 
 	_, err := Run(ctx, cfg, req)
-	// Should still fail with nsjail not found (checked before exec).
 	if err == nil {
-		t.Fatal("expected error")
+		t.Fatal("expected error when nsjail binary not found")
+	}
+	if !strings.Contains(err.Error(), "nsjail binary not found") {
+		t.Errorf("expected nsjail-not-found error, got: %v", err)
 	}
 }
 

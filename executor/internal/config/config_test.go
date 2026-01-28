@@ -5,6 +5,19 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
+	// Clear all env vars that Load() reads so defaults are tested in isolation.
+	t.Setenv("PORT", "")
+	t.Setenv("ENVIRONMENT", "")
+	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("NSJAIL_PATH", "")
+	t.Setenv("PYTHON_PATH", "")
+	t.Setenv("DEFAULT_TIMEOUT_MS", "")
+	t.Setenv("MAX_CODE_BYTES", "")
+	t.Setenv("MAX_STDIN_BYTES", "")
+	t.Setenv("MAX_OUTPUT_BYTES", "")
+	t.Setenv("MAX_FILES", "")
+	t.Setenv("MAX_FILE_BYTES", "")
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() returned error: %v", err)

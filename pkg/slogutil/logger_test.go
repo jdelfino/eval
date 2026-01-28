@@ -27,17 +27,23 @@ func TestParseLevel(t *testing.T) {
 }
 
 func TestNewLogger(t *testing.T) {
-	t.Run("local environment returns non-nil logger", func(t *testing.T) {
+	t.Run("local environment uses TextHandler", func(t *testing.T) {
 		logger := NewLogger("local", "debug")
 		if logger == nil {
 			t.Fatal("expected non-nil logger")
 		}
+		if _, ok := logger.Handler().(*slog.TextHandler); !ok {
+			t.Errorf("expected *slog.TextHandler for local env, got %T", logger.Handler())
+		}
 	})
 
-	t.Run("production environment returns non-nil logger", func(t *testing.T) {
+	t.Run("production environment uses JSONHandler", func(t *testing.T) {
 		logger := NewLogger("production", "info")
 		if logger == nil {
 			t.Fatal("expected non-nil logger")
+		}
+		if _, ok := logger.Handler().(*slog.JSONHandler); !ok {
+			t.Errorf("expected *slog.JSONHandler for production env, got %T", logger.Handler())
 		}
 	})
 }
