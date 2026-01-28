@@ -62,6 +62,35 @@ func TestExecuteRequest_OmitsEmptyFields(t *testing.T) {
 	}
 }
 
+func TestExecuteResponse_OmitsEmptyFields(t *testing.T) {
+	resp := ExecuteResponse{
+		Success:         true,
+		ExecutionTimeMs: 42,
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	for _, field := range []string{"error", "output", "stdin"} {
+		if _, ok := raw[field]; ok {
+			t.Errorf("expected field %q to be omitted, but it was present", field)
+		}
+	}
+
+	// Verify required fields are still present
+	for _, field := range []string{"success", "execution_time_ms"} {
+		if _, ok := raw[field]; !ok {
+			t.Errorf("expected field %q to be present, but it was missing", field)
+		}
+	}
+}
+
 func TestExecuteResponse_JSON(t *testing.T) {
 	resp := ExecuteResponse{
 		Success:         true,

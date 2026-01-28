@@ -19,8 +19,8 @@ type File struct {
 // ExecuteResponse is the JSON response for code execution.
 type ExecuteResponse struct {
 	Success         bool   `json:"success"`
-	Output          string `json:"output"`
-	Error           string `json:"error"`
+	Output          string `json:"output,omitempty"`
+	Error           string `json:"error,omitempty"`
 	ExecutionTimeMs int64  `json:"execution_time_ms"`
 	Stdin           string `json:"stdin,omitempty"`
 }
