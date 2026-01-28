@@ -2,6 +2,13 @@
   "name": "eval",
   "image": "mcr.microsoft.com/devcontainers/base:trixie",
 
+  "workspaceMount": "source=eval-workspace,target=/workspaces/eval,type=volume",
+  "workspaceFolder": "/workspaces/eval",
+
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+  ],
+
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false },
     "ghcr.io/devcontainers/features/node:1": { "version": "22", "installYarnUsingApt": false },
