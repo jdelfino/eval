@@ -23,19 +23,24 @@ const maxTimeoutMs = 30000
 // SandboxRunner is the function signature for sandbox.Run, allowing injection in tests.
 type SandboxRunner func(ctx context.Context, cfg sandbox.Config, req sandbox.Request) (*sandbox.Result, error)
 
+// ExecuteHandlerConfig holds configuration values for the ExecuteHandler.
+type ExecuteHandlerConfig struct {
+	NsjailPath       string
+	PythonPath       string
+	MaxOutputBytes   int
+	DefaultTimeoutMs int
+	MaxCodeBytes     int
+	MaxStdinBytes    int
+	MaxFiles         int
+	MaxFileBytes     int
+}
+
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	logger           *slog.Logger
-	runner           SandboxRunner
-	metrics          *metrics.Metrics
-	nsjailPath       string
-	pythonPath       string
-	maxOutputBytes   int
-	defaultTimeoutMs int
-	maxCodeBytes     int
-	maxStdinBytes    int
-	maxFiles         int
-	maxFileBytes     int
+	logger  *slog.Logger
+	runner  SandboxRunner
+	metrics *metrics.Metrics
+	cfg     ExecuteHandlerConfig
 }
 
 // NewExecuteHandler creates an ExecuteHandler with the given dependencies.
@@ -43,27 +48,13 @@ func NewExecuteHandler(
 	logger *slog.Logger,
 	runner SandboxRunner,
 	m *metrics.Metrics,
-	nsjailPath string,
-	pythonPath string,
-	maxOutputBytes int,
-	defaultTimeoutMs int,
-	maxCodeBytes int,
-	maxStdinBytes int,
-	maxFiles int,
-	maxFileBytes int,
+	cfg ExecuteHandlerConfig,
 ) *ExecuteHandler {
 	return &ExecuteHandler{
-		logger:           logger,
-		runner:           runner,
-		metrics:          m,
-		nsjailPath:       nsjailPath,
-		pythonPath:       pythonPath,
-		maxOutputBytes:   maxOutputBytes,
-		defaultTimeoutMs: defaultTimeoutMs,
-		maxCodeBytes:     maxCodeBytes,
-		maxStdinBytes:    maxStdinBytes,
-		maxFiles:         maxFiles,
-		maxFileBytes:     maxFileBytes,
+		logger:  logger,
+		runner:  runner,
+		metrics: m,
+		cfg:     cfg,
 	}
 }
 
@@ -94,7 +85,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.metrics.CodeSizeBytes.Observe(float64(len(req.Code)))
 
 	// Determine timeout.
-	timeoutMs := h.defaultTimeoutMs
+	timeoutMs := h.cfg.DefaultTimeoutMs
 	if req.TimeoutMs != nil {
 		timeoutMs = *req.TimeoutMs
 	}
@@ -114,9 +105,9 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sandboxCfg := sandbox.Config{
-		NsjailPath:     h.nsjailPath,
-		PythonPath:     h.pythonPath,
-		MaxOutputBytes: h.maxOutputBytes,
+		NsjailPath:     h.cfg.NsjailPath,
+		PythonPath:     h.cfg.PythonPath,
+		MaxOutputBytes: h.cfg.MaxOutputBytes,
 	}
 
 	h.logger.Info("executing code",
@@ -184,14 +175,14 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	if req.Code == "" {
 		return "invalid_request", "code is required and must be non-empty"
 	}
-	if len(req.Code) > h.maxCodeBytes {
-		return "code_too_large", fmt.Sprintf("code exceeds maximum size of %d bytes", h.maxCodeBytes)
+	if len(req.Code) > h.cfg.MaxCodeBytes {
+		return "code_too_large", fmt.Sprintf("code exceeds maximum size of %d bytes", h.cfg.MaxCodeBytes)
 	}
-	if len(req.Stdin) > h.maxStdinBytes {
-		return "stdin_too_large", fmt.Sprintf("stdin exceeds maximum size of %d bytes", h.maxStdinBytes)
+	if len(req.Stdin) > h.cfg.MaxStdinBytes {
+		return "stdin_too_large", fmt.Sprintf("stdin exceeds maximum size of %d bytes", h.cfg.MaxStdinBytes)
 	}
-	if len(req.Files) > h.maxFiles {
-		return "too_many_files", fmt.Sprintf("too many files: maximum is %d", h.maxFiles)
+	if len(req.Files) > h.cfg.MaxFiles {
+		return "too_many_files", fmt.Sprintf("too many files: maximum is %d", h.cfg.MaxFiles)
 	}
 	for _, f := range req.Files {
 		if f.Name == "" {
@@ -200,8 +191,8 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 		if f.Content == "" {
 			return "invalid_request", "file content must not be empty"
 		}
-		if len(f.Content) > h.maxFileBytes {
-			return "file_too_large", fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, h.maxFileBytes)
+		if len(f.Content) > h.cfg.MaxFileBytes {
+			return "file_too_large", fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, h.cfg.MaxFileBytes)
 		}
 	}
 	if req.TimeoutMs != nil {

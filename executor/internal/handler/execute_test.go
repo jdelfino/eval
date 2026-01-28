@@ -20,30 +20,21 @@ import (
 	io_prometheus_client "github.com/prometheus/client_model/go"
 )
 
-// handlerOpts holds optional overrides for building an ExecuteHandler in tests.
-type handlerOpts struct {
-	maxCodeBytes  int
-	maxStdinBytes int
-	maxFiles      int
-	maxFileBytes  int
-}
-
-func defaultOpts() handlerOpts {
-	return handlerOpts{
-		maxCodeBytes:  102400,
-		maxStdinBytes: 1048576,
-		maxFiles:      5,
-		maxFileBytes:  10240,
+func defaultConfig() handler.ExecuteHandlerConfig {
+	return handler.ExecuteHandlerConfig{
+		NsjailPath:       "/usr/bin/nsjail",
+		PythonPath:       "/usr/bin/python3",
+		MaxOutputBytes:   1048576,
+		DefaultTimeoutMs: 10000,
+		MaxCodeBytes:     102400,
+		MaxStdinBytes:    1048576,
+		MaxFiles:         5,
+		MaxFileBytes:     10240,
 	}
 }
 
-func newHandler(runner handler.SandboxRunner, m *metrics.Metrics, opts handlerOpts) http.HandlerFunc {
-	h := handler.NewExecuteHandler(
-		noopLogger(), runner, m,
-		"/usr/bin/nsjail", "/usr/bin/python3", 1048576,
-		10000, opts.maxCodeBytes, opts.maxStdinBytes,
-		opts.maxFiles, opts.maxFileBytes,
-	)
+func newHandler(runner handler.SandboxRunner, m *metrics.Metrics, cfg handler.ExecuteHandlerConfig) http.HandlerFunc {
+	h := handler.NewExecuteHandler(noopLogger(), runner, m, cfg)
 	return h.ServeHTTP
 }
 
@@ -106,7 +97,7 @@ func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
 }
 
 func TestExecute_Success(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"print('hello')"}`)
 
 	if w.Code != http.StatusOK {
@@ -129,7 +120,7 @@ func TestExecute_Success(t *testing.T) {
 }
 
 func TestExecute_CodeFailure(t *testing.T) {
-	h := newHandler(failRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(failRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"print(x)"}`)
 
 	if w.Code != http.StatusOK {
@@ -149,7 +140,7 @@ func TestExecute_CodeFailure(t *testing.T) {
 }
 
 func TestExecute_Timeout(t *testing.T) {
-	h := newHandler(timeoutRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(timeoutRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"while True: pass"}`)
 
 	if w.Code != http.StatusOK {
@@ -169,7 +160,7 @@ func TestExecute_Timeout(t *testing.T) {
 }
 
 func TestExecute_InternalError(t *testing.T) {
-	h := newHandler(errorRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(errorRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"print(1)"}`)
 
 	if w.Code != http.StatusInternalServerError {
@@ -178,7 +169,7 @@ func TestExecute_InternalError(t *testing.T) {
 }
 
 func TestExecute_EmptyCode(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":""}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -187,7 +178,7 @@ func TestExecute_EmptyCode(t *testing.T) {
 }
 
 func TestExecute_MissingCode(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -196,7 +187,7 @@ func TestExecute_MissingCode(t *testing.T) {
 }
 
 func TestExecute_InvalidJSON(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `not json`)
 
 	if w.Code != http.StatusBadRequest {
@@ -205,9 +196,9 @@ func TestExecute_InvalidJSON(t *testing.T) {
 }
 
 func TestExecute_CodeTooLarge(t *testing.T) {
-	opts := defaultOpts()
-	opts.maxCodeBytes = 10
-	h := newHandler(successRunner, metrics.NewNoop(), opts)
+	cfg := defaultConfig()
+	cfg.MaxCodeBytes = 10
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
 	w := doRequest(h, `{"code":"print('this is way too long')"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -216,9 +207,9 @@ func TestExecute_CodeTooLarge(t *testing.T) {
 }
 
 func TestExecute_StdinTooLarge(t *testing.T) {
-	opts := defaultOpts()
-	opts.maxStdinBytes = 5
-	h := newHandler(successRunner, metrics.NewNoop(), opts)
+	cfg := defaultConfig()
+	cfg.MaxStdinBytes = 5
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
 	w := doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -227,9 +218,9 @@ func TestExecute_StdinTooLarge(t *testing.T) {
 }
 
 func TestExecute_TooManyFiles(t *testing.T) {
-	opts := defaultOpts()
-	opts.maxFiles = 1
-	h := newHandler(successRunner, metrics.NewNoop(), opts)
+	cfg := defaultConfig()
+	cfg.MaxFiles = 1
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	w := doRequest(h, body)
 
@@ -239,9 +230,9 @@ func TestExecute_TooManyFiles(t *testing.T) {
 }
 
 func TestExecute_FileTooLarge(t *testing.T) {
-	opts := defaultOpts()
-	opts.maxFileBytes = 5
-	h := newHandler(successRunner, metrics.NewNoop(), opts)
+	cfg := defaultConfig()
+	cfg.MaxFileBytes = 5
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
 	w := doRequest(h, body)
 
@@ -251,7 +242,7 @@ func TestExecute_FileTooLarge(t *testing.T) {
 }
 
 func TestExecute_EmptyFileName(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"x=1","files":[{"name":"","content":"data"}]}`
 	w := doRequest(h, body)
 
@@ -261,7 +252,7 @@ func TestExecute_EmptyFileName(t *testing.T) {
 }
 
 func TestExecute_EmptyFileContent(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":""}]}`
 	w := doRequest(h, body)
 
@@ -271,7 +262,7 @@ func TestExecute_EmptyFileContent(t *testing.T) {
 }
 
 func TestExecute_NegativeTimeout(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":-1}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -280,7 +271,7 @@ func TestExecute_NegativeTimeout(t *testing.T) {
 }
 
 func TestExecute_TimeoutTooLarge(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":99999}`)
 
 	if w.Code != http.StatusBadRequest {
@@ -289,7 +280,7 @@ func TestExecute_TimeoutTooLarge(t *testing.T) {
 }
 
 func TestExecute_StdinEchoed(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"x=1","stdin":"my input"}`)
 
 	var resp executorapi.ExecuteResponse
@@ -303,7 +294,7 @@ func TestExecute_StdinEchoed(t *testing.T) {
 
 func TestExecute_CustomTimeout(t *testing.T) {
 	cap := &captureRunner{}
-	h := newHandler(cap.run, metrics.NewNoop(), defaultOpts())
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"x=1","timeout_ms":5000}`)
 
 	if w.Code != http.StatusOK {
@@ -316,7 +307,7 @@ func TestExecute_CustomTimeout(t *testing.T) {
 
 func TestExecute_DefaultTimeout(t *testing.T) {
 	cap := &captureRunner{}
-	h := newHandler(cap.run, metrics.NewNoop(), defaultOpts())
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"x=1"}`)
 
 	if w.Code != http.StatusOK {
@@ -329,7 +320,7 @@ func TestExecute_DefaultTimeout(t *testing.T) {
 
 func TestExecute_FilesPassedToSandbox(t *testing.T) {
 	cap := &captureRunner{}
-	h := newHandler(cap.run, metrics.NewNoop(), defaultOpts())
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"x=1","files":[{"name":"data.txt","content":"hello"}],"random_seed":42}`
 	w := doRequest(h, body)
 
@@ -348,7 +339,7 @@ func TestExecute_FilesPassedToSandbox(t *testing.T) {
 }
 
 func TestExecute_BodyTooLarge(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultOpts())
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	// Create a body larger than 1MB
 	large := bytes.Repeat([]byte("x"), 2*1024*1024)
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(large))
@@ -388,7 +379,7 @@ func getGaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 
 func TestExecute_MetricsSuccess(t *testing.T) {
 	m := newTestMetrics(t)
-	h := newHandler(successRunner, m, defaultOpts())
+	h := newHandler(successRunner, m, defaultConfig())
 	w := doRequest(h, `{"code":"print('hello')"}`)
 
 	if w.Code != http.StatusOK {
@@ -406,7 +397,7 @@ func TestExecute_MetricsSuccess(t *testing.T) {
 
 func TestExecute_MetricsFailure(t *testing.T) {
 	m := newTestMetrics(t)
-	h := newHandler(failRunner, m, defaultOpts())
+	h := newHandler(failRunner, m, defaultConfig())
 	doRequest(h, `{"code":"print(x)"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "failure"); v != 1 {
@@ -416,7 +407,7 @@ func TestExecute_MetricsFailure(t *testing.T) {
 
 func TestExecute_MetricsTimeout(t *testing.T) {
 	m := newTestMetrics(t)
-	h := newHandler(timeoutRunner, m, defaultOpts())
+	h := newHandler(timeoutRunner, m, defaultConfig())
 	doRequest(h, `{"code":"while True: pass"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "timeout"); v != 1 {
@@ -426,7 +417,7 @@ func TestExecute_MetricsTimeout(t *testing.T) {
 
 func TestExecute_MetricsError(t *testing.T) {
 	m := newTestMetrics(t)
-	h := newHandler(errorRunner, m, defaultOpts())
+	h := newHandler(errorRunner, m, defaultConfig())
 	doRequest(h, `{"code":"print(1)"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "error"); v != 1 {
@@ -436,9 +427,9 @@ func TestExecute_MetricsError(t *testing.T) {
 
 func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	opts := defaultOpts()
-	opts.maxCodeBytes = 10
-	h := newHandler(successRunner, m, opts)
+	cfg := defaultConfig()
+	cfg.MaxCodeBytes = 10
+	h := newHandler(successRunner, m, cfg)
 	doRequest(h, `{"code":"print('this is way too long')"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "code_too_large"); v != 1 {
@@ -448,7 +439,7 @@ func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 
 func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 	m := newTestMetrics(t)
-	h := newHandler(successRunner, m, defaultOpts())
+	h := newHandler(successRunner, m, defaultConfig())
 	doRequest(h, `not json`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "invalid_request"); v != 1 {
@@ -458,9 +449,9 @@ func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 
 func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	opts := defaultOpts()
-	opts.maxStdinBytes = 5
-	h := newHandler(successRunner, m, opts)
+	cfg := defaultConfig()
+	cfg.MaxStdinBytes = 5
+	h := newHandler(successRunner, m, cfg)
 	doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "stdin_too_large"); v != 1 {
@@ -470,9 +461,9 @@ func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
 
 func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
 	m := newTestMetrics(t)
-	opts := defaultOpts()
-	opts.maxFiles = 1
-	h := newHandler(successRunner, m, opts)
+	cfg := defaultConfig()
+	cfg.MaxFiles = 1
+	h := newHandler(successRunner, m, cfg)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	doRequest(h, body)
 
@@ -483,9 +474,9 @@ func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
 
 func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
 	m := newTestMetrics(t)
-	opts := defaultOpts()
-	opts.maxFileBytes = 5
-	h := newHandler(successRunner, m, opts)
+	cfg := defaultConfig()
+	cfg.MaxFileBytes = 5
+	h := newHandler(successRunner, m, cfg)
 	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
 	doRequest(h, body)
 

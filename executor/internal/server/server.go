@@ -17,8 +17,9 @@ import (
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
-	custommw "github.com/jdelfino/eval/executor/internal/middleware"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
+	"github.com/jdelfino/eval/pkg/httplog"
+	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
 
 // Server wraps the HTTP server with its configuration and logger.
@@ -48,14 +49,15 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 // NewWithRegistry creates a new Server using the provided Prometheus registerer.
 func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Registerer) *Server {
 	m := metrics.New(reg)
+	httpMetrics := httpmiddleware.NewHTTPMetrics(reg)
 
 	r := chi.NewRouter()
 
 	// Middleware chain
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(custommw.Logger(logger))
-	r.Use(custommw.Metrics)
+	r.Use(httplog.Logger(logger))
+	r.Use(httpMetrics.Middleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 
@@ -74,9 +76,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	// Execute endpoint
 	execHandler := handler.NewExecuteHandler(
 		logger, sandbox.Run, m,
-		cfg.NsjailPath, cfg.PythonPath, cfg.MaxOutputBytes,
-		cfg.DefaultTimeoutMS, cfg.MaxCodeBytes, cfg.MaxStdinBytes,
-		cfg.MaxFiles, cfg.MaxFileBytes,
+		handler.ExecuteHandlerConfig{
+			NsjailPath:       cfg.NsjailPath,
+			PythonPath:       cfg.PythonPath,
+			MaxOutputBytes:   cfg.MaxOutputBytes,
+			DefaultTimeoutMs: cfg.DefaultTimeoutMS,
+			MaxCodeBytes:     cfg.MaxCodeBytes,
+			MaxStdinBytes:    cfg.MaxStdinBytes,
+			MaxFiles:         cfg.MaxFiles,
+			MaxFileBytes:     cfg.MaxFileBytes,
+		},
 	)
 	r.Post("/execute", execHandler.ServeHTTP)
 
