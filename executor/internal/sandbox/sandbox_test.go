@@ -21,6 +21,8 @@ func TestSanitizeFilename(t *testing.T) {
 		{"empty", "", "unnamed_file.txt"},
 		{"spaces only", "   ", "unnamed_file.txt"},
 		{"multiple leading dots", "...test", "_.test"},
+		{"null byte", "foo\x00bar.txt", "foo_bar.txt"},
+		{"only null bytes", "\x00\x00", "__"},
 	}
 
 	for _, tt := range tests {
@@ -225,6 +227,30 @@ func TestSanitizeStderrSingleQuotePath(t *testing.T) {
 	}
 }
 
+
+func TestRunRejectsDuplicateSanitizedFilenames(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		PythonPath:     "/usr/bin/python3",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code: "print('hello')",
+		Files: []File{
+			{Name: "foo/bar.txt", Content: "a"},
+			{Name: "foo_bar.txt", Content: "b"},
+		},
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for duplicate sanitized filenames")
+	}
+	if !strings.Contains(err.Error(), "duplicate filename") {
+		t.Errorf("expected duplicate filename error, got: %v", err)
+	}
+}
 
 // TestRunContextCancelled verifies that a cancelled context is handled.
 func TestRunContextCancelled(t *testing.T) {

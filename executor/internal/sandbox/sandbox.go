@@ -54,11 +54,16 @@ type Result struct {
 // Run executes Python code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// Validate attached filenames before doing any work.
+	seen := make(map[string]string) // sanitized name -> original name
 	for _, f := range req.Files {
 		name := sanitizeFilename(f.Name)
 		if name == "main.py" {
 			return nil, fmt.Errorf("file name %q is reserved", f.Name)
 		}
+		if orig, ok := seen[name]; ok {
+			return nil, fmt.Errorf("duplicate filename: %q and %q both sanitize to %q", orig, f.Name, name)
+		}
+		seen[name] = f.Name
 	}
 
 	// Verify nsjail binary exists.
@@ -194,6 +199,8 @@ func sanitizeFilename(name string) string {
 	s = strings.ReplaceAll(s, "/", "_")
 	s = strings.ReplaceAll(s, "\\", "_")
 	s = strings.ReplaceAll(s, "..", "_")
+	// Replace null bytes.
+	s = strings.ReplaceAll(s, "\x00", "_")
 	// Replace leading dots.
 	for len(s) > 0 && s[0] == '.' {
 		s = "_" + s[1:]
