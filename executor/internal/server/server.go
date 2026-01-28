@@ -17,8 +17,8 @@ import (
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
+	custommw "github.com/jdelfino/eval/executor/internal/middleware"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
-	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
 
@@ -56,7 +56,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	// Middleware chain
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(httplog.Logger(logger))
+	r.Use(custommw.Logger(logger))
 	r.Use(httpMetrics.Middleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))

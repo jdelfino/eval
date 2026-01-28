@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/db"
 	"github.com/jdelfino/eval/internal/store"
@@ -35,7 +37,7 @@ func TestNew(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
 
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	if s == nil {
 		t.Fatal("New() returned nil")
@@ -58,7 +60,7 @@ func TestRoutes(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	tests := []struct {
 		name           string
@@ -134,7 +136,7 @@ func TestReadyzUnhealthyPool(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: false, Message: "connection failed"}}
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()
@@ -168,7 +170,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	// Make a request to generate some metrics
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -197,7 +199,7 @@ func TestNotFoundRoute(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	rr := httptest.NewRecorder()
@@ -213,7 +215,7 @@ func TestAPIRoutePrefix(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := New(cfg, logger, pool, nil)
+	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
 
 	// API v1 route prefix exists (even if no routes are registered yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1", nil)
@@ -236,7 +238,7 @@ func TestNewWithStore_BuildsWithoutError(t *testing.T) {
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
 	st := store.New(nil)
 
-	s := New(cfg, logger, pool, st)
+	s := NewWithRegistry(cfg, logger, pool, st, prometheus.NewRegistry())
 
 	if s == nil {
 		t.Fatal("New() returned nil when store is provided")
