@@ -42,8 +42,19 @@ fi
 
 echo "Using 1Password vault: $OP_VAULT"
 
-# Add env vars to shell profile for future sessions
 WORKSPACE_DIR=$(pwd)
+
+# Fetch GH_TOKEN from 1Password and persist to file
+GH_TOKEN_VAL=$(op read "op://${OP_VAULT}/github-cli-token/credential" 2>/dev/null) || true
+if [ -n "$GH_TOKEN_VAL" ]; then
+    echo "$GH_TOKEN_VAL" > "$WORKSPACE_DIR/.gh-token"
+    export GH_TOKEN="$GH_TOKEN_VAL"
+    echo "GH_TOKEN fetched from 1Password"
+else
+    echo "WARNING: Could not fetch GH_TOKEN from 1Password"
+fi
+
+# Add env vars to shell profile for future sessions
 PROFILE_SNIPPET="
 # 1Password credentials for devcontainer
 if [ -f \"$WORKSPACE_DIR/.op-token\" ]; then
@@ -51,6 +62,9 @@ if [ -f \"$WORKSPACE_DIR/.op-token\" ]; then
 fi
 if [ -f \"$WORKSPACE_DIR/.op-vault\" ]; then
     export OP_VAULT=\$(cat \"$WORKSPACE_DIR/.op-vault\")
+fi
+if [ -f \"$WORKSPACE_DIR/.gh-token\" ]; then
+    export GH_TOKEN=\$(cat \"$WORKSPACE_DIR/.gh-token\")
 fi
 "
 
