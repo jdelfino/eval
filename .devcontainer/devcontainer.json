@@ -18,7 +18,7 @@
     "ghcr.io/devcontainers/features/terraform:1": {}
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
-  "postCreateCommand": "find / -maxdepth 4 -name 'post-create.sh' -path '*/.devcontainer/*' 2>/dev/null && echo '---' && ls /tmp/ && echo '---' && ls /workspaces/",
+  "postCreateCommand": "echo FIND:; find / -maxdepth 4 -name 'post-create.sh' 2>/dev/null; echo TMP:; ls /tmp/; echo WORKSPACES:; ls -la /workspaces/; echo WORKSPACES_EVAL:; ls -la /workspaces/eval/",
   "postStartCommand": "/workspaces/eval/.devcontainer/setup-secrets.sh",
 
   "remoteEnv": {
