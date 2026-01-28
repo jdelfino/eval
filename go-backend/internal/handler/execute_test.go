@@ -245,6 +245,38 @@ func TestExecute_403StudentExecutingForAnother(t *testing.T) {
 	}
 }
 
+func TestExecute_400StudentIDNotParticipant(t *testing.T) {
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return activeSession(), nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{}
+	execClient := &mockExecutorClient{}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	// Instructor passes an outsider UUID as student_id
+	body := newExecuteReq(testOutsiderID, "code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp["error"] != "student_id is not a participant in this session" {
+		t.Fatalf("unexpected error message: %s", resp["error"])
+	}
+}
+
 func TestExecute_404SessionNotFound(t *testing.T) {
 	sessRepo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {

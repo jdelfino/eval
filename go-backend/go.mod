@@ -13,6 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/jdelfino/eval/pkg/httplog v0.0.0-00010101000000-000000000000
+	github.com/jdelfino/eval/pkg/httpmiddleware v0.0.0-00010101000000-000000000000
 	github.com/jdelfino/eval/pkg/slogutil v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
@@ -27,7 +28,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -46,3 +46,5 @@ replace github.com/jdelfino/eval/pkg/executorapi => ../pkg/executorapi
 replace github.com/jdelfino/eval/pkg/httplog => ../pkg/httplog
 
 replace github.com/jdelfino/eval/pkg/slogutil => ../pkg/slogutil
+
+replace github.com/jdelfino/eval/pkg/httpmiddleware => ../pkg/httpmiddleware

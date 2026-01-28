@@ -101,6 +101,12 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 4b. Validate student_id is an actual session participant
+	if !isCreatorOrParticipant(req.StudentID, session) {
+		httputil.WriteError(w, http.StatusBadRequest, "student_id is not a participant in this session")
+		return
+	}
+
 	// 5. Merge execution settings: get student record for middle layer
 	var studentRecord *store.SessionStudent
 	sr, err := h.sessionStudents.GetSessionStudent(r.Context(), sessionID, req.StudentID)
