@@ -379,6 +379,72 @@ func TestExecute_400InvalidJSONBody(t *testing.T) {
 	}
 }
 
+func TestMergeExecutionSettings_FilesOverrideBetweenLayers(t *testing.T) {
+	// Layer 1 (problem) has file A, layer 2 (student record) has file B.
+	// Files from layer 2 should completely replace layer 1 files.
+	problemJSON := json.RawMessage(`{"execution_settings":{"files":[{"name":"a.txt","content":"from-problem"}]}}`)
+	studentRecord := &store.SessionStudent{
+		ExecutionSettings: json.RawMessage(`{"files":[{"name":"b.txt","content":"from-student"}]}`),
+	}
+
+	result := mergeExecutionSettings(problemJSON, studentRecord, nil)
+
+	if len(result.Files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(result.Files))
+	}
+	if result.Files[0].Name != "b.txt" {
+		t.Errorf("expected file 'b.txt' from student layer, got %q", result.Files[0].Name)
+	}
+	if result.Files[0].Content != "from-student" {
+		t.Errorf("expected content 'from-student', got %q", result.Files[0].Content)
+	}
+}
+
+func TestMergeExecutionSettings_MalformedProblemJSON(t *testing.T) {
+	// Malformed problem JSON should be gracefully ignored.
+	problemJSON := json.RawMessage(`{not valid json`)
+	stdin := "request-stdin"
+	reqSettings := &executionSettingsJSON{Stdin: &stdin}
+
+	result := mergeExecutionSettings(problemJSON, nil, reqSettings)
+
+	if result.Stdin == nil || *result.Stdin != "request-stdin" {
+		t.Errorf("expected stdin 'request-stdin', got %v", result.Stdin)
+	}
+}
+
+func TestMergeExecutionSettings_NilProblemWithStudentRecord(t *testing.T) {
+	// Nil/empty problem JSON with student record settings.
+	stdin := "student-stdin"
+	studentRecord := &store.SessionStudent{
+		ExecutionSettings: json.RawMessage(`{"stdin":"student-stdin","random_seed":7}`),
+	}
+
+	result := mergeExecutionSettings(nil, studentRecord, nil)
+
+	if result.Stdin == nil || *result.Stdin != stdin {
+		t.Errorf("expected stdin %q, got %v", stdin, result.Stdin)
+	}
+	if result.RandomSeed == nil || *result.RandomSeed != 7 {
+		t.Errorf("expected random_seed 7, got %v", result.RandomSeed)
+	}
+}
+
+func TestMergeExecutionSettings_AllLayersEmpty(t *testing.T) {
+	// All three layers are nil/empty — result should be zero-value.
+	result := mergeExecutionSettings(nil, nil, nil)
+
+	if result.Stdin != nil {
+		t.Errorf("expected nil stdin, got %v", result.Stdin)
+	}
+	if result.RandomSeed != nil {
+		t.Errorf("expected nil random_seed, got %v", result.RandomSeed)
+	}
+	if len(result.Files) != 0 {
+		t.Errorf("expected no files, got %d", len(result.Files))
+	}
+}
+
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
 	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)
