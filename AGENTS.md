@@ -7,38 +7,17 @@ for resolving larger issues in follow-on work.
 
 ## Workflows
 
-Use the appropriate workflow for your task type:
-
-- **Coordinated work** (epics, complex tasks, multi-commit): `/work <id>`
-- **Simple tasks** (quick fixes, single commit): `/task <id>`
-
-### Agent Roles
-
-The `/work` command uses a coordinator that delegates to specialized agents:
-
-| Role | Responsibility | Beads Access |
-|------|---------------|--------------|
-| **Coordinator** | Orchestrates work, manages worktrees, avoids conflicts, creates PRs | Full (owns all issues) |
-| **Implementer** | Writes code and tests, commits and pushes | None (never touches bd) |
-| **Reviewer** | Verifies correctness, test coverage, code quality | Create only (blocking issues) |
-
-### Workflow State Labels
-
-The coordinator tracks task progress via labels:
-
-- `wip` - Implementation in progress
-- `needs-review` - Awaiting review
-- `changes-needed` - Review found issues
-- `approved` - Ready to close
-
-### When to Use Which
-
 | Scenario | Command |
 |----------|---------|
-| Epic with multiple subtasks | `/work <epic-id>` |
-| Complex feature (multi-file) | `/work <task-id>` |
-| Simple bug fix (1-2 files) | `/task <task-id>` |
-| Quick typo/config change | `/task <task-id>` |
+| New epic or feature design | `/plan <description-or-epic-id>` |
+| Coordinated work (epics, multi-commit) | `/work <id>` |
+| Simple tasks (quick fixes, single commit) | `/task <id>` |
+
+`/plan` explores the codebase, discusses tradeoffs with you, files beads issues, and runs an architectural plan review. Use it before `/work` for new epics.
+
+`/work` implements filed issues: spawns implementers, runs 3 specialized PR reviews (correctness, test quality, architecture) before creating the PR.
+
+`/task` handles simple single-commit work end-to-end.
 
 ## Issue Tracking with bd (beads)
 
@@ -56,6 +35,8 @@ The coordinator tracks task progress via labels:
 **Check for ready work:**
 ```bash
 bd ready --json
+bd ready --json | jq '[.[] | select(.issue_type == "epic")]'
+bd list --json | jq '[.[] | select(.status == "open" and .priority <= 1)]'
 ```
 
 **Create new issues:**
@@ -138,7 +119,7 @@ For example: `bd create --help` shows `--parent`, `--deps`, `--assignee`, etc.
 ### Important Rules
 
 - Use bd for ALL task tracking
-- Always use `--json` flag for programmatic use
+- Always use `--json` flag for programmatic use; pipe through `jq` for filtering
 - Link discovered work with `discovered-from` dependencies
 - Check `bd ready` before asking "what should I work on?"
 - Run `bd <cmd> --help` to discover available flags
