@@ -42,6 +42,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.GCPRegion != "" {
 		t.Errorf("GCPRegion = %q, want empty string", cfg.GCPRegion)
 	}
+	if cfg.ExecutorTimeout != 35*time.Second {
+		t.Errorf("ExecutorTimeout = %v, want %v", cfg.ExecutorTimeout, 35*time.Second)
+	}
+	if cfg.ExecutorURL != "http://localhost:8081" {
+		t.Errorf("ExecutorURL = %q, want %q", cfg.ExecutorURL, "http://localhost:8081")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
