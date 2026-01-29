@@ -57,9 +57,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(httplog.Logger(logger))
-	r.Use(httpMetrics.Middleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(httpMetrics.Middleware)
 
 	// Metrics endpoint
 	r.Handle("/metrics", promhttp.Handler())

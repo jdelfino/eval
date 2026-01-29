@@ -8,9 +8,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/jdelfino/eval/executor/internal/config"
+	"github.com/jdelfino/eval/executor/internal/metrics"
+	"github.com/jdelfino/eval/pkg/httplog"
+	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
 
 func newTestServer(t *testing.T) *Server {
@@ -139,5 +144,37 @@ func TestMetrics(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestRecovererCatchesPanic(t *testing.T) {
+	// Verify that the Recoverer middleware is in the chain and catches panics,
+	// returning a 500 instead of crashing the server.
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	m := metrics.New(reg)
+	httpMetrics := httpmiddleware.NewHTTPMetrics(reg)
+
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(httplog.Logger(logger))
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(httpMetrics.Middleware)
+	_ = m // metrics registered but not needed for this test
+
+	r.Get("/panic", func(w http.ResponseWriter, r *http.Request) {
+		panic("test panic")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	rec := httptest.NewRecorder()
+
+	// Should not panic; Recoverer should catch it and return 500.
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
