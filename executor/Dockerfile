@@ -32,10 +32,13 @@ FROM golang:1.24-alpine AS go-builder
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# Copy shared packages first (needed by replace directives in go.mod).
+COPY pkg/ /pkg/
+
+COPY executor/go.mod executor/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY executor/ .
 RUN CGO_ENABLED=0 go build \
     -ldflags="-w -s" \
     -o /app/executor \

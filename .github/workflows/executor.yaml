@@ -63,5 +63,5 @@ jobs:
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
       - run: gcloud auth configure-docker us-east1-docker.pkg.dev
       - run: |
-          docker build -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} executor/
+          docker build -f executor/Dockerfile -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} .
           docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}

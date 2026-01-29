@@ -43,8 +43,8 @@ services:
 
   executor:
     build:
-      context: ./executor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: executor/Dockerfile
     ports:
       - "8081:8081"
     environment:
