@@ -142,8 +142,14 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		args = appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
 	}
 
-	// Create command with context for cancellation.
-	cmd := exec.CommandContext(ctx, cfg.NsjailPath, args...)
+	// Create a derived context with a deadline so that if nsjail hangs beyond
+	// its own time_limit, the Go process will kill it. The 2-second buffer
+	// accounts for nsjail startup/teardown overhead.
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+2*time.Second)
+	defer execCancel()
+
+	// Create command with the deadline context.
+	cmd := exec.CommandContext(execCtx, cfg.NsjailPath, args...)
 
 	// Set up stdin.
 	if req.Stdin != "" {
@@ -173,15 +179,18 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
-		} else if ctx.Err() != nil {
+		} else if execCtx.Err() != nil || ctx.Err() != nil {
 			timedOut = true
 			exitCode = -1
 		}
 	}
 
-	// nsjail kills the process on time_limit and returns exit code 137 (SIGKILL).
-	// Also detect if the wall-clock time is close to the timeout.
-	if exitCode == 137 || (exitCode != 0 && duration >= time.Duration(timeoutSec)*time.Second) {
+	// Detect timeout via context deadline (Go killed the process) or
+	// nsjail's own SIGKILL (exit code 137).
+	if execCtx.Err() == context.DeadlineExceeded || ctx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+	if exitCode == 137 {
 		timedOut = true
 	}
 
