@@ -1,0 +1,67 @@
+name: Executor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'executor/**'
+      - 'pkg/**'
+      - '.github/workflows/executor.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'executor/**'
+      - 'pkg/**'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
+  IMAGE_NAME: executor
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: executor/go.sum
+      - name: Build
+        run: go build ./...
+        working-directory: executor
+      - name: Test
+        run: go test -v -race ./...
+        working-directory: executor
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: executor/go.sum
+      - uses: golangci/golangci-lint-action@v4
+        with:
+          working-directory: executor
+          args: --timeout=3m
+
+  build-push:
+    needs: [test, lint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          docker build -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} executor/
+          docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}

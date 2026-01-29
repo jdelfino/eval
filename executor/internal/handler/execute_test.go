@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jdelfino/eval/executor/internal/handler"
@@ -482,5 +483,108 @@ func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "file_too_large"); v != 1 {
 		t.Errorf("expected validation_errors_total{reason=file_too_large}=1, got %v", v)
+	}
+}
+
+func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
+	// blockCh controls when the runner completes.
+	blockCh := make(chan struct{})
+	blockingRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		<-blockCh
+		return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
+	}
+
+	cfg := defaultConfig()
+	cfg.MaxConcurrentExecutions = 1
+	h := handler.NewExecuteHandler(noopLogger(), blockingRunner, metrics.NewNoop(), cfg)
+
+	// First request: occupies the single slot.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	var firstStatus int
+	go func() {
+		defer wg.Done()
+		w := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+		firstStatus = w.Code
+	}()
+
+	// Give the first goroutine time to acquire the semaphore.
+	// We send a second request while the first is still blocking.
+	// Use a small sync trick: send another request synchronously.
+	// The blocking runner holds the slot, so this should get 429.
+	//
+	// We need to wait a moment for the goroutine to enter the runner.
+	// A more robust approach: use a channel to signal entry.
+	entryCh := make(chan struct{})
+	blockCh2 := make(chan struct{})
+	entryRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		close(entryCh)
+		<-blockCh2
+		return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
+	}
+
+	// Recreate handler with entryRunner so we can synchronize.
+	h2 := handler.NewExecuteHandler(noopLogger(), entryRunner, metrics.NewNoop(), cfg)
+
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	go func() {
+		defer wg2.Done()
+		doRequest(h2.ServeHTTP, `{"code":"x=1"}`)
+	}()
+
+	// Wait for first request to enter runner.
+	<-entryCh
+
+	// Second request should be rejected.
+	w := doRequest(h2.ServeHTTP, `{"code":"x=1"}`)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp["error"] != "too many concurrent executions" {
+		t.Errorf("unexpected error message: %q", errResp["error"])
+	}
+
+	// Unblock.
+	close(blockCh2)
+	wg2.Wait()
+
+	// Clean up first handler too.
+	close(blockCh)
+	wg.Wait()
+	_ = firstStatus
+}
+
+func TestExecute_ConcurrencyLimit_AllowsAfterRelease(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MaxConcurrentExecutions = 1
+	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
+
+	// First request succeeds (acquires and releases).
+	w1 := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", w1.Code)
+	}
+
+	// Second request should also succeed since first released the slot.
+	w2 := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("second request: expected 200, got %d", w2.Code)
+	}
+}
+
+func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MaxConcurrentExecutions = 0
+	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
+
+	w := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }

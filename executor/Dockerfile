@@ -54,6 +54,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=nsjail-builder /nsjail/nsjail /usr/bin/nsjail
 COPY --from=go-builder /app/executor /executor
 
+# Create an empty chroot directory. nsjail uses this as the filesystem root
+# for sandboxed processes, so only explicitly bind-mounted paths are visible.
+# This prevents student code from reading host files like /etc/passwd or /proc.
+RUN mkdir -p /sandbox-root
+
 # NOTE: The executor process must run as root so nsjail can create namespaces
 # and chroot. Student code runs as nobody (UID 65534) inside the jail via
 # nsjail's --user flag.

@@ -2,6 +2,8 @@ package sandbox
 
 import (
 	"context"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -181,6 +183,42 @@ func TestLimitedBuffer(t *testing.T) {
 	})
 }
 
+func TestChrootDirIsNotRoot(t *testing.T) {
+	// Verify the sandbox uses a restricted chroot, not "/".
+	if chrootDir == "/" {
+		t.Fatal("chrootDir must not be '/' — that exposes the entire host filesystem")
+	}
+	if chrootDir == "" {
+		t.Fatal("chrootDir must not be empty")
+	}
+}
+
+func TestAppendBeforeTerminator(t *testing.T) {
+	args := []string{"--mode", "once", "--", "/usr/bin/python3", "main.py"}
+	got := appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
+	// The new flag should appear right before "--".
+	expected := []string{"--mode", "once", "--bindmount_ro", "/usr/lib64", "--", "/usr/bin/python3", "main.py"}
+	if len(got) != len(expected) {
+		t.Fatalf("length mismatch: got %d, want %d", len(got), len(expected))
+	}
+	for i := range expected {
+		if got[i] != expected[i] {
+			t.Errorf("index %d: got %q, want %q", i, got[i], expected[i])
+		}
+	}
+}
+
+func TestAppendBeforeTerminatorNoTerminator(t *testing.T) {
+	args := []string{"--mode", "once"}
+	got := appendBeforeTerminator(args, "--flag", "val")
+	if len(got) != 4 {
+		t.Fatalf("expected 4 elements, got %d", len(got))
+	}
+	if got[2] != "--flag" || got[3] != "val" {
+		t.Errorf("expected appended at end, got %v", got)
+	}
+}
+
 func TestRunNsjailNotFound(t *testing.T) {
 	cfg := Config{
 		NsjailPath:     "/nonexistent/nsjail",
@@ -319,6 +357,46 @@ func TestTruncationSuffix(t *testing.T) {
 	}
 	if !strings.HasPrefix(result, "abcde") {
 		t.Errorf("expected prefix 'abcde', got %q", result)
+	}
+}
+
+// TestTimeoutDetectionNoFalsePositive verifies that a fast non-zero exit
+// is NOT misclassified as a timeout (regression test for wall-clock heuristic).
+func TestTimeoutDetectionNoFalsePositive(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("test requires linux")
+	}
+
+	falsePath, err := exec.LookPath("false")
+	if err != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := Config{
+		NsjailPath:     falsePath,
+		PythonPath:     "/usr/bin/python3",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "print('hello')",
+		TimeoutMs: 1, // 1ms → timeoutSec=1, very short
+	}
+
+	result, err := Run(context.Background(), cfg, req)
+	if err != nil {
+		t.Logf("Run returned error: %v", err)
+		return
+	}
+
+	// `false` exits with code 1 immediately. The old wall-clock heuristic
+	// would misclassify this as timeout if duration >= 1s. With the new
+	// approach, it should NOT be marked as timed out.
+	if result.TimedOut {
+		t.Errorf("false command should not be detected as timeout: exitCode=%d, duration=%dms",
+			result.ExitCode, result.DurationMs)
+	}
+	if result.ExitCode != 1 {
+		t.Logf("unexpected exit code %d (expected 1 from false)", result.ExitCode)
 	}
 }
 

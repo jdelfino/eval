@@ -224,6 +224,71 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 	}
 }
 
+func TestIntegration_FilesystemIsolation_EtcPasswd(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `
+import os
+try:
+    with open('/etc/passwd') as f:
+        print("LEAKED:" + f.readline())
+except Exception as e:
+    print("BLOCKED:" + type(e).__name__)
+`,
+		TimeoutMs: intPtr(5000),
+	})
+	output := strings.TrimSpace(resp.Output)
+	if strings.HasPrefix(output, "LEAKED:") {
+		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "BLOCKED:") {
+		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+	}
+}
+
+func TestIntegration_FilesystemIsolation_Proc(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `
+import os
+try:
+    entries = os.listdir('/proc')
+    print("LEAKED:" + str(len(entries)))
+except Exception as e:
+    print("BLOCKED:" + type(e).__name__)
+`,
+		TimeoutMs: intPtr(5000),
+	})
+	output := strings.TrimSpace(resp.Output)
+	if strings.HasPrefix(output, "LEAKED:") {
+		t.Fatalf("sandbox should not expose /proc, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "BLOCKED:") {
+		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+	}
+}
+
+func TestIntegration_FilesystemIsolation_PythonStdlib(t *testing.T) {
+	u := executorURL(t)
+	// Verify Python stdlib still works with the restricted chroot.
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `
+import json
+import math
+import os
+print(json.dumps({"pi": round(math.pi, 2), "cwd": os.getcwd()}))
+`,
+		TimeoutMs: intPtr(5000),
+	})
+	if !resp.Success {
+		t.Fatalf("expected Python stdlib to work, got error: %s", resp.Error)
+	}
+	output := strings.TrimSpace(resp.Output)
+	if !strings.Contains(output, "3.14") {
+		t.Errorf("expected pi in output, got %q", output)
+	}
+}
+
 func TestIntegration_StdinEchoed(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
