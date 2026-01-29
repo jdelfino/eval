@@ -6,12 +6,15 @@ WORKDIR /app
 # Install CA certificates
 RUN apk add --no-cache ca-certificates tzdata
 
+# Copy shared packages first (needed by replace directives in go.mod).
+COPY pkg/ /pkg/
+
 # Copy go mod files first (cache layer)
-COPY go.mod go.sum ./
+COPY go-backend/go.mod go-backend/go.sum ./
 RUN go mod download
 
 # Copy source and build
-COPY . .
+COPY go-backend/ .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /app/server \
