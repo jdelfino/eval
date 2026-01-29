@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/time/rate"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/metrics"
@@ -176,5 +177,106 @@ func TestRecovererCatchesPanic(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRateLimitMiddleware_Rejects(t *testing.T) {
+	// Limiter with burst=1, so the second request should be rejected.
+	limiter := rate.NewLimiter(rate.Limit(1), 1)
+
+	called := 0
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called++
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := rateLimitMiddleware(limiter, inner)
+
+	// First request: allowed (consumes the burst token).
+	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec1 := httptest.NewRecorder()
+	handler(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Errorf("first request: status = %d, want %d", rec1.Code, http.StatusOK)
+	}
+
+	// Second request: should be rate limited (no tokens left).
+	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec2 := httptest.NewRecorder()
+	handler(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
+	}
+
+	var resp rateLimitResponse
+	if err := json.NewDecoder(rec2.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Error != "rate limit exceeded" {
+		t.Errorf("error = %q, want %q", resp.Error, "rate limit exceeded")
+	}
+
+	if called != 1 {
+		t.Errorf("inner handler called %d times, want 1", called)
+	}
+}
+
+func TestRateLimitDisabled_WhenRPSZero(t *testing.T) {
+	cfg := &config.Config{
+		Port:           8081,
+		Environment:    "local",
+		NsjailPath:     "/usr/bin/nsjail",
+		PythonPath:     "/usr/bin/python3",
+		RateLimitRPS:   0, // disabled
+		RateLimitBurst: 100,
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+
+	// Should still reach the execute handler (400 due to no body), not 429.
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/execute", nil)
+		rec := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d: got 429 but rate limiting should be disabled", i)
+		}
+	}
+}
+
+func TestRateLimitEnabled_IntegrationWithServer(t *testing.T) {
+	cfg := &config.Config{
+		Port:           8081,
+		Environment:    "local",
+		NsjailPath:     "/usr/bin/nsjail",
+		PythonPath:     "/usr/bin/python3",
+		RateLimitRPS:   1,
+		RateLimitBurst: 1,
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+
+	// First request consumes the burst token.
+	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec1 := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec1, req1)
+
+	// Could be 400 (bad request) since no body, but should NOT be 429.
+	if rec1.Code == http.StatusTooManyRequests {
+		t.Errorf("first request should not be rate limited, got 429")
+	}
+
+	// Second request should be rate limited.
+	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec2 := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 }

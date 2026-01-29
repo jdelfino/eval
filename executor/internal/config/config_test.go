@@ -18,6 +18,8 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("MAX_FILES", "")
 	t.Setenv("MAX_FILE_BYTES", "")
 	t.Setenv("MAX_CONCURRENT_EXECUTIONS", "")
+	t.Setenv("RATE_LIMIT_RPS", "")
+	t.Setenv("RATE_LIMIT_BURST", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -41,6 +43,8 @@ func TestLoadDefaults(t *testing.T) {
 		{"MaxFiles", cfg.MaxFiles, 5},
 		{"MaxFileBytes", cfg.MaxFileBytes, 10240},
 		{"MaxConcurrentExecutions", cfg.MaxConcurrentExecutions, 10},
+		{"RateLimitRPS", cfg.RateLimitRPS, 50.0},
+		{"RateLimitBurst", cfg.RateLimitBurst, 100},
 	}
 
 	for _, tt := range tests {
@@ -65,6 +69,8 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("MAX_FILES", "10")
 	t.Setenv("MAX_FILE_BYTES", "20480")
 	t.Setenv("MAX_CONCURRENT_EXECUTIONS", "20")
+	t.Setenv("RATE_LIMIT_RPS", "100.5")
+	t.Setenv("RATE_LIMIT_BURST", "200")
 
 	cfg, err := Load()
 	if err != nil {
@@ -91,5 +97,11 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.MaxConcurrentExecutions != 20 {
 		t.Errorf("MaxConcurrentExecutions = %d, want 20", cfg.MaxConcurrentExecutions)
+	}
+	if cfg.RateLimitRPS != 100.5 {
+		t.Errorf("RateLimitRPS = %f, want 100.5", cfg.RateLimitRPS)
+	}
+	if cfg.RateLimitBurst != 200 {
+		t.Errorf("RateLimitBurst = %d, want 200", cfg.RateLimitBurst)
 	}
 }

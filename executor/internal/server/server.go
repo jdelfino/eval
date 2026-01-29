@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/time/rate"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
@@ -87,7 +88,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxFileBytes:     cfg.MaxFileBytes,
 		},
 	)
-	r.Post("/execute", execHandler.ServeHTTP)
+	// Wrap /execute with rate limiting if enabled (RPS > 0).
+	var executeHandler http.HandlerFunc = execHandler.ServeHTTP
+	if cfg.RateLimitRPS > 0 {
+		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
+		executeHandler = rateLimitMiddleware(limiter, executeHandler)
+	}
+	r.Post("/execute", executeHandler)
 
 	return &Server{
 		httpServer: &http.Server{
@@ -136,6 +143,24 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 			Status:     status,
 			Components: components,
 		})
+	}
+}
+
+// rateLimitResponse represents the JSON response when rate limit is exceeded.
+type rateLimitResponse struct {
+	Error string `json:"error"`
+}
+
+// rateLimitMiddleware wraps a handler and returns 429 when the limiter rejects.
+func rateLimitMiddleware(limiter *rate.Limiter, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !limiter.Allow() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(rateLimitResponse{Error: "rate limit exceeded"})
+			return
+		}
+		next(w, r)
 	}
 }
 
