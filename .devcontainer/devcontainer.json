@@ -21,7 +21,7 @@
   },
   "initializeCommand": "./.devcontainer/init-1password.sh",
   "postCreateCommand": "./.devcontainer/post-create.sh",
-  "postStartCommand": "./.devcontainer/setup-secrets.sh",
+  "postStartCommand": "./.devcontainer/post-start.sh && ./.devcontainer/setup-secrets.sh",
 
   "remoteEnv": {
     "BD_SOCKET": "/tmp/beads.sock"
