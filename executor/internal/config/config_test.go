@@ -17,6 +17,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("MAX_OUTPUT_BYTES", "")
 	t.Setenv("MAX_FILES", "")
 	t.Setenv("MAX_FILE_BYTES", "")
+	t.Setenv("MAX_CONCURRENT_EXECUTIONS", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -39,6 +40,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"MaxOutputBytes", cfg.MaxOutputBytes, 1048576},
 		{"MaxFiles", cfg.MaxFiles, 5},
 		{"MaxFileBytes", cfg.MaxFileBytes, 10240},
+		{"MaxConcurrentExecutions", cfg.MaxConcurrentExecutions, 10},
 	}
 
 	for _, tt := range tests {
@@ -62,6 +64,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("MAX_OUTPUT_BYTES", "500000")
 	t.Setenv("MAX_FILES", "10")
 	t.Setenv("MAX_FILE_BYTES", "20480")
+	t.Setenv("MAX_CONCURRENT_EXECUTIONS", "20")
 
 	cfg, err := Load()
 	if err != nil {
@@ -85,5 +88,8 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.MaxFileBytes != 20480 {
 		t.Errorf("MaxFileBytes = %d, want 20480", cfg.MaxFileBytes)
+	}
+	if cfg.MaxConcurrentExecutions != 20 {
+		t.Errorf("MaxConcurrentExecutions = %d, want 20", cfg.MaxConcurrentExecutions)
 	}
 }

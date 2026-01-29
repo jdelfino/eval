@@ -18,6 +18,11 @@ import (
 // MaxOutputBytes is the maximum size of stdout/stderr before truncation.
 const MaxOutputBytes = 1024 * 1024 // 1 MB
 
+// chrootDir is the empty directory used as the chroot root for nsjail.
+// Only explicitly bind-mounted paths are visible inside the jail.
+// This directory is created in the Dockerfile.
+const chrootDir = "/sandbox-root"
+
 // truncationSuffix is appended when output is truncated.
 const truncationSuffix = "\n... [output truncated]"
 
@@ -107,9 +112,10 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 
 	// Build nsjail arguments.
+	// Use an empty chroot so only explicitly bind-mounted paths are visible.
 	args := []string{
 		"--mode", "once",
-		"--chroot", "/",
+		"--chroot", chrootDir,
 		"--user", "65534",
 		"--group", "65534",
 		"--time_limit", fmt.Sprintf("%d", timeoutSec),
@@ -119,6 +125,9 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--cwd", "/tmp/work",
 		"--bindmount_ro", cfg.PythonPath,
 		"--bindmount_ro", "/usr/lib",
+		"--bindmount_ro", "/lib",
+		"--bindmount_ro", "/dev/null",
+		"--bindmount_ro", "/dev/urandom",
 		"--bindmount", tempDir + ":/tmp/work",
 		"--env", "PATH=/usr/bin:/bin",
 		"--env", "HOME=/tmp",
@@ -126,6 +135,11 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--env", "PYTHONUNBUFFERED=1",
 		"--really_quiet",
 		"--", cfg.PythonPath, "/tmp/work/main.py",
+	}
+
+	// Add /usr/lib64 bind mount if it exists (needed on some distros).
+	if info, err := os.Stat("/usr/lib64"); err == nil && info.IsDir() {
+		args = appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
 	}
 
 	// Create command with context for cancellation.
@@ -257,6 +271,21 @@ func replaceErrno(s string) string {
 		s = rest[end+1:]
 	}
 	return b.String()
+}
+
+// appendBeforeTerminator inserts flag and value before the "--" terminator in args.
+func appendBeforeTerminator(args []string, flag, value string) []string {
+	for i, a := range args {
+		if a == "--" {
+			result := make([]string, 0, len(args)+2)
+			result = append(result, args[:i]...)
+			result = append(result, flag, value)
+			result = append(result, args[i:]...)
+			return result
+		}
+	}
+	// No terminator found; append at end (shouldn't happen).
+	return append(args, flag, value)
 }
 
 // limitedBuffer is a bytes.Buffer that stops accepting writes after maxBytes.

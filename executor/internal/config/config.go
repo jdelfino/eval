@@ -17,7 +17,8 @@ type Config struct {
 	PythonPath string `env:"PYTHON_PATH" envDefault:"/usr/bin/python3"`
 
 	// Execution Limits
-	DefaultTimeoutMS int `env:"DEFAULT_TIMEOUT_MS" envDefault:"10000"`
+	MaxConcurrentExecutions int `env:"MAX_CONCURRENT_EXECUTIONS" envDefault:"10"`
+	DefaultTimeoutMS        int `env:"DEFAULT_TIMEOUT_MS" envDefault:"10000"`
 	MaxCodeBytes     int `env:"MAX_CODE_BYTES" envDefault:"102400"`
 	MaxStdinBytes    int `env:"MAX_STDIN_BYTES" envDefault:"1048576"`
 	MaxOutputBytes   int `env:"MAX_OUTPUT_BYTES" envDefault:"1048576"`

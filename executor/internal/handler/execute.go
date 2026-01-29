@@ -25,22 +25,24 @@ type SandboxRunner func(ctx context.Context, cfg sandbox.Config, req sandbox.Req
 
 // ExecuteHandlerConfig holds configuration values for the ExecuteHandler.
 type ExecuteHandlerConfig struct {
-	NsjailPath       string
-	PythonPath       string
-	MaxOutputBytes   int
-	DefaultTimeoutMs int
-	MaxCodeBytes     int
-	MaxStdinBytes    int
-	MaxFiles         int
-	MaxFileBytes     int
+	NsjailPath              string
+	PythonPath              string
+	MaxOutputBytes          int
+	DefaultTimeoutMs        int
+	MaxCodeBytes            int
+	MaxStdinBytes           int
+	MaxFiles                int
+	MaxFileBytes            int
+	MaxConcurrentExecutions int
 }
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	logger  *slog.Logger
-	runner  SandboxRunner
-	metrics *metrics.Metrics
-	cfg     ExecuteHandlerConfig
+	logger    *slog.Logger
+	runner    SandboxRunner
+	metrics   *metrics.Metrics
+	cfg       ExecuteHandlerConfig
+	semaphore chan struct{}
 }
 
 // NewExecuteHandler creates an ExecuteHandler with the given dependencies.
@@ -50,11 +52,16 @@ func NewExecuteHandler(
 	m *metrics.Metrics,
 	cfg ExecuteHandlerConfig,
 ) *ExecuteHandler {
+	var sem chan struct{}
+	if cfg.MaxConcurrentExecutions > 0 {
+		sem = make(chan struct{}, cfg.MaxConcurrentExecutions)
+	}
 	return &ExecuteHandler{
-		logger:  logger,
-		runner:  runner,
-		metrics: m,
-		cfg:     cfg,
+		logger:    logger,
+		runner:    runner,
+		metrics:   m,
+		cfg:       cfg,
+		semaphore: sem,
 	}
 }
 
@@ -79,6 +86,18 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, errMsg)
 		return
+	}
+
+	// Try to acquire a concurrency slot (non-blocking).
+	if h.semaphore != nil {
+		select {
+		case h.semaphore <- struct{}{}:
+			defer func() { <-h.semaphore }()
+		default:
+			h.logger.Warn("concurrency limit reached, rejecting request")
+			writeError(w, http.StatusTooManyRequests, "too many concurrent executions")
+			return
+		}
 	}
 
 	// Observe code size.

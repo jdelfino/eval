@@ -181,6 +181,42 @@ func TestLimitedBuffer(t *testing.T) {
 	})
 }
 
+func TestChrootDirIsNotRoot(t *testing.T) {
+	// Verify the sandbox uses a restricted chroot, not "/".
+	if chrootDir == "/" {
+		t.Fatal("chrootDir must not be '/' — that exposes the entire host filesystem")
+	}
+	if chrootDir == "" {
+		t.Fatal("chrootDir must not be empty")
+	}
+}
+
+func TestAppendBeforeTerminator(t *testing.T) {
+	args := []string{"--mode", "once", "--", "/usr/bin/python3", "main.py"}
+	got := appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
+	// The new flag should appear right before "--".
+	expected := []string{"--mode", "once", "--bindmount_ro", "/usr/lib64", "--", "/usr/bin/python3", "main.py"}
+	if len(got) != len(expected) {
+		t.Fatalf("length mismatch: got %d, want %d", len(got), len(expected))
+	}
+	for i := range expected {
+		if got[i] != expected[i] {
+			t.Errorf("index %d: got %q, want %q", i, got[i], expected[i])
+		}
+	}
+}
+
+func TestAppendBeforeTerminatorNoTerminator(t *testing.T) {
+	args := []string{"--mode", "once"}
+	got := appendBeforeTerminator(args, "--flag", "val")
+	if len(got) != 4 {
+		t.Fatalf("expected 4 elements, got %d", len(got))
+	}
+	if got[2] != "--flag" || got[3] != "val" {
+		t.Errorf("expected appended at end, got %v", got)
+	}
+}
+
 func TestRunNsjailNotFound(t *testing.T) {
 	cfg := Config{
 		NsjailPath:     "/nonexistent/nsjail",
