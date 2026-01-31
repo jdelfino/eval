@@ -43,6 +43,20 @@ provider "kubernetes" {
   }
 }
 
+provider "helm" {
+  kubernetes {
+    host                   = "https://${module.gke.endpoint}"
+    cluster_ca_certificate = base64decode(module.gke.ca_certificate)
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "gke-gcloud-auth-plugin"
+      env = {
+        USE_GKE_GCLOUD_AUTH_PLUGIN = "True"
+      }
+    }
+  }
+}
+
 # -----------------------------------------------------------------------------
 # Module Instantiation
 # -----------------------------------------------------------------------------
@@ -172,6 +186,22 @@ module "redis" {
   vpc_network_id = module.vpc.vpc_id
 
   depends_on = [module.vpc]
+}
+
+# -----------------------------------------------------------------------------
+# KEDA (Kubernetes Event-Driven Autoscaling)
+# -----------------------------------------------------------------------------
+# Required for the executor ScaledObject CRD used in k8s/base/.
+
+resource "helm_release" "keda" {
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = "2.16.1"
+  namespace        = "keda"
+  create_namespace = true
+
+  depends_on = [module.gke]
 }
 
 # -----------------------------------------------------------------------------
