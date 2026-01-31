@@ -1,4 +1,6 @@
 #!/bin/bash
+# post-create.sh - Install tools and configure the development environment
+# Runs via postCreateCommand (after container creation)
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -13,6 +15,15 @@ bd hooks install 2>/dev/null || true
 # Install Claude Code
 curl -fsSL https://claude.ai/install.sh | bash
 
+# Install copier (template updates)
+sudo pip3 install copier --break-system-packages
+
+# Fix ownership of node_modules volume (Docker named volumes default to root)
+sudo chown vscode:vscode "/workspaces/eval/node_modules"
+
+# Fix ownership of go mod cache volume (Docker named volumes default to root)
+sudo chown -R vscode:vscode /home/vscode/go/pkg/mod
+
 # Install Air (Go hot reload)
 go install github.com/air-verse/air@latest
 
@@ -26,5 +37,5 @@ echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.clou
 sudo apt-get update
 sudo apt-get install -y google-cloud-cli
 
-# Run project setup
+# Run project setup (1Password vault access, etc.)
 "$SCRIPT_DIR/setup.sh"
