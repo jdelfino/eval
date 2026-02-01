@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jdelfino/eval/internal/auth"
+	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 )
 
@@ -1510,6 +1511,48 @@ func TestAddInstructor_InternalError(t *testing.T) {
 	}
 }
 
+// TestRemoveInstructor_NotMemberButOtherInstructorExists verifies that removing
+// a user who is NOT an instructor of the section returns 404 (not 400) even when
+// other instructors exist. This is the edge case for PLAT-59r: the store must
+// distinguish "target is the last instructor" from "target is not a member at all".
+func TestRemoveInstructor_NotMemberButOtherInstructorExists(t *testing.T) {
+	sectionID := uuid.New()
+	nonMemberUser := uuid.New()
+
+	membRepo := &mockMembershipRepo{
+		deleteMembershipIfNotLastFn: func(_ context.Context, sid, uid uuid.UUID, role string) error {
+			if sid != sectionID {
+				t.Fatalf("unexpected sectionID: %v", sid)
+			}
+			if uid != nonMemberUser {
+				t.Fatalf("unexpected userID: %v", uid)
+			}
+			if role != "instructor" {
+				t.Fatalf("unexpected role: %v", role)
+			}
+			// The store should return ErrNotFound when the target is not a member,
+			// even if there is only one instructor (who is someone else).
+			return store.ErrNotFound
+		},
+	}
+
+	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("userID", nonMemberUser.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.RemoveInstructor(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when target is not a member, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRemoveInstructor_InternalError(t *testing.T) {
 	sectionID := uuid.New()
 	userToRemove := uuid.New()
@@ -1558,5 +1601,117 @@ func TestListInstructors_InternalError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- RBAC Forbidden tests (middleware-level, mimicking server.go routing) ---
+
+// buildSectionInstructorRouter creates a router matching the server.go layout
+// for the instructor+ section endpoints.
+func buildSectionInstructorRouter(h *SectionHandler) chi.Router {
+	r := chi.NewRouter()
+	r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+	r.Get("/sections/{id}/sessions", h.ListSessions)
+	r.Post("/sections/{id}/regenerate-code", h.RegenerateCode)
+	r.Get("/sections/{id}/instructors", h.ListInstructors)
+	r.Post("/sections/{id}/instructors", h.AddInstructor)
+	r.Delete("/sections/{id}/instructors/{userID}", h.RemoveInstructor)
+	return r
+}
+
+func TestListSessions_RBACForbidden(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{}, &mockSessionRepo{}, nil, nil)
+	router := buildSectionInstructorRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/sessions", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET sessions, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRegenerateCode_RBACForbidden(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	router := buildSectionInstructorRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/regenerate-code", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student POST regenerate-code, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListInstructors_RBACForbidden(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, nil)
+	router := buildSectionInstructorRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/instructors", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET instructors, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAddInstructor_RBACForbidden(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, &sectionTestUserRepo{})
+	router := buildSectionInstructorRouter(h)
+
+	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/instructors", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student POST instructors, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRemoveInstructor_RBACForbidden(t *testing.T) {
+	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, nil)
+	router := buildSectionInstructorRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/sections/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student DELETE instructor, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

@@ -663,3 +663,123 @@ func TestUpdateRole_InvalidBody(t *testing.T) {
 		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// --- RBAC Forbidden tests (middleware-level) ---
+
+func TestListSystemUsers_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	req := httptest.NewRequest(http.MethodGet, "/system/users", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleNamespaceAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for namespace-admin GET system users, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateAdmin_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	body := `{"email":"x@example.com"}`
+	req := httptest.NewRequest(http.MethodPut, "/system/users/"+uuid.New().String(), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleNamespaceAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for namespace-admin PUT system user, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteUser_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	req := httptest.NewRequest(http.MethodDelete, "/system/users/"+uuid.New().String(), nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleNamespaceAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for namespace-admin DELETE system user, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestListNamespaceUsers_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/admin/users", h.NamespaceRoutes())
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET admin users, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteNamespaceScoped_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/admin/users", h.NamespaceRoutes())
+
+	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+uuid.New().String(), nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student DELETE admin user, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateRole_RBACForbidden(t *testing.T) {
+	repo := &fullMockUserRepo{}
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/admin/users", h.NamespaceRoutes())
+
+	body := `{"role":"instructor"}`
+	req := httptest.NewRequest(http.MethodPut, "/admin/users/"+uuid.New().String()+"/role", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student PUT admin user role, got %d: %s", w.Code, w.Body.String())
+	}
+}
