@@ -335,3 +335,19 @@ func TestCreateRevision_InternalError(t *testing.T) {
 		t.Fatalf("expected 500, got %d", rec.Code)
 	}
 }
+
+func TestListRevisions_Unauthorized(t *testing.T) {
+	h := NewRevisionHandler(&mockRevisionRepo{})
+	sessionID := uuid.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := revisionRouteCtx(sessionID.String())
+	// No auth user in context
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}

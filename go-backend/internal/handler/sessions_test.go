@@ -370,9 +370,13 @@ func TestCreateSession_InternalError(t *testing.T) {
 func TestUpdateSession_Success(t *testing.T) {
 	sess := testSession()
 	featuredID := uuid.New()
-	sess.FeaturedStudentID = &featuredID
+	updatedSess := *sess
+	updatedSess.FeaturedStudentID = &featuredID
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
 		updateSessionFn: func(_ context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 			if id != sess.ID {
 				t.Fatalf("unexpected id: %v", id)
@@ -380,7 +384,7 @@ func TestUpdateSession_Success(t *testing.T) {
 			if params.FeaturedStudentID == nil || *params.FeaturedStudentID != featuredID {
 				t.Fatalf("unexpected featured_student_id: %v", params.FeaturedStudentID)
 			}
-			return sess, nil
+			return &updatedSess, nil
 		},
 	}
 
@@ -413,14 +417,18 @@ func TestUpdateSession_Success(t *testing.T) {
 }
 
 func TestUpdateSession_EndSession(t *testing.T) {
-	sess := testSession()
+	prevSess := testSession() // status "active"
 	now := time.Now()
-	sess.Status = "completed"
-	sess.EndedAt = &now
+	completedSess := *prevSess
+	completedSess.Status = "completed"
+	completedSess.EndedAt = &now
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
 		updateSessionFn: func(_ context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
-			if id != sess.ID {
+			if id != prevSess.ID {
 				t.Fatalf("unexpected id: %v", id)
 			}
 			if params.Status == nil || *params.Status != "completed" {
@@ -429,7 +437,7 @@ func TestUpdateSession_EndSession(t *testing.T) {
 			if params.EndedAt == nil {
 				t.Fatalf("expected ended_at to be set when status is completed")
 			}
-			return sess, nil
+			return &completedSess, nil
 		},
 	}
 
@@ -437,10 +445,10 @@ func TestUpdateSession_EndSession(t *testing.T) {
 		"status": "completed",
 	})
 	h := NewSessionHandler(repo, noopPublisher(), testLogger())
-	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
+	rctx.URLParams.Add("id", prevSess.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
 	req = req.WithContext(ctx)
@@ -455,7 +463,7 @@ func TestUpdateSession_EndSession(t *testing.T) {
 
 func TestUpdateSession_NotFound(t *testing.T) {
 	repo := &mockSessionRepo{
-		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -578,13 +586,17 @@ func TestUpdateSession_InvalidBody(t *testing.T) {
 }
 
 func TestUpdateSession_InternalError(t *testing.T) {
+	sess := testSession()
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
 		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
 			return nil, errors.New("db error")
 		},
 	}
 
-	id := uuid.New()
+	id := sess.ID
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
 	h := NewSessionHandler(repo, noopPublisher(), testLogger())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
@@ -653,24 +665,28 @@ func TestUpdateSession_RBACForbidden(t *testing.T) {
 // --- Publisher integration tests ---
 
 func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
-	sess := testSession()
+	prevSess := testSession() // status "active"
 	now := time.Now()
-	sess.Status = "completed"
-	sess.EndedAt = &now
+	completedSess := *prevSess
+	completedSess.Status = "completed"
+	completedSess.EndedAt = &now
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
 		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-			return sess, nil
+			return &completedSess, nil
 		},
 	}
 	pub := newMockPublisher()
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
-	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
+	rctx.URLParams.Add("id", prevSess.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
 	req = req.WithContext(ctx)
@@ -687,8 +703,8 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 	if len(pub.sessionEndedCalls) != 1 {
 		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
 	}
-	if pub.sessionEndedCalls[0].sessionID != sess.ID.String() {
-		t.Errorf("expected session_id %q, got %q", sess.ID, pub.sessionEndedCalls[0].sessionID)
+	if pub.sessionEndedCalls[0].sessionID != prevSess.ID.String() {
+		t.Errorf("expected session_id %q, got %q", prevSess.ID, pub.sessionEndedCalls[0].sessionID)
 	}
 	if pub.sessionEndedCalls[0].reason != "completed" {
 		t.Errorf("expected reason %q, got %q", "completed", pub.sessionEndedCalls[0].reason)
@@ -696,15 +712,19 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 }
 
 func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testing.T) {
-	sess := testSession()
+	prevSess := testSession() // no featured student
 	featuredID := uuid.New()
-	sess.FeaturedStudentID = &featuredID
 	featuredCode := "print('featured')"
-	sess.FeaturedCode = &featuredCode
+	updatedSess := *prevSess
+	updatedSess.FeaturedStudentID = &featuredID
+	updatedSess.FeaturedCode = &featuredCode
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
 		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-			return sess, nil
+			return &updatedSess, nil
 		},
 	}
 	pub := newMockPublisher()
@@ -714,10 +734,10 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 		"featured_student_id": featuredID.String(),
 		"featured_code":       featuredCode,
 	})
-	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
+	rctx.URLParams.Add("id", prevSess.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
 	req = req.WithContext(ctx)
@@ -735,8 +755,8 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 		t.Fatalf("expected 1 FeaturedStudentChanged call, got %d", len(pub.featuredStudentChangedCalls))
 	}
 	call := pub.featuredStudentChangedCalls[0]
-	if call.sessionID != sess.ID.String() {
-		t.Errorf("expected session_id %q, got %q", sess.ID, call.sessionID)
+	if call.sessionID != prevSess.ID.String() {
+		t.Errorf("expected session_id %q, got %q", prevSess.ID, call.sessionID)
 	}
 	if call.userID != featuredID.String() {
 		t.Errorf("expected user_id %q, got %q", featuredID, call.userID)
@@ -747,24 +767,28 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 }
 
 func TestUpdateSession_EndSession_SucceedsWhenPublisherFails(t *testing.T) {
-	sess := testSession()
+	prevSess := testSession() // status "active"
 	now := time.Now()
-	sess.Status = "completed"
-	sess.EndedAt = &now
+	completedSess := *prevSess
+	completedSess.Status = "completed"
+	completedSess.EndedAt = &now
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
 		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-			return sess, nil
+			return &completedSess, nil
 		},
 	}
 	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionHandler(repo, pub, testLogger())
 
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
-	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
+	rctx.URLParams.Add("id", prevSess.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
 	req = req.WithContext(ctx)
@@ -778,7 +802,11 @@ func TestUpdateSession_EndSession_SucceedsWhenPublisherFails(t *testing.T) {
 }
 
 func TestUpdateSession_DBError_NoPublish(t *testing.T) {
+	sess := testSession()
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
 		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
 			return nil, errors.New("db error")
 		},
@@ -786,7 +814,7 @@ func TestUpdateSession_DBError_NoPublish(t *testing.T) {
 	pub := newMockPublisher()
 	h := NewSessionHandler(repo, pub, testLogger())
 
-	id := uuid.New()
+	id := sess.ID
 	body, _ := json.Marshal(map[string]any{"status": "completed"})
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -809,5 +837,108 @@ func TestUpdateSession_DBError_NoPublish(t *testing.T) {
 	defer pub.mu.Unlock()
 	if len(pub.sessionEndedCalls) != 0 {
 		t.Errorf("expected no SessionEnded calls when DB fails, got %d", len(pub.sessionEndedCalls))
+	}
+}
+
+func TestListSessions_InvalidStatus(t *testing.T) {
+	repo := &mockSessionRepo{}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+	req := httptest.NewRequest(http.MethodGet, "/?status=invalid", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateSession_IdempotentEnd_NoPublish(t *testing.T) {
+	// Session is already completed; re-sending status=completed should not publish.
+	prevSess := testSession()
+	prevSess.Status = "completed"
+	now := time.Now()
+	prevSess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return prevSess, nil
+		},
+	}
+	pub := newMockPublisher()
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", prevSess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// Brief sleep to confirm no publish calls arrive.
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionEndedCalls) != 0 {
+		t.Errorf("expected no SessionEnded calls on idempotent end, got %d", len(pub.sessionEndedCalls))
+	}
+}
+
+func TestUpdateSession_IdempotentFeaturedStudent_NoPublish(t *testing.T) {
+	// Featured student is already set to the same ID; re-sending should not publish.
+	featuredID := uuid.New()
+	prevSess := testSession()
+	prevSess.FeaturedStudentID = &featuredID
+	code := "print('hello')"
+	prevSess.FeaturedCode = &code
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return prevSess, nil
+		},
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return prevSess, nil
+		},
+	}
+	pub := newMockPublisher()
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	body, _ := json.Marshal(map[string]any{
+		"featured_student_id": featuredID.String(),
+		"featured_code":       code,
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", prevSess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// Brief sleep to confirm no publish calls arrive.
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.featuredStudentChangedCalls) != 0 {
+		t.Errorf("expected no FeaturedStudentChanged calls on idempotent update, got %d", len(pub.featuredStudentChangedCalls))
 	}
 }

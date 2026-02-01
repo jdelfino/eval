@@ -23,6 +23,12 @@ func NewRevisionHandler(revisions store.RevisionRepository) *RevisionHandler {
 
 // List handles GET /api/v1/sessions/{sessionID}/revisions — returns revisions for a session.
 func (h *RevisionHandler) List(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	sessionID, ok := httputil.ParseUUIDParam(w, r, "sessionID")
 	if !ok {
 		return
