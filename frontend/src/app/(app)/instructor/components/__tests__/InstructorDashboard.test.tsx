@@ -11,10 +11,10 @@ import { InstructorDashboard } from '../InstructorDashboard';
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: {
-      id: 'user-1',
-      role: 'instructor',
-      email: 'instructor@test.com',
-      namespaceId: 'namespace-1',
+      ID: 'user-1',
+      Role: 'instructor',
+      Email: 'instructor@test.com',
+      NamespaceID: 'namespace-1',
     },
   }),
 }));

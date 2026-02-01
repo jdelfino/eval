@@ -35,7 +35,7 @@ describe('Landing Page', () => {
   describe('Authenticated User Redirects', () => {
     it('redirects system-admin to /system', async () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { id: '1', username: 'sysadmin', role: 'system-admin' },
+        user: { ID: '1', username: 'sysadmin', Role: 'system-admin' },
         isLoading: false,
       });
 
@@ -48,7 +48,7 @@ describe('Landing Page', () => {
 
     it('redirects namespace-admin to /admin', async () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { id: '1', username: 'adam', role: 'namespace-admin' },
+        user: { ID: '1', username: 'adam', Role: 'namespace-admin' },
         isLoading: false,
       });
 
@@ -61,7 +61,7 @@ describe('Landing Page', () => {
 
     it('redirects instructor to /instructor', async () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { id: '2', username: 'prof', role: 'instructor' },
+        user: { ID: '2', username: 'prof', Role: 'instructor' },
         isLoading: false,
       });
 
@@ -74,7 +74,7 @@ describe('Landing Page', () => {
 
     it('redirects student to /sections', async () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { id: '3', username: 'student1', role: 'student' },
+        user: { ID: '3', username: 'student1', Role: 'student' },
         isLoading: false,
       });
 

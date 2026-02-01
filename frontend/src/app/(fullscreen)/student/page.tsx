@@ -59,8 +59,8 @@ function StudentPage() {
     replacementInfo,
   } = useRealtimeSession({
     sessionId: sessionIdFromUrl || '',
-    userId: user?.id,
-    userName: user?.displayName || user?.email,
+    userId: user?.ID,
+    userName: user?.DisplayName || user?.Email,
   });
 
   // Debugger state - uses API-based trace requests
@@ -85,7 +85,7 @@ function StudentPage() {
 
   // Handle joining the session
   useEffect(() => {
-    if (!sessionIdFromUrl || !user?.id) {
+    if (!sessionIdFromUrl || !user?.ID) {
       return;
     }
 
@@ -118,7 +118,7 @@ function StudentPage() {
       // If session is completed, skip joining and show read-only view
       if (session.status === 'completed') {
         setJoined(true);
-        setStudentId(user.id);
+        setStudentId(user.ID);
         setSessionEnded(true);
         setError(null);
         return;
@@ -126,10 +126,10 @@ function StudentPage() {
 
       setIsJoining(true);
 
-      joinSession(user.id, user.displayName || user.email || 'Student')
-        .then((result) => {
+      joinSession(user.ID, user.DisplayName || user.Email || 'Student')
+        .then((result: any) => {
           setJoined(true);
-          setStudentId(user.id);
+          setStudentId(user.ID);
           setIsJoining(false);
           setError(null);
           // Restore saved code and execution settings from server
@@ -145,7 +145,7 @@ function StudentPage() {
           setIsJoining(false);
         });
     }
-  }, [sessionIdFromUrl, user?.id, user?.email, user?.displayName, joined, isJoining, isConnected, session, joinSession]);
+  }, [sessionIdFromUrl, user?.ID, user?.Email, user?.DisplayName, joined, isJoining, isConnected, session, joinSession]);
 
   // Update problem when session loads
   useEffect(() => {

@@ -215,7 +215,8 @@ describe('useInvitations', () => {
         invitation = await result.current.revokeInvitation('inv-3');
       });
 
-      expect(invitation).toEqual(mockRevokedInvitation);
+      // apiDelete returns void; revokeInvitation returns a stub with id and revokedAt
+      expect(invitation).toMatchObject({ id: 'inv-3' });
       expect(mockApiDelete).toHaveBeenCalledWith('/invitations/inv-3');
     });
 

@@ -20,14 +20,14 @@ describe('SectionCard', () => {
 
   const defaultSection = {
     id: 'section-1',
-    classId: 'class-1',
+    class_id: 'class-1',
     name: 'Section A',
     semester: 'Fall 2026',
     className: 'CS 101',
     classDescription: 'Intro to CS',
     role: 'student' as const,
-    joinCode: 'ABC123',
-    createdAt: '2026-01-01T00:00:00Z',
+    join_code: 'ABC123',
+    created_at: '2026-01-01T00:00:00Z',
   };
 
   beforeEach(() => {

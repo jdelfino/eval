@@ -6,16 +6,9 @@ import { hasRolePermission } from '@/lib/permissions';
 import { useRouter, useParams } from 'next/navigation';
 import { useNamespaces } from '@/hooks/useNamespaces';
 import { apiFetch } from '@/lib/api-client';
+import type { User as ApiUser } from '@/types/api';
 
-interface User {
-  id: string;
-  email: string;
-  displayName?: string;
-  role: string;
-  createdAt: string;
-}
-
-interface Namespace {
+interface NamespaceDetail {
   id: string;
   displayName: string;
   active: boolean;
@@ -45,8 +38,8 @@ export default function NamespaceUsersPage() {
     deleteUser,
   } = useNamespaces();
 
-  const [namespace, setNamespace] = useState<Namespace | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [namespace, setNamespace] = useState<NamespaceDetail | null>(null);
+  const [users, setUsers] = useState<ApiUser[]>([]);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingRole, setEditingRole] = useState<'namespace-admin' | 'instructor' | 'student'>('student');
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -54,14 +47,14 @@ export default function NamespaceUsersPage() {
 
   // Redirect if not system admin
   useEffect(() => {
-    if (!authLoading && (!currentUser || !hasRolePermission(currentUser.role, 'system.admin'))) {
+    if (!authLoading && (!currentUser || !hasRolePermission(currentUser.Role, 'system.admin'))) {
       router.push('/');
     }
   }, [currentUser, authLoading, router]);
 
   // Fetch namespace and users
   useEffect(() => {
-    if (currentUser && hasRolePermission(currentUser.role, 'system.admin') && namespaceId) {
+    if (currentUser && hasRolePermission(currentUser.Role, 'system.admin') && namespaceId) {
       fetchData();
     }
   }, [currentUser, namespaceId]);
@@ -113,7 +106,7 @@ export default function NamespaceUsersPage() {
   }
 
   // Verify system admin role
-  if (!hasRolePermission(currentUser.role, 'system.admin')) {
+  if (!hasRolePermission(currentUser.Role, 'system.admin')) {
     return null; // Will redirect
   }
 
@@ -171,15 +164,15 @@ export default function NamespaceUsersPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {users.map(user => (
-            <Card key={user.id} variant="outlined" className="p-6">
+            <Card key={user.ID} variant="outlined" className="p-6">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-1">{user.displayName || user.email}</h3>
-                  {user.displayName && (
-                    <p className="text-sm text-gray-500 mb-2">{user.email}</p>
+                  <h3 className="text-lg font-semibold mb-1">{user.DisplayName || user.Email}</h3>
+                  {user.DisplayName && (
+                    <p className="text-sm text-gray-500 mb-2">{user.Email}</p>
                   )}
 
-                  {editingUserId === user.id ? (
+                  {editingUserId === user.ID ? (
                     <div className="flex gap-2 items-center mb-2">
                       <select
                         value={editingRole}
@@ -194,7 +187,7 @@ export default function NamespaceUsersPage() {
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => handleUpdateRole(user.id)}
+                        onClick={() => handleUpdateRole(user.ID)}
                         disabled={loading}
                         className="bg-green-600 hover:bg-green-700 from-green-600 to-green-600 hover:from-green-700 hover:to-green-700"
                       >
@@ -211,19 +204,19 @@ export default function NamespaceUsersPage() {
                     </div>
                   ) : (
                     <div className="mb-2">
-                      <Badge variant={getRoleBadgeVariant(user.role)}>
-                        {user.role}
+                      <Badge variant={getRoleBadgeVariant(user.Role)}>
+                        {user.Role}
                       </Badge>
                     </div>
                   )}
 
                   <div className="text-sm text-gray-500">
-                    Created: {new Date(user.createdAt).toLocaleString()}
+                    Created: {new Date(user.CreatedAt).toLocaleString()}
                   </div>
                 </div>
 
                 {/* User Actions */}
-                {deletingUserId === user.id ? (
+                {deletingUserId === user.ID ? (
                   <Alert variant="warning" className="p-4 ml-4">
                     <p className="text-sm mb-2">
                       Delete this user?
@@ -232,7 +225,7 @@ export default function NamespaceUsersPage() {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => handleDeleteUser(user.id)}
+                        onClick={() => handleDeleteUser(user.ID)}
                         disabled={loading}
                       >
                         Yes
@@ -253,8 +246,8 @@ export default function NamespaceUsersPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        setEditingUserId(user.id);
-                        setEditingRole(user.role as 'namespace-admin' | 'instructor' | 'student');
+                        setEditingUserId(user.ID);
+                        setEditingRole(user.Role as 'namespace-admin' | 'instructor' | 'student');
                       }}
                       disabled={loading}
                     >
@@ -263,7 +256,7 @@ export default function NamespaceUsersPage() {
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => setDeletingUserId(user.id)}
+                      onClick={() => setDeletingUserId(user.ID)}
                       disabled={loading}
                     >
                       Delete

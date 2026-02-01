@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
 import { hasRolePermission } from '@/lib/permissions';
-import type { Class, Section } from '@/types/classes';
+import type { Class, Section } from '@/types/api';
 import { apiFetch } from '@/lib/api-client';
 import SectionCard from '../components/SectionCard';
 import CreateSectionForm from '../components/CreateSectionForm';
@@ -37,7 +37,7 @@ export default function ClassDetailsPage() {
     }
 
     // Check if user has permission to read classes
-    if (user && !hasRolePermission(user.role, 'class.read')) {
+    if (user && !hasRolePermission(user.Role, 'class.read')) {
       router.push('/');
       return;
     }
@@ -70,7 +70,7 @@ export default function ClassDetailsPage() {
   const handleRegenerateCode = async (sectionId: string) => {
     const newCode = await regenerateJoinCode(sectionId);
     setSections(sections.map(s => 
-      s.id === sectionId ? { ...s, joinCode: newCode } : s
+      s.id === sectionId ? { ...s, join_code: newCode } : s
     ));
     return newCode;
   };
@@ -93,7 +93,7 @@ export default function ClassDetailsPage() {
     );
   }
 
-  if (!user || !hasRolePermission(user.role, 'class.read') || !classData) {
+  if (!user || !hasRolePermission(user.Role, 'class.read') || !classData) {
     return null;
   }
 

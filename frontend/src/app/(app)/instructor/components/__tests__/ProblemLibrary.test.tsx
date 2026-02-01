@@ -47,10 +47,10 @@ jest.mock('../ProblemCard', () => {
 
 describe('ProblemLibrary', () => {
   const mockUser = {
-    id: 'user-123',
-    role: 'instructor' as const,
-    displayName: 'Test Instructor',
-    createdAt: '2025-01-01T00:00:00.000Z',
+    ID: 'user-123',
+    Role: 'instructor' as const,
+    DisplayName: 'Test Instructor',
+    CreatedAt: '2025-01-01T00:00:00.000Z',
   };
 
   const mockProblems = [
@@ -338,8 +338,8 @@ describe('ProblemLibrary', () => {
 
   describe('Class picker', () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS 101', namespaceId: 'ns-1' },
-      { id: 'class-2', name: 'CS 201', namespaceId: 'ns-1' },
+      { id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' },
+      { id: 'class-2', name: 'CS 201', namespace_id: 'ns-1' },
     ];
 
     beforeEach(() => {

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { Section } from '@/types/classes';
+import type { Section } from '@/types/api';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { apiFetch } from '@/lib/api-client';
 
@@ -30,7 +30,7 @@ export default function SectionCard({
   instructorNames: _instructorNames = {}
 }: SectionCardProps) {
   const [showJoinCode, setShowJoinCode] = useState(true);
-  const [joinCode, setJoinCode] = useState(section.joinCode);
+  const [joinCode, setJoinCode] = useState(section.join_code);
   const [regenerating, setRegenerating] = useState(false);
   const [addingInstructor, setAddingInstructor] = useState(false);
   const [newInstructorEmail, setNewInstructorEmail] = useState('');
@@ -235,7 +235,7 @@ export default function SectionCard({
 
       {/* Statistics */}
       <div className="border-t pt-4 text-sm text-gray-600">
-        <p>Created {new Date(section.createdAt).toLocaleDateString()}</p>
+        <p>Created {new Date(section.created_at).toLocaleDateString()}</p>
       </div>
 
       <ConfirmDialog

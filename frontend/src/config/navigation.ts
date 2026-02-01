@@ -3,8 +3,8 @@
  * Defines navigation items, groups, breadcrumb hierarchy, and role-based filtering.
  */
 
-/** User roles in the system */
-export type UserRole = 'system-admin' | 'namespace-admin' | 'instructor' | 'student';
+import type { UserRole } from '@/types/api';
+export type { UserRole };
 
 /** Navigation groups for sidebar sections */
 export enum NavGroup {

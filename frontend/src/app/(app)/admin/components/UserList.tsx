@@ -8,10 +8,18 @@ import React, { useState } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { User } from '@/types/auth';
+/** User as returned by admin user-list endpoints (camelCase wire format). */
+interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  displayName?: string;
+  createdAt: Date | string;
+  lastLoginAt?: Date | string;
+}
 
 interface UserListProps {
-  users: User[];
+  users: AdminUser[];
   currentUserId: string;
   onDelete?: (userId: string, username: string) => Promise<void>;
   showActions?: boolean;

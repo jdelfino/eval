@@ -24,7 +24,7 @@ jest.mock('@/hooks/useDebugger', () => ({
 }));
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'user-1', username: 'TestStudent' },
+    user: { ID: 'user-1', username: 'TestStudent' },
     signOut: jest.fn(),
   }),
 }));
@@ -65,7 +65,7 @@ const mockUseRealtimeSession = useRealtimeSession as jest.Mock;
 describe('Student Page - Viewport Layout', () => {
   const activeSessionState = {
     session: {
-      id: 'session-123',
+      ID: 'session-123',
       problem: { title: 'Test', description: 'Test problem' },
       status: 'active',
     },

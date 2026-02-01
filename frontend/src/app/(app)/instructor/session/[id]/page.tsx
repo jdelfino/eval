@@ -68,8 +68,8 @@ export default function InstructorSessionPage() {
     replacementInfo,
   } = useRealtimeSession({
     sessionId: sessionId || '',
-    userId: user?.id,
-    userName: user?.displayName || user?.email,
+    userId: user?.ID,
+    userName: user?.DisplayName || user?.Email,
   });
 
   // Cast session to include additional API fields like joinCode

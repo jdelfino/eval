@@ -32,14 +32,14 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
 
   // Load user's current namespace display name
   useEffect(() => {
-    if (!user || !user.namespaceId) return;
+    if (!user || !user.NamespaceID) return;
 
     const loadCurrentNamespace = async () => {
       try {
         // For system admin, we fetch all namespaces anyway, so skip this
-        if (user.role === 'system-admin') return;
+        if (user.Role === 'system-admin') return;
 
-        const response = await apiFetch(`/system/namespaces/${user.namespaceId}`);
+        const response = await apiFetch(`/system/namespaces/${user.NamespaceID}`);
         const data = await response.json();
         if (data.success && data.namespace) {
           setCurrentNamespace(data.namespace);
@@ -54,7 +54,7 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
 
   // Load all namespaces for system-admin
   useEffect(() => {
-    if (!user || user.role !== 'system-admin') return;
+    if (!user || user.Role !== 'system-admin') return;
 
     const loadNamespaces = async () => {
       setIsLoading(true);
@@ -66,7 +66,7 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
 
           // Load selected namespace from localStorage or default to user's namespace
           const savedNamespaceId = localStorage.getItem('selectedNamespaceId');
-          const initialNamespaceId = savedNamespaceId || user.namespaceId || 'default';
+          const initialNamespaceId = savedNamespaceId || user.NamespaceID || 'default';
           setSelectedNamespaceId(initialNamespaceId);
 
           // Set current namespace
@@ -100,13 +100,13 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
   if (!user) return null;
 
   // For non-system-admin users: Show namespace name (read-only)
-  if (user.role !== 'system-admin') {
-    if (!currentNamespace && !user.namespaceId) return null;
-    
+  if (user.Role !== 'system-admin') {
+    if (!currentNamespace && !user.NamespaceID) return null;
+
     return (
       <div className={`flex items-center space-x-2 ${className}`}>
         <span className="text-sm text-gray-600 dark:text-gray-400">
-          {currentNamespace?.displayName || user.namespaceId || 'Default'}
+          {currentNamespace?.displayName || user.NamespaceID || 'Default'}
         </span>
       </div>
     );

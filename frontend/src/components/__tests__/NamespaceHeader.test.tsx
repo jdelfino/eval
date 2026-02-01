@@ -13,6 +13,27 @@ const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 // Mock fetch
 global.fetch = jest.fn();
 
+function mockAuthUser(overrides: Record<string, unknown> = {}) {
+  return {
+    user: {
+      ID: 'user1',
+      ExternalID: null,
+      Email: 'user1@example.com',
+      Role: 'instructor' as const,
+      NamespaceID: 'stanford',
+      DisplayName: 'User One',
+      CreatedAt: '2024-01-01T00:00:00Z',
+      UpdatedAt: '2024-01-01T00:00:00Z',
+      ...overrides,
+    },
+    isAuthenticated: true,
+    isLoading: false,
+    signIn: jest.fn(),
+    signOut: jest.fn(),
+    refreshUser: jest.fn(),
+  };
+}
+
 describe('NamespaceHeader', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -22,30 +43,14 @@ describe('NamespaceHeader', () => {
 
   describe('For non-system-admin users', () => {
     it('displays namespace name for instructor', async () => {
-      // Mock user as instructor
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'user1',
-          email: 'instructor1@example.com',
-          role: 'instructor',
-          namespaceId: 'stanford',
-          displayName: 'Instructor One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        ID: 'user1',
+        Email: 'instructor1@example.com',
+        Role: 'instructor',
+        NamespaceID: 'stanford',
+        DisplayName: 'Instructor One',
+      }));
 
-      // Mock fetch for namespace details
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -68,27 +73,13 @@ describe('NamespaceHeader', () => {
     });
 
     it('displays namespace name for namespace-admin', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'admin1',
-          email: 'admin@example.com',
-          role: 'namespace-admin',
-          namespaceId: 'mit',
-          displayName: 'Admin One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        ID: 'admin1',
+        Email: 'admin@example.com',
+        Role: 'namespace-admin',
+        NamespaceID: 'mit',
+        DisplayName: 'Admin One',
+      }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -112,27 +103,13 @@ describe('NamespaceHeader', () => {
     });
 
     it('displays namespace name for student', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'student1',
-          email: 'student1@example.com',
-          role: 'student',
-          namespaceId: 'stanford',
-          displayName: 'Student One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        ID: 'student1',
+        Email: 'student1@example.com',
+        Role: 'student',
+        NamespaceID: 'stanford',
+        DisplayName: 'Student One',
+      }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -156,27 +133,9 @@ describe('NamespaceHeader', () => {
     });
 
     it('falls back to namespaceId if displayName is not available', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'user1',
-          email: 'user1@example.com',
-          role: 'instructor',
-          namespaceId: 'testns',
-          displayName: 'User One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        NamespaceID: 'testns',
+      }));
 
       // Mock fetch to fail
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -193,27 +152,7 @@ describe('NamespaceHeader', () => {
     });
 
     it('does not show dropdown for non-system-admin users', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'user1',
-          email: 'user1@example.com',
-          role: 'instructor',
-          namespaceId: 'stanford',
-          displayName: 'User One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser());
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -240,27 +179,13 @@ describe('NamespaceHeader', () => {
 
   describe('For system-admin users', () => {
     it('displays namespace dropdown for system-admin', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'sysadmin1',
-          email: 'sysadmin@example.com',
-          role: 'system-admin',
-          namespaceId: 'default',
-          displayName: 'System Admin',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        ID: 'sysadmin1',
+        Email: 'sysadmin@example.com',
+        Role: 'system-admin',
+        NamespaceID: 'default',
+        DisplayName: 'System Admin',
+      }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -297,7 +222,7 @@ describe('NamespaceHeader', () => {
         expect(screen.getByLabelText('Namespace:')).toBeInTheDocument();
         const select = screen.getByRole('combobox') as HTMLSelectElement;
         expect(select).toBeInTheDocument();
-        
+
         // Check that all namespaces are in the dropdown
         expect(screen.getByText(/Default \(5 users\)/)).toBeInTheDocument();
         expect(screen.getByText(/Stanford University \(10 users\)/)).toBeInTheDocument();
@@ -308,27 +233,13 @@ describe('NamespaceHeader', () => {
     it('loads selected namespace from localStorage', async () => {
       localStorage.setItem('selectedNamespaceId', 'stanford');
 
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'sysadmin1',
-          email: 'sysadmin@example.com',
-          role: 'system-admin',
-          namespaceId: 'default',
-          displayName: 'System Admin',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        ID: 'sysadmin1',
+        Email: 'sysadmin@example.com',
+        Role: 'system-admin',
+        NamespaceID: 'default',
+        DisplayName: 'System Admin',
+      }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -366,17 +277,11 @@ describe('NamespaceHeader', () => {
     it('returns null when user is not authenticated', () => {
       mockUseAuth.mockReturnValue({
         user: null,
-        sessionId: null,
         isAuthenticated: false,
         isLoading: false,
         signIn: jest.fn(),
         signOut: jest.fn(),
         refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
       });
 
       const { container } = render(<NamespaceHeader />);
@@ -384,54 +289,18 @@ describe('NamespaceHeader', () => {
     });
 
     it('returns null when user has no namespaceId', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'user1',
-          email: 'user1@example.com',
-          role: 'instructor',
-          namespaceId: null,
-          displayName: 'User One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        NamespaceID: null,
+      }));
 
       const { container } = render(<NamespaceHeader />);
       expect(container.firstChild).toBeNull();
     });
 
     it('handles fetch errors gracefully', async () => {
-      mockUseAuth.mockReturnValue({
-        user: {
-          id: 'user1',
-          email: 'user1@example.com',
-          role: 'instructor',
-          namespaceId: 'stanford',
-          displayName: 'User One',
-          createdAt: '2024-01-01T00:00:00Z',
-        },
-        sessionId: 'session1',
-        isAuthenticated: true,
-        isLoading: false,
-        signIn: jest.fn(),
-        signOut: jest.fn(),
-        refreshUser: jest.fn(),
-        mfaPending: false,
-        pendingEmail: null,
-        sendMfaCode: jest.fn(),
-        verifyMfaCode: jest.fn(),
-        cancelMfa: jest.fn(),
-      });
+      mockUseAuth.mockReturnValue(mockAuthUser({
+        NamespaceID: 'stanford',
+      }));
 
       // Mock fetch to throw error
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));

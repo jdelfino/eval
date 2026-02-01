@@ -91,12 +91,12 @@ describe('InstructorSessionPage', () => {
   const mockFeatureStudent = jest.fn();
 
   const mockUser = {
-    id: 'user-1',
-    email: 'instructor@example.com',
-    displayName: 'Test Instructor',
-    role: 'instructor' as const,
-    namespaceId: 'namespace-1',
-    createdAt: '2024-01-01',
+    ID: 'user-1',
+    Email: 'instructor@example.com',
+    DisplayName: 'Test Instructor',
+    Role: 'instructor' as const,
+    NamespaceID: 'namespace-1',
+    CreatedAt: '2024-01-01',
   };
 
   const mockSession = {
@@ -115,8 +115,8 @@ describe('InstructorSessionPage', () => {
   };
 
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', code: 'print("Hello")', executionSettings: {} },
-    { id: 'student-2', name: 'Bob', code: '', executionSettings: {} },
+    { userId: 'student-1', name: 'Alice', code: 'print("Hello")', executionSettings: {} },
+    { userId: 'student-2', name: 'Bob', code: '', executionSettings: {} },
   ];
 
   const mockClearFeaturedStudent = jest.fn();
@@ -466,7 +466,7 @@ describe('InstructorSessionPage', () => {
 
     it('uses email as fallback for userName', () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { ...mockUser, displayName: undefined },
+        user: { ...mockUser, DisplayName: undefined },
         isLoading: false,
       });
 
@@ -484,7 +484,7 @@ describe('InstructorSessionPage', () => {
     it('transforms realtime students to display format', () => {
       const studentsWithSettings = [
         {
-          id: 'student-1',
+          userId: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
           executionSettings: { stdin: 'test input', randomSeed: 42 },

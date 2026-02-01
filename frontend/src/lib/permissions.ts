@@ -9,7 +9,9 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type UserRole = 'system-admin' | 'namespace-admin' | 'instructor' | 'student';
+// Re-export canonical UserRole from types/api
+export type { UserRole } from '@/types/api';
+import type { UserRole } from '@/types/api';
 
 export type Permission =
   | 'session.create'

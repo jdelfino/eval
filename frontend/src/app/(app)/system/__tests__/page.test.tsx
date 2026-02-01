@@ -19,9 +19,9 @@ jest.mock('next/navigation', () => ({
 
 // Mock AuthContext
 const mockUser = {
-  id: 'admin-1',
-  role: 'system-admin' as const,
-  namespaceId: null,
+  ID: 'admin-1',
+  Role: 'system-admin' as const,
+  NamespaceID: null,
 };
 
 const mockSignOut = jest.fn();
@@ -42,8 +42,8 @@ const mockDeleteNamespace = jest.fn();
 jest.mock('@/hooks/useNamespaces', () => ({
   useNamespaces: () => ({
     namespaces: [
-      { id: 'ns-1', displayName: 'Test Org 1', active: true, userCount: 10 },
-      { id: 'ns-2', displayName: 'Test Org 2', active: true, userCount: 5 },
+      { id: 'ns-1', display_name: 'Test Org 1', active: true, userCount: 10 },
+      { id: 'ns-2', display_name: 'Test Org 2', active: true, userCount: 5 },
     ],
     loading: false,
     error: null,

@@ -2,11 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-interface Namespace {
-  id: string;
-  displayName: string;
-  active: boolean;
-}
+import type { Namespace } from '@/types/api';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,7 +15,7 @@ interface NamespaceWithStats extends Namespace {
 
 interface NamespaceListProps {
   namespaces: NamespaceWithStats[];
-  onUpdate: (id: string, updates: { displayName?: string; active?: boolean }) => Promise<Namespace>;
+  onUpdate: (id: string, updates: { display_name?: string; active?: boolean }) => Promise<Namespace>;
   onDelete: (id: string) => Promise<void>;
   loading: boolean;
 }
@@ -33,7 +29,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
 
   const handleEdit = (namespace: NamespaceWithStats) => {
     setEditingId(namespace.id);
-    setEditDisplayName(namespace.displayName);
+    setEditDisplayName(namespace.display_name);
   };
 
   const handleSaveEdit = async (id: string) => {
@@ -41,7 +37,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
 
     setActionLoading(true);
     try {
-      await onUpdate(id, { displayName: editDisplayName.trim() });
+      await onUpdate(id, { display_name: editDisplayName.trim() });
       setEditingId(null);
     } catch (err) {
       console.error('Failed to update namespace:', err);
@@ -142,7 +138,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-semibold mb-1">
-                      {namespace.displayName}
+                      {namespace.display_name}
                     </h3>
                     <div className="text-sm text-gray-500 font-mono">
                       {namespace.id}
@@ -162,7 +158,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
               <strong className="text-gray-700">Users:</strong> {namespace.userCount}
             </div>
             <div>
-              <strong className="text-gray-700">Created:</strong> {new Date(namespace.createdAt).toLocaleDateString()}
+              <strong className="text-gray-700">Created:</strong> {new Date(namespace.created_at).toLocaleDateString()}
             </div>
           </div>
 

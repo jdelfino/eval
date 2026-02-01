@@ -35,7 +35,7 @@ interface PublicProblem {
 
 const getProblem = cache(async function getProblem(id: string): Promise<PublicProblem | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/public/problems/${id}`, {
+    const res = await fetch(`${API_BASE}/public/problems/${id}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;

@@ -13,12 +13,14 @@ jest.mock('next/navigation', () => ({
 
 // Mock AuthContext
 const mockUser = {
-  id: 'admin-1',
-  role: 'system-admin' as const,
-  namespaceId: 'ns-1',
-  email: 'admin@test.com',
-  displayName: 'Admin',
-  createdAt: new Date(),
+  ID: 'admin-1',
+  Role: 'system-admin' as const,
+  NamespaceID: 'ns-1',
+  Email: 'admin@test.com',
+  DisplayName: 'Admin',
+  CreatedAt: new Date().toISOString(),
+  UpdatedAt: new Date().toISOString(),
+  ExternalID: null,
 };
 
 jest.mock('@/contexts/AuthContext', () => ({

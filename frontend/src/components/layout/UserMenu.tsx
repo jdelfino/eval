@@ -48,7 +48,7 @@ export function UserMenu() {
     return null;
   }
 
-  const displayName = user.displayName || user.email;
+  const displayName = user.DisplayName || user.Email;
 
   const handleSignOut = async () => {
     setIsOpen(false);
@@ -82,10 +82,10 @@ export function UserMenu() {
           {/* User info section */}
           <div className="px-4 py-2 border-b border-gray-100">
             <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
-            {user.displayName && user.email !== user.displayName && (
-              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            {user.DisplayName && user.Email !== user.DisplayName && (
+              <p className="text-xs text-gray-500 truncate">{user.Email}</p>
             )}
-            <p className="text-xs text-gray-400 capitalize mt-0.5">{user.role.replace('-', ' ')}</p>
+            <p className="text-xs text-gray-400 capitalize mt-0.5">{user.Role.replace('-', ' ')}</p>
           </div>
 
           {/* Menu items */}

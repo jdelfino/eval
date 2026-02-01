@@ -18,15 +18,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "test:integration:sandbox": "jest --config '{\"preset\": \"ts-jest\", \"testEnvironment\": \"node\", \"testMatch\": [\"**/*.integration.test.ts\"]}' --runInBand",
-    "seed-data": "supabase db reset",
-    "supabase:start": "supabase start",
-    "supabase:stop": "supabase stop",
-    "supabase:reset": "supabase db reset",
-    "supabase:studio": "echo 'Supabase Studio available at http://localhost:54323'",
-    "supabase:migrate": "supabase db reset",
-    "db:reset": "supabase db reset",
-    "ops:db-reset": "tsx ops/db-reset.ts"
+    "test:integration:sandbox": "jest --config '{\"preset\": \"ts-jest\", \"testEnvironment\": \"node\", \"testMatch\": [\"**/*.integration.test.ts\"]}' --runInBand"
   },
   "repository": {
     "type": "git",

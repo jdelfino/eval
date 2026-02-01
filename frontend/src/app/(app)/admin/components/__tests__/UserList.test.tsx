@@ -5,32 +5,27 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import UserList from '../UserList';
-import type { User } from '@/types/auth';
-
-const mockUsers: User[] = [
+const mockUsers = [
   {
     id: 'user-1',
     email: 'alice@example.com',
     role: 'instructor',
-    namespaceId: 'ns-1',
     displayName: 'Alice Smith',
-    createdAt: new Date('2024-01-15'),
-    lastLoginAt: new Date('2024-06-01'),
+    createdAt: '2024-01-15T00:00:00Z',
+    lastLoginAt: '2024-06-01T00:00:00Z',
   },
   {
     id: 'user-2',
     email: 'bob@example.com',
     role: 'student',
-    namespaceId: 'ns-1',
     displayName: '',
-    createdAt: new Date('2024-03-20'),
+    createdAt: '2024-03-20T00:00:00Z',
   },
   {
     id: 'user-3',
     email: 'carol@example.com',
     role: 'student',
-    namespaceId: 'ns-1',
-    createdAt: new Date('2024-04-10'),
+    createdAt: '2024-04-10T00:00:00Z',
   },
 ];
 

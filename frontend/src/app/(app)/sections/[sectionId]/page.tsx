@@ -167,11 +167,11 @@ export default function SectionDetailPage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                            {session.problem?.title || 'Coding Session'}
+                            {(session.problem as {title?: string; description?: string} | null)?.title || 'Coding Session'}
                           </h3>
-                          {session.problem?.description && (
+                          {(session.problem as {title?: string; description?: string} | null)?.description && (
                             <p className="text-gray-600 mb-2 line-clamp-2">
-                              {session.problem.description}
+                              {(session.problem as {description?: string})?.description}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -181,7 +181,7 @@ export default function SectionDetailPage() {
                               </svg>
                               {session.participants?.length || 0} student{session.participants?.length !== 1 ? 's' : ''}
                             </span>
-                            <span>Started {formatDate(session.createdAt)}</span>
+                            <span>Started {formatDate(session.created_at)}</span>
                           </div>
                         </div>
                       </div>
@@ -235,11 +235,11 @@ export default function SectionDetailPage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                            {session.problem?.title || 'Coding Session'}
+                            {(session.problem as {title?: string; description?: string} | null)?.title || 'Coding Session'}
                           </h3>
-                          {session.problem?.description && (
+                          {(session.problem as {title?: string; description?: string} | null)?.description && (
                             <p className="text-gray-600 mb-2 line-clamp-1 text-sm">
-                              {session.problem.description}
+                              {(session.problem as {description?: string})?.description}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -253,7 +253,7 @@ export default function SectionDetailPage() {
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              {formatDate(session.createdAt)}
+                              {formatDate(session.created_at)}
                             </span>
                             <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
                               Completed

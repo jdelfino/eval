@@ -3,20 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
-import type { Session } from '@/types/session';
+import type { Session } from '@/types/api';
 
 export const ACTIVE_SESSION_POLL_INTERVAL_MS = 10000;
 
 interface SectionWithClass {
   id: string;
-  classId: string;
+  class_id: string;
   name: string;
-  semester?: string;
+  semester?: string | null;
   className: string;
   classDescription: string;
   role: 'instructor' | 'student';
-  joinCode: string;
-  createdAt: string | Date;
+  join_code: string;
+  created_at: string;
 }
 
 interface SectionCardProps {
@@ -116,19 +116,19 @@ export default function SectionCard({ section, getActiveSessions }: SectionCardP
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-base font-semibold text-gray-900 truncate">
-                        {session.problem?.title || 'Coding Session'}
+                        {(session.problem as {title?: string} | null)?.title || 'Coding Session'}
                       </p>
                       <div className="flex items-center gap-4 mt-1">
                         <p className="text-sm text-gray-600 flex items-center gap-1">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                           </svg>
-                          {session.students?.size || 0} student{session.students?.size !== 1 ? 's' : ''} joined
+                          {session.participants?.length || 0} student{session.participants?.length !== 1 ? 's' : ''} joined
                         </p>
-                        {session.problem?.description && (
+                        {(session.problem as {description?: string} | null)?.description && (
                           <p className="text-sm text-gray-500 truncate">
-                            {session.problem.description.substring(0, 80)}
-                            {session.problem.description.length > 80 ? '...' : ''}
+                            {((session.problem as {description: string}).description).substring(0, 80)}
+                            {(session.problem as {description: string}).description.length > 80 ? '...' : ''}
                           </p>
                         )}
                       </div>

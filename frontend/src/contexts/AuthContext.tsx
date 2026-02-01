@@ -13,19 +13,8 @@ import {
 } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebase';
 import { apiGet } from '@/lib/api-client';
-
-/**
- * User type matching Go backend PascalCase JSON fields.
- */
-export interface User {
-  ID: string;
-  Email: string;
-  Role: 'system-admin' | 'namespace-admin' | 'instructor' | 'student';
-  NamespaceID: string | null;
-  DisplayName: string | null;
-  CreatedAt: string;
-  UpdatedAt: string;
-}
+import type { User } from '@/types/api';
+export type { User };
 
 interface AuthContextType {
   user: User | null;
@@ -47,7 +36,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
-    return apiGet<User>('/api/v1/auth/me');
+    return apiGet<User>('/auth/me');
   }, []);
 
   // Listen to Firebase auth state changes

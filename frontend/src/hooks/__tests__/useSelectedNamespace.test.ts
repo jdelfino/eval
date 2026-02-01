@@ -7,7 +7,7 @@ import { renderHook } from '@testing-library/react';
 import { useSelectedNamespace, useNamespaceQueryParam } from '../useSelectedNamespace';
 
 // Mock useAuth
-let mockUser: any = { role: 'system-admin', namespaceId: 'default' };
+let mockUser: any = { Role: 'system-admin', NamespaceID: 'default' };
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
@@ -16,8 +16,7 @@ describe('useSelectedNamespace', () => {
   beforeEach(() => {
     localStorage.clear();
     // Reset mockUser to defaults
-    mockUser.role = 'system-admin';
-    mockUser.namespaceId = 'default';
+    mockUser = { Role: 'system-admin', NamespaceID: 'default' };
   });
 
   it('returns localStorage value for system-admin', () => {
@@ -26,14 +25,13 @@ describe('useSelectedNamespace', () => {
     expect(result.current).toBe('custom-ns');
   });
 
-  it('returns user namespaceId for system-admin when no localStorage', () => {
+  it('returns user NamespaceID for system-admin when no localStorage', () => {
     const { result } = renderHook(() => useSelectedNamespace());
     expect(result.current).toBe('default');
   });
 
-  it('returns user namespaceId for non-system-admin', () => {
-    mockUser.role = 'instructor';
-    mockUser.namespaceId = 'instructor-ns';
+  it('returns user NamespaceID for non-system-admin', () => {
+    mockUser = { Role: 'instructor', NamespaceID: 'instructor-ns' };
     const { result } = renderHook(() => useSelectedNamespace());
     expect(result.current).toBe('instructor-ns');
   });
@@ -52,8 +50,8 @@ describe('useSelectedNamespace', () => {
 
     // Auth finishes loading, user is now available
     mockUser = {
-      role: 'instructor',
-      namespaceId: 'ns-async',
+      Role: 'instructor',
+      NamespaceID: 'ns-async',
     };
     rerender();
     expect(result.current).toBe('ns-async');
@@ -63,8 +61,7 @@ describe('useSelectedNamespace', () => {
 describe('useNamespaceQueryParam', () => {
   beforeEach(() => {
     localStorage.clear();
-    mockUser.role = 'system-admin';
-    mockUser.namespaceId = 'default';
+    mockUser = { Role: 'system-admin', NamespaceID: 'default' };
   });
 
   it('returns namespace query param for system-admin', () => {
@@ -74,8 +71,7 @@ describe('useNamespaceQueryParam', () => {
   });
 
   it('returns empty string for non-system-admin', () => {
-    mockUser.role = 'instructor';
-    mockUser.namespaceId = 'some-ns';
+    mockUser = { Role: 'instructor', NamespaceID: 'some-ns' };
     const { result } = renderHook(() => useNamespaceQueryParam());
     expect(result.current).toBe('');
   });

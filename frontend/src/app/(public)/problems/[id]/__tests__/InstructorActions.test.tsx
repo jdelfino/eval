@@ -6,7 +6,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import InstructorActions from '../InstructorActions';
 
 // Mock useAuth
-const mockUser = { id: 'user-1', role: 'instructor', email: 'test@test.com' };
+const mockUser = { ID: 'user-1', Role: 'instructor', Email: 'test@test.com' };
 let authValue: { user: typeof mockUser | null; isLoading: boolean } = { user: mockUser, isLoading: false };
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => authValue,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import SectionCard from '../SectionCard';
-import type { Section } from '@/types/classes';
+import type { Section } from '@/types/api';
 
 // Mock next/link
 jest.mock('next/link', () => {
@@ -24,14 +24,14 @@ global.fetch = jest.fn().mockResolvedValue({
 describe('SectionCard', () => {
   const mockSection: Section = {
     id: 'section-xyz',
-    namespaceId: 'ns-1',
-    classId: 'class-1',
+    namespace_id: 'ns-1',
+    class_id: 'class-1',
     name: 'MWF 10am',
     semester: 'Fall 2025',
-    joinCode: 'XYZ-789',
+    join_code: 'XYZ-789',
     active: true,
-    createdAt: new Date('2025-01-01'),
-    updatedAt: new Date('2025-01-01'),
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2025-01-01T00:00:00Z',
   };
 
   it('renders section name as a link to /sections/{sectionId}', () => {

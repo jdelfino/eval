@@ -9,6 +9,9 @@ export function createCentrifuge(): Centrifuge {
     getToken: async () => {
       const headers = await getAuthHeaders();
       const res = await fetch(`${API_URL}/realtime/token`, { headers });
+      if (!res.ok) {
+        throw new Error(`Failed to get token: ${res.status}`);
+      }
       const data = await res.json();
       return data.token;
     },
@@ -18,6 +21,9 @@ export function createCentrifuge(): Centrifuge {
 export async function getSubscriptionToken(channel: string): Promise<string> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}/realtime/token?channel=${encodeURIComponent(channel)}`, { headers });
+  if (!res.ok) {
+    throw new Error(`Failed to get subscription token: ${res.status}`);
+  }
   const data = await res.json();
   return data.token;
 }

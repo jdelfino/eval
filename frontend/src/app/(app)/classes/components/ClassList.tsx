@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { Class } from '@/types/classes';
+import type { Class } from '@/types/api';
 
 interface ClassListProps {
   classes: Class[];
@@ -51,7 +51,7 @@ export default function ClassList({ classes, onCreateNew }: ClassListProps) {
             </p>
           )}
           <div className="text-sm text-gray-500">
-            Created {new Date(classItem.createdAt).toLocaleDateString()}
+            Created {new Date(classItem.created_at).toLocaleDateString()}
           </div>
         </Link>
       ))}

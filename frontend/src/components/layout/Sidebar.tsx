@@ -131,7 +131,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  const role = user?.role || 'student';
+  const role = user?.Role || 'student';
   const navItems = getNavItemsForRole(role);
   const navGroups = getNavGroupsForRole(role);
 

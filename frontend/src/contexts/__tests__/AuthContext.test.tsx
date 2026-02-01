@@ -108,7 +108,7 @@ describe('AuthContext', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/api/v1/auth/me');
+      expect(mockApiGet).toHaveBeenCalledWith('/auth/me');
     });
 
     it('clears user when Firebase user is null', async () => {

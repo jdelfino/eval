@@ -107,9 +107,10 @@ export function useInvitations(): UseInvitationsResult {
     setError(null);
     try {
       // TODO: endpoint may not exist yet in Go backend (PLAT-vyf)
-      const data = await apiDelete(`/invitations/${id}`) as unknown as { invitation: SerializedInvitation };
+      await apiDelete(`/invitations/${id}`);
       await fetchInvitations();
-      return data.invitation;
+      // apiDelete returns void; re-fetch provides updated list
+      return { id, revokedAt: new Date().toISOString() } as SerializedInvitation;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to revoke invitation';
       setError(message);
