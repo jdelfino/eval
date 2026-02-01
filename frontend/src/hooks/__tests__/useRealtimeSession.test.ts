@@ -812,6 +812,55 @@ describe('useRealtimeSession', () => {
       expect(mockSubscription.unsubscribe).toHaveBeenCalled();
       expect(mockCentrifuge.disconnect).toHaveBeenCalled();
     });
+
+    it('should cancel pending debounced updateCode calls on unmount', async () => {
+      jest.useFakeTimers();
+
+      mockApiGet.mockReset();
+      mockApiGet.mockResolvedValueOnce({
+        session: { id: 'session-1' },
+        students: [
+          { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
+        ],
+        join_code: '',
+      });
+
+      mockApiPost.mockResolvedValue({});
+
+      const { result, unmount } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await act(async () => {
+        await jest.runAllTimersAsync();
+      });
+
+      expect(result.current.loading).toBe(false);
+
+      mockApiPost.mockClear();
+
+      // Schedule a debounced code update
+      act(() => {
+        result.current.updateCode('student-1', 'print("should not fire")');
+      });
+
+      // Unmount before debounce fires
+      unmount();
+
+      // Advance past the debounce delay
+      await act(async () => {
+        jest.advanceTimersByTime(500);
+        await jest.runAllTimersAsync();
+      });
+
+      // The debounced call should have been cancelled — no API call
+      expect(mockApiPost).not.toHaveBeenCalled();
+
+      jest.useRealTimers();
+    });
   });
 
   describe('Polling fallback', () => {

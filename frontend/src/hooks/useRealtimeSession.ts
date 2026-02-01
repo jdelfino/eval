@@ -12,13 +12,18 @@ export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'fa
 /**
  * Debounce function
  */
+interface DebouncedFunction<T extends (...args: any[]) => any> {
+  (...args: Parameters<T>): void;
+  cancel: () => void;
+}
+
 function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
-): (...args: Parameters<T>) => void {
+): DebouncedFunction<T> {
   let timeout: NodeJS.Timeout | null = null;
 
-  return function executedFunction(...args: Parameters<T>) {
+  const executedFunction = function (...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
@@ -28,7 +33,16 @@ function debounce<T extends (...args: any[]) => any>(
       clearTimeout(timeout);
     }
     timeout = setTimeout(later, wait);
+  } as DebouncedFunction<T>;
+
+  executedFunction.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
   };
+
+  return executedFunction;
 }
 
 // Response shape from Go backend (snake_case)
@@ -404,6 +418,13 @@ export function useRealtimeSession({
     }, 300),
     [updateCodeImmediate]
   );
+
+  // Cancel pending debounced updateCode on unmount
+  useEffect(() => {
+    return () => {
+      updateCode.cancel();
+    };
+  }, [updateCode]);
 
   /**
    * Execute code
