@@ -10,14 +10,14 @@ import (
 
 // User represents a user in the database.
 type User struct {
-	ID          uuid.UUID
-	ExternalID  *string // Identity Platform uid, nullable
-	Email       string
-	Role        string // system-admin, namespace-admin, instructor, student
-	NamespaceID *string
-	DisplayName *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uuid.UUID  `json:"id"`
+	ExternalID  *string    `json:"external_id"`
+	Email       string     `json:"email"`
+	Role        string     `json:"role"`
+	NamespaceID *string    `json:"namespace_id"`
+	DisplayName *string    `json:"display_name"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // UpdateUserParams contains the fields that can be updated on a user.
@@ -324,6 +324,8 @@ type MembershipRepository interface {
 	DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error
 	// ListMembers retrieves all memberships for a given section.
 	ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error)
+	// ListMembersByRole retrieves memberships for a given section filtered by role.
+	ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]SectionMembership, error)
 	// DeleteMembershipIfNotLast atomically deletes a membership only if it is not the
 	// last member with the given role in the section.
 	// Returns ErrLastMember if removal would leave zero members with that role.

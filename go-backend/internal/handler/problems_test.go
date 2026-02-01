@@ -75,9 +75,9 @@ func testProblem() *store.Problem {
 func TestListProblems_Success(t *testing.T) {
 	p := testProblem()
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, classID *uuid.UUID) ([]store.Problem, error) {
-			if classID != nil {
-				t.Fatalf("expected nil classID, got %v", classID)
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			if filters.ClassID != nil {
+				t.Fatalf("expected nil classID, got %v", filters.ClassID)
 			}
 			return []store.Problem{*p}, nil
 		},
@@ -113,12 +113,12 @@ func TestListProblems_WithClassIDFilter(t *testing.T) {
 	p.ClassID = &classID
 
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, cid *uuid.UUID) ([]store.Problem, error) {
-			if cid == nil {
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			if filters.ClassID == nil {
 				t.Fatalf("expected classID, got nil")
 			}
-			if *cid != classID {
-				t.Fatalf("expected classID %v, got %v", classID, *cid)
+			if *filters.ClassID != classID {
+				t.Fatalf("expected classID %v, got %v", classID, *filters.ClassID)
 			}
 			return []store.Problem{*p}, nil
 		},
@@ -154,7 +154,7 @@ func TestListProblems_InvalidClassID(t *testing.T) {
 
 func TestListProblems_Empty(t *testing.T) {
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, _ *uuid.UUID) ([]store.Problem, error) {
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
 			return nil, nil
 		},
 	}
@@ -179,7 +179,7 @@ func TestListProblems_Empty(t *testing.T) {
 
 func TestListProblems_InternalError(t *testing.T) {
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, _ *uuid.UUID) ([]store.Problem, error) {
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
 			return nil, errors.New("db error")
 		},
 	}

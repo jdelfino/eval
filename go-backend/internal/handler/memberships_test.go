@@ -24,6 +24,7 @@ type mockMembershipRepo struct {
 	deleteMembershipFn           func(ctx context.Context, sectionID, userID uuid.UUID) error
 	listMembersFn                func(ctx context.Context, sectionID uuid.UUID) ([]store.SectionMembership, error)
 	deleteMembershipIfNotLastFn  func(ctx context.Context, sectionID, userID uuid.UUID, role string) error
+	listMembersByRoleFn          func(ctx context.Context, sectionID uuid.UUID, role string) ([]store.SectionMembership, error)
 }
 
 func (m *mockMembershipRepo) GetSectionByJoinCode(ctx context.Context, code string) (*store.Section, error) {
@@ -40,6 +41,13 @@ func (m *mockMembershipRepo) DeleteMembership(ctx context.Context, sectionID, us
 
 func (m *mockMembershipRepo) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]store.SectionMembership, error) {
 	return m.listMembersFn(ctx, sectionID)
+}
+
+func (m *mockMembershipRepo) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]store.SectionMembership, error) {
+	if m.listMembersByRoleFn != nil {
+		return m.listMembersByRoleFn(ctx, sectionID, role)
+	}
+	return nil, nil
 }
 
 func (m *mockMembershipRepo) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error {

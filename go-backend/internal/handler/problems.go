@@ -78,17 +78,8 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.PublicOnly = true
 	}
 
-	// Use filtered query if any extended filters are set
-	hasExtended := filters.AuthorID != nil || len(filters.Tags) > 0 ||
-		filters.PublicOnly || filters.SortBy != "" || filters.SortOrder != ""
-
 	var problems []store.Problem
-	var err error
-	if hasExtended {
-		problems, err = h.problems.ListProblemsFiltered(r.Context(), filters)
-	} else {
-		problems, err = h.problems.ListProblems(r.Context(), filters.ClassID)
-	}
+	problems, err := h.problems.ListProblemsFiltered(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

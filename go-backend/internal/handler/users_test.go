@@ -543,3 +543,124 @@ func TestListSystemUsers_WithFilters(t *testing.T) {
 		t.Fatalf("expected namespace_id filter 'ns1', got %v", capturedFilters.NamespaceID)
 	}
 }
+
+func TestListSystemUsers_InternalError(t *testing.T) {
+	repo := &fullMockUserRepo{
+		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+			return nil, errors.New("db connection lost")
+		},
+	}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	req := httptest.NewRequest(http.MethodGet, "/system/users", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleSystemAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestListNamespaceUsers_InternalError(t *testing.T) {
+	repo := &fullMockUserRepo{
+		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+			return nil, errors.New("db connection lost")
+		},
+	}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/admin/users", h.NamespaceRoutes())
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleNamespaceAdmin,
+		NamespaceID: "ns1",
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateAdmin_InvalidUUID(t *testing.T) {
+	repo := &fullMockUserRepo{}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	body := `{"email":"x@example.com"}`
+	req := httptest.NewRequest(http.MethodPut, "/system/users/not-a-uuid", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleSystemAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteUser_InvalidUUID(t *testing.T) {
+	repo := &fullMockUserRepo{}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	req := httptest.NewRequest(http.MethodDelete, "/system/users/not-a-uuid", nil)
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleSystemAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateRole_InvalidBody(t *testing.T) {
+	nsID := "ns1"
+	targetID := uuid.New()
+
+	repo := &fullMockUserRepo{
+		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+			return &store.User{ID: id, NamespaceID: &nsID, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+		},
+	}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/admin/users", h.NamespaceRoutes())
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPut, "/admin/users/"+targetID.String()+"/role", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleNamespaceAdmin,
+		NamespaceID: nsID,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+}

@@ -165,7 +165,7 @@ func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	active := false
-	ns, err := h.namespaces.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
+	_, err := h.namespaces.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
 		Active: &active,
 	})
 	if err != nil {
@@ -177,7 +177,7 @@ func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, ns)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ListUsers handles GET /api/v1/namespaces/{id}/users — list users in a namespace (namespace-admin+).

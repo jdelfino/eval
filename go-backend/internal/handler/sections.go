@@ -298,17 +298,10 @@ func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	members, err := h.memberships.ListMembers(r.Context(), sectionID)
+	instructors, err := h.memberships.ListMembersByRole(r.Context(), sectionID, string(auth.RoleInstructor))
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
-	}
-
-	var instructors []store.SectionMembership
-	for _, m := range members {
-		if m.Role == string(auth.RoleInstructor) {
-			instructors = append(instructors, m)
-		}
 	}
 
 	if instructors == nil {

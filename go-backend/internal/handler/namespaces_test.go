@@ -549,16 +549,31 @@ func TestDeleteNamespace_Success(t *testing.T) {
 
 	h.Delete(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteNamespace_InternalError(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
+			return nil, errors.New("db error")
+		},
 	}
 
-	var got store.Namespace
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if got.Active != false {
-		t.Errorf("expected active=false, got %v", got.Active)
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
