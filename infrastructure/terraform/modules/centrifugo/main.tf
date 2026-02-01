@@ -123,6 +123,11 @@ resource "kubernetes_deployment" "centrifugo" {
           }
 
           env {
+            name  = "CENTRIFUGO_PORT"
+            value = "8000"
+          }
+
+          env {
             name = "CENTRIFUGO_API_KEY"
             value_from {
               secret_key_ref {
