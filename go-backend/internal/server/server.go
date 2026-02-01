@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/jdelfino/eval/internal/ai"
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/executor"
@@ -206,6 +207,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
 				r.Post("/execute", executeHandler.StandaloneExecute)
+			})
+
+			// Advanced session features (instructor+): trace and AI analysis
+			traceHandler := handler.NewTraceHandler(s, execClient)
+			analyzeHandler := handler.NewAnalyzeHandler(s, &ai.StubClient{})
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Post("/sessions/{id}/trace", traceHandler.Trace)
+				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
 			sessionStudentHandler := handler.NewSessionStudentHandler(s, sessionPub, logger)
