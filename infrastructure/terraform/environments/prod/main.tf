@@ -271,7 +271,7 @@ module "centrifugo" {
   api_key         = var.centrifugo_api_key
   token_secret    = var.centrifugo_token_secret
   allowed_origins = var.centrifugo_allowed_origins
-  redis_host      = "redis.default.svc.cluster.local"
+  redis_host      = "redis.default.svc.cluster.local" # Matches k8s/base/redis-service.yaml in default namespace
   redis_port      = 6379
 
   depends_on = [module.gke]

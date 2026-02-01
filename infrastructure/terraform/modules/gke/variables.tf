@@ -159,9 +159,9 @@ variable "default_pool_machine_type" {
 }
 
 variable "default_pool_min_nodes" {
-  description = "Minimum number of nodes in the default pool (0 for scale-to-zero)"
+  description = "Minimum number of nodes in the default pool (must be >= 1 for system pods)"
   type        = number
-  default     = 0
+  default     = 1
 }
 
 variable "default_pool_max_nodes" {

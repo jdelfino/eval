@@ -17,6 +17,7 @@ spec:
       containers:
         - name: redis
           image: redis:7-alpine
+          args: ["--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
           ports:
             - containerPort: 6379
           resources:
@@ -25,3 +26,13 @@ spec:
               cpu: 50m
             limits:
               memory: 256Mi
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
