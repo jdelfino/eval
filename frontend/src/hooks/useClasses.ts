@@ -3,7 +3,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { Class, Section } from '@/server/classes/types';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import type { Class, Section } from '@/types/api';
 
 interface UseClassesReturn {
   classes: Class[];
@@ -29,12 +30,7 @@ export function useClasses(): UseClassesReturn {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/classes');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch classes');
-      }
-      const data = await response.json();
+      const data = await apiGet<{ classes: Class[] }>('/classes');
       setClasses(data.classes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -45,113 +41,50 @@ export function useClasses(): UseClassesReturn {
 
   const createClass = useCallback(async (name: string, description?: string): Promise<Class> => {
     setError(null);
-    const response = await fetch('/api/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description }),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create class');
-    }
-    const data = await response.json();
+    const data = await apiPost<{ class: Class }>('/classes', { name, description });
     setClasses(prev => [...prev, data.class]);
     return data.class;
   }, []);
 
   const updateClass = useCallback(async (id: string, updates: Partial<Class>): Promise<Class> => {
     setError(null);
-    const response = await fetch(`/api/classes/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to update class');
-    }
-    const data = await response.json();
+    const data = await apiPatch<{ class: Class }>(`/classes/${id}`, updates);
     setClasses(prev => prev.map(c => c.id === id ? data.class : c));
     return data.class;
   }, []);
 
   const deleteClass = useCallback(async (id: string): Promise<void> => {
     setError(null);
-    const response = await fetch(`/api/classes/${id}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to delete class');
-    }
+    await apiDelete(`/classes/${id}`);
     setClasses(prev => prev.filter(c => c.id !== id));
   }, []);
 
   const createSection = useCallback(async (classId: string, name: string, semester?: string): Promise<Section> => {
     setError(null);
-    const response = await fetch(`/api/classes/${classId}/sections`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, semester }),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create section');
-    }
-    const data = await response.json();
+    const data = await apiPost<{ section: Section }>(`/classes/${classId}/sections`, { name, semester });
     return data.section;
   }, []);
 
   const updateSection = useCallback(async (sectionId: string, updates: Partial<Section>): Promise<Section> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to update section');
-    }
-    const data = await response.json();
+    const data = await apiPatch<{ section: Section }>(`/sections/${sectionId}`, updates);
     return data.section;
   }, []);
 
   const regenerateJoinCode = useCallback(async (sectionId: string): Promise<string> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}/regenerate-code`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to regenerate join code');
-    }
-    const data = await response.json();
-    return data.joinCode;
+    const data = await apiPost<{ join_code: string }>(`/sections/${sectionId}/regenerate-code`);
+    return data.join_code;
   }, []);
 
   const addCoInstructor = useCallback(async (sectionId: string, email: string): Promise<void> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}/instructors`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to add co-instructor');
-    }
+    await apiPost(`/sections/${sectionId}/instructors`, { email });
   }, []);
 
   const removeCoInstructor = useCallback(async (sectionId: string, userId: string): Promise<void> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}/instructors/${userId}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to remove co-instructor');
-    }
+    await apiDelete(`/sections/${sectionId}/instructors/${userId}`);
   }, []);
 
   return {

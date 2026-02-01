@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
+import { apiGet } from '@/lib/api-client';
+import type { Session } from '@/types/api';
 
 export interface SessionHistory {
   id: string;
-  joinCode: string;
-  problemText: string;
-  createdAt: string;
-  lastActivity: string;
-  creatorId: string;
-  participantCount: number;
+  join_code: string;
+  problem: unknown;
+  created_at: string;
+  last_activity: string;
+  creator_id: string;
+  participants: string[];
   status: 'active' | 'completed';
-  endedAt?: string;
+  ended_at?: string | null;
 }
 
 export function useSessionHistory() {
@@ -20,15 +22,9 @@ export function useSessionHistory() {
   const fetchSessions = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      const response = await fetch('/api/sessions/history');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch session history');
-      }
-      
-      const data = await response.json();
+      const data = await apiGet<{ sessions: SessionHistory[] }>('/sessions/history');
       setSessions(data.sessions);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -43,8 +39,6 @@ export function useSessionHistory() {
   }, []);
 
   const reconnectToSession = (sessionId: string) => {
-    // Navigate to the session page
-    // This will be handled by the student/instructor page
     window.location.href = `/student?session=${sessionId}`;
   };
 

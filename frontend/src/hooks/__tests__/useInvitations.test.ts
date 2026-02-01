@@ -6,8 +6,18 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useInvitations } from '../useInvitations';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock api-client
+jest.mock('@/lib/api-client', () => ({
+  apiGet: jest.fn(),
+  apiPost: jest.fn(),
+  apiDelete: jest.fn(),
+}));
+
+import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
+
+const mockApiGet = apiGet as jest.MockedFunction<typeof apiGet>;
+const mockApiPost = apiPost as jest.MockedFunction<typeof apiPost>;
+const mockApiDelete = apiDelete as jest.MockedFunction<typeof apiDelete>;
 
 describe('useInvitations', () => {
   beforeEach(() => {
@@ -43,10 +53,7 @@ describe('useInvitations', () => {
 
   describe('fetchInvitations', () => {
     it('fetches invitations successfully', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ invitations: [mockInvitation, mockConsumedInvitation] }),
-      });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation, mockConsumedInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -57,14 +64,11 @@ describe('useInvitations', () => {
       expect(result.current.invitations).toHaveLength(2);
       expect(result.current.invitations[0].email).toBe('instructor@example.com');
       expect(result.current.error).toBeNull();
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations?');
+      expect(mockApiGet).toHaveBeenCalledWith('/invitations?');
     });
 
     it('fetches invitations with status filter', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ invitations: [mockInvitation] }),
-      });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -72,14 +76,11 @@ describe('useInvitations', () => {
         await result.current.fetchInvitations({ status: 'pending' });
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations?status=pending');
+      expect(mockApiGet).toHaveBeenCalledWith('/invitations?status=pending');
     });
 
     it('fetches invitations with email filter', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ invitations: [mockInvitation] }),
-      });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -87,14 +88,11 @@ describe('useInvitations', () => {
         await result.current.fetchInvitations({ email: 'test@' });
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations?email=test%40');
+      expect(mockApiGet).toHaveBeenCalledWith('/invitations?email=test%40');
     });
 
     it('sets error when fetch fails', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to load invitations' }),
-      });
+      mockApiGet.mockRejectedValueOnce(new Error('Failed to load invitations'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -110,11 +108,8 @@ describe('useInvitations', () => {
     });
 
     it('sets loading state during fetch', async () => {
-      (global.fetch as jest.Mock).mockImplementationOnce(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(() => resolve({ ok: true, json: async () => ({ invitations: [] }) }), 100)
-          )
+      mockApiGet.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(() => resolve({ invitations: [] }), 100))
       );
 
       const { result } = renderHook(() => useInvitations());
@@ -130,15 +125,8 @@ describe('useInvitations', () => {
 
   describe('createInvitation', () => {
     it('creates invitation successfully', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [mockInvitation] }),
-        });
+      mockApiPost.mockResolvedValueOnce({ invitation: mockInvitation });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -148,23 +136,12 @@ describe('useInvitations', () => {
       });
 
       expect(invitation).toEqual(mockInvitation);
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'instructor@example.com' }),
-      });
+      expect(mockApiPost).toHaveBeenCalledWith('/invitations', { email: 'instructor@example.com' });
     });
 
     it('creates invitation with custom expiry', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [mockInvitation] }),
-        });
+      mockApiPost.mockResolvedValueOnce({ invitation: mockInvitation });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -172,18 +149,14 @@ describe('useInvitations', () => {
         await result.current.createInvitation('instructor@example.com', 14);
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'instructor@example.com', expiresInDays: 14 }),
+      expect(mockApiPost).toHaveBeenCalledWith('/invitations', {
+        email: 'instructor@example.com',
+        expiresInDays: 14,
       });
     });
 
     it('sets error for invalid email', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Invalid email format', code: 'INVALID_EMAIL' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Invalid email format'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -199,11 +172,7 @@ describe('useInvitations', () => {
     });
 
     it('sets error for duplicate invitation', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: 'An invitation has already been sent to this email', code: 'DUPLICATE_INVITATION' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('An invitation has already been sent to this email'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -219,15 +188,8 @@ describe('useInvitations', () => {
     });
 
     it('refreshes invitations after create', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [mockInvitation] }),
-        });
+      mockApiPost.mockResolvedValueOnce({ invitation: mockInvitation });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -235,23 +197,16 @@ describe('useInvitations', () => {
         await result.current.createInvitation('instructor@example.com');
       });
 
-      // Second call should be the refresh
-      expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/namespace/invitations?');
+      // apiPost for create + apiGet for refresh
+      expect(mockApiPost).toHaveBeenCalledTimes(1);
+      expect(mockApiGet).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('revokeInvitation', () => {
     it('revokes invitation successfully', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockRevokedInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [mockRevokedInvitation] }),
-        });
+      mockApiDelete.mockResolvedValueOnce({ invitation: mockRevokedInvitation } as any);
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockRevokedInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -261,17 +216,11 @@ describe('useInvitations', () => {
       });
 
       expect(invitation).toEqual(mockRevokedInvitation);
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations/inv-3', {
-        method: 'DELETE',
-      });
+      expect(mockApiDelete).toHaveBeenCalledWith('/invitations/inv-3');
     });
 
     it('sets error when revoking consumed invitation', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: 'Cannot revoke a consumed invitation', code: 'INVITATION_CONSUMED' }),
-      });
+      mockApiDelete.mockRejectedValueOnce(new Error('Cannot revoke a consumed invitation'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -287,15 +236,8 @@ describe('useInvitations', () => {
     });
 
     it('refreshes invitations after revoke', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockRevokedInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [] }),
-        });
+      mockApiDelete.mockResolvedValueOnce({ invitation: mockRevokedInvitation } as any);
+      mockApiGet.mockResolvedValueOnce({ invitations: [] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -303,21 +245,15 @@ describe('useInvitations', () => {
         await result.current.revokeInvitation('inv-3');
       });
 
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(mockApiDelete).toHaveBeenCalledTimes(1);
+      expect(mockApiGet).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('resendInvitation', () => {
     it('resends invitation successfully', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitation: mockInvitation }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ invitations: [mockInvitation] }),
-        });
+      mockApiPost.mockResolvedValueOnce({ invitation: mockInvitation });
+      mockApiGet.mockResolvedValueOnce({ invitations: [mockInvitation] });
 
       const { result } = renderHook(() => useInvitations());
 
@@ -327,17 +263,11 @@ describe('useInvitations', () => {
       });
 
       expect(invitation).toEqual(mockInvitation);
-      expect(global.fetch).toHaveBeenCalledWith('/api/namespace/invitations/inv-1/resend', {
-        method: 'POST',
-      });
+      expect(mockApiPost).toHaveBeenCalledWith('/invitations/inv-1/resend');
     });
 
     it('sets error when resending consumed invitation', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: 'Cannot resend a consumed invitation', code: 'INVITATION_CONSUMED' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Cannot resend a consumed invitation'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -353,11 +283,7 @@ describe('useInvitations', () => {
     });
 
     it('sets error when resending revoked invitation', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: 'Cannot resend a revoked invitation', code: 'INVITATION_REVOKED' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Cannot resend a revoked invitation'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -373,11 +299,7 @@ describe('useInvitations', () => {
     });
 
     it('handles email sending failure', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 502,
-        json: async () => ({ error: 'Failed to send invitation email', code: 'EMAIL_SEND_FAILED' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Failed to send invitation email'));
 
       const { result } = renderHook(() => useInvitations());
 
@@ -424,10 +346,7 @@ describe('useInvitations', () => {
 
   describe('clearError', () => {
     it('clears error state', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Some error' }),
-      });
+      mockApiGet.mockRejectedValueOnce(new Error('Some error'));
 
       const { result } = renderHook(() => useInvitations());
 

@@ -6,8 +6,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSessionOperations } from '../useSessionOperations';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock api-client
+jest.mock('@/lib/api-client', () => ({
+  apiPost: jest.fn(),
+  apiDelete: jest.fn(),
+  apiFetch: jest.fn(),
+}));
+
+import { apiPost, apiDelete } from '@/lib/api-client';
+
+const mockApiPost = apiPost as jest.MockedFunction<typeof apiPost>;
+const mockApiDelete = apiDelete as jest.MockedFunction<typeof apiDelete>;
 
 describe('useSessionOperations', () => {
   beforeEach(() => {
@@ -18,18 +27,15 @@ describe('useSessionOperations', () => {
     it('creates a session successfully', async () => {
       const mockSession = {
         id: 'session-1',
-        sectionId: 'section-1',
-        sectionName: 'Section A',
-        joinCode: 'ABC123',
+        section_id: 'section-1',
+        section_name: 'Section A',
+        join_code: 'ABC123',
         problem: null,
-        createdAt: '2024-01-01T00:00:00Z',
+        created_at: '2024-01-01T00:00:00Z',
         status: 'active',
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, session: mockSession }),
-      });
+      mockApiPost.mockResolvedValueOnce({ session: mockSession });
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -39,30 +45,21 @@ describe('useSessionOperations', () => {
       });
 
       expect(session).toEqual(mockSession);
-      expect(global.fetch).toHaveBeenCalledWith('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sectionId: 'section-1' }),
-      });
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 'section-1' });
     });
 
     it('creates a session with a problemId', async () => {
       const mockSession = {
         id: 'session-1',
-        sectionId: 'section-1',
-        sectionName: 'Section A',
-        joinCode: 'ABC123',
+        section_id: 'section-1',
+        section_name: 'Section A',
+        join_code: 'ABC123',
         problem: { id: 'problem-1', title: 'Test Problem' },
-        createdAt: '2024-01-01T00:00:00Z',
+        created_at: '2024-01-01T00:00:00Z',
         status: 'active',
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, session: mockSession }),
-      });
+      mockApiPost.mockResolvedValueOnce({ session: mockSession });
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -70,23 +67,14 @@ describe('useSessionOperations', () => {
         await result.current.createSession('section-1', 'Section A', 'problem-1');
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sectionId: 'section-1',
-          problemId: 'problem-1',
-        }),
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', {
+        section_id: 'section-1',
+        problem_id: 'problem-1',
       });
     });
 
     it('sets error when create fails', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to create session' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Failed to create session'));
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -104,10 +92,7 @@ describe('useSessionOperations', () => {
 
   describe('endSession', () => {
     it('ends a session successfully', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, message: 'Session ended' }),
-      });
+      mockApiDelete.mockResolvedValueOnce(undefined);
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -115,19 +100,11 @@ describe('useSessionOperations', () => {
         await result.current.endSession('session-1');
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/sessions/session-1', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      expect(mockApiDelete).toHaveBeenCalledWith('/sessions/session-1');
     });
 
     it('sets error when end fails', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to end session' }),
-      });
+      mockApiDelete.mockRejectedValueOnce(new Error('Failed to end session'));
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -156,10 +133,7 @@ describe('useSessionOperations', () => {
     };
 
     it('updates a problem successfully', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, message: 'Problem updated' }),
-      });
+      mockApiPost.mockResolvedValueOnce({});
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -167,23 +141,14 @@ describe('useSessionOperations', () => {
         await result.current.updateProblem('session-1', mockProblem, mockSettings);
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/sessions/session-1/update-problem', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          problem: mockProblem,
-          executionSettings: mockSettings,
-        }),
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
+        problem: mockProblem,
+        execution_settings: mockSettings,
       });
     });
 
     it('updates problem without execution settings', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, message: 'Problem updated' }),
-      });
+      mockApiPost.mockResolvedValueOnce({});
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -191,23 +156,14 @@ describe('useSessionOperations', () => {
         await result.current.updateProblem('session-1', mockProblem);
       });
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/sessions/session-1/update-problem', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          problem: mockProblem,
-          executionSettings: undefined,
-        }),
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
+        problem: mockProblem,
+        execution_settings: undefined,
       });
     });
 
     it('sets error when update fails', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to update problem' }),
-      });
+      mockApiPost.mockRejectedValueOnce(new Error('Failed to update problem'));
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -225,18 +181,8 @@ describe('useSessionOperations', () => {
 
   describe('loading states', () => {
     it('sets loading to true during operation', async () => {
-      (global.fetch as jest.Mock).mockImplementationOnce(
-        () =>
-          new Promise(resolve =>
-            setTimeout(
-              () =>
-                resolve({
-                  ok: true,
-                  json: async () => ({ success: true, session: {} }),
-                }),
-              100
-            )
-          )
+      mockApiPost.mockImplementationOnce(
+        () => new Promise(resolve => setTimeout(() => resolve({ session: {} }), 100))
       );
 
       const { result } = renderHook(() => useSessionOperations());

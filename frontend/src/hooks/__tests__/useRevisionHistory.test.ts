@@ -6,8 +6,14 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRevisionHistory } from '../useRevisionHistory';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock api-client
+jest.mock('@/lib/api-client', () => ({
+  apiGet: jest.fn(),
+}));
+
+import { apiGet } from '@/lib/api-client';
+
+const mockApiGet = apiGet as jest.MockedFunction<typeof apiGet>;
 
 describe('useRevisionHistory', () => {
   beforeEach(() => {
@@ -20,19 +26,16 @@ describe('useRevisionHistory', () => {
         {
           id: 'rev-1',
           timestamp: '2024-01-01T10:00:00Z',
-          code: 'print("Hello")',
+          full_code: 'print("Hello")',
         },
         {
           id: 'rev-2',
           timestamp: '2024-01-01T10:01:00Z',
-          code: 'print("Hello, World!")',
+          full_code: 'print("Hello, World!")',
         },
       ];
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, revisions: mockRevisions }),
-      });
+      mockApiGet.mockResolvedValueOnce({ revisions: mockRevisions });
 
       const { result } = renderHook(() =>
         useRevisionHistory({
@@ -47,8 +50,8 @@ describe('useRevisionHistory', () => {
       // Wait for API call to complete
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/sessions/session-1/revisions?studentId=student-1'
+      expect(mockApiGet).toHaveBeenCalledWith(
+        '/sessions/session-1/revisions?user_id=student-1'
       );
       expect(result.current.revisions).toHaveLength(2);
       expect(result.current.totalRevisions).toBe(2);
@@ -57,10 +60,7 @@ describe('useRevisionHistory', () => {
     });
 
     it('handles API errors', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to fetch revisions' }),
-      });
+      mockApiGet.mockRejectedValueOnce(new Error('Failed to fetch revisions'));
 
       const { result } = renderHook(() =>
         useRevisionHistory({
@@ -76,10 +76,7 @@ describe('useRevisionHistory', () => {
     });
 
     it('handles empty revisions array', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, revisions: [] }),
-      });
+      mockApiGet.mockResolvedValueOnce({ revisions: [] });
 
       const { result } = renderHook(() =>
         useRevisionHistory({
@@ -103,7 +100,7 @@ describe('useRevisionHistory', () => {
         })
       );
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockApiGet).not.toHaveBeenCalled();
     });
 
     it('does not load when studentId is null', () => {
@@ -114,22 +111,19 @@ describe('useRevisionHistory', () => {
         })
       );
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockApiGet).not.toHaveBeenCalled();
     });
   });
 
   describe('navigation methods', () => {
     const mockRevisions = [
-      { id: 'rev-1', timestamp: '2024-01-01T10:00:00Z', code: 'code 1' },
-      { id: 'rev-2', timestamp: '2024-01-01T10:01:00Z', code: 'code 2' },
-      { id: 'rev-3', timestamp: '2024-01-01T10:02:00Z', code: 'code 3' },
+      { id: 'rev-1', timestamp: '2024-01-01T10:00:00Z', full_code: 'code 1' },
+      { id: 'rev-2', timestamp: '2024-01-01T10:01:00Z', full_code: 'code 2' },
+      { id: 'rev-3', timestamp: '2024-01-01T10:02:00Z', full_code: 'code 3' },
     ];
 
     beforeEach(() => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, revisions: mockRevisions }),
-      });
+      mockApiGet.mockResolvedValueOnce({ revisions: mockRevisions });
     });
 
     it('navigates to next revision', async () => {

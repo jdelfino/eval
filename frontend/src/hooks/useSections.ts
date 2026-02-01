@@ -3,8 +3,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { Section } from '@/server/classes/types';
-import type { Session } from '@/server/types';
+import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
+import type { Section, Session } from '@/types/api';
 
 interface SectionWithClass extends Section {
   className: string;
@@ -31,12 +31,7 @@ export function useSections(): UseSectionsReturn {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/sections/my');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch sections');
-      }
-      const data = await response.json();
+      const data = await apiGet<{ sections: SectionWithClass[] }>('/sections/my');
       setSections(data.sections);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -47,16 +42,7 @@ export function useSections(): UseSectionsReturn {
 
   const joinSection = useCallback(async (joinCode: string): Promise<Section> => {
     setError(null);
-    const response = await fetch('/api/sections/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ joinCode }),
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to join section');
-    }
-    const data = await response.json();
+    const data = await apiPost<{ section: Section }>('/sections/join', { joinCode });
     // Refresh sections after joining
     await fetchMySections();
     return data.section;
@@ -64,24 +50,13 @@ export function useSections(): UseSectionsReturn {
 
   const leaveSection = useCallback(async (sectionId: string): Promise<void> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}/leave`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to leave section');
-    }
+    await apiDelete(`/sections/${sectionId}/leave`);
     setSections(prev => prev.filter(s => s.id !== sectionId));
   }, []);
 
   const getActiveSessions = useCallback(async (sectionId: string): Promise<Session[]> => {
     setError(null);
-    const response = await fetch(`/api/sections/${sectionId}/sessions`);
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to get sessions');
-    }
-    const data = await response.json();
+    const data = await apiGet<{ sessions: Session[] }>(`/sections/${sectionId}/sessions`);
     // Filter for active sessions only
     return data.sessions.filter((s: Session) => s.status === 'active');
   }, []);

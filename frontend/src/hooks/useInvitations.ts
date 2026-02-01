@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
 
 /**
  * Serialized invitation as returned from the API
@@ -45,6 +46,8 @@ export interface UseInvitationsResult {
 /**
  * Hook for managing namespace invitations.
  * Requires user.manage permission (namespace-admin or higher).
+ *
+ * TODO: Invitation endpoints may not all exist in Go backend yet (PLAT-vyf in progress).
  */
 export function useInvitations(): UseInvitationsResult {
   const [invitations, setInvitations] = useState<SerializedInvitation[]>([]);
@@ -52,9 +55,6 @@ export function useInvitations(): UseInvitationsResult {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<InvitationFilter>('all');
 
-  /**
-   * Fetch invitations with optional filters
-   */
   const fetchInvitations = useCallback(async (filters?: InvitationFilters) => {
     setLoading(true);
     setError(null);
@@ -66,14 +66,8 @@ export function useInvitations(): UseInvitationsResult {
       if (filters?.email) {
         params.set('email', filters.email);
       }
-
-      const response = await fetch(`/api/namespace/invitations?${params}`);
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch invitations');
-      }
-
-      const data = await response.json();
+      // TODO: endpoint may not exist yet in Go backend (PLAT-vyf)
+      const data = await apiGet<{ invitations: SerializedInvitation[] }>(`/invitations?${params}`);
       setInvitations(data.invitations);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch invitations';
@@ -84,9 +78,6 @@ export function useInvitations(): UseInvitationsResult {
     }
   }, []);
 
-  /**
-   * Create a new invitation
-   */
   const createInvitation = useCallback(async (
     email: string,
     expiresInDays?: number
@@ -98,23 +89,9 @@ export function useInvitations(): UseInvitationsResult {
       if (expiresInDays !== undefined) {
         body.expiresInDays = expiresInDays;
       }
-
-      const response = await fetch('/api/namespace/invitations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create invitation');
-      }
-
-      const data = await response.json();
-
-      // Refresh invitations list
+      // TODO: endpoint may not exist yet in Go backend (PLAT-vyf)
+      const data = await apiPost<{ invitation: SerializedInvitation }>('/invitations', body);
       await fetchInvitations();
-
       return data.invitation;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create invitation';
@@ -125,27 +102,13 @@ export function useInvitations(): UseInvitationsResult {
     }
   }, [fetchInvitations]);
 
-  /**
-   * Revoke an invitation
-   */
   const revokeInvitation = useCallback(async (id: string): Promise<SerializedInvitation> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/namespace/invitations/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to revoke invitation');
-      }
-
-      const data = await response.json();
-
-      // Refresh invitations list
+      // TODO: endpoint may not exist yet in Go backend (PLAT-vyf)
+      const data = await apiDelete(`/invitations/${id}`) as unknown as { invitation: SerializedInvitation };
       await fetchInvitations();
-
       return data.invitation;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to revoke invitation';
@@ -156,27 +119,13 @@ export function useInvitations(): UseInvitationsResult {
     }
   }, [fetchInvitations]);
 
-  /**
-   * Resend an invitation email
-   */
   const resendInvitation = useCallback(async (id: string): Promise<SerializedInvitation> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/namespace/invitations/${id}/resend`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to resend invitation');
-      }
-
-      const data = await response.json();
-
-      // Refresh invitations list
+      // TODO: endpoint may not exist yet in Go backend (PLAT-vyf)
+      const data = await apiPost<{ invitation: SerializedInvitation }>(`/invitations/${id}/resend`);
       await fetchInvitations();
-
       return data.invitation;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resend invitation';
@@ -187,9 +136,6 @@ export function useInvitations(): UseInvitationsResult {
     }
   }, [fetchInvitations]);
 
-  /**
-   * Clear the error state
-   */
   const clearError = useCallback(() => {
     setError(null);
   }, []);

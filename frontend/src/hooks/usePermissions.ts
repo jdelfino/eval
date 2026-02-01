@@ -4,8 +4,8 @@
  */
 
 import { useMemo } from 'react';
-import type { UserRole } from '@/server/auth/types';
-import { ROLE_PERMISSIONS } from '@/server/auth/permissions';
+import type { UserRole } from '@/lib/permissions';
+import { ROLE_PERMISSIONS } from '@/lib/permissions';
 
 /**
  * Minimal user type for permission checking.
@@ -22,7 +22,7 @@ type UserWithRole = {
 export function usePermission(user: UserWithRole | null, permission: string): boolean {
   return useMemo(() => {
     if (!user) return false;
-    
+
     const rolePermissions = ROLE_PERMISSIONS[user.Role];
     return rolePermissions.includes(permission as any);
   }, [user, permission]);
@@ -34,9 +34,9 @@ export function usePermission(user: UserWithRole | null, permission: string): bo
 export function useAnyPermission(user: UserWithRole | null, permissions: string[]): boolean {
   return useMemo(() => {
     if (!user) return false;
-    
+
     const rolePermissions = ROLE_PERMISSIONS[user.Role];
-    return permissions.some(permission => 
+    return permissions.some(permission =>
       rolePermissions.includes(permission as any)
     );
   }, [user, permissions]);
@@ -48,9 +48,9 @@ export function useAnyPermission(user: UserWithRole | null, permissions: string[
 export function useAllPermissions(user: UserWithRole | null, permissions: string[]): boolean {
   return useMemo(() => {
     if (!user) return false;
-    
+
     const rolePermissions = ROLE_PERMISSIONS[user.Role];
-    return permissions.every(permission => 
+    return permissions.every(permission =>
       rolePermissions.includes(permission as any)
     );
   }, [user, permissions]);
@@ -62,7 +62,7 @@ export function useAllPermissions(user: UserWithRole | null, permissions: string
  */
 export function hasPermission(user: UserWithRole | null, permission: string): boolean {
   if (!user) return false;
-  
+
   const rolePermissions = ROLE_PERMISSIONS[user.Role];
   return rolePermissions.includes(permission as any);
 }

@@ -8,17 +8,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Problem, ExecutionSettings } from '@/server/types/problem';
-
-interface Session {
-  id: string;
-  sectionId: string;
-  sectionName: string;
-  joinCode: string;
-  problem?: Problem | null;
-  createdAt: string;
-  status: string;
-}
+import { apiPost, apiDelete } from '@/lib/api-client';
+import type { Session } from '@/types/api';
 
 export function useSessionOperations() {
   const [loading, setLoading] = useState(false);
@@ -37,27 +28,12 @@ export function useSessionOperations() {
       setError(null);
 
       try {
-        const body: any = { sectionId };
+        const body: Record<string, string> = { section_id: sectionId };
         if (problemId) {
-          body.problemId = problemId;
+          body.problem_id = problemId;
         }
 
-        const response = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ error: 'Failed to create session' }));
-          throw new Error(errorData.error || 'Failed to create session');
-        }
-
-        const data = await response.json();
+        const data = await apiPost<{ session: Session }>('/sessions', body);
         return data.session;
       } catch (err: any) {
         const errorMessage = err.message || 'Failed to create session';
@@ -78,19 +54,7 @@ export function useSessionOperations() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: 'Failed to end session' }));
-        throw new Error(errorData.error || 'Failed to end session');
-      }
+      await apiDelete(`/sessions/${sessionId}`);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to end session';
       setError(errorMessage);
@@ -106,30 +70,17 @@ export function useSessionOperations() {
   const updateProblem = useCallback(
     async (
       sessionId: string,
-      problem: Partial<Problem>,
-      executionSettings?: ExecutionSettings
+      problem: Record<string, unknown>,
+      executionSettings?: Record<string, unknown>
     ): Promise<void> => {
       setLoading(true);
       setError(null);
 
       try {
-        const response = await fetch(`/api/sessions/${sessionId}/update-problem`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            problem,
-            executionSettings,
-          }),
+        await apiPost(`/sessions/${sessionId}/update-problem`, {
+          problem,
+          execution_settings: executionSettings,
         });
-
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ error: 'Failed to update problem' }));
-          throw new Error(errorData.error || 'Failed to update problem');
-        }
       } catch (err: any) {
         const errorMessage = err.message || 'Failed to update problem';
         setError(errorMessage);

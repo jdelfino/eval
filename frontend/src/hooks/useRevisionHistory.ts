@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiGet } from '@/lib/api-client';
+import type { Revision } from '@/types/api';
 
 export interface CodeRevision {
   id: string;
@@ -31,23 +33,15 @@ export function useRevisionHistory({
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/sessions/${sessionId}/revisions?studentId=${studentId}`
+        const data = await apiGet<{ revisions: Revision[] }>(
+          `/sessions/${sessionId}/revisions?user_id=${studentId}`
         );
 
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ error: 'Failed to fetch revisions' }));
-          throw new Error(errorData.error || 'Failed to fetch revisions');
-        }
-
-        const data = await response.json();
-
-        // Convert timestamp strings to Date objects
-        const processedRevisions = data.revisions.map((rev: any) => ({
-          ...rev,
+        // Convert to CodeRevision format
+        const processedRevisions: CodeRevision[] = data.revisions.map((rev) => ({
+          id: rev.id,
           timestamp: new Date(rev.timestamp),
+          code: rev.full_code || '',
         }));
 
         setRevisions(processedRevisions);
