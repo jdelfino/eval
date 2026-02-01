@@ -29,10 +29,6 @@ jest.mock('@/lib/permissions', () => ({
   },
 }));
 
-jest.mock('@/lib/api-utils', () => ({
-  fetchWithRetry: jest.fn(),
-}));
-
 jest.mock('../CreateClassModal', () => {
   return function MockCreateClassModal({ onClose, onSuccess }: any) {
     return (
@@ -44,7 +40,9 @@ jest.mock('../CreateClassModal', () => {
   };
 });
 
-const mockFetchWithRetry = require('@/lib/api-utils').fetchWithRetry as jest.Mock;
+// Mock global.fetch
+global.fetch = jest.fn();
+const mockFetch = global.fetch as jest.Mock;
 
 describe('InstructorDashboard', () => {
   const defaultProps = {
@@ -58,7 +56,7 @@ describe('InstructorDashboard', () => {
 
   describe('loading state', () => {
     it('shows loading spinner while fetching data', async () => {
-      mockFetchWithRetry.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { container } = render(<InstructorDashboard {...defaultProps} />);
 
@@ -69,7 +67,7 @@ describe('InstructorDashboard', () => {
 
   describe('empty state', () => {
     it('shows empty state when no classes exist', async () => {
-      mockFetchWithRetry.mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ classes: [] }),
       });
@@ -119,7 +117,7 @@ describe('InstructorDashboard', () => {
     ];
 
     beforeEach(() => {
-      mockFetchWithRetry.mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ classes: mockClasses }),
       });
@@ -228,7 +226,7 @@ describe('InstructorDashboard', () => {
 
   describe('create class modal', () => {
     beforeEach(() => {
-      mockFetchWithRetry.mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ classes: [] }),
       });
@@ -265,14 +263,15 @@ describe('InstructorDashboard', () => {
       });
 
       // Data should be reloaded (fetch called twice)
-      expect(mockFetchWithRetry).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('error handling', () => {
     it('shows error state when fetch fails', async () => {
-      mockFetchWithRetry.mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: false,
+        status: 500,
         json: async () => ({ error: 'Server error' }),
       });
 
@@ -284,9 +283,10 @@ describe('InstructorDashboard', () => {
     });
 
     it('allows retry after error', async () => {
-      mockFetchWithRetry
+      mockFetch
         .mockResolvedValueOnce({
           ok: false,
+          status: 500,
           json: async () => ({ error: 'Server error' }),
         })
         .mockResolvedValueOnce({

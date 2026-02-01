@@ -286,6 +286,7 @@ describe('CreateSectionModal', () => {
   it('shows generic error when API fails without error message', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
+      status: 500,
       json: async () => ({}),
     });
 
@@ -296,7 +297,7 @@ describe('CreateSectionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/failed to create section/i)).toBeInTheDocument();
+      expect(screen.getByText(/Request failed: 500/i)).toBeInTheDocument();
     });
 
     expect(mockOnSuccess).not.toHaveBeenCalled();

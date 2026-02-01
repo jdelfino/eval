@@ -274,9 +274,9 @@ describe('InstructorSessionPage', () => {
       fireEvent.click(screen.getByTestId('reopen-session-btn'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/sessions/session-123/reopen', {
+        expect(global.fetch).toHaveBeenCalledWith('/sessions/session-123/reopen', expect.objectContaining({
           method: 'POST',
-        });
+        }));
       });
     });
   });

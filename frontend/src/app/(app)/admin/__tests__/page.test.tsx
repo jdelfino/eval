@@ -97,8 +97,7 @@ describe('Admin Page - Namespace URL', () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('?namespace=ns-1'),
-        expect.anything()
+        expect.stringContaining('?namespace=ns-1')
       );
     });
   });

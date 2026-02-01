@@ -125,8 +125,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/namespace/invitations'),
-          expect.objectContaining({ credentials: 'include' })
+          expect.stringContaining('/namespace/invitations')
         );
       });
     });
@@ -187,7 +186,6 @@ describe('InvitationsPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('status=pending'),
-          expect.any(Object)
         );
       });
     });
@@ -213,7 +211,6 @@ describe('InvitationsPage', () => {
         // Should not include status param when "all" is selected
         expect(mockFetch).toHaveBeenCalledWith(
           expect.not.stringContaining('status='),
-          expect.any(Object)
         );
       });
     });

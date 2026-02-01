@@ -36,6 +36,7 @@ module.exports = {
       roots: ['<rootDir>/src'],
       setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
       moduleNameMapper: {
+        '^@/lib/api-client$': '<rootDir>/src/__mocks__/api-client.ts',
         '^@/(.*)$': '<rootDir>/src/$1',
         '^react-markdown$': '<rootDir>/src/__mocks__/react-markdown.tsx',
         '^remark-breaks$': '<rootDir>/src/__mocks__/remark-breaks.ts',

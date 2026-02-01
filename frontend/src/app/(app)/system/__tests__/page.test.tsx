@@ -195,7 +195,6 @@ describe('SystemAdminPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('namespaceId=ns-1'),
-          expect.any(Object)
         );
       });
     });
@@ -219,7 +218,6 @@ describe('SystemAdminPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('targetRole=namespace-admin'),
-          expect.any(Object)
         );
       });
     });
@@ -243,7 +241,6 @@ describe('SystemAdminPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('status=pending'),
-          expect.any(Object)
         );
       });
     });

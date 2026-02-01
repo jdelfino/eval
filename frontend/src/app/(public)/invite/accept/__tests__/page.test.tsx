@@ -192,9 +192,7 @@ describe('AcceptInvitePage', () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', {
-          credentials: 'include',
-        });
+        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite');
       });
     });
 

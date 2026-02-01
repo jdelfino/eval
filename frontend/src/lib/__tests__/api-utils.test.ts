@@ -1,5 +1,6 @@
 /**
  * Unit tests for API utilities including retry logic
+ * @jest-environment node
  */
 
 import { withRetry, withRetryInfo, fetchWithRetry, createUserFriendlyError } from '../api-utils';

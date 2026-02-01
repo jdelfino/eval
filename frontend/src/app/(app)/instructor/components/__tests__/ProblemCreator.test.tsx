@@ -273,7 +273,7 @@ describe('ProblemCreator Component', () => {
       render(<ProblemCreator problemId="problem-456" />);
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to load problem')).toBeInTheDocument();
+        expect(screen.getByText('Not found')).toBeInTheDocument();
       });
     });
 

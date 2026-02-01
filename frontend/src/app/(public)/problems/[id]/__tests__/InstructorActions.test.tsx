@@ -107,7 +107,8 @@ describe('InstructorActions auto-start from query params', () => {
     mockSearchParams = new URLSearchParams('start=true&sectionId=bad-section');
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      json: async () => ({}),
+      status: 500,
+      json: async () => ({ error: 'Failed to create session' }),
     });
 
     render(<InstructorActions {...defaultProps} />);
