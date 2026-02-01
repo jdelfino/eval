@@ -17,12 +17,15 @@ import (
 
 // SectionHandler handles section management routes.
 type SectionHandler struct {
-	sections store.SectionRepository
+	sections    store.SectionRepository
+	sessions    store.SessionRepository
+	memberships store.MembershipRepository
+	users       store.UserRepository
 }
 
-// NewSectionHandler creates a new SectionHandler with the given repository.
-func NewSectionHandler(sections store.SectionRepository) *SectionHandler {
-	return &SectionHandler{sections: sections}
+// NewSectionHandler creates a new SectionHandler with the given repositories.
+func NewSectionHandler(sections store.SectionRepository, sessions store.SessionRepository, memberships store.MembershipRepository, users store.UserRepository) *SectionHandler {
+	return &SectionHandler{sections: sections, sessions: sessions, memberships: memberships, users: users}
 }
 
 // Routes returns a chi.Router with standalone section routes mounted.
@@ -199,6 +202,184 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// MySections handles GET /api/v1/sections/my — returns sections the user is enrolled in.
+func (h *SectionHandler) MySections(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	sections, err := h.sections.ListMySections(r.Context(), authUser.ID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if sections == nil {
+		sections = []store.MySectionInfo{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, sections)
+}
+
+// ListSessions handles GET /api/v1/sections/{id}/sessions — returns sessions for a section.
+func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	sessions, err := h.sessions.ListSessions(r.Context(), store.SessionFilters{SectionID: &id})
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if sessions == nil {
+		sessions = []store.Session{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, sessions)
+}
+
+// RegenerateCode handles POST /api/v1/sections/{id}/regenerate-code — regenerate join code (instructor+).
+func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	const maxRetries = 3
+	var section *store.Section
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		joinCode, err := generateJoinCode()
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+		section, err = h.sections.UpdateSectionJoinCode(r.Context(), id, joinCode)
+		if err == nil {
+			break
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "section not found")
+			return
+		}
+		if store.IsUniqueViolation(err, "sections_join_code_key") {
+			continue
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if section == nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, section)
+}
+
+// ListInstructors handles GET /api/v1/sections/{id}/instructors — list section instructors.
+func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request) {
+	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	instructors, err := h.memberships.ListMembersByRole(r.Context(), sectionID, string(auth.RoleInstructor))
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if instructors == nil {
+		instructors = []store.SectionMembership{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, instructors)
+}
+
+// addInstructorRequest is the request body for POST /sections/{id}/instructors.
+type addInstructorRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// AddInstructor handles POST /api/v1/sections/{id}/instructors — add instructor by email.
+func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
+	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	req, err := httputil.BindJSON[addInstructorRequest](w, r)
+	if err != nil {
+		return
+	}
+
+	user, err := h.users.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if user.Role != string(auth.RoleInstructor) && user.Role != string(auth.RoleNamespaceAdmin) && user.Role != string(auth.RoleSystemAdmin) {
+		httputil.WriteError(w, http.StatusBadRequest, "user is not an instructor")
+		return
+	}
+
+	membership, err := h.memberships.CreateMembership(r.Context(), store.CreateMembershipParams{
+		UserID:    user.ID,
+		SectionID: sectionID,
+		Role:      "instructor",
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			httputil.WriteError(w, http.StatusConflict, "user is already an instructor for this section")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusCreated, membership)
+}
+
+// RemoveInstructor handles DELETE /api/v1/sections/{id}/instructors/{userID} — remove instructor.
+func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request) {
+	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	userID, ok := httputil.ParseUUIDParam(w, r, "userID")
+	if !ok {
+		return
+	}
+
+	err := h.memberships.DeleteMembershipIfNotLast(r.Context(), sectionID, userID, string(auth.RoleInstructor))
+	if err != nil {
+		if errors.Is(err, store.ErrLastMember) {
+			httputil.WriteError(w, http.StatusBadRequest, "cannot remove the last instructor")
+			return
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "instructor not found")
 			return
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")

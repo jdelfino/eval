@@ -163,5 +163,39 @@ func (s *Store) DeleteClass(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ListClassInstructorNames returns distinct instructor display names (or emails)
+// for all sections of a class, using a single joined query.
+func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT DISTINCT COALESCE(u.display_name, u.email)
+		FROM sections s
+		JOIN section_memberships sm ON sm.section_id = s.id
+		JOIN users u ON u.id = sm.user_id
+		WHERE s.class_id = $1
+		  AND sm.role = 'instructor'
+		ORDER BY 1`
+
+	rows, err := conn.Query(ctx, query, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
 // Compile-time check that Store implements ClassRepository.
 var _ ClassRepository = (*Store)(nil)

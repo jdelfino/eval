@@ -19,6 +19,8 @@ var (
 	ErrNoConnection = errors.New("no database connection in context")
 	// ErrDuplicate indicates a unique constraint violation.
 	ErrDuplicate = errors.New("duplicate record")
+	// ErrLastMember indicates the operation would remove the last member of a required role.
+	ErrLastMember = errors.New("cannot remove last member")
 )
 
 // HandleNotFound converts pgx.ErrNoRows to ErrNotFound.

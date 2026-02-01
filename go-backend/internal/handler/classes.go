@@ -14,12 +14,13 @@ import (
 
 // ClassHandler handles class management routes.
 type ClassHandler struct {
-	classes store.ClassRepository
+	classes  store.ClassRepository
+	sections store.SectionRepository
 }
 
-// NewClassHandler creates a new ClassHandler with the given repository.
-func NewClassHandler(classes store.ClassRepository) *ClassHandler {
-	return &ClassHandler{classes: classes}
+// NewClassHandler creates a new ClassHandler with the given repositories.
+func NewClassHandler(classes store.ClassRepository, sections store.SectionRepository) *ClassHandler {
+	return &ClassHandler{classes: classes, sections: sections}
 }
 
 // Routes returns a chi.Router with class routes mounted.
@@ -55,7 +56,14 @@ func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, classes)
 }
 
-// Get handles GET /api/v1/classes/{id} — returns a single class.
+// classDetailResponse is the enriched response for GET /classes/{id}.
+type classDetailResponse struct {
+	store.Class
+	Sections        []store.Section `json:"sections"`
+	InstructorNames []string        `json:"instructor_names"`
+}
+
+// Get handles GET /api/v1/classes/{id} — returns a single class with sections and instructor names.
 func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id")
 	if !ok {
@@ -72,7 +80,35 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, class)
+	// Enrich with sections and instructor names when repos are available
+	sections := []store.Section{}
+	instructorNames := []string{}
+
+	if h.sections != nil {
+		secs, err := h.sections.ListSectionsByClass(r.Context(), id)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if secs != nil {
+			sections = secs
+		}
+
+		names, err := h.classes.ListClassInstructorNames(r.Context(), id)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if names != nil {
+			instructorNames = names
+		}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{
+		Class:           *class,
+		Sections:        sections,
+		InstructorNames: instructorNames,
+	})
 }
 
 // createClassRequest is the request body for POST /classes.

@@ -126,13 +126,14 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 					r.Mount("/realtime", centrifugoHandler.Routes())
 				}
 			}
-			r.Mount("/namespaces", handler.NewNamespaceHandler(s).Routes())
-			r.Mount("/classes", handler.NewClassHandler(s).Routes())
+			r.Mount("/namespaces", handler.NewNamespaceHandler(s, s).Routes())
+			r.Mount("/classes", handler.NewClassHandler(s, s).Routes())
 
 			membershipHandler := handler.NewMembershipHandler(s)
 			r.Post("/sections/join", membershipHandler.Join)
 
-			sectionHandler := handler.NewSectionHandler(s)
+			sectionHandler := handler.NewSectionHandler(s, s, s, s)
+			r.Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
 				r.Mount("/", sectionHandler.ClassRoutes())
@@ -141,7 +142,22 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Get("/sections/{id}/members", membershipHandler.ListMembers)
 			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
 
+			// Section sub-resources (instructor+)
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Get("/sections/{id}/sessions", sectionHandler.ListSessions)
+				r.Post("/sections/{id}/regenerate-code", sectionHandler.RegenerateCode)
+				r.Get("/sections/{id}/instructors", sectionHandler.ListInstructors)
+				r.Post("/sections/{id}/instructors", sectionHandler.AddInstructor)
+				r.Delete("/sections/{id}/instructors/{userID}", sectionHandler.RemoveInstructor)
+			})
+
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
+
+			// User management routes
+			userHandler := handler.NewUserHandler(s)
+			r.Mount("/system/users", userHandler.SystemRoutes())
+			r.Mount("/admin/users", userHandler.NamespaceRoutes())
 
 			// Create real-time publisher (no-op if Centrifugo is not configured)
 			var sessionPub realtime.SessionPublisher

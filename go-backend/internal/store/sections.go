@@ -175,5 +175,82 @@ func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ListMySections retrieves sections the user is enrolled in with class info.
+func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySectionInfo, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT s.id, s.namespace_id, s.class_id, s.name, s.semester, s.join_code, s.active,
+		       s.created_at, s.updated_at, c.name
+		FROM sections s
+		JOIN section_memberships sm ON sm.section_id = s.id
+		JOIN classes c ON c.id = s.class_id
+		WHERE sm.user_id = $1
+		ORDER BY s.created_at`
+
+	rows, err := conn.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []MySectionInfo
+	for rows.Next() {
+		var info MySectionInfo
+		if err := rows.Scan(
+			&info.Section.ID,
+			&info.Section.NamespaceID,
+			&info.Section.ClassID,
+			&info.Section.Name,
+			&info.Section.Semester,
+			&info.Section.JoinCode,
+			&info.Section.Active,
+			&info.Section.CreatedAt,
+			&info.Section.UpdatedAt,
+			&info.ClassName,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, info)
+	}
+	return results, rows.Err()
+}
+
+// UpdateSectionJoinCode updates a section's join code.
+// Returns ErrNotFound if the section does not exist.
+func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*Section, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE sections
+		SET join_code = $2, updated_at = now()
+		WHERE id = $1
+		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+
+	var sec Section
+	err = conn.QueryRow(ctx, query, id, joinCode).Scan(
+		&sec.ID,
+		&sec.NamespaceID,
+		&sec.ClassID,
+		&sec.Name,
+		&sec.Semester,
+		&sec.JoinCode,
+		&sec.Active,
+		&sec.CreatedAt,
+		&sec.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &sec, nil
+}
+
 // Compile-time check that Store implements SectionRepository.
 var _ SectionRepository = (*Store)(nil)

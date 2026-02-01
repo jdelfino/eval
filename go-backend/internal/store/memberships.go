@@ -140,5 +140,80 @@ func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]Section
 	return members, rows.Err()
 }
 
+// ListMembersByRole retrieves memberships for a given section filtered by role.
+func (s *Store) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]SectionMembership, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT id, user_id, section_id, role, joined_at
+		FROM section_memberships
+		WHERE section_id = $1 AND role = $2
+		ORDER BY joined_at`
+
+	rows, err := conn.Query(ctx, query, sectionID, role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members []SectionMembership
+	for rows.Next() {
+		var m SectionMembership
+		if err := rows.Scan(
+			&m.ID,
+			&m.UserID,
+			&m.SectionID,
+			&m.Role,
+			&m.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		members = append(members, m)
+	}
+	return members, rows.Err()
+}
+
+// DeleteMembershipIfNotLast atomically deletes a membership only if it is not the
+// last member with the given role in the section.
+// Returns ErrLastMember if removal would leave zero members with that role.
+// Returns ErrNotFound if the membership does not exist.
+func (s *Store) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error {
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Count members with this role (FOR UPDATE locks the rows)
+	var count int
+	err = tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND role = $2 FOR UPDATE`,
+		sectionID, role,
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count <= 1 {
+		return ErrLastMember
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2 AND role = $3`,
+		sectionID, userID, role,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return tx.Commit(ctx)
+}
+
 // Compile-time check that Store implements MembershipRepository.
 var _ MembershipRepository = (*Store)(nil)

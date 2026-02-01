@@ -19,11 +19,12 @@ import (
 
 // mockProblemRepo implements store.ProblemRepository for testing.
 type mockProblemRepo struct {
-	listProblemsFn  func(ctx context.Context, classID *uuid.UUID) ([]store.Problem, error)
-	getProblemFn    func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
-	createProblemFn func(ctx context.Context, params store.CreateProblemParams) (*store.Problem, error)
-	updateProblemFn func(ctx context.Context, id uuid.UUID, params store.UpdateProblemParams) (*store.Problem, error)
-	deleteProblemFn func(ctx context.Context, id uuid.UUID) error
+	listProblemsFn         func(ctx context.Context, classID *uuid.UUID) ([]store.Problem, error)
+	listProblemsFilteredFn func(ctx context.Context, filters store.ProblemFilters) ([]store.Problem, error)
+	getProblemFn           func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
+	createProblemFn        func(ctx context.Context, params store.CreateProblemParams) (*store.Problem, error)
+	updateProblemFn        func(ctx context.Context, id uuid.UUID, params store.UpdateProblemParams) (*store.Problem, error)
+	deleteProblemFn        func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockProblemRepo) ListProblems(ctx context.Context, classID *uuid.UUID) ([]store.Problem, error) {
@@ -44,6 +45,13 @@ func (m *mockProblemRepo) UpdateProblem(ctx context.Context, id uuid.UUID, param
 
 func (m *mockProblemRepo) DeleteProblem(ctx context.Context, id uuid.UUID) error {
 	return m.deleteProblemFn(ctx, id)
+}
+
+func (m *mockProblemRepo) ListProblemsFiltered(ctx context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+	if m.listProblemsFilteredFn != nil {
+		return m.listProblemsFilteredFn(ctx, filters)
+	}
+	return nil, nil
 }
 
 func testProblem() *store.Problem {
@@ -67,9 +75,9 @@ func testProblem() *store.Problem {
 func TestListProblems_Success(t *testing.T) {
 	p := testProblem()
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, classID *uuid.UUID) ([]store.Problem, error) {
-			if classID != nil {
-				t.Fatalf("expected nil classID, got %v", classID)
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			if filters.ClassID != nil {
+				t.Fatalf("expected nil classID, got %v", filters.ClassID)
 			}
 			return []store.Problem{*p}, nil
 		},
@@ -105,12 +113,12 @@ func TestListProblems_WithClassIDFilter(t *testing.T) {
 	p.ClassID = &classID
 
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, cid *uuid.UUID) ([]store.Problem, error) {
-			if cid == nil {
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			if filters.ClassID == nil {
 				t.Fatalf("expected classID, got nil")
 			}
-			if *cid != classID {
-				t.Fatalf("expected classID %v, got %v", classID, *cid)
+			if *filters.ClassID != classID {
+				t.Fatalf("expected classID %v, got %v", classID, *filters.ClassID)
 			}
 			return []store.Problem{*p}, nil
 		},
@@ -146,7 +154,7 @@ func TestListProblems_InvalidClassID(t *testing.T) {
 
 func TestListProblems_Empty(t *testing.T) {
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, _ *uuid.UUID) ([]store.Problem, error) {
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
 			return nil, nil
 		},
 	}
@@ -171,7 +179,7 @@ func TestListProblems_Empty(t *testing.T) {
 
 func TestListProblems_InternalError(t *testing.T) {
 	repo := &mockProblemRepo{
-		listProblemsFn: func(_ context.Context, _ *uuid.UUID) ([]store.Problem, error) {
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
 			return nil, errors.New("db error")
 		},
 	}
@@ -687,5 +695,135 @@ func TestDeleteProblem_RBACForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for student DELETE, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListProblems_FilteredByAuthor(t *testing.T) {
+	authorID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	p := testProblem()
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?author_id="+authorID.String(), nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedFilters.AuthorID == nil || *capturedFilters.AuthorID != authorID {
+		t.Fatalf("expected AuthorID %v, got %v", authorID, capturedFilters.AuthorID)
+	}
+}
+
+func TestListProblems_FilteredByTags(t *testing.T) {
+	p := testProblem()
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?tags=go,algorithms", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedFilters.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(capturedFilters.Tags))
+	}
+	if capturedFilters.Tags[0] != "go" || capturedFilters.Tags[1] != "algorithms" {
+		t.Errorf("expected tags [go, algorithms], got %v", capturedFilters.Tags)
+	}
+}
+
+func TestListProblems_PublicOnly(t *testing.T) {
+	p := testProblem()
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?public_only=true", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !capturedFilters.PublicOnly {
+		t.Fatal("expected PublicOnly=true")
+	}
+}
+
+func TestListProblems_InvalidAuthorID(t *testing.T) {
+	repo := &mockProblemRepo{}
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?author_id=not-a-uuid", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestListProblems_FilteredSortBy(t *testing.T) {
+	p := testProblem()
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?sort_by=title&sort_order=desc", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedFilters.SortBy != "title" {
+		t.Errorf("expected SortBy=title, got %q", capturedFilters.SortBy)
+	}
+	if capturedFilters.SortOrder != "desc" {
+		t.Errorf("expected SortOrder=desc, got %q", capturedFilters.SortOrder)
 	}
 }
