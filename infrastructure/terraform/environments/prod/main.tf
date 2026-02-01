@@ -184,20 +184,6 @@ module "monitoring" {
   region       = var.region
 }
 
-module "redis" {
-  source = "../../modules/redis"
-
-  environment  = var.environment
-  project_name = var.project_name
-  project_id   = var.project_id
-  region       = var.region
-
-  tier           = var.redis_tier
-  memory_size_gb = var.redis_memory_size_gb
-  vpc_network_id = module.vpc.vpc_id
-
-  depends_on = [module.vpc]
-}
 
 # -----------------------------------------------------------------------------
 # KEDA (Kubernetes Event-Driven Autoscaling)
