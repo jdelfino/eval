@@ -180,9 +180,28 @@ func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// requireNamespaceAccess checks that non-system-admin callers belong to the given namespace.
+// Returns true if access is allowed, false if a 403 was written.
+func requireNamespaceAccess(w http.ResponseWriter, r *http.Request, namespaceID string) bool {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return false
+	}
+	if authUser.Role != auth.RoleSystemAdmin && authUser.NamespaceID != namespaceID {
+		httputil.WriteError(w, http.StatusForbidden, "access denied: namespace mismatch")
+		return false
+	}
+	return true
+}
+
 // ListUsers handles GET /api/v1/namespaces/{id}/users — list users in a namespace (namespace-admin+).
 func (h *NamespaceHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	if !requireNamespaceAccess(w, r, id) {
+		return
+	}
 
 	users, err := h.users.ListUsers(r.Context(), store.UserFilters{NamespaceID: &id})
 	if err != nil {
@@ -207,6 +226,10 @@ type capacityResponse struct {
 // GetCapacity handles GET /api/v1/namespaces/{id}/capacity — namespace limits + current counts (namespace-admin+).
 func (h *NamespaceHandler) GetCapacity(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	if !requireNamespaceAccess(w, r, id) {
+		return
+	}
 
 	ns, err := h.namespaces.GetNamespace(r.Context(), id)
 	if err != nil {
@@ -240,6 +263,10 @@ type updateCapacityRequest struct {
 // UpdateCapacity handles PUT /api/v1/namespaces/{id}/capacity — update capacity limits (system-admin only).
 func (h *NamespaceHandler) UpdateCapacity(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	if !requireNamespaceAccess(w, r, id) {
+		return
+	}
 
 	req, err := httputil.BindJSON[updateCapacityRequest](w, r)
 	if err != nil {

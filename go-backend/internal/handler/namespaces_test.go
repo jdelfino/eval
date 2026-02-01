@@ -619,7 +619,7 @@ func TestNSListUsers_Success(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", nsID)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: nsID})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -653,7 +653,7 @@ func TestNSListUsers_Empty(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -698,7 +698,7 @@ func TestGetCapacity_Success(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -738,7 +738,7 @@ func TestGetCapacity_NotFound(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -767,7 +767,7 @@ func TestGetCapacity_CountError(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -829,6 +829,105 @@ func TestUpdateCapacity_Success(t *testing.T) {
 	}
 	if got.MaxStudents == nil || *got.MaxStudents != 100 {
 		t.Errorf("expected max_students=100, got %v", got.MaxStudents)
+	}
+}
+
+func TestListUsers_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
+	users := &nsTestUserRepo{
+		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+			t.Fatal("should not reach repo")
+			return nil, nil
+		},
+	}
+
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	req := httptest.NewRequest(http.MethodGet, "/other-ns/users", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "other-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListUsers_SystemAdmin_AllowsCrossNamespace(t *testing.T) {
+	users := &nsTestUserRepo{
+		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+			return []store.User{}, nil
+		},
+	}
+
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	req := httptest.NewRequest(http.MethodGet, "/any-ns/users", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "any-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin, NamespaceID: ""})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {
+			t.Fatal("should not reach repo")
+			return nil, nil
+		},
+	}
+
+	h := NewNamespaceHandler(repo, &nsTestUserRepo{})
+	req := httptest.NewRequest(http.MethodGet, "/other-ns/capacity", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "other-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetCapacity(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
+	// UpdateCapacity is system-admin only via middleware, but the handler itself
+	// should also enforce namespace scoping for defense in depth.
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
+			t.Fatal("should not reach repo")
+			return nil, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodPut, "/other-ns/capacity", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "other-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCapacity(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
