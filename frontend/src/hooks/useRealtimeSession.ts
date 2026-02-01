@@ -394,9 +394,14 @@ export function useRealtimeSession({
     }
   }, [session_id]);
 
-  // Create debounced version (300ms)
+  // Create debounced version (300ms) with error handling
   const updateCode = useMemo(
-    () => debounce(updateCodeImmediate, 300),
+    () => debounce((...args: Parameters<typeof updateCodeImmediate>) => {
+      updateCodeImmediate(...args).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Failed to save code';
+        setError(message);
+      });
+    }, 300),
     [updateCodeImmediate]
   );
 
