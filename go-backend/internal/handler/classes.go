@@ -80,28 +80,26 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enrich with sections and instructor names when repos are available
+	// Enrich with sections and instructor names.
 	sections := []store.Section{}
 	instructorNames := []string{}
 
-	if h.sections != nil {
-		secs, err := h.sections.ListSectionsByClass(r.Context(), id)
-		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if secs != nil {
-			sections = secs
-		}
+	secs, err := h.sections.ListSectionsByClass(r.Context(), id)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if secs != nil {
+		sections = secs
+	}
 
-		names, err := h.classes.ListClassInstructorNames(r.Context(), id)
-		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if names != nil {
-			instructorNames = names
-		}
+	names, err := h.classes.ListClassInstructorNames(r.Context(), id)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if names != nil {
+		instructorNames = names
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{

@@ -798,6 +798,36 @@ func TestListProblems_InvalidAuthorID(t *testing.T) {
 	}
 }
 
+func TestListProblems_InvalidSortBy(t *testing.T) {
+	repo := &mockProblemRepo{}
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?sort_by=invalid_column", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListProblems_InvalidSortOrder(t *testing.T) {
+	repo := &mockProblemRepo{}
+	h := NewProblemHandler(repo)
+	req := httptest.NewRequest(http.MethodGet, "/?sort_order=invalid", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListProblems_FilteredSortBy(t *testing.T) {
 	p := testProblem()
 

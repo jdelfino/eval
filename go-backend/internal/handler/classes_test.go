@@ -153,9 +153,17 @@ func TestGetClass_Success(t *testing.T) {
 			}
 			return c, nil
 		},
+		listClassInstructorNamesFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return nil, nil
+		},
+	}
+	secRepo := &mockSectionRepo{
+		listSectionsByClassFn: func(_ context.Context, _ uuid.UUID) ([]store.Section, error) {
+			return nil, nil
+		},
 	}
 
-	h := NewClassHandler(repo, nil)
+	h := NewClassHandler(repo, secRepo)
 	req := httptest.NewRequest(http.MethodGet, "/"+c.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", c.ID.String())

@@ -250,6 +250,61 @@ func TestUpdateAdmin_Success(t *testing.T) {
 	}
 }
 
+func TestUpdateAdmin_ClearNullableFields(t *testing.T) {
+	userID := uuid.New()
+	emptyStr := ""
+	returned := &store.User{
+		ID:          userID,
+		Email:       "user@example.com",
+		Role:        "instructor",
+		NamespaceID: nil,
+		DisplayName: nil,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	repo := &fullMockUserRepo{
+		updateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
+			if id != userID {
+				t.Fatalf("unexpected id")
+			}
+			if params.NamespaceID == nil {
+				t.Fatal("expected namespace_id param to be non-nil (empty string to clear)")
+			}
+			if *params.NamespaceID != emptyStr {
+				t.Fatalf("expected empty namespace_id, got %q", *params.NamespaceID)
+			}
+			return returned, nil
+		},
+	}
+
+	h := NewUserHandler(repo)
+	r := chi.NewRouter()
+	r.Mount("/system/users", h.SystemRoutes())
+
+	body := `{"namespace_id":""}`
+	req := httptest.NewRequest(http.MethodPut, "/system/users/"+userID.String(), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleSystemAdmin,
+	}))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result store.User
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.NamespaceID != nil {
+		t.Fatalf("expected nil namespace_id, got %v", result.NamespaceID)
+	}
+}
+
 func TestUpdateAdmin_NotFound(t *testing.T) {
 	repo := &fullMockUserRepo{
 		updateUserAdminFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {

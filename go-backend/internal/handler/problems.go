@@ -47,9 +47,22 @@ func (h *ProblemHandler) Routes() chi.Router {
 // Supports query params: class_id, author_id, tags (comma-separated), include_public, sort_by, sort_order.
 func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+
+	sortBy := q.Get("sort_by")
+	if sortBy != "" && sortBy != "created_at" && sortBy != "title" && sortBy != "updated_at" {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid sort_by: must be one of created_at, title, updated_at")
+		return
+	}
+
+	sortOrder := q.Get("sort_order")
+	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid sort_order: must be asc or desc")
+		return
+	}
+
 	filters := store.ProblemFilters{
-		SortBy:    q.Get("sort_by"),
-		SortOrder: q.Get("sort_order"),
+		SortBy:    sortBy,
+		SortOrder: sortOrder,
 	}
 
 	if classIDStr := q.Get("class_id"); classIDStr != "" {

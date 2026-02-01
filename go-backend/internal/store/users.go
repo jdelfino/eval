@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -189,6 +190,8 @@ func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, err
 }
 
 // UpdateUserAdmin updates a user's fields as an admin and returns the updated user.
+// Uses dynamic SET clauses so that nullable fields (namespace_id, display_name) can
+// be explicitly cleared by passing a non-nil pointer to an empty/zero value.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params UpdateUserAdminParams) (*User, error) {
 	conn, err := s.conn(ctx)
@@ -196,18 +199,40 @@ func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params Update
 		return nil, err
 	}
 
-	const query = `
+	setClauses := []string{"updated_at = now()"}
+	args := []any{id}
+	argIdx := 2
+
+	if params.Email != nil {
+		setClauses = append(setClauses, fmt.Sprintf("email = $%d", argIdx))
+		args = append(args, *params.Email)
+		argIdx++
+	}
+	if params.DisplayName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("display_name = $%d", argIdx))
+		args = append(args, *params.DisplayName)
+		argIdx++
+	}
+	if params.Role != nil {
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, *params.Role)
+		argIdx++
+	}
+	if params.NamespaceID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("namespace_id = $%d", argIdx))
+		args = append(args, *params.NamespaceID)
+		argIdx++ //nolint:ineffassign
+	}
+
+	query := fmt.Sprintf(`
 		UPDATE users
-		SET email        = COALESCE($2, email),
-		    display_name = COALESCE($3, display_name),
-		    role         = COALESCE($4, role),
-		    namespace_id = COALESCE($5, namespace_id),
-		    updated_at   = now()
+		SET %s
 		WHERE id = $1
-		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
+		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`,
+		strings.Join(setClauses, ", "))
 
 	var user User
-	err = conn.QueryRow(ctx, query, id, params.Email, params.DisplayName, params.Role, params.NamespaceID).Scan(
+	err = conn.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
