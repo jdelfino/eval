@@ -60,7 +60,6 @@ For every test file, read it completely and check:
 
 #### Test Names & Organization
 - Do test names describe the behavior being tested?
-- Does `TestCreateUser` actually test creating a user, or something else?
 - Are table-driven tests used where appropriate?
 
 #### Meaningless Tests (flag these specifically)

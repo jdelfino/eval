@@ -1,142 +1,75 @@
 ---
 name: implementer
-description: Implement a well-defined task with test-first development. Commits and pushes but NEVER modifies beads issues. Used by coordinator as a subagent.
+description: Pure development workflow with test-first development and coverage review. Used by coordinator directly or as a subagent. Never manages beads issues or commits.
 ---
 
 # Implementer
 
-You are an implementer agent. Your job is to write code and tests for a specific task, commit, and push. You do NOT manage beads issues - the coordinator handles that.
+Follow these phases **in strict order**. Do not skip phases. Do not proceed until the current phase's gate is satisfied.
 
-## Your Constraints
+This skill covers development only — no issue tracking, no commits, no pushes. The coordinator handles those.
 
-- **MAY** read beads issues (`bd show`, `bd list`) to understand context
-- **NEVER** modify beads issues (no create, update, close, or label changes)
-- **ALWAYS** work in the worktree path provided to you
-- **ALWAYS** commit and push your work
-- **ALWAYS** report your outcome in the structured format below
+## Principles
 
-## Workflow
+- Never silently work around problems. Throw errors for missing env vars, invalid state, missing dependencies.
+- Mock properly in tests. Do not add production fallbacks to make tests pass.
+- No type casts that bypass the type system.
+- No optional chaining on required properties.
 
-### 1. Understand the Task
+## Phase 1: Write Failing Tests
 
-Read the task description carefully. If anything is unclear, report failure with specific questions rather than guessing.
+Write tests for the behavior you are about to change or add. Do this **before** touching any production code.
 
-### 2. Navigate to Worktree
+1. Read the relevant production code to understand current behavior
+2. Write new test cases that describe the desired behavior after your change
+3. Run the tests
 
-```bash
-cd <worktree-path>
-```
+**Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
-All work happens in the worktree, not the main checkout.
+## Phase 2: Implement
 
-### 3. Test-First Development
+Make the production code changes. Keep changes minimal and focused on the task.
 
-**The One Rule: CHANGED CODE = NEW TESTS**
+## Phase 3: Verify
 
-1. Write test FIRST (it should fail)
-2. Implement the fix/feature
-3. Run tests (they should pass)
-4. Commit BOTH production + test files together
+Run all quality gates for the project (tests, type checking, linting).
 
-### Pre-Commit Questions
+**Gate:** All quality gate commands pass with zero errors. If any fails, fix the issues before proceeding.
 
-1. **Did I change production code?** → Must add tests
-2. **Did I add NEW tests for EVERY file I changed?** → If NO, STOP
-3. **Do ALL tests pass?** → Run your test command
-4. **Any type/lint errors?** → Run your lint/type-check command
+## Phase 4: Test Coverage Review
 
-### Common Violations (DO NOT DO THESE)
+This is an audit, not a formality. Evaluate whether your tests actually cover the changes you made.
 
-- "Tests already pass" - Did you ADD tests for YOUR changes?
-- "It's a small change" - Still needs tests
-- "Bug fix only" - Needs regression test
-- "Changed 3 files, added tests for 1" - Need tests for ALL 3
-
-## Fail Fast, Fail Loud
-
-**Never silently work around problems. Fix them or let them fail visibly.**
-
-- **Missing env vars**: Throw an error, don't silently skip
-- **Invalid state**: Crash early with a clear message
-- **Tests need mocking**: Mock properly, don't add production fallbacks
-
-## Quality Gates
-
-Run ALL of these commands before committing:
-
-**For Go projects:**
-```bash
-go build ./...           # Must compile
-go test ./...            # All tests must pass
-golangci-lint run ./...  # Zero lint issues (including errcheck)
-```
-
-**For TypeScript/JavaScript projects:**
-```bash
-npm run build            # Must compile
-npm test                 # All tests must pass
-npm run lint             # Zero lint issues
-```
-
-**All checks must pass with zero errors.** If they don't, fix the issues before committing.
-
-## Commit Checklist
-
-Before EVERY commit, verify ALL of these:
-
-- [ ] Tests written for ALL new/modified production code
-- [ ] All tests passing
-- [ ] No lint/type errors
-- [ ] No type casts that bypass the type system
-
-**If you cannot check ALL boxes, DO NOT COMMIT.** Report failure instead.
-
-## Make the Commit
+### Step 1: List what changed
 
 ```bash
-git add -A
-git commit -m "$(cat <<'EOF'
-<type>: <description>
-
-<optional body>
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-git push
+git diff --name-only
 ```
 
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+Separate the output into production files and test files.
 
-## Report Your Outcome
+### Step 2: For each changed production file, evaluate
 
-When finished, you MUST report in this exact format:
+- **What behavior changed?** (new feature, bug fix, removed feature, refactored logic)
+- **What existing tests cover this file?** Read the corresponding test file if one exists.
+- **Are there gaps?** Specifically:
+  - Happy path for new/changed behavior
+  - Error paths and edge cases
+  - Regression test if this is a bug fix (a test that would have caught the original bug)
+  - Boundary conditions
 
-### On Success
+### Step 3: Evaluate integration test needs
 
-```
-IMPLEMENTATION RESULT: SUCCESS
-Task: <task-id>
-Commit: <full 40-character commit hash>
-Summary: <1-2 sentence description of what was done>
-```
+Integration tests are needed when changes affect:
+- Repository/persistence layer (database queries, data mapping)
+- API routes that combine multiple services
+- Auth flows or permission checks
+- Data flowing across multiple layers
 
-The coordinator can inspect the commit for details. Keep the report minimal.
+If integration tests are needed, write them.
 
-### On Failure
+### Step 4: Fill gaps
 
-```
-IMPLEMENTATION RESULT: FAILURE
-Task: <task-id>
-Error: <what went wrong>
-Details: <brief explanation or key error message>
-```
+Write any missing tests identified above. Then re-run quality gates.
 
-If you have questions about unclear requirements, list them in Details.
-
-## What You Do NOT Do
-
-- ❌ Modify beads issues (create, update, close, labels)
-- ❌ Make decisions about what to work on next
-- ❌ Skip tests because "it's simple"
-- ❌ Commit if quality gates fail
+**Gate:** All tests pass, including your new coverage additions. If you identified no gaps in Steps 2-3, document your reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").

@@ -10,14 +10,14 @@ for resolving larger issues in follow-on work.
 | Scenario | Command |
 |----------|---------|
 | New epic or feature design | `/plan <description-or-epic-id>` |
-| Coordinated work (epics, multi-commit) | `/work <id>` |
-| Simple tasks (quick fixes, single commit) | `/task <id>` |
+| All implementation work | `/work <id-or-description>` |
+| Process merge queue | `/merge` |
 
 `/plan` explores the codebase, discusses tradeoffs with you, files beads issues, and runs an architectural plan review. Use it before `/work` for new epics.
 
-`/work` implements filed issues: spawns implementers, runs 3 specialized PR reviews (correctness, test quality, architecture) before creating the PR.
+`/work` is the single entry point for all implementation. It triages the work, decides whether to commit directly to main or create a branch/PR, manages beads issues, and runs specialized reviews for branch work.
 
-`/task` handles simple single-commit work end-to-end.
+`/merge` processes open PRs: merges when CI passes, handles rebases, files issues for failures. Run in a dedicated window while other windows do `/work`.
 
 ## Issue Tracking with bd (beads)
 
@@ -111,6 +111,21 @@ bd automatically syncs with git:
 - Imports from JSONL when newer (e.g., after `git pull`)
 - No manual export/import needed!
 
+### Managing AI-Generated Planning Documents
+
+AI assistants often create planning and design documents during development:
+- PLAN.md, IMPLEMENTATION.md, ARCHITECTURE.md
+- DESIGN.md, CODEBASE_SUMMARY.md, INTEGRATION_PLAN.md
+- TESTING_GUIDE.md, TECHNICAL_DESIGN.md, and similar files
+
+**Best Practice: Use a dedicated directory for these ephemeral files**
+
+**Recommended approach:**
+- Create a `history/` directory in the project root
+- Store ALL AI-generated planning/design docs in `history/`
+- Keep the repository root clean and focused on permanent project files
+- Only access `history/` when explicitly asked to review past planning
+
 ### CLI Help
 
 Run `bd <command> --help` to see all available flags for any command.
@@ -122,7 +137,35 @@ For example: `bd create --help` shows `--parent`, `--deps`, `--assignee`, etc.
 - Always use `--json` flag for programmatic use; pipe through `jq` for filtering
 - Link discovered work with `discovered-from` dependencies
 - Check `bd ready` before asking "what should I work on?"
+- Store AI planning docs in `history/` directory
 - Run `bd <cmd> --help` to discover available flags
 - Do NOT create markdown TODO lists
 - Do NOT use external issue trackers
 - Do NOT duplicate tracking systems
+- Do NOT clutter repo root with planning documents
+
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds

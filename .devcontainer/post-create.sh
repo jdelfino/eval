@@ -15,9 +15,6 @@ bd hooks install 2>/dev/null || true
 # Install Claude Code
 curl -fsSL https://claude.ai/install.sh | bash
 
-# Install copier (template updates)
-sudo pip3 install copier --break-system-packages
-
 # Fix ownership of node_modules volume (Docker named volumes default to root)
 sudo chown vscode:vscode "/workspaces/eval/node_modules"
 
@@ -37,5 +34,5 @@ echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.clou
 sudo apt-get update
 sudo apt-get install -y google-cloud-cli
 
-# Run project setup (1Password vault access, etc.)
+# Configure 1Password vault access
 "$SCRIPT_DIR/setup.sh"

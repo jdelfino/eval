@@ -33,7 +33,7 @@ git diff <base-branch>...HEAD
 
 ### 2. Run Quality Gates
 
-Run ALL quality gates for the project. If any fail, note the specific failures.
+Run all quality gates for the project. If any fail, note the specific failures.
 
 ### 3. Review Every Changed File
 
@@ -42,8 +42,8 @@ For each file in the diff, check:
 #### Bugs
 - Logic errors, off-by-one, nil/null dereference
 - Incorrect conditionals, missing return statements
-- Concurrency issues: race conditions, missing locks, goroutine leaks
-- Resource leaks: unclosed connections, file handles, channels
+- Concurrency issues: race conditions, missing locks
+- Resource leaks: unclosed connections, file handles
 
 #### Error Handling
 - Are errors checked and propagated correctly?

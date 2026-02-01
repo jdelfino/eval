@@ -95,4 +95,4 @@ Dependency fixes:
 - <dependency that should be added/removed, or "None">
 ```
 
-Be specific. "Task 3 creates a new RequestBody struct but go-backend/internal/types/api.go already has ExecuteRequest that serves the same purpose" is useful. "Watch out for duplication" is not.
+Be specific. "Task 3 creates a new RequestBody type but src/types/api.ts already has ExecuteRequest that serves the same purpose" is useful. "Watch out for duplication" is not.
