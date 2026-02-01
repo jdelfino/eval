@@ -152,6 +152,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			r.Mount("/sessions", handler.NewSessionHandler(s, sessionPub, logger).Routes())
 
+			sessionStateHandler := handler.NewSessionStateHandler(s, s, s, sessionPub, logger)
+			r.Get("/sessions/{id}/state", sessionStateHandler.State)
+			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Get("/sessions/{id}/details", sessionStateHandler.Details)
+				r.Post("/sessions/{id}/feature", sessionStateHandler.Feature)
+			})
+
 			revisionHandler := handler.NewRevisionHandler(s)
 			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
 			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
