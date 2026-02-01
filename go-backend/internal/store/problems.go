@@ -173,6 +173,7 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 	if params.ClassID != nil {
 		query += fmt.Sprintf("\n		    class_id           = $%d,", argIdx)
 		args = append(args, *params.ClassID)
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 	}
 
 	query += `

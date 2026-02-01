@@ -33,6 +33,7 @@ func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Ses
 	if filters.Status != nil {
 		query += fmt.Sprintf(" AND status = $%d", argIdx)
 		args = append(args, *filters.Status)
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
 	}
 	query += " ORDER BY created_at DESC"
 
@@ -184,6 +185,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 	if params.EndedAt != nil {
 		query += fmt.Sprintf(",\n		    ended_at = $%d", argIdx)
 		args = append(args, *params.EndedAt)
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 	}
 
 	query += `

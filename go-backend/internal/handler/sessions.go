@@ -61,6 +61,10 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status := r.URL.Query().Get("status"); status != "" {
+		if status != "active" && status != "completed" {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid status: must be 'active' or 'completed'")
+			return
+		}
 		filters.Status = &status
 	}
 
@@ -151,6 +155,17 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	// Fetch current state to detect actual changes for event publishing.
+	previous, err := h.sessions.GetSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	params := store.UpdateSessionParams{
 		FeaturedStudentID: req.FeaturedStudentID,
 		FeaturedCode:      req.FeaturedCode,
@@ -173,16 +188,19 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Publish real-time events asynchronously after successful update.
-	if req.Status != nil && *req.Status == "completed" {
+	// Publish real-time events only when the value actually changed.
+	if req.Status != nil && *req.Status == "completed" && previous.Status != "completed" {
 		publishAsync(r, h.logger, id, func(ctx context.Context) error {
 			return h.publisher.SessionEnded(ctx, id.String(), "completed")
 		})
 	}
 	if req.FeaturedStudentID != nil && req.FeaturedCode != nil {
-		publishAsync(r, h.logger, id, func(ctx context.Context) error {
-			return h.publisher.FeaturedStudentChanged(ctx, id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode)
-		})
+		featuredChanged := previous.FeaturedStudentID == nil || *previous.FeaturedStudentID != *req.FeaturedStudentID
+		if featuredChanged {
+			publishAsync(r, h.logger, id, func(ctx context.Context) error {
+				return h.publisher.FeaturedStudentChanged(ctx, id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode)
+			})
+		}
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
