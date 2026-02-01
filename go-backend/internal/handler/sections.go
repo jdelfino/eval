@@ -379,27 +379,12 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Prevent removing the last instructor
-	members, err := h.memberships.ListMembers(r.Context(), sectionID)
+	err := h.memberships.DeleteMembershipIfNotLast(r.Context(), sectionID, userID, string(auth.RoleInstructor))
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	instructorCount := 0
-	for _, m := range members {
-		if m.Role == string(auth.RoleInstructor) {
-			instructorCount++
+		if errors.Is(err, store.ErrLastMember) {
+			httputil.WriteError(w, http.StatusBadRequest, "cannot remove the last instructor")
+			return
 		}
-	}
-
-	if instructorCount <= 1 {
-		httputil.WriteError(w, http.StatusBadRequest, "cannot remove the last instructor")
-		return
-	}
-
-	err = h.memberships.DeleteMembership(r.Context(), sectionID, userID)
-	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "instructor not found")
 			return

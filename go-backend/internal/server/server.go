@@ -125,7 +125,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				}
 			}
 			r.Mount("/namespaces", handler.NewNamespaceHandler(s, s).Routes())
-			r.Mount("/classes", handler.NewClassHandler(s, s, s, s).Routes())
+			r.Mount("/classes", handler.NewClassHandler(s, s).Routes())
 
 			membershipHandler := handler.NewMembershipHandler(s)
 			r.Post("/sections/join", membershipHandler.Join)

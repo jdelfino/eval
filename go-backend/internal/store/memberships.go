@@ -140,5 +140,44 @@ func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]Section
 	return members, rows.Err()
 }
 
+// DeleteMembershipIfNotLast atomically deletes a membership only if it is not the
+// last member with the given role in the section.
+// Returns ErrLastMember if removal would leave zero members with that role.
+// Returns ErrNotFound if the membership does not exist.
+func (s *Store) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error {
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Count members with this role (FOR UPDATE locks the rows)
+	var count int
+	err = tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND role = $2 FOR UPDATE`,
+		sectionID, role,
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count <= 1 {
+		return ErrLastMember
+	}
+
+	tag, err := tx.Exec(ctx,
+		`DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2`,
+		sectionID, userID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return tx.Commit(ctx)
+}
+
 // Compile-time check that Store implements MembershipRepository.
 var _ MembershipRepository = (*Store)(nil)

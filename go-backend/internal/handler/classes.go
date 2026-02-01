@@ -14,15 +14,13 @@ import (
 
 // ClassHandler handles class management routes.
 type ClassHandler struct {
-	classes     store.ClassRepository
-	sections    store.SectionRepository
-	memberships store.MembershipRepository
-	users       store.UserRepository
+	classes  store.ClassRepository
+	sections store.SectionRepository
 }
 
 // NewClassHandler creates a new ClassHandler with the given repositories.
-func NewClassHandler(classes store.ClassRepository, sections store.SectionRepository, memberships store.MembershipRepository, users store.UserRepository) *ClassHandler {
-	return &ClassHandler{classes: classes, sections: sections, memberships: memberships, users: users}
+func NewClassHandler(classes store.ClassRepository, sections store.SectionRepository) *ClassHandler {
+	return &ClassHandler{classes: classes, sections: sections}
 }
 
 // Routes returns a chi.Router with class routes mounted.
@@ -96,32 +94,13 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 			sections = secs
 		}
 
-		// Collect unique instructor names from all section memberships
-		// TODO(PLAT-0mf): Replace N+1 queries with a single store-level join
-		if h.memberships != nil && h.users != nil {
-			instructorNameSet := map[string]struct{}{}
-			for _, sec := range sections {
-				members, err := h.memberships.ListMembers(r.Context(), sec.ID)
-				if err != nil {
-					continue
-				}
-				for _, m := range members {
-					if m.Role == string(auth.RoleInstructor) {
-						u, err := h.users.GetUserByID(r.Context(), m.UserID)
-						if err == nil {
-							name := u.Email
-							if u.DisplayName != nil {
-								name = *u.DisplayName
-							}
-							instructorNameSet[name] = struct{}{}
-						}
-					}
-				}
-			}
-			instructorNames = make([]string, 0, len(instructorNameSet))
-			for name := range instructorNameSet {
-				instructorNames = append(instructorNames, name)
-			}
+		names, err := h.classes.ListClassInstructorNames(r.Context(), id)
+		if err != nil {
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if names != nil {
+			instructorNames = names
 		}
 	}
 

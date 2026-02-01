@@ -1314,21 +1314,17 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 func TestRemoveInstructor_Success(t *testing.T) {
 	sectionID := uuid.New()
 	userToRemove := uuid.New()
-	otherInstructor := uuid.New()
 
 	membRepo := &mockMembershipRepo{
-		listMembersFn: func(_ context.Context, _ uuid.UUID) ([]store.SectionMembership, error) {
-			return []store.SectionMembership{
-				{ID: uuid.New(), UserID: userToRemove, SectionID: sectionID, Role: "instructor", JoinedAt: time.Now()},
-				{ID: uuid.New(), UserID: otherInstructor, SectionID: sectionID, Role: "instructor", JoinedAt: time.Now()},
-			}, nil
-		},
-		deleteMembershipFn: func(_ context.Context, sid, uid uuid.UUID) error {
+		deleteMembershipIfNotLastFn: func(_ context.Context, sid, uid uuid.UUID, role string) error {
 			if sid != sectionID {
 				t.Fatalf("unexpected sectionID: %v", sid)
 			}
 			if uid != userToRemove {
 				t.Fatalf("unexpected userID: %v", uid)
+			}
+			if role != "instructor" {
+				t.Fatalf("unexpected role: %v", role)
 			}
 			return nil
 		},
@@ -1356,10 +1352,8 @@ func TestRemoveInstructor_LastInstructor(t *testing.T) {
 	userToRemove := uuid.New()
 
 	membRepo := &mockMembershipRepo{
-		listMembersFn: func(_ context.Context, _ uuid.UUID) ([]store.SectionMembership, error) {
-			return []store.SectionMembership{
-				{ID: uuid.New(), UserID: userToRemove, SectionID: sectionID, Role: "instructor", JoinedAt: time.Now()},
-			}, nil
+		deleteMembershipIfNotLastFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) error {
+			return store.ErrLastMember
 		},
 	}
 
@@ -1393,13 +1387,7 @@ func TestRemoveInstructor_NotFound(t *testing.T) {
 	userToRemove := uuid.New()
 
 	membRepo := &mockMembershipRepo{
-		listMembersFn: func(_ context.Context, _ uuid.UUID) ([]store.SectionMembership, error) {
-			return []store.SectionMembership{
-				{ID: uuid.New(), UserID: userToRemove, SectionID: sectionID, Role: "instructor", JoinedAt: time.Now()},
-				{ID: uuid.New(), UserID: uuid.New(), SectionID: sectionID, Role: "instructor", JoinedAt: time.Now()},
-			}, nil
-		},
-		deleteMembershipFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+		deleteMembershipIfNotLastFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) error {
 			return store.ErrNotFound
 		},
 	}

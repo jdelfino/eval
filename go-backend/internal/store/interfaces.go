@@ -108,6 +108,9 @@ type ClassRepository interface {
 	// DeleteClass deletes a class by ID.
 	// Returns ErrNotFound if the class does not exist.
 	DeleteClass(ctx context.Context, id uuid.UUID) error
+	// ListClassInstructorNames returns distinct instructor display names (or emails)
+	// for all sections of a class, using a single joined query.
+	ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error)
 }
 
 // Problem represents a coding exercise in the database.
@@ -321,6 +324,11 @@ type MembershipRepository interface {
 	DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error
 	// ListMembers retrieves all memberships for a given section.
 	ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error)
+	// DeleteMembershipIfNotLast atomically deletes a membership only if it is not the
+	// last member with the given role in the section.
+	// Returns ErrLastMember if removal would leave zero members with that role.
+	// Returns ErrNotFound if the membership does not exist.
+	DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error
 }
 
 // SessionStudent represents a student's participation in a session.
