@@ -3,7 +3,8 @@
  * @jest-environment node
  */
 
-import { withRetry, withRetryInfo } from '../api-utils';
+import { withRetry } from '../api-utils';
+import * as apiUtils from '../api-utils';
 
 describe('api-utils', () => {
   beforeEach(() => {
@@ -117,30 +118,13 @@ describe('api-utils', () => {
     });
   });
 
-  describe('withRetryInfo', () => {
-    it('should return attempt info on success', async () => {
-      const fn = jest.fn().mockResolvedValue('data');
-
-      const result = await withRetryInfo(fn);
-
-      expect(result.data).toBe('data');
-      expect(result.attempts).toBe(1);
-      expect(result.wasRetried).toBe(false);
+  describe('dead code removal', () => {
+    it('should not export withRetryInfo', () => {
+      expect('withRetryInfo' in apiUtils).toBe(false);
     });
 
-    it('should track retry attempts', async () => {
-      const fn = jest.fn()
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce('data');
-
-      const resultPromise = withRetryInfo(fn, { maxRetries: 2, initialDelay: 100 });
-
-      await jest.runAllTimersAsync();
-
-      const result = await resultPromise;
-      expect(result.data).toBe('data');
-      expect(result.attempts).toBe(2);
-      expect(result.wasRetried).toBe(true);
+    it('should not export RetryResult', () => {
+      expect('RetryResult' in apiUtils).toBe(false);
     });
   });
 

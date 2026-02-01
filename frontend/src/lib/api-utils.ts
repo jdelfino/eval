@@ -26,15 +26,6 @@ export interface RetryOptions {
 }
 
 /**
- * Result type for operations that may fail with retry info
- */
-export interface RetryResult<T> {
-  data: T;
-  attempts: number;
-  wasRetried: boolean;
-}
-
-/**
  * Default retry options
  */
 const defaultRetryOptions: Required<Omit<RetryOptions, 'onRetry' | 'shouldRetry'>> = {
@@ -135,57 +126,4 @@ export async function withRetry<T>(
   throw lastError!;
 }
 
-/**
- * Wraps an async function with retry logic and returns detailed result info
- *
- * @param fn - The async function to execute
- * @param options - Retry configuration options
- * @returns Promise resolving to RetryResult with data and attempt info
- */
-export async function withRetryInfo<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<RetryResult<T>> {
-  const {
-    maxRetries = defaultRetryOptions.maxRetries,
-    initialDelay = defaultRetryOptions.initialDelay,
-    maxDelay = defaultRetryOptions.maxDelay,
-    backoffMultiplier = defaultRetryOptions.backoffMultiplier,
-    onRetry,
-    shouldRetry,
-  } = options;
-
-  let lastError: Error;
-  let attempt = 0;
-
-  while (attempt <= maxRetries) {
-    try {
-      const data = await fn();
-      return {
-        data,
-        attempts: attempt + 1,
-        wasRetried: attempt > 0,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      const canRetry = shouldRetry ? shouldRetry(lastError) : isRetryableError(lastError);
-
-      if (!canRetry || attempt >= maxRetries) {
-        throw lastError;
-      }
-
-      const retryDelay = calculateDelay(attempt, initialDelay, maxDelay, backoffMultiplier);
-
-      if (onRetry) {
-        onRetry(attempt + 1, lastError, retryDelay);
-      }
-
-      await delay(retryDelay);
-      attempt++;
-    }
-  }
-
-  throw lastError!;
-}
 

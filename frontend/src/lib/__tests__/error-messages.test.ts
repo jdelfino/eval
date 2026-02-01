@@ -160,6 +160,20 @@ describe('error-messages', () => {
       });
     });
 
+    describe('should not false-positive on status code substrings', () => {
+      it.each([
+        ['port 5003', 'server'],
+        ['port 4000', 'validation'],
+        ['address 127.0.0.1:5002', 'server'],
+        ['error code 14001', 'auth'],
+        ['item #4032 not available', 'permission'],
+        ['ref 5041 created', 'server'],
+      ])('should NOT classify "%s" as %s error', (message, wrongCategory) => {
+        const result = classifyError(new Error(message));
+        expect(result.category).not.toBe(wrongCategory);
+      });
+    });
+
     it('should handle string input', () => {
       const result = classifyError('Network error occurred');
       expect(result.category).toBe('network');
