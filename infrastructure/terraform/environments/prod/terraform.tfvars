@@ -43,6 +43,7 @@ nat_zone = "us-east1-b"
 # GKE Configuration
 # -----------------------------------------------------------------------------
 
+gke_zone                   = "us-east1-b"
 gke_release_channel        = "REGULAR"
 gke_deletion_protection    = true
 gke_master_ipv4_cidr_block = "172.16.0.0/28"
@@ -89,19 +90,7 @@ github_owner   = "jdelfino"
 github_repo    = "eval"
 
 # -----------------------------------------------------------------------------
-# Redis Configuration
-# -----------------------------------------------------------------------------
-
-redis_tier           = "BASIC"
-redis_memory_size_gb = 1
-
-# -----------------------------------------------------------------------------
 # Centrifugo Configuration
 # -----------------------------------------------------------------------------
 
 centrifugo_allowed_origins = ["https://eval.delquillan.com"]
-
-# Centrifugo secrets - provide via environment variables (don't commit secrets):
-#   export TF_VAR_centrifugo_api_key="your-api-key"
-#   export TF_VAR_centrifugo_token_secret="your-token-secret"
-# Or via: terraform apply -var-file="secrets.tfvars" (gitignored)

@@ -1,4 +1,4 @@
-# GCP GKE Autopilot Module Outputs
+# GCP GKE Standard Module Outputs
 #
 # Outputs for integration with other modules and applications.
 # These values are used to configure kubectl, workloads, and CI/CD.
@@ -9,17 +9,17 @@
 
 output "cluster_id" {
   description = "The unique identifier of the cluster"
-  value       = google_container_cluster.autopilot.id
+  value       = google_container_cluster.main.id
 }
 
 output "cluster_name" {
   description = "The name of the cluster"
-  value       = google_container_cluster.autopilot.name
+  value       = google_container_cluster.main.name
 }
 
 output "cluster_self_link" {
   description = "The self-link of the cluster"
-  value       = google_container_cluster.autopilot.self_link
+  value       = google_container_cluster.main.self_link
 }
 
 # -----------------------------------------------------------------------------
@@ -28,19 +28,19 @@ output "cluster_self_link" {
 
 output "endpoint" {
   description = "The IP address of the cluster master"
-  value       = google_container_cluster.autopilot.endpoint
+  value       = google_container_cluster.main.endpoint
   sensitive   = true
 }
 
 output "private_endpoint" {
   description = "The private IP address of the cluster master (if private endpoint enabled)"
-  value       = google_container_cluster.autopilot.private_cluster_config[0].private_endpoint
+  value       = google_container_cluster.main.private_cluster_config[0].private_endpoint
   sensitive   = true
 }
 
 output "public_endpoint" {
   description = "The public IP address of the cluster master (if private endpoint disabled)"
-  value       = google_container_cluster.autopilot.private_cluster_config[0].public_endpoint
+  value       = google_container_cluster.main.private_cluster_config[0].public_endpoint
   sensitive   = true
 }
 
@@ -50,7 +50,7 @@ output "public_endpoint" {
 
 output "ca_certificate" {
   description = "Base64 encoded public certificate that is the root of trust for the cluster"
-  value       = google_container_cluster.autopilot.master_auth[0].cluster_ca_certificate
+  value       = google_container_cluster.main.master_auth[0].cluster_ca_certificate
   sensitive   = true
 }
 
@@ -69,12 +69,12 @@ output "workload_identity_pool" {
 
 output "network" {
   description = "The VPC network the cluster is connected to"
-  value       = google_container_cluster.autopilot.network
+  value       = google_container_cluster.main.network
 }
 
 output "subnetwork" {
   description = "The subnetwork the cluster is connected to"
-  value       = google_container_cluster.autopilot.subnetwork
+  value       = google_container_cluster.main.subnetwork
 }
 
 output "master_ipv4_cidr_block" {
@@ -87,8 +87,8 @@ output "master_ipv4_cidr_block" {
 # -----------------------------------------------------------------------------
 
 output "location" {
-  description = "The location (region) of the cluster"
-  value       = google_container_cluster.autopilot.location
+  description = "The location (zone) of the cluster"
+  value       = google_container_cluster.main.location
 }
 
 output "project_id" {
@@ -103,7 +103,7 @@ output "release_channel" {
 
 output "cluster_version" {
   description = "The current Kubernetes version of the cluster"
-  value       = google_container_cluster.autopilot.master_version
+  value       = google_container_cluster.main.master_version
 }
 
 # -----------------------------------------------------------------------------
@@ -112,5 +112,5 @@ output "cluster_version" {
 
 output "get_credentials_command" {
   description = "gcloud command to get cluster credentials"
-  value       = "gcloud container clusters get-credentials ${google_container_cluster.autopilot.name} --region ${var.region} --project ${var.project_id}"
+  value       = "gcloud container clusters get-credentials ${google_container_cluster.main.name} --zone ${var.zone} --project ${var.project_id}"
 }

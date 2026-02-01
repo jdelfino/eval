@@ -19,6 +19,13 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       hostUsers: false
+      tolerations:
+        - key: "executor-only"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: executor
       containers:
         - name: executor
           image: executor

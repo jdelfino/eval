@@ -74,6 +74,11 @@ variable "nat_zone" {
 # GKE Variables
 # -----------------------------------------------------------------------------
 
+variable "gke_zone" {
+  description = "GCP zone for the zonal GKE cluster (e.g. us-east1-b)"
+  type        = string
+}
+
 variable "gke_release_channel" {
   description = "Release channel for GKE upgrades (RAPID, REGULAR, STABLE)"
   type        = string
@@ -99,6 +104,54 @@ variable "gke_master_authorized_networks" {
     display_name = string
   }))
   default = []
+}
+
+variable "gke_default_pool_machine_type" {
+  description = "Machine type for the default GKE node pool"
+  type        = string
+  default     = "e2-small"
+}
+
+variable "gke_default_pool_min_nodes" {
+  description = "Minimum number of nodes in the default pool (must be >= 1 for system pods)"
+  type        = number
+  default     = 1
+}
+
+variable "gke_default_pool_max_nodes" {
+  description = "Maximum number of nodes in the default pool"
+  type        = number
+  default     = 3
+}
+
+variable "gke_default_pool_spot" {
+  description = "Use spot VMs for the default node pool"
+  type        = bool
+  default     = true
+}
+
+variable "gke_executor_pool_machine_type" {
+  description = "Machine type for the executor GKE node pool"
+  type        = string
+  default     = "e2-medium"
+}
+
+variable "gke_executor_pool_min_nodes" {
+  description = "Minimum number of nodes in the executor pool (0 for scale-to-zero)"
+  type        = number
+  default     = 0
+}
+
+variable "gke_executor_pool_max_nodes" {
+  description = "Maximum number of nodes in the executor pool"
+  type        = number
+  default     = 5
+}
+
+variable "gke_executor_pool_spot" {
+  description = "Use spot VMs for the executor node pool"
+  type        = bool
+  default     = true
 }
 
 # -----------------------------------------------------------------------------
@@ -177,36 +230,8 @@ variable "github_repo" {
 }
 
 # -----------------------------------------------------------------------------
-# Redis Variables
-# -----------------------------------------------------------------------------
-
-variable "redis_tier" {
-  description = "Redis service tier: BASIC or STANDARD_HA"
-  type        = string
-  default     = "BASIC"
-}
-
-variable "redis_memory_size_gb" {
-  description = "Memory size in GB for the Redis instance"
-  type        = number
-  default     = 1
-}
-
-# -----------------------------------------------------------------------------
 # Centrifugo Variables
 # -----------------------------------------------------------------------------
-
-variable "centrifugo_api_key" {
-  description = "API key for Centrifugo server API authentication"
-  type        = string
-  sensitive   = true
-}
-
-variable "centrifugo_token_secret" {
-  description = "HMAC secret for Centrifugo JWT token verification"
-  type        = string
-  sensitive   = true
-}
 
 variable "centrifugo_allowed_origins" {
   description = "List of allowed origins for Centrifugo CORS"

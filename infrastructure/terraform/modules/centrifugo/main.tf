@@ -7,7 +7,20 @@
 # Local Values
 # -----------------------------------------------------------------------------
 
+resource "random_password" "api_key" {
+  length  = 32
+  special = false
+}
+
+resource "random_password" "token_secret" {
+  length  = 32
+  special = false
+}
+
 locals {
+  api_key      = random_password.api_key.result
+  token_secret = random_password.token_secret.result
+
   labels = {
     project     = var.project_name
     environment = var.environment
@@ -61,8 +74,8 @@ resource "kubernetes_secret" "centrifugo_secrets" {
   }
 
   data = {
-    CENTRIFUGO_API_KEY               = var.api_key
-    CENTRIFUGO_TOKEN_HMAC_SECRET_KEY = var.token_secret
+    CENTRIFUGO_API_KEY               = local.api_key
+    CENTRIFUGO_TOKEN_HMAC_SECRET_KEY = local.token_secret
   }
 
   type = "Opaque"

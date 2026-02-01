@@ -5,7 +5,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: executor
-  minReplicaCount: 1
+  minReplicaCount: 0
   maxReplicaCount: 10
   cooldownPeriod: 60
   pollingInterval: 15
