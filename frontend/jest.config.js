@@ -53,5 +53,32 @@ module.exports = {
         }]
       },
     },
+    {
+      displayName: 'integration',
+      preset: 'ts-jest',
+      testEnvironment: 'jsdom',
+      testMatch: [
+        '<rootDir>/src/**/__tests__/**/*.integration.test.ts',
+        '<rootDir>/src/**/__tests__/**/*.integration.test.tsx',
+      ],
+      roots: ['<rootDir>/src'],
+      setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^react-markdown$': '<rootDir>/src/__mocks__/react-markdown.tsx',
+        '^remark-breaks$': '<rootDir>/src/__mocks__/remark-breaks.ts',
+        '^firebase/app$': '<rootDir>/src/__mocks__/firebase/app.ts',
+        '^firebase/auth$': '<rootDir>/src/__mocks__/firebase/auth.ts',
+      },
+      transform: {
+        '^.+\\.tsx?$': ['ts-jest', {
+          tsconfig: {
+            jsx: 'react-jsx',
+            esModuleInterop: true,
+            allowSyntheticDefaultImports: true,
+          }
+        }]
+      },
+    },
   ],
 };
