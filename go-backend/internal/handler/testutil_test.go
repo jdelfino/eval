@@ -20,10 +20,12 @@ import (
 
 // mockSessionRepo implements store.SessionRepository for testing.
 type mockSessionRepo struct {
-	listSessionsFn  func(ctx context.Context, filters store.SessionFilters) ([]store.Session, error)
-	getSessionFn    func(ctx context.Context, id uuid.UUID) (*store.Session, error)
-	createSessionFn func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
-	updateSessionFn func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
+	listSessionsFn       func(ctx context.Context, filters store.SessionFilters) ([]store.Session, error)
+	getSessionFn         func(ctx context.Context, id uuid.UUID) (*store.Session, error)
+	createSessionFn      func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
+	updateSessionFn      func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
+	listSessionHistoryFn    func(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error)
+	updateSessionProblemFn  func(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error)
 }
 
 func (m *mockSessionRepo) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
@@ -40,6 +42,14 @@ func (m *mockSessionRepo) CreateSession(ctx context.Context, params store.Create
 
 func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 	return m.updateSessionFn(ctx, id, params)
+}
+
+func (m *mockSessionRepo) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
+	return m.listSessionHistoryFn(ctx, userID, isCreator, filters)
+}
+
+func (m *mockSessionRepo) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
+	return m.updateSessionProblemFn(ctx, id, problem)
 }
 
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.

@@ -121,6 +121,8 @@ type Problem struct {
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	AuthorID          uuid.UUID       `json:"author_id"`
 	ClassID           *uuid.UUID      `json:"class_id"`
+	Tags              []string        `json:"tags"`
+	Solution          *string         `json:"solution"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
@@ -135,6 +137,8 @@ type CreateProblemParams struct {
 	ExecutionSettings json.RawMessage
 	AuthorID          uuid.UUID
 	ClassID           *uuid.UUID
+	Tags              []string
+	Solution          *string
 }
 
 // UpdateProblemParams contains the fields that can be updated on a problem.
@@ -145,6 +149,8 @@ type UpdateProblemParams struct {
 	TestCases         json.RawMessage
 	ExecutionSettings json.RawMessage
 	ClassID           *uuid.UUID
+	Tags              []string
+	Solution          *string
 }
 
 // ProblemRepository defines the interface for problem data access.
@@ -243,6 +249,14 @@ type UpdateSessionParams struct {
 	FeaturedCode      *string
 	Status            *string
 	EndedAt           *time.Time
+	ClearEndedAt      bool
+	ClearFeatured     bool
+}
+
+// SessionHistoryFilters contains optional filters for listing session history.
+type SessionHistoryFilters struct {
+	ClassID *uuid.UUID
+	Search  *string
 }
 
 // SessionFilters contains optional filters for listing sessions.
@@ -264,6 +278,12 @@ type SessionRepository interface {
 	// UpdateSession updates a session's mutable fields and returns the updated session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
+	// ListSessionHistory retrieves sessions based on user role.
+	// Instructors see sessions they created; students see sessions they participated in.
+	ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error)
+	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
+	// Returns ErrNotFound if the session does not exist.
+	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.

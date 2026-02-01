@@ -35,6 +35,7 @@ func (h *SessionHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", h.List)
+	r.Get("/history", h.History)
 	r.Get("/{id}", h.Get)
 
 	// Instructor+ routes
@@ -42,6 +43,9 @@ func (h *SessionHandler) Routes() chi.Router {
 		r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
+		r.Delete("/{id}", h.Delete)
+		r.Post("/{id}/reopen", h.Reopen)
+		r.Post("/{id}/update-problem", h.UpdateProblem)
 	})
 
 	return r
@@ -204,4 +208,170 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
+}
+
+// Delete handles DELETE /api/v1/sessions/{id} — ends a session (instructor+).
+func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	existing, err := h.sessions.GetSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if existing.Status != "active" {
+		httputil.WriteError(w, http.StatusConflict, "session is not active")
+		return
+	}
+
+	status := "completed"
+	now := time.Now()
+	session, err := h.sessions.UpdateSession(r.Context(), id, store.UpdateSessionParams{
+		Status:  &status,
+		EndedAt: &now,
+	})
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	publishAsync(r, h.logger, id, func(ctx context.Context) error {
+		return h.publisher.SessionEnded(ctx, id.String(), "completed")
+	})
+
+	httputil.WriteJSON(w, http.StatusOK, session)
+}
+
+// Reopen handles POST /api/v1/sessions/{id}/reopen — reopens a completed session (instructor+).
+func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	existing, err := h.sessions.GetSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if existing.Status != "completed" {
+		httputil.WriteError(w, http.StatusConflict, "session is not completed")
+		return
+	}
+
+	status := "active"
+	session, err := h.sessions.UpdateSession(r.Context(), id, store.UpdateSessionParams{
+		Status:       &status,
+		ClearEndedAt: true,
+	})
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, session)
+}
+
+// updateSessionProblemRequest is the request body for POST /sessions/{id}/update-problem.
+type updateSessionProblemRequest struct {
+	Problem json.RawMessage `json:"problem" validate:"required"`
+}
+
+// UpdateProblem handles POST /api/v1/sessions/{id}/update-problem — updates session problem JSON (instructor+).
+func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	req, err := httputil.BindJSON[updateSessionProblemRequest](w, r)
+	if err != nil {
+		return // BindJSON already wrote the error response
+	}
+
+	// Check session is active before updating problem.
+	existing, err := h.sessions.GetSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if existing.Status != "active" {
+		httputil.WriteError(w, http.StatusConflict, "session is not active")
+		return
+	}
+
+	session, err := h.sessions.UpdateSessionProblem(r.Context(), id, req.Problem)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Extract problem ID from the JSON payload if present.
+	var problemMeta struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(req.Problem, &problemMeta)
+	publishAsync(r, h.logger, id, func(ctx context.Context) error {
+		return h.publisher.ProblemUpdated(ctx, id.String(), problemMeta.ID)
+	})
+
+	httputil.WriteJSON(w, http.StatusOK, session)
+}
+
+// History handles GET /api/v1/sessions/history — returns session history for the current user.
+func (h *SessionHandler) History(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var filters store.SessionHistoryFilters
+
+	if classIDStr := r.URL.Query().Get("class_id"); classIDStr != "" {
+		classID, err := uuid.Parse(classIDStr)
+		if err != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid class_id")
+			return
+		}
+		filters.ClassID = &classID
+	}
+
+	if search := r.URL.Query().Get("search"); search != "" {
+		filters.Search = &search
+	}
+
+	isCreator := authUser.Role != auth.RoleStudent
+	sessions, err := h.sessions.ListSessionHistory(r.Context(), authUser.ID, isCreator, filters)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if sessions == nil {
+		sessions = []store.Session{}
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, sessions)
 }

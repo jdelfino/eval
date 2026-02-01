@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -188,6 +189,15 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 	}
 
+	if params.ClearEndedAt {
+		query += ",\n		    ended_at = NULL"
+	}
+
+	if params.ClearFeatured {
+		query += ",\n		    featured_student_id = NULL"
+		query += ",\n		    featured_code = NULL"
+	}
+
 	query += `
 		WHERE id = $1
 		RETURNING id, namespace_id, section_id, section_name, problem,
@@ -196,6 +206,118 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	var sess Session
 	err = conn.QueryRow(ctx, query, args...).Scan(
+		&sess.ID,
+		&sess.NamespaceID,
+		&sess.SectionID,
+		&sess.SectionName,
+		&sess.Problem,
+		&sess.FeaturedStudentID,
+		&sess.FeaturedCode,
+		&sess.CreatorID,
+		&sess.Participants,
+		&sess.Status,
+		&sess.CreatedAt,
+		&sess.LastActivity,
+		&sess.EndedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &sess, nil
+}
+
+// ListSessionHistory retrieves sessions based on user role.
+// Instructors see sessions they created; students see sessions they participated in.
+func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT id, namespace_id, section_id, section_name, problem,
+		       featured_student_id, featured_code, creator_id, participants,
+		       status, created_at, last_activity, ended_at
+		FROM sessions WHERE 1=1`
+
+	args := []any{}
+	argIdx := 1
+
+	// Role-aware filtering
+	if isCreator {
+		query += fmt.Sprintf(" AND creator_id = $%d", argIdx)
+		args = append(args, userID)
+		argIdx++
+	} else {
+		query += fmt.Sprintf(" AND $%d = ANY(participants)", argIdx)
+		args = append(args, userID)
+		argIdx++
+	}
+
+	if filters.ClassID != nil {
+		query += fmt.Sprintf(" AND section_id IN (SELECT id FROM sections WHERE class_id = $%d)", argIdx)
+		args = append(args, *filters.ClassID)
+		argIdx++
+	}
+
+	if filters.Search != nil {
+		query += fmt.Sprintf(" AND section_name ILIKE '%%' || $%d || '%%'", argIdx)
+		args = append(args, *filters.Search)
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	rows, err := conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var sess Session
+		if err := rows.Scan(
+			&sess.ID,
+			&sess.NamespaceID,
+			&sess.SectionID,
+			&sess.SectionName,
+			&sess.Problem,
+			&sess.FeaturedStudentID,
+			&sess.FeaturedCode,
+			&sess.CreatorID,
+			&sess.Participants,
+			&sess.Status,
+			&sess.CreatedAt,
+			&sess.LastActivity,
+			&sess.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, sess)
+	}
+	return sessions, rows.Err()
+}
+
+// UpdateSessionProblem updates the problem JSON snapshot and last_activity for a session.
+// Returns ErrNotFound if the session does not exist.
+func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE sessions
+		SET problem = $2, last_activity = now()
+		WHERE id = $1
+		RETURNING id, namespace_id, section_id, section_name, problem,
+		          featured_student_id, featured_code, creator_id, participants,
+		          status, created_at, last_activity, ended_at`
+
+	var sess Session
+	err = conn.QueryRow(ctx, query, id, problem).Scan(
 		&sess.ID,
 		&sess.NamespaceID,
 		&sess.SectionID,
