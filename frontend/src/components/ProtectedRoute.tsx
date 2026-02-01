@@ -10,11 +10,11 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission, useAnyPermission } from '@/hooks/usePermissions';
-import type { UserRole } from '@/server/auth/types';
+import type { User } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: UserRole;
+  requiredRole?: User['Role'];
   requiredPermission?: string; // Single permission required
   requiredPermissions?: string[]; // Any of these permissions required
   fallbackPath?: string;
@@ -63,16 +63,16 @@ export function ProtectedRoute({
 
       if (!hasPermissionAccess) {
         // No permission, redirect to appropriate page
-        const defaultPath = user.role === 'instructor' ? '/instructor' : '/student';
+        const defaultPath = user.Role === 'instructor' ? '/instructor' : '/student';
         router.push(defaultPath);
         return; // Don't mark as done if we're redirecting
       }
     } else if (requiredRole) {
       // Check role-based access (legacy support)
-      const hasAccess = user.role === requiredRole || (allowAdmin && user.role === 'namespace-admin');
+      const hasAccess = user.Role === requiredRole || (allowAdmin && user.Role === 'namespace-admin');
       if (!hasAccess) {
         // Wrong role, redirect to appropriate page
-        const defaultPath = user.role === 'instructor' ? '/instructor' : '/student';
+        const defaultPath = user.Role === 'instructor' ? '/instructor' : '/student';
         router.push(defaultPath);
         return; // Don't mark as done if we're redirecting
       }
@@ -107,7 +107,7 @@ export function ProtectedRoute({
       return null;
     }
   } else if (requiredRole) {
-    const hasAccess = user.role === requiredRole || (allowAdmin && user.role === 'namespace-admin');
+    const hasAccess = user.Role === requiredRole || (allowAdmin && user.Role === 'namespace-admin');
     if (!hasAccess) {
       return null;
     }

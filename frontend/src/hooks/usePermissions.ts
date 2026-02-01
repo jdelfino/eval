@@ -12,7 +12,7 @@ import { ROLE_PERMISSIONS } from '@/server/auth/permissions';
  * Only needs role - works with both client and server User types.
  */
 type UserWithRole = {
-  role: UserRole;
+  Role: UserRole;
   [key: string]: any;
 };
 
@@ -23,7 +23,7 @@ export function usePermission(user: UserWithRole | null, permission: string): bo
   return useMemo(() => {
     if (!user) return false;
     
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
+    const rolePermissions = ROLE_PERMISSIONS[user.Role];
     return rolePermissions.includes(permission as any);
   }, [user, permission]);
 }
@@ -35,7 +35,7 @@ export function useAnyPermission(user: UserWithRole | null, permissions: string[
   return useMemo(() => {
     if (!user) return false;
     
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
+    const rolePermissions = ROLE_PERMISSIONS[user.Role];
     return permissions.some(permission => 
       rolePermissions.includes(permission as any)
     );
@@ -49,7 +49,7 @@ export function useAllPermissions(user: UserWithRole | null, permissions: string
   return useMemo(() => {
     if (!user) return false;
     
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
+    const rolePermissions = ROLE_PERMISSIONS[user.Role];
     return permissions.every(permission => 
       rolePermissions.includes(permission as any)
     );
@@ -63,6 +63,6 @@ export function useAllPermissions(user: UserWithRole | null, permissions: string
 export function hasPermission(user: UserWithRole | null, permission: string): boolean {
   if (!user) return false;
   
-  const rolePermissions = ROLE_PERMISSIONS[user.role];
+  const rolePermissions = ROLE_PERMISSIONS[user.Role];
   return rolePermissions.includes(permission as any);
 }
