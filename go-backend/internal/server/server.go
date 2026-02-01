@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -96,6 +97,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(middleware.Timeout(30 * time.Second))
 		// Auth middleware - validates JWT and populates user context
 		if s != nil {
 			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)

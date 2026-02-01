@@ -34,11 +34,14 @@ type CachedJWKSProvider struct {
 	lastFetch time.Time
 }
 
+// defaultJWKSHTTPTimeout is the timeout for JWKS HTTP requests when no custom client is provided.
+const defaultJWKSHTTPTimeout = 10 * time.Second
+
 // NewCachedJWKSProvider creates a provider that fetches keys from the given URL.
-// If client is nil, http.DefaultClient is used.
+// If client is nil, a default client with a 10-second timeout is used.
 func NewCachedJWKSProvider(url string, client *http.Client) *CachedJWKSProvider {
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: defaultJWKSHTTPTimeout}
 	}
 	return &CachedJWKSProvider{
 		url:    url,
