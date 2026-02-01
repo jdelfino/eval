@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -292,6 +293,45 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, role s
 		sessions = append(sessions, sess)
 	}
 	return sessions, rows.Err()
+}
+
+// UpdateSessionProblem updates the problem JSON snapshot and last_activity for a session.
+// Returns ErrNotFound if the session does not exist.
+func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE sessions
+		SET problem = $2, last_activity = now()
+		WHERE id = $1
+		RETURNING id, namespace_id, section_id, section_name, problem,
+		          featured_student_id, featured_code, creator_id, participants,
+		          status, created_at, last_activity, ended_at`
+
+	var sess Session
+	err = conn.QueryRow(ctx, query, id, problem).Scan(
+		&sess.ID,
+		&sess.NamespaceID,
+		&sess.SectionID,
+		&sess.SectionName,
+		&sess.Problem,
+		&sess.FeaturedStudentID,
+		&sess.FeaturedCode,
+		&sess.CreatorID,
+		&sess.Participants,
+		&sess.Status,
+		&sess.CreatedAt,
+		&sess.LastActivity,
+		&sess.EndedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &sess, nil
 }
 
 // Compile-time check that Store implements SessionRepository.

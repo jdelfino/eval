@@ -280,6 +280,9 @@ type SessionRepository interface {
 	// ListSessionHistory retrieves sessions based on user role.
 	// Instructors see sessions they created; students see sessions they participated in.
 	ListSessionHistory(ctx context.Context, userID uuid.UUID, role string, filters SessionHistoryFilters) ([]Session, error)
+	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
+	// Returns ErrNotFound if the session does not exist.
+	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.

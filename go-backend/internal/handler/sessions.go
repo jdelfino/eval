@@ -45,6 +45,7 @@ func (h *SessionHandler) Routes() chi.Router {
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
 		r.Post("/{id}/reopen", h.Reopen)
+		r.Post("/{id}/update-problem", h.UpdateProblem)
 	})
 
 	return r
@@ -280,6 +281,40 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	httputil.WriteJSON(w, http.StatusOK, session)
+}
+
+// updateSessionProblemRequest is the request body for POST /sessions/{id}/update-problem.
+type updateSessionProblemRequest struct {
+	Problem json.RawMessage `json:"problem" validate:"required"`
+}
+
+// UpdateProblem handles POST /api/v1/sessions/{id}/update-problem — updates session problem JSON (instructor+).
+func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	req, err := httputil.BindJSON[updateSessionProblemRequest](w, r)
+	if err != nil {
+		return // BindJSON already wrote the error response
+	}
+
+	session, err := h.sessions.UpdateSessionProblem(r.Context(), id, req.Problem)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	publishAsync(r, h.logger, id, func(ctx context.Context) error {
+		return h.publisher.ProblemUpdated(ctx, id.String(), id.String())
+	})
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

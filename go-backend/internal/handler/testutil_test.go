@@ -24,7 +24,8 @@ type mockSessionRepo struct {
 	getSessionFn         func(ctx context.Context, id uuid.UUID) (*store.Session, error)
 	createSessionFn      func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
 	updateSessionFn      func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
-	listSessionHistoryFn func(ctx context.Context, userID uuid.UUID, role string, filters store.SessionHistoryFilters) ([]store.Session, error)
+	listSessionHistoryFn    func(ctx context.Context, userID uuid.UUID, role string, filters store.SessionHistoryFilters) ([]store.Session, error)
+	updateSessionProblemFn  func(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error)
 }
 
 func (m *mockSessionRepo) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
@@ -45,6 +46,10 @@ func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, param
 
 func (m *mockSessionRepo) ListSessionHistory(ctx context.Context, userID uuid.UUID, role string, filters store.SessionHistoryFilters) ([]store.Session, error) {
 	return m.listSessionHistoryFn(ctx, userID, role, filters)
+}
+
+func (m *mockSessionRepo) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
+	return m.updateSessionProblemFn(ctx, id, problem)
 }
 
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.
