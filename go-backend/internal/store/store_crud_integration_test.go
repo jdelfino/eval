@@ -519,7 +519,9 @@ func TestIntegration_DeleteClass(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM classes WHERE id = $1", classID).Scan(&count)
+		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM classes WHERE id = $1", classID).Scan(&count); err != nil {
+			t.Fatalf("count query: %v", err)
+		}
 		if count != 0 {
 			t.Error("class should be deleted")
 		}
@@ -827,7 +829,9 @@ func TestIntegration_DeleteSection(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE id = $1", sectionID).Scan(&count)
+		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE id = $1", sectionID).Scan(&count); err != nil {
+			t.Fatalf("count query: %v", err)
+		}
 		if count != 0 {
 			t.Error("section should be deleted")
 		}
@@ -1007,7 +1011,9 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID).Scan(&count)
+		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID).Scan(&count); err != nil {
+			t.Fatalf("count query: %v", err)
+		}
 		if count != 0 {
 			t.Error("membership should be deleted")
 		}

@@ -328,7 +328,7 @@ func TestIntegration_UpdateSession(t *testing.T) {
 		if params.EndedAt != nil {
 			query += fmt.Sprintf(", ended_at = $%d", argIdx)
 			args = append(args, *params.EndedAt)
-			argIdx++
+			argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 		}
 		if params.ClearEndedAt {
 			query += ", ended_at = NULL"
@@ -393,7 +393,7 @@ func TestIntegration_UpdateSession(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if sess.Status != "completed" {
-			t.Errorf("expected status 'ended', got %s", sess.Status)
+			t.Errorf("expected status 'completed', got %s", sess.Status)
 		}
 		if sess.EndedAt == nil {
 			t.Error("expected ended_at to be set")
