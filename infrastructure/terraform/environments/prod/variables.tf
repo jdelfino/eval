@@ -230,6 +230,22 @@ variable "github_repo" {
 }
 
 # -----------------------------------------------------------------------------
+# Redis Variables
+# -----------------------------------------------------------------------------
+
+variable "redis_tier" {
+  description = "Redis service tier: BASIC or STANDARD_HA"
+  type        = string
+  default     = "BASIC"
+}
+
+variable "redis_memory_size_gb" {
+  description = "Memory size in GB for the Redis instance"
+  type        = number
+  default     = 1
+}
+
+# -----------------------------------------------------------------------------
 # Centrifugo Variables
 # -----------------------------------------------------------------------------
 
