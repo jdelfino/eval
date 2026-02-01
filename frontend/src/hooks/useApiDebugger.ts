@@ -51,11 +51,11 @@ export function useApiDebugger(session_id: string | null) {
         isLoading: false,
         error: trace.error || null
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Failed to trace code execution'
+        error: error instanceof Error ? error.message : 'Failed to trace code execution'
       }));
     }
   }, [session_id]);

@@ -46,8 +46,8 @@ export function useRevisionHistory({
 
         setRevisions(processedRevisions);
         setCurrentIndex(processedRevisions.length > 0 ? processedRevisions.length - 1 : 0);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch revisions');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch revisions');
       } finally {
         setLoading(false);
       }

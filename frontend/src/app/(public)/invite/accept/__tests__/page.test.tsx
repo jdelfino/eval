@@ -346,7 +346,7 @@ describe('AcceptInvitePage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ displayName: undefined, password: 'securepassword123' }),
+          body: JSON.stringify({ invitation_token: 'test-token', invitation_id: 'inv-1', displayName: undefined, password: 'securepassword123' }),
         }));
       });
 
@@ -485,7 +485,7 @@ describe('AcceptInvitePage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ displayName: 'John Doe', password: 'securepassword123' }),
+          body: JSON.stringify({ invitation_token: 'test-token', invitation_id: 'inv-1', displayName: 'John Doe', password: 'securepassword123' }),
         }));
       });
     });

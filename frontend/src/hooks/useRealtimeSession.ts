@@ -137,9 +137,9 @@ export function useRealtimeSession({
         setFeaturedStudent({});
 
         initialLoadRef.current = true;
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useRealtimeSession] Failed to load state:', e);
-        setError(e.message || 'Failed to load session state');
+        setError(e instanceof Error ? e.message : 'Failed to load session state');
       } finally {
         setLoading(false);
       }
@@ -169,9 +169,9 @@ export function useRealtimeSession({
       setStudents(studentsMap);
 
       setError(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to fetch state:', e);
-      setError(e.message || 'Failed to fetch session state');
+      setError(e instanceof Error ? e.message : 'Failed to fetch session state');
     }
   }, [session_id, mapStudent]);
 
@@ -387,9 +387,9 @@ export function useRealtimeSession({
         }
         return updated;
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to update code:', e);
-      setError(e.message || 'Failed to save code');
+      setError(e instanceof Error ? e.message : 'Failed to save code');
       throw e;
     }
   }, [session_id]);
@@ -419,7 +419,7 @@ export function useRealtimeSession({
         code,
         execution_settings,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to execute code:', e);
       throw e;
     }
@@ -441,7 +441,7 @@ export function useRealtimeSession({
       });
 
       return data;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);
       throw e;
     }
@@ -456,7 +456,7 @@ export function useRealtimeSession({
 
       // Optimistically clear local state
       setFeaturedStudent({});
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to clear featured student:', e);
       throw e;
     }
@@ -471,7 +471,7 @@ export function useRealtimeSession({
         studentId,
         name,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to join session:', e);
       throw e;
     }

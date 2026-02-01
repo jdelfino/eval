@@ -35,8 +35,8 @@ export function useSessionOperations() {
 
         const data = await apiPost<{ session: Session }>('/sessions', body);
         return data.session;
-      } catch (err: any) {
-        const errorMessage = err.message || 'Failed to create session';
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to create session';
         setError(errorMessage);
         throw err;
       } finally {
@@ -55,8 +55,8 @@ export function useSessionOperations() {
 
     try {
       await apiDelete(`/sessions/${session_id}`);
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to end session';
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to end session';
       setError(errorMessage);
       throw err;
     } finally {
@@ -81,8 +81,8 @@ export function useSessionOperations() {
           problem,
           execution_settings: execution_settings,
         });
-      } catch (err: any) {
-        const errorMessage = err.message || 'Failed to update problem';
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to update problem';
         setError(errorMessage);
         throw err;
       } finally {
