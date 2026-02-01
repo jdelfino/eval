@@ -18,7 +18,7 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 
 	query := `
 		SELECT id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, created_at, updated_at
+		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
 		FROM problems`
 
 	var args []any
@@ -47,6 +47,8 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 			&p.ExecutionSettings,
 			&p.AuthorID,
 			&p.ClassID,
+			&p.Tags,
+			&p.Solution,
 			&p.CreatedAt,
 			&p.UpdatedAt,
 		); err != nil {
@@ -67,7 +69,7 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 
 	const query = `
 		SELECT id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, created_at, updated_at
+		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
 		FROM problems
 		WHERE id = $1`
 
@@ -82,6 +84,8 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 		&p.ExecutionSettings,
 		&p.AuthorID,
 		&p.ClassID,
+		&p.Tags,
+		&p.Solution,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
@@ -101,10 +105,10 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 
 	const query = `
 		INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
-		                      execution_settings, author_id, class_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		                      execution_settings, author_id, class_id, tags, solution)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, namespace_id, title, description, starter_code, test_cases,
-		          execution_settings, author_id, class_id, created_at, updated_at`
+		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
 
 	var p Problem
 	err = conn.QueryRow(ctx, query,
@@ -116,6 +120,8 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 		params.ExecutionSettings,
 		params.AuthorID,
 		params.ClassID,
+		params.Tags,
+		params.Solution,
 	).Scan(
 		&p.ID,
 		&p.NamespaceID,
@@ -126,6 +132,8 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 		&p.ExecutionSettings,
 		&p.AuthorID,
 		&p.ClassID,
+		&p.Tags,
+		&p.Solution,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
@@ -173,6 +181,20 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 	if params.ClassID != nil {
 		query += fmt.Sprintf("\n		    class_id           = $%d,", argIdx)
 		args = append(args, *params.ClassID)
+		argIdx++
+	}
+
+	// tags: if provided (non-nil), set it; otherwise keep current value
+	if params.Tags != nil {
+		query += fmt.Sprintf("\n		    tags               = $%d,", argIdx)
+		args = append(args, params.Tags)
+		argIdx++
+	}
+
+	// solution: if provided (non-nil), set it; otherwise keep current value
+	if params.Solution != nil {
+		query += fmt.Sprintf("\n		    solution           = $%d,", argIdx)
+		args = append(args, *params.Solution)
 		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 	}
 
@@ -180,7 +202,7 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 		    updated_at        = now()
 		WHERE id = $1
 		RETURNING id, namespace_id, title, description, starter_code, test_cases,
-		          execution_settings, author_id, class_id, created_at, updated_at`
+		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
 
 	var p Problem
 	err = conn.QueryRow(ctx, query, args...).Scan(
@@ -193,6 +215,8 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 		&p.ExecutionSettings,
 		&p.AuthorID,
 		&p.ClassID,
+		&p.Tags,
+		&p.Solution,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)

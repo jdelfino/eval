@@ -121,6 +121,8 @@ type Problem struct {
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	AuthorID          uuid.UUID       `json:"author_id"`
 	ClassID           *uuid.UUID      `json:"class_id"`
+	Tags              []string        `json:"tags"`
+	Solution          *string         `json:"solution"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
@@ -135,6 +137,8 @@ type CreateProblemParams struct {
 	ExecutionSettings json.RawMessage
 	AuthorID          uuid.UUID
 	ClassID           *uuid.UUID
+	Tags              []string
+	Solution          *string
 }
 
 // UpdateProblemParams contains the fields that can be updated on a problem.
@@ -145,6 +149,8 @@ type UpdateProblemParams struct {
 	TestCases         json.RawMessage
 	ExecutionSettings json.RawMessage
 	ClassID           *uuid.UUID
+	Tags              []string
+	Solution          *string
 }
 
 // ProblemRepository defines the interface for problem data access.
