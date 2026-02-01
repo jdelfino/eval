@@ -150,5 +150,204 @@ describe('api-client', () => {
       expect(err.message).toBe('Not found');
       expect(err.status).toBe(404);
     });
+
+    it('uses status code as message when error JSON has no error field', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      });
+
+      const { apiGet } = require('../api-client');
+      const err: any = await apiGet('/v1/broken').catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Request failed: 500');
+      expect(err.status).toBe(500);
+    });
+
+    it('handles non-JSON error response body', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new Error('invalid json')),
+      });
+
+      const { apiGet } = require('../api-client');
+      const err: any = await apiGet('/v1/bad-gateway').catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Request failed: 502');
+      expect(err.status).toBe(502);
+    });
+  });
+
+  describe('null currentUser (PLAT-uum.50)', () => {
+    it('getAuthHeaders throws when currentUser is null', async () => {
+      const firebaseMock = require('@/lib/firebase');
+      const original = firebaseMock.firebaseAuth.currentUser;
+      firebaseMock.firebaseAuth.currentUser = null;
+
+      try {
+        const { getAuthHeaders } = require('../api-client');
+        const err = await getAuthHeaders().catch((e: any) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('No authenticated user');
+      } finally {
+        firebaseMock.firebaseAuth.currentUser = original;
+      }
+    });
+
+    it('apiGet throws when currentUser is null (logged out mid-request)', async () => {
+      const firebaseMock = require('@/lib/firebase');
+      const original = firebaseMock.firebaseAuth.currentUser;
+      firebaseMock.firebaseAuth.currentUser = null;
+
+      try {
+        const { apiGet } = require('../api-client');
+        const err: any = await apiGet('/v1/users').catch((e: any) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('No authenticated user');
+      } finally {
+        firebaseMock.firebaseAuth.currentUser = original;
+      }
+    });
+
+    it('apiPost throws when currentUser is null', async () => {
+      const firebaseMock = require('@/lib/firebase');
+      const original = firebaseMock.firebaseAuth.currentUser;
+      firebaseMock.firebaseAuth.currentUser = null;
+
+      try {
+        const { apiPost } = require('../api-client');
+        const err: any = await apiPost('/v1/items', { name: 'test' }).catch((e: any) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('No authenticated user');
+        expect(global.fetch).not.toHaveBeenCalled();
+      } finally {
+        firebaseMock.firebaseAuth.currentUser = original;
+      }
+    });
+
+    it('apiDelete throws when currentUser is null', async () => {
+      const firebaseMock = require('@/lib/firebase');
+      const original = firebaseMock.firebaseAuth.currentUser;
+      firebaseMock.firebaseAuth.currentUser = null;
+
+      try {
+        const { apiDelete } = require('../api-client');
+        const err: any = await apiDelete('/v1/items/1').catch((e: any) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('No authenticated user');
+        expect(global.fetch).not.toHaveBeenCalled();
+      } finally {
+        firebaseMock.firebaseAuth.currentUser = original;
+      }
+    });
+  });
+
+  describe('null/undefined API response shapes (PLAT-uum.54)', () => {
+    it('apiGet returns null when API responds with null body', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(null),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/users/1');
+      expect(result).toBeNull();
+    });
+
+    it('apiGet returns response with missing expected fields', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/items');
+      expect(result).toEqual({});
+      expect((result as any).items).toBeUndefined();
+      expect((result as any).total).toBeUndefined();
+    });
+
+    it('apiGet returns response with extra unexpected fields', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1', name: 'test', _internal: true, debug: {} }),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/items/1');
+      expect(result).toEqual({ id: '1', name: 'test', _internal: true, debug: {} });
+    });
+
+    it('apiGet handles empty array response', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/items');
+      expect(result).toEqual([]);
+    });
+
+    it('apiGet handles null nested fields where objects expected', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ user: null, settings: null, items: [] }),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/profile');
+      expect(result.user).toBeNull();
+      expect(result.settings).toBeNull();
+      expect(result.items).toEqual([]);
+    });
+
+    it('apiPost returns null when API responds with null', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(null),
+      });
+
+      const { apiPost } = require('../api-client');
+      const result = await apiPost('/v1/items', { name: 'test' });
+      expect(result).toBeNull();
+    });
+
+    it('apiPatch returns response with missing fields', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1' }),
+      });
+
+      const { apiPatch } = require('../api-client');
+      const result = await apiPatch('/v1/items/1', { name: 'new' });
+      expect(result).toEqual({ id: '1' });
+      expect((result as any).name).toBeUndefined();
+      expect((result as any).updatedAt).toBeUndefined();
+    });
+
+    it('apiGet handles undefined values in response object', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1', name: undefined }),
+      });
+
+      const { apiGet } = require('../api-client');
+      const result = await apiGet('/v1/items/1');
+      expect(result.id).toBe('1');
+      expect(result.name).toBeUndefined();
+    });
   });
 });
