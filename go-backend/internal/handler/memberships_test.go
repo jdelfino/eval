@@ -72,6 +72,35 @@ func testMembershipSection() *store.Section {
 	}
 }
 
+// membershipTestRepos embeds stubRepos and overrides membership methods.
+type membershipTestRepos struct {
+	stubRepos
+	mem *mockMembershipRepo
+}
+
+func (r *membershipTestRepos) GetSectionByJoinCode(ctx context.Context, code string) (*store.Section, error) {
+	return r.mem.GetSectionByJoinCode(ctx, code)
+}
+func (r *membershipTestRepos) CreateMembership(ctx context.Context, params store.CreateMembershipParams) (*store.SectionMembership, error) {
+	return r.mem.CreateMembership(ctx, params)
+}
+func (r *membershipTestRepos) DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error {
+	return r.mem.DeleteMembership(ctx, sectionID, userID)
+}
+func (r *membershipTestRepos) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]store.SectionMembership, error) {
+	return r.mem.ListMembers(ctx, sectionID)
+}
+func (r *membershipTestRepos) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]store.SectionMembership, error) {
+	return r.mem.ListMembersByRole(ctx, sectionID, role)
+}
+func (r *membershipTestRepos) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error {
+	return r.mem.DeleteMembershipIfNotLast(ctx, sectionID, userID, role)
+}
+
+func membershipRepos(repo *mockMembershipRepo) *membershipTestRepos {
+	return &membershipTestRepos{mem: repo}
+}
+
 func testMembership() *store.SectionMembership {
 	return &store.SectionMembership{
 		ID:        uuid.MustParse("22222222-3333-4444-5555-666666666666"),
@@ -111,7 +140,7 @@ func TestJoin_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -119,6 +148,7 @@ func TestJoin_Success(t *testing.T) {
 		Role:        auth.RoleStudent,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -138,7 +168,7 @@ func TestJoin_Success(t *testing.T) {
 }
 
 func TestJoin_Unauthorized(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -159,10 +189,11 @@ func TestJoin_SectionNotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "BAD-CODE-123"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -184,10 +215,11 @@ func TestJoin_SectionNotActive(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -199,7 +231,7 @@ func TestJoin_SectionNotActive(t *testing.T) {
 }
 
 func TestJoin_InvalidBody(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
@@ -221,10 +253,11 @@ func TestJoin_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -247,10 +280,11 @@ func TestJoin_Duplicate(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -273,10 +307,11 @@ func TestJoin_CreateError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -288,7 +323,7 @@ func TestJoin_CreateError(t *testing.T) {
 }
 
 func TestJoin_MissingJoinCode(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	body, _ := json.Marshal(map[string]any{})
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -304,7 +339,7 @@ func TestJoin_MissingJoinCode(t *testing.T) {
 }
 
 func TestListMembers_Unauthorized(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/members", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -337,12 +372,13 @@ func TestLeave_Success(t *testing.T) {
 		},
 	}
 
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/membership", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -354,7 +390,7 @@ func TestLeave_Success(t *testing.T) {
 }
 
 func TestLeave_Unauthorized(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+uuid.New().String()+"/membership", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -370,7 +406,7 @@ func TestLeave_Unauthorized(t *testing.T) {
 }
 
 func TestLeave_InvalidID(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/sections/not-a-uuid/membership", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -394,12 +430,13 @@ func TestLeave_NotFound(t *testing.T) {
 	}
 
 	sectionID := uuid.New()
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/membership", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -418,12 +455,13 @@ func TestLeave_InternalError(t *testing.T) {
 	}
 
 	sectionID := uuid.New()
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/membership", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -449,12 +487,13 @@ func TestListMembers_Success(t *testing.T) {
 		},
 	}
 
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+sectionID.String()+"/members", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -484,12 +523,13 @@ func TestListMembers_Empty(t *testing.T) {
 	}
 
 	sectionID := uuid.New()
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+sectionID.String()+"/members", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -506,7 +546,7 @@ func TestListMembers_Empty(t *testing.T) {
 }
 
 func TestListMembers_InvalidID(t *testing.T) {
-	h := NewMembershipHandler(&mockMembershipRepo{})
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodGet, "/sections/not-a-uuid/members", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -530,12 +570,13 @@ func TestListMembers_InternalError(t *testing.T) {
 	}
 
 	sectionID := uuid.New()
-	h := NewMembershipHandler(repo)
+	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+sectionID.String()+"/members", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, membershipRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

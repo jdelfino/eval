@@ -18,17 +18,13 @@ import (
 
 // InvitationHandler handles invitation management routes.
 type InvitationHandler struct {
-	invitations store.InvitationRepository
-	namespaces  store.NamespaceRepository
 	emailClient email.Client
 	baseURL     string
 }
 
 // NewInvitationHandler creates a new InvitationHandler.
-func NewInvitationHandler(invitations store.InvitationRepository, namespaces store.NamespaceRepository, emailClient email.Client, baseURL string) *InvitationHandler {
+func NewInvitationHandler(emailClient email.Client, baseURL string) *InvitationHandler {
 	return &InvitationHandler{
-		invitations: invitations,
-		namespaces:  namespaces,
 		emailClient: emailClient,
 		baseURL:     baseURL,
 	}
@@ -77,7 +73,8 @@ func (h *InvitationHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.Status = &statusFilter
 	}
 
-	invitations, err := h.invitations.ListInvitations(r.Context(), filters)
+	repos := store.ReposFromContext(r.Context())
+	invitations, err := repos.ListInvitations(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -111,7 +108,8 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.CreateInvitation(r.Context(), store.CreateInvitationParams{
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.CreateInvitation(r.Context(), store.CreateInvitationParams{
 		Email:       req.Email,
 		TargetRole:  req.TargetRole,
 		NamespaceID: nsID,
@@ -143,7 +141,8 @@ func (h *InvitationHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -174,7 +173,8 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -189,7 +189,7 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	revoked, err := h.invitations.RevokeInvitation(r.Context(), invID)
+	revoked, err := repos.RevokeInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -221,7 +221,8 @@ func (h *InvitationHandler) Resend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -263,7 +264,8 @@ func (h *InvitationHandler) SystemList(w http.ResponseWriter, r *http.Request) {
 		filters.NamespaceID = &nsFilter
 	}
 
-	invitations, err := h.invitations.ListInvitations(r.Context(), filters)
+	repos := store.ReposFromContext(r.Context())
+	invitations, err := repos.ListInvitations(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -293,7 +295,8 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	inv, err := h.invitations.CreateInvitation(r.Context(), store.CreateInvitationParams{
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.CreateInvitation(r.Context(), store.CreateInvitationParams{
 		Email:       req.Email,
 		TargetRole:  req.TargetRole,
 		NamespaceID: req.NamespaceID,
@@ -319,7 +322,8 @@ func (h *InvitationHandler) SystemGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -340,7 +344,8 @@ func (h *InvitationHandler) SystemRevoke(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	inv, err := h.invitations.RevokeInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.RevokeInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -367,7 +372,8 @@ func (h *InvitationHandler) SystemResend(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")

@@ -13,14 +13,11 @@ import (
 )
 
 // ClassHandler handles class management routes.
-type ClassHandler struct {
-	classes  store.ClassRepository
-	sections store.SectionRepository
-}
+type ClassHandler struct{}
 
-// NewClassHandler creates a new ClassHandler with the given repositories.
-func NewClassHandler(classes store.ClassRepository, sections store.SectionRepository) *ClassHandler {
-	return &ClassHandler{classes: classes, sections: sections}
+// NewClassHandler creates a new ClassHandler.
+func NewClassHandler() *ClassHandler {
+	return &ClassHandler{}
 }
 
 // Routes returns a chi.Router with class routes mounted.
@@ -43,7 +40,8 @@ func (h *ClassHandler) Routes() chi.Router {
 
 // List handles GET /api/v1/classes — returns all classes visible to the user.
 func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
-	classes, err := h.classes.ListClasses(r.Context())
+	repos := store.ReposFromContext(r.Context())
+	classes, err := repos.ListClasses(r.Context())
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -70,7 +68,8 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	class, err := h.classes.GetClass(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	class, err := repos.GetClass(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")
@@ -84,7 +83,7 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 	sections := []store.Section{}
 	instructorNames := []string{}
 
-	secs, err := h.sections.ListSectionsByClass(r.Context(), id)
+	secs, err := repos.ListSectionsByClass(r.Context(), id)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -93,7 +92,7 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sections = secs
 	}
 
-	names, err := h.classes.ListClassInstructorNames(r.Context(), id)
+	names, err := repos.ListClassInstructorNames(r.Context(), id)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -128,7 +127,8 @@ func (h *ClassHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	class, err := h.classes.CreateClass(r.Context(), store.CreateClassParams{
+	repos := store.ReposFromContext(r.Context())
+	class, err := repos.CreateClass(r.Context(), store.CreateClassParams{
 		NamespaceID: authUser.NamespaceID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -160,7 +160,8 @@ func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	class, err := h.classes.UpdateClass(r.Context(), id, store.UpdateClassParams{
+	repos := store.ReposFromContext(r.Context())
+	class, err := repos.UpdateClass(r.Context(), id, store.UpdateClassParams{
 		Name:        req.Name,
 		Description: req.Description,
 	})
@@ -183,7 +184,8 @@ func (h *ClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.classes.DeleteClass(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteClass(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")

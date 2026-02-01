@@ -9,13 +9,11 @@ import (
 )
 
 // DashboardHandler handles the instructor dashboard endpoint.
-type DashboardHandler struct {
-	dashboard store.DashboardRepository
-}
+type DashboardHandler struct{}
 
 // NewDashboardHandler creates a new DashboardHandler.
-func NewDashboardHandler(dashboard store.DashboardRepository) *DashboardHandler {
-	return &DashboardHandler{dashboard: dashboard}
+func NewDashboardHandler() *DashboardHandler {
+	return &DashboardHandler{}
 }
 
 // Dashboard handles GET /api/v1/instructor/dashboard — returns classes with sections
@@ -27,7 +25,8 @@ func (h *DashboardHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	classes, err := h.dashboard.InstructorDashboard(r.Context(), user.ID)
+	repos := store.ReposFromContext(r.Context())
+	classes, err := repos.InstructorDashboard(r.Context(), user.ID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

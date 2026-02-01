@@ -21,14 +21,12 @@ type analyzeHTTPRequest struct {
 
 // AnalyzeHandler handles AI analysis requests for session code.
 type AnalyzeHandler struct {
-	sessions store.SessionRepository
 	aiClient ai.Client
 }
 
 // NewAnalyzeHandler creates a new AnalyzeHandler.
-func NewAnalyzeHandler(sessions store.SessionRepository, aiClient ai.Client) *AnalyzeHandler {
+func NewAnalyzeHandler(aiClient ai.Client) *AnalyzeHandler {
 	return &AnalyzeHandler{
-		sessions: sessions,
 		aiClient: aiClient,
 	}
 }
@@ -57,8 +55,9 @@ func (h *AnalyzeHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	// Look up session
-	session, err := h.sessions.GetSession(r.Context(), sessionID)
+	session, err := repos.GetSession(r.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")

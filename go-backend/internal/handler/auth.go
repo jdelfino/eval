@@ -13,21 +13,11 @@ import (
 )
 
 // AuthHandler handles authentication-related routes for the current user.
-type AuthHandler struct {
-	users       store.UserRepository
-	invitations store.InvitationRepository
-	memberships store.MembershipRepository
-	classes     store.ClassRepository
-}
+type AuthHandler struct{}
 
-// NewAuthHandler creates a new AuthHandler with the given repositories.
-func NewAuthHandler(users store.UserRepository, invitations store.InvitationRepository, memberships store.MembershipRepository, classes store.ClassRepository) *AuthHandler {
-	return &AuthHandler{
-		users:       users,
-		invitations: invitations,
-		memberships: memberships,
-		classes:     classes,
-	}
+// NewAuthHandler creates a new AuthHandler.
+func NewAuthHandler() *AuthHandler {
+	return &AuthHandler{}
 }
 
 // Routes returns a chi.Router with the auth routes mounted.
@@ -50,7 +40,8 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.GetUserByID(r.Context(), authUser.ID)
+	repos := store.ReposFromContext(r.Context())
+	user, err := repos.GetUserByID(r.Context(), authUser.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -81,7 +72,8 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	user, err := h.users.UpdateUser(r.Context(), authUser.ID, store.UpdateUserParams{
+	repos := store.ReposFromContext(r.Context())
+	user, err := repos.UpdateUser(r.Context(), authUser.ID, store.UpdateUserParams{
 		DisplayName: req.DisplayName,
 	})
 	if err != nil {
@@ -110,7 +102,8 @@ func (h *AuthHandler) GetAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -144,7 +137,8 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 
 	invID, _ := uuid.Parse(req.Token) // validated by struct tag
 
-	inv, err := h.invitations.GetInvitation(r.Context(), invID)
+	repos := store.ReposFromContext(r.Context())
+	inv, err := repos.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -159,7 +153,7 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.CreateUser(r.Context(), store.CreateUserParams{
+	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
 		ExternalID:  req.ExternalID,
 		Email:       inv.Email,
 		Role:        inv.TargetRole,
@@ -171,7 +165,7 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.invitations.ConsumeInvitation(r.Context(), invID, user.ID); err != nil {
+	if _, err := repos.ConsumeInvitation(r.Context(), invID, user.ID); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to consume invitation")
 		return
 	}
@@ -193,7 +187,8 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	section, err := h.memberships.GetSectionByJoinCode(r.Context(), code)
+	repos := store.ReposFromContext(r.Context())
+	section, err := repos.GetSectionByJoinCode(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invalid join code")
@@ -208,7 +203,7 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	class, err := h.classes.GetClass(r.Context(), section.ClassID)
+	class, err := repos.GetClass(r.Context(), section.ClassID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -235,7 +230,8 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	section, err := h.memberships.GetSectionByJoinCode(r.Context(), req.JoinCode)
+	repos := store.ReposFromContext(r.Context())
+	section, err := repos.GetSectionByJoinCode(r.Context(), req.JoinCode)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invalid join code")
@@ -250,7 +246,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user, err := h.users.CreateUser(r.Context(), store.CreateUserParams{
+	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
 		ExternalID:  req.ExternalID,
 		Email:       req.Email,
 		Role:        "student",
@@ -262,7 +258,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if _, err := h.memberships.CreateMembership(r.Context(), store.CreateMembershipParams{
+	if _, err := repos.CreateMembership(r.Context(), store.CreateMembershipParams{
 		UserID:    user.ID,
 		SectionID: section.ID,
 		Role:      "student",

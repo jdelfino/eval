@@ -13,14 +13,11 @@ import (
 )
 
 // NamespaceHandler handles namespace management routes.
-type NamespaceHandler struct {
-	namespaces store.NamespaceRepository
-	users      store.UserRepository
-}
+type NamespaceHandler struct{}
 
-// NewNamespaceHandler creates a new NamespaceHandler with the given repositories.
-func NewNamespaceHandler(namespaces store.NamespaceRepository, users store.UserRepository) *NamespaceHandler {
-	return &NamespaceHandler{namespaces: namespaces, users: users}
+// NewNamespaceHandler creates a new NamespaceHandler.
+func NewNamespaceHandler() *NamespaceHandler {
+	return &NamespaceHandler{}
 }
 
 // Routes returns a chi.Router with namespace routes mounted.
@@ -59,7 +56,8 @@ func (h *NamespaceHandler) Routes() chi.Router {
 
 // List handles GET /api/v1/namespaces — returns all namespaces visible to the user.
 func (h *NamespaceHandler) List(w http.ResponseWriter, r *http.Request) {
-	namespaces, err := h.namespaces.ListNamespaces(r.Context())
+	repos := store.ReposFromContext(r.Context())
+	namespaces, err := repos.ListNamespaces(r.Context())
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -76,7 +74,8 @@ func (h *NamespaceHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *NamespaceHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	ns, err := h.namespaces.GetNamespace(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	ns, err := repos.GetNamespace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
@@ -110,7 +109,8 @@ func (h *NamespaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	ns, err := h.namespaces.CreateNamespace(r.Context(), store.CreateNamespaceParams{
+	repos := store.ReposFromContext(r.Context())
+	ns, err := repos.CreateNamespace(r.Context(), store.CreateNamespaceParams{
 		ID:             req.ID,
 		DisplayName:    req.DisplayName,
 		MaxInstructors: req.MaxInstructors,
@@ -142,7 +142,8 @@ func (h *NamespaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	ns, err := h.namespaces.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
+	repos := store.ReposFromContext(r.Context())
+	ns, err := repos.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
 		DisplayName:    req.DisplayName,
 		Active:         req.Active,
 		MaxInstructors: req.MaxInstructors,
@@ -164,8 +165,9 @@ func (h *NamespaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	repos := store.ReposFromContext(r.Context())
 	active := false
-	_, err := h.namespaces.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
+	_, err := repos.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
 		Active: &active,
 	})
 	if err != nil {
@@ -203,7 +205,8 @@ func (h *NamespaceHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.users.ListUsers(r.Context(), store.UserFilters{NamespaceID: &id})
+	repos := store.ReposFromContext(r.Context())
+	users, err := repos.ListUsers(r.Context(), store.UserFilters{NamespaceID: &id})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -231,7 +234,8 @@ func (h *NamespaceHandler) GetCapacity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ns, err := h.namespaces.GetNamespace(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	ns, err := repos.GetNamespace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
@@ -241,7 +245,7 @@ func (h *NamespaceHandler) GetCapacity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	counts, err := h.users.CountUsersByRole(r.Context(), id)
+	counts, err := repos.CountUsersByRole(r.Context(), id)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -273,7 +277,8 @@ func (h *NamespaceHandler) UpdateCapacity(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ns, err := h.namespaces.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
+	repos := store.ReposFromContext(r.Context())
+	ns, err := repos.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
 		MaxInstructors: req.MaxInstructors,
 		MaxStudents:    req.MaxStudents,
 	})

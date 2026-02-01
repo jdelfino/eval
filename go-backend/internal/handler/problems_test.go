@@ -54,6 +54,35 @@ func (m *mockProblemRepo) ListProblemsFiltered(ctx context.Context, filters stor
 	return nil, nil
 }
 
+// problemTestRepos embeds stubRepos and overrides problem methods.
+type problemTestRepos struct {
+	stubRepos
+	prob *mockProblemRepo
+}
+
+func (r *problemTestRepos) ListProblems(ctx context.Context, classID *uuid.UUID) ([]store.Problem, error) {
+	return r.prob.ListProblems(ctx, classID)
+}
+func (r *problemTestRepos) ListProblemsFiltered(ctx context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+	return r.prob.ListProblemsFiltered(ctx, filters)
+}
+func (r *problemTestRepos) GetProblem(ctx context.Context, id uuid.UUID) (*store.Problem, error) {
+	return r.prob.GetProblem(ctx, id)
+}
+func (r *problemTestRepos) CreateProblem(ctx context.Context, params store.CreateProblemParams) (*store.Problem, error) {
+	return r.prob.CreateProblem(ctx, params)
+}
+func (r *problemTestRepos) UpdateProblem(ctx context.Context, id uuid.UUID, params store.UpdateProblemParams) (*store.Problem, error) {
+	return r.prob.UpdateProblem(ctx, id, params)
+}
+func (r *problemTestRepos) DeleteProblem(ctx context.Context, id uuid.UUID) error {
+	return r.prob.DeleteProblem(ctx, id)
+}
+
+func problemRepos(repo *mockProblemRepo) *problemTestRepos {
+	return &problemTestRepos{prob: repo}
+}
+
 func testProblem() *store.Problem {
 	desc := "Write a function that adds two numbers"
 	starter := "func add(a, b int) int {\n\treturn 0\n}"
@@ -83,9 +112,10 @@ func TestListProblems_Success(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -124,9 +154,10 @@ func TestListProblems_WithClassIDFilter(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?class_id="+classID.String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -139,9 +170,10 @@ func TestListProblems_WithClassIDFilter(t *testing.T) {
 
 func TestListProblems_InvalidClassID(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?class_id=not-a-uuid", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -159,9 +191,10 @@ func TestListProblems_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -184,9 +217,10 @@ func TestListProblems_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -208,12 +242,13 @@ func TestGetProblem_Success(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+p.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", p.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -240,12 +275,13 @@ func TestGetProblem_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -258,12 +294,13 @@ func TestGetProblem_NotFound(t *testing.T) {
 
 func TestGetProblem_InvalidID(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -298,7 +335,7 @@ func TestCreateProblem_Success(t *testing.T) {
 		"description": "Write a function that adds two numbers",
 		"test_cases":  json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
 	})
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -306,6 +343,7 @@ func TestCreateProblem_Success(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -325,7 +363,7 @@ func TestCreateProblem_Success(t *testing.T) {
 }
 
 func TestCreateProblem_Unauthorized(t *testing.T) {
-	h := NewProblemHandler(&mockProblemRepo{})
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -338,7 +376,7 @@ func TestCreateProblem_Unauthorized(t *testing.T) {
 
 func TestCreateProblem_RBACForbidden(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -350,6 +388,7 @@ func TestCreateProblem_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -380,13 +419,14 @@ func TestUpdateProblem_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"title": newTitle,
 	})
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+p.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", p.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -414,13 +454,14 @@ func TestUpdateProblem_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"title": "New Title"})
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -442,12 +483,13 @@ func TestDeleteProblem_Success(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+problemID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", problemID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -466,12 +508,13 @@ func TestDeleteProblem_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -484,12 +527,13 @@ func TestDeleteProblem_NotFound(t *testing.T) {
 
 func TestDeleteProblem_InvalidID(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -501,7 +545,7 @@ func TestDeleteProblem_InvalidID(t *testing.T) {
 }
 
 func TestCreateProblem_MissingTitle(t *testing.T) {
-	h := NewProblemHandler(&mockProblemRepo{})
+	h := NewProblemHandler()
 	body, _ := json.Marshal(map[string]any{"description": "no title"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -521,7 +565,7 @@ func TestCreateProblem_MissingTitle(t *testing.T) {
 }
 
 func TestCreateProblem_InvalidBody(t *testing.T) {
-	h := NewProblemHandler(&mockProblemRepo{})
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -547,7 +591,7 @@ func TestCreateProblem_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"title": "Two Sum"})
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -555,6 +599,7 @@ func TestCreateProblem_InternalError(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -566,7 +611,7 @@ func TestCreateProblem_InternalError(t *testing.T) {
 }
 
 func TestUpdateProblem_InvalidID(t *testing.T) {
-	h := NewProblemHandler(&mockProblemRepo{})
+	h := NewProblemHandler()
 	body, _ := json.Marshal(map[string]any{"title": "New Title"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -586,7 +631,7 @@ func TestUpdateProblem_InvalidID(t *testing.T) {
 
 func TestUpdateProblem_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewProblemHandler(&mockProblemRepo{})
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -612,13 +657,14 @@ func TestUpdateProblem_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"title": "New Title"})
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -637,12 +683,13 @@ func TestGetProblem_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -661,12 +708,13 @@ func TestDeleteProblem_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -679,7 +727,7 @@ func TestDeleteProblem_InternalError(t *testing.T) {
 
 func TestDeleteProblem_RBACForbidden(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	router := h.Routes()
 
 	id := uuid.New()
@@ -688,6 +736,7 @@ func TestDeleteProblem_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -710,9 +759,10 @@ func TestListProblems_FilteredByAuthor(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?author_id="+authorID.String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -737,9 +787,10 @@ func TestListProblems_FilteredByTags(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?tags=go,algorithms", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -767,9 +818,10 @@ func TestListProblems_PublicOnly(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?public_only=true", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -785,9 +837,10 @@ func TestListProblems_PublicOnly(t *testing.T) {
 
 func TestListProblems_InvalidAuthorID(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?author_id=not-a-uuid", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -800,9 +853,10 @@ func TestListProblems_InvalidAuthorID(t *testing.T) {
 
 func TestListProblems_InvalidSortBy(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?sort_by=invalid_column", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -815,9 +869,10 @@ func TestListProblems_InvalidSortBy(t *testing.T) {
 
 func TestListProblems_InvalidSortOrder(t *testing.T) {
 	repo := &mockProblemRepo{}
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?sort_order=invalid", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -839,9 +894,10 @@ func TestListProblems_FilteredSortBy(t *testing.T) {
 		},
 	}
 
-	h := NewProblemHandler(repo)
+	h := NewProblemHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?sort_by=title&sort_order=desc", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

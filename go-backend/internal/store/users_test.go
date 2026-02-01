@@ -162,16 +162,6 @@ func TestGetUserByID_Success(t *testing.T) {
 	}
 }
 
-func TestGetUserByID_NoConnection(t *testing.T) {
-	store := New(nil)
-	ctx := context.Background()
-	userID := uuid.New()
-
-	_, err := store.GetUserByID(ctx, userID)
-	if !errors.Is(err, ErrNoConnection) {
-		t.Errorf("GetUserByID() error = %v, want ErrNoConnection", err)
-	}
-}
 
 func TestGetUserByID_SystemAdmin(t *testing.T) {
 	// System admin has nil namespace_id
@@ -302,15 +292,6 @@ func TestGetUserByExternalID_NotFound(t *testing.T) {
 	}
 }
 
-func TestGetUserByExternalID_NoConnection(t *testing.T) {
-	store := New(nil)
-	ctx := context.Background()
-
-	_, err := store.GetUserByExternalID(ctx, "some-uid")
-	if !errors.Is(err, ErrNoConnection) {
-		t.Errorf("GetUserByExternalID() error = %v, want ErrNoConnection", err)
-	}
-}
 
 func TestGetUserByID_DatabaseError(t *testing.T) {
 	dbErr := errors.New("connection refused")

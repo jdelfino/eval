@@ -21,16 +21,12 @@ const defaultTokenExpiry = 15 * time.Minute
 // CentrifugoHandler issues Centrifugo connection and subscription tokens.
 type CentrifugoHandler struct {
 	tokens      realtime.TokenGenerator
-	sessions    store.SessionRepository
-	members     store.SessionStudentRepository
 	tokenExpiry time.Duration
 }
 
 // NewCentrifugoHandler creates a new CentrifugoHandler.
 func NewCentrifugoHandler(
 	tokens realtime.TokenGenerator,
-	sessions store.SessionRepository,
-	members store.SessionStudentRepository,
 	tokenExpiry time.Duration,
 ) *CentrifugoHandler {
 	if tokenExpiry <= 0 {
@@ -38,8 +34,6 @@ func NewCentrifugoHandler(
 	}
 	return &CentrifugoHandler{
 		tokens:      tokens,
-		sessions:    sessions,
-		members:     members,
 		tokenExpiry: tokenExpiry,
 	}
 }
@@ -111,13 +105,14 @@ var errForbidden = errors.New("forbidden")
 // (who can see the session via RLS) or a student participant in the session.
 func (h *CentrifugoHandler) authorizeSubscription(r *http.Request, user *auth.User, sessionID uuid.UUID) error {
 	ctx := r.Context()
+	repos := store.ReposFromContext(ctx)
 
 	// Instructors, namespace admins, and system admins are always allowed
 	// if they can see the session (RLS enforced by the store query).
 	switch user.Role {
 	case auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin:
 		// Verify the session exists and is visible to this user via RLS.
-		_, err := h.sessions.GetSession(ctx, sessionID)
+		_, err := repos.GetSession(ctx, sessionID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return errForbidden
@@ -128,7 +123,7 @@ func (h *CentrifugoHandler) authorizeSubscription(r *http.Request, user *auth.Us
 	}
 
 	// Students: must be a participant.
-	_, err := h.members.GetSessionStudent(ctx, sessionID, user.ID)
+	_, err := repos.GetSessionStudent(ctx, sessionID, user.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return errForbidden

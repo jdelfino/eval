@@ -46,11 +46,3 @@ func TestErrNotFound_IsSentinel(t *testing.T) {
 	}
 }
 
-func TestErrNoConnection_IsSentinel(t *testing.T) {
-	if ErrNoConnection == nil {
-		t.Error("ErrNoConnection should not be nil")
-	}
-	if ErrNoConnection.Error() != "no database connection in context" {
-		t.Errorf("ErrNoConnection.Error() = %q, want %q", ErrNoConnection.Error(), "no database connection in context")
-	}
-}

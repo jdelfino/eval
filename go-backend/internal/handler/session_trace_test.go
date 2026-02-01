@@ -26,9 +26,25 @@ func (m *mockTracerClient) Trace(ctx context.Context, req executor.TraceRequest)
 	return m.traceFn(ctx, req)
 }
 
-func setupTraceHandler(sessRepo store.SessionRepository, tracer TracerClient) http.Handler {
-	h := NewTraceHandler(sessRepo, tracer)
+// traceTestRepos embeds stubRepos for trace handler tests.
+type traceTestRepos struct {
+	stubRepos
+	sess *mockSessionRepo
+}
+
+func (r *traceTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
+	return r.sess.GetSession(ctx, id)
+}
+
+func setupTraceHandler(sessRepo *mockSessionRepo, tracer TracerClient) http.Handler {
+	h := NewTraceHandler(tracer)
+	repos := &traceTestRepos{sess: sessRepo}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), repos)))
+		})
+	})
 	r.Post("/sessions/{id}/trace", h.Trace)
 	return r
 }

@@ -12,13 +12,11 @@ import (
 )
 
 // RevisionHandler handles revision management routes.
-type RevisionHandler struct {
-	revisions store.RevisionRepository
-}
+type RevisionHandler struct{}
 
-// NewRevisionHandler creates a new RevisionHandler with the given repository.
-func NewRevisionHandler(revisions store.RevisionRepository) *RevisionHandler {
-	return &RevisionHandler{revisions: revisions}
+// NewRevisionHandler creates a new RevisionHandler.
+func NewRevisionHandler() *RevisionHandler {
+	return &RevisionHandler{}
 }
 
 // List handles GET /api/v1/sessions/{sessionID}/revisions — returns revisions for a session.
@@ -44,7 +42,8 @@ func (h *RevisionHandler) List(w http.ResponseWriter, r *http.Request) {
 		userID = &parsed
 	}
 
-	revisions, err := h.revisions.ListRevisions(r.Context(), sessionID, userID)
+	repos := store.ReposFromContext(r.Context())
+	revisions, err := repos.ListRevisions(r.Context(), sessionID, userID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -84,7 +83,8 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	revision, err := h.revisions.CreateRevision(r.Context(), store.CreateRevisionParams{
+	repos := store.ReposFromContext(r.Context())
+	revision, err := repos.CreateRevision(r.Context(), store.CreateRevisionParams{
 		NamespaceID:     authUser.NamespaceID,
 		SessionID:       sessionID,
 		UserID:          authUser.ID,

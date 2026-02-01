@@ -31,7 +31,7 @@ func (m *mockAuditLogRepo) CreateAuditLog(ctx context.Context, params store.Crea
 }
 
 type mockAdminRepo struct {
-	statsFn    func(ctx context.Context) (*store.AdminStats, error)
+	statsFn     func(ctx context.Context) (*store.AdminStats, error)
 	clearDataFn func(ctx context.Context, keepUserID uuid.UUID) error
 }
 
@@ -41,6 +41,45 @@ func (m *mockAdminRepo) AdminStats(ctx context.Context) (*store.AdminStats, erro
 
 func (m *mockAdminRepo) ClearData(ctx context.Context, keepUserID uuid.UUID) error {
 	return m.clearDataFn(ctx, keepUserID)
+}
+
+// adminTestRepos embeds stubRepos and includes specific mocks for admin handler tests
+type adminTestRepos struct {
+	stubRepos
+	adminRepo   *mockAdminRepo
+	auditLogRepo *mockAuditLogRepo
+}
+
+// AdminStats delegates to the embedded mock if set
+func (a *adminTestRepos) AdminStats(ctx context.Context) (*store.AdminStats, error) {
+	if a.adminRepo != nil {
+		return a.adminRepo.AdminStats(ctx)
+	}
+	return a.stubRepos.AdminStats(ctx)
+}
+
+// ClearData delegates to the embedded mock if set
+func (a *adminTestRepos) ClearData(ctx context.Context, keepUserID uuid.UUID) error {
+	if a.adminRepo != nil {
+		return a.adminRepo.ClearData(ctx, keepUserID)
+	}
+	return a.stubRepos.ClearData(ctx, keepUserID)
+}
+
+// ListAuditLogs delegates to the embedded mock if set
+func (a *adminTestRepos) ListAuditLogs(ctx context.Context, filters store.AuditLogFilters) ([]store.AuditLog, error) {
+	if a.auditLogRepo != nil {
+		return a.auditLogRepo.ListAuditLogs(ctx, filters)
+	}
+	return a.stubRepos.ListAuditLogs(ctx, filters)
+}
+
+// CreateAuditLog delegates to the embedded mock if set
+func (a *adminTestRepos) CreateAuditLog(ctx context.Context, params store.CreateAuditLogParams) (*store.AuditLog, error) {
+	if a.auditLogRepo != nil {
+		return a.auditLogRepo.CreateAuditLog(ctx, params)
+	}
+	return a.stubRepos.CreateAuditLog(ctx, params)
 }
 
 // --- Tests ---
@@ -57,12 +96,13 @@ func TestAdminStats_Success(t *testing.T) {
 			return stats, nil
 		},
 	}
-	h := NewAdminHandler(repo, &mockAuditLogRepo{})
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{adminRepo: repo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -90,12 +130,13 @@ func TestAdminStats_RepoError(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	h := NewAdminHandler(repo, &mockAuditLogRepo{})
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{adminRepo: repo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -125,12 +166,13 @@ func TestAdminAudit_Success(t *testing.T) {
 			return logs, nil
 		},
 	}
-	h := NewAdminHandler(&mockAdminRepo{}, auditRepo)
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/audit", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{auditLogRepo: auditRepo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -168,13 +210,14 @@ func TestAdminAudit_WithFilters(t *testing.T) {
 			return []store.AuditLog{}, nil
 		},
 	}
-	h := NewAdminHandler(&mockAdminRepo{}, auditRepo)
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/audit?limit=10&offset=5&action=user.create&actor_id="+actorID.String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{auditLogRepo: auditRepo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -191,12 +234,13 @@ func TestAdminAudit_RepoError(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	h := NewAdminHandler(&mockAdminRepo{}, auditRepo)
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/audit", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{auditLogRepo: auditRepo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -217,12 +261,13 @@ func TestAdminClearData_Success(t *testing.T) {
 			return nil
 		},
 	}
-	h := NewAdminHandler(repo, &mockAuditLogRepo{})
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/clear-data", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: userID, Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{adminRepo: repo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -234,7 +279,7 @@ func TestAdminClearData_Success(t *testing.T) {
 }
 
 func TestAdminClearData_NoUser(t *testing.T) {
-	h := NewAdminHandler(&mockAdminRepo{}, &mockAuditLogRepo{})
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/clear-data", nil)
 	w := httptest.NewRecorder()
@@ -252,12 +297,13 @@ func TestAdminClearData_RepoError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	h := NewAdminHandler(repo, &mockAuditLogRepo{})
+	h := NewAdminHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/clear-data", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: uuid.New(), Role: auth.RoleSystemAdmin,
 	})
+	ctx = store.WithRepos(ctx, &adminTestRepos{adminRepo: repo})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -269,15 +315,7 @@ func TestAdminClearData_RepoError(t *testing.T) {
 }
 
 func TestAdminRoutes_MountsCorrectly(t *testing.T) {
-	h := NewAdminHandler(&mockAdminRepo{
-		statsFn: func(ctx context.Context) (*store.AdminStats, error) {
-			return &store.AdminStats{}, nil
-		},
-	}, &mockAuditLogRepo{
-		listFn: func(ctx context.Context, filters store.AuditLogFilters) ([]store.AuditLog, error) {
-			return []store.AuditLog{}, nil
-		},
-	})
+	h := NewAdminHandler()
 
 	router := h.Routes()
 	if router == nil {

@@ -26,15 +26,13 @@ type traceHTTPRequest struct {
 
 // TraceHandler handles debugger trace requests for sessions.
 type TraceHandler struct {
-	sessions store.SessionRepository
-	tracer   TracerClient
+	tracer TracerClient
 }
 
 // NewTraceHandler creates a new TraceHandler.
-func NewTraceHandler(sessions store.SessionRepository, tracer TracerClient) *TraceHandler {
+func NewTraceHandler(tracer TracerClient) *TraceHandler {
 	return &TraceHandler{
-		sessions: sessions,
-		tracer:   tracer,
+		tracer: tracer,
 	}
 }
 
@@ -62,8 +60,9 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	// Look up session
-	session, err := h.sessions.GetSession(r.Context(), sessionID)
+	session, err := repos.GetSession(r.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")

@@ -201,7 +201,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 
 			// Create revision buffer for auto-creating revisions on code save.
-			revBuffer = revision.NewRevisionBuffer(logger)
+			poolStore := store.New(pool.PgxPool())
+			revBuffer = revision.NewRevisionBuffer(poolStore, logger)
 			revBuffer.Start()
 
 			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer, logger).Routes())

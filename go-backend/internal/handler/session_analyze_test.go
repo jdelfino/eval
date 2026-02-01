@@ -26,9 +26,25 @@ func (m *mockAIClient) AnalyzeCode(ctx context.Context, req ai.AnalyzeRequest) (
 	return m.analyzeFn(ctx, req)
 }
 
-func setupAnalyzeHandler(sessRepo store.SessionRepository, aiClient ai.Client) http.Handler {
-	h := NewAnalyzeHandler(sessRepo, aiClient)
+// analyzeTestRepos embeds stubRepos and overrides session methods for analyze tests.
+type analyzeTestRepos struct {
+	stubRepos
+	sess *mockSessionRepo
+}
+
+func (r *analyzeTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
+	return r.sess.GetSession(ctx, id)
+}
+
+func setupAnalyzeHandler(sessRepo *mockSessionRepo, aiClient ai.Client) http.Handler {
+	h := NewAnalyzeHandler(aiClient)
+	repos := &analyzeTestRepos{sess: sessRepo}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), repos)))
+		})
+	})
 	r.Post("/sessions/{id}/analyze", h.Analyze)
 	return r
 }

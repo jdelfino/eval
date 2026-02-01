@@ -23,6 +23,16 @@ func (m *mockDashboardRepo) InstructorDashboard(ctx context.Context, userID uuid
 	return m.instructorDashboardFn(ctx, userID)
 }
 
+// dashboardRepos creates a store.Repos with the given DashboardRepository mock.
+type dashboardRepos struct {
+	stubRepos
+	dashboard *mockDashboardRepo
+}
+
+func (r *dashboardRepos) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]store.DashboardClass, error) {
+	return r.dashboard.InstructorDashboard(ctx, userID)
+}
+
 func TestDashboard_Success(t *testing.T) {
 	classID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
 	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -51,9 +61,10 @@ func TestDashboard_Success(t *testing.T) {
 		},
 	}
 
-	h := NewDashboardHandler(repo)
+	h := NewDashboardHandler()
 	req := httptest.NewRequest(http.MethodGet, "/instructor/dashboard", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, &dashboardRepos{dashboard: repo})
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -93,9 +104,10 @@ func TestDashboard_EmptyResult(t *testing.T) {
 		},
 	}
 
-	h := NewDashboardHandler(repo)
+	h := NewDashboardHandler()
 	req := httptest.NewRequest(http.MethodGet, "/instructor/dashboard", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, &dashboardRepos{dashboard: repo})
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -122,9 +134,10 @@ func TestDashboard_StoreError(t *testing.T) {
 		},
 	}
 
-	h := NewDashboardHandler(repo)
+	h := NewDashboardHandler()
 	req := httptest.NewRequest(http.MethodGet, "/instructor/dashboard", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, &dashboardRepos{dashboard: repo})
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
@@ -136,10 +149,9 @@ func TestDashboard_StoreError(t *testing.T) {
 }
 
 func TestDashboard_NoAuth(t *testing.T) {
-	repo := &mockDashboardRepo{}
-
-	h := NewDashboardHandler(repo)
+	h := NewDashboardHandler()
 	req := httptest.NewRequest(http.MethodGet, "/instructor/dashboard", nil)
+	// No auth, no repos needed since auth check comes first
 
 	w := httptest.NewRecorder()
 	h.Dashboard(w, req)

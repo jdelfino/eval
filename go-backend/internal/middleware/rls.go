@@ -5,16 +5,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 )
-
-// Execer is the interface for executing SQL commands.
-type Execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
 
 // Releaser is the interface for releasing connections.
 type Releaser interface {
@@ -22,8 +16,10 @@ type Releaser interface {
 }
 
 // RLSConn combines the interfaces needed for RLS middleware.
+// It embeds store.Querier (Exec, Query, QueryRow) so the connection
+// can be used to construct a Store, plus Releaser for cleanup.
 type RLSConn interface {
-	Execer
+	store.Querier
 	Releaser
 }
 
@@ -102,7 +98,7 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 }
 
 // setRLSVariables sets the PostgreSQL session variables for RLS policies.
-func setRLSVariables(ctx context.Context, conn Execer, user *auth.User) error {
+func setRLSVariables(ctx context.Context, conn store.Querier, user *auth.User) error {
 	// Set user ID
 	_, err := conn.Exec(ctx, "SELECT set_config('app.user_id', $1, true)", user.ID.String())
 	if err != nil {

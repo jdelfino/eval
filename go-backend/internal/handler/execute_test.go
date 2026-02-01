@@ -82,13 +82,57 @@ func newExecuteReq(studentID uuid.UUID, code string) []byte {
 	return b
 }
 
+// executeTestRepos embeds stubRepos and overrides session/student methods.
+type executeTestRepos struct {
+	stubRepos
+	sessions *mockSessionRepo
+	students *execMockSessionStudentRepo
+}
+
+func (r *executeTestRepos) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
+	return r.sessions.ListSessions(ctx, filters)
+}
+func (r *executeTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
+	return r.sessions.GetSession(ctx, id)
+}
+func (r *executeTestRepos) CreateSession(ctx context.Context, params store.CreateSessionParams) (*store.Session, error) {
+	return r.sessions.CreateSession(ctx, params)
+}
+func (r *executeTestRepos) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+	return r.sessions.UpdateSession(ctx, id, params)
+}
+func (r *executeTestRepos) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
+	return r.sessions.ListSessionHistory(ctx, userID, isCreator, filters)
+}
+func (r *executeTestRepos) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
+	return r.sessions.UpdateSessionProblem(ctx, id, problem)
+}
+func (r *executeTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
+	return r.students.JoinSession(ctx, params)
+}
+func (r *executeTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error) {
+	return r.students.UpdateCode(ctx, sessionID, userID, code)
+}
+func (r *executeTestRepos) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
+	return r.students.ListSessionStudents(ctx, sessionID)
+}
+func (r *executeTestRepos) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error) {
+	return r.students.GetSessionStudent(ctx, sessionID, userID)
+}
+
 func setupExecuteHandler(
-	sessionRepo store.SessionRepository,
-	studentRepo store.SessionStudentRepository,
+	sessionRepo *mockSessionRepo,
+	studentRepo *execMockSessionStudentRepo,
 	execClient ExecutorClient,
 ) http.Handler {
-	h := NewExecuteHandler(sessionRepo, studentRepo, execClient)
+	h := NewExecuteHandler(execClient)
+	repos := &executeTestRepos{sessions: sessionRepo, students: studentRepo}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), repos)))
+		})
+	})
 	r.Post("/sessions/{id}/execute", h.Execute)
 	return r
 }
@@ -448,7 +492,7 @@ func TestMergeExecutionSettings_AllLayersEmpty(t *testing.T) {
 // --- StandaloneExecute tests ---
 
 func setupStandaloneExecuteHandler(execClient ExecutorClient) http.Handler {
-	h := NewExecuteHandler(&mockSessionRepo{}, &execMockSessionStudentRepo{}, execClient)
+	h := NewExecuteHandler(execClient)
 	r := chi.NewRouter()
 	r.Post("/execute", h.StandaloneExecute)
 	return r

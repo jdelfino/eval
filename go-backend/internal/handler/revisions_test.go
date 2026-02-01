@@ -31,6 +31,23 @@ func (m *mockRevisionRepo) CreateRevision(ctx context.Context, params store.Crea
 	return m.createRevisionFn(ctx, params)
 }
 
+// revisionTestRepos embeds stubRepos and overrides revision methods.
+type revisionTestRepos struct {
+	stubRepos
+	rev *mockRevisionRepo
+}
+
+func (r *revisionTestRepos) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]store.Revision, error) {
+	return r.rev.ListRevisions(ctx, sessionID, userID)
+}
+func (r *revisionTestRepos) CreateRevision(ctx context.Context, params store.CreateRevisionParams) (*store.Revision, error) {
+	return r.rev.CreateRevision(ctx, params)
+}
+
+func revisionRepos(repo *mockRevisionRepo) *revisionTestRepos {
+	return &revisionTestRepos{rev: repo}
+}
+
 func testRevision() *store.Revision {
 	code := "fmt.Println(\"hello\")"
 	return &store.Revision{
@@ -65,10 +82,11 @@ func TestListRevisions_Success(t *testing.T) {
 		},
 	}
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := revisionRouteCtx(rev.SessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -109,10 +127,11 @@ func TestListRevisions_WithUserIDFilter(t *testing.T) {
 		},
 	}
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/?user_id="+filterUserID.String(), nil)
 	ctx := revisionRouteCtx(rev.SessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -125,10 +144,11 @@ func TestListRevisions_WithUserIDFilter(t *testing.T) {
 
 func TestListRevisions_InvalidSessionID(t *testing.T) {
 	repo := &mockRevisionRepo{}
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := revisionRouteCtx("not-a-uuid")
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -141,11 +161,12 @@ func TestListRevisions_InvalidSessionID(t *testing.T) {
 
 func TestListRevisions_InvalidUserID(t *testing.T) {
 	repo := &mockRevisionRepo{}
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/?user_id=not-a-uuid", nil)
 	ctx := revisionRouteCtx(sessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -163,11 +184,12 @@ func TestListRevisions_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := revisionRouteCtx(sessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -190,11 +212,12 @@ func TestListRevisions_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := revisionRouteCtx(sessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -233,7 +256,7 @@ func TestCreateRevision_Success(t *testing.T) {
 		"execution_result": json.RawMessage(`{"passed":true}`),
 	})
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := revisionRouteCtx(rev.SessionID.String())
@@ -242,6 +265,7 @@ func TestCreateRevision_Success(t *testing.T) {
 		Role:        auth.RoleStudent,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -261,7 +285,7 @@ func TestCreateRevision_Success(t *testing.T) {
 }
 
 func TestCreateRevision_Unauthorized(t *testing.T) {
-	h := NewRevisionHandler(&mockRevisionRepo{})
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	ctx := revisionRouteCtx(sessionID.String())
@@ -276,7 +300,7 @@ func TestCreateRevision_Unauthorized(t *testing.T) {
 }
 
 func TestCreateRevision_InvalidSessionID(t *testing.T) {
-	h := NewRevisionHandler(&mockRevisionRepo{})
+	h := NewRevisionHandler()
 	body, _ := json.Marshal(map[string]any{"full_code": "x"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -293,7 +317,7 @@ func TestCreateRevision_InvalidSessionID(t *testing.T) {
 }
 
 func TestCreateRevision_InvalidBody(t *testing.T) {
-	h := NewRevisionHandler(&mockRevisionRepo{})
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
@@ -320,12 +344,13 @@ func TestCreateRevision_InternalError(t *testing.T) {
 		"full_code": "x",
 	})
 
-	h := NewRevisionHandler(repo)
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := revisionRouteCtx(sessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent, NamespaceID: "test-ns"})
+	ctx = store.WithRepos(ctx, revisionRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -337,7 +362,7 @@ func TestCreateRevision_InternalError(t *testing.T) {
 }
 
 func TestListRevisions_Unauthorized(t *testing.T) {
-	h := NewRevisionHandler(&mockRevisionRepo{})
+	h := NewRevisionHandler()
 	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := revisionRouteCtx(sessionID.String())

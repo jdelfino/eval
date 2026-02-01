@@ -16,27 +16,18 @@ import (
 
 // SessionStateHandler handles composite session state endpoints.
 type SessionStateHandler struct {
-	sessions        store.SessionRepository
-	sessionStudents store.SessionStudentRepository
-	sections        store.SectionRepository
-	publisher       realtime.SessionPublisher
-	logger          *slog.Logger
+	publisher realtime.SessionPublisher
+	logger    *slog.Logger
 }
 
 // NewSessionStateHandler creates a new SessionStateHandler.
 func NewSessionStateHandler(
-	sessions store.SessionRepository,
-	sessionStudents store.SessionStudentRepository,
-	sections store.SectionRepository,
 	publisher realtime.SessionPublisher,
 	logger *slog.Logger,
 ) *SessionStateHandler {
 	return &SessionStateHandler{
-		sessions:        sessions,
-		sessionStudents: sessionStudents,
-		sections:        sections,
-		publisher:       publisher,
-		logger:          logger,
+		publisher: publisher,
+		logger:    logger,
 	}
 }
 
@@ -67,12 +58,13 @@ func (h *SessionStateHandler) State(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SessionStateHandler) buildStateResponse(ctx context.Context, id uuid.UUID) (*sessionStateResponse, error) {
-	session, err := h.sessions.GetSession(ctx, id)
+	repos := store.ReposFromContext(ctx)
+	session, err := repos.GetSession(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	students, err := h.sessionStudents.ListSessionStudents(ctx, id)
+	students, err := repos.ListSessionStudents(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +72,7 @@ func (h *SessionStateHandler) buildStateResponse(ctx context.Context, id uuid.UU
 		students = []store.SessionStudent{}
 	}
 
-	section, err := h.sections.GetSection(ctx, session.SectionID)
+	section, err := repos.GetSection(ctx, session.SectionID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +99,8 @@ func (h *SessionStateHandler) PublicState(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	session, err := h.sessions.GetSession(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	session, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -117,7 +110,7 @@ func (h *SessionStateHandler) PublicState(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	section, err := h.sections.GetSection(r.Context(), session.SectionID)
+	section, err := repos.GetSection(r.Context(), session.SectionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
@@ -161,7 +154,8 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 		params.ClearFeatured = true
 	}
 
-	session, err := h.sessions.UpdateSession(r.Context(), id, params)
+	repos := store.ReposFromContext(r.Context())
+	session, err := repos.UpdateSession(r.Context(), id, params)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")

@@ -16,16 +16,11 @@ import (
 )
 
 // SectionHandler handles section management routes.
-type SectionHandler struct {
-	sections    store.SectionRepository
-	sessions    store.SessionRepository
-	memberships store.MembershipRepository
-	users       store.UserRepository
-}
+type SectionHandler struct{}
 
-// NewSectionHandler creates a new SectionHandler with the given repositories.
-func NewSectionHandler(sections store.SectionRepository, sessions store.SessionRepository, memberships store.MembershipRepository, users store.UserRepository) *SectionHandler {
-	return &SectionHandler{sections: sections, sessions: sessions, memberships: memberships, users: users}
+// NewSectionHandler creates a new SectionHandler.
+func NewSectionHandler() *SectionHandler {
+	return &SectionHandler{}
 }
 
 // Routes returns a chi.Router with standalone section routes mounted.
@@ -64,7 +59,8 @@ func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sections, err := h.sections.ListSectionsByClass(r.Context(), classID)
+	repos := store.ReposFromContext(r.Context())
+	sections, err := repos.ListSectionsByClass(r.Context(), classID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -84,7 +80,8 @@ func (h *SectionHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	section, err := h.sections.GetSection(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	section, err := repos.GetSection(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
@@ -121,6 +118,7 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	const maxJoinCodeRetries = 3
 	var section *store.Section
 	for attempt := 0; attempt < maxJoinCodeRetries; attempt++ {
@@ -130,7 +128,7 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		section, err = h.sections.CreateSection(r.Context(), store.CreateSectionParams{
+		section, err = repos.CreateSection(r.Context(), store.CreateSectionParams{
 			NamespaceID: authUser.NamespaceID,
 			ClassID:     classID,
 			Name:        req.Name,
@@ -174,7 +172,8 @@ func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	section, err := h.sections.UpdateSection(r.Context(), id, store.UpdateSectionParams{
+	repos := store.ReposFromContext(r.Context())
+	section, err := repos.UpdateSection(r.Context(), id, store.UpdateSectionParams{
 		Name:     req.Name,
 		Semester: req.Semester,
 		Active:   req.Active,
@@ -198,7 +197,8 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.sections.DeleteSection(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteSection(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
@@ -219,7 +219,8 @@ func (h *SectionHandler) MySections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sections, err := h.sections.ListMySections(r.Context(), authUser.ID)
+	repos := store.ReposFromContext(r.Context())
+	sections, err := repos.ListMySections(r.Context(), authUser.ID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -239,7 +240,8 @@ func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions, err := h.sessions.ListSessions(r.Context(), store.SessionFilters{SectionID: &id})
+	repos := store.ReposFromContext(r.Context())
+	sessions, err := repos.ListSessions(r.Context(), store.SessionFilters{SectionID: &id})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -259,6 +261,7 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	const maxRetries = 3
 	var section *store.Section
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -268,7 +271,7 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		section, err = h.sections.UpdateSectionJoinCode(r.Context(), id, joinCode)
+		section, err = repos.UpdateSectionJoinCode(r.Context(), id, joinCode)
 		if err == nil {
 			break
 		}
@@ -298,7 +301,8 @@ func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	instructors, err := h.memberships.ListMembersByRole(r.Context(), sectionID, string(auth.RoleInstructor))
+	repos := store.ReposFromContext(r.Context())
+	instructors, err := repos.ListMembersByRole(r.Context(), sectionID, string(auth.RoleInstructor))
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -328,7 +332,8 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.GetUserByEmail(r.Context(), req.Email)
+	repos := store.ReposFromContext(r.Context())
+	user, err := repos.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -343,7 +348,7 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	membership, err := h.memberships.CreateMembership(r.Context(), store.CreateMembershipParams{
+	membership, err := repos.CreateMembership(r.Context(), store.CreateMembershipParams{
 		UserID:    user.ID,
 		SectionID: sectionID,
 		Role:      "instructor",
@@ -372,7 +377,8 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := h.memberships.DeleteMembershipIfNotLast(r.Context(), sectionID, userID, string(auth.RoleInstructor))
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteMembershipIfNotLast(r.Context(), sectionID, userID, string(auth.RoleInstructor))
 	if err != nil {
 		if errors.Is(err, store.ErrLastMember) {
 			httputil.WriteError(w, http.StatusBadRequest, "cannot remove the last instructor")

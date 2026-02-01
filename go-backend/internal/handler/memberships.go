@@ -10,13 +10,11 @@ import (
 )
 
 // MembershipHandler handles section membership routes.
-type MembershipHandler struct {
-	memberships store.MembershipRepository
-}
+type MembershipHandler struct{}
 
-// NewMembershipHandler creates a new MembershipHandler with the given repository.
-func NewMembershipHandler(memberships store.MembershipRepository) *MembershipHandler {
-	return &MembershipHandler{memberships: memberships}
+// NewMembershipHandler creates a new MembershipHandler.
+func NewMembershipHandler() *MembershipHandler {
+	return &MembershipHandler{}
 }
 
 // joinRequest is the request body for POST /sections/join.
@@ -37,7 +35,8 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	section, err := h.memberships.GetSectionByJoinCode(r.Context(), req.JoinCode)
+	repos := store.ReposFromContext(r.Context())
+	section, err := repos.GetSectionByJoinCode(r.Context(), req.JoinCode)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
@@ -52,7 +51,7 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	membership, err := h.memberships.CreateMembership(r.Context(), store.CreateMembershipParams{
+	membership, err := repos.CreateMembership(r.Context(), store.CreateMembershipParams{
 		UserID:    authUser.ID,
 		SectionID: section.ID,
 		Role:      "student",
@@ -82,7 +81,8 @@ func (h *MembershipHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.memberships.DeleteMembership(r.Context(), sectionID, authUser.ID)
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteMembership(r.Context(), sectionID, authUser.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "membership not found")
@@ -107,7 +107,8 @@ func (h *MembershipHandler) ListMembers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	members, err := h.memberships.ListMembers(r.Context(), sectionID)
+	repos := store.ReposFromContext(r.Context())
+	members, err := repos.ListMembers(r.Context(), sectionID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
