@@ -161,10 +161,18 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 
-			// User management routes
-			userHandler := handler.NewUserHandler(s)
-			r.Mount("/system/users", userHandler.SystemRoutes())
-			r.Mount("/admin/users", userHandler.NamespaceRoutes())
+			// Admin routes (system-admin only)
+			adminHandler := handler.NewAdminHandler(s, s)
+			r.Route("/admin", func(r chi.Router) {
+				r.Mount("/", adminHandler.Routes())
+				// User management routes (namespace-admin+)
+				userHandler := handler.NewUserHandler(s)
+				r.Mount("/users", userHandler.NamespaceRoutes())
+			})
+
+			// System-level user management routes
+			sysUserHandler := handler.NewUserHandler(s)
+			r.Mount("/system/users", sysUserHandler.SystemRoutes())
 
 			// Create real-time publisher (no-op if Centrifugo is not configured)
 			var sessionPub realtime.SessionPublisher

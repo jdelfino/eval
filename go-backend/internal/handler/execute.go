@@ -144,6 +144,43 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
+// standaloneExecuteRequest is the request body for POST /api/v1/execute.
+type standaloneExecuteRequest struct {
+	Code     string             `json:"code" validate:"required"`
+	Language string             `json:"language,omitempty"`
+	Stdin    string             `json:"stdin,omitempty"`
+	Files    []executorapi.File `json:"files,omitempty"`
+}
+
+// StandaloneExecute handles POST /api/v1/execute for instructor code preview.
+// No session context is required — this is for the "Run" button in the problem editor.
+func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	req, err := httputil.BindJSON[standaloneExecuteRequest](w, r)
+	if err != nil {
+		return // BindJSON already wrote the error response
+	}
+
+	execReq := executor.ExecuteRequest{
+		Code:  req.Code,
+		Stdin: req.Stdin,
+		Files: req.Files,
+	}
+
+	execResp, err := h.executor.Execute(r.Context(), execReq)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "execution failed")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, execResp)
+}
+
 // isCreatorOrParticipant checks if the user is the session creator or a participant.
 func isCreatorOrParticipant(userID uuid.UUID, session *store.Session) bool {
 	if session.CreatorID == userID {
