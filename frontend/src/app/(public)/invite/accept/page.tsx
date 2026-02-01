@@ -97,6 +97,7 @@ export default function AcceptInvitePage() {
   const reload = useLocationReload();
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -171,6 +172,8 @@ export default function AcceptInvitePage() {
           namespace: data.namespace,
         };
         setInvitation(invitationInfo);
+        // Store the token so we can include it in the POST request
+        setInvitationToken(accessToken || tokenHash);
         setPageState({ status: 'ready', invitation: invitationInfo });
       } catch (error) {
         console.error('[AcceptInvite] Unexpected error:', error);
@@ -210,6 +213,8 @@ export default function AcceptInvitePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          invitation_token: invitationToken,
+          invitation_id: invitation.id,
           displayName: displayName.trim() || undefined,
           password,
         }),
