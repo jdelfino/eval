@@ -10,11 +10,6 @@ import (
 // for an instructor. Uses a single query that joins classes, sections, memberships, and sessions.
 // RLS policies handle namespace filtering automatically.
 func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT
 			c.id   AS class_id,
@@ -42,7 +37,7 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 		   )
 		ORDER BY c.name, sec.name`
 
-	rows, err := conn.Query(ctx, query, userID)
+	rows, err := s.q.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}

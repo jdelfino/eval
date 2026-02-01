@@ -11,11 +11,6 @@ import (
 // If classID is non-nil, results are filtered to that class.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, namespace_id, title, description, starter_code, test_cases,
 		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
@@ -28,7 +23,7 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 	}
 	query += " ORDER BY created_at"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +56,6 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 
 // ListProblemsFiltered retrieves problems with extended filters.
 func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters) ([]Problem, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, namespace_id, title, description, starter_code, test_cases,
 		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
@@ -111,7 +101,7 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 	}
 	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +135,6 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 // GetProblem retrieves a problem by its ID.
 // Returns ErrNotFound if the problem does not exist.
 func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, title, description, starter_code, test_cases,
 		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
@@ -157,7 +142,7 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 		WHERE id = $1`
 
 	var p Problem
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&p.ID,
 		&p.NamespaceID,
 		&p.Title,
@@ -181,11 +166,6 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 
 // CreateProblem creates a new problem and returns the created record.
 func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
 		                      execution_settings, author_id, class_id, tags, solution)
@@ -194,7 +174,7 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
 
 	var p Problem
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.Title,
 		params.Description,
@@ -230,11 +210,6 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 // UpdateProblem updates a problem's mutable fields and returns the updated record.
 // Returns ErrNotFound if the problem does not exist.
 func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdateProblemParams) (*Problem, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Build dynamic update query for fields that may or may not be provided.
 	// COALESCE handles optional string fields; JSONB fields use explicit SET logic.
 	query := `
@@ -288,7 +263,7 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
 
 	var p Problem
-	err = conn.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, args...).Scan(
 		&p.ID,
 		&p.NamespaceID,
 		&p.Title,
@@ -313,12 +288,7 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 // DeleteProblem deletes a problem by its ID.
 // Returns ErrNotFound if the problem does not exist.
 func (s *Store) DeleteProblem(ctx context.Context, id uuid.UUID) error {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := conn.Exec(ctx, "DELETE FROM problems WHERE id = $1", id)
+	tag, err := s.q.Exec(ctx, "DELETE FROM problems WHERE id = $1", id)
 	if err != nil {
 		return err
 	}

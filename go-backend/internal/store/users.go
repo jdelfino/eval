@@ -11,18 +11,13 @@ import (
 // GetUserByID retrieves a user by their primary key ID.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
 		FROM users
 		WHERE id = $1`
 
 	var user User
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
@@ -42,18 +37,13 @@ func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 // GetUserByExternalID retrieves a user by their Identity Platform uid (external_id).
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) GetUserByExternalID(ctx context.Context, externalID string) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
 		FROM users
 		WHERE external_id = $1`
 
 	var user User
-	err = conn.QueryRow(ctx, query, externalID).Scan(
+	err := s.q.QueryRow(ctx, query, externalID).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
@@ -73,11 +63,6 @@ func (s *Store) GetUserByExternalID(ctx context.Context, externalID string) (*Us
 // UpdateUser updates a user's mutable fields and returns the updated user.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserParams) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE users
 		SET display_name = COALESCE($2, display_name),
@@ -86,7 +71,7 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserP
 		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
 
 	var user User
-	err = conn.QueryRow(ctx, query, id, params.DisplayName).Scan(
+	err := s.q.QueryRow(ctx, query, id, params.DisplayName).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
@@ -106,18 +91,13 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserP
 // GetUserByEmail retrieves a user by email address.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
 		FROM users
 		WHERE email = $1`
 
 	var user User
-	err = conn.QueryRow(ctx, query, email).Scan(
+	err := s.q.QueryRow(ctx, query, email).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
@@ -136,11 +116,6 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error)
 
 // ListUsers retrieves users with optional filters.
 func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
 		FROM users
@@ -163,7 +138,7 @@ func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, err
 
 	query += " ORDER BY created_at"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +169,6 @@ func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, err
 // be explicitly cleared by passing a non-nil pointer to an empty/zero value.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params UpdateUserAdminParams) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	setClauses := []string{"updated_at = now()"}
 	args := []any{id}
 	argIdx := 2
@@ -232,7 +202,7 @@ func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params Update
 		strings.Join(setClauses, ", "))
 
 	var user User
-	err = conn.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
@@ -252,12 +222,7 @@ func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params Update
 // DeleteUser deletes a user by ID.
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := conn.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
+	tag, err := s.q.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -269,18 +234,13 @@ func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
 
 // CountUsersByRole counts users grouped by role within a namespace.
 func (s *Store) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT role, COUNT(*)
 		FROM users
 		WHERE namespace_id = $1
 		GROUP BY role`
 
-	rows, err := conn.Query(ctx, query, namespaceID)
+	rows, err := s.q.Query(ctx, query, namespaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -300,18 +260,13 @@ func (s *Store) CountUsersByRole(ctx context.Context, namespaceID string) (map[s
 
 // CreateUser creates a new user and returns it.
 func (s *Store) CreateUser(ctx context.Context, params CreateUserParams) (*User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO users (external_id, email, role, namespace_id, display_name)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
 
 	var user User
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.ExternalID,
 		params.Email,
 		params.Role,

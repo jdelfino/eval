@@ -7,17 +7,12 @@ import (
 // ListNamespaces retrieves all namespaces visible to the current user.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListNamespaces(ctx context.Context) ([]Namespace, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at
 		FROM namespaces
 		ORDER BY id`
 
-	rows, err := conn.Query(ctx, query)
+	rows, err := s.q.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -46,18 +41,13 @@ func (s *Store) ListNamespaces(ctx context.Context) ([]Namespace, error) {
 // GetNamespace retrieves a namespace by its ID.
 // Returns ErrNotFound if the namespace does not exist.
 func (s *Store) GetNamespace(ctx context.Context, id string) (*Namespace, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at
 		FROM namespaces
 		WHERE id = $1`
 
 	var ns Namespace
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&ns.ID,
 		&ns.DisplayName,
 		&ns.Active,
@@ -76,18 +66,13 @@ func (s *Store) GetNamespace(ctx context.Context, id string) (*Namespace, error)
 
 // CreateNamespace creates a new namespace and returns the created record.
 func (s *Store) CreateNamespace(ctx context.Context, params CreateNamespaceParams) (*Namespace, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO namespaces (id, display_name, max_instructors, max_students, created_by)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at`
 
 	var ns Namespace
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.ID,
 		params.DisplayName,
 		params.MaxInstructors,
@@ -113,11 +98,6 @@ func (s *Store) CreateNamespace(ctx context.Context, params CreateNamespaceParam
 // UpdateNamespace updates a namespace's mutable fields and returns the updated record.
 // Returns ErrNotFound if the namespace does not exist.
 func (s *Store) UpdateNamespace(ctx context.Context, id string, params UpdateNamespaceParams) (*Namespace, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE namespaces
 		SET display_name    = COALESCE($2, display_name),
@@ -129,7 +109,7 @@ func (s *Store) UpdateNamespace(ctx context.Context, id string, params UpdateNam
 		RETURNING id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at`
 
 	var ns Namespace
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		id,
 		params.DisplayName,
 		params.Active,
