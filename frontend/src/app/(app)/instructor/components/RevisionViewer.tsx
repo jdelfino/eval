@@ -4,14 +4,14 @@ import { useRevisionHistory } from '@/hooks/useRevisionHistory';
 import { useState, useEffect, useMemo } from 'react';
 
 interface RevisionViewerProps {
-  sessionId: string;
+  session_id: string;
   studentId: string;
   studentName: string;
   onClose: () => void;
 }
 
 export default function RevisionViewer({
-  sessionId,
+  session_id,
   studentId,
   studentName,
   onClose,
@@ -31,7 +31,7 @@ export default function RevisionViewer({
     hasPrevious,
     totalRevisions,
   } = useRevisionHistory({
-    sessionId,
+    session_id,
     studentId,
   });
 

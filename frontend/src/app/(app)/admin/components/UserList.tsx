@@ -14,14 +14,14 @@ interface AdminUser {
   email: string;
   role: string;
   displayName?: string;
-  createdAt: Date | string;
+  created_at: Date | string;
   lastLoginAt?: Date | string;
 }
 
 interface UserListProps {
   users: AdminUser[];
   currentUserId: string;
-  onDelete?: (userId: string, username: string) => Promise<void>;
+  onDelete?: (user_id: string, username: string) => Promise<void>;
   showActions?: boolean;
 }
 
@@ -29,12 +29,12 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const handleDelete = async (userId: string, username: string) => {
+  const handleDelete = async (user_id: string, username: string) => {
     if (!onDelete) return;
 
-    setDeletingId(userId);
+    setDeletingId(user_id);
     try {
-      await onDelete(userId, username);
+      await onDelete(user_id, username);
       setConfirmDeleteId(null);
     } catch (error) {
       console.error('Delete error:', error);
@@ -100,7 +100,7 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
               </Badge>
             </Table.Cell>
             <Table.Cell className="text-sm text-gray-500">
-              {formatDate(user.createdAt)}
+              {formatDate(user.created_at)}
             </Table.Cell>
             <Table.Cell className="text-sm text-gray-500">
               {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}

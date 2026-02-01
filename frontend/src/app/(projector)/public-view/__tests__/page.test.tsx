@@ -12,7 +12,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn(() => ({
-    get: jest.fn((key: string) => (key === 'sessionId' ? 'test-session-id' : null))
+    get: jest.fn((key: string) => (key === 'session_id' ? 'test-session-id' : null))
   })),
 }));
 
@@ -45,7 +45,7 @@ const mockDebuggerHook = {
   getCurrentGlobals: jest.fn(),
   getCurrentCallStack: jest.fn(),
   getPreviousStep: jest.fn(),
-  totalSteps: 0,
+  total_steps: 0,
   hasTrace: false,
   canStepForward: false,
   canStepBackward: false,
@@ -96,14 +96,14 @@ describe('PublicInstructorView', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: {
           title: 'Test Problem',
           description: 'A test problem description',
         },
-        featuredStudentId: 'student-1',
-        featuredCode: 'print("Hello, World!")',
+        featured_student_id: 'student-1',
+        featured_code: 'print("Hello, World!")',
         hasFeaturedSubmission: true,
       }),
     });
@@ -136,14 +136,14 @@ describe('PublicInstructorView', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: {
           title: 'Test Problem',
           description: '## Markdown Header\n\nThis has **bold** text.',
         },
-        featuredStudentId: null,
-        featuredCode: null,
+        featured_student_id: null,
+        featured_code: null,
         hasFeaturedSubmission: false,
       }),
     });
@@ -172,14 +172,14 @@ describe('PublicInstructorView', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: {
           title: 'Test Problem',
           description: 'A test problem description',
         },
-        featuredStudentId: 'student-1',
-        featuredCode: 'print("test")',
+        featured_student_id: 'student-1',
+        featured_code: 'print("test")',
         hasFeaturedSubmission: true,
       }),
     });
@@ -207,11 +207,11 @@ describe('PublicInstructorView', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: null,
-        featuredStudentId: null,
-        featuredCode: null,
+        featured_student_id: null,
+        featured_code: null,
         hasFeaturedSubmission: false,
       }),
     });
@@ -228,21 +228,21 @@ describe('PublicInstructorView', () => {
     expect(lastCodeEditorProps.readOnly).toBeFalsy();
   });
 
-  test('shows starter code in editor when no featured submission but problem has starterCode', async () => {
+  test('shows starter code in editor when no featured submission but problem has starter_code', async () => {
     lastCodeEditorProps = null;
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: {
           title: 'Test Problem',
           description: 'A test problem',
-          starterCode: 'def solve():\n    pass',
+          starter_code: 'def solve():\n    pass',
         },
-        featuredStudentId: null,
-        featuredCode: null,
+        featured_student_id: null,
+        featured_code: null,
         hasFeaturedSubmission: false,
       }),
     });
@@ -281,11 +281,11 @@ describe('PublicInstructorView', () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: null,
-        featuredStudentId: null,
-        featuredCode: null,
+        featured_student_id: null,
+        featured_code: null,
         hasFeaturedSubmission: false,
       }),
     });
@@ -325,14 +325,14 @@ describe('PublicInstructorView collapsible header', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        sessionId: 'test-session-id',
-        joinCode: 'ABC-123',
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
         problem: {
           title: 'Test Problem',
           description: 'A test problem description',
         },
-        featuredStudentId: null,
-        featuredCode: null,
+        featured_student_id: null,
+        featured_code: null,
         hasFeaturedSubmission: false,
         ...overrides,
       }),
@@ -418,8 +418,8 @@ describe('PublicInstructorView collapsible header', () => {
     lastCodeEditorProps = null;
 
     await renderWithState({
-      featuredStudentId: 'student-1',
-      featuredCode: 'print("hello")',
+      featured_student_id: 'student-1',
+      featured_code: 'print("hello")',
       hasFeaturedSubmission: true,
     });
 
@@ -460,19 +460,19 @@ describe('PublicInstructorView collapsible header', () => {
   });
 });
 
-// Separate describe block with different navigation mock for no-sessionId case
-describe('PublicInstructorView without sessionId', () => {
+// Separate describe block with different navigation mock for no-session_id case
+describe('PublicInstructorView without session_id', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Override the mock to return null for sessionId
+    // Override the mock to return null for session_id
     const { useSearchParams } = require('next/navigation');
     (useSearchParams as jest.Mock).mockReturnValue({
       get: jest.fn(() => null)
     });
   });
 
-  test('shows no session message when sessionId is missing', async () => {
+  test('shows no session message when session_id is missing', async () => {
     const PublicInstructorView = require('../page').default;
     render(<PublicInstructorView />);
 

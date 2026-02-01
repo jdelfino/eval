@@ -8,9 +8,9 @@ import CreateSessionFromProblemModal from '../CreateSessionFromProblemModal';
 
 describe('CreateSessionFromProblemModal', () => {
   const defaultProps = {
-    problemId: 'prob-1',
-    problemTitle: 'Two Sum',
-    classId: 'class-1',
+    problem_id: 'prob-1',
+    problem_title: 'Two Sum',
+    class_id: 'class-1',
     className: 'CS 101',
     onClose: jest.fn(),
     onSuccess: jest.fn(),
@@ -39,13 +39,13 @@ describe('CreateSessionFromProblemModal', () => {
     expect(screen.queryByText('-- Select a class --')).not.toBeInTheDocument();
   });
 
-  it('loads sections for the given classId on mount', async () => {
+  it('loads sections for the given class_id on mount', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-          { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
         ],
       }),
     });
@@ -66,14 +66,14 @@ describe('CreateSessionFromProblemModal', () => {
         ok: true,
         json: async () => ({
           sections: [
-            { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
+            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
           ],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          session: { id: 'session-1', joinCode: 'JOIN123' },
+          session: { id: 'session-1', join_code: 'JOIN123' },
         }),
       });
 
@@ -93,7 +93,7 @@ describe('CreateSessionFromProblemModal', () => {
     // Verify session creation call
     expect(global.fetch).toHaveBeenCalledWith('/sessions', expect.objectContaining({
       method: 'POST',
-      body: JSON.stringify({ sectionId: 'sec-1', problemId: 'prob-1' }),
+      body: JSON.stringify({ section_id: 'sec-1', problem_id: 'prob-1' }),
     }));
   });
 
@@ -102,7 +102,7 @@ describe('CreateSessionFromProblemModal', () => {
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
         ],
       }),
     });
@@ -118,15 +118,15 @@ describe('CreateSessionFromProblemModal', () => {
     expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
   });
 
-  it('pre-selects last-used section when classId matches', async () => {
-    localStorage.setItem('lastUsedSection', JSON.stringify({ sectionId: 'sec-2', classId: 'class-1' }));
+  it('pre-selects last-used section when class_id matches', async () => {
+    localStorage.setItem('lastUsedSection', JSON.stringify({ section_id: 'sec-2', class_id: 'class-1' }));
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-          { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
         ],
       }),
     });
@@ -139,14 +139,14 @@ describe('CreateSessionFromProblemModal', () => {
   });
 
   it('does not pre-select when last-used section is for a different class', async () => {
-    localStorage.setItem('lastUsedSection', JSON.stringify({ sectionId: 'sec-1', classId: 'other-class' }));
+    localStorage.setItem('lastUsedSection', JSON.stringify({ section_id: 'sec-1', class_id: 'other-class' }));
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-          { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
         ],
       }),
     });
@@ -166,14 +166,14 @@ describe('CreateSessionFromProblemModal', () => {
         ok: true,
         json: async () => ({
           sections: [
-            { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
+            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
           ],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          session: { id: 'session-1', joinCode: 'JOIN123' },
+          session: { id: 'session-1', join_code: 'JOIN123' },
         }),
       });
 
@@ -191,6 +191,6 @@ describe('CreateSessionFromProblemModal', () => {
     });
 
     const stored = JSON.parse(localStorage.getItem('lastUsedSection')!);
-    expect(stored).toEqual({ sectionId: 'sec-1', classId: 'class-1' });
+    expect(stored).toEqual({ section_id: 'sec-1', class_id: 'class-1' });
   });
 });

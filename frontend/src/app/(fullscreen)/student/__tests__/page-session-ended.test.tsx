@@ -41,7 +41,7 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 jest.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: (key: string) => key === 'sessionId' ? 'session-123' : null,
+    get: (key: string) => key === 'session_id' ? 'session-123' : null,
   }),
   useRouter: () => ({
     push: mockPush,
@@ -117,7 +117,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -148,7 +148,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -165,7 +165,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -184,7 +184,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -203,7 +203,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -222,7 +222,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -243,7 +243,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -266,7 +266,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -294,7 +294,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 
@@ -316,7 +316,7 @@ describe('Student Page - Session Ended Detection', () => {
       session: {
         ...baseSessionState.session,
         status: 'completed',
-        endedAt: '2026-01-09T12:00:00Z',
+        ended_at: '2026-01-09T12:00:00Z',
       },
     });
 

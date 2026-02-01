@@ -83,11 +83,11 @@ describe('CodeEditor Empty States', () => {
     });
 
     it('should not show empty state when execution result is present', () => {
-      const executionResult = {
+      const execution_result = {
         success: true,
         output: 'Hello, World!',
         error: '',
-        executionTime: 10,
+        execution_time: 10,
       };
 
       render(
@@ -95,7 +95,7 @@ describe('CodeEditor Empty States', () => {
           code="print('Hello, World!')"
           onChange={jest.fn()}
           problem={{ title: 'Test Problem' }}
-          executionResult={executionResult}
+          execution_result={execution_result}
         />
       );
 

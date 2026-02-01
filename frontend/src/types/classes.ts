@@ -1,37 +1,37 @@
 /**
  * Client-side class/section types.
  *
- * Migrated from @/server/classes/types — pure type definitions.
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 export interface Class {
   id: string;
-  namespaceId: string;
+  namespace_id: string;
   name: string;
   description?: string;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  created_by: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface Section {
   id: string;
-  namespaceId: string;
-  classId: string;
+  namespace_id: string;
+  class_id: string;
   name: string;
   semester?: string;
-  joinCode: string;
+  join_code: string;
   active: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface SectionMembership {
   id: string;
-  userId: string;
-  sectionId: string;
+  user_id: string;
+  section_id: string;
   role: 'instructor' | 'student';
-  joinedAt: Date;
+  joined_at: Date;
 }
 
 export interface SectionWithClass extends Section {

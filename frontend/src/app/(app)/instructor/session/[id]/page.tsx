@@ -4,7 +4,7 @@
  * Instructor Session Page
  *
  * Direct route for viewing an active session.
- * URL pattern: /instructor/session/{sessionId}
+ * URL pattern: /instructor/session/{session_id}
  *
  * Uses:
  * - SessionView component for the main UI
@@ -26,15 +26,15 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 
 /**
- * Extended session state from API that includes joinCode from section
+ * Extended session state from API that includes join_code from section
  */
 interface SessionStateFromAPI {
-  sectionId?: string;
-  sectionName?: string;
-  joinCode?: string;
+  section_id?: string;
+  section_name?: string;
+  join_code?: string;
   problem?: Problem | null;
   status?: 'active' | 'completed';
-  featuredStudentId?: string | null;
+  featured_student_id?: string | null;
 }
 
 export default function InstructorSessionPage() {
@@ -42,7 +42,7 @@ export default function InstructorSessionPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { setHeaderSlot } = useHeaderSlot();
-  const sessionId = params.id as string;
+  const session_id = params.id as string;
 
   // Local state
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +50,8 @@ export default function InstructorSessionPage() {
   const [sessionProblem, setSessionProblem] = useState<Problem | null>(null);
   const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   }>({});
 
   // Realtime session hook
@@ -67,12 +67,12 @@ export default function InstructorSessionPage() {
     clearFeaturedStudent,
     replacementInfo,
   } = useRealtimeSession({
-    sessionId: sessionId || '',
-    userId: user?.ID,
+    session_id: session_id || '',
+    user_id: user?.ID,
     userName: user?.DisplayName || user?.Email,
   });
 
-  // Cast session to include additional API fields like joinCode
+  // Cast session to include additional API fields like join_code
   const realtimeSession = realtimeSessionRaw as SessionStateFromAPI | null;
 
   // Session operations hook
@@ -81,28 +81,28 @@ export default function InstructorSessionPage() {
     updateProblem: apiUpdateProblem,
   } = useSessionOperations();
 
-  // Derive students array from realtime data (map userId to id for UI components)
+  // Derive students array from realtime data (map user_id to id for UI components)
   const students = useMemo(() =>
     realtimeStudents.map(s => ({
-      id: s.userId,
+      id: s.user_id,
       name: s.name,
-      hasCode: !!s.code,
-      executionSettings: {
-        randomSeed: s.executionSettings?.randomSeed,
-        stdin: s.executionSettings?.stdin,
-        attachedFiles: s.executionSettings?.attachedFiles,
+      has_code: !!s.code,
+      execution_settings: {
+        random_seed: s.execution_settings?.random_seed,
+        stdin: s.execution_settings?.stdin,
+        attached_files: s.execution_settings?.attached_files,
       },
     })),
     [realtimeStudents]
   );
 
-  // Map userId to id for UI component compatibility
+  // Map user_id to id for UI component compatibility
   const mappedRealtimeStudents = useMemo(() =>
     realtimeStudents.map(s => ({
-      id: s.userId,
+      id: s.user_id,
       name: s.name,
       code: s.code,
-      executionSettings: s.executionSettings,
+      execution_settings: s.execution_settings,
     })),
     [realtimeStudents]
   );
@@ -111,19 +111,19 @@ export default function InstructorSessionPage() {
   const sessionContext = useMemo(() => {
     if (!realtimeSession) return null;
     return {
-      sectionId: realtimeSession.sectionId || '',
-      sectionName: realtimeSession.sectionName || 'Session',
+      section_id: realtimeSession.section_id || '',
+      section_name: realtimeSession.section_name || 'Session',
     };
   }, [realtimeSession]);
 
   // Join code from session
-  const joinCode = realtimeSession?.joinCode || null;
+  const join_code = realtimeSession?.join_code || null;
 
   // Sync state from Realtime session
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    setSessionExecutionSettings(realtimeSession.problem?.executionSettings || {});
+    setSessionExecutionSettings(realtimeSession.problem?.execution_settings || {});
   }, [realtimeSession]);
 
   // Show connection status in the global header
@@ -144,10 +144,10 @@ export default function InstructorSessionPage() {
   const isSessionEnded = realtimeSession?.status === 'completed';
 
   const handleReopenSession = useCallback(async () => {
-    if (!sessionId) return;
+    if (!session_id) return;
     try {
       setReopening(true);
-      await apiPost(`/sessions/${sessionId}/reopen`);
+      await apiPost(`/sessions/${session_id}/reopen`);
       // Reload the page to get fresh active session state
       window.location.reload();
     } catch (err: any) {
@@ -155,63 +155,63 @@ export default function InstructorSessionPage() {
     } finally {
       setReopening(false);
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   // Handlers
   const handleEndSession = useCallback(async () => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
-      await apiEndSession(sessionId);
+      await apiEndSession(session_id);
       router.push('/instructor');
     } catch (err: any) {
       setError(err.message || 'Failed to end session');
     }
-  }, [sessionId, apiEndSession, router]);
+  }, [session_id, apiEndSession, router]);
 
   const handleUpdateProblem = useCallback(async (
-    problem: { title: string; description: string; starterCode: string },
-    executionSettings?: {
+    problem: { title: string; description: string; starter_code: string },
+    execution_settings?: {
       stdin?: string;
-      randomSeed?: number;
-      attachedFiles?: Array<{ name: string; content: string }>;
+      random_seed?: number;
+      attached_files?: Array<{ name: string; content: string }>;
     }
   ) => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
-      await apiUpdateProblem(sessionId, problem, executionSettings);
+      await apiUpdateProblem(session_id, problem, execution_settings);
     } catch (err: any) {
       setError(err.message || 'Failed to update problem');
     }
-  }, [sessionId, apiUpdateProblem]);
+  }, [session_id, apiUpdateProblem]);
 
   const handleFeatureStudent = useCallback(async (studentId: string) => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
       await featureStudent(studentId);
     } catch (err: any) {
       setError(err.message || 'Failed to feature student');
     }
-  }, [sessionId, featureStudent]);
+  }, [session_id, featureStudent]);
 
   const handleClearPublicView = useCallback(async () => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
       await clearFeaturedStudent();
     } catch (err: any) {
       setError(err.message || 'Failed to clear public view');
     }
-  }, [sessionId, clearFeaturedStudent]);
+  }, [session_id, clearFeaturedStudent]);
 
   const handleExecuteCode = useCallback(async (
     studentId: string,
     code: string,
-    executionSettings: ExecutionSettings
+    execution_settings: ExecutionSettings
   ) => {
-    return executeCode(studentId, code, executionSettings);
+    return executeCode(studentId, code, execution_settings);
   }, [executeCode]);
 
   // Loading state
@@ -299,10 +299,10 @@ export default function InstructorSessionPage() {
       )}
 
       {/* Session View */}
-      {sessionId && (
+      {session_id && (
         <SessionView
-          sessionId={sessionId}
-          joinCode={joinCode}
+          session_id={session_id}
+          join_code={join_code}
           sessionContext={sessionContext}
           students={students}
           realtimeStudents={mappedRealtimeStudents}
@@ -313,7 +313,7 @@ export default function InstructorSessionPage() {
           onFeatureStudent={handleFeatureStudent}
           onClearPublicView={handleClearPublicView}
           executeCode={handleExecuteCode}
-          featuredStudentId={realtimeSession?.featuredStudentId}
+          featured_student_id={realtimeSession?.featured_student_id}
         />
       )}
     </div>

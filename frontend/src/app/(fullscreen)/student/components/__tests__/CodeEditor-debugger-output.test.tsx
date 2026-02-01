@@ -43,7 +43,7 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: {},
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: ''
             },
             {
@@ -51,7 +51,7 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: { x: 5 },
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: 'Hello, World!\n'
             },
             {
@@ -59,19 +59,19 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: { x: 5, y: 10 },
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: 'Hello, World!\nValue: 15\n'
             }
           ],
-          totalSteps: 3,
-          exitCode: 0,
+          total_steps: 3,
+          exit_code: 0,
           truncated: false
         },
         currentStep: 2,
         isLoading: false,
         error: null,
         hasTrace: true,
-        totalSteps: 3,
+        total_steps: 3,
         canStepForward: false,
         canStepBackward: true,
         requestTrace: jest.fn(),
@@ -88,7 +88,7 @@ describe('CodeEditor - Debugger Output Display', () => {
           event: 'line',
           locals: { x: 5, y: 10 },
           globals: {},
-          callStack: [],
+          call_stack: [],
           stdout: 'Hello, World!\nValue: 15\n'
         })),
         getCurrentLocals: jest.fn(() => ({ x: 5, y: 10 })),
@@ -99,7 +99,7 @@ describe('CodeEditor - Debugger Output Display', () => {
           event: 'line',
           locals: { x: 5 },
           globals: {},
-          callStack: [],
+          call_stack: [],
           stdout: 'Hello, World!\n'
         }))
       };
@@ -135,19 +135,19 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: {},
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: ''
             }
           ],
-          totalSteps: 1,
-          exitCode: 0,
+          total_steps: 1,
+          exit_code: 0,
           truncated: false
         },
         currentStep: 0,
         isLoading: false,
         error: null,
         hasTrace: true,
-        totalSteps: 1,
+        total_steps: 1,
         canStepForward: false,
         canStepBackward: false,
         requestTrace: jest.fn(),
@@ -164,7 +164,7 @@ describe('CodeEditor - Debugger Output Display', () => {
           event: 'line',
           locals: {},
           globals: {},
-          callStack: [],
+          call_stack: [],
           stdout: ''
         })),
         getCurrentLocals: jest.fn(() => ({})),
@@ -188,15 +188,15 @@ describe('CodeEditor - Debugger Output Display', () => {
       const mockDebugger = {
         trace: {
           steps: [],
-          totalSteps: 0,
-          exitCode: 1,
+          total_steps: 0,
+          exit_code: 1,
           truncated: false
         },
         currentStep: 0,
         isLoading: false,
         error: 'NameError: name "undefined_var" is not defined',
         hasTrace: true,
-        totalSteps: 0,
+        total_steps: 0,
         canStepForward: false,
         canStepBackward: false,
         requestTrace: jest.fn(),
@@ -236,7 +236,7 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: {},
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: ''
             },
             {
@@ -244,7 +244,7 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: {},
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: 'First line\n'
             },
             {
@@ -252,19 +252,19 @@ describe('CodeEditor - Debugger Output Display', () => {
               event: 'line',
               locals: {},
               globals: {},
-              callStack: [],
+              call_stack: [],
               stdout: 'First line\nSecond line\n'
             }
           ],
-          totalSteps: 3,
-          exitCode: 0,
+          total_steps: 3,
+          exit_code: 0,
           truncated: false
         },
         currentStep: 1,
         isLoading: false,
         error: null,
         hasTrace: true,
-        totalSteps: 3,
+        total_steps: 3,
         canStepForward: true,
         canStepBackward: true,
         requestTrace: jest.fn(),
@@ -281,7 +281,7 @@ describe('CodeEditor - Debugger Output Display', () => {
           event: 'line',
           locals: {},
           globals: {},
-          callStack: [],
+          call_stack: [],
           stdout: 'First line\n'
         })),
         getCurrentLocals: jest.fn(() => ({})),
@@ -292,7 +292,7 @@ describe('CodeEditor - Debugger Output Display', () => {
           event: 'line',
           locals: {},
           globals: {},
-          callStack: [],
+          call_stack: [],
           stdout: ''
         }))
       };
@@ -320,11 +320,11 @@ describe('CodeEditor - Debugger Output Display', () => {
         <CodeEditor
           code="print('Hello')"
           onChange={mockOnChange}
-          executionResult={{
+          execution_result={{
             success: true,
             output: 'Hello\n',
             error: '',
-            executionTime: 100
+            execution_time: 100
           }}
         />
       );

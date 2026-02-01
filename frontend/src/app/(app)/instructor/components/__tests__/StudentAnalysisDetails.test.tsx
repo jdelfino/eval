@@ -7,9 +7,9 @@ const makeIssue = (overrides: Partial<AnalysisIssue> = {}): AnalysisIssue => ({
   title: 'Missing base case',
   explanation: 'Students forgot the base case in their recursive function',
   count: 3,
-  studentIds: ['s1', 's2', 's3'],
-  representativeStudentLabel: 'Student A',
-  representativeStudentId: 's1',
+  student_ids: ['s1', 's2', 's3'],
+  representative_student_label: 'Student A',
+  representative_student_id: 's1',
   severity: 'error',
   ...overrides,
 });

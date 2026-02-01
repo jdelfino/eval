@@ -34,8 +34,8 @@ describe('ClassList', () => {
 
   it('should fetch and display classes', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro to CS', sectionCount: 3 },
-      { id: 'class-2', name: 'CS102', description: 'Data Structures', sectionCount: 2 },
+      { id: 'class-1', name: 'CS101', description: 'Intro to CS', section_count: 3 },
+      { id: 'class-2', name: 'CS102', description: 'Data Structures', section_count: 2 },
     ];
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -58,7 +58,7 @@ describe('ClassList', () => {
 
   it('should handle singular section count', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro', sectionCount: 1 },
+      { id: 'class-1', name: 'CS101', description: 'Intro', section_count: 1 },
     ];
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -119,7 +119,7 @@ describe('ClassList', () => {
 
   it('should call onSelectClass when class is clicked', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro', sectionCount: 3 },
+      { id: 'class-1', name: 'CS101', description: 'Intro', section_count: 3 },
     ];
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -149,7 +149,7 @@ describe('ClassList', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ classes: [{ id: 'class-1', name: 'CS101', description: '', sectionCount: 1 }] }),
+        json: async () => ({ classes: [{ id: 'class-1', name: 'CS101', description: '', section_count: 1 }] }),
       });
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
@@ -181,7 +181,7 @@ describe('ClassList', () => {
 
   it('should handle classes without descriptions', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: '', sectionCount: 1 },
+      { id: 'class-1', name: 'CS101', description: '', section_count: 1 },
     ];
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({

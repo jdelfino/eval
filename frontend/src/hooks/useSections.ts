@@ -17,9 +17,9 @@ interface UseSectionsReturn {
   loading: boolean;
   error: string | null;
   fetchMySections: () => Promise<void>;
-  joinSection: (joinCode: string) => Promise<Section>;
-  leaveSection: (sectionId: string) => Promise<void>;
-  getActiveSessions: (sectionId: string) => Promise<Session[]>;
+  joinSection: (join_code: string) => Promise<Section>;
+  leaveSection: (section_id: string) => Promise<void>;
+  getActiveSessions: (section_id: string) => Promise<Session[]>;
 }
 
 export function useSections(): UseSectionsReturn {
@@ -40,23 +40,23 @@ export function useSections(): UseSectionsReturn {
     }
   }, []);
 
-  const joinSection = useCallback(async (joinCode: string): Promise<Section> => {
+  const joinSection = useCallback(async (join_code: string): Promise<Section> => {
     setError(null);
-    const data = await apiPost<{ section: Section }>('/sections/join', { joinCode });
+    const data = await apiPost<{ section: Section }>('/sections/join', { join_code });
     // Refresh sections after joining
     await fetchMySections();
     return data.section;
   }, [fetchMySections]);
 
-  const leaveSection = useCallback(async (sectionId: string): Promise<void> => {
+  const leaveSection = useCallback(async (section_id: string): Promise<void> => {
     setError(null);
-    await apiDelete(`/sections/${sectionId}/leave`);
-    setSections(prev => prev.filter(s => s.id !== sectionId));
+    await apiDelete(`/sections/${section_id}/leave`);
+    setSections(prev => prev.filter(s => s.id !== section_id));
   }, []);
 
-  const getActiveSessions = useCallback(async (sectionId: string): Promise<Session[]> => {
+  const getActiveSessions = useCallback(async (section_id: string): Promise<Session[]> => {
     setError(null);
-    const data = await apiGet<{ sessions: Session[] }>(`/sections/${sectionId}/sessions`);
+    const data = await apiGet<{ sessions: Session[] }>(`/sections/${section_id}/sessions`);
     // Filter for active sessions only
     return data.sessions.filter((s: Session) => s.status === 'active');
   }, []);

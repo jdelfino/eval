@@ -31,15 +31,15 @@ describe('StudentList', () => {
       expect(screen.queryByText('Waiting for students to join the session.')).not.toBeInTheDocument();
     });
 
-    it('should show empty state with join code when no students and joinCode provided', () => {
-      render(<StudentList {...defaultProps} joinCode="ABC123" />);
+    it('should show empty state with join code when no students and join_code provided', () => {
+      render(<StudentList {...defaultProps} join_code="ABC123" />);
 
       expect(screen.getByText('Waiting for students to join the session.')).toBeInTheDocument();
       expect(screen.getByText('Share this join code with your students:')).toBeInTheDocument();
       expect(screen.getByText('ABC123')).toBeInTheDocument();
     });
 
-    it('should show empty state without join code when no students and no joinCode', () => {
+    it('should show empty state without join code when no students and no join_code', () => {
       render(<StudentList {...defaultProps} />);
 
       expect(screen.getByText('Waiting for students to join the session.')).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe('StudentList', () => {
 
     it('should not show empty state when there are students', () => {
       const students = [
-        { id: 'student-1', name: 'Alice', hasCode: true },
+        { id: 'student-1', name: 'Alice', has_code: true },
       ];
       render(<StudentList {...defaultProps} students={students} />);
 
@@ -60,8 +60,8 @@ describe('StudentList', () => {
 
   describe('Student list display', () => {
     const students = [
-      { id: 'student-1', name: 'Alice', hasCode: true },
-      { id: 'student-2', name: 'Bob', hasCode: false },
+      { id: 'student-1', name: 'Alice', has_code: true },
+      { id: 'student-2', name: 'Bob', has_code: false },
     ];
 
     it('should display the count of connected students', () => {
@@ -92,8 +92,8 @@ describe('StudentList', () => {
       expect(screen.getByText('Not started')).toBeInTheDocument();
     });
 
-    it('should show "Finished" badge when finishedStudentIds is provided', () => {
-      render(<StudentList {...defaultProps} students={students} finishedStudentIds={new Set(['student-1'])} />);
+    it('should show "Finished" badge when finished_student_ids is provided', () => {
+      render(<StudentList {...defaultProps} students={students} finished_student_ids={new Set(['student-1'])} />);
 
       expect(screen.getByText('Finished')).toBeInTheDocument();
       expect(screen.getByText('Not started')).toBeInTheDocument();
@@ -111,7 +111,7 @@ describe('StudentList', () => {
 
   describe('Optional action buttons', () => {
     const students = [
-      { id: 'student-1', name: 'Alice', hasCode: true },
+      { id: 'student-1', name: 'Alice', has_code: true },
     ];
 
     it('should show History button when onViewHistory is provided', () => {
@@ -156,8 +156,8 @@ describe('StudentList', () => {
 
   describe('Featured student indicator', () => {
     const students = [
-      { id: 'student-1', name: 'Alice', hasCode: true },
-      { id: 'student-2', name: 'Bob', hasCode: false },
+      { id: 'student-1', name: 'Alice', has_code: true },
+      { id: 'student-2', name: 'Bob', has_code: false },
     ];
 
     it('should highlight the featured student row', () => {
@@ -165,7 +165,7 @@ describe('StudentList', () => {
         <StudentList
           {...defaultProps}
           students={students}
-          featuredStudentId="student-1"
+          featured_student_id="student-1"
           onShowOnPublicView={mockOnShowOnPublicView}
         />
       );
@@ -190,7 +190,7 @@ describe('StudentList', () => {
         <StudentList
           {...defaultProps}
           students={students}
-          featuredStudentId="student-2"
+          featured_student_id="student-2"
           onShowOnPublicView={mockOnShowOnPublicView}
         />
       );
@@ -205,12 +205,12 @@ describe('StudentList', () => {
       expect(aliceRow.className).not.toContain('border-emerald');
     });
 
-    it('should update highlight when featuredStudentId changes', () => {
+    it('should update highlight when featured_student_id changes', () => {
       const { rerender } = render(
         <StudentList
           {...defaultProps}
           students={students}
-          featuredStudentId="student-1"
+          featured_student_id="student-1"
           onShowOnPublicView={mockOnShowOnPublicView}
         />
       );
@@ -222,7 +222,7 @@ describe('StudentList', () => {
         <StudentList
           {...defaultProps}
           students={students}
-          featuredStudentId="student-2"
+          featured_student_id="student-2"
           onShowOnPublicView={mockOnShowOnPublicView}
         />
       );
@@ -235,13 +235,13 @@ describe('StudentList', () => {
   describe('Clear Public View button', () => {
     it('should not render Clear Public View button (moved to SessionControls)', () => {
       const students = [
-        { id: 'student-1', name: 'Alice', hasCode: true },
+        { id: 'student-1', name: 'Alice', has_code: true },
       ];
       render(
         <StudentList
           {...defaultProps}
           students={students}
-          featuredStudentId="student-1"
+          featured_student_id="student-1"
         />
       );
 

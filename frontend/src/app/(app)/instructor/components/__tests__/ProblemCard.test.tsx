@@ -12,10 +12,10 @@ describe('ProblemCard', () => {
     id: 'problem-123',
     title: 'Test Problem',
     description: 'This is a test problem description',
-    createdAt: '2025-01-01T00:00:00.000Z',
-    authorId: 'user-123',
+    created_at: '2025-01-01T00:00:00.000Z',
+    author_id: 'user-123',
     tags: [],
-    classId: 'class-1',
+    class_id: 'class-1',
   };
 
   const defaultProps = {

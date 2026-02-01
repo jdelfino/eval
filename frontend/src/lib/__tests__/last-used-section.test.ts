@@ -13,9 +13,9 @@ describe('last-used-section', () => {
       expect(getLastUsedSection()).toBeNull();
     });
 
-    it('returns stored sectionId and classId', () => {
-      localStorage.setItem('lastUsedSection', JSON.stringify({ sectionId: 'sec-1', classId: 'class-1' }));
-      expect(getLastUsedSection()).toEqual({ sectionId: 'sec-1', classId: 'class-1' });
+    it('returns stored section_id and class_id', () => {
+      localStorage.setItem('lastUsedSection', JSON.stringify({ section_id: 'sec-1', class_id: 'class-1' }));
+      expect(getLastUsedSection()).toEqual({ section_id: 'sec-1', class_id: 'class-1' });
     });
 
     it('returns null for invalid JSON', () => {
@@ -25,11 +25,11 @@ describe('last-used-section', () => {
   });
 
   describe('setLastUsedSection', () => {
-    it('stores sectionId and classId', () => {
+    it('stores section_id and class_id', () => {
       setLastUsedSection('sec-1', 'class-1');
       expect(JSON.parse(localStorage.getItem('lastUsedSection')!)).toEqual({
-        sectionId: 'sec-1',
-        classId: 'class-1',
+        section_id: 'sec-1',
+        class_id: 'class-1',
       });
     });
   });

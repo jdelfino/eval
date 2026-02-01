@@ -93,7 +93,7 @@ export default async function PublicProblemPage({ params }: Params) {
       </a>
 
       <Suspense fallback={null}>
-        <InstructorActions problemId={problem.id} problemTitle={problem.title} classId={problem.class_id} className={className} />
+        <InstructorActions problem_id={problem.id} problem_title={problem.title} class_id={problem.class_id} className={className} />
       </Suspense>
 
       {problem.description && (

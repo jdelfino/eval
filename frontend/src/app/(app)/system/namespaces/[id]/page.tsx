@@ -28,7 +28,7 @@ export default function NamespaceUsersPage() {
   const { user: currentUser, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
-  const namespaceId = params.id as string;
+  const namespace_id = params.id as string;
 
   const {
     loading,
@@ -54,30 +54,30 @@ export default function NamespaceUsersPage() {
 
   // Fetch namespace and users
   useEffect(() => {
-    if (currentUser && hasRolePermission(currentUser.Role, 'system.admin') && namespaceId) {
+    if (currentUser && hasRolePermission(currentUser.Role, 'system.admin') && namespace_id) {
       fetchData();
     }
-  }, [currentUser, namespaceId]);
+  }, [currentUser, namespace_id]);
 
   const fetchData = async () => {
     try {
       // Fetch namespace details
-      const nsResponse = await apiFetch(`/system/namespaces/${namespaceId}`);
+      const nsResponse = await apiFetch(`/system/namespaces/${namespace_id}`);
       const nsData = await nsResponse.json();
       setNamespace(nsData.namespace);
 
       // Fetch users
-      const fetchedUsers = await getNamespaceUsers(namespaceId);
+      const fetchedUsers = await getNamespaceUsers(namespace_id);
       setUsers(fetchedUsers);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     }
   };
 
-  const handleUpdateRole = async (userId: string) => {
+  const handleUpdateRole = async (user_id: string) => {
     setActionError(null);
     try {
-      await updateUserRole(userId, editingRole);
+      await updateUserRole(user_id, editingRole);
       await fetchData();
       setEditingUserId(null);
     } catch (err) {
@@ -85,10 +85,10 @@ export default function NamespaceUsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
+  const handleDeleteUser = async (user_id: string) => {
     setActionError(null);
     try {
-      await deleteUser(userId);
+      await deleteUser(user_id);
       await fetchData();
       setDeletingUserId(null);
     } catch (err) {
@@ -131,10 +131,10 @@ export default function NamespaceUsersPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-2">
-          {namespace?.displayName || namespaceId}
+          {namespace?.displayName || namespace_id}
         </h1>
         <p className="text-gray-500 font-mono">
-          {namespaceId}
+          {namespace_id}
         </p>
       </div>
 

@@ -16,10 +16,10 @@ export interface UseNamespacesResult {
   createNamespace: (id: string, displayName: string) => Promise<Namespace>;
   updateNamespace: (id: string, updates: { display_name?: string; active?: boolean }) => Promise<Namespace>;
   deleteNamespace: (id: string) => Promise<void>;
-  getNamespaceUsers: (namespaceId: string) => Promise<User[]>;
-  createUser: (namespaceId: string, email: string, username: string, password: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
-  updateUserRole: (userId: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
-  deleteUser: (userId: string) => Promise<void>;
+  getNamespaceUsers: (namespace_id: string) => Promise<User[]>;
+  createUser: (namespace_id: string, email: string, username: string, password: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
+  updateUserRole: (user_id: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
+  deleteUser: (user_id: string) => Promise<void>;
 }
 
 /**
@@ -99,11 +99,11 @@ export function useNamespaces(): UseNamespacesResult {
     }
   }, [fetchNamespaces]);
 
-  const getNamespaceUsers = useCallback(async (namespaceId: string): Promise<User[]> => {
+  const getNamespaceUsers = useCallback(async (namespace_id: string): Promise<User[]> => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<{ users: User[] }>(`/namespaces/${namespaceId}/users`);
+      const data = await apiGet<{ users: User[] }>(`/namespaces/${namespace_id}/users`);
       return data.users;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch users';
@@ -115,7 +115,7 @@ export function useNamespaces(): UseNamespacesResult {
   }, []);
 
   const createUser = useCallback(async (
-    namespaceId: string,
+    namespace_id: string,
     email: string,
     username: string,
     password: string,
@@ -124,7 +124,7 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPost<{ user: User }>(`/namespaces/${namespaceId}/users`, { email, username, password, role });
+      const data = await apiPost<{ user: User }>(`/namespaces/${namespace_id}/users`, { email, username, password, role });
       return data.user;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create user';
@@ -136,13 +136,13 @@ export function useNamespaces(): UseNamespacesResult {
   }, []);
 
   const updateUserRole = useCallback(async (
-    userId: string,
+    user_id: string,
     role: 'namespace-admin' | 'instructor' | 'student'
   ): Promise<User> => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPatch<{ user: User }>(`/users/${userId}`, { role });
+      const data = await apiPatch<{ user: User }>(`/users/${user_id}`, { role });
       return data.user;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update user';
@@ -153,11 +153,11 @@ export function useNamespaces(): UseNamespacesResult {
     }
   }, []);
 
-  const deleteUser = useCallback(async (userId: string): Promise<void> => {
+  const deleteUser = useCallback(async (user_id: string): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      await apiDelete(`/users/${userId}`);
+      await apiDelete(`/users/${user_id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete user';
       setError(message);

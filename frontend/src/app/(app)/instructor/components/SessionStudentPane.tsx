@@ -18,7 +18,7 @@ import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
 interface SessionStudentPaneProps {
   /** Session ID for analysis API calls */
-  sessionId: string;
+  session_id: string;
   /** List of students in the session (derived from realtimeStudents) */
   students: Student[];
   /** Raw realtime students for code access */
@@ -28,11 +28,11 @@ interface SessionStudentPaneProps {
   /** Session execution settings */
   sessionExecutionSettings: {
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   };
   /** Join code for the session */
-  joinCode?: string;
+  join_code?: string;
   /** Callback when a student is selected */
   onSelectStudent?: (studentId: string) => void;
   /** Callback to show student on public view */
@@ -44,7 +44,7 @@ interface SessionStudentPaneProps {
   /** Callback to execute student code */
   onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<ExecutionResult | undefined>;
   /** ID of the currently featured student */
-  featuredStudentId?: string | null;
+  featured_student_id?: string | null;
 }
 
 /**
@@ -53,23 +53,23 @@ interface SessionStudentPaneProps {
  * Right: Read-only code editor showing selected student's code
  */
 export function SessionStudentPane({
-  sessionId,
+  session_id,
   students,
   realtimeStudents,
   sessionProblem,
   sessionExecutionSettings,
-  joinCode,
+  join_code,
   onSelectStudent,
   onShowOnPublicView,
   onClearPublicView: _onClearPublicView,
   onViewHistory,
   onExecuteCode,
-  featuredStudentId,
+  featured_student_id,
 }: SessionStudentPaneProps) {
   // Local state for student selection and code
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentCode, setSelectedStudentCode] = useState<string>('');
-  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [execution_result, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // Analysis groups hook
@@ -79,9 +79,9 @@ export function SessionStudentPane({
     script: _script,
     groups,
     activeGroupIndex,
-    overallNote,
-    completionEstimate,
-    finishedStudentIds,
+    overall_note,
+    completion_estimate,
+    finished_student_ids,
     analyze,
     navigateGroup,
     dismissGroup,
@@ -110,14 +110,14 @@ export function SessionStudentPane({
     onSelectStudent?.(studentId);
   };
 
-  const handleExecuteStudentCode = async (executionSettings: ExecutionSettings) => {
+  const handleExecuteStudentCode = async (execution_settings: ExecutionSettings) => {
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
     setExecutionResult(null);
 
     try {
-      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, executionSettings);
+      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, execution_settings);
       if (result) {
         setExecutionResult(result);
       }
@@ -127,7 +127,7 @@ export function SessionStudentPane({
   };
 
   const handleAnalyze = () => {
-    analyze(sessionId);
+    analyze(session_id);
   };
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
@@ -135,7 +135,7 @@ export function SessionStudentPane({
   // Filter students when an issue group is active
   const activeGroup = groups.length > 0 ? groups[activeGroupIndex] ?? null : null;
   const filteredStudents = activeGroup && activeGroup.id !== 'all'
-    ? students.filter(s => activeGroup.studentIds.includes(s.id))
+    ? students.filter(s => activeGroup.student_ids.includes(s.id))
     : students;
 
   // Get the active issue for the selected student's details
@@ -195,8 +195,8 @@ export function SessionStudentPane({
               activeGroupIndex={activeGroupIndex}
               onNavigate={navigateGroup}
               onDismiss={dismissGroup}
-              overallNote={overallNote}
-              completionEstimate={completionEstimate}
+              overall_note={overall_note}
+              completion_estimate={completion_estimate}
             />
           </div>
         )}
@@ -214,10 +214,10 @@ export function SessionStudentPane({
           onShowOnPublicView={onShowOnPublicView}
 
           onViewHistory={onViewHistory}
-          joinCode={joinCode}
-          featuredStudentId={featuredStudentId}
+          join_code={join_code}
+          featured_student_id={featured_student_id}
           headerLabel={studentListHeaderLabel}
-          finishedStudentIds={analysisState === 'ready' ? finishedStudentIds : undefined}
+          finished_student_ids={analysisState === 'ready' ? finished_student_ids : undefined}
         />
       </div>
 
@@ -237,11 +237,11 @@ export function SessionStudentPane({
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
                 exampleInput={sessionExecutionSettings.stdin}
-                randomSeed={selectedStudent?.executionSettings?.randomSeed}
-                attachedFiles={selectedStudent?.executionSettings?.attachedFiles}
+                random_seed={selectedStudent?.execution_settings?.random_seed}
+                attached_files={selectedStudent?.execution_settings?.attached_files}
                 readOnly
                 problem={sessionProblem}
-                executionResult={executionResult}
+                execution_result={execution_result}
               />
             </EditorContainer>
           </div>

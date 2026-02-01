@@ -7,23 +7,23 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface SessionData {
   id: string;
-  joinCode: string;
-  problemTitle: string;
-  problemDescription?: string;
-  createdAt: string;
-  lastActivity: string;
-  creatorId: string;
-  participantCount: number;
+  join_code: string;
+  problem_title: string;
+  problem_description?: string;
+  created_at: string;
+  last_activity: string;
+  creator_id: string;
+  participant_count: number;
   status: 'active' | 'completed';
-  endedAt?: string;
-  sectionId: string;
-  sectionName: string;
+  ended_at?: string;
+  section_id: string;
+  section_name: string;
 }
 
 interface SessionsListProps {
-  onRejoinSession?: (sessionId: string) => void;
-  onEndSession?: (sessionId: string) => void;
-  onViewDetails?: (sessionId: string) => void;
+  onRejoinSession?: (session_id: string) => void;
+  onEndSession?: (session_id: string) => void;
+  onViewDetails?: (session_id: string) => void;
   refreshTrigger?: number; // Increment this to trigger a refresh
 }
 
@@ -72,16 +72,16 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
     return () => clearInterval(interval);
   }, [statusFilter, searchQuery, refreshTrigger]);
 
-  const handleRejoin = (sessionId: string) => {
+  const handleRejoin = (session_id: string) => {
     if (onRejoinSession) {
-      onRejoinSession(sessionId);
+      onRejoinSession(session_id);
     } else {
-      router.push(`/instructor?sessionId=${sessionId}`);
+      router.push(`/instructor?session_id=${session_id}`);
     }
   };
 
-  const handleEndSessionClick = (sessionId: string) => {
-    setSessionToEnd(sessionId);
+  const handleEndSessionClick = (session_id: string) => {
+    setSessionToEnd(session_id);
     setShowEndSessionConfirm(true);
   };
 
@@ -230,17 +230,17 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
                 <div className="flex-1">
                   <div className="flex items-start gap-3">
                     <div className="flex-1">
-                      <h4 className="text-lg font-semibold text-gray-900">{session.sectionName}</h4>
+                      <h4 className="text-lg font-semibold text-gray-900">{session.section_name}</h4>
                       <p className="text-sm text-gray-600 mt-1">
-                        Join Code: <span className="font-mono font-bold text-blue-600">{session.joinCode}</span>
+                        Join Code: <span className="font-mono font-bold text-blue-600">{session.join_code}</span>
                         {' • '}
-                        {session.participantCount} {session.participantCount === 1 ? 'student' : 'students'}
+                        {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}
                         {' • '}
-                        {getTimeAgo(session.createdAt)}
+                        {getTimeAgo(session.created_at)}
                       </p>
-                      {session.problemTitle && session.problemTitle !== 'Untitled Session' && (
+                      {session.problem_title && session.problem_title !== 'Untitled Session' && (
                         <p className="text-sm text-gray-700 mt-2">
-                          <span className="font-medium">Problem:</span> {session.problemTitle}
+                          <span className="font-medium">Problem:</span> {session.problem_title}
                         </p>
                       )}
                     </div>
@@ -276,24 +276,24 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
             <div key={session.id} className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
               <div className="flex flex-col sm:flex-row justify-between gap-4">
                 <div className="flex-1">
-                  <h4 className="text-lg font-semibold text-gray-900">{session.sectionName}</h4>
+                  <h4 className="text-lg font-semibold text-gray-900">{session.section_name}</h4>
                   <p className="text-sm text-gray-600 mt-1">
-                    {session.participantCount} {session.participantCount === 1 ? 'student' : 'students'}
+                    {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}
                     {' • '}
-                    {formatDate(session.createdAt)}
+                    {formatDate(session.created_at)}
                     {' • '}
-                    Duration: {formatDuration(session.createdAt, session.endedAt)}
+                    Duration: {formatDuration(session.created_at, session.ended_at)}
                   </p>
-                  {session.problemTitle && session.problemTitle !== 'Untitled Session' && (
+                  {session.problem_title && session.problem_title !== 'Untitled Session' && (
                     <p className="text-sm text-gray-700 mt-2">
-                      <span className="font-medium">Problem:</span> {session.problemTitle}
+                      <span className="font-medium">Problem:</span> {session.problem_title}
                     </p>
                   )}
                 </div>
                 
                 <div className="flex sm:flex-col sm:justify-center">
                   <button
-                    onClick={() => onViewDetails ? onViewDetails(session.id) : router.push(`/instructor?sessionId=${session.id}`)}
+                    onClick={() => onViewDetails ? onViewDetails(session.id) : router.push(`/instructor?session_id=${session.id}`)}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
                   >
                     View Details

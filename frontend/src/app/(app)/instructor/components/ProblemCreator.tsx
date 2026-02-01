@@ -19,40 +19,40 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { useDebugger } from '@/hooks/useDebugger';
 
 interface ProblemCreatorProps {
-  problemId?: string | null;
-  onProblemCreated?: (problemId: string) => void;
+  problem_id?: string | null;
+  onProblemCreated?: (problem_id: string) => void;
   onCancel?: () => void;
-  classId?: string | null;
+  class_id?: string | null;
 }
 
 export default function ProblemCreator({
-  problemId = null,
+  problem_id = null,
   onProblemCreated,
   onCancel,
-  classId = null,
+  class_id = null,
 }: ProblemCreatorProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [starterCode, setStarterCode] = useState('');
+  const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
   const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(!!problemId);
+  const [isLoading, setIsLoading] = useState(!!problem_id);
   const [error, setError] = useState<string | null>(null);
 
   // Class and tags state
   const [classes, setClasses] = useState<ClassInfo[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>(classId || '');
+  const [selectedClassId, setSelectedClassId] = useState<string>(class_id || '');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
 
   // Execution settings
   const [stdin, setStdin] = useState('');
-  const [randomSeed, setRandomSeed] = useState<number | undefined>(undefined);
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
+  const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
+  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
 
-  const isEditMode = !!problemId;
+  const isEditMode = !!problem_id;
 
   // Load classes on mount
   useEffect(() => {
@@ -61,23 +61,23 @@ export default function ProblemCreator({
         const response = await apiFetch('/classes');
         const data = await response.json();
         setClasses(data.classes || []);
-        // Pre-populate if classId prop provided
-        if (classId) {
-          setSelectedClassId(classId);
+        // Pre-populate if class_id prop provided
+        if (class_id) {
+          setSelectedClassId(class_id);
         }
       } catch {
         // Classes won't be populated but form still works
       }
     };
     loadClasses();
-  }, [classId]);
+  }, [class_id]);
 
   // Load problem data when editing
   useEffect(() => {
-    if (problemId) {
-      loadProblem(problemId);
+    if (problem_id) {
+      loadProblem(problem_id);
     }
-  }, [problemId]);
+  }, [problem_id]);
 
   const loadProblem = async (id: string) => {
     setIsLoading(true);
@@ -87,16 +87,16 @@ export default function ProblemCreator({
       const { problem } = await response.json();
       setTitle(problem.title || '');
       setDescription(problem.description || '');
-      setStarterCode(problem.starterCode || '');
+      setStarterCode(problem.starter_code || '');
       setSolution(problem.solution || '');
-      if (problem.classId) setSelectedClassId(problem.classId);
+      if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
       // Load execution settings
-      const execSettings = problem.executionSettings;
+      const execSettings = problem.execution_settings;
       setStdin(execSettings?.stdin || '');
-      setRandomSeed(execSettings?.randomSeed);
-      setAttachedFiles(execSettings?.attachedFiles || []);
+      setRandomSeed(execSettings?.random_seed);
+      setAttachedFiles(execSettings?.attached_files || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -134,26 +134,26 @@ export default function ProblemCreator({
       const problemInput: Partial<ProblemInput> = {
         title: title.trim(),
         description: description.trim(),
-        starterCode: starterCode.trim(),
+        starter_code: starter_code.trim(),
         solution: solution.trim(),
-        testCases: [], // Test cases added separately
-        classId: selectedClassId || undefined,
+        test_cases: [], // Test cases added separately
+        class_id: selectedClassId || undefined,
         tags: finalTags.length > 0 ? finalTags : [],
       };
 
-      // Only include executionSettings if at least one field is set
+      // Only include execution_settings if at least one field is set
       const execSettings: any = {};
       if (stdin.trim()) execSettings.stdin = stdin.trim();
-      if (randomSeed !== undefined) execSettings.randomSeed = randomSeed;
-      if (attachedFiles.length > 0) execSettings.attachedFiles = attachedFiles;
+      if (random_seed !== undefined) execSettings.random_seed = random_seed;
+      if (attached_files.length > 0) execSettings.attached_files = attached_files;
 
       if (Object.keys(execSettings).length > 0) {
-        problemInput.executionSettings = execSettings;
+        problemInput.execution_settings = execSettings;
       }
 
       let result: { problem: { id: string } };
       if (isEditMode) {
-        result = await apiPatch<{ problem: { id: string } }>(`/problems/${problemId}`, problemInput);
+        result = await apiPatch<{ problem: { id: string } }>(`/problems/${problem_id}`, problemInput);
       } else {
         result = await apiPost<{ problem: { id: string } }>('/problems', problemInput);
       }
@@ -403,17 +403,17 @@ export default function ProblemCreator({
       {/* Full-width code editor */}
       {!isLoading && <EditorContainer variant="flex">
         <CodeEditor
-          code={activeTab === 'starter' ? starterCode : solution}
+          code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
           useApiExecution={true}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           exampleInput={stdin}
           onStdinChange={setStdin}
-          randomSeed={randomSeed}
+          random_seed={random_seed}
           onRandomSeedChange={setRandomSeed}
-          attachedFiles={attachedFiles}
+          attached_files={attached_files}
           onAttachedFilesChange={setAttachedFiles}
-          problem={{ title, description, starterCode }}
+          problem={{ title, description, starter_code }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}
           onProblemEdit={(updates) => {

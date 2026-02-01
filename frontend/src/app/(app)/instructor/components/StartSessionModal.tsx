@@ -18,17 +18,17 @@ interface ProblemInfo {
 }
 
 interface StartSessionModalProps {
-  sectionId: string;
-  sectionName: string;
+  section_id: string;
+  section_name: string;
   onClose: () => void;
-  onSessionCreated: (sessionId: string) => void;
+  onSessionCreated: (session_id: string) => void;
 }
 
 type SelectionType = 'blank' | string; // 'blank' or problem ID
 
 export default function StartSessionModal({
-  sectionId,
-  sectionName,
+  section_id,
+  section_name,
   onClose,
   onSessionCreated,
 }: StartSessionModalProps) {
@@ -67,9 +67,9 @@ export default function StartSessionModal({
       setLoading(true);
       setError(null);
 
-      const body: { sectionId: string; problemId?: string } = { sectionId };
+      const body: { section_id: string; problem_id?: string } = { section_id };
       if (selectedOption !== 'blank') {
-        body.problemId = selectedOption;
+        body.problem_id = selectedOption;
       }
 
       const { session } = await apiPost<{ session: { id: string } }>('/sessions', body);
@@ -105,7 +105,7 @@ export default function StartSessionModal({
           <div>
             <h2 className="text-xl font-bold text-gray-900">Start Session</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Section: <span className="font-medium">{sectionName}</span>
+              Section: <span className="font-medium">{section_name}</span>
             </p>
           </div>
           <button

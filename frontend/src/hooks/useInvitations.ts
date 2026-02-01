@@ -11,9 +11,9 @@ export interface SerializedInvitation {
   id: string;
   email: string;
   targetRole: 'instructor' | 'namespace-admin';
-  namespaceId: string;
-  createdBy: string;
-  createdAt: string;
+  namespace_id: string;
+  created_by: string;
+  created_at: string;
   expiresAt: string;
   consumedAt?: string;
   consumedBy?: string;

@@ -19,7 +19,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={0}
-          totalSteps={0}
+          total_steps={0}
           currentLine={0}
           canStepForward={false}
           canStepBackward={false}
@@ -42,7 +42,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={0}
-          totalSteps={0}
+          total_steps={0}
           currentLine={0}
           canStepForward={false}
           canStepBackward={false}
@@ -66,7 +66,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={0}
-          totalSteps={0}
+          total_steps={0}
           currentLine={0}
           canStepForward={false}
           canStepBackward={false}
@@ -91,7 +91,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -119,7 +119,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -143,7 +143,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -167,7 +167,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -191,7 +191,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -215,7 +215,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -239,7 +239,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={0}
-          totalSteps={10}
+          total_steps={10}
           currentLine={1}
           canStepForward={true}
           canStepBackward={false}
@@ -264,7 +264,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -289,7 +289,7 @@ describe('DebuggerSidebar', () => {
       const { container } = render(
         <DebuggerSidebar
           currentStep={0}
-          totalSteps={0}
+          total_steps={0}
           currentLine={0}
           canStepForward={false}
           canStepBackward={false}
@@ -316,7 +316,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -342,7 +342,7 @@ describe('DebuggerSidebar', () => {
       render(
         <DebuggerSidebar
           currentStep={2}
-          totalSteps={10}
+          total_steps={10}
           currentLine={5}
           canStepForward={true}
           canStepBackward={true}
@@ -354,9 +354,9 @@ describe('DebuggerSidebar', () => {
           onRequestTrace={mockOnRequestTrace}
           hasTrace={true}
           isLoading={false}
-          callStack={[
-            { functionName: '<module>', filename: '<string>', line: 10 },
-            { functionName: 'helper', filename: '<string>', line: 5 }
+          call_stack={[
+            { function_name: '<module>', filename: '<string>', line: 10 },
+            { function_name: 'helper', filename: '<string>', line: 5 }
           ]}
         />
       );

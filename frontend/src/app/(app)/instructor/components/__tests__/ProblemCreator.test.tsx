@@ -3,7 +3,7 @@
  *
  * Tests both create and edit modes with all fields:
  * - Loading existing problem data
- * - Editing all fields (title, description, starterCode)
+ * - Editing all fields (title, description, starter_code)
  * - Form submission and validation
  * - Error handling
  * - Cancel functionality
@@ -27,7 +27,7 @@ jest.mock('@/hooks/useDebugger', () => ({
     isLoading: false,
     error: null,
     hasTrace: false,
-    totalSteps: 0,
+    total_steps: 0,
     canStepForward: false,
     canStepBackward: false,
     requestTrace: jest.fn(),
@@ -126,7 +126,7 @@ describe('ProblemCreator Component', () => {
   });
 
   describe('Create Mode', () => {
-    it('should render form in create mode when no problemId provided', () => {
+    it('should render form in create mode when no problem_id provided', () => {
       render(<ProblemCreator />);
 
       expect(screen.getByText('Create New Problem')).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe('ProblemCreator Component', () => {
         id: 'problem-123',
         title: 'Test Problem',
         description: 'Test description',
-        starterCode: 'def solution():\n    pass',
+        starter_code: 'def solution():\n    pass',
       };
 
       (global.fetch as jest.Mock) = createFetchMock(() =>
@@ -223,8 +223,8 @@ describe('ProblemCreator Component', () => {
       id: 'problem-456',
       title: 'Existing Problem',
       description: 'Original description',
-      starterCode: 'def original():\n    pass',
-      authorId: 'user-1',
+      starter_code: 'def original():\n    pass',
+      author_id: 'user-1',
     };
 
     it('should load existing problem data in edit mode', async () => {
@@ -238,7 +238,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" />);
+      render(<ProblemCreator problem_id="problem-456" />);
 
       // Should show loading state
       expect(screen.getByText('Loading problem...')).toBeInTheDocument();
@@ -270,7 +270,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" />);
+      render(<ProblemCreator problem_id="problem-456" />);
 
       await waitFor(() => {
         expect(screen.getByText('Not found')).toBeInTheDocument();
@@ -297,7 +297,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" onProblemCreated={onProblemCreated} />);
+      render(<ProblemCreator problem_id="problem-456" onProblemCreated={onProblemCreated} />);
 
       // Wait for load
       await waitFor(() => {
@@ -344,7 +344,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" />);
+      render(<ProblemCreator problem_id="problem-456" />);
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Title/)).toHaveValue('Existing Problem');
@@ -465,14 +465,14 @@ describe('ProblemCreator Component', () => {
         });
       });
 
-      // Verify the call - stdin is empty so executionSettings should not be included
+      // Verify the call - stdin is empty so execution_settings should not be included
       const problemCalls = (global.fetch as jest.Mock).mock.calls.filter(
         (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
       );
       const callArgs = problemCalls[0];
       const body = JSON.parse(callArgs[1].body);
       // No execution settings since we didn't set any values
-      expect(body.executionSettings).toBeUndefined();
+      expect(body.execution_settings).toBeUndefined();
     });
 
     // Note: Attached files test removed because file attachment UI is now
@@ -484,10 +484,10 @@ describe('ProblemCreator Component', () => {
     it('should load execution settings when editing and pass to CodeEditor', async () => {
       const problemWithExecSettings = {
         ...mockExistingProblem,
-        executionSettings: {
+        execution_settings: {
           stdin: '1\n2\n3\n',
-          randomSeed: 99,
-          attachedFiles: [
+          random_seed: 99,
+          attached_files: [
             { name: 'input.txt', content: 'file content here' }
           ],
         },
@@ -503,7 +503,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" />);
+      render(<ProblemCreator problem_id="problem-456" />);
 
       await waitFor(() => {
         // Verify CodeEditor component is rendered
@@ -531,7 +531,7 @@ describe('ProblemCreator Component', () => {
       });
 
       // Note: Execution settings are managed by CodeEditor's ExecutionSettings
-      // After form reset, CodeEditor receives empty props for exampleInput, randomSeed, attachedFiles
+      // After form reset, CodeEditor receives empty props for exampleInput, random_seed, attached_files
 
       // Submit
       fireEvent.click(screen.getByText('Create Problem'));
@@ -554,8 +554,8 @@ describe('ProblemCreator Component', () => {
 
   describe('Class and Tags', () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS 101', namespaceId: 'ns-1' },
-      { id: 'class-2', name: 'CS 201', namespaceId: 'ns-1' },
+      { id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' },
+      { id: 'class-2', name: 'CS 201', namespace_id: 'ns-1' },
     ];
 
     beforeEach(() => {
@@ -586,7 +586,7 @@ describe('ProblemCreator Component', () => {
       expect(screen.getByLabelText('Tags')).toBeInTheDocument();
     });
 
-    it('should include classId and tags in create request', async () => {
+    it('should include class_id and tags in create request', async () => {
       const onProblemCreated = jest.fn();
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
@@ -615,7 +615,7 @@ describe('ProblemCreator Component', () => {
         );
         expect(calls.length).toBe(1);
         const body = JSON.parse(calls[0][1].body);
-        expect(body.classId).toBe('class-2');
+        expect(body.class_id).toBe('class-2');
         expect(body.tags).toEqual(['loops', 'arrays']);
       });
     });
@@ -663,8 +663,8 @@ describe('ProblemCreator Component', () => {
       expect(screen.getByText('loops')).toBeInTheDocument();
     });
 
-    it('should pre-populate classId from prop', async () => {
-      render(<ProblemCreator classId="class-2" />);
+    it('should pre-populate class_id from prop', async () => {
+      render(<ProblemCreator class_id="class-2" />);
 
       await waitFor(() => {
         const select = screen.getByLabelText('Class *') as HTMLSelectElement;
@@ -784,7 +784,7 @@ describe('ProblemCreator Component', () => {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       });
 
-      render(<ProblemCreator problemId="problem-456" />);
+      render(<ProblemCreator problem_id="problem-456" />);
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Starter Code/)).toHaveValue('def original():\n    pass');
@@ -825,6 +825,6 @@ const mockExistingProblem = {
   id: 'problem-456',
   title: 'Existing Problem',
   description: 'Original description',
-  starterCode: 'def original():\n    pass',
-  authorId: 'user-1',
+  starter_code: 'def original():\n    pass',
+  author_id: 'user-1',
 };

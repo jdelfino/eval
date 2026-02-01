@@ -28,14 +28,14 @@ jest.mock('../../components/ProblemLibrary', () => {
 });
 
 jest.mock('../../components/ProblemCreator', () => {
-  return function MockProblemCreator({ problemId, onCancel, onProblemCreated }: {
-    problemId?: string | null;
+  return function MockProblemCreator({ problem_id, onCancel, onProblemCreated }: {
+    problem_id?: string | null;
     onCancel?: () => void;
     onProblemCreated?: (id: string) => void;
   }) {
     return (
       <div data-testid="problem-creator">
-        <span data-testid="editing-problem-id">{problemId || 'new'}</span>
+        <span data-testid="editing-problem-id">{problem_id || 'new'}</span>
         <button onClick={onCancel} data-testid="cancel-btn">Cancel</button>
         <button onClick={() => onProblemCreated?.('created-id')} data-testid="save-btn">Save</button>
       </div>

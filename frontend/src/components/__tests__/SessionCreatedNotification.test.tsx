@@ -23,7 +23,7 @@ describe('SessionCreatedNotification', () => {
 
     act(() => {
       channelInstance.onmessage!(new MessageEvent('message', {
-        data: { sessionId: 'sess-1', problemTitle: 'Two Sum' },
+        data: { session_id: 'sess-1', problem_title: 'Two Sum' },
       }));
     });
 
@@ -36,7 +36,7 @@ describe('SessionCreatedNotification', () => {
 
     act(() => {
       channelInstance.onmessage!(new MessageEvent('message', {
-        data: { sessionId: 'sess-1', problemTitle: 'Two Sum' },
+        data: { session_id: 'sess-1', problem_title: 'Two Sum' },
       }));
     });
 

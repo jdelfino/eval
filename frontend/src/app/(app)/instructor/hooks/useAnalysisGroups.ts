@@ -5,7 +5,7 @@ import { apiFetch } from '@/lib/api-client';
 export interface AnalysisGroup {
   id: string;
   label: string;
-  studentIds: string[];
+  student_ids: string[];
   recommendedStudentId: string | null;
   issue?: AnalysisIssue;
 }
@@ -23,15 +23,15 @@ export default function useAnalysisGroups() {
     const allGroup: AnalysisGroup = {
       id: 'all',
       label: 'All Submissions',
-      studentIds: [],
+      student_ids: [],
       recommendedStudentId: null,
     };
 
     const issueGroups: AnalysisGroup[] = script.issues.map((issue, index) => ({
       id: String(index),
       label: issue.title,
-      studentIds: issue.studentIds,
-      recommendedStudentId: issue.representativeStudentId,
+      student_ids: issue.student_ids,
+      recommendedStudentId: issue.representative_student_id,
       issue,
     }));
 
@@ -40,16 +40,16 @@ export default function useAnalysisGroups() {
 
   const activeGroup = groups.length > 0 ? groups[activeGroupIndex] ?? null : null;
 
-  const overallNote = script?.overallNote ?? null;
-  const completionEstimate = script?.summary?.completionEstimate ?? null;
-  const finishedStudentIds = useMemo(() => new Set(script?.finishedStudentIds ?? []), [script]);
+  const overall_note = script?.overall_note ?? null;
+  const completion_estimate = script?.summary?.completion_estimate ?? null;
+  const finished_student_ids = useMemo(() => new Set(script?.finished_student_ids ?? []), [script]);
 
-  const analyze = useCallback(async (sessionId: string) => {
+  const analyze = useCallback(async (session_id: string) => {
     setAnalysisState('loading');
     setError(null);
 
     try {
-      const response = await apiFetch(`/sessions/${sessionId}/analyze`, {
+      const response = await apiFetch(`/sessions/${session_id}/analyze`, {
         method: 'POST',
       });
 
@@ -101,9 +101,9 @@ export default function useAnalysisGroups() {
     groups,
     activeGroup,
     activeGroupIndex,
-    overallNote,
-    completionEstimate,
-    finishedStudentIds,
+    overall_note,
+    completion_estimate,
+    finished_student_ids,
     analyze,
     navigateGroup,
     setActiveGroupIndex,

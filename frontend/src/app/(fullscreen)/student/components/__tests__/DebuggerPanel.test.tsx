@@ -8,13 +8,13 @@ import { DebuggerPanel } from '../DebuggerPanel';
 describe('DebuggerPanel', () => {
   const defaultProps = {
     currentStep: 0,
-    totalSteps: 5,
+    total_steps: 5,
     currentLine: 1,
     locals: {},
     globals: {},
     previousLocals: {},
     previousGlobals: {},
-    callStack: [],
+    call_stack: [],
   };
 
   it('renders debugger output title', () => {
@@ -57,9 +57,9 @@ describe('DebuggerPanel', () => {
   it('renders CallStackPanel when call stack has 2+ entries', () => {
     const props = {
       ...defaultProps,
-      callStack: [
-        { functionName: '<module>', filename: '<string>', line: 10 },
-        { functionName: 'helper', filename: '<string>', line: 5 }
+      call_stack: [
+        { function_name: '<module>', filename: '<string>', line: 10 },
+        { function_name: 'helper', filename: '<string>', line: 5 }
       ]
     };
 

@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 
 interface CreateSectionFormProps {
-  classId: string;
+  class_id: string;
   className: string;
   onSubmit: (name: string, semester: string) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function CreateSectionForm({ classId: _classId, className, onSubmit, onCancel }: CreateSectionFormProps) {
+export default function CreateSectionForm({ class_id: _classId, className, onSubmit, onCancel }: CreateSectionFormProps) {
   const [name, setName] = useState('');
   const [semester, setSemester] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -50,11 +50,11 @@ export default function CreateSectionForm({ classId: _classId, className, onSubm
         )}
 
         <div>
-          <label htmlFor="sectionName" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="section_name" className="block text-sm font-medium text-gray-700 mb-2">
             Section Name *
           </label>
           <input
-            id="sectionName"
+            id="section_name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

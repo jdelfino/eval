@@ -6,16 +6,16 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 interface CodeViewerProps {
   code: string;
   studentName?: string;
-  executionResult?: {
+  execution_result?: {
     success: boolean;
     output: string;
     error: string;
-    executionTime: number;
+    execution_time: number;
   };
   onRunCode: () => void;
 }
 
-export default function CodeViewer({ code, studentName, executionResult, onRunCode }: CodeViewerProps) {
+export default function CodeViewer({ code, studentName, execution_result, onRunCode }: CodeViewerProps) {
   if (!code) {
     return (
       <div style={{ padding: '1rem', border: '1px solid #ccc' }}>
@@ -30,7 +30,7 @@ export default function CodeViewer({ code, studentName, executionResult, onRunCo
       onChange={() => {}} // No-op since readOnly=true
       readOnly={true}
       useApiExecution={true}
-      executionResult={executionResult}
+      execution_result={execution_result}
       title={studentName ? `${studentName}'s Code` : "Student's Code"}
       showRunButton={true}
       onRun={onRunCode}

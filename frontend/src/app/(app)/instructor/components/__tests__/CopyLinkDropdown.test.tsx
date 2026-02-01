@@ -21,8 +21,8 @@ global.fetch = mockFetch;
 // window.location.origin is already 'http://localhost' in jsdom
 
 const defaultProps = {
-  problemId: 'prob-1',
-  classId: 'class-1',
+  problem_id: 'prob-1',
+  class_id: 'class-1',
 };
 
 const sectionsResponse = {
@@ -89,14 +89,14 @@ describe('CopyLinkDropdown', () => {
     });
 
     expect(mockWriteText).toHaveBeenCalledWith(
-      'http://localhost/problems/prob-1?start=true&sectionId=sec-1'
+      'http://localhost/problems/prob-1?start=true&section_id=sec-1'
     );
   });
 
   it('sorts last-used section first', async () => {
     mockGetLastUsedSection.mockReturnValue({
-      sectionId: 'sec-2',
-      classId: 'class-1',
+      section_id: 'sec-2',
+      class_id: 'class-1',
     });
 
     render(<CopyLinkDropdown {...defaultProps} />);

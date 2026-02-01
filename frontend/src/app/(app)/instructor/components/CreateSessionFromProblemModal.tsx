@@ -15,22 +15,22 @@ interface SectionInfo {
   id: string;
   name: string;
   semester?: string;
-  joinCode: string;
+  join_code: string;
 }
 
 interface CreateSessionFromProblemModalProps {
-  problemId: string;
-  problemTitle: string;
-  classId: string;
+  problem_id: string;
+  problem_title: string;
+  class_id: string;
   className: string;
   onClose: () => void;
-  onSuccess: (sessionId: string, joinCode: string) => void;
+  onSuccess: (session_id: string, join_code: string) => void;
 }
 
 export default function CreateSessionFromProblemModal({
-  problemId,
-  problemTitle,
-  classId,
+  problem_id,
+  problem_title,
+  class_id,
   className: classDisplayName,
   onClose,
   onSuccess,
@@ -42,8 +42,8 @@ export default function CreateSessionFromProblemModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSections(classId);
-  }, [classId]);
+    loadSections(class_id);
+  }, [class_id]);
 
   const loadSections = async (targetClassId: string) => {
     try {
@@ -55,8 +55,8 @@ export default function CreateSessionFromProblemModal({
 
       // Pre-select last-used section if it matches this class
       const lastUsed = getLastUsedSection();
-      if (lastUsed && lastUsed.classId === targetClassId) {
-        const match = loadedSections.find(s => s.id === lastUsed.sectionId);
+      if (lastUsed && lastUsed.class_id === targetClassId) {
+        const match = loadedSections.find(s => s.id === lastUsed.section_id);
         if (match) {
           setSelectedSectionId(match.id);
           return;
@@ -81,12 +81,12 @@ export default function CreateSessionFromProblemModal({
       setLoading(true);
       setError(null);
 
-      const { session } = await apiPost<{ session: { id: string; joinCode: string } }>('/sessions', {
-        sectionId: selectedSectionId,
-        problemId: problemId,
+      const { session } = await apiPost<{ session: { id: string; join_code: string } }>('/sessions', {
+        section_id: selectedSectionId,
+        problem_id: problem_id,
       });
-      setLastUsedSection(selectedSectionId, classId);
-      onSuccess(session.id, session.joinCode);
+      setLastUsedSection(selectedSectionId, class_id);
+      onSuccess(session.id, session.join_code);
     } catch (err) {
       console.error('Error creating session:', err);
       setError(err instanceof Error ? err.message : 'Failed to create session');
@@ -104,7 +104,7 @@ export default function CreateSessionFromProblemModal({
           <div>
             <h2 className="text-xl font-bold text-gray-900">Create Session</h2>
             <p className="text-sm text-gray-600 mt-1">
-              From problem: <span className="font-medium">{problemTitle}</span>
+              From problem: <span className="font-medium">{problem_title}</span>
             </p>
           </div>
           <button
@@ -169,7 +169,7 @@ export default function CreateSessionFromProblemModal({
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-blue-700">Problem:</dt>
-                  <dd className="font-medium text-blue-900">{problemTitle}</dd>
+                  <dd className="font-medium text-blue-900">{problem_title}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-blue-700">Class:</dt>

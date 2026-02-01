@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import { apiPost } from '@/lib/api-client';
 
 interface CreateSectionModalProps {
-  classId: string;
+  class_id: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function CreateSectionModal({ classId, onClose, onSuccess }: CreateSectionModalProps) {
+export default function CreateSectionModal({ class_id, onClose, onSuccess }: CreateSectionModalProps) {
   const [name, setName] = useState('');
   const [schedule, setSchedule] = useState('');
   const [location, setLocation] = useState('');
@@ -54,7 +54,7 @@ export default function CreateSectionModal({ classId, onClose, onSuccess }: Crea
         body.capacity = capacityNum;
       }
 
-      await apiPost(`/classes/${classId}/sections`, body);
+      await apiPost(`/classes/${class_id}/sections`, body);
 
       // Success
       setName('');

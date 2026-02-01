@@ -51,7 +51,7 @@ describe('Navigation Configuration', () => {
       expect(routes).toContain('/classes');
       expect(routes).toContain('/classes/[id]');
       expect(routes).toContain('/sections');
-      expect(routes).toContain('/sections/[sectionId]');
+      expect(routes).toContain('/sections/[section_id]');
       expect(routes).toContain('/instructor');
     });
 
@@ -59,7 +59,7 @@ describe('Navigation Configuration', () => {
       expect(BREADCRUMB_HIERARCHY['/classes']).toBeNull();
       expect(BREADCRUMB_HIERARCHY['/classes/[id]']).toBe('/classes');
       expect(BREADCRUMB_HIERARCHY['/sections']).toBeNull();
-      expect(BREADCRUMB_HIERARCHY['/sections/[sectionId]']).toBe('/sections');
+      expect(BREADCRUMB_HIERARCHY['/sections/[section_id]']).toBe('/sections');
     });
   });
 

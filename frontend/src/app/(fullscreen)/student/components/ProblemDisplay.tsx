@@ -6,7 +6,7 @@ import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {
   problem: Problem | null;
-  onLoadStarterCode?: (starterCode: string) => void;
+  onLoadStarterCode?: (starter_code: string) => void;
 }
 
 export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDisplayProps) {
@@ -17,8 +17,8 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
     return null;
   }
 
-  const hasStarterCode = !!problem.starterCode;
-  const hasTestCases = problem.testCases && problem.testCases.length > 0;
+  const hasStarterCode = !!problem.starter_code;
+  const hasTestCases = problem.test_cases && problem.test_cases.length > 0;
   const hasDescription = !!problem.description;
 
   return (
@@ -53,11 +53,11 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
             {showStarterCode && (
               <div className="mt-2">
                 <pre className="bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto text-sm">
-                  <code>{problem.starterCode}</code>
+                  <code>{problem.starter_code}</code>
                 </pre>
                 {onLoadStarterCode && (
                   <button
-                    onClick={() => onLoadStarterCode(problem.starterCode!)}
+                    onClick={() => onLoadStarterCode(problem.starter_code!)}
                     className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
                   >
                     Load into Editor
@@ -76,11 +76,11 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
               className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
             >
               <span>{showTestCases ? '▼' : '▶'}</span>
-              <span>Test Cases ({problem.testCases!.length})</span>
+              <span>Test Cases ({problem.test_cases!.length})</span>
             </button>
             {showTestCases && (
               <div className="mt-2 space-y-2">
-                {problem.testCases!.map((testCase, index) => (
+                {problem.test_cases!.map((testCase, index) => (
                   <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">
@@ -101,13 +101,13 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
         )}
 
         {/* Execution Settings Info */}
-        {problem.executionSettings && (
+        {problem.execution_settings && (
           <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-            {problem.executionSettings.randomSeed !== undefined && (
-              <p>🎲 Random seed: {problem.executionSettings.randomSeed}</p>
+            {problem.execution_settings.random_seed !== undefined && (
+              <p>🎲 Random seed: {problem.execution_settings.random_seed}</p>
             )}
-            {problem.executionSettings.attachedFiles && problem.executionSettings.attachedFiles.length > 0 && (
-              <p>📎 {problem.executionSettings.attachedFiles.length} file(s) attached</p>
+            {problem.execution_settings.attached_files && problem.execution_settings.attached_files.length > 0 && (
+              <p>📎 {problem.execution_settings.attached_files.length} file(s) attached</p>
             )}
           </div>
         )}

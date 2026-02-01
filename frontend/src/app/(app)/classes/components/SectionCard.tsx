@@ -16,10 +16,10 @@ interface Instructor {
 
 interface SectionCardProps {
   section: Section;
-  onRegenerateCode?: (sectionId: string) => Promise<string>;
-  onAddInstructor?: (sectionId: string, email: string) => Promise<void>;
-  onRemoveInstructor?: (sectionId: string, userId: string) => Promise<void>;
-  instructorNames?: Record<string, string>; // userId -> email mapping (kept for backwards compat)
+  onRegenerateCode?: (section_id: string) => Promise<string>;
+  onAddInstructor?: (section_id: string, email: string) => Promise<void>;
+  onRemoveInstructor?: (section_id: string, user_id: string) => Promise<void>;
+  instructorNames?: Record<string, string>; // user_id -> email mapping (kept for backwards compat)
 }
 
 export default function SectionCard({
@@ -30,7 +30,7 @@ export default function SectionCard({
   instructorNames: _instructorNames = {}
 }: SectionCardProps) {
   const [showJoinCode, setShowJoinCode] = useState(true);
-  const [joinCode, setJoinCode] = useState(section.join_code);
+  const [join_code, setJoinCode] = useState(section.join_code);
   const [regenerating, setRegenerating] = useState(false);
   const [addingInstructor, setAddingInstructor] = useState(false);
   const [newInstructorEmail, setNewInstructorEmail] = useState('');
@@ -96,8 +96,8 @@ export default function SectionCard({
     }
   };
 
-  const handleRemoveInstructorClick = (userId: string) => {
-    setInstructorToRemove(userId);
+  const handleRemoveInstructorClick = (user_id: string) => {
+    setInstructorToRemove(user_id);
     setShowRemoveInstructorConfirm(true);
   };
 
@@ -151,7 +151,7 @@ export default function SectionCard({
         {showJoinCode && (
           <div className="flex items-center gap-2">
             <code className="flex-1 bg-gray-100 px-3 py-2 rounded font-mono text-lg">
-              {formatJoinCodeForDisplay(joinCode)}
+              {formatJoinCodeForDisplay(join_code)}
             </code>
             {onRegenerateCode && (
               <button

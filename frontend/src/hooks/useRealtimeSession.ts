@@ -45,8 +45,8 @@ interface SessionStateResponse {
 }
 
 export interface UseRealtimeSessionOptions {
-  sessionId: string;
-  userId?: string;
+  session_id: string;
+  user_id?: string;
   userName?: string;
 }
 
@@ -67,8 +67,8 @@ export interface FeaturedStudent {
  * - Handles errors with retry logic
  */
 export function useRealtimeSession({
-  sessionId,
-  userId,
+  session_id,
+  user_id,
   userName: _userName,
 }: UseRealtimeSessionOptions) {
   // Local state
@@ -92,26 +92,26 @@ export function useRealtimeSession({
   // Store pending code updates that arrive before student_joined events
   const pendingCodeUpdatesRef = useRef<Map<string, {
     code: string;
-    executionSettings?: ExecutionSettings;
-    lastUpdate?: string;
+    execution_settings?: ExecutionSettings;
+    last_update?: string;
   }>>(new Map());
 
   /**
    * Convert backend snake_case student to frontend Student type
    */
   const mapStudent = useCallback((s: SessionStateResponse['students'][0]): Student => ({
-    userId: s.user_id,
+    user_id: s.user_id,
     name: s.name,
     code: s.code || '',
-    lastUpdate: new Date(s.last_update),
-    executionSettings: s.execution_settings,
+    last_update: new Date(s.last_update),
+    execution_settings: s.execution_settings,
   }), []);
 
   /**
    * Load initial session state from API
    */
   useEffect(() => {
-    if (!sessionId || !userId || initialLoadRef.current) {
+    if (!session_id || !user_id || initialLoadRef.current) {
       return;
     }
 
@@ -120,7 +120,7 @@ export function useRealtimeSession({
         setLoading(true);
         setError(null);
 
-        const data = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/state`);
+        const data = await apiGet<SessionStateResponse>(`/sessions/${session_id}/state`);
 
         // Set session data
         setSession(data.session);
@@ -129,7 +129,7 @@ export function useRealtimeSession({
         const studentsMap = new Map<string, Student>();
         data.students.forEach((student) => {
           const mapped = mapStudent(student);
-          studentsMap.set(mapped.userId, mapped);
+          studentsMap.set(mapped.user_id, mapped);
         });
         setStudents(studentsMap);
 
@@ -146,16 +146,16 @@ export function useRealtimeSession({
     };
 
     loadState();
-  }, [sessionId, userId, mapStudent]);
+  }, [session_id, user_id, mapStudent]);
 
   /**
    * Fetch session state (used for polling fallback)
    */
   const fetchState = useCallback(async () => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
-      const data = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/state`);
+      const data = await apiGet<SessionStateResponse>(`/sessions/${session_id}/state`);
 
       // Set session data
       setSession(data.session);
@@ -164,7 +164,7 @@ export function useRealtimeSession({
       const studentsMap = new Map<string, Student>();
       data.students.forEach((student) => {
         const mapped = mapStudent(student);
-        studentsMap.set(mapped.userId, mapped);
+        studentsMap.set(mapped.user_id, mapped);
       });
       setStudents(studentsMap);
 
@@ -173,20 +173,20 @@ export function useRealtimeSession({
       console.error('[useRealtimeSession] Failed to fetch state:', e);
       setError(e.message || 'Failed to fetch session state');
     }
-  }, [sessionId, mapStudent]);
+  }, [session_id, mapStudent]);
 
   /**
    * Subscribe to Centrifugo channel for real-time updates
    */
   useEffect(() => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     setConnectionStatus('connecting');
 
     const centrifuge = createCentrifuge();
     centrifugeRef.current = centrifuge;
 
-    const channelName = `session:${sessionId}`;
+    const channelName = `session:${session_id}`;
     const sub = centrifuge.newSubscription(channelName, {
       getToken: () => getSubscriptionToken(channelName),
     });
@@ -200,23 +200,23 @@ export function useRealtimeSession({
             const { student } = payload;
             setStudents(prev => {
               const updated = new Map(prev);
-              const pendingUpdate = pendingCodeUpdatesRef.current.get(student.userId);
+              const pendingUpdate = pendingCodeUpdatesRef.current.get(student.user_id);
               if (pendingUpdate) {
-                updated.set(student.userId, {
-                  userId: student.userId,
+                updated.set(student.user_id, {
+                  user_id: student.user_id,
                   name: student.name,
                   code: pendingUpdate.code,
-                  lastUpdate: pendingUpdate.lastUpdate ? new Date(pendingUpdate.lastUpdate) : new Date(),
-                  executionSettings: pendingUpdate.executionSettings ?? student.executionSettings,
+                  last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
+                  execution_settings: pendingUpdate.execution_settings ?? student.execution_settings,
                 });
-                pendingCodeUpdatesRef.current.delete(student.userId);
+                pendingCodeUpdatesRef.current.delete(student.user_id);
               } else {
-                updated.set(student.userId, {
-                  userId: student.userId,
+                updated.set(student.user_id, {
+                  user_id: student.user_id,
                   name: student.name,
                   code: student.code || '',
-                  lastUpdate: new Date(),
-                  executionSettings: student.executionSettings,
+                  last_update: new Date(),
+                  execution_settings: student.execution_settings,
                 });
               }
               return updated;
@@ -227,7 +227,7 @@ export function useRealtimeSession({
 
         case 'student_code_updated': {
           if (payload) {
-            const { studentId, code, executionSettings, lastUpdate } = payload;
+            const { studentId, code, execution_settings, last_update } = payload;
             setStudents(prev => {
               const updated = new Map(prev);
               const student = updated.get(studentId);
@@ -235,14 +235,14 @@ export function useRealtimeSession({
                 updated.set(studentId, {
                   ...student,
                   code: code || '',
-                  lastUpdate: lastUpdate ? new Date(lastUpdate) : new Date(),
-                  executionSettings: executionSettings ?? student.executionSettings,
+                  last_update: last_update ? new Date(last_update) : new Date(),
+                  execution_settings: execution_settings ?? student.execution_settings,
                 });
               } else {
                 pendingCodeUpdatesRef.current.set(studentId, {
                   code: code || '',
-                  executionSettings,
-                  lastUpdate,
+                  execution_settings,
+                  last_update,
                 });
               }
               return updated;
@@ -253,11 +253,11 @@ export function useRealtimeSession({
 
         case 'session_ended': {
           if (payload) {
-            const { endedAt } = payload;
+            const { ended_at } = payload;
             setSession(prev => prev ? {
               ...prev,
               status: 'completed',
-              endedAt: endedAt ? new Date(endedAt) : new Date(),
+              ended_at: ended_at ? new Date(ended_at) : new Date(),
             } : prev);
           }
           break;
@@ -265,15 +265,15 @@ export function useRealtimeSession({
 
         case 'featured_student_changed': {
           if (payload) {
-            const { featuredStudentId, featuredCode } = payload;
+            const { featured_student_id, featured_code } = payload;
             setSession(prev => prev ? {
               ...prev,
-              featuredStudentId,
-              featuredCode,
+              featured_student_id,
+              featured_code,
             } : prev);
             setFeaturedStudent({
-              studentId: featuredStudentId,
-              code: featuredCode,
+              studentId: featured_student_id,
+              code: featured_code,
             });
           }
           break;
@@ -338,20 +338,20 @@ export function useRealtimeSession({
       centrifugeRef.current = null;
       setConnectionStatus('disconnected');
     };
-  }, [sessionId]);
+  }, [session_id]);
 
   /**
    * Polling fallback: Poll for updates every 2 seconds when not subscribed
    */
   useEffect(() => {
-    if (!sessionId || isSubscribed || loading) return;
+    if (!session_id || isSubscribed || loading) return;
 
     const pollInterval = setInterval(() => {
       fetchState();
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, isSubscribed, loading, fetchState]);
+  }, [session_id, isSubscribed, loading, fetchState]);
 
   /**
    * Update student code (debounced)
@@ -359,13 +359,13 @@ export function useRealtimeSession({
   const updateCodeImmediate = useCallback(async (
     studentId: string,
     code: string,
-    executionSettings?: ExecutionSettings
+    execution_settings?: ExecutionSettings
   ) => {
     try {
-      await apiPost(`/sessions/${sessionId}/code`, {
+      await apiPost(`/sessions/${session_id}/code`, {
         studentId,
         code,
-        executionSettings,
+        execution_settings,
       });
 
       // Optimistically update local state
@@ -376,8 +376,8 @@ export function useRealtimeSession({
           updated.set(studentId, {
             ...student,
             code,
-            lastUpdate: new Date(),
-            executionSettings: executionSettings || student.executionSettings,
+            last_update: new Date(),
+            execution_settings: execution_settings || student.execution_settings,
           });
         }
         return updated;
@@ -387,7 +387,7 @@ export function useRealtimeSession({
       setError(e.message || 'Failed to save code');
       throw e;
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   // Create debounced version (300ms)
   const updateCode = useMemo(
@@ -401,26 +401,26 @@ export function useRealtimeSession({
   const executeCode = useCallback(async (
     studentId: string,
     code: string,
-    executionSettings?: ExecutionSettings
+    execution_settings?: ExecutionSettings
   ): Promise<ExecutionResult> => {
     try {
-      return await apiPost<ExecutionResult>(`/sessions/${sessionId}/execute`, {
+      return await apiPost<ExecutionResult>(`/sessions/${session_id}/execute`, {
         studentId,
         code,
-        executionSettings,
+        execution_settings,
       });
     } catch (e: any) {
       console.error('[useRealtimeSession] Failed to execute code:', e);
       throw e;
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   /**
    * Feature a student's code
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      const data = await apiPost(`/sessions/${sessionId}/feature`, {
+      const data = await apiPost(`/sessions/${session_id}/feature`, {
         studentId,
       });
 
@@ -435,14 +435,14 @@ export function useRealtimeSession({
       console.error('[useRealtimeSession] Failed to feature student:', e);
       throw e;
     }
-  }, [sessionId, students]);
+  }, [session_id, students]);
 
   /**
    * Clear the featured student from public view
    */
   const clearFeaturedStudent = useCallback(async () => {
     try {
-      await apiPost(`/sessions/${sessionId}/feature`, {});
+      await apiPost(`/sessions/${session_id}/feature`, {});
 
       // Optimistically clear local state
       setFeaturedStudent({});
@@ -450,14 +450,14 @@ export function useRealtimeSession({
       console.error('[useRealtimeSession] Failed to clear featured student:', e);
       throw e;
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   /**
    * Join session
    */
   const joinSession = useCallback(async (studentId: string, name: string) => {
     try {
-      return await apiPost(`/sessions/${sessionId}/join`, {
+      return await apiPost(`/sessions/${session_id}/join`, {
         studentId,
         name,
       });
@@ -465,7 +465,7 @@ export function useRealtimeSession({
       console.error('[useRealtimeSession] Failed to join session:', e);
       throw e;
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   return {
     // State

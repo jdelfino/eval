@@ -70,7 +70,7 @@ describe('useSections', () => {
     await act(async () => { sec = await result.current.joinSection('CODE'); });
 
     expect(sec).toEqual(joinedSection);
-    expect(mockApiPost).toHaveBeenCalledWith('/sections/join', { joinCode: 'CODE' });
+    expect(mockApiPost).toHaveBeenCalledWith('/sections/join', { join_code: 'CODE' });
     expect(mockApiGet).toHaveBeenCalledWith('/sections/my');
   });
 

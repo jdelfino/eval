@@ -16,18 +16,18 @@ import { useDebugger } from '@/hooks/useDebugger';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (
-    problem: { title: string; description: string; starterCode: string },
-    executionSettings?: {
+    problem: { title: string; description: string; starter_code: string },
+    execution_settings?: {
       stdin?: string;
-      randomSeed?: number;
-      attachedFiles?: Array<{ name: string; content: string }>;
+      random_seed?: number;
+      attached_files?: Array<{ name: string; content: string }>;
     }
   ) => void;
-  initialProblem?: Problem | { title: string; description: string; starterCode: string } | null;
+  initialProblem?: Problem | { title: string; description: string; starter_code: string } | null;
   initialExecutionSettings?: {
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   };
 }
 
@@ -38,13 +38,13 @@ export default function SessionProblemEditor({
 }: SessionProblemEditorProps) {
   const [title, setTitle] = useState(initialProblem?.title || '');
   const [description, setDescription] = useState(initialProblem?.description || '');
-  const [starterCode, setStarterCode] = useState(initialProblem?.starterCode || '');
+  const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
 
   // Execution settings
   const [stdin, setStdin] = useState(initialExecutionSettings?.stdin || '');
-  const [randomSeed, setRandomSeed] = useState<number | undefined>(initialExecutionSettings?.randomSeed);
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
-    initialExecutionSettings?.attachedFiles || []
+  const [random_seed, setRandomSeed] = useState<number | undefined>(initialExecutionSettings?.random_seed);
+  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
+    initialExecutionSettings?.attached_files || []
   );
 
   // Sync state when initial values change (e.g., when problem is loaded)
@@ -52,35 +52,35 @@ export default function SessionProblemEditor({
     if (initialProblem) {
       setTitle(initialProblem.title || '');
       setDescription(initialProblem.description || '');
-      setStarterCode(initialProblem.starterCode || '');
+      setStarterCode(initialProblem.starter_code || '');
     }
-  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starterCode]);
+  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code]);
 
   useEffect(() => {
     if (initialExecutionSettings) {
       setStdin(initialExecutionSettings.stdin || '');
-      setRandomSeed(initialExecutionSettings.randomSeed);
-      setAttachedFiles(initialExecutionSettings.attachedFiles || []);
+      setRandomSeed(initialExecutionSettings.random_seed);
+      setAttachedFiles(initialExecutionSettings.attached_files || []);
     }
   }, [
     initialExecutionSettings?.stdin,
-    initialExecutionSettings?.randomSeed,
-    initialExecutionSettings?.attachedFiles
+    initialExecutionSettings?.random_seed,
+    initialExecutionSettings?.attached_files
   ]);
 
   const handleUpdate = () => {
     const problem = {
       title: title.trim(),
       description: description.trim(),
-      starterCode: starterCode.trim(),
+      starter_code: starter_code.trim(),
     };
 
-    const executionSettings: any = {};
-    if (stdin.trim()) executionSettings.stdin = stdin.trim();
-    if (randomSeed !== undefined) executionSettings.randomSeed = randomSeed;
-    if (attachedFiles.length > 0) executionSettings.attachedFiles = attachedFiles;
+    const execution_settings: any = {};
+    if (stdin.trim()) execution_settings.stdin = stdin.trim();
+    if (random_seed !== undefined) execution_settings.random_seed = random_seed;
+    if (attached_files.length > 0) execution_settings.attached_files = attached_files;
 
-    onUpdateProblem(problem, Object.keys(executionSettings).length > 0 ? executionSettings : undefined);
+    onUpdateProblem(problem, Object.keys(execution_settings).length > 0 ? execution_settings : undefined);
   };
 
   // Setup debugger (trace feature not yet available via API)
@@ -121,17 +121,17 @@ export default function SessionProblemEditor({
       {/* Full-width code editor */}
       <EditorContainer variant="flex">
         <CodeEditor
-          code={starterCode}
+          code={starter_code}
           onChange={setStarterCode}
           useApiExecution={true}
           title="Starter Code"
           exampleInput={stdin}
           onStdinChange={setStdin}
-          randomSeed={randomSeed}
+          random_seed={random_seed}
           onRandomSeedChange={setRandomSeed}
-          attachedFiles={attachedFiles}
+          attached_files={attached_files}
           onAttachedFilesChange={setAttachedFiles}
-          problem={{ title, description, starterCode }}
+          problem={{ title, description, starter_code }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}
           onProblemEdit={(updates) => {

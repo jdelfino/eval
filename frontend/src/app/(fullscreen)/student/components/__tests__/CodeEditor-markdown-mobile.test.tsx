@@ -55,13 +55,13 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
   it('should render markdown headers in mobile problem view', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: '# Main Header\n\nSome content\n\n## Sub Header',
-      starterCode: '',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: '',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(
@@ -88,13 +88,13 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
   it('should render markdown bold text in mobile view', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: 'This is **bold** text.',
-      starterCode: '',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: '',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(
@@ -121,13 +121,13 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
   it('should render inline code in mobile view', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: 'Call the `main()` function to start.',
-      starterCode: '',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: '',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(
@@ -154,13 +154,13 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
   it('should render markdown lists in mobile view', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: '## Requirements\n\n- First item\n- Second item',
-      starterCode: '',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: '',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(

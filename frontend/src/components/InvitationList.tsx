@@ -18,9 +18,9 @@ import { Button } from '@/components/ui/Button';
 export interface Invitation {
   id: string;
   email: string;
-  namespaceId: string;
+  namespace_id: string;
   targetRole: 'namespace-admin' | 'instructor';
-  createdAt: string;
+  created_at: string;
   expiresAt: string;
   consumedAt?: string;
   revokedAt?: string;
@@ -261,7 +261,7 @@ export function InvitationList({
                 <Table.Cell className="font-medium">{invitation.email}</Table.Cell>
                 {showNamespace && (
                   <Table.Cell className="text-gray-600">
-                    {getNamespaceName(invitation.namespaceId)}
+                    {getNamespaceName(invitation.namespace_id)}
                   </Table.Cell>
                 )}
                 {showRole && (
@@ -275,7 +275,7 @@ export function InvitationList({
                   </StatusBadge>
                 </Table.Cell>
                 <Table.Cell className="text-gray-500 text-sm">
-                  {formatDate(invitation.createdAt)}
+                  {formatDate(invitation.created_at)}
                 </Table.Cell>
                 <Table.Cell className="text-gray-500 text-sm">
                   {formatDate(invitation.expiresAt)}

@@ -132,9 +132,9 @@ describe('SystemAdminPage', () => {
             {
               id: 'inv-1',
               email: 'test@example.com',
-              namespaceId: 'ns-1',
+              namespace_id: 'ns-1',
               targetRole: 'instructor',
-              createdAt: '2024-01-01T00:00:00Z',
+              created_at: '2024-01-01T00:00:00Z',
               expiresAt: '2024-01-08T00:00:00Z',
             },
           ],
@@ -194,7 +194,7 @@ describe('SystemAdminPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('namespaceId=ns-1'),
+          expect.stringContaining('namespace_id=ns-1'),
         );
       });
     });
@@ -306,7 +306,7 @@ describe('SystemAdminPage', () => {
           method: 'POST',
           body: JSON.stringify({
             email: 'new@example.com',
-            namespaceId: 'ns-1',
+            namespace_id: 'ns-1',
             targetRole: 'namespace-admin',
           }),
         }));
@@ -349,7 +349,7 @@ describe('SystemAdminPage', () => {
           method: 'POST',
           body: JSON.stringify({
             email: 'instructor@example.com',
-            namespaceId: 'ns-2',
+            namespace_id: 'ns-2',
             targetRole: 'instructor',
           }),
         }));
@@ -371,17 +371,17 @@ describe('SystemAdminPage', () => {
             {
               id: 'inv-1',
               email: 'test1@example.com',
-              namespaceId: 'ns-1',
+              namespace_id: 'ns-1',
               targetRole: 'instructor',
-              createdAt: '2024-01-01T00:00:00Z',
+              created_at: '2024-01-01T00:00:00Z',
               expiresAt: futureDate.toISOString(),
             },
             {
               id: 'inv-2',
               email: 'test2@example.com',
-              namespaceId: 'ns-1',
+              namespace_id: 'ns-1',
               targetRole: 'instructor',
-              createdAt: '2024-01-01T00:00:00Z',
+              created_at: '2024-01-01T00:00:00Z',
               expiresAt: futureDate.toISOString(),
             },
           ],

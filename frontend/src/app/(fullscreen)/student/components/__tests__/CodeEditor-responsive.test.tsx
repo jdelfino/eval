@@ -170,10 +170,10 @@ describe('CodeEditor Responsive Layout', () => {
         id: 'test-problem',
         title: 'Test Problem',
         description: 'Test description',
-        starterCode: '',
-        authorId: 'instructor-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        starter_code: '',
+        author_id: 'instructor-1',
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
       const { container } = render(
@@ -261,11 +261,11 @@ describe('CodeEditor Responsive Layout', () => {
         <CodeEditor
           code="print('hello')"
           onChange={jest.fn()}
-          executionResult={{
+          execution_result={{
             success: true,
             output: 'Hello World',
             error: '',
-            executionTime: 100,
+            execution_time: 100,
           }}
         />
       );
@@ -333,11 +333,11 @@ describe('CodeEditor Responsive Layout', () => {
   });
 
   describe('Responsive Execution Results', () => {
-    const executionResult = {
+    const execution_result = {
       success: true,
       output: 'Test output',
       error: '',
-      executionTime: 100,
+      execution_time: 100,
     };
 
     it('should render execution results below editor on desktop', () => {
@@ -355,7 +355,7 @@ describe('CodeEditor Responsive Layout', () => {
         <CodeEditor
           code="print('hello')"
           onChange={jest.fn()}
-          executionResult={executionResult}
+          execution_result={execution_result}
         />
       );
 
@@ -379,7 +379,7 @@ describe('CodeEditor Responsive Layout', () => {
         <CodeEditor
           code="print('hello')"
           onChange={jest.fn()}
-          executionResult={executionResult}
+          execution_result={execution_result}
         />
       );
 

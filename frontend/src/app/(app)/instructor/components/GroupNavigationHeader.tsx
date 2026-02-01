@@ -8,8 +8,8 @@ interface GroupNavigationHeaderProps {
   activeGroupIndex: number;
   onNavigate: (direction: 'prev' | 'next') => void;
   onDismiss: (groupId: string) => void;
-  overallNote?: string | null;
-  completionEstimate?: { finished: number; inProgress: number; notStarted: number } | null;
+  overall_note?: string | null;
+  completion_estimate?: { finished: number; in_progress: number; not_started: number } | null;
 }
 
 export default function GroupNavigationHeader({
@@ -17,8 +17,8 @@ export default function GroupNavigationHeader({
   activeGroupIndex,
   onNavigate,
   onDismiss,
-  overallNote,
-  completionEstimate,
+  overall_note,
+  completion_estimate,
 }: GroupNavigationHeaderProps) {
   const activeGroup = groups[activeGroupIndex];
   if (!activeGroup) return null;
@@ -26,7 +26,7 @@ export default function GroupNavigationHeader({
   const isFirst = activeGroupIndex === 0;
   const isLast = activeGroupIndex === groups.length - 1;
   const isAll = activeGroup.id === 'all';
-  const studentCount = activeGroup.studentIds.length;
+  const studentCount = activeGroup.student_ids.length;
 
   return (
     <div>
@@ -74,15 +74,15 @@ export default function GroupNavigationHeader({
         </button>
       </div>
 
-      {isAll && completionEstimate && (
+      {isAll && completion_estimate && (
         <p className="mt-2 text-xs text-gray-500 text-center" data-testid="completion-summary">
-          {completionEstimate.finished} finished &middot; {completionEstimate.inProgress} in progress &middot; {completionEstimate.notStarted} not started
+          {completion_estimate.finished} finished &middot; {completion_estimate.in_progress} in progress &middot; {completion_estimate.not_started} not started
         </p>
       )}
 
-      {isAll && overallNote && (
+      {isAll && overall_note && (
         <p className="mt-2 text-xs text-gray-500 text-center italic" data-testid="overall-note">
-          {overallNote}
+          {overall_note}
         </p>
       )}
     </div>

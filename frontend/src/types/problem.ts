@@ -1,10 +1,7 @@
 /**
  * Client-side Problem-related types.
  *
- * These mirror the shapes used by the frontend for problem editing,
- * display, and execution configuration. They use camelCase (frontend
- * convention) and are distinct from the snake_case API response types
- * in api.ts.
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 // ---------------------------------------------------------------------------
@@ -13,8 +10,8 @@
 
 export interface ExecutionSettings {
   stdin?: string;
-  randomSeed?: number;
-  attachedFiles?: Array<{ name: string; content: string }>;
+  random_seed?: number;
+  attached_files?: Array<{ name: string; content: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -27,21 +24,21 @@ export type OutputMatchType = 'exact' | 'contains' | 'regex';
 
 export interface InputOutputTestConfig {
   input: string;
-  expectedOutput: string;
-  matchType: OutputMatchType;
-  ignoreWhitespace?: boolean;
+  expected_output: string;
+  match_type: OutputMatchType;
+  ignore_whitespace?: boolean;
 }
 
 export interface PyTestConfig {
-  testCode: string;
-  targetFunction?: string;
+  test_code: string;
+  target_function?: string;
   timeout?: number;
 }
 
 export interface PropertyTestConfig {
-  propertyCode: string;
-  strategyConfig?: Record<string, unknown>;
-  maxExamples?: number;
+  property_code: string;
+  strategy_config?: Record<string, unknown>;
+  max_examples?: number;
 }
 
 export type TestConfig =
@@ -51,7 +48,7 @@ export type TestConfig =
 
 export interface TestCase {
   id: string;
-  problemId: string;
+  problem_id: string;
   type: TestCaseType;
   name: string;
   description: string;
@@ -61,31 +58,31 @@ export interface TestCase {
 }
 
 // ---------------------------------------------------------------------------
-// Problem (client-side, camelCase)
+// Problem (client-side, snake_case matching backend)
 // ---------------------------------------------------------------------------
 
 export interface Problem {
   id: string;
-  namespaceId: string;
+  namespace_id: string;
   title: string;
   description?: string;
-  starterCode?: string;
-  testCases?: TestCase[];
-  executionSettings?: ExecutionSettings;
-  authorId: string;
-  classId: string;
+  starter_code?: string;
+  test_cases?: TestCase[];
+  execution_settings?: ExecutionSettings;
+  author_id: string;
+  class_id: string;
   tags: string[];
   solution?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface StudentProblem {
   id: string;
   title: string;
   description: string;
-  starterCode?: string;
-  testCases: TestCase[];
+  starter_code?: string;
+  test_cases: TestCase[];
 }
 
-export type ProblemInput = Omit<Problem, 'id' | 'createdAt' | 'updatedAt'>;
+export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;

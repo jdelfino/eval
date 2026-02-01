@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 interface SessionNotification {
-  sessionId: string;
-  problemTitle: string;
+  session_id: string;
+  problem_title: string;
 }
 
 export default function SessionCreatedNotification() {
@@ -31,12 +31,12 @@ export default function SessionCreatedNotification() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span className="text-blue-800 font-medium">
-          New session started for {notification.problemTitle}
+          New session started for {notification.problem_title}
         </span>
       </div>
       <div className="flex items-center gap-2">
         <Link
-          href={`/instructor/session/${notification.sessionId}`}
+          href={`/instructor/session/${notification.session_id}`}
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
           Go to Session Dashboard

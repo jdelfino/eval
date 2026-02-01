@@ -18,15 +18,15 @@ import { apiPost } from '@/lib/api-client';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
 interface SessionContext {
-  sectionId: string;
-  sectionName: string;
+  section_id: string;
+  section_name: string;
 }
 
 interface SessionViewProps {
   /** Current session ID */
-  sessionId: string;
+  session_id: string;
   /** Join code for the session */
-  joinCode: string | null;
+  join_code: string | null;
   /** Session context (section info) */
   sessionContext: SessionContext | null;
   /** Derived students from realtime data */
@@ -38,18 +38,18 @@ interface SessionViewProps {
   /** Session execution settings */
   sessionExecutionSettings: {
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   };
   /** Callback to end the session */
   onEndSession: () => Promise<void>;
   /** Callback to update problem */
   onUpdateProblem: (
-    problem: { title: string; description: string; starterCode: string },
-    executionSettings?: {
+    problem: { title: string; description: string; starter_code: string },
+    execution_settings?: {
       stdin?: string;
-      randomSeed?: number;
-      attachedFiles?: Array<{ name: string; content: string }>;
+      random_seed?: number;
+      attached_files?: Array<{ name: string; content: string }>;
     }
   ) => Promise<void>;
   /** Callback to feature a student on public view */
@@ -60,10 +60,10 @@ interface SessionViewProps {
   executeCode: (
     studentId: string,
     code: string,
-    executionSettings: ExecutionSettings
+    execution_settings: ExecutionSettings
   ) => Promise<ExecutionResult>;
   /** ID of the currently featured student */
-  featuredStudentId?: string | null;
+  featured_student_id?: string | null;
 }
 
 type SessionTab = 'students' | 'problem';
@@ -77,8 +77,8 @@ type SessionTab = 'students' | 'problem';
  * - Content: Full-width content for selected tab
  */
 export function SessionView({
-  sessionId,
-  joinCode,
+  session_id,
+  join_code,
   sessionContext,
   students,
   realtimeStudents,
@@ -89,7 +89,7 @@ export function SessionView({
   onFeatureStudent,
   onClearPublicView,
   executeCode,
-  featuredStudentId,
+  featured_student_id,
 }: SessionViewProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<SessionTab>('students');
@@ -103,11 +103,11 @@ export function SessionView({
     if (!sessionProblem?.solution || !onClearPublicView) return;
 
     try {
-      await apiPost(`/sessions/${sessionId}/feature`, { code: sessionProblem.solution });
+      await apiPost(`/sessions/${session_id}/feature`, { code: sessionProblem.solution });
     } catch (error) {
       console.error('Failed to show solution:', error);
     }
-  }, [sessionId, sessionProblem?.solution, onClearPublicView]);
+  }, [session_id, sessionProblem?.solution, onClearPublicView]);
 
   // Handlers for student pane
   const handleViewRevisions = useCallback((studentId: string, studentName: string) => {
@@ -135,13 +135,13 @@ export function SessionView({
     <div className="space-y-4" data-testid="session-view">
       {/* Session Controls Header */}
       <SessionControls
-        sessionId={sessionId}
-        sectionName={sessionContext?.sectionName}
-        joinCode={joinCode || undefined}
+        session_id={session_id}
+        section_name={sessionContext?.section_name}
+        join_code={join_code || undefined}
         connectedStudentCount={students.length}
         onEndSession={onEndSession}
         onClearPublicView={onClearPublicView}
-        featuredStudentId={featuredStudentId}
+        featured_student_id={featured_student_id}
         problemSolution={sessionProblem?.solution}
         onShowSolution={handleShowSolution}
       />
@@ -160,17 +160,17 @@ export function SessionView({
         {/* Students Tab - Student list + code editor */}
         <Tabs.Panel tabId="students" className="pt-4">
           <SessionStudentPane
-            sessionId={sessionId}
+            session_id={session_id}
             students={students}
             realtimeStudents={realtimeStudents}
             sessionProblem={sessionProblem}
             sessionExecutionSettings={sessionExecutionSettings}
-            joinCode={joinCode || undefined}
+            join_code={join_code || undefined}
             onShowOnPublicView={onFeatureStudent}
             onClearPublicView={onClearPublicView}
             onViewHistory={handleViewRevisions}
             onExecuteCode={handleExecuteCode}
-            featuredStudentId={featuredStudentId}
+            featured_student_id={featured_student_id}
           />
         </Tabs.Panel>
 
@@ -189,7 +189,7 @@ export function SessionView({
       {/* Modals */}
       {revisionViewerState && (
         <RevisionViewer
-          sessionId={sessionId}
+          session_id={session_id}
           studentId={revisionViewerState.studentId}
           studentName={revisionViewerState.studentName}
           onClose={handleCloseRevisionViewer}

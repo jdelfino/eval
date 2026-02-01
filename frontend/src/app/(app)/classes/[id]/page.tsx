@@ -14,7 +14,7 @@ import { BackButton } from '@/components/ui/BackButton';
 export default function ClassDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const classId = params.id as string;
+  const class_id = params.id as string;
   
   const { user, isLoading: authLoading } = useAuth();
   const { 
@@ -45,11 +45,11 @@ export default function ClassDetailsPage() {
     if (user) {
       loadClassDetails();
     }
-  }, [user, authLoading, router, classId]);
+  }, [user, authLoading, router, class_id]);
 
   const loadClassDetails = async () => {
     try {
-      const response = await apiFetch(`/classes/${classId}`);
+      const response = await apiFetch(`/classes/${class_id}`);
       const data = await response.json();
       setClassData(data.class);
       setSections(data.sections || []);
@@ -62,26 +62,26 @@ export default function ClassDetailsPage() {
   };
 
   const handleCreateSection = async (name: string, semester: string) => {
-    const newSection = await createSection(classId, name, semester);
+    const newSection = await createSection(class_id, name, semester);
     setSections([...sections, newSection]);
     setShowCreateForm(false);
   };
 
-  const handleRegenerateCode = async (sectionId: string) => {
-    const newCode = await regenerateJoinCode(sectionId);
+  const handleRegenerateCode = async (section_id: string) => {
+    const newCode = await regenerateJoinCode(section_id);
     setSections(sections.map(s => 
-      s.id === sectionId ? { ...s, join_code: newCode } : s
+      s.id === section_id ? { ...s, join_code: newCode } : s
     ));
     return newCode;
   };
 
-  const handleAddInstructor = async (sectionId: string, email: string) => {
-    await addCoInstructor(sectionId, email);
+  const handleAddInstructor = async (section_id: string, email: string) => {
+    await addCoInstructor(section_id, email);
     await loadClassDetails(); // Reload to get updated instructor list
   };
 
-  const handleRemoveInstructor = async (sectionId: string, userId: string) => {
-    await removeCoInstructor(sectionId, userId);
+  const handleRemoveInstructor = async (section_id: string, user_id: string) => {
+    await removeCoInstructor(section_id, user_id);
     await loadClassDetails(); // Reload to get updated instructor list
   };
 
@@ -127,7 +127,7 @@ export default function ClassDetailsPage() {
 
       {showCreateForm && (
         <CreateSectionForm
-          classId={classId}
+          class_id={class_id}
           className={classData.name}
           onSubmit={handleCreateSection}
           onCancel={() => setShowCreateForm(false)}

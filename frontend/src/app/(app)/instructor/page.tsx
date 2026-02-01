@@ -15,8 +15,8 @@ import { InstructorDashboard } from './components/InstructorDashboard';
 import StartSessionModal from './components/StartSessionModal';
 
 interface StartSessionState {
-  sectionId: string;
-  sectionName: string;
+  section_id: string;
+  section_name: string;
 }
 
 function InstructorPage() {
@@ -27,19 +27,19 @@ function InstructorPage() {
   const [startSessionState, setStartSessionState] = useState<StartSessionState | null>(null);
 
   // Handle "Start Session" button click from dashboard
-  const handleStartSession = (sectionId: string, sectionName: string) => {
-    setStartSessionState({ sectionId, sectionName });
+  const handleStartSession = (section_id: string, section_name: string) => {
+    setStartSessionState({ section_id, section_name });
   };
 
   // Handle "Rejoin Session" button click - navigate directly to session
-  const handleRejoinSession = (sessionId: string) => {
-    router.push(`/instructor/session/${sessionId}`);
+  const handleRejoinSession = (session_id: string) => {
+    router.push(`/instructor/session/${session_id}`);
   };
 
   // Handle session created from modal - navigate to session
-  const handleSessionCreated = (sessionId: string) => {
+  const handleSessionCreated = (session_id: string) => {
     setStartSessionState(null);
-    router.push(`/instructor/session/${sessionId}`);
+    router.push(`/instructor/session/${session_id}`);
   };
 
   // Close the modal
@@ -63,8 +63,8 @@ function InstructorPage() {
       {/* Start Session Modal */}
       {startSessionState && (
         <StartSessionModal
-          sectionId={startSessionState.sectionId}
-          sectionName={startSessionState.sectionName}
+          section_id={startSessionState.section_id}
+          section_name={startSessionState.section_name}
           onClose={handleCloseModal}
           onSessionCreated={handleSessionCreated}
         />

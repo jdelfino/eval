@@ -13,12 +13,12 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     id: 'test-problem-1',
     title: 'Test Problem',
     description: 'A test problem description',
-    namespaceId: 'test-namespace',
-    authorId: 'author-1',
-    classId: 'test-class-id',
+    namespace_id: 'test-namespace',
+    author_id: 'author-1',
+    class_id: 'test-class-id',
     tags: [],
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
+    created_at: new Date('2024-01-01T00:00:00Z'),
+    updated_at: new Date('2024-01-01T00:00:00Z'),
     ...overrides,
   };
 }
@@ -152,10 +152,10 @@ factorial(5)  # Returns 120
 
   describe('Starter code section', () => {
     it('toggles starter code visibility', () => {
-      const starterCode = `def hello():
+      const starter_code = `def hello():
     pass`;
       const problem = createProblem({
-        starterCode,
+        starter_code,
       });
       render(<ProblemDisplay problem={problem} />);
 
@@ -174,7 +174,7 @@ factorial(5)  # Returns 120
     it('calls onLoadStarterCode when button is clicked', () => {
       const mockOnLoadStarterCode = jest.fn();
       const problem = createProblem({
-        starterCode: 'def main():\n    pass',
+        starter_code: 'def main():\n    pass',
       });
       render(<ProblemDisplay problem={problem} onLoadStarterCode={mockOnLoadStarterCode} />);
 
@@ -190,29 +190,29 @@ factorial(5)  # Returns 120
 
   describe('Test cases section', () => {
     it('toggles test cases visibility', () => {
-      const testCases: TestCase[] = [
+      const test_cases: TestCase[] = [
         {
           id: 'tc1',
-          problemId: 'test-problem-1',
+          problem_id: 'test-problem-1',
           name: 'Test 1',
           type: 'input-output',
           description: 'Test adding 1 and 2',
           visible: true,
           order: 1,
-          config: { type: 'input-output', data: { input: '1 2', expectedOutput: '3', matchType: 'exact' } },
+          config: { type: 'input-output', data: { input: '1 2', expected_output: '3', match_type: 'exact' } },
         },
         {
           id: 'tc2',
-          problemId: 'test-problem-1',
+          problem_id: 'test-problem-1',
           name: 'Test 2',
           type: 'input-output',
           description: 'Test adding 0 and 0',
           visible: true,
           order: 2,
-          config: { type: 'input-output', data: { input: '0 0', expectedOutput: '0', matchType: 'exact' } },
+          config: { type: 'input-output', data: { input: '0 0', expected_output: '0', match_type: 'exact' } },
         },
       ];
-      const problem = createProblem({ testCases });
+      const problem = createProblem({ test_cases });
       render(<ProblemDisplay problem={problem} />);
 
       // Initially hidden
@@ -232,7 +232,7 @@ factorial(5)  # Returns 120
   describe('Execution settings', () => {
     it('displays random seed when set', () => {
       const problem = createProblem({
-        executionSettings: { randomSeed: 42 },
+        execution_settings: { random_seed: 42 },
       });
       render(<ProblemDisplay problem={problem} />);
       expect(screen.getByText(/Random seed: 42/)).toBeInTheDocument();
@@ -240,8 +240,8 @@ factorial(5)  # Returns 120
 
     it('displays attached files count when files exist', () => {
       const problem = createProblem({
-        executionSettings: {
-          attachedFiles: [
+        execution_settings: {
+          attached_files: [
             { name: 'data.txt', content: 'data' },
             { name: 'config.json', content: '{}' },
           ],

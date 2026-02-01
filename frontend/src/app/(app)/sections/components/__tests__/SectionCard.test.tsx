@@ -89,7 +89,7 @@ describe('SectionCard', () => {
     mockGetActiveSessions.mockResolvedValue([
       {
         id: 'session-1',
-        sectionId: 'section-1',
+        section_id: 'section-1',
         status: 'active',
         problem: { title: 'Two Sum' },
         students: new Map([['s1', {}]]),

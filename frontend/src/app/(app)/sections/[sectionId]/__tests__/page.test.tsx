@@ -11,7 +11,7 @@ import SectionDetailPage from '../page';
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
-  useParams: () => ({ sectionId: 'section-1' }),
+  useParams: () => ({ section_id: 'section-1' }),
 }));
 
 jest.mock('@/contexts/AuthContext', () => ({
@@ -27,7 +27,7 @@ jest.mock('@/components/ui/BackButton', () => ({
 const pastSession = {
   id: 'session-past-1',
   status: 'completed',
-  createdAt: '2026-01-15T10:00:00Z',
+  created_at: '2026-01-15T10:00:00Z',
   problem: { title: 'Past Problem', description: 'A completed problem' },
   participants: ['student-1', 'student-2'],
 };
@@ -77,7 +77,7 @@ describe('SectionDetailPage', () => {
     const viewBtn = await screen.findByText('View');
     await userEvent.click(viewBtn);
 
-    expect(mockPush).toHaveBeenCalledWith('/student?sessionId=session-past-1');
+    expect(mockPush).toHaveBeenCalledWith('/student?session_id=session-past-1');
   });
 
   it('does not show Reopen button on section detail page', async () => {

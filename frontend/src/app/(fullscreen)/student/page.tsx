@@ -21,7 +21,7 @@ function StudentPage() {
   const router = useRouter();
   const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
-  const sessionIdFromUrl = searchParams.get('sessionId');
+  const sessionIdFromUrl = searchParams.get('session_id');
   const { refetch: refetchSessions } = useSessionHistory();
 
   const [joined, setJoined] = useState(false);
@@ -29,15 +29,15 @@ function StudentPage() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   }>({});
   const [studentExecutionSettings, setStudentExecutionSettings] = useState<{
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   } | null>(null);
   const [code, setCode] = useState('');
-  const [executionResult, setExecutionResult] = useState<any>(null);
+  const [execution_result, setExecutionResult] = useState<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
@@ -58,8 +58,8 @@ function StudentPage() {
     joinSession,
     replacementInfo,
   } = useRealtimeSession({
-    sessionId: sessionIdFromUrl || '',
-    userId: user?.ID,
+    session_id: sessionIdFromUrl || '',
+    user_id: user?.ID,
     userName: user?.DisplayName || user?.Email,
   });
 
@@ -80,7 +80,7 @@ function StudentPage() {
     return () => setHeaderSlot(null);
   }, [joined, connectionStatus, connectionError, setHeaderSlot]);
 
-  // Track if we've already initiated a join for this sessionId to prevent loops
+  // Track if we've already initiated a join for this session_id to prevent loops
   const joinAttemptedRef = useRef<string | null>(null);
 
   // Handle joining the session
@@ -136,8 +136,8 @@ function StudentPage() {
           if (result?.student?.code) {
             setCode(result.student.code);
           }
-          if (result?.student?.executionSettings) {
-            setStudentExecutionSettings(result.student.executionSettings);
+          if (result?.student?.execution_settings) {
+            setStudentExecutionSettings(result.student.execution_settings);
           }
         })
         .catch((err) => {
@@ -152,9 +152,9 @@ function StudentPage() {
     if (session?.problem) {
       setProblem(session.problem as Problem);
       setSessionExecutionSettings({
-        stdin: session.problem.executionSettings?.stdin,
-        randomSeed: session.problem.executionSettings?.randomSeed,
-        attachedFiles: session.problem.executionSettings?.attachedFiles,
+        stdin: session.problem.execution_settings?.stdin,
+        random_seed: session.problem.execution_settings?.random_seed,
+        attached_files: session.problem.execution_settings?.attached_files,
       });
     }
   }, [session]);
@@ -201,12 +201,12 @@ function StudentPage() {
     if (oldSessionId) {
       sessionStorage.removeItem(`left-session:${oldSessionId}`);
     }
-    router.push(`/student?sessionId=${replacementInfo.newSessionId}`);
+    router.push(`/student?session_id=${replacementInfo.newSessionId}`);
   }, [replacementInfo, sessionIdFromUrl, router]);
 
   const editorRef = useRef<any>(null);
 
-  const applyStarterCode = useCallback((starterCode: string) => {
+  const applyStarterCode = useCallback((starter_code: string) => {
     // Use Monaco editor API to preserve undo history
     if (editorRef.current) {
       const editor = editorRef.current;
@@ -215,21 +215,21 @@ function StudentPage() {
         const fullRange = model.getFullModelRange();
         editor.executeEdits('load-starter-code', [{
           range: fullRange,
-          text: starterCode,
+          text: starter_code,
         }]);
       }
     } else {
-      setCode(starterCode);
+      setCode(starter_code);
     }
   }, []);
 
-  const handleLoadStarterCode = useCallback((starterCode: string) => {
+  const handleLoadStarterCode = useCallback((starter_code: string) => {
     if (code.trim().length > 0) {
       // Ask for confirmation if there's existing code
-      setPendingStarterCode(starterCode);
+      setPendingStarterCode(starter_code);
       setShowReplaceCodeConfirm(true);
     } else {
-      applyStarterCode(starterCode);
+      applyStarterCode(starter_code);
     }
   }, [code, applyStarterCode]);
 
@@ -241,7 +241,7 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  const handleRunCode = async (executionSettings: ExecutionSettings) => {
+  const handleRunCode = async (execution_settings: ExecutionSettings) => {
     if (!isConnected) {
       setError('Not connected to server. Cannot run code.');
       return;
@@ -260,7 +260,7 @@ function StudentPage() {
     setExecutionResult(null);
 
     try {
-      const result = await realtimeExecuteCode(studentId, code, executionSettings);
+      const result = await realtimeExecuteCode(studentId, code, execution_settings);
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
@@ -269,7 +269,7 @@ function StudentPage() {
     }
   };
 
-  // No sessionId in URL - show error message (check before loading to avoid infinite loading)
+  // No session_id in URL - show error message (check before loading to avoid infinite loading)
   if (!sessionIdFromUrl) {
     return (
       <main className="p-8 text-center">
@@ -357,11 +357,11 @@ function StudentPage() {
           onRun={sessionEnded ? undefined : handleRunCode}
           isRunning={isRunning}
           exampleInput={sessionExecutionSettings.stdin}
-          randomSeed={studentExecutionSettings?.randomSeed !== undefined ? studentExecutionSettings.randomSeed : sessionExecutionSettings.randomSeed}
-          onRandomSeedChange={(seed) => setStudentExecutionSettings(prev => ({ ...prev, randomSeed: seed }))}
-          attachedFiles={studentExecutionSettings?.attachedFiles !== undefined ? studentExecutionSettings.attachedFiles : sessionExecutionSettings.attachedFiles}
-          onAttachedFilesChange={(files) => setStudentExecutionSettings(prev => ({ ...prev, attachedFiles: files }))}
-          executionResult={executionResult}
+          random_seed={studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed}
+          onRandomSeedChange={(seed) => setStudentExecutionSettings(prev => ({ ...prev, random_seed: seed }))}
+          attached_files={studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files}
+          onAttachedFilesChange={(files) => setStudentExecutionSettings(prev => ({ ...prev, attached_files: files }))}
+          execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={sessionEnded ? undefined : handleLoadStarterCode}
           externalEditorRef={editorRef}

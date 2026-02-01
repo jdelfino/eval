@@ -48,7 +48,7 @@ describe('useSessionOperations', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 'section-1' });
     });
 
-    it('creates a session with a problemId', async () => {
+    it('creates a session with a problem_id', async () => {
       const mockSession = {
         id: 'session-1',
         section_id: 'section-1',
@@ -124,12 +124,12 @@ describe('useSessionOperations', () => {
     const mockProblem = {
       title: 'Test Problem',
       description: 'Test description',
-      starterCode: 'print("test")',
+      starter_code: 'print("test")',
     };
 
     const mockSettings = {
       stdin: 'test input',
-      randomSeed: 42,
+      random_seed: 42,
     };
 
     it('updates a problem successfully', async () => {

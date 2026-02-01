@@ -41,8 +41,8 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 // Mock SessionView component
 jest.mock('../../../components/SessionView', () => ({
   SessionView: function MockSessionView({
-    sessionId,
-    joinCode,
+    session_id,
+    join_code,
     sessionContext,
     students,
     onEndSession,
@@ -51,12 +51,12 @@ jest.mock('../../../components/SessionView', () => ({
   }: any) {
     return (
       <div data-testid="session-view">
-        <span data-testid="session-id">{sessionId}</span>
-        <span data-testid="join-code">{joinCode}</span>
-        <span data-testid="section-name">{sessionContext?.sectionName}</span>
+        <span data-testid="session-id">{session_id}</span>
+        <span data-testid="join-code">{join_code}</span>
+        <span data-testid="section-name">{sessionContext?.section_name}</span>
         <span data-testid="student-count">{students.length}</span>
         <button onClick={onEndSession} data-testid="end-session-btn">End Session</button>
-        <button onClick={() => onUpdateProblem({ title: 'Updated', description: '', starterCode: '' })} data-testid="update-problem-btn">Update Problem</button>
+        <button onClick={() => onUpdateProblem({ title: 'Updated', description: '', starter_code: '' })} data-testid="update-problem-btn">Update Problem</button>
         <button onClick={() => onFeatureStudent('student-1')} data-testid="feature-student-btn">Feature Student</button>
       </div>
     );
@@ -101,22 +101,22 @@ describe('InstructorSessionPage', () => {
 
   const mockSession = {
     id: 'session-123',
-    joinCode: 'ABC123',
-    sectionId: 'section-1',
-    sectionName: 'Morning Section',
+    join_code: 'ABC123',
+    section_id: 'section-1',
+    section_name: 'Morning Section',
     status: 'active',
     problem: {
       id: 'problem-1',
       title: 'Test Problem',
       description: 'A test problem',
-      starterCode: 'print("Hello")',
-      executionSettings: { stdin: 'test' },
+      starter_code: 'print("Hello")',
+      execution_settings: { stdin: 'test' },
     },
   };
 
   const mockStudents = [
-    { userId: 'student-1', name: 'Alice', code: 'print("Hello")', executionSettings: {} },
-    { userId: 'student-2', name: 'Bob', code: '', executionSettings: {} },
+    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', execution_settings: {} },
+    { user_id: 'student-2', name: 'Bob', code: '', execution_settings: {} },
   ];
 
   const mockClearFeaturedStudent = jest.fn();
@@ -381,7 +381,7 @@ describe('InstructorSessionPage', () => {
       await waitFor(() => {
         expect(mockUpdateProblem).toHaveBeenCalledWith(
           'session-123',
-          { title: 'Updated', description: '', starterCode: '' },
+          { title: 'Updated', description: '', starter_code: '' },
           undefined
         );
       });
@@ -454,12 +454,12 @@ describe('InstructorSessionPage', () => {
   });
 
   describe('Hook Integration', () => {
-    it('passes correct sessionId to useRealtimeSession', () => {
+    it('passes correct session_id to useRealtimeSession', () => {
       render(<InstructorSessionPage />);
 
       expect(useRealtimeSession).toHaveBeenCalledWith({
-        sessionId: 'session-123',
-        userId: 'user-1',
+        session_id: 'session-123',
+        user_id: 'user-1',
         userName: 'Test Instructor',
       });
     });
@@ -473,8 +473,8 @@ describe('InstructorSessionPage', () => {
       render(<InstructorSessionPage />);
 
       expect(useRealtimeSession).toHaveBeenCalledWith({
-        sessionId: 'session-123',
-        userId: 'user-1',
+        session_id: 'session-123',
+        user_id: 'user-1',
         userName: 'instructor@example.com',
       });
     });
@@ -484,10 +484,10 @@ describe('InstructorSessionPage', () => {
     it('transforms realtime students to display format', () => {
       const studentsWithSettings = [
         {
-          userId: 'student-1',
+          user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
-          executionSettings: { stdin: 'test input', randomSeed: 42 },
+          execution_settings: { stdin: 'test input', random_seed: 42 },
         },
       ];
 

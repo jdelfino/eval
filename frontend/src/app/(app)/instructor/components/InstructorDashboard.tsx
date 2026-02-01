@@ -20,7 +20,7 @@ interface SectionInfo {
   id: string;
   name: string;
   semester?: string;
-  joinCode: string;
+  join_code: string;
   studentCount: number;
   activeSessionId?: string;
 }
@@ -34,9 +34,9 @@ interface ClassWithSections {
 
 interface InstructorDashboardProps {
   /** Callback when user wants to start a new session for a section */
-  onStartSession: (sectionId: string, sectionName: string) => void;
+  onStartSession: (section_id: string, section_name: string) => void;
   /** Callback when user wants to rejoin an existing active session */
-  onRejoinSession: (sessionId: string) => void;
+  onRejoinSession: (session_id: string) => void;
 }
 
 export function InstructorDashboard({
@@ -256,7 +256,7 @@ export function InstructorDashboard({
                         {section.name}
                       </Link>
                       <div className="text-xs text-gray-500 font-mono" data-testid="join-code">
-                        {formatJoinCodeForDisplay(section.joinCode)}
+                        {formatJoinCodeForDisplay(section.join_code)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

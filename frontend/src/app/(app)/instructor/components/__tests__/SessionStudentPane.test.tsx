@@ -38,7 +38,7 @@ let mockScript: WalkthroughScript | null = null;
 let mockGroups: AnalysisGroup[] = [];
 let mockActiveGroupIndex = 0;
 let mockOverallNote: string | null = null;
-let mockCompletionEstimate: { finished: number; inProgress: number; notStarted: number } | null = null;
+let mockCompletionEstimate: { finished: number; in_progress: number; not_started: number } | null = null;
 let mockFinishedStudentIds: Set<string> = new Set();
 
 jest.mock('../../hooks/useAnalysisGroups', () => {
@@ -49,9 +49,9 @@ jest.mock('../../hooks/useAnalysisGroups', () => {
     groups: mockGroups,
     activeGroup: mockGroups.length > 0 ? mockGroups[mockActiveGroupIndex] ?? null : null,
     activeGroupIndex: mockActiveGroupIndex,
-    overallNote: mockOverallNote,
-    completionEstimate: mockCompletionEstimate,
-    finishedStudentIds: mockFinishedStudentIds,
+    overall_note: mockOverallNote,
+    completion_estimate: mockCompletionEstimate,
+    finished_student_ids: mockFinishedStudentIds,
     analyze: mockAnalyze,
     navigateGroup: mockNavigateGroup,
     setActiveGroupIndex: jest.fn(),
@@ -96,9 +96,9 @@ jest.mock('../StudentAnalysisDetails', () => {
 
 describe('SessionStudentPane', () => {
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', hasCode: true, executionSettings: {} },
-    { id: 'student-2', name: 'Bob', hasCode: false, executionSettings: {} },
-    { id: 'student-3', name: 'Carol', hasCode: true, executionSettings: { randomSeed: 42 } },
+    { id: 'student-1', name: 'Alice', has_code: true, execution_settings: {} },
+    { id: 'student-2', name: 'Bob', has_code: false, execution_settings: {} },
+    { id: 'student-3', name: 'Carol', has_code: true, execution_settings: { random_seed: 42 } },
   ];
 
   const mockRealtimeStudents = [
@@ -108,12 +108,12 @@ describe('SessionStudentPane', () => {
   ];
 
   const defaultProps = {
-    sessionId: 'session-123',
+    session_id: 'session-123',
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: null,
     sessionExecutionSettings: {},
-    joinCode: 'ABC123',
+    join_code: 'ABC123',
   };
 
   const mockIssues: AnalysisIssue[] = [
@@ -121,18 +121,18 @@ describe('SessionStudentPane', () => {
       title: 'Missing edge case handling',
       explanation: 'Good teaching moment about edge cases',
       count: 1,
-      studentIds: ['student-1'],
-      representativeStudentLabel: 'Student A',
-      representativeStudentId: 'student-1',
+      student_ids: ['student-1'],
+      representative_student_label: 'Student A',
+      representative_student_id: 'student-1',
       severity: 'error',
     },
     {
       title: 'Clean solution with good naming',
       explanation: 'Show as example of best practices',
       count: 1,
-      studentIds: ['student-3'],
-      representativeStudentLabel: 'Student C',
-      representativeStudentId: 'student-3',
+      student_ids: ['student-3'],
+      representative_student_label: 'Student C',
+      representative_student_id: 'student-3',
       severity: 'good-pattern',
     },
   ];
@@ -150,43 +150,43 @@ describe('SessionStudentPane', () => {
   });
 
   const mockWalkthroughScript: WalkthroughScript = {
-    sessionId: 'session-123',
+    session_id: 'session-123',
     issues: mockIssues,
-    finishedStudentIds: ['student-2'],
+    finished_student_ids: ['student-2'],
     summary: {
-      totalSubmissions: 3,
-      filteredOut: 1,
-      analyzedSubmissions: 2,
-      completionEstimate: { finished: 2, inProgress: 1, notStarted: 0 },
+      total_submissions: 3,
+      filtered_out: 1,
+      analyzed_submissions: 2,
+      completion_estimate: { finished: 2, in_progress: 1, not_started: 0 },
     },
-    overallNote: 'Students are progressing well',
-    generatedAt: new Date('2026-01-29T00:00:00Z'),
+    overall_note: 'Students are progressing well',
+    generated_at: new Date('2026-01-29T00:00:00Z'),
   };
 
   function setAnalysisReady() {
     mockAnalysisState = 'ready';
     mockScript = mockWalkthroughScript;
     mockOverallNote = 'Students are progressing well';
-    mockCompletionEstimate = { finished: 2, inProgress: 1, notStarted: 0 };
+    mockCompletionEstimate = { finished: 2, in_progress: 1, not_started: 0 };
     mockFinishedStudentIds = new Set(['student-2']);
     mockGroups = [
       {
         id: 'all',
         label: 'All Submissions',
-        studentIds: [],
+        student_ids: [],
         recommendedStudentId: null,
       },
       {
         id: '0',
         label: 'Missing edge case handling',
-        studentIds: ['student-1'],
+        student_ids: ['student-1'],
         recommendedStudentId: 'student-1',
         issue: mockIssues[0],
       },
       {
         id: '1',
         label: 'Clean solution with good naming',
-        studentIds: ['student-3'],
+        student_ids: ['student-3'],
         recommendedStudentId: 'student-3',
         issue: mockIssues[1],
       },
@@ -227,7 +227,7 @@ describe('SessionStudentPane', () => {
       expect(btn).toBeDisabled();
     });
 
-    it('calls analyze with sessionId when clicked', () => {
+    it('calls analyze with session_id when clicked', () => {
       render(<SessionStudentPane {...defaultProps} />);
       fireEvent.click(screen.getByTestId('analyze-button'));
       expect(mockAnalyze).toHaveBeenCalledWith('session-123');
@@ -561,7 +561,7 @@ describe('SessionStudentPane', () => {
           {...defaultProps}
           students={[]}
           realtimeStudents={[]}
-          joinCode="XYZ789"
+          join_code="XYZ789"
         />
       );
 

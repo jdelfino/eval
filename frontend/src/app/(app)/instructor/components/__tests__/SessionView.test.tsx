@@ -10,17 +10,17 @@ import { SessionView } from '../SessionView';
 // Mock child components
 jest.mock('../SessionControls', () => {
   return function MockSessionControls({
-    sessionId,
-    sectionName,
-    joinCode,
+    session_id,
+    section_name,
+    join_code,
     connectedStudentCount,
     onEndSession,
   }: any) {
     return (
       <div data-testid="session-controls">
-        <span data-testid="session-id">{sessionId}</span>
-        <span data-testid="section-name">{sectionName}</span>
-        <span data-testid="join-code">{joinCode}</span>
+        <span data-testid="session-id">{session_id}</span>
+        <span data-testid="section-name">{section_name}</span>
+        <span data-testid="join-code">{join_code}</span>
         <span data-testid="student-count">{connectedStudentCount}</span>
         <button onClick={onEndSession} data-testid="end-session-btn">End Session</button>
       </div>
@@ -30,14 +30,14 @@ jest.mock('../SessionControls', () => {
 
 jest.mock('../SessionStudentPane', () => ({
   SessionStudentPane: function MockSessionStudentPane({
-    sessionId,
+    session_id,
     students,
     onShowOnPublicView,
     onViewHistory,
   }: any) {
     return (
       <div data-testid="session-student-pane">
-        <span data-testid="student-pane-session-id">{sessionId}</span>
+        <span data-testid="student-pane-session-id">{session_id}</span>
         <span data-testid="student-count-pane">{students.length}</span>
         <button
           onClick={() => onShowOnPublicView?.('student-1')}
@@ -65,7 +65,7 @@ jest.mock('../ProblemSetupPanel', () => ({
       <div data-testid="problem-setup-panel">
         <span data-testid="problem-title">{initialProblem?.title || 'No problem'}</span>
         <button
-          onClick={() => onUpdateProblem({ title: 'Updated', description: '', starterCode: '' })}
+          onClick={() => onUpdateProblem({ title: 'Updated', description: '', starter_code: '' })}
           data-testid="update-problem-btn"
         >
           Update Problem
@@ -101,8 +101,8 @@ jest.mock('../RevisionViewer', () => {
 
 describe('SessionView', () => {
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', hasCode: true, executionSettings: {} },
-    { id: 'student-2', name: 'Bob', hasCode: false, executionSettings: {} },
+    { id: 'student-1', name: 'Alice', has_code: true, execution_settings: {} },
+    { id: 'student-2', name: 'Bob', has_code: false, execution_settings: {} },
   ];
 
   const mockRealtimeStudents = [
@@ -114,19 +114,19 @@ describe('SessionView', () => {
     id: 'problem-1',
     title: 'Test Problem',
     description: 'A test problem',
-    starterCode: 'print("start")',
-    namespaceId: 'namespace-1',
-    authorId: 'author-1',
-    classId: 'test-class-id',
+    starter_code: 'print("start")',
+    namespace_id: 'namespace-1',
+    author_id: 'author-1',
+    class_id: 'test-class-id',
     tags: [],
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-02'),
+    created_at: new Date('2024-01-01'),
+    updated_at: new Date('2024-01-02'),
   };
 
   const defaultProps = {
-    sessionId: 'session-123',
-    joinCode: 'ABC123',
-    sessionContext: { sectionId: 'section-1', sectionName: 'Morning Section' },
+    session_id: 'session-123',
+    join_code: 'ABC123',
+    sessionContext: { section_id: 'section-1', section_name: 'Morning Section' },
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: mockProblem,
@@ -134,7 +134,7 @@ describe('SessionView', () => {
     onEndSession: jest.fn().mockResolvedValue(undefined),
     onUpdateProblem: jest.fn().mockResolvedValue(undefined),
     onFeatureStudent: jest.fn().mockResolvedValue(undefined),
-    executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', executionTime: 100 }),
+    executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time: 100 }),
   };
 
   beforeEach(() => {
@@ -173,7 +173,7 @@ describe('SessionView', () => {
       expect(screen.getByTestId('problem-title')).toHaveTextContent('Test Problem');
     });
 
-    it('passes sessionId to SessionStudentPane', () => {
+    it('passes session_id to SessionStudentPane', () => {
       render(<SessionView {...defaultProps} />);
 
       expect(screen.getByTestId('student-pane-session-id')).toHaveTextContent('session-123');
@@ -255,14 +255,14 @@ describe('SessionView', () => {
       fireEvent.click(screen.getByTestId('update-problem-btn'));
 
       expect(defaultProps.onUpdateProblem).toHaveBeenCalledWith(
-        { title: 'Updated', description: '', starterCode: '' }
+        { title: 'Updated', description: '', starter_code: '' }
       );
     });
   });
 
   describe('null/undefined handling', () => {
-    it('handles null joinCode gracefully', () => {
-      render(<SessionView {...defaultProps} joinCode={null} />);
+    it('handles null join_code gracefully', () => {
+      render(<SessionView {...defaultProps} join_code={null} />);
 
       expect(screen.getByTestId('session-controls')).toBeInTheDocument();
     });

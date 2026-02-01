@@ -29,8 +29,8 @@ jest.mock('next/link', () => {
  */
 function buildBreadcrumbItems(
   viewMode: 'classes' | 'sections' | 'problems' | 'sessions' | 'session' | 'details',
-  classContext: { classId: string; className: string } | null,
-  sessionContext: { sectionId: string; sectionName: string } | null,
+  classContext: { class_id: string; className: string } | null,
+  sessionContext: { section_id: string; section_name: string } | null,
   problemSubView: 'library' | 'creator'
 ): BreadcrumbItem[] {
   const items: BreadcrumbItem[] = [];
@@ -74,7 +74,7 @@ function buildBreadcrumbItems(
 
   // Add section name for active session
   if (sessionContext && viewMode === 'session') {
-    items.push({ label: sessionContext.sectionName });
+    items.push({ label: sessionContext.section_name });
   }
 
   // Add Session Details for details view
@@ -99,7 +99,7 @@ describe('Instructor Breadcrumb Integration', () => {
 
     describe('Sections view', () => {
       it('should show "Classes > ClassName" path', () => {
-        const classContext = { classId: 'class-1', className: 'CS 101' };
+        const classContext = { class_id: 'class-1', className: 'CS 101' };
         const items = buildBreadcrumbItems('sections', classContext, null, 'library');
 
         expect(items).toHaveLength(2);
@@ -108,7 +108,7 @@ describe('Instructor Breadcrumb Integration', () => {
       });
 
       it('should handle class names with special characters', () => {
-        const classContext = { classId: 'class-1', className: 'CS 101 & Math 200' };
+        const classContext = { class_id: 'class-1', className: 'CS 101 & Math 200' };
         const items = buildBreadcrumbItems('sections', classContext, null, 'library');
 
         expect(items[1]).toEqual({ label: 'CS 101 & Math 200' });
@@ -117,8 +117,8 @@ describe('Instructor Breadcrumb Integration', () => {
 
     describe('Session view', () => {
       it('should show "Classes > ClassName > SectionName" path', () => {
-        const classContext = { classId: 'class-1', className: 'CS 101' };
-        const sessionContext = { sectionId: 'section-1', sectionName: 'Section A' };
+        const classContext = { class_id: 'class-1', className: 'CS 101' };
+        const sessionContext = { section_id: 'section-1', section_name: 'Section A' };
         const items = buildBreadcrumbItems('session', classContext, sessionContext, 'library');
 
         expect(items).toHaveLength(3);
@@ -128,7 +128,7 @@ describe('Instructor Breadcrumb Integration', () => {
       });
 
       it('should handle session without class context', () => {
-        const sessionContext = { sectionId: 'section-1', sectionName: 'Section A' };
+        const sessionContext = { section_id: 'section-1', section_name: 'Section A' };
         const items = buildBreadcrumbItems('session', null, sessionContext, 'library');
 
         expect(items).toHaveLength(2);
@@ -182,7 +182,7 @@ describe('Instructor Breadcrumb Integration', () => {
     });
 
     it('should render Sections view breadcrumb with clickable link', () => {
-      const classContext = { classId: 'class-1', className: 'CS 101' };
+      const classContext = { class_id: 'class-1', className: 'CS 101' };
       const items = buildBreadcrumbItems('sections', classContext, null, 'library');
       render(<Breadcrumb items={items} />);
 
@@ -192,8 +192,8 @@ describe('Instructor Breadcrumb Integration', () => {
     });
 
     it('should render Session view breadcrumb with navigation hierarchy', () => {
-      const classContext = { classId: 'class-1', className: 'CS 101' };
-      const sessionContext = { sectionId: 'section-1', sectionName: 'Section A' };
+      const classContext = { class_id: 'class-1', className: 'CS 101' };
+      const sessionContext = { section_id: 'section-1', section_name: 'Section A' };
       const items = buildBreadcrumbItems('session', classContext, sessionContext, 'library');
       render(<Breadcrumb items={items} />);
 
@@ -203,7 +203,7 @@ describe('Instructor Breadcrumb Integration', () => {
     });
 
     it('should render separators between items', () => {
-      const classContext = { classId: 'class-1', className: 'CS 101' };
+      const classContext = { class_id: 'class-1', className: 'CS 101' };
       const items = buildBreadcrumbItems('sections', classContext, null, 'library');
       render(<Breadcrumb items={items} separator="/" />);
 
@@ -227,8 +227,8 @@ describe('Instructor Breadcrumb Integration', () => {
     });
 
     it('should mark last item as current page', () => {
-      const classContext = { classId: 'class-1', className: 'CS 101' };
-      const sessionContext = { sectionId: 'section-1', sectionName: 'Section A' };
+      const classContext = { class_id: 'class-1', className: 'CS 101' };
+      const sessionContext = { section_id: 'section-1', section_name: 'Section A' };
       const items = buildBreadcrumbItems('session', classContext, sessionContext, 'library');
       render(<Breadcrumb items={items} />);
 

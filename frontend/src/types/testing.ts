@@ -1,7 +1,7 @@
 /**
  * Client-side test case types.
  *
- * Migrated from @/server/testing/types — pure type definitions.
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 export type TestCaseType = 'input-output' | 'pytest' | 'property-based';
@@ -10,21 +10,21 @@ export type OutputMatchType = 'exact' | 'contains' | 'regex';
 
 export interface InputOutputTestConfig {
   input: string;
-  expectedOutput: string;
-  matchType: OutputMatchType;
-  ignoreWhitespace?: boolean;
+  expected_output: string;
+  match_type: OutputMatchType;
+  ignore_whitespace?: boolean;
 }
 
 export interface PyTestConfig {
-  testCode: string;
-  targetFunction?: string;
+  test_code: string;
+  target_function?: string;
   timeout?: number;
 }
 
 export interface PropertyTestConfig {
-  propertyCode: string;
-  strategyConfig?: Record<string, unknown>;
-  maxExamples?: number;
+  property_code: string;
+  strategy_config?: Record<string, unknown>;
+  max_examples?: number;
 }
 
 export type TestConfig =
@@ -34,7 +34,7 @@ export type TestConfig =
 
 export interface TestCase {
   id: string;
-  problemId: string;
+  problem_id: string;
   type: TestCaseType;
   name: string;
   description: string;

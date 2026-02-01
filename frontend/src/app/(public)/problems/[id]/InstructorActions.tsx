@@ -8,13 +8,13 @@ import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section'
 import { apiFetch, apiPost } from '@/lib/api-client';
 
 interface InstructorActionsProps {
-  problemId: string;
-  problemTitle: string;
-  classId: string;
+  problem_id: string;
+  problem_title: string;
+  class_id: string;
   className: string;
 }
 
-export default function InstructorActions({ problemId, problemTitle, classId, className }: InstructorActionsProps) {
+export default function InstructorActions({ problem_id, problem_title, class_id, className }: InstructorActionsProps) {
   const { user, isLoading } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -30,63 +30,63 @@ export default function InstructorActions({ problemId, problemTitle, classId, cl
     if (!isInstructor) return;
 
     const shouldStart = searchParams.get('start') === 'true';
-    const sectionId = searchParams.get('sectionId');
-    if (!shouldStart || !sectionId) return;
+    const section_id = searchParams.get('section_id');
+    if (!shouldStart || !section_id) return;
 
     autoStartAttempted.current = true;
 
     (async () => {
       try {
-        const { session } = await apiPost<{ session: { id: string } }>('/sessions', { sectionId, problemId });
-        setLastUsedSection(sectionId, classId);
+        const { session } = await apiPost<{ session: { id: string } }>('/sessions', { section_id, problem_id });
+        setLastUsedSection(section_id, class_id);
         const channel = new BroadcastChannel('instructor-session-created');
-        channel.postMessage({ sessionId: session.id, problemTitle });
+        channel.postMessage({ session_id: session.id, problem_title });
         channel.close();
-        router.push(`/public-view?sessionId=${session.id}`);
+        router.push(`/public-view?session_id=${session.id}`);
       } catch (err) {
         setAutoStartError(err instanceof Error ? err.message : 'Failed to create session');
       }
     })();
-  }, [isLoading, isInstructor, searchParams, problemId, classId, problemTitle, router]);
+  }, [isLoading, isInstructor, searchParams, problem_id, class_id, problem_title, router]);
 
   if (isLoading) return null;
   if (!isInstructor) return null;
 
-  const handleSessionCreated = (sessionId: string) => {
+  const handleSessionCreated = (session_id: string) => {
     const channel = new BroadcastChannel('instructor-session-created');
-    channel.postMessage({ sessionId, problemTitle });
+    channel.postMessage({ session_id, problem_title });
     channel.close();
-    router.push(`/public-view?sessionId=${sessionId}`);
+    router.push(`/public-view?session_id=${session_id}`);
   };
 
-  const createSession = async (sectionId: string) => {
-    const { session } = await apiPost<{ session: { id: string } }>('/sessions', { sectionId, problemId });
+  const createSession = async (section_id: string) => {
+    const { session } = await apiPost<{ session: { id: string } }>('/sessions', { section_id, problem_id });
     return session;
   };
 
   const handleStartSession = async () => {
     setStarting(true);
     try {
-      const response = await apiFetch(`/classes/${classId}/sections`);
+      const response = await apiFetch(`/classes/${class_id}/sections`);
       const data = await response.json();
-      const sections: { id: string; name: string; joinCode: string }[] = data.sections || [];
+      const sections: { id: string; name: string; join_code: string }[] = data.sections || [];
 
       // Auto-start if only one section
       if (sections.length === 1) {
         const section = sections[0];
         const session = await createSession(section.id);
-        setLastUsedSection(section.id, classId);
+        setLastUsedSection(section.id, class_id);
         handleSessionCreated(session.id);
         return;
       }
 
       // Auto-start if last-used section matches this class and exists in sections
       const lastUsed = getLastUsedSection();
-      if (lastUsed && lastUsed.classId === classId) {
-        const matchingSection = sections.find(s => s.id === lastUsed.sectionId);
+      if (lastUsed && lastUsed.class_id === class_id) {
+        const matchingSection = sections.find(s => s.id === lastUsed.section_id);
         if (matchingSection) {
           const session = await createSession(matchingSection.id);
-          setLastUsedSection(matchingSection.id, classId);
+          setLastUsedSection(matchingSection.id, class_id);
           handleSessionCreated(session.id);
           return;
         }
@@ -128,14 +128,14 @@ export default function InstructorActions({ problemId, problemTitle, classId, cl
       )}
       {showModal && (
         <CreateSessionFromProblemModal
-          problemId={problemId}
-          problemTitle={problemTitle}
-          classId={classId}
+          problem_id={problem_id}
+          problem_title={problem_title}
+          class_id={class_id}
           className={className}
           onClose={() => setShowModal(false)}
-          onSuccess={(sessionId) => {
+          onSuccess={(session_id) => {
             setShowModal(false);
-            handleSessionCreated(sessionId);
+            handleSessionCreated(session_id);
           }}
         />
       )}

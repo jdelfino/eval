@@ -11,7 +11,7 @@ jest.mock('@/hooks/useDebugger', () => ({
   useDebugger: jest.fn(() => ({
     isDebugging: false,
     currentStep: 0,
-    totalSteps: 0,
+    total_steps: 0,
     currentTrace: null,
     startDebugging: jest.fn(),
     stopDebugging: jest.fn(),
@@ -110,7 +110,7 @@ describe('SessionProblemEditor', () => {
     const initialProblem = {
       title: 'Test Problem',
       description: 'Test description',
-      starterCode: 'print("hello")',
+      starter_code: 'print("hello")',
     };
 
     render(
@@ -128,8 +128,8 @@ describe('SessionProblemEditor', () => {
   it('renders with initial execution settings', () => {
     const initialExecutionSettings = {
       stdin: 'test input',
-      randomSeed: 42,
-      attachedFiles: [{ name: 'test.txt', content: 'content' }],
+      random_seed: 42,
+      attached_files: [{ name: 'test.txt', content: 'content' }],
     };
 
     render(
@@ -207,7 +207,7 @@ describe('SessionProblemEditor', () => {
       {
         title: 'My Title',
         description: 'My description',
-        starterCode: 'print("code")',
+        starter_code: 'print("code")',
       },
       undefined // No execution settings set
     );
@@ -254,7 +254,7 @@ describe('SessionProblemEditor', () => {
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        randomSeed: 42,
+        random_seed: 42,
       })
     );
   });
@@ -282,7 +282,7 @@ describe('SessionProblemEditor', () => {
       {
         title: 'Title with spaces',
         description: 'Description with spaces',
-        starterCode: 'code with spaces',
+        starter_code: 'code with spaces',
       },
       undefined
     );
@@ -295,7 +295,7 @@ describe('SessionProblemEditor', () => {
         initialProblem={{
           title: 'Initial',
           description: 'Initial desc',
-          starterCode: 'initial code',
+          starter_code: 'initial code',
         }}
       />
     );
@@ -309,7 +309,7 @@ describe('SessionProblemEditor', () => {
         initialProblem={{
           title: 'Updated',
           description: 'Updated desc',
-          starterCode: 'updated code',
+          starter_code: 'updated code',
         }}
       />
     );
@@ -322,12 +322,12 @@ describe('SessionProblemEditor', () => {
     const initialProblem = {
       title: 'Test',
       description: 'Test',
-      starterCode: 'test code',
+      starter_code: 'test code',
     };
     const initialSettings = {
       stdin: 'input',
-      randomSeed: 123,
-      attachedFiles: [{ name: 'file.txt', content: 'content' }],
+      random_seed: 123,
+      attached_files: [{ name: 'file.txt', content: 'content' }],
     };
 
     render(

@@ -128,28 +128,28 @@ describe('SessionEndedNotification', () => {
     });
 
     it('copies code to clipboard when Copy Code button is clicked', async () => {
-      const testCode = "print('hello world')";
+      const test_code = "print('hello world')";
       render(
         <SessionEndedNotification
           onLeaveToDashboard={mockOnLeaveToDashboard}
-          code={testCode}
+          code={test_code}
         />
       );
 
       fireEvent.click(screen.getByTestId('copy-code-button'));
 
       await waitFor(() => {
-        expect(navigator.clipboard.writeText).toHaveBeenCalledWith(testCode);
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith(test_code);
       });
     });
 
     it('shows Copied! message after successful copy', async () => {
       jest.useFakeTimers();
-      const testCode = "print('hello world')";
+      const test_code = "print('hello world')";
       render(
         <SessionEndedNotification
           onLeaveToDashboard={mockOnLeaveToDashboard}
-          code={testCode}
+          code={test_code}
         />
       );
 
@@ -182,11 +182,11 @@ describe('SessionEndedNotification', () => {
       const mockExecCommand = jest.fn().mockReturnValue(true);
       document.execCommand = mockExecCommand;
 
-      const testCode = "print('hello world')";
+      const test_code = "print('hello world')";
       render(
         <SessionEndedNotification
           onLeaveToDashboard={mockOnLeaveToDashboard}
-          code={testCode}
+          code={test_code}
         />
       );
 

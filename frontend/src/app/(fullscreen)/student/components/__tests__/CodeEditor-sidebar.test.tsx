@@ -56,13 +56,13 @@ describe('CodeEditor - Problem Sidebar', () => {
   it('should show problem sidebar open by default when problem exists', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: 'This is a test problem description',
-      starterCode: 'def solution():\n    pass',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: 'def solution():\n    pass',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(
@@ -86,13 +86,13 @@ describe('CodeEditor - Problem Sidebar', () => {
   it('should persist sidebar state in localStorage', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: 'Test description',
-      starterCode: 'def solution():\n    pass',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: 'def solution():\n    pass',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     const { rerender } = render(
@@ -141,13 +141,13 @@ describe('CodeEditor - Problem Sidebar', () => {
   it('should show execution settings collapsed by default when problem is present', async () => {
     const problem = {
       id: 'problem-1',
-      authorId: 'instructor-1',
+      author_id: 'instructor-1',
       title: 'Test Problem',
       description: 'Test description',
-      starterCode: 'def solution():\n    pass',
-      executionSettings: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      starter_code: 'def solution():\n    pass',
+      execution_settings: {},
+      created_at: new Date(),
+      updated_at: new Date(),
     };
 
     render(

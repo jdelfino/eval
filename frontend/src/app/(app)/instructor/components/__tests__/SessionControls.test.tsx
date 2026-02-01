@@ -11,7 +11,7 @@ describe('SessionControls', () => {
   const mockOnEndSession = jest.fn();
 
   const defaultProps = {
-    sessionId: 'session-123',
+    session_id: 'session-123',
     onEndSession: mockOnEndSession,
   };
 
@@ -26,7 +26,7 @@ describe('SessionControls', () => {
   });
 
   it('should display section name when provided', () => {
-    render(<SessionControls {...defaultProps} sectionName="Section A - MWF 10am" />);
+    render(<SessionControls {...defaultProps} section_name="Section A - MWF 10am" />);
 
     expect(screen.getByText('Active Session')).toBeInTheDocument();
     expect(screen.getByText('Section A - MWF 10am')).toBeInTheDocument();
@@ -146,12 +146,12 @@ describe('SessionControls', () => {
       expect(mockOnEndSession).not.toHaveBeenCalled();
     });
 
-    it('should show Clear Public View button when featuredStudentId is set', () => {
+    it('should show Clear Public View button when featured_student_id is set', () => {
       const mockOnClearPublicView = jest.fn();
       render(
         <SessionControls
           {...defaultProps}
-          featuredStudentId="student-1"
+          featured_student_id="student-1"
           onClearPublicView={mockOnClearPublicView}
         />
       );

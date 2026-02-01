@@ -19,7 +19,7 @@ describe('useDebugger', () => {
         event: 'line',
         locals: {},
         globals: {},
-        callStack: [{ functionName: '<module>', filename: '<string>', line: 1 }],
+        call_stack: [{ function_name: '<module>', filename: '<string>', line: 1 }],
         stdout: ''
       },
       {
@@ -27,7 +27,7 @@ describe('useDebugger', () => {
         event: 'line',
         locals: { x: 5 },
         globals: {},
-        callStack: [{ functionName: '<module>', filename: '<string>', line: 2 }],
+        call_stack: [{ function_name: '<module>', filename: '<string>', line: 2 }],
         stdout: ''
       },
       {
@@ -35,12 +35,12 @@ describe('useDebugger', () => {
         event: 'line',
         locals: { x: 5, y: 10 },
         globals: {},
-        callStack: [{ functionName: '<module>', filename: '<string>', line: 3 }],
+        call_stack: [{ function_name: '<module>', filename: '<string>', line: 3 }],
         stdout: ''
       }
     ],
-    totalSteps: 3,
-    exitCode: 0,
+    total_steps: 3,
+    exit_code: 0,
     truncated: false
   };
 
@@ -226,9 +226,9 @@ describe('useDebugger', () => {
       result.current.setTrace(mockTrace);
     });
 
-    const callStack = result.current.getCurrentCallStack();
-    expect(callStack).toHaveLength(1);
-    expect(callStack[0].functionName).toBe('<module>');
+    const call_stack = result.current.getCurrentCallStack();
+    expect(call_stack).toHaveLength(1);
+    expect(call_stack[0].function_name).toBe('<module>');
   });
 
   it('provides correct navigation flags', () => {

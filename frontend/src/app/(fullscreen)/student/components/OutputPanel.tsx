@@ -7,7 +7,7 @@ interface ExecutionResult {
   success: boolean;
   output: string;
   error: string;
-  executionTime: number;
+  execution_time: number;
   stdin?: string; // Input provided to the program
 }
 
@@ -86,7 +86,7 @@ export default function OutputPanel({ result, isConnected = true, isRunning = fa
       )}
 
       <div className="text-sm text-gray-500 mt-2">
-        Execution time: {result.executionTime}ms
+        Execution time: {result.execution_time}ms
       </div>
     </div>
   );

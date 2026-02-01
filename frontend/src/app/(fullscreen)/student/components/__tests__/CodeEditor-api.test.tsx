@@ -75,8 +75,8 @@ describe('CodeEditor Component', () => {
 
       expect(mockOnRun).toHaveBeenCalledWith({ 
         stdin: undefined, 
-        randomSeed: undefined, 
-        attachedFiles: undefined 
+        random_seed: undefined, 
+        attached_files: undefined 
       });
     });
 
@@ -84,11 +84,11 @@ describe('CodeEditor Component', () => {
       const mockOnRun = jest.fn();
       const mockOnChange = jest.fn();
 
-      const executionResult = {
+      const execution_result = {
         success: true,
         output: 'Hello, World!\n',
         error: '',
-        executionTime: 125,
+        execution_time: 125,
       };
 
       render(
@@ -96,7 +96,7 @@ describe('CodeEditor Component', () => {
           code="print('Hello, World!')"
           onChange={mockOnChange}
           onRun={mockOnRun}
-          executionResult={executionResult}
+          execution_result={execution_result}
         />
       );
 
@@ -110,11 +110,11 @@ describe('CodeEditor Component', () => {
       const mockOnRun = jest.fn();
       const mockOnChange = jest.fn();
 
-      const executionResult = {
+      const execution_result = {
         success: false,
         output: '',
         error: 'NameError: name "x" is not defined',
-        executionTime: 100,
+        execution_time: 100,
       };
 
       render(
@@ -122,7 +122,7 @@ describe('CodeEditor Component', () => {
           code="print(x)"
           onChange={mockOnChange}
           onRun={mockOnRun}
-          executionResult={executionResult}
+          execution_result={execution_result}
         />
       );
 
@@ -143,7 +143,7 @@ describe('CodeEditor Component', () => {
           success: true,
           output: 'API execution result\n',
           error: '',
-          executionTime: 150,
+          execution_time: 150,
         }),
       });
 
@@ -165,8 +165,8 @@ describe('CodeEditor Component', () => {
           body: JSON.stringify({
             code: "print('API execution')",
             stdin: undefined,
-            randomSeed: undefined,
-            attachedFiles: undefined,
+            random_seed: undefined,
+            attached_files: undefined,
           }),
         });
       });
@@ -231,7 +231,7 @@ describe('CodeEditor Component', () => {
       const mockOnRandomSeedChange = jest.fn();
       const mockOnAttachedFilesChange = jest.fn();
 
-      const attachedFiles = [{ name: 'data.txt', content: 'test data' }];
+      const attached_files = [{ name: 'data.txt', content: 'test data' }];
       const codeToRun = 'import random\nprint(random.randint(1, 100))';
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -240,7 +240,7 @@ describe('CodeEditor Component', () => {
           success: true,
           output: '42\n',
           error: '',
-          executionTime: 125,
+          execution_time: 125,
         }),
       });
 
@@ -249,9 +249,9 @@ describe('CodeEditor Component', () => {
           code={codeToRun}
           onChange={mockOnChange}
           useApiExecution={true}
-          randomSeed={42}
+          random_seed={42}
           onRandomSeedChange={mockOnRandomSeedChange}
-          attachedFiles={attachedFiles}
+          attached_files={attached_files}
           onAttachedFilesChange={mockOnAttachedFilesChange}
           exampleInput="test input"
         />
@@ -271,8 +271,8 @@ describe('CodeEditor Component', () => {
       const body = JSON.parse(callArgs[1].body);
       expect(body.code).toBe(codeToRun);
       expect(body.stdin).toBe('test input');
-      expect(body.randomSeed).toBe(42);
-      expect(body.attachedFiles).toEqual(attachedFiles);
+      expect(body.random_seed).toBe(42);
+      expect(body.attached_files).toEqual(attached_files);
     });
 
     it('should show running state during API execution', async () => {
@@ -308,7 +308,7 @@ describe('CodeEditor Component', () => {
           success: true,
           output: 'Done\n',
           error: '',
-          executionTime: 100,
+          execution_time: 100,
         }),
       });
 

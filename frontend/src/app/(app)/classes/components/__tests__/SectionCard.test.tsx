@@ -34,7 +34,7 @@ describe('SectionCard', () => {
     updated_at: '2025-01-01T00:00:00Z',
   };
 
-  it('renders section name as a link to /sections/{sectionId}', () => {
+  it('renders section name as a link to /sections/{section_id}', () => {
     render(<SectionCard section={mockSection} />);
 
     const link = screen.getByTestId('section-link-section-xyz');

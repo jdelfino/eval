@@ -12,15 +12,15 @@ interface StudentListProps {
   onShowOnPublicView?: (studentId: string) => void;
 
   onViewHistory?: (studentId: string, studentName: string) => void;
-  joinCode?: string;
+  join_code?: string;
   isLoading?: boolean;
-  featuredStudentId?: string | null;
+  featured_student_id?: string | null;
   headerLabel?: string;
   /** Set of student IDs classified as finished by analysis. When provided, enables 3-state badges. */
-  finishedStudentIds?: Set<string>;
+  finished_student_ids?: Set<string>;
 }
 
-export default function StudentList({ students, onSelectStudent, onShowOnPublicView, onViewHistory, joinCode, isLoading = false, featuredStudentId, headerLabel, finishedStudentIds }: StudentListProps) {
+export default function StudentList({ students, onSelectStudent, onShowOnPublicView, onViewHistory, join_code, isLoading = false, featured_student_id, headerLabel, finished_student_ids }: StudentListProps) {
   return (
     <Card variant="default" className="p-4">
       <div className="flex items-center justify-between mb-3">
@@ -35,15 +35,15 @@ export default function StudentList({ students, onSelectStudent, onShowOnPublicV
           <p className="text-gray-500 mb-2">
             Waiting for students to join the session.
           </p>
-          {joinCode && (
+          {join_code && (
             <p className="text-gray-700 m-0">
               Share this join code with your students:{' '}
               <span className="font-mono font-bold bg-gray-200 px-2 py-1 rounded text-blue-600">
-                {joinCode}
+                {join_code}
               </span>
             </p>
           )}
-          {!joinCode && (
+          {!join_code && (
             <p className="text-gray-400 text-sm m-0">
               Students can join using the session join code displayed in the session controls.
             </p>
@@ -52,7 +52,7 @@ export default function StudentList({ students, onSelectStudent, onShowOnPublicV
       ) : (
         <div className="space-y-2">
           {students.map((student) => {
-            const isFeatured = featuredStudentId === student.id;
+            const isFeatured = featured_student_id === student.id;
             return (
               <div
                 key={student.id}
@@ -60,7 +60,7 @@ export default function StudentList({ students, onSelectStudent, onShowOnPublicV
                 className={`p-3 border rounded flex flex-col gap-2 ${
                   isFeatured
                     ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
-                    : `border-gray-200 ${student.hasCode ? 'bg-blue-50' : 'bg-white'}`
+                    : `border-gray-200 ${student.has_code ? 'bg-blue-50' : 'bg-white'}`
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -71,11 +71,11 @@ export default function StudentList({ students, onSelectStudent, onShowOnPublicV
                     </Badge>
                   )}
                   {(() => {
-                    const isFinished = finishedStudentIds?.has(student.id);
+                    const isFinished = finished_student_ids?.has(student.id);
                     if (isFinished) {
                       return <Badge variant="success" className="shrink-0">Finished</Badge>;
                     }
-                    if (student.hasCode) {
+                    if (student.has_code) {
                       return <Badge variant="info" className="shrink-0">In progress</Badge>;
                     }
                     return <Badge variant="default" className="shrink-0">Not started</Badge>;

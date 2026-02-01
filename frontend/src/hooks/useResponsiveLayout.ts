@@ -101,31 +101,31 @@ export function useMobileViewport(): MobileViewportInfo {
 /**
  * Custom hook to manage collapsible sidebar sections with localStorage persistence
  */
-export function useSidebarSection(sectionId: string, defaultCollapsed: boolean = false) {
+export function useSidebarSection(section_id: string, defaultCollapsed: boolean = false) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   useEffect(() => {
     // Load collapsed state from localStorage
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`sidebar-${sectionId}-collapsed`);
+      const saved = localStorage.getItem(`sidebar-${section_id}-collapsed`);
       if (saved !== null) {
         setIsCollapsed(saved === 'true');
       }
     }
-  }, [sectionId]);
+  }, [section_id]);
 
   const toggle = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`sidebar-${sectionId}-collapsed`, String(newState));
+      localStorage.setItem(`sidebar-${section_id}-collapsed`, String(newState));
     }
   };
 
   const setCollapsed = (collapsed: boolean) => {
     setIsCollapsed(collapsed);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`sidebar-${sectionId}-collapsed`, String(collapsed));
+      localStorage.setItem(`sidebar-${section_id}-collapsed`, String(collapsed));
     }
   };
 

@@ -10,11 +10,11 @@ interface Section {
 }
 
 interface CopyLinkDropdownProps {
-  problemId: string;
-  classId: string;
+  problem_id: string;
+  class_id: string;
 }
 
-export function CopyLinkDropdown({ problemId, classId }: CopyLinkDropdownProps) {
+export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sections, setSections] = useState<Section[] | null>(null);
@@ -29,24 +29,24 @@ export function CopyLinkDropdown({ problemId, classId }: CopyLinkDropdownProps) 
 
   const copyGenericLink = useCallback(async () => {
     try {
-      const url = `${window.location.origin}/problems/${problemId}`;
+      const url = `${window.location.origin}/problems/${problem_id}`;
       await navigator.clipboard.writeText(url);
       showCopiedFeedback();
     } catch {
       // Clipboard API not available — ignore silently
     }
-  }, [problemId, showCopiedFeedback]);
+  }, [problem_id, showCopiedFeedback]);
 
-  const copySectionLink = useCallback(async (sectionId: string) => {
+  const copySectionLink = useCallback(async (section_id: string) => {
     try {
-      const url = `${window.location.origin}/problems/${problemId}?start=true&sectionId=${sectionId}`;
+      const url = `${window.location.origin}/problems/${problem_id}?start=true&section_id=${section_id}`;
       await navigator.clipboard.writeText(url);
       showCopiedFeedback();
     } catch {
       // Clipboard API not available — ignore silently
     }
     setIsOpen(false);
-  }, [problemId, showCopiedFeedback]);
+  }, [problem_id, showCopiedFeedback]);
 
   const openDropdown = useCallback(async () => {
     if (isOpen) {
@@ -58,7 +58,7 @@ export function CopyLinkDropdown({ problemId, classId }: CopyLinkDropdownProps) 
       setLoading(true);
       setFetchError(false);
       try {
-        const res = await apiFetch(`/classes/${classId}/sections`);
+        const res = await apiFetch(`/classes/${class_id}/sections`);
         const data = await res.json();
         setSections(data.sections ?? []);
       } catch {
@@ -67,7 +67,7 @@ export function CopyLinkDropdown({ problemId, classId }: CopyLinkDropdownProps) 
         setLoading(false);
       }
     }
-  }, [isOpen, sections, classId]);
+  }, [isOpen, sections, class_id]);
 
   // Click outside
   useEffect(() => {
@@ -94,8 +94,8 @@ export function CopyLinkDropdown({ problemId, classId }: CopyLinkDropdownProps) 
   const sortedSections = (() => {
     if (!sections) return [];
     const lastUsed = getLastUsedSection();
-    if (!lastUsed || lastUsed.classId !== classId) return sections;
-    const idx = sections.findIndex((s) => s.id === lastUsed.sectionId);
+    if (!lastUsed || lastUsed.class_id !== class_id) return sections;
+    const idx = sections.findIndex((s) => s.id === lastUsed.section_id);
     if (idx <= 0) return sections;
     const copy = [...sections];
     const [item] = copy.splice(idx, 1);

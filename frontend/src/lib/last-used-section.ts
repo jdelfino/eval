@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'lastUsedSection';
 
 interface LastUsedSection {
-  sectionId: string;
-  classId: string;
+  section_id: string;
+  class_id: string;
 }
 
 export function getLastUsedSection(): LastUsedSection | null {
@@ -10,13 +10,13 @@ export function getLastUsedSection(): LastUsedSection | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LastUsedSection;
-    if (parsed.sectionId && parsed.classId) return parsed;
+    if (parsed.section_id && parsed.class_id) return parsed;
     return null;
   } catch {
     return null;
   }
 }
 
-export function setLastUsedSection(sectionId: string, classId: string): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ sectionId, classId }));
+export function setLastUsedSection(section_id: string, class_id: string): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ section_id, class_id }));
 }

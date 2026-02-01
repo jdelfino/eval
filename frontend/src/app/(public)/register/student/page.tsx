@@ -93,7 +93,7 @@ function StudentRegistrationContent() {
   const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
 
   // Form fields
-  const [joinCode, setJoinCode] = useState('');
+  const [join_code, setJoinCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -176,8 +176,8 @@ function StudentRegistrationContent() {
   const handleValidateCode = async (e: FormEvent) => {
     e.preventDefault();
 
-    const cleaned = joinCode.replace(/-/g, '');
-    if (!validateCodeFormat(joinCode)) {
+    const cleaned = join_code.replace(/-/g, '');
+    if (!validateCodeFormat(join_code)) {
       setCodeError('Please enter a valid join code (e.g., ABC-123)');
       return;
     }
@@ -245,7 +245,7 @@ function StudentRegistrationContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: joinCode.replace(/-/g, ''),
+          code: join_code.replace(/-/g, ''),
           email: email.trim(),
           password,
         }),
@@ -376,12 +376,12 @@ function StudentRegistrationContent() {
 
             <form className="space-y-6" onSubmit={handleValidateCode}>
               <div>
-                <label htmlFor="joinCode" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="join_code" className="block text-sm font-medium text-gray-700 mb-2">
                   Section Join Code
                 </label>
                 <input
-                  id="joinCode"
-                  name="joinCode"
+                  id="join_code"
+                  name="join_code"
                   type="text"
                   autoComplete="off"
                   autoFocus
@@ -389,7 +389,7 @@ function StudentRegistrationContent() {
                     codeError ? 'border-red-300' : 'border-gray-300'
                   } placeholder-gray-400 text-gray-900 text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500`}
                   placeholder="ABC-123"
-                  value={joinCode}
+                  value={join_code}
                   onChange={(e) => handleCodeChange(e.target.value)}
                   disabled={pageState.status === 'validating-code'}
                   maxLength={7}

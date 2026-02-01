@@ -38,7 +38,7 @@ export interface BreadcrumbProps {
  * ```tsx
  * <Breadcrumb items={[
  *   { label: 'Classes', href: '/instructor?view=classes' },
- *   { label: 'CS 101', href: '/instructor?view=sections&classId=...' },
+ *   { label: 'CS 101', href: '/instructor?view=sections&class_id=...' },
  *   { label: 'Section A' }
  * ]} />
  * ```

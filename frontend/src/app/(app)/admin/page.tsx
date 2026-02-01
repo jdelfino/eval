@@ -26,15 +26,15 @@ interface User {
   email: string;
   role: UserRole;
   displayName?: string;
-  createdAt: string;
+  created_at: string;
 }
 
 interface Invitation {
   id: string;
   email: string;
-  namespaceId: string;
+  namespace_id: string;
   targetRole: 'instructor';
-  createdAt: string;
+  created_at: string;
   expiresAt: string;
   consumedAt?: string;
   revokedAt?: string;
@@ -181,14 +181,14 @@ function AdminPage() {
     loadInvitations();
   }, [isAdmin, selectedNamespace]);
 
-  const handleChangeRole = async (userId: string, newRole: UserRole) => {
+  const handleChangeRole = async (user_id: string, newRole: UserRole) => {
     if (!isAdmin) return;
 
-    setRoleChangeLoading(userId);
+    setRoleChangeLoading(user_id);
     setError('');
 
     try {
-      await apiFetch(`/admin/users/${userId}/role`, {
+      await apiFetch(`/admin/users/${user_id}/role`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
@@ -204,8 +204,8 @@ function AdminPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, _username: string) => {
-    await apiDelete(`/admin/users/${userId}`);
+  const handleDeleteUser = async (user_id: string, _username: string) => {
+    await apiDelete(`/admin/users/${user_id}`);
 
     // Reload users
     await loadUsers();
@@ -322,7 +322,7 @@ function AdminPage() {
                             </Badge>
                           </Table.Cell>
                           <Table.Cell className="text-gray-500">
-                            {new Date(u.createdAt).toLocaleDateString()}
+                            {new Date(u.created_at).toLocaleDateString()}
                           </Table.Cell>
                           <Table.Cell align="right">
                             {u.id !== user?.ID && (

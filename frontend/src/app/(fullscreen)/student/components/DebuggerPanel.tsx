@@ -4,25 +4,25 @@ import { CallStackPanel } from './CallStackPanel';
 
 interface DebuggerPanelProps {
   currentStep: number;
-  totalSteps: number;
+  total_steps: number;
   currentLine: number;
   locals: Record<string, any>;
   globals: Record<string, any>;
   previousLocals: Record<string, any>;
   previousGlobals: Record<string, any>;
-  callStack: any[];
+  call_stack: any[];
   truncated?: boolean;
 }
 
 export function DebuggerPanel({
   currentStep,
-  totalSteps,
+  total_steps,
   currentLine,
   locals,
   globals,
   previousLocals,
   previousGlobals,
-  callStack,
+  call_stack,
   truncated
 }: DebuggerPanelProps) {
   return (
@@ -32,7 +32,7 @@ export function DebuggerPanel({
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-800">Debugger Output</h2>
           <div className="text-sm text-gray-600">
-            Step {currentStep + 1} of {totalSteps}
+            Step {currentStep + 1} of {total_steps}
             {currentLine > 0 && (
               <span className="ml-2 text-gray-500">
                 (Line {currentLine})
@@ -58,7 +58,7 @@ export function DebuggerPanel({
         />
 
         {/* Call Stack */}
-        <CallStackPanel callStack={callStack} />
+        <CallStackPanel call_stack={call_stack} />
       </div>
     </div>
   );

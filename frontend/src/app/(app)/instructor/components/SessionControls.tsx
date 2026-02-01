@@ -4,32 +4,32 @@ import React, { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface SessionControlsProps {
-  sessionId: string;
-  sectionName?: string;
-  joinCode?: string;
+  session_id: string;
+  section_name?: string;
+  join_code?: string;
   connectedStudentCount?: number;
   onEndSession: () => void;
   onClearPublicView?: () => void;
-  featuredStudentId?: string | null;
+  featured_student_id?: string | null;
   problemSolution?: string;
   onShowSolution?: () => void;
 }
 
 export default function SessionControls({
-  sessionId,
-  sectionName,
-  joinCode,
+  session_id,
+  section_name,
+  join_code,
   connectedStudentCount = 0,
   onEndSession,
   onClearPublicView,
-  featuredStudentId,
+  featured_student_id,
   problemSolution,
   onShowSolution,
 }: SessionControlsProps) {
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
 
   const handleOpenPublicView = () => {
-    const publicViewUrl = `/public-view?sessionId=${sessionId}`;
+    const publicViewUrl = `/public-view?session_id=${session_id}`;
     window.open(publicViewUrl, '_blank', 'width=1200,height=800');
   };
 
@@ -38,15 +38,15 @@ export default function SessionControls({
       <div className="flex justify-between items-start mb-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 mb-1">Active Session</h2>
-          {sectionName && (
-            <p className="text-sm text-gray-600">{sectionName}</p>
+          {section_name && (
+            <p className="text-sm text-gray-600">{section_name}</p>
           )}
-          {joinCode && (
+          {join_code && (
             <div className="mt-2 inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-mono font-bold rounded-lg">
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
-              Join Code: {joinCode}
+              Join Code: {join_code}
             </div>
           )}
         </div>

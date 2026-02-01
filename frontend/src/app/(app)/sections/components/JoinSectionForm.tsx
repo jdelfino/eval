@@ -6,11 +6,11 @@ import { ErrorAlert } from '@/components/ErrorAlert';
 import { BackButton } from '@/components/ui/BackButton';
 
 interface JoinSectionFormProps {
-  onSubmit: (joinCode: string) => Promise<void>;
+  onSubmit: (join_code: string) => Promise<void>;
 }
 
 export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
-  const [joinCode, setJoinCode] = useState('');
+  const [join_code, setJoinCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -21,7 +21,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
       e.preventDefault();
     }
 
-    const codeToSubmit = joinCode.trim();
+    const codeToSubmit = join_code.trim();
     if (!codeToSubmit) {
       setError('Join code is required');
       return;
@@ -50,7 +50,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [joinCode, onSubmit]);
+  }, [join_code, onSubmit]);
 
   // Retry handler for the ErrorAlert component
   const handleRetry = useCallback(() => {
@@ -85,13 +85,13 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
           )}
 
           <div>
-            <label htmlFor="joinCode" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="join_code" className="block text-sm font-medium text-gray-700 mb-2">
               Join Code
             </label>
             <input
-              id="joinCode"
+              id="join_code"
               type="text"
-              value={joinCode}
+              value={join_code}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               placeholder="e.g., ABC-123"
               className="w-full px-4 py-3 text-lg font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-wider"
@@ -106,7 +106,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
 
           <button
             type="submit"
-            disabled={submitting || !joinCode.trim() || success}
+            disabled={submitting || !join_code.trim() || success}
             className="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? 'Joining...' : success ? 'Joined!' : 'Join Section'}

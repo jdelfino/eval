@@ -1,8 +1,7 @@
 /**
  * Analysis types for AI-powered code walkthrough (client-side).
  *
- * Migrated from @/server/types/analysis — these are pure type
- * definitions with no server dependencies.
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 export type IssueSeverity = 'error' | 'misconception' | 'style' | 'good-pattern';
@@ -11,31 +10,31 @@ export interface AnalysisIssue {
   title: string;
   explanation: string;
   count: number;
-  studentIds: string[];
-  representativeStudentLabel: string;
-  representativeStudentId: string;
+  student_ids: string[];
+  representative_student_label: string;
+  representative_student_id: string;
   severity: IssueSeverity;
 }
 
 export interface WalkthroughSummary {
-  totalSubmissions: number;
-  filteredOut: number;
-  analyzedSubmissions: number;
-  completionEstimate: {
+  total_submissions: number;
+  filtered_out: number;
+  analyzed_submissions: number;
+  completion_estimate: {
     finished: number;
-    inProgress: number;
-    notStarted: number;
+    in_progress: number;
+    not_started: number;
   };
   warning?: string;
 }
 
 export interface WalkthroughScript {
-  sessionId: string;
+  session_id: string;
   issues: AnalysisIssue[];
   summary: WalkthroughSummary;
-  overallNote?: string;
-  finishedStudentIds: string[];
-  generatedAt: Date;
+  overall_note?: string;
+  finished_student_ids: string[];
+  generated_at: Date;
 }
 
 export interface AnalyzeCodeResponse {

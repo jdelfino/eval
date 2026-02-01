@@ -11,9 +11,9 @@ function makeIssue(overrides: Partial<AnalysisIssue> = {}): AnalysisIssue {
     title: 'Missing base case',
     explanation: 'Students forgot the base case in recursion',
     count: 2,
-    studentIds: ['s1', 's2'],
-    representativeStudentLabel: 'Student A',
-    representativeStudentId: 's1',
+    student_ids: ['s1', 's2'],
+    representative_student_label: 'Student A',
+    representative_student_id: 's1',
     severity: 'error',
     ...overrides,
   };
@@ -21,17 +21,17 @@ function makeIssue(overrides: Partial<AnalysisIssue> = {}): AnalysisIssue {
 
 function makeScript(issues: AnalysisIssue[]): WalkthroughScript {
   return {
-    sessionId: 'session-1',
+    session_id: 'session-1',
     issues,
-    finishedStudentIds: ['s1', 's2', 's3'],
+    finished_student_ids: ['s1', 's2', 's3'],
     summary: {
-      totalSubmissions: 5,
-      filteredOut: 0,
-      analyzedSubmissions: 5,
-      completionEstimate: { finished: 3, inProgress: 1, notStarted: 1 },
+      total_submissions: 5,
+      filtered_out: 0,
+      analyzed_submissions: 5,
+      completion_estimate: { finished: 3, in_progress: 1, not_started: 1 },
     },
-    overallNote: 'Most students did well overall',
-    generatedAt: new Date(),
+    overall_note: 'Most students did well overall',
+    generated_at: new Date(),
   };
 }
 
@@ -50,10 +50,10 @@ function mockErrorResponse(error: string) {
 }
 
 const sampleIssues: AnalysisIssue[] = [
-  makeIssue({ title: 'Missing base case', studentIds: ['s1', 's5'], representativeStudentId: 's1', severity: 'error', count: 2 }),
-  makeIssue({ title: 'Off-by-one error', studentIds: ['s2'], representativeStudentId: 's2', severity: 'misconception', count: 1 }),
-  makeIssue({ title: 'Good use of helper functions', studentIds: ['s3'], representativeStudentId: 's3', severity: 'good-pattern', count: 1 }),
-  makeIssue({ title: 'Inconsistent naming', studentIds: ['s4'], representativeStudentId: 's4', severity: 'style', count: 1 }),
+  makeIssue({ title: 'Missing base case', student_ids: ['s1', 's5'], representative_student_id: 's1', severity: 'error', count: 2 }),
+  makeIssue({ title: 'Off-by-one error', student_ids: ['s2'], representative_student_id: 's2', severity: 'misconception', count: 1 }),
+  makeIssue({ title: 'Good use of helper functions', student_ids: ['s3'], representative_student_id: 's3', severity: 'good-pattern', count: 1 }),
+  makeIssue({ title: 'Inconsistent naming', student_ids: ['s4'], representative_student_id: 's4', severity: 'style', count: 1 }),
 ];
 
 beforeEach(() => {
@@ -70,8 +70,8 @@ describe('useAnalysisGroups', () => {
     expect(result.current.groups).toEqual([]);
     expect(result.current.activeGroup).toBeNull();
     expect(result.current.activeGroupIndex).toBe(0);
-    expect(result.current.overallNote).toBeNull();
-    expect(result.current.completionEstimate).toBeNull();
+    expect(result.current.overall_note).toBeNull();
+    expect(result.current.completion_estimate).toBeNull();
   });
 
   it('analyze() transitions idle -> loading -> ready and populates groups', async () => {
@@ -130,7 +130,7 @@ describe('useAnalysisGroups', () => {
     expect(result.current.groups[2].issue).toEqual(sampleIssues[1]);
   });
 
-  it('exposes overallNote and completionEstimate from script', async () => {
+  it('exposes overall_note and completion_estimate from script', async () => {
     const script = makeScript(sampleIssues);
     mockSuccessResponse(script);
 
@@ -140,8 +140,8 @@ describe('useAnalysisGroups', () => {
       await result.current.analyze('session-1');
     });
 
-    expect(result.current.overallNote).toBe('Most students did well overall');
-    expect(result.current.completionEstimate).toEqual({ finished: 3, inProgress: 1, notStarted: 1 });
+    expect(result.current.overall_note).toBe('Most students did well overall');
+    expect(result.current.completion_estimate).toEqual({ finished: 3, in_progress: 1, not_started: 1 });
   });
 
   it('navigateGroup next/prev updates activeGroupIndex with bounds clamping', async () => {
@@ -238,7 +238,7 @@ describe('useAnalysisGroups', () => {
     expect(result.current.groups.length).toBe(dismissedCount + 1);
   });
 
-  it('recommendedStudentId is representativeStudentId per issue group', async () => {
+  it('recommendedStudentId is representative_student_id per issue group', async () => {
     const script = makeScript(sampleIssues);
     mockSuccessResponse(script);
 
@@ -250,11 +250,11 @@ describe('useAnalysisGroups', () => {
 
     const allGroup = result.current.groups.find(g => g.id === 'all')!;
     expect(allGroup.recommendedStudentId).toBeNull();
-    expect(allGroup.studentIds).toEqual([]);
+    expect(allGroup.student_ids).toEqual([]);
 
     const firstIssueGroup = result.current.groups.find(g => g.id === '0')!;
     expect(firstIssueGroup.recommendedStudentId).toBe('s1');
-    expect(firstIssueGroup.studentIds).toEqual(['s1', 's5']);
+    expect(firstIssueGroup.student_ids).toEqual(['s1', 's5']);
 
     const secondIssueGroup = result.current.groups.find(g => g.id === '1')!;
     expect(secondIssueGroup.recommendedStudentId).toBe('s2');

@@ -11,18 +11,18 @@ import { InvitationList, Invitation, NamespaceOption } from '../InvitationList';
 const mockPendingInvitation: Invitation = {
   id: 'inv-1',
   email: 'pending@example.com',
-  namespaceId: 'ns-1',
+  namespace_id: 'ns-1',
   targetRole: 'instructor',
-  createdAt: '2026-01-15T10:00:00Z',
+  created_at: '2026-01-15T10:00:00Z',
   expiresAt: '2027-02-15T10:00:00Z', // Far future - always pending
 };
 
 const mockConsumedInvitation: Invitation = {
   id: 'inv-2',
   email: 'consumed@example.com',
-  namespaceId: 'ns-1',
+  namespace_id: 'ns-1',
   targetRole: 'namespace-admin',
-  createdAt: '2026-01-10T10:00:00Z',
+  created_at: '2026-01-10T10:00:00Z',
   expiresAt: '2027-02-10T10:00:00Z',
   consumedAt: '2026-01-12T10:00:00Z',
   consumedBy: 'user-1',
@@ -31,9 +31,9 @@ const mockConsumedInvitation: Invitation = {
 const mockRevokedInvitation: Invitation = {
   id: 'inv-3',
   email: 'revoked@example.com',
-  namespaceId: 'ns-2',
+  namespace_id: 'ns-2',
   targetRole: 'instructor',
-  createdAt: '2026-01-05T10:00:00Z',
+  created_at: '2026-01-05T10:00:00Z',
   expiresAt: '2027-02-05T10:00:00Z',
   revokedAt: '2026-01-08T10:00:00Z',
 };
@@ -41,9 +41,9 @@ const mockRevokedInvitation: Invitation = {
 const mockExpiredInvitation: Invitation = {
   id: 'inv-4',
   email: 'expired@example.com',
-  namespaceId: 'ns-1',
+  namespace_id: 'ns-1',
   targetRole: 'instructor',
-  createdAt: '2024-12-01T10:00:00Z',
+  created_at: '2024-12-01T10:00:00Z',
   expiresAt: '2024-12-15T10:00:00Z', // Already expired
 };
 
@@ -183,7 +183,7 @@ describe('InvitationList', () => {
     it('should fallback to namespace ID if namespace not found', () => {
       const unknownNamespaceInvitation = {
         ...mockPendingInvitation,
-        namespaceId: 'unknown-ns',
+        namespace_id: 'unknown-ns',
       };
 
       render(

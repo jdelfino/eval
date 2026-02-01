@@ -106,7 +106,7 @@ export function useDebugger(sendMessage: (type: string, payload: any) => void) {
 
   const getCurrentCallStack = useCallback(() => {
     const step = getCurrentStep();
-    return step?.callStack || [];
+    return step?.call_stack || [];
   }, [getCurrentStep]);
 
   const getPreviousStep = useCallback((): TraceStep | null => {
@@ -182,7 +182,7 @@ export function useDebugger(sendMessage: (type: string, payload: any) => void) {
     getCurrentGlobals,
     getCurrentCallStack,
     getPreviousStep,
-    totalSteps: state.trace?.steps.length || 0,
+    total_steps: state.trace?.steps.length || 0,
     hasTrace: state.trace !== null,
     canStepForward: state.trace !== null && state.currentStep < (state.trace.steps.length - 1),
     canStepBackward: state.trace !== null && state.currentStep > 0

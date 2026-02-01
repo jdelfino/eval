@@ -17,8 +17,8 @@ jest.mock('next/navigation', () => ({
 describe('StartSessionModal', () => {
   const mockOnClose = jest.fn();
   const mockOnSessionCreated = jest.fn();
-  const sectionId = 'section-123';
-  const sectionName = 'Section A';
+  const section_id = 'section-123';
+  const section_name = 'Section A';
 
   const mockProblems = [
     { id: 'problem-1', title: 'FizzBuzz', authorName: 'Instructor' },
@@ -44,15 +44,15 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
       );
 
       expect(screen.getByRole('heading', { name: 'Start Session' })).toBeInTheDocument();
-      expect(screen.getByText(sectionName)).toBeInTheDocument();
+      expect(screen.getByText(section_name)).toBeInTheDocument();
     });
 
     it('shows loading state while fetching problems', () => {
@@ -62,8 +62,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -80,8 +80,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -102,8 +102,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -122,8 +122,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -143,8 +143,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -163,8 +163,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -184,8 +184,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -205,8 +205,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -229,8 +229,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -256,8 +256,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -284,14 +284,14 @@ describe('StartSessionModal', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            session: { id: 'session-123', joinCode: 'ABC123' },
+            session: { id: 'session-123', join_code: 'ABC123' },
           }),
         });
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -312,8 +312,8 @@ describe('StartSessionModal', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sectionId: sectionId,
-            problemId: 'problem-1',
+            section_id: section_id,
+            problem_id: 'problem-1',
           }),
         });
       });
@@ -331,14 +331,14 @@ describe('StartSessionModal', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            session: { id: 'session-456', joinCode: 'XYZ789' },
+            session: { id: 'session-456', join_code: 'XYZ789' },
           }),
         });
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -359,7 +359,7 @@ describe('StartSessionModal', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sectionId: sectionId,
+            section_id: section_id,
           }),
         });
       });
@@ -382,7 +382,7 @@ describe('StartSessionModal', () => {
                   resolve({
                     ok: true,
                     json: async () => ({
-                      session: { id: 'session-123', joinCode: 'ABC123' },
+                      session: { id: 'session-123', join_code: 'ABC123' },
                     }),
                   }),
                 100
@@ -392,8 +392,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -429,7 +429,7 @@ describe('StartSessionModal', () => {
                   resolve({
                     ok: true,
                     json: async () => ({
-                      session: { id: 'session-123', joinCode: 'ABC123' },
+                      session: { id: 'session-123', join_code: 'ABC123' },
                     }),
                   }),
                 100
@@ -439,8 +439,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -476,7 +476,7 @@ describe('StartSessionModal', () => {
                   resolve({
                     ok: true,
                     json: async () => ({
-                      session: { id: 'session-123', joinCode: 'ABC123' },
+                      session: { id: 'session-123', join_code: 'ABC123' },
                     }),
                   }),
                 100
@@ -486,8 +486,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -520,8 +520,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -545,8 +545,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -576,8 +576,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -605,8 +605,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />
@@ -631,8 +631,8 @@ describe('StartSessionModal', () => {
 
       render(
         <StartSessionModal
-          sectionId={sectionId}
-          sectionName={sectionName}
+          section_id={section_id}
+          section_name={section_name}
           onClose={mockOnClose}
           onSessionCreated={mockOnSessionCreated}
         />

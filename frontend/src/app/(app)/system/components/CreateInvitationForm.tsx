@@ -13,7 +13,7 @@ interface Namespace {
 
 interface CreateInvitationFormProps {
   namespaces: Namespace[];
-  onSubmit: (email: string, namespaceId: string, targetRole: 'namespace-admin' | 'instructor') => Promise<void>;
+  onSubmit: (email: string, namespace_id: string, targetRole: 'namespace-admin' | 'instructor') => Promise<void>;
   onCancel: () => void;
   loading: boolean;
 }
@@ -25,7 +25,7 @@ export default function CreateInvitationForm({
   loading,
 }: CreateInvitationFormProps) {
   const [email, setEmail] = useState('');
-  const [namespaceId, setNamespaceId] = useState('');
+  const [namespace_id, setNamespaceId] = useState('');
   const [targetRole, setTargetRole] = useState<'namespace-admin' | 'instructor'>('instructor');
   const [error, setError] = useState('');
 
@@ -49,13 +49,13 @@ export default function CreateInvitationForm({
     }
 
     // Validate namespace
-    if (!namespaceId) {
+    if (!namespace_id) {
       setError('Please select a namespace');
       return;
     }
 
     try {
-      await onSubmit(email.trim(), namespaceId, targetRole);
+      await onSubmit(email.trim(), namespace_id, targetRole);
       // Clear form on success
       setEmail('');
       setNamespaceId('');
@@ -115,7 +115,7 @@ export default function CreateInvitationForm({
           </label>
           <select
             id="invite-namespace"
-            value={namespaceId}
+            value={namespace_id}
             onChange={(e) => setNamespaceId(e.target.value)}
             disabled={loading}
             style={{

@@ -45,9 +45,9 @@ jest.mock('@/app/(app)/instructor/components/CreateSessionFromProblemModal', () 
 });
 
 const defaultProps = {
-  problemId: 'prob-1',
-  problemTitle: 'Test Problem',
-  classId: 'class-1',
+  problem_id: 'prob-1',
+  problem_title: 'Test Problem',
+  class_id: 'class-1',
   className: 'Test Class',
 };
 
@@ -58,8 +58,8 @@ beforeEach(() => {
 });
 
 describe('InstructorActions auto-start from query params', () => {
-  it('auto-creates session when start=true and sectionId present', async () => {
-    mockSearchParams = new URLSearchParams('start=true&sectionId=section-1');
+  it('auto-creates session when start=true and section_id present', async () => {
+    mockSearchParams = new URLSearchParams('start=true&section_id=section-1');
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ session: { id: 'session-123' } }),
@@ -71,22 +71,22 @@ describe('InstructorActions auto-start from query params', () => {
       expect(mockFetch).toHaveBeenCalledWith('/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sectionId: 'section-1', problemId: 'prob-1' }),
+        body: JSON.stringify({ section_id: 'section-1', problem_id: 'prob-1' }),
       });
     });
 
     await waitFor(() => {
       expect(mockSetLastUsedSection).toHaveBeenCalledWith('section-1', 'class-1');
-      expect(mockPush).toHaveBeenCalledWith('/public-view?sessionId=session-123');
+      expect(mockPush).toHaveBeenCalledWith('/public-view?session_id=session-123');
       expect(mockPostMessage).toHaveBeenCalledWith({
-        sessionId: 'session-123',
-        problemTitle: 'Test Problem',
+        session_id: 'session-123',
+        problem_title: 'Test Problem',
       });
     });
   });
 
   it('does not auto-start when start param is missing', async () => {
-    mockSearchParams = new URLSearchParams('sectionId=section-1');
+    mockSearchParams = new URLSearchParams('section_id=section-1');
 
     render(<InstructorActions {...defaultProps} />);
 
@@ -94,7 +94,7 @@ describe('InstructorActions auto-start from query params', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('does not auto-start when sectionId param is missing', async () => {
+  it('does not auto-start when section_id param is missing', async () => {
     mockSearchParams = new URLSearchParams('start=true');
 
     render(<InstructorActions {...defaultProps} />);
@@ -104,7 +104,7 @@ describe('InstructorActions auto-start from query params', () => {
   });
 
   it('shows error message on API failure', async () => {
-    mockSearchParams = new URLSearchParams('start=true&sectionId=bad-section');
+    mockSearchParams = new URLSearchParams('start=true&section_id=bad-section');
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -120,7 +120,7 @@ describe('InstructorActions auto-start from query params', () => {
 
   it('does not auto-start for non-instructors', async () => {
     authValue = { user: null, isLoading: false };
-    mockSearchParams = new URLSearchParams('start=true&sectionId=section-1');
+    mockSearchParams = new URLSearchParams('start=true&section_id=section-1');
 
     const { container } = render(<InstructorActions {...defaultProps} />);
 

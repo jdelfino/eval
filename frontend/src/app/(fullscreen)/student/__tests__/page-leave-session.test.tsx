@@ -41,7 +41,7 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 jest.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: (key: string) => key === 'sessionId' ? 'session-123' : null,
+    get: (key: string) => key === 'session_id' ? 'session-123' : null,
   }),
   useRouter: () => ({
     push: mockRouterPush,

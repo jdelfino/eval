@@ -19,7 +19,7 @@ interface SectionDetail {
 export default function SectionDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const sectionId = params.sectionId as string;
+  const section_id = params.section_id as string;
   const { user, isLoading: authLoading } = useAuth();
   const [section, setSection] = useState<SectionDetail | null>(null);
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
@@ -34,10 +34,10 @@ export default function SectionDetailPage() {
       return;
     }
 
-    if (user && sectionId) {
+    if (user && section_id) {
       loadSectionData();
     }
-  }, [user, authLoading, sectionId, router]);
+  }, [user, authLoading, section_id, router]);
 
   const loadSectionData = async () => {
     try {
@@ -47,7 +47,7 @@ export default function SectionDetailPage() {
       // Get section details
       const sectionsResponse = await apiFetch('/sections/my');
       const sectionsData = await sectionsResponse.json();
-      const sectionDetail = sectionsData.sections.find((s: any) => s.id === sectionId);
+      const sectionDetail = sectionsData.sections.find((s: any) => s.id === section_id);
       
       if (!sectionDetail) {
         setError('Section not found');
@@ -57,7 +57,7 @@ export default function SectionDetailPage() {
       setSection(sectionDetail);
 
       // Get all sessions for this section
-      const sessionsResponse = await apiFetch(`/sections/${sectionId}/sessions`);
+      const sessionsResponse = await apiFetch(`/sections/${section_id}/sessions`);
       const sessionsData = await sessionsResponse.json();
       
       // Separate active and past sessions
@@ -74,8 +74,8 @@ export default function SectionDetailPage() {
     }
   };
 
-  const handleJoinSession = (sessionId: string) => {
-    router.push(`/student?sessionId=${sessionId}`);
+  const handleJoinSession = (session_id: string) => {
+    router.push(`/student?session_id=${session_id}`);
   };
 
   const formatDate = (dateString: string | Date) => {
@@ -265,7 +265,7 @@ export default function SectionDetailPage() {
                         onClick={() => router.push(
                           section.role === 'instructor'
                             ? `/instructor/session/${session.id}`
-                            : `/student?sessionId=${session.id}`
+                            : `/student?session_id=${session.id}`
                         )}
                         className="ml-4 px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
                       >

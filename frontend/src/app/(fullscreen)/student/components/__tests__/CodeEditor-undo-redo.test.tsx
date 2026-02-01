@@ -173,7 +173,7 @@ describe('CodeEditor Undo/Redo Functionality', () => {
   it('should not render undo/redo buttons when debugger is active (read-only)', () => {
     const mockOnChange = jest.fn();
     const mockDebugger = {
-      trace: { steps: [], totalSteps: 0, exitCode: 0 },
+      trace: { steps: [], total_steps: 0, exit_code: 0 },
       currentStep: 0,
       isLoading: false,
       error: null,
@@ -191,7 +191,7 @@ describe('CodeEditor Undo/Redo Functionality', () => {
       getCurrentGlobals: jest.fn(() => ({})),
       getCurrentCallStack: jest.fn(() => []),
       getPreviousStep: jest.fn(() => null),
-      totalSteps: 0,
+      total_steps: 0,
       hasTrace: true,
       canStepForward: false,
       canStepBackward: false,

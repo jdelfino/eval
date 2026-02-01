@@ -12,7 +12,7 @@ export interface DebuggerState {
  * API-based debugger hook for use outside of WebSocket contexts.
  * Provides the same interface as useDebugger but uses REST API calls for trace requests.
  */
-export function useApiDebugger(sessionId: string | null) {
+export function useApiDebugger(session_id: string | null) {
   const [state, setState] = useState<DebuggerState>({
     trace: null,
     currentStep: 0,
@@ -21,7 +21,7 @@ export function useApiDebugger(sessionId: string | null) {
   });
 
   const requestTrace = useCallback(async (code: string, stdin?: string, maxSteps?: number) => {
-    if (!sessionId) {
+    if (!session_id) {
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -33,7 +33,7 @@ export function useApiDebugger(sessionId: string | null) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/trace`, {
+      const response = await fetch(`/api/sessions/${session_id}/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, stdin, maxSteps }),
@@ -58,7 +58,7 @@ export function useApiDebugger(sessionId: string | null) {
         error: error.message || 'Failed to trace code execution'
       }));
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   const setTrace = useCallback((trace: ExecutionTrace) => {
     setState({
@@ -145,7 +145,7 @@ export function useApiDebugger(sessionId: string | null) {
 
   const getCurrentCallStack = useCallback(() => {
     const step = getCurrentStep();
-    return step?.callStack || [];
+    return step?.call_stack || [];
   }, [getCurrentStep]);
 
   const getPreviousStep = useCallback((): TraceStep | null => {
@@ -221,7 +221,7 @@ export function useApiDebugger(sessionId: string | null) {
     getCurrentGlobals,
     getCurrentCallStack,
     getPreviousStep,
-    totalSteps: state.trace?.steps.length || 0,
+    total_steps: state.trace?.steps.length || 0,
     hasTrace: state.trace !== null,
     canStepForward: state.trace !== null && state.currentStep < (state.trace.steps.length - 1),
     canStepBackward: state.trace !== null && state.currentStep > 0

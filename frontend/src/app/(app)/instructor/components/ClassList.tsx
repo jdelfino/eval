@@ -10,7 +10,7 @@ import type { ClassWithSections } from '../types';
 type ClassInfo = ClassWithSections;
 
 interface ClassListProps {
-  onSelectClass: (classId: string) => void;
+  onSelectClass: (class_id: string) => void;
 }
 
 export default function ClassList({ onSelectClass }: ClassListProps) {
@@ -42,8 +42,8 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
     }
   };
 
-  const handleDeleteClick = (classId: string, className: string) => {
-    setClassToDelete({ id: classId, name: className });
+  const handleDeleteClick = (class_id: string, className: string) => {
+    setClassToDelete({ id: class_id, name: className });
     setShowDeleteConfirm(true);
   };
 
@@ -177,7 +177,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
-                <span>{classInfo.sectionCount} {classInfo.sectionCount === 1 ? 'section' : 'sections'}</span>
+                <span>{classInfo.section_count} {classInfo.section_count === 1 ? 'section' : 'sections'}</span>
               </div>
             </button>
 

@@ -15,9 +15,9 @@ describe('ExecutionSettings Component', () => {
   const defaultProps = {
     stdin: '',
     onStdinChange: jest.fn(),
-    randomSeed: undefined,
+    random_seed: undefined,
     onRandomSeedChange: jest.fn(),
-    attachedFiles: [],
+    attached_files: [],
     onAttachedFilesChange: jest.fn(),
     exampleInput: undefined,
     readOnly: false,
@@ -126,7 +126,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          randomSeed={12345}
+          random_seed={12345}
         />
       );
 
@@ -138,7 +138,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          randomSeed={undefined}
+          random_seed={undefined}
         />
       );
 
@@ -150,7 +150,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          randomSeed={12345}
+          random_seed={12345}
           readOnly={false}
         />
       );
@@ -166,7 +166,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          randomSeed={12345}
+          random_seed={12345}
           readOnly={true}
         />
       );
@@ -182,7 +182,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          attachedFiles={[]}
+          attached_files={[]}
         />
       );
 
@@ -199,7 +199,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          attachedFiles={files}
+          attached_files={files}
         />
       );
 
@@ -216,7 +216,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          attachedFiles={files}
+          attached_files={files}
         />
       );
 
@@ -228,7 +228,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          attachedFiles={[]}
+          attached_files={[]}
           readOnly={false}
         />
       );
@@ -243,7 +243,7 @@ describe('ExecutionSettings Component', () => {
         <ExecutionSettings 
           {...defaultProps} 
           inSidebar={true}
-          attachedFiles={[]}
+          attached_files={[]}
           readOnly={true}
         />
       );
@@ -312,8 +312,8 @@ describe('ExecutionSettings Component', () => {
           {...defaultProps} 
           inSidebar={false}
           stdin="test"
-          randomSeed={123}
-          attachedFiles={[{ name: 'file.txt', content: 'content' }]}
+          random_seed={123}
+          attached_files={[{ name: 'file.txt', content: 'content' }]}
         />
       );
 
@@ -329,8 +329,8 @@ describe('ExecutionSettings Component', () => {
           {...defaultProps} 
           inSidebar={false}
           stdin="test"
-          randomSeed={123}
-          attachedFiles={[{ name: 'file.txt', content: 'content' }]}
+          random_seed={123}
+          attached_files={[{ name: 'file.txt', content: 'content' }]}
         />
       );
 

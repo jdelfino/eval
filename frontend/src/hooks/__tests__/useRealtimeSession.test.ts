@@ -119,7 +119,7 @@ describe('useRealtimeSession', () => {
       const mockState = {
         session: {
           id: 'session-1',
-          namespaceId: 'namespace-1',
+          namespace_id: 'namespace-1',
           problem: { title: 'Test Problem', description: 'Test' },
         },
         students: [
@@ -132,8 +132,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -146,7 +146,7 @@ describe('useRealtimeSession', () => {
       expect(mockApiGet).toHaveBeenCalledWith('/sessions/session-1/state');
       expect(result.current.session).toEqual(mockState.session);
       expect(result.current.students).toHaveLength(1);
-      expect(result.current.students[0].userId).toBe('student-1');
+      expect(result.current.students[0].user_id).toBe('student-1');
     });
 
     it('should handle loading errors', async () => {
@@ -154,8 +154,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'nonexistent',
-          userId: 'user-1',
+          session_id: 'nonexistent',
+          user_id: 'user-1',
         })
       );
 
@@ -175,8 +175,8 @@ describe('useRealtimeSession', () => {
 
       const { rerender } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -213,8 +213,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -256,8 +256,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -278,7 +278,7 @@ describe('useRealtimeSession', () => {
         await jest.runAllTimersAsync();
       });
 
-      const student = result.current.students.find(s => s.userId === 'student-1');
+      const student = result.current.students.find(s => s.user_id === 'student-1');
       expect(student?.code).toBe('print("new code")');
     });
   });
@@ -293,8 +293,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -306,7 +306,7 @@ describe('useRealtimeSession', () => {
         success: true,
         output: 'Hello, World!',
         error: '',
-        executionTime: 123,
+        execution_time: 123,
       };
 
       mockApiPost.mockResolvedValueOnce(mockResult);
@@ -332,8 +332,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -363,8 +363,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -397,8 +397,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -432,8 +432,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -467,8 +467,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -494,8 +494,8 @@ describe('useRealtimeSession', () => {
     it('should subscribe to Centrifugo channel on mount', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -516,8 +516,8 @@ describe('useRealtimeSession', () => {
     it('should handle student_joined event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -529,19 +529,19 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('student_joined', {
-          sessionId: 'session-1',
+          session_id: 'session-1',
           student: {
-            userId: 'student-1',
+            user_id: 'student-1',
             name: 'Alice',
             code: 'print("hello")',
-            executionSettings: undefined,
+            execution_settings: undefined,
           },
           timestamp: Date.now(),
         });
       });
 
       expect(result.current.students).toHaveLength(1);
-      expect(result.current.students[0].userId).toBe('student-1');
+      expect(result.current.students[0].user_id).toBe('student-1');
       expect(result.current.students[0].name).toBe('Alice');
       expect(result.current.students[0].code).toBe('print("hello")');
     });
@@ -549,8 +549,8 @@ describe('useRealtimeSession', () => {
     it('should handle student_code_updated event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -561,7 +561,7 @@ describe('useRealtimeSession', () => {
       // Add a student first
       act(() => {
         simulatePublication('student_joined', {
-          student: { userId: 'student-1', name: 'Alice', code: '' },
+          student: { user_id: 'student-1', name: 'Alice', code: '' },
         });
       });
 
@@ -571,20 +571,20 @@ describe('useRealtimeSession', () => {
         simulatePublication('student_code_updated', {
           studentId: 'student-1',
           code: 'print("updated")',
-          executionSettings: { showTests: true },
-          lastUpdate: new Date().toISOString(),
+          execution_settings: { showTests: true },
+          last_update: new Date().toISOString(),
         });
       });
 
       expect(result.current.students[0].code).toBe('print("updated")');
-      expect(result.current.students[0].executionSettings).toEqual({ showTests: true });
+      expect(result.current.students[0].execution_settings).toEqual({ showTests: true });
     });
 
     it('should handle out-of-order events (code update before student join)', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -599,8 +599,8 @@ describe('useRealtimeSession', () => {
         simulatePublication('student_code_updated', {
           studentId: 'student-1',
           code: 'print("early update")',
-          executionSettings: { randomSeed: 42 },
-          lastUpdate: new Date().toISOString(),
+          execution_settings: { random_seed: 42 },
+          last_update: new Date().toISOString(),
         });
       });
 
@@ -609,20 +609,20 @@ describe('useRealtimeSession', () => {
       // Student join arrives after
       act(() => {
         simulatePublication('student_joined', {
-          student: { userId: 'student-1', name: 'Alice', code: '' },
+          student: { user_id: 'student-1', name: 'Alice', code: '' },
         });
       });
 
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].code).toBe('print("early update")');
-      expect(result.current.students[0].executionSettings).toEqual({ randomSeed: 42 });
+      expect(result.current.students[0].execution_settings).toEqual({ random_seed: 42 });
     });
 
     it('should handle session_ended event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -630,23 +630,23 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const endedAt = '2026-01-25T12:00:00Z';
+      const ended_at = '2026-01-25T12:00:00Z';
       act(() => {
         simulatePublication('session_ended', {
-          sessionId: 'session-1',
-          endedAt,
+          session_id: 'session-1',
+          ended_at,
         });
       });
 
       expect(result.current.session?.status).toBe('completed');
-      expect(result.current.session?.endedAt).toEqual(new Date(endedAt));
+      expect(result.current.session?.ended_at).toEqual(new Date(ended_at));
     });
 
-    it('should handle session_ended event with default endedAt', async () => {
+    it('should handle session_ended event with default ended_at', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -657,23 +657,23 @@ describe('useRealtimeSession', () => {
       const beforeTime = new Date();
       act(() => {
         simulatePublication('session_ended', {
-          sessionId: 'session-1',
+          session_id: 'session-1',
         });
       });
       const afterTime = new Date();
 
       expect(result.current.session?.status).toBe('completed');
-      const endedAt = result.current.session?.endedAt;
-      expect(endedAt).toBeInstanceOf(Date);
-      expect((endedAt as Date).getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
-      expect((endedAt as Date).getTime()).toBeLessThanOrEqual(afterTime.getTime());
+      const ended_at = result.current.session?.ended_at;
+      expect(ended_at).toBeInstanceOf(Date);
+      expect((ended_at as Date).getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
+      expect((ended_at as Date).getTime()).toBeLessThanOrEqual(afterTime.getTime());
     });
 
     it('should handle featured_student_changed event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -685,29 +685,29 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('featured_student_changed', {
-          featuredStudentId: 'student-1',
-          featuredCode: 'print("featured code")',
+          featured_student_id: 'student-1',
+          featured_code: 'print("featured code")',
         });
       });
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
       expect(result.current.featuredStudent.code).toBe('print("featured code")');
-      expect(result.current.session?.featuredStudentId).toBe('student-1');
-      expect(result.current.session?.featuredCode).toBe('print("featured code")');
+      expect(result.current.session?.featured_student_id).toBe('student-1');
+      expect(result.current.session?.featured_code).toBe('print("featured code")');
     });
 
     it('should handle featured_student_changed event to clear featured student', async () => {
       mockApiGet.mockReset();
       mockApiGet.mockResolvedValueOnce({
-        session: { id: 'session-1', featuredStudentId: 'student-1', featuredCode: 'old code' },
+        session: { id: 'session-1', featured_student_id: 'student-1', featured_code: 'old code' },
         students: [],
         join_code: '',
       });
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -717,22 +717,22 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('featured_student_changed', {
-          featuredStudentId: null,
-          featuredCode: null,
+          featured_student_id: null,
+          featured_code: null,
         });
       });
 
       expect(result.current.featuredStudent.studentId).toBeNull();
       expect(result.current.featuredStudent.code).toBeNull();
-      expect(result.current.session?.featuredStudentId).toBeNull();
-      expect(result.current.session?.featuredCode).toBeNull();
+      expect(result.current.session?.featured_student_id).toBeNull();
+      expect(result.current.session?.featured_code).toBeNull();
     });
 
     it('should handle problem_updated event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -746,7 +746,7 @@ describe('useRealtimeSession', () => {
         id: 'problem-1',
         title: 'New Problem',
         description: 'Solve this problem',
-        starterCode: 'def solve():\n    pass',
+        starter_code: 'def solve():\n    pass',
       };
 
       act(() => {
@@ -759,8 +759,8 @@ describe('useRealtimeSession', () => {
     it('should handle session_replaced event', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -783,8 +783,8 @@ describe('useRealtimeSession', () => {
     it('should expose isBroadcastConnected status', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -798,8 +798,8 @@ describe('useRealtimeSession', () => {
     it('should cleanup on unmount', async () => {
       const { result, unmount } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -840,8 +840,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 
@@ -878,8 +878,8 @@ describe('useRealtimeSession', () => {
 
       const { result } = renderHook(() =>
         useRealtimeSession({
-          sessionId: 'session-1',
-          userId: 'user-1',
+          session_id: 'session-1',
+          user_id: 'user-1',
         })
       );
 

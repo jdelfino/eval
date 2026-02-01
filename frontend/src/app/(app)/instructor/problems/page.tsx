@@ -25,8 +25,8 @@ function ProblemsPage() {
     router.push('/instructor/problems?edit=new');
   };
 
-  const handleEdit = (problemId: string) => {
-    router.push(`/instructor/problems?edit=${problemId}`);
+  const handleEdit = (problem_id: string) => {
+    router.push(`/instructor/problems?edit=${problem_id}`);
   };
 
   const handleCloseCreator = useCallback(() => {
@@ -37,7 +37,7 @@ function ProblemsPage() {
     return (
       <div className="h-full flex flex-col -m-6">
         <ProblemCreator
-          problemId={editingProblemId}
+          problem_id={editingProblemId}
           onCancel={handleCloseCreator}
           onProblemCreated={handleCloseCreator}
         />

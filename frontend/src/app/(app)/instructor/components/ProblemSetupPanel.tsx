@@ -15,11 +15,11 @@ import { Problem } from '@/types/problem';
 interface ProblemSetupPanelProps {
   /** Callback when problem is updated */
   onUpdateProblem: (
-    problem: { title: string; description: string; starterCode: string },
-    executionSettings?: {
+    problem: { title: string; description: string; starter_code: string },
+    execution_settings?: {
       stdin?: string;
-      randomSeed?: number;
-      attachedFiles?: Array<{ name: string; content: string }>;
+      random_seed?: number;
+      attached_files?: Array<{ name: string; content: string }>;
     }
   ) => void;
   /** Initial problem data */
@@ -27,8 +27,8 @@ interface ProblemSetupPanelProps {
   /** Initial execution settings */
   initialExecutionSettings?: {
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   };
   /** Whether the panel is loading */
   isLoading?: boolean;

@@ -22,20 +22,20 @@ describe('ActiveSessionContext', () => {
         wrapper: ActiveSessionProvider,
       });
 
-      expect(result.current.state.sessionId).toBeNull();
-      expect(result.current.state.joinCode).toBeNull();
+      expect(result.current.state.session_id).toBeNull();
+      expect(result.current.state.join_code).toBeNull();
     });
 
     it('restores state from localStorage on mount', () => {
-      const storedState = { sessionId: 'test-session', joinCode: 'ABC-123' };
+      const storedState = { session_id: 'test-session', join_code: 'ABC-123' };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(storedState));
 
       const { result } = renderHook(() => useActiveSession(), {
         wrapper: ActiveSessionProvider,
       });
 
-      expect(result.current.state.sessionId).toBe('test-session');
-      expect(result.current.state.joinCode).toBe('ABC-123');
+      expect(result.current.state.session_id).toBe('test-session');
+      expect(result.current.state.join_code).toBe('ABC-123');
     });
 
     it('ignores invalid JSON in localStorage', () => {
@@ -45,20 +45,20 @@ describe('ActiveSessionContext', () => {
         wrapper: ActiveSessionProvider,
       });
 
-      expect(result.current.state.sessionId).toBeNull();
-      expect(result.current.state.joinCode).toBeNull();
+      expect(result.current.state.session_id).toBeNull();
+      expect(result.current.state.join_code).toBeNull();
     });
 
     it('ignores incomplete stored state', () => {
-      const incompleteState = { sessionId: 'test-session' };
+      const incompleteState = { session_id: 'test-session' };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(incompleteState));
 
       const { result } = renderHook(() => useActiveSession(), {
         wrapper: ActiveSessionProvider,
       });
 
-      expect(result.current.state.sessionId).toBeNull();
-      expect(result.current.state.joinCode).toBeNull();
+      expect(result.current.state.session_id).toBeNull();
+      expect(result.current.state.join_code).toBeNull();
     });
   });
 
@@ -72,8 +72,8 @@ describe('ActiveSessionContext', () => {
         result.current.setActiveSession('session-123', 'XYZ-789');
       });
 
-      expect(result.current.state.sessionId).toBe('session-123');
-      expect(result.current.state.joinCode).toBe('XYZ-789');
+      expect(result.current.state.session_id).toBe('session-123');
+      expect(result.current.state.join_code).toBe('XYZ-789');
     });
 
     it('persists session info to localStorage', () => {
@@ -86,8 +86,8 @@ describe('ActiveSessionContext', () => {
       });
 
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      expect(stored.sessionId).toBe('session-456');
-      expect(stored.joinCode).toBe('DEF-321');
+      expect(stored.session_id).toBe('session-456');
+      expect(stored.join_code).toBe('DEF-321');
     });
 
     it('overwrites previous session info', () => {
@@ -103,8 +103,8 @@ describe('ActiveSessionContext', () => {
         result.current.setActiveSession('second-session', 'CODE-2');
       });
 
-      expect(result.current.state.sessionId).toBe('second-session');
-      expect(result.current.state.joinCode).toBe('CODE-2');
+      expect(result.current.state.session_id).toBe('second-session');
+      expect(result.current.state.join_code).toBe('CODE-2');
     });
   });
 
@@ -118,14 +118,14 @@ describe('ActiveSessionContext', () => {
         result.current.setActiveSession('session-to-clear', 'ABC-123');
       });
 
-      expect(result.current.state.sessionId).toBe('session-to-clear');
+      expect(result.current.state.session_id).toBe('session-to-clear');
 
       act(() => {
         result.current.clearActiveSession();
       });
 
-      expect(result.current.state.sessionId).toBeNull();
-      expect(result.current.state.joinCode).toBeNull();
+      expect(result.current.state.session_id).toBeNull();
+      expect(result.current.state.join_code).toBeNull();
     });
 
     it('removes session from localStorage', () => {

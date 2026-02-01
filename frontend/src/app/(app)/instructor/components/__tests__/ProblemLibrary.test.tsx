@@ -58,19 +58,19 @@ describe('ProblemLibrary', () => {
       id: 'problem-1',
       title: 'Problem 1',
       description: 'Description 1',
-      createdAt: '2025-01-01T00:00:00.000Z',
-      authorId: 'user-123',
+      created_at: '2025-01-01T00:00:00.000Z',
+      author_id: 'user-123',
       tags: [],
-      classId: 'class-1',
+      class_id: 'class-1',
     },
     {
       id: 'problem-2',
       title: 'Problem 2',
       description: 'Description 2',
-      createdAt: '2025-01-02T00:00:00.000Z',
-      authorId: 'user-123',
+      created_at: '2025-01-02T00:00:00.000Z',
+      author_id: 'user-123',
       tags: [],
-      classId: 'class-1',
+      class_id: 'class-1',
     },
   ];
 
@@ -273,12 +273,12 @@ describe('ProblemLibrary', () => {
     });
   });
 
-  it('includes authorId in API request', async () => {
+  it('includes author_id in API request', async () => {
     render(<ProblemLibrary />);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('authorId=user-123')
+        expect.stringContaining('author_id=user-123')
       );
     });
   });
@@ -387,17 +387,17 @@ describe('ProblemLibrary', () => {
       });
     });
 
-    it('passes selected classId to API call', async () => {
+    it('passes selected class_id to API call', async () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('classId=class-1')
+          expect.stringContaining('class_id=class-1')
         );
       });
     });
 
-    it('does not pass classId when "All classes" is selected', async () => {
+    it('does not pass class_id when "All classes" is selected', async () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
@@ -407,11 +407,11 @@ describe('ProblemLibrary', () => {
       fireEvent.change(screen.getByLabelText('Class:'), { target: { value: '' } });
 
       await waitFor(() => {
-        // Find the most recent call without classId
+        // Find the most recent call without class_id
         const lastCall = (global.fetch as jest.Mock).mock.calls.filter(
           (c: any[]) => typeof c[0] === 'string' && c[0].includes('/problems')
         ).pop();
-        expect(lastCall[0]).not.toContain('classId=');
+        expect(lastCall[0]).not.toContain('class_id=');
       });
     });
   });

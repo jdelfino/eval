@@ -64,16 +64,16 @@ describe('InvitationsPage', () => {
   const mockUser = {
     id: 'user-1',
     role: 'namespace-admin' as const,
-    namespaceId: 'test-namespace',
+    namespace_id: 'test-namespace',
   };
 
   const mockPendingInvitation = {
     id: 'inv-1',
     email: 'pending@example.com',
     targetRole: 'instructor',
-    namespaceId: 'test-namespace',
-    createdBy: 'user-1',
-    createdAt: '2024-01-01T00:00:00Z',
+    namespace_id: 'test-namespace',
+    created_by: 'user-1',
+    created_at: '2024-01-01T00:00:00Z',
     expiresAt: '2024-01-08T00:00:00Z',
     status: 'pending',
   };
@@ -82,9 +82,9 @@ describe('InvitationsPage', () => {
     id: 'inv-2',
     email: 'consumed@example.com',
     targetRole: 'instructor',
-    namespaceId: 'test-namespace',
-    createdBy: 'user-1',
-    createdAt: '2024-01-01T00:00:00Z',
+    namespace_id: 'test-namespace',
+    created_by: 'user-1',
+    created_at: '2024-01-01T00:00:00Z',
     expiresAt: '2024-01-08T00:00:00Z',
     consumedAt: '2024-01-02T00:00:00Z',
     status: 'consumed',

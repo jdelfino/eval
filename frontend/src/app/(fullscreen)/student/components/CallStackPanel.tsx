@@ -2,13 +2,13 @@ import React from 'react';
 import { CallFrame } from '@/types/session';
 
 interface CallStackPanelProps {
-  callStack: CallFrame[];
+  call_stack: CallFrame[];
   darkTheme?: boolean;
 }
 
-export function CallStackPanel({ callStack, darkTheme = false }: CallStackPanelProps) {
+export function CallStackPanel({ call_stack, darkTheme = false }: CallStackPanelProps) {
   // Hide call stack if there are fewer than 2 entries (just main program)
-  if (callStack.length < 2) {
+  if (call_stack.length < 2) {
     return null;
   }
 
@@ -23,8 +23,8 @@ export function CallStackPanel({ callStack, darkTheme = false }: CallStackPanelP
       </div>
 
       <div className={darkTheme ? 'divide-y divide-gray-700' : 'divide-y divide-gray-200'}>
-        {callStack.map((frame, index) => {
-          const isCurrentFrame = index === callStack.length - 1;
+        {call_stack.map((frame, index) => {
+          const isCurrentFrame = index === call_stack.length - 1;
           return (
             <div
               key={index}
@@ -36,7 +36,7 @@ export function CallStackPanel({ callStack, darkTheme = false }: CallStackPanelP
                 <span className={darkTheme ? 'mr-2 text-blue-400' : 'mr-2 text-blue-600'}>→</span>
               )}
               <span className={`font-mono ${darkTheme ? 'text-gray-200' : 'text-gray-900'}`}>
-                {frame.functionName === '<module>' ? '<main program>' : frame.functionName}
+                {frame.function_name === '<module>' ? '<main program>' : frame.function_name}
               </span>
               <span className={`mx-2 ${darkTheme ? 'text-gray-500' : 'text-gray-400'}`}>:</span>
               <span className={`font-mono ${darkTheme ? 'text-gray-400' : 'text-gray-600'}`}>

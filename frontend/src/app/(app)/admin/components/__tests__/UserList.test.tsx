@@ -11,7 +11,7 @@ const mockUsers = [
     email: 'alice@example.com',
     role: 'instructor',
     displayName: 'Alice Smith',
-    createdAt: '2024-01-15T00:00:00Z',
+    created_at: '2024-01-15T00:00:00Z',
     lastLoginAt: '2024-06-01T00:00:00Z',
   },
   {
@@ -19,13 +19,13 @@ const mockUsers = [
     email: 'bob@example.com',
     role: 'student',
     displayName: '',
-    createdAt: '2024-03-20T00:00:00Z',
+    created_at: '2024-03-20T00:00:00Z',
   },
   {
     id: 'user-3',
     email: 'carol@example.com',
     role: 'student',
-    createdAt: '2024-04-10T00:00:00Z',
+    created_at: '2024-04-10T00:00:00Z',
   },
 ];
 

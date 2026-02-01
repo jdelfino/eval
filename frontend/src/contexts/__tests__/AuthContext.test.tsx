@@ -80,11 +80,11 @@ describe('AuthContext', () => {
       expect(result.current.isAuthenticated).toBe(false);
     });
 
-    it('does not expose mfaPending or sessionId', () => {
+    it('does not expose mfaPending or session_id', () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
 
       expect(result.current).not.toHaveProperty('mfaPending');
-      expect(result.current).not.toHaveProperty('sessionId');
+      expect(result.current).not.toHaveProperty('session_id');
       expect(result.current).not.toHaveProperty('sendMfaCode');
       expect(result.current).not.toHaveProperty('verifyMfaCode');
       expect(result.current).not.toHaveProperty('cancelMfa');

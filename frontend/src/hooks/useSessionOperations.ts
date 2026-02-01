@@ -20,17 +20,17 @@ export function useSessionOperations() {
    */
   const createSession = useCallback(
     async (
-      sectionId: string,
-      sectionName: string,
-      problemId?: string
+      section_id: string,
+      section_name: string,
+      problem_id?: string
     ): Promise<Session> => {
       setLoading(true);
       setError(null);
 
       try {
-        const body: Record<string, string> = { section_id: sectionId };
-        if (problemId) {
-          body.problem_id = problemId;
+        const body: Record<string, string> = { section_id: section_id };
+        if (problem_id) {
+          body.problem_id = problem_id;
         }
 
         const data = await apiPost<{ session: Session }>('/sessions', body);
@@ -49,12 +49,12 @@ export function useSessionOperations() {
   /**
    * End a session
    */
-  const endSession = useCallback(async (sessionId: string): Promise<void> => {
+  const endSession = useCallback(async (session_id: string): Promise<void> => {
     setLoading(true);
     setError(null);
 
     try {
-      await apiDelete(`/sessions/${sessionId}`);
+      await apiDelete(`/sessions/${session_id}`);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to end session';
       setError(errorMessage);
@@ -69,17 +69,17 @@ export function useSessionOperations() {
    */
   const updateProblem = useCallback(
     async (
-      sessionId: string,
+      session_id: string,
       problem: Record<string, unknown>,
-      executionSettings?: Record<string, unknown>
+      execution_settings?: Record<string, unknown>
     ): Promise<void> => {
       setLoading(true);
       setError(null);
 
       try {
-        await apiPost(`/sessions/${sessionId}/update-problem`, {
+        await apiPost(`/sessions/${session_id}/update-problem`, {
           problem,
-          execution_settings: executionSettings,
+          execution_settings: execution_settings,
         });
       } catch (err: any) {
         const errorMessage = err.message || 'Failed to update problem';

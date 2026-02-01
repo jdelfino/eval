@@ -4,18 +4,18 @@ import React, { useState, useEffect } from 'react';
 
 interface ProblemInputProps {
   onUpdateProblem: (
-    problem: { title: string; description: string; starterCode: string },
-    executionSettings?: {
+    problem: { title: string; description: string; starter_code: string },
+    execution_settings?: {
       stdin?: string;
-      randomSeed?: number;
-      attachedFiles?: Array<{ name: string; content: string }>;
+      random_seed?: number;
+      attached_files?: Array<{ name: string; content: string }>;
     }
   ) => void;
-  initialProblem?: { title: string; description: string; starterCode: string } | null;
+  initialProblem?: { title: string; description: string; starter_code: string } | null;
   initialExecutionSettings?: {
     stdin?: string;
-    randomSeed?: number;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
   };
 }
 
@@ -27,9 +27,9 @@ export default function ProblemInput({
   const [problemText, setProblemText] = useState(initialProblem?.description || '');
   const [exampleInput, setExampleInput] = useState(initialExecutionSettings.stdin || '');
   const [showExampleInput, setShowExampleInput] = useState(!!initialExecutionSettings.stdin);
-  const [randomSeed, setRandomSeed] = useState(initialExecutionSettings.randomSeed !== undefined ? String(initialExecutionSettings.randomSeed) : '');
-  const [showRandomSeed, setShowRandomSeed] = useState(initialExecutionSettings.randomSeed !== undefined);
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(initialExecutionSettings.attachedFiles || []);
+  const [random_seed, setRandomSeed] = useState(initialExecutionSettings.random_seed !== undefined ? String(initialExecutionSettings.random_seed) : '');
+  const [showRandomSeed, setShowRandomSeed] = useState(initialExecutionSettings.random_seed !== undefined);
+  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(initialExecutionSettings.attached_files || []);
   const [newFileName, setNewFileName] = useState('');
   const [newFileContent, setNewFileContent] = useState('');
   const [fileError, setFileError] = useState('');
@@ -39,9 +39,9 @@ export default function ProblemInput({
     setProblemText(initialProblem?.description || '');
     setExampleInput(initialExecutionSettings?.stdin || '');
     setShowExampleInput(!!initialExecutionSettings?.stdin);
-    setRandomSeed(initialExecutionSettings?.randomSeed !== undefined ? String(initialExecutionSettings.randomSeed) : '');
-    setShowRandomSeed(initialExecutionSettings?.randomSeed !== undefined);
-    setAttachedFiles(initialExecutionSettings?.attachedFiles || []);
+    setRandomSeed(initialExecutionSettings?.random_seed !== undefined ? String(initialExecutionSettings.random_seed) : '');
+    setShowRandomSeed(initialExecutionSettings?.random_seed !== undefined);
+    setAttachedFiles(initialExecutionSettings?.attached_files || []);
   }, [initialProblem, initialExecutionSettings]);
 
   const addFile = () => {
@@ -52,7 +52,7 @@ export default function ProblemInput({
       return;
     }
 
-    if (attachedFiles.some(f => f.name === newFileName.trim())) {
+    if (attached_files.some(f => f.name === newFileName.trim())) {
       setFileError('File with this name already exists');
       return;
     }
@@ -60,7 +60,7 @@ export default function ProblemInput({
     const maxSize = 10 * 1024; // 10KB
     const maxFiles = 5;
 
-    if (attachedFiles.length >= maxFiles) {
+    if (attached_files.length >= maxFiles) {
       setFileError(`Maximum ${maxFiles} files allowed`);
       return;
     }
@@ -70,7 +70,7 @@ export default function ProblemInput({
       return;
     }
 
-    setAttachedFiles([...attachedFiles, { 
+    setAttachedFiles([...attached_files, { 
       name: newFileName.trim(), 
       content: newFileContent 
     }]);
@@ -79,28 +79,28 @@ export default function ProblemInput({
   };
 
   const updateFile = (index: number, content: string) => {
-    const updated = [...attachedFiles];
+    const updated = [...attached_files];
     updated[index] = { ...updated[index], content };
     setAttachedFiles(updated);
   };
 
   const removeFile = (index: number) => {
-    setAttachedFiles(attachedFiles.filter((_, i) => i !== index));
+    setAttachedFiles(attached_files.filter((_, i) => i !== index));
   };
 
   const handleUpdate = () => {
-    const seed = showRandomSeed && randomSeed ? parseInt(randomSeed, 10) : undefined;
+    const seed = showRandomSeed && random_seed ? parseInt(random_seed, 10) : undefined;
     const problem = {
       title: '', // TODO: Add title input field
       description: problemText,
-      starterCode: '', // TODO: Add starter code input field
+      starter_code: '', // TODO: Add starter code input field
     };
-    const executionSettings = {
+    const execution_settings = {
       stdin: showExampleInput ? exampleInput : undefined,
-      randomSeed: seed,
-      attachedFiles: attachedFiles.length > 0 ? attachedFiles : undefined,
+      random_seed: seed,
+      attached_files: attached_files.length > 0 ? attached_files : undefined,
     };
-    onUpdateProblem(problem, executionSettings);
+    onUpdateProblem(problem, execution_settings);
   };
 
   return (
@@ -176,7 +176,7 @@ export default function ProblemInput({
           </label>
           <input
             type="number"
-            value={randomSeed}
+            value={random_seed}
             onChange={(e) => setRandomSeed(e.target.value)}
             placeholder="e.g., 42"
             style={{
@@ -258,12 +258,12 @@ export default function ProblemInput({
         </div>
 
         {/* List of attached files */}
-        {attachedFiles.length > 0 && (
+        {attached_files.length > 0 && (
           <div>
             <div style={{ fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
               Current Files:
             </div>
-            {attachedFiles.map((file, index) => (
+            {attached_files.map((file, index) => (
               <div key={index} style={{ 
                 marginBottom: '1rem',
                 border: '1px solid #eee',

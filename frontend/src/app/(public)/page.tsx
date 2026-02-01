@@ -37,7 +37,7 @@ export default function Home() {
   const { user, isLoading } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [joinCode, setJoinCode] = useState('');
+  const [join_code, setJoinCode] = useState('');
   const [error, setError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
 
@@ -78,14 +78,14 @@ export default function Home() {
     setError('');
 
     // Validate format
-    if (!isValidJoinCode(joinCode)) {
+    if (!isValidJoinCode(join_code)) {
       setError('Please enter a valid join code (e.g., ABC-123)');
       return;
     }
 
     // Navigate to registration page with code
     setIsValidating(true);
-    const cleanCode = joinCode.replace(/-/g, '');
+    const cleanCode = join_code.replace(/-/g, '');
     router.push(`/register/student?code=${cleanCode}`);
   };
 
@@ -232,7 +232,7 @@ export default function Home() {
               ref={inputRef}
               id="join-code"
               type="text"
-              value={joinCode}
+              value={join_code}
               onChange={handleCodeChange}
               placeholder="ABC-123"
               disabled={isValidating}
@@ -276,7 +276,7 @@ export default function Home() {
 
           <button
             type="submit"
-            disabled={isValidating || !joinCode}
+            disabled={isValidating || !join_code}
             style={{
               width: '100%',
               padding: '0.875rem 1.5rem',
@@ -284,20 +284,20 @@ export default function Home() {
               fontWeight: '600',
               color: 'white',
               background:
-                isValidating || !joinCode
+                isValidating || !join_code
                   ? '#9ca3af'
                   : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
               borderRadius: '8px',
-              cursor: isValidating || !joinCode ? 'not-allowed' : 'pointer',
+              cursor: isValidating || !join_code ? 'not-allowed' : 'pointer',
               transition: 'transform 0.1s, box-shadow 0.2s',
               boxShadow:
-                isValidating || !joinCode
+                isValidating || !join_code
                   ? 'none'
                   : '0 4px 14px 0 rgba(102, 126, 234, 0.4)',
             }}
             onMouseOver={(e) => {
-              if (!isValidating && joinCode) {
+              if (!isValidating && join_code) {
                 e.currentTarget.style.transform = 'translateY(-1px)';
                 e.currentTarget.style.boxShadow =
                   '0 6px 20px 0 rgba(102, 126, 234, 0.5)';

@@ -11,12 +11,12 @@ export interface CodeRevision {
 }
 
 interface UseRevisionHistoryProps {
-  sessionId: string | null;
+  session_id: string | null;
   studentId: string | null;
 }
 
 export function useRevisionHistory({
-  sessionId,
+  session_id,
   studentId,
 }: UseRevisionHistoryProps) {
   const [revisions, setRevisions] = useState<CodeRevision[]>([]);
@@ -26,7 +26,7 @@ export function useRevisionHistory({
 
   // Load revisions via API
   useEffect(() => {
-    if (!sessionId || !studentId) return;
+    if (!session_id || !studentId) return;
 
     const loadRevisions = async () => {
       setLoading(true);
@@ -34,7 +34,7 @@ export function useRevisionHistory({
 
       try {
         const data = await apiGet<{ revisions: Revision[] }>(
-          `/sessions/${sessionId}/revisions?user_id=${studentId}`
+          `/sessions/${session_id}/revisions?user_id=${studentId}`
         );
 
         // Convert to CodeRevision format
@@ -54,7 +54,7 @@ export function useRevisionHistory({
     };
 
     loadRevisions();
-  }, [sessionId, studentId]);
+  }, [session_id, studentId]);
 
   const goToRevision = useCallback((index: number) => {
     if (index >= 0 && index < revisions.length) {

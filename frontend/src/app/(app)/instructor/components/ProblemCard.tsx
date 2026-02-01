@@ -15,9 +15,9 @@ import type { ProblemSummary } from '../types';
 interface ProblemCardProps {
   problem: ProblemSummary;
   viewMode: 'list' | 'grid';
-  onEdit: (problemId: string) => void;
-  onDelete: (problemId: string, title: string) => void;
-  onCreateSession: (problemId: string) => void;
+  onEdit: (problem_id: string) => void;
+  onDelete: (problem_id: string, title: string) => void;
+  onCreateSession: (problem_id: string) => void;
   onTagClick?: (tag: string) => void;
 }
 
@@ -95,7 +95,7 @@ export default function ProblemCard({
             {renderTags()}
 
             <div className="flex items-center gap-4 text-xs text-gray-500">
-              <span>Created {formatDate(problem.createdAt)}</span>
+              <span>Created {formatDate(problem.created_at)}</span>
             </div>
           </div>
 
@@ -107,7 +107,7 @@ export default function ProblemCard({
             >
               Edit
             </button>
-            <CopyLinkDropdown problemId={problem.id} classId={problem.classId} />
+            <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
             <button
               onClick={() => onCreateSession(problem.id)}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
@@ -154,7 +154,7 @@ export default function ProblemCard({
       {renderTags()}
 
       <div className="flex items-center gap-3 text-xs text-gray-500 mb-4">
-        <span>{formatDate(problem.createdAt)}</span>
+        <span>{formatDate(problem.created_at)}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -165,7 +165,7 @@ export default function ProblemCard({
           Edit
         </button>
         <div className="col-span-2">
-          <CopyLinkDropdown problemId={problem.id} classId={problem.classId} />
+          <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
         </div>
         <button
           onClick={() => onCreateSession(problem.id)}

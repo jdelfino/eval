@@ -12,15 +12,15 @@ const STORAGE_KEY = 'coding-tool:active-session';
 
 /** Active session state */
 export interface ActiveSessionState {
-  sessionId: string | null;
-  joinCode: string | null;
+  session_id: string | null;
+  join_code: string | null;
 }
 
 interface ActiveSessionContextType {
   /** Current active session state */
   state: ActiveSessionState;
   /** Set the active session */
-  setActiveSession: (sessionId: string, joinCode: string) => void;
+  setActiveSession: (session_id: string, join_code: string) => void;
   /** Clear the active session */
   clearActiveSession: () => void;
 }
@@ -37,8 +37,8 @@ interface ActiveSessionProviderProps {
  */
 export function ActiveSessionProvider({ children }: ActiveSessionProviderProps) {
   const [state, setState] = useState<ActiveSessionState>({
-    sessionId: null,
-    joinCode: null,
+    session_id: null,
+    join_code: null,
   });
 
   // Restore from localStorage on mount
@@ -47,7 +47,7 @@ export function ActiveSessionProvider({ children }: ActiveSessionProviderProps) 
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as ActiveSessionState;
-        if (parsed.sessionId && parsed.joinCode) {
+        if (parsed.session_id && parsed.join_code) {
           setState(parsed);
         }
       }
@@ -56,8 +56,8 @@ export function ActiveSessionProvider({ children }: ActiveSessionProviderProps) 
     }
   }, []);
 
-  const setActiveSession = useCallback((sessionId: string, joinCode: string) => {
-    const newState: ActiveSessionState = { sessionId, joinCode };
+  const setActiveSession = useCallback((session_id: string, join_code: string) => {
+    const newState: ActiveSessionState = { session_id, join_code };
     setState(newState);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
@@ -67,7 +67,7 @@ export function ActiveSessionProvider({ children }: ActiveSessionProviderProps) 
   }, []);
 
   const clearActiveSession = useCallback(() => {
-    setState({ sessionId: null, joinCode: null });
+    setState({ session_id: null, join_code: null });
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {

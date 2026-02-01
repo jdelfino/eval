@@ -38,8 +38,8 @@ export function useSessionHistory() {
     fetchSessions();
   }, []);
 
-  const reconnectToSession = (sessionId: string) => {
-    window.location.href = `/student?session=${sessionId}`;
+  const reconnectToSession = (session_id: string) => {
+    window.location.href = `/student?session=${session_id}`;
   };
 
   return {

@@ -37,7 +37,7 @@ jest.mock('@monaco-editor/react', () => ({
 // Mock useResponsiveLayout
 jest.mock('@/hooks/useResponsiveLayout', () => ({
   useResponsiveLayout: () => true, // Desktop layout
-  useSidebarSection: (sectionId: string, defaultCollapsed: boolean) => ({
+  useSidebarSection: (section_id: string, defaultCollapsed: boolean) => ({
     isCollapsed: defaultCollapsed,
     toggle: jest.fn(),
     setCollapsed: jest.fn(),
@@ -56,11 +56,11 @@ describe('CodeEditor - Form Interaction', () => {
     id: 'test-problem',
     title: 'Test Problem',
     description: 'Test problem description',
-    starterCode: 'print("hello")',
-    testCases: [],
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
-    authorId: 'test-author',
+    starter_code: 'print("hello")',
+    test_cases: [],
+    created_at: new Date('2024-01-01T00:00:00Z'),
+    updated_at: new Date('2024-01-01T00:00:00Z'),
+    author_id: 'test-author',
   };
 
   beforeEach(() => {
@@ -124,8 +124,8 @@ describe('CodeEditor - Form Interaction', () => {
 
     // Mock useSidebarSection to start with problem panel open
     jest.spyOn(require('@/hooks/useResponsiveLayout'), 'useSidebarSection')
-      .mockImplementation(((sectionId: string) => {
-        if (sectionId === 'problem-panel') {
+      .mockImplementation(((section_id: string) => {
+        if (section_id === 'problem-panel') {
           return {
             isCollapsed: false, // Problem panel open
             toggle: jest.fn(),
@@ -191,8 +191,8 @@ describe('CodeEditor - Form Interaction', () => {
 
     // Mock useSidebarSection to start with problem panel open
     jest.spyOn(require('@/hooks/useResponsiveLayout'), 'useSidebarSection')
-      .mockImplementation(((sectionId: string) => {
-        if (sectionId === 'problem-panel') {
+      .mockImplementation(((section_id: string) => {
+        if (section_id === 'problem-panel') {
           return {
             isCollapsed: false, // Problem panel open
             toggle: jest.fn(),
@@ -224,7 +224,7 @@ describe('CodeEditor - Form Interaction', () => {
 
     // Form should NOT be submitted, but onLoadStarterCode should be called
     expect(handleSubmit).not.toHaveBeenCalled();
-    expect(handleLoadStarterCode).toHaveBeenCalledWith(mockProblem.starterCode);
+    expect(handleLoadStarterCode).toHaveBeenCalledWith(mockProblem.starter_code);
   });
 
   it('should allow form submission via explicit submit button', async () => {

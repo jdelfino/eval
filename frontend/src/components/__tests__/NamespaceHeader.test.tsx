@@ -132,7 +132,7 @@ describe('NamespaceHeader', () => {
       });
     });
 
-    it('falls back to namespaceId if displayName is not available', async () => {
+    it('falls back to namespace_id if displayName is not available', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
         NamespaceID: 'testns',
       }));
@@ -288,7 +288,7 @@ describe('NamespaceHeader', () => {
       expect(container.firstChild).toBeNull();
     });
 
-    it('returns null when user has no namespaceId', async () => {
+    it('returns null when user has no namespace_id', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
         NamespaceID: null,
       }));
@@ -309,7 +309,7 @@ describe('NamespaceHeader', () => {
         render(<NamespaceHeader />);
       });
 
-      // Should still render something (fallback to namespaceId)
+      // Should still render something (fallback to namespace_id)
       await waitFor(() => {
         expect(screen.getByText('stanford')).toBeInTheDocument();
       });

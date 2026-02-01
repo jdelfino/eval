@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils';
 interface ExecutionSettingsProps {
   stdin?: string;
   onStdinChange?: (stdin: string) => void;
-  randomSeed?: number;
+  random_seed?: number;
   onRandomSeedChange?: (seed: number | undefined) => void;
-  attachedFiles?: Array<{ name: string; content: string }>;
+  attached_files?: Array<{ name: string; content: string }>;
   onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
   exampleInput?: string;
   readOnly?: boolean;
@@ -19,9 +19,9 @@ interface ExecutionSettingsProps {
 export default function ExecutionSettings({
   stdin = '',
   onStdinChange,
-  randomSeed,
+  random_seed,
   onRandomSeedChange,
-  attachedFiles = [],
+  attached_files = [],
   onAttachedFilesChange,
   exampleInput,
   readOnly = false,
@@ -30,9 +30,9 @@ export default function ExecutionSettings({
 }: ExecutionSettingsProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingSeed, setEditingSeed] = useState(false);
-  const [seedInput, setSeedInput] = useState(randomSeed?.toString() || '');
+  const [seedInput, setSeedInput] = useState(random_seed?.toString() || '');
   const [editingFiles, setEditingFiles] = useState(false);
-  const [localFiles, setLocalFiles] = useState(attachedFiles);
+  const [localFiles, setLocalFiles] = useState(attached_files);
   const [newFileName, setNewFileName] = useState('');
   const [newFileContent, setNewFileContent] = useState('');
 
@@ -52,7 +52,7 @@ export default function ExecutionSettings({
   };
 
   const handleCancelSeedEdit = () => {
-    setSeedInput(randomSeed?.toString() || '');
+    setSeedInput(random_seed?.toString() || '');
     setEditingSeed(false);
   };
 
@@ -64,7 +64,7 @@ export default function ExecutionSettings({
   };
 
   const handleCancelFilesEdit = () => {
-    setLocalFiles(attachedFiles);
+    setLocalFiles(attached_files);
     setNewFileName('');
     setNewFileContent('');
     setEditingFiles(false);
@@ -93,7 +93,7 @@ export default function ExecutionSettings({
     navigator.clipboard.writeText(text);
   };
 
-  const hasContent = stdin || randomSeed !== undefined || attachedFiles.length > 0;
+  const hasContent = stdin || random_seed !== undefined || attached_files.length > 0;
 
   return (
     <div className={cn(
@@ -117,7 +117,7 @@ export default function ExecutionSettings({
           </div>
           {hasContent && !isExpanded && (
             <span className="text-sm text-gray-500 font-normal">
-              {stdin && '📝'} {randomSeed !== undefined && '🎲'} {attachedFiles.length > 0 && `📁 ${attachedFiles.length}`}
+              {stdin && '📝'} {random_seed !== undefined && '🎲'} {attached_files.length > 0 && `📁 ${attached_files.length}`}
             </span>
           )}
         </button>
@@ -174,7 +174,7 @@ export default function ExecutionSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setSeedInput(randomSeed?.toString() || '');
+                    setSeedInput(random_seed?.toString() || '');
                     setEditingSeed(true);
                   }}
                   className="px-2 py-1 text-xs bg-blue-500 text-white border-none rounded cursor-pointer hover:bg-blue-600"
@@ -191,8 +191,8 @@ export default function ExecutionSettings({
                   ? 'bg-gray-900 border-gray-700 text-gray-200'
                   : 'bg-gray-50 border-gray-200 text-black'
               )}>
-                {randomSeed !== undefined ? (
-                  <code>{randomSeed}</code>
+                {random_seed !== undefined ? (
+                  <code>{random_seed}</code>
                 ) : (
                   <span className={cn(
                     'italic',
@@ -252,7 +252,7 @@ export default function ExecutionSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setLocalFiles(attachedFiles);
+                    setLocalFiles(attached_files);
                     setEditingFiles(true);
                   }}
                   className="px-2 py-1 text-xs bg-blue-500 text-white border-none rounded cursor-pointer hover:bg-blue-600"
@@ -264,7 +264,7 @@ export default function ExecutionSettings({
 
             {!editingFiles ? (
               <>
-                {attachedFiles.length === 0 ? (
+                {attached_files.length === 0 ? (
                   <div className={cn(
                     'p-2 rounded border text-sm',
                     useDarkTheme
@@ -278,7 +278,7 @@ export default function ExecutionSettings({
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {attachedFiles.map((file, index) => (
+                    {attached_files.map((file, index) => (
                       <div
                         key={index}
                         className={cn(

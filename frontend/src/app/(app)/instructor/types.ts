@@ -1,28 +1,30 @@
 /**
  * Shared types for instructor session components.
+ *
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 /** Common class fields used across instructor UI components. */
 export interface ClassInfo {
   id: string;
   name: string;
-  namespaceId?: string;
+  namespace_id?: string;
   description?: string;
 }
 
 /** ClassInfo extended with section count, used by ClassList. */
 export interface ClassWithSections extends ClassInfo {
-  sectionCount: number;
+  section_count: number;
 }
 
 export interface Student {
   id: string;
   name: string;
-  hasCode: boolean;
-  executionSettings?: {
-    randomSeed?: number;
+  has_code: boolean;
+  execution_settings?: {
+    random_seed?: number;
     stdin?: string;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    attached_files?: Array<{ name: string; content: string }>;
   };
 }
 
@@ -30,10 +32,10 @@ export interface RealtimeStudent {
   id: string;
   name: string;
   code?: string;
-  executionSettings?: {
-    randomSeed?: number;
+  execution_settings?: {
+    random_seed?: number;
     stdin?: string;
-    attachedFiles?: Array<{ name: string; content: string }>;
+    attached_files?: Array<{ name: string; content: string }>;
   };
 }
 
@@ -42,16 +44,14 @@ export interface ProblemSummary {
   id: string;
   title: string;
   description?: string;
-  createdAt: string;
-  authorId: string;
+  created_at: string;
+  author_id: string;
   tags: string[];
-  classId: string;
-  testCaseCount?: number;
+  class_id: string;
+  test_case_count?: number;
 }
 
-export interface ExecutionResult {
-  success: boolean;
-  output: string;
-  error: string;
-  executionTime: number;
-}
+/**
+ * Re-export ExecutionResult from api.ts to avoid duplication.
+ */
+export type { ExecutionResult } from '@/types/api';

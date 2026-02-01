@@ -10,7 +10,7 @@ import CreateSectionModal from '../CreateSectionModal';
 describe('CreateSectionModal', () => {
   const mockOnClose = jest.fn();
   const mockOnSuccess = jest.fn();
-  const classId = 'class-123';
+  const class_id = 'class-123';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -22,7 +22,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('renders the modal with all form fields', () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     expect(screen.getByText('Create New Section')).toBeInTheDocument();
     expect(screen.getByLabelText(/section name/i)).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('closes modal when cancel button is clicked', () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
@@ -42,7 +42,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('closes modal when clicking outside the modal content', () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const backdrop = screen.getByText('Create New Section').closest('div')?.parentElement?.parentElement;
     if (backdrop) {
@@ -53,7 +53,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('does not close modal when clicking inside the modal content', () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const modalContent = screen.getByText('Create New Section').parentElement;
     if (modalContent) {
@@ -64,7 +64,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('shows validation error when submitting empty form', async () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const form = screen.getByRole('button', { name: /create section/i }).closest('form');
     if (form) {
@@ -79,7 +79,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('shows validation error for name exceeding max length', async () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'a'.repeat(101) } });
@@ -93,7 +93,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('shows validation error for negative capacity', async () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     const capacityInput = screen.getByLabelText(/capacity/i);
@@ -109,7 +109,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('shows validation error for zero capacity', async () => {
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     const capacityInput = screen.getByLabelText(/capacity/i);
@@ -130,7 +130,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({ section: { id: 'section-1', name: 'Section A' } }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -165,7 +165,7 @@ describe('CreateSectionModal', () => {
       }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     const scheduleInput = screen.getByLabelText(/schedule/i);
@@ -200,7 +200,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({ section: { id: 'section-1', name: 'Section A' } }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     const scheduleInput = screen.getByLabelText(/schedule/i);
@@ -228,7 +228,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({ section: { id: 'section-1', name: 'Section A' } }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -249,7 +249,7 @@ describe('CreateSectionModal', () => {
       }), 100))
     );
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -270,7 +270,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({ error: 'Database error' }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -290,7 +290,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({}),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -306,7 +306,7 @@ describe('CreateSectionModal', () => {
   it('shows error when network request fails', async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -330,7 +330,7 @@ describe('CreateSectionModal', () => {
       }), 100))
     );
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
@@ -355,7 +355,7 @@ describe('CreateSectionModal', () => {
       json: async () => ({ section: { id: 'section-1', name: 'Section A', capacity: 50 } }),
     });
 
-    render(<CreateSectionModal classId={classId} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
     const capacityInput = screen.getByLabelText(/capacity/i);

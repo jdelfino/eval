@@ -29,7 +29,7 @@ jest.mock('@/app/(app)/instructor/components/CreateSessionFromProblemModal', () 
 });
 
 const mockSetLastUsedSection = jest.fn();
-let mockLastUsedSection: { sectionId: string; classId: string } | null = null;
+let mockLastUsedSection: { section_id: string; class_id: string } | null = null;
 
 jest.mock('@/lib/last-used-section', () => ({
   getLastUsedSection: () => mockLastUsedSection,
@@ -56,54 +56,54 @@ describe('InstructorActions auto-start', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          sections: [{ id: 'sec-1', name: 'Section A', joinCode: 'ABC' }],
+          sections: [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          session: { id: 'session-1', joinCode: 'JOIN123' },
+          session: { id: 'session-1', join_code: 'JOIN123' },
         }),
       });
 
-    render(<InstructorActions problemId="prob-1" problemTitle="Test Problem" classId="class-1" className="CS 101" />);
+    render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
     await userEvent.click(screen.getByText('Start Session'));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/public-view?sessionId=session-1');
+      expect(mockPush).toHaveBeenCalledWith('/public-view?session_id=session-1');
     });
 
     expect(screen.queryByTestId('create-session-modal')).not.toBeInTheDocument();
     expect(mockSetLastUsedSection).toHaveBeenCalledWith('sec-1', 'class-1');
   });
 
-  it('auto-starts session when last-used section matches classId', async () => {
-    mockLastUsedSection = { sectionId: 'sec-2', classId: 'class-1' };
+  it('auto-starts session when last-used section matches class_id', async () => {
+    mockLastUsedSection = { section_id: 'sec-2', class_id: 'class-1' };
 
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           sections: [
-            { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-            { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+            { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
           ],
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          session: { id: 'session-2', joinCode: 'JOIN456' },
+          session: { id: 'session-2', join_code: 'JOIN456' },
         }),
       });
 
-    render(<InstructorActions problemId="prob-1" problemTitle="Test Problem" classId="class-1" className="CS 101" />);
+    render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
     await userEvent.click(screen.getByText('Start Session'));
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/public-view?sessionId=session-2');
+      expect(mockPush).toHaveBeenCalledWith('/public-view?session_id=session-2');
     });
 
     expect(screen.queryByTestId('create-session-modal')).not.toBeInTheDocument();
@@ -117,13 +117,13 @@ describe('InstructorActions auto-start', () => {
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-          { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
         ],
       }),
     });
 
-    render(<InstructorActions problemId="prob-1" problemTitle="Test Problem" classId="class-1" className="CS 101" />);
+    render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
     await userEvent.click(screen.getByText('Start Session'));
 
@@ -135,19 +135,19 @@ describe('InstructorActions auto-start', () => {
   });
 
   it('opens modal when last-used section is for a different class', async () => {
-    mockLastUsedSection = { sectionId: 'sec-99', classId: 'other-class' };
+    mockLastUsedSection = { section_id: 'sec-99', class_id: 'other-class' };
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         sections: [
-          { id: 'sec-1', name: 'Section A', joinCode: 'ABC' },
-          { id: 'sec-2', name: 'Section B', joinCode: 'DEF' },
+          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
         ],
       }),
     });
 
-    render(<InstructorActions problemId="prob-1" problemTitle="Test Problem" classId="class-1" className="CS 101" />);
+    render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
     await userEvent.click(screen.getByText('Start Session'));
 

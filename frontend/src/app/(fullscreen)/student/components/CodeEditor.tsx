@@ -16,27 +16,27 @@ interface ExecutionResult {
   success: boolean;
   output: string;
   error: string;
-  executionTime: number;
+  execution_time: number;
 }
 
 interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
-  onRun?: (executionSettings: ExecutionSettings) => void;
+  onRun?: (execution_settings: ExecutionSettings) => void;
   isRunning?: boolean;
   exampleInput?: string;
   onStdinChange?: (stdin: string) => void;
-  randomSeed?: number;
+  random_seed?: number;
   onRandomSeedChange?: (seed: number | undefined) => void;
-  attachedFiles?: Array<{ name: string; content: string }>;
+  attached_files?: Array<{ name: string; content: string }>;
   onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
   readOnly?: boolean;
-  executionResult?: ExecutionResult | null;
+  execution_result?: ExecutionResult | null;
   useApiExecution?: boolean;
   title?: string;
   showRunButton?: boolean;
-  problem?: Problem | { title: string; description?: string; starterCode?: string } | null;
-  onLoadStarterCode?: (starterCode: string) => void;
+  problem?: Problem | { title: string; description?: string; starter_code?: string } | null;
+  onLoadStarterCode?: (starter_code: string) => void;
   externalEditorRef?: React.MutableRefObject<any>;
   debugger?: ReturnType<typeof import('@/hooks/useDebugger').useDebugger>;
   onProblemEdit?: (updates: { title?: string; description?: string }) => void;
@@ -53,12 +53,12 @@ export default function CodeEditor({
   isRunning = false,
   exampleInput,
   onStdinChange,
-  randomSeed,
+  random_seed,
   onRandomSeedChange,
-  attachedFiles,
+  attached_files,
   onAttachedFilesChange,
   readOnly = false,
-  executionResult = null,
+  execution_result = null,
   useApiExecution = false,
   title = 'Your Code',
   showRunButton = true,
@@ -241,7 +241,7 @@ export default function CodeEditor({
 
   // Use local state for API execution, or passed props for WebSocket execution
   const effectiveIsRunning = useApiExecution ? localIsRunning : isRunning;
-  const effectiveResult = useApiExecution ? localExecutionResult : executionResult;
+  const effectiveResult = useApiExecution ? localExecutionResult : execution_result;
 
   // Auto-grow output section when results appear (up to 40%)
   // Skip auto-grow for right-positioned output to avoid jarring width changes
@@ -341,7 +341,7 @@ export default function CodeEditor({
         success: false,
         output: '',
         error: 'Please write some code before running',
-        executionTime: 0,
+        execution_time: 0,
       });
       return;
     }
@@ -356,8 +356,8 @@ export default function CodeEditor({
         body: JSON.stringify({
           code,
           stdin: stdin || undefined,
-          randomSeed,
-          attachedFiles,
+          random_seed,
+          attached_files,
         }),
       });
 
@@ -368,7 +368,7 @@ export default function CodeEditor({
         success: false,
         output: '',
         error: error.message || 'Failed to execute code',
-        executionTime: 0,
+        execution_time: 0,
       });
     } finally {
       setLocalIsRunning(false);
@@ -379,7 +379,7 @@ export default function CodeEditor({
     if (useApiExecution) {
       handleRunViaApi();
     } else if (onRun) {
-      onRun({ stdin: stdin || undefined, randomSeed, attachedFiles });
+      onRun({ stdin: stdin || undefined, random_seed, attached_files });
     }
   };
 
@@ -598,10 +598,10 @@ export default function CodeEditor({
                   <MarkdownContent content={problem.description} darkTheme={true} />
                 </div>
               )}
-              {problem.starterCode && onLoadStarterCode && !editableProblem && (
+              {problem.starter_code && onLoadStarterCode && !editableProblem && (
                 <button
                   type="button"
-                  onClick={() => onLoadStarterCode(problem.starterCode || '')}
+                  onClick={() => onLoadStarterCode(problem.starter_code || '')}
                   className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
                 >
                   Restore Starter Code
@@ -617,9 +617,9 @@ export default function CodeEditor({
             <ExecutionSettingsComponent
               stdin={stdin}
               onStdinChange={handleStdinChange}
-              randomSeed={randomSeed}
+              random_seed={random_seed}
               onRandomSeedChange={onRandomSeedChange}
-              attachedFiles={attachedFiles}
+              attached_files={attached_files}
               onAttachedFilesChange={onAttachedFilesChange}
               exampleInput={exampleInput}
               readOnly={readOnly}
@@ -634,7 +634,7 @@ export default function CodeEditor({
           <div className="bg-gray-800 border-b border-gray-700 flex-shrink-0">
             <DebuggerSidebar
               currentStep={debuggerHook.currentStep}
-              totalSteps={debuggerHook.totalSteps}
+              total_steps={debuggerHook.total_steps}
               currentLine={debuggerHook.getCurrentStep()?.line || 0}
               canStepForward={debuggerHook.canStepForward}
               canStepBackward={debuggerHook.canStepBackward}
@@ -652,7 +652,7 @@ export default function CodeEditor({
               globals={debuggerHook.getCurrentGlobals()}
               previousLocals={debuggerHook.getPreviousStep()?.locals || {}}
               previousGlobals={debuggerHook.getPreviousStep()?.globals || {}}
-              callStack={debuggerHook.getCurrentCallStack()}
+              call_stack={debuggerHook.getCurrentCallStack()}
             />
           </div>
         )}
@@ -792,10 +792,10 @@ export default function CodeEditor({
                           className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                         />
                       </div>
-                      {problem.starterCode && onLoadStarterCode && !editableProblem && (
+                      {problem.starter_code && onLoadStarterCode && !editableProblem && (
                         <button
                           type="button"
-                          onClick={() => onLoadStarterCode(problem.starterCode || '')}
+                          onClick={() => onLoadStarterCode(problem.starter_code || '')}
                           className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm w-full"
                         >
                           Restore Starter Code
@@ -811,10 +811,10 @@ export default function CodeEditor({
                           <MarkdownContent content={problem.description} darkTheme={true} />
                         </div>
                       )}
-                      {problem.starterCode && onLoadStarterCode && !editableProblem && (
+                      {problem.starter_code && onLoadStarterCode && !editableProblem && (
                         <button
                           type="button"
-                          onClick={() => onLoadStarterCode(problem.starterCode || '')}
+                          onClick={() => onLoadStarterCode(problem.starter_code || '')}
                           className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
                         >
                           Restore Starter Code
@@ -855,9 +855,9 @@ export default function CodeEditor({
                   <ExecutionSettingsComponent
                     stdin={stdin}
                     onStdinChange={handleStdinChange}
-                    randomSeed={randomSeed}
+                    random_seed={random_seed}
                     onRandomSeedChange={onRandomSeedChange}
-                    attachedFiles={attachedFiles}
+                    attached_files={attached_files}
                     onAttachedFilesChange={onAttachedFilesChange}
                     exampleInput={exampleInput}
                     readOnly={readOnly}
@@ -895,7 +895,7 @@ export default function CodeEditor({
                 <div className="flex-1 overflow-y-auto">
                   <DebuggerSidebar
                     currentStep={debuggerHook.currentStep}
-                    totalSteps={debuggerHook.totalSteps}
+                    total_steps={debuggerHook.total_steps}
                     currentLine={debuggerHook.getCurrentStep()?.line || 0}
                     canStepForward={debuggerHook.canStepForward}
                     canStepBackward={debuggerHook.canStepBackward}
@@ -913,7 +913,7 @@ export default function CodeEditor({
                     globals={debuggerHook.getCurrentGlobals()}
                     previousLocals={debuggerHook.getPreviousStep()?.locals || {}}
                     previousGlobals={debuggerHook.getPreviousStep()?.globals || {}}
-                    callStack={debuggerHook.getCurrentCallStack()}
+                    call_stack={debuggerHook.getCurrentCallStack()}
                   />
                 </div>
                 {/* Resize handle */}
@@ -1046,7 +1046,7 @@ export default function CodeEditor({
                     🐛 Debugger Output
                   </span>
                   <span className="text-sm text-blue-300">
-                    Step {debuggerHook.currentStep + 1} of {debuggerHook.totalSteps}
+                    Step {debuggerHook.currentStep + 1} of {debuggerHook.total_steps}
                   </span>
                 </div>
 
@@ -1110,7 +1110,7 @@ export default function CodeEditor({
                   <span className={`${outputTextSm} ${
                     effectiveResult.success ? 'text-green-300' : 'text-red-300'
                   }`}>
-                    Execution time: {effectiveResult.executionTime}ms
+                    Execution time: {effectiveResult.execution_time}ms
                   </span>
                 </div>
 

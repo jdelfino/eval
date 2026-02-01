@@ -4,7 +4,7 @@ import { CallStackPanel } from './CallStackPanel';
 
 interface DebuggerSidebarProps {
   currentStep: number;
-  totalSteps: number;
+  total_steps: number;
   currentLine: number;
   canStepForward: boolean;
   canStepBackward: boolean;
@@ -22,12 +22,12 @@ interface DebuggerSidebarProps {
   globals?: Record<string, any>;
   previousLocals?: Record<string, any>;
   previousGlobals?: Record<string, any>;
-  callStack?: any[];
+  call_stack?: any[];
 }
 
 export function DebuggerSidebar({
   currentStep,
-  totalSteps,
+  total_steps,
   currentLine,
   canStepForward,
   canStepBackward,
@@ -45,7 +45,7 @@ export function DebuggerSidebar({
   globals = {},
   previousLocals = {},
   previousGlobals = {},
-  callStack = []
+  call_stack = []
 }: DebuggerSidebarProps) {
   const bgClass = darkTheme ? 'bg-gray-800' : 'bg-white';
   const textClass = darkTheme ? 'text-gray-200' : 'text-gray-800';
@@ -101,7 +101,7 @@ export function DebuggerSidebar({
                 </button>
               </div>
               <div className="text-sm">
-                Step {currentStep + 1} of {totalSteps}
+                Step {currentStep + 1} of {total_steps}
                 {currentLine > 0 && (
                   <span className="ml-2 opacity-70">
                     (Line {currentLine})
@@ -168,7 +168,7 @@ export function DebuggerSidebar({
 
             {/* Call Stack */}
             <div className="mt-4">
-              <CallStackPanel callStack={callStack} darkTheme={darkTheme} />
+              <CallStackPanel call_stack={call_stack} darkTheme={darkTheme} />
             </div>
           </>
         )}

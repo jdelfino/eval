@@ -21,7 +21,7 @@ interface SectionWithClass {
 
 interface SectionCardProps {
   section: SectionWithClass;
-  getActiveSessions: (sectionId: string) => Promise<Session[]>;
+  getActiveSessions: (section_id: string) => Promise<Session[]>;
 }
 
 export default function SectionCard({ section, getActiveSessions }: SectionCardProps) {
@@ -47,8 +47,8 @@ export default function SectionCard({ section, getActiveSessions }: SectionCardP
     }
   };
 
-  const handleJoinSession = (sessionId: string) => {
-    router.push(`/student?sessionId=${sessionId}`);
+  const handleJoinSession = (session_id: string) => {
+    router.push(`/student?session_id=${session_id}`);
   };
 
   const handleViewSection = () => {

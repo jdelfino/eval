@@ -8,7 +8,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { BackButton } from '@/components/ui/BackButton';
 
 interface SessionDetailsProps {
-  sessionId: string;
+  session_id: string;
   onClose: () => void;
 }
 
@@ -16,24 +16,24 @@ interface StudentData {
   id: string;
   name: string;
   code: string;
-  lastUpdate: string;
+  last_update: string;
 }
 
 interface SessionData {
   id: string;
-  joinCode: string;
-  problemTitle: string;
-  problemDescription?: string;
-  starterCode?: string;
-  createdAt: string;
-  endedAt?: string;
+  join_code: string;
+  problem_title: string;
+  problem_description?: string;
+  starter_code?: string;
+  created_at: string;
+  ended_at?: string;
   status: 'active' | 'completed';
-  sectionName: string;
+  section_name: string;
   students: StudentData[];
-  participantCount: number;
+  participant_count: number;
 }
 
-export default function SessionDetails({ sessionId, onClose }: SessionDetailsProps) {
+export default function SessionDetails({ session_id, onClose }: SessionDetailsProps) {
   const _router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -42,14 +42,14 @@ export default function SessionDetails({ sessionId, onClose }: SessionDetailsPro
 
   useEffect(() => {
     fetchSessionDetails();
-  }, [sessionId]);
+  }, [session_id]);
 
   const fetchSessionDetails = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiFetch(`/sessions/${sessionId}/details`);
+      const response = await apiFetch(`/sessions/${session_id}/details`);
       const data = await response.json();
       setSession(data);
       
@@ -120,7 +120,7 @@ export default function SessionDetails({ sessionId, onClose }: SessionDetailsPro
         <div className="flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-gray-900">{session.sectionName}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{session.section_name}</h2>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 session.status === 'active' 
                   ? 'bg-green-100 text-green-800' 
@@ -130,19 +130,19 @@ export default function SessionDetails({ sessionId, onClose }: SessionDetailsPro
               </span>
             </div>
             <div className="mt-2 space-y-1 text-sm text-gray-600">
-              <p><span className="font-medium">Join Code:</span> <span className="font-mono font-bold">{session.joinCode}</span></p>
-              <p><span className="font-medium">Started:</span> {formatDate(session.createdAt)}</p>
-              {session.endedAt && (
-                <p><span className="font-medium">Ended:</span> {formatDate(session.endedAt)}</p>
+              <p><span className="font-medium">Join Code:</span> <span className="font-mono font-bold">{session.join_code}</span></p>
+              <p><span className="font-medium">Started:</span> {formatDate(session.created_at)}</p>
+              {session.ended_at && (
+                <p><span className="font-medium">Ended:</span> {formatDate(session.ended_at)}</p>
               )}
-              <p><span className="font-medium">Duration:</span> {formatDuration(session.createdAt, session.endedAt)}</p>
-              <p><span className="font-medium">Participants:</span> {session.participantCount} {session.participantCount === 1 ? 'student' : 'students'}</p>
+              <p><span className="font-medium">Duration:</span> {formatDuration(session.created_at, session.ended_at)}</p>
+              <p><span className="font-medium">Participants:</span> {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}</p>
             </div>
-            {session.problemTitle && session.problemTitle !== 'Untitled Session' && (
+            {session.problem_title && session.problem_title !== 'Untitled Session' && (
               <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="font-medium text-blue-900">{session.problemTitle}</p>
-                {session.problemDescription && (
-                  <p className="text-sm text-blue-700 mt-1">{session.problemDescription}</p>
+                <p className="font-medium text-blue-900">{session.problem_title}</p>
+                {session.problem_description && (
+                  <p className="text-sm text-blue-700 mt-1">{session.problem_description}</p>
                 )}
               </div>
             )}
@@ -187,12 +187,12 @@ export default function SessionDetails({ sessionId, onClose }: SessionDetailsPro
                     {selectedStudent.name}'s Code
                   </h3>
                   <span className="text-sm text-gray-500">
-                    Last updated: {new Date(selectedStudent.lastUpdate).toLocaleString()}
+                    Last updated: {new Date(selectedStudent.last_update).toLocaleString()}
                   </span>
                 </div>
                 <EditorContainer height="500px">
                   <CodeEditor
-                    code={selectedStudent.code || session.starterCode || '# No code submitted'}
+                    code={selectedStudent.code || session.starter_code || '# No code submitted'}
                     onChange={() => {}} // Read-only
                     onRun={() => {}} // Read-only, no execution
                     readOnly

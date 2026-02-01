@@ -39,7 +39,7 @@ describe('useRevisionHistory', () => {
 
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -64,7 +64,7 @@ describe('useRevisionHistory', () => {
 
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -80,7 +80,7 @@ describe('useRevisionHistory', () => {
 
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -92,10 +92,10 @@ describe('useRevisionHistory', () => {
       expect(result.current.currentRevision).toBeNull();
     });
 
-    it('does not load when sessionId is null', () => {
+    it('does not load when session_id is null', () => {
       renderHook(() =>
         useRevisionHistory({
-          sessionId: null,
+          session_id: null,
           studentId: 'student-1',
         })
       );
@@ -106,7 +106,7 @@ describe('useRevisionHistory', () => {
     it('does not load when studentId is null', () => {
       renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: null,
         })
       );
@@ -129,7 +129,7 @@ describe('useRevisionHistory', () => {
     it('navigates to next revision', async () => {
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -160,7 +160,7 @@ describe('useRevisionHistory', () => {
     it('navigates to previous revision', async () => {
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -180,7 +180,7 @@ describe('useRevisionHistory', () => {
     it('navigates to specific revision', async () => {
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );
@@ -198,7 +198,7 @@ describe('useRevisionHistory', () => {
     it('navigates to last revision', async () => {
       const { result } = renderHook(() =>
         useRevisionHistory({
-          sessionId: 'session-1',
+          session_id: 'session-1',
           studentId: 'student-1',
         })
       );

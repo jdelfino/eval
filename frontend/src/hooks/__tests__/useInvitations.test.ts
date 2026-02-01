@@ -28,9 +28,9 @@ describe('useInvitations', () => {
     id: 'inv-1',
     email: 'instructor@example.com',
     targetRole: 'instructor',
-    namespaceId: 'test-namespace',
-    createdBy: 'admin-1',
-    createdAt: '2024-01-01T00:00:00Z',
+    namespace_id: 'test-namespace',
+    created_by: 'admin-1',
+    created_at: '2024-01-01T00:00:00Z',
     expiresAt: '2024-01-08T00:00:00Z',
     status: 'pending',
   };

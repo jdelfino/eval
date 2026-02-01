@@ -17,7 +17,7 @@ import type { ClassInfo, ProblemSummary } from '../types';
 
 interface ProblemLibraryProps {
   onCreateNew?: () => void;
-  onEdit?: (problemId: string) => void;
+  onEdit?: (problem_id: string) => void;
 }
 
 export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryProps) {
@@ -41,7 +41,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
 
   // Session creation modal state
   const [showSessionModal, setShowSessionModal] = useState(false);
-  const [selectedProblemForSession, setSelectedProblemForSession] = useState<{ id: string; title: string; classId: string } | null>(null);
+  const [selectedProblemForSession, setSelectedProblemForSession] = useState<{ id: string; title: string; class_id: string } | null>(null);
 
   // Load classes on mount
   useEffect(() => {
@@ -83,14 +83,14 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       setError(null);
 
       const params = new URLSearchParams({
-        authorId: user.ID,
+        author_id: user.ID,
         includePublic: 'true',
         sortBy,
         sortOrder,
       });
 
       if (selectedClassId) {
-        params.set('classId', selectedClassId);
+        params.set('class_id', selectedClassId);
       }
 
       const response = await apiFetch(`/problems?${params}`);
@@ -104,10 +104,10 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     }
   };
 
-  const handleClassChange = (classId: string) => {
-    setSelectedClassId(classId);
-    if (classId) {
-      localStorage.setItem('problemLibrary_classId', classId);
+  const handleClassChange = (class_id: string) => {
+    setSelectedClassId(class_id);
+    if (class_id) {
+      localStorage.setItem('problemLibrary_classId', class_id);
     } else {
       localStorage.removeItem('problemLibrary_classId');
     }
@@ -158,9 +158,9 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       if (sortBy === 'title') {
         compareValue = a.title.localeCompare(b.title);
       } else if (sortBy === 'created') {
-        compareValue = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       } else if (sortBy === 'updated') {
-        compareValue = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       }
 
       return sortOrder === 'asc' ? compareValue : -compareValue;
@@ -169,17 +169,17 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     return filtered;
   }, [problems, searchQuery, sortBy, sortOrder, selectedTags]);
 
-  const handleEdit = (problemId: string) => {
+  const handleEdit = (problem_id: string) => {
     if (onEdit) {
-      onEdit(problemId);
+      onEdit(problem_id);
     } else {
       router.push(`/instructor/problems`);
     }
   };
 
-  const handleDelete = async (problemId: string, title: string) => {
+  const handleDelete = async (problem_id: string, title: string) => {
     try {
-      await apiDelete(`/problems/${problemId}`);
+      await apiDelete(`/problems/${problem_id}`);
 
       // Reload problems after deletion
       await loadProblems();
@@ -189,23 +189,23 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     }
   };
 
-  const handleCreateSession = (problemId: string) => {
-    const problem = problems.find(p => p.id === problemId);
+  const handleCreateSession = (problem_id: string) => {
+    const problem = problems.find(p => p.id === problem_id);
     if (!problem) {
       alert('Problem not found');
       return;
     }
 
-    setSelectedProblemForSession({ id: problem.id, title: problem.title, classId: problem.classId });
+    setSelectedProblemForSession({ id: problem.id, title: problem.title, class_id: problem.class_id });
     setShowSessionModal(true);
   };
 
-  const handleSessionCreated = (sessionId: string, _joinCode: string) => {
+  const handleSessionCreated = (session_id: string, _joinCode: string) => {
     setShowSessionModal(false);
     setSelectedProblemForSession(null);
     
     // Navigate to instructor page - it will auto-join the session
-    router.push(`/instructor?sessionId=${sessionId}`);
+    router.push(`/instructor?session_id=${session_id}`);
   };
 
   const handleCloseSessionModal = () => {
@@ -347,10 +347,10 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       {/* Session Creation Modal */}
       {showSessionModal && selectedProblemForSession && (
         <CreateSessionFromProblemModal
-          problemId={selectedProblemForSession.id}
-          problemTitle={selectedProblemForSession.title}
-          classId={selectedProblemForSession.classId}
-          className={classes.find(c => c.id === selectedProblemForSession.classId)?.name || ''}
+          problem_id={selectedProblemForSession.id}
+          problem_title={selectedProblemForSession.title}
+          class_id={selectedProblemForSession.class_id}
+          className={classes.find(c => c.id === selectedProblemForSession.class_id)?.name || ''}
           onClose={handleCloseSessionModal}
           onSuccess={handleSessionCreated}
         />

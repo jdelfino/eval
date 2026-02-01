@@ -82,8 +82,8 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
     setDeletingId(null);
   };
 
-  const handleManageUsers = (namespaceId: string) => {
-    router.push(`/system/namespaces/${namespaceId}`);
+  const handleManageUsers = (namespace_id: string) => {
+    router.push(`/system/namespaces/${namespace_id}`);
   };
 
   if (namespaces.length === 0) {

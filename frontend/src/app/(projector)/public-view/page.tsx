@@ -13,17 +13,17 @@ import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface PublicSessionState {
-  sessionId: string;
-  joinCode: string;
+  session_id: string;
+  join_code: string;
   problem: Problem | null;
-  featuredStudentId: string | null;
-  featuredCode: string | null;
+  featured_student_id: string | null;
+  featured_code: string | null;
   hasFeaturedSubmission: boolean;
 }
 
 function PublicViewContent() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('sessionId');
+  const session_id = searchParams.get('session_id');
   const { setHeaderSlot } = useHeaderSlot();
 
   const [state, setState] = useState<PublicSessionState | null>(null);
@@ -40,10 +40,10 @@ function PublicViewContent() {
 
   // Fetch session state from API
   const fetchState = useCallback(async () => {
-    if (!sessionId) return;
+    if (!session_id) return;
 
     try {
-      const res = await apiFetch(`/sessions/${sessionId}/public-state`);
+      const res = await apiFetch(`/sessions/${session_id}/public-state`);
       const data = await res.json();
       setState(data);
       setError(null);
@@ -53,7 +53,7 @@ function PublicViewContent() {
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [session_id]);
 
   // Connection status for polling-based updates
   // TODO: Replace with Centrifugo realtime subscription
@@ -62,7 +62,7 @@ function PublicViewContent() {
   // Show connection status in the global header
   const connectionState: ConnectionState = isConnected ? 'connected' : 'connecting';
   useEffect(() => {
-    if (sessionId) {
+    if (session_id) {
       setHeaderSlot(
         <ConnectionStatus
           status={connectionState}
@@ -71,10 +71,10 @@ function PublicViewContent() {
       );
     }
     return () => setHeaderSlot(null);
-  }, [sessionId, connectionState, setHeaderSlot]);
+  }, [session_id, connectionState, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
-  const debuggerHook = useApiDebugger(sessionId);
+  const debuggerHook = useApiDebugger(session_id);
 
   // Initial fetch
   useEffect(() => {
@@ -83,34 +83,34 @@ function PublicViewContent() {
 
   // Reset local code when featured student or their code changes
   useEffect(() => {
-    const studentChanged = state?.featuredStudentId !== lastFeaturedStudentId.current;
-    const codeChanged = state?.featuredCode !== lastFeaturedCode.current;
+    const studentChanged = state?.featured_student_id !== lastFeaturedStudentId.current;
+    const codeChanged = state?.featured_code !== lastFeaturedCode.current;
 
     if (studentChanged || codeChanged) {
-      lastFeaturedStudentId.current = state?.featuredStudentId || null;
-      lastFeaturedCode.current = state?.featuredCode || null;
-      setLocalCode(state?.featuredCode || state?.problem?.starterCode || '');
+      lastFeaturedStudentId.current = state?.featured_student_id || null;
+      lastFeaturedCode.current = state?.featured_code || null;
+      setLocalCode(state?.featured_code || state?.problem?.starter_code || '');
     }
-  }, [state?.featuredStudentId, state?.featuredCode, state?.problem?.starterCode]);
+  }, [state?.featured_student_id, state?.featured_code, state?.problem?.starter_code]);
 
   // Fallback: Poll for updates every 2 seconds ONLY when disconnected
   // This compensates for Realtime connection issues
   useEffect(() => {
-    if (!sessionId || isConnected) return;
+    if (!session_id || isConnected) return;
 
     const pollInterval = setInterval(() => {
       fetchState();
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, isConnected, fetchState]);
+  }, [session_id, isConnected, fetchState]);
 
-  if (!sessionId) {
+  if (!session_id) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-gray-300 rounded">
           <h1 className="text-xl font-bold mb-4">No Session</h1>
-          <p className="text-gray-500">Please provide a sessionId in the URL.</p>
+          <p className="text-gray-500">Please provide a session_id in the URL.</p>
         </div>
       </div>
     );
@@ -159,7 +159,7 @@ function PublicViewContent() {
           </div>
           <div className="flex-shrink-0 text-right">
             <span className="text-4xl font-bold text-blue-500 font-mono">
-              {state?.joinCode || '------'}
+              {state?.join_code || '------'}
             </span>
           </div>
         </button>
@@ -192,10 +192,10 @@ function PublicViewContent() {
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
           <CodeEditor
-            code={localCode || state?.problem?.starterCode || ''}
+            code={localCode || state?.problem?.starter_code || ''}
             onChange={setLocalCode}
             problem={state?.problem || null}
-            title={state?.problem?.starterCode ? 'Starter Code' : 'Scratch Pad'}
+            title={state?.problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
             useApiExecution={true}
             debugger={debuggerHook}
             forceDesktop={true}

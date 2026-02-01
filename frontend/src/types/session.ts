@@ -3,10 +3,12 @@
  *
  * Migrated from @/server/types — these are pure type definitions
  * used by hooks and components (no server/WebSocket dependencies).
+ *
+ * Field names use snake_case to match the Go backend JSON wire format.
  */
 
 export interface CallFrame {
-  functionName: string;
+  function_name: string;
   filename: string;
   line: number;
 }
@@ -20,35 +22,32 @@ export interface TraceStep {
   event: string;
   locals: VariableState;
   globals: VariableState;
-  callStack: CallFrame[];
+  call_stack: CallFrame[];
   stdout: string;
 }
 
 export interface ExecutionTrace {
   steps: TraceStep[];
-  totalSteps: number;
-  exitCode: number;
+  total_steps: number;
+  exit_code: number;
   error?: string;
   truncated?: boolean;
 }
 
-export interface ExecutionResult {
-  success: boolean;
-  output: string;
-  error: string;
-  executionTime: number;
-  stdin?: string;
-}
+/**
+ * Re-export ExecutionResult from api.ts to avoid duplication.
+ */
+export type { ExecutionResult } from './api';
 
 /**
  * Client-side student representation (no WebSocket).
  */
 export interface Student {
-  userId: string;
+  user_id: string;
   name: string;
   code: string;
-  lastUpdate: Date;
-  executionSettings?: import('./problem').ExecutionSettings;
+  last_update: Date;
+  execution_settings?: import('./problem').ExecutionSettings;
 }
 
 /**
@@ -56,17 +55,17 @@ export interface Student {
  */
 export interface Session {
   id: string;
-  namespaceId: string;
+  namespace_id: string;
   problem: import('./problem').Problem;
   students: Map<string, Student>;
-  featuredStudentId?: string;
-  featuredCode?: string;
-  createdAt: Date;
-  lastActivity: Date;
-  creatorId: string;
+  featured_student_id?: string;
+  featured_code?: string;
+  created_at: Date;
+  last_activity: Date;
+  creator_id: string;
   participants: string[];
   status: 'active' | 'completed';
-  endedAt?: Date;
-  sectionId: string;
-  sectionName: string;
+  ended_at?: Date;
+  section_id: string;
+  section_name: string;
 }

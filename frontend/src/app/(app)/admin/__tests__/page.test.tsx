@@ -67,8 +67,8 @@ const mockStats = {
 };
 
 const mockUsers = [
-  { id: 'u1', email: 'a@test.com', role: 'instructor', displayName: 'A', createdAt: new Date().toISOString() },
-  { id: 'u2', email: 'b@test.com', role: 'student', displayName: 'B', createdAt: new Date().toISOString() },
+  { id: 'u1', email: 'a@test.com', role: 'instructor', displayName: 'A', created_at: new Date().toISOString() },
+  { id: 'u2', email: 'b@test.com', role: 'student', displayName: 'B', created_at: new Date().toISOString() },
 ];
 
 // Mock fetch
@@ -137,7 +137,7 @@ describe('Admin Page - Namespace Admins tab', () => {
     // Include a namespace-admin user in the mock data
     const usersWithNsAdmin = [
       ...mockUsers,
-      { id: 'u3', email: 'nsadmin@test.com', role: 'namespace-admin', displayName: 'NS Admin', createdAt: new Date().toISOString() },
+      { id: 'u3', email: 'nsadmin@test.com', role: 'namespace-admin', displayName: 'NS Admin', created_at: new Date().toISOString() },
     ];
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/admin/stats')) {

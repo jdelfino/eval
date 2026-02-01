@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 interface SectionInfo {
   id: string;
   name: string;
-  joinCode: string;
+  join_code: string;
   schedule?: string;
   location?: string;
   studentCount: number;
@@ -20,24 +20,24 @@ interface SectionInfo {
 
 interface SessionInfo {
   id: string;
-  joinCode: string;
+  join_code: string;
   problemText: string;
   studentCount: number;
-  createdAt: string;
-  lastActivity: string;
+  created_at: string;
+  last_activity: string;
   status: 'active' | 'completed';
 }
 
 interface SectionViewProps {
-  classId: string;
+  class_id: string;
   className: string;
   onBack: () => void;
-  onCreateSession: (sectionId: string, sectionName: string) => void;
-  onJoinSession: (sessionId: string) => void;
+  onCreateSession: (section_id: string, section_name: string) => void;
+  onJoinSession: (session_id: string) => void;
 }
 
 export default function SectionView({
-  classId,
+  class_id,
   className,
   onBack: _onBack,
   onCreateSession,
@@ -56,7 +56,7 @@ export default function SectionView({
 
   useEffect(() => {
     loadSections();
-  }, [classId]);
+  }, [class_id]);
 
   useEffect(() => {
     if (selectedSection) {
@@ -67,7 +67,7 @@ export default function SectionView({
   const loadSections = async () => {
     try {
       setLoading(true);
-      const response = await apiFetch(`/classes/${classId}/sections`);
+      const response = await apiFetch(`/classes/${class_id}/sections`);
       const data = await response.json();
       setSections(data.sections || []);
       setError(null);
@@ -79,8 +79,8 @@ export default function SectionView({
     }
   };
 
-  const handleDeleteSectionClick = (sectionId: string, sectionName: string) => {
-    setSectionToDelete({ id: sectionId, name: sectionName });
+  const handleDeleteSectionClick = (section_id: string, section_name: string) => {
+    setSectionToDelete({ id: section_id, name: section_name });
     setShowDeleteConfirm(true);
   };
 
@@ -108,10 +108,10 @@ export default function SectionView({
     }
   };
 
-  const loadSessions = async (sectionId: string) => {
+  const loadSessions = async (section_id: string) => {
     try {
       setLoadingSessions(true);
-      const response = await apiFetch(`/sections/${sectionId}/sessions`);
+      const response = await apiFetch(`/sections/${section_id}/sessions`);
       const data = await response.json();
       setSessions(data.sessions || []);
     } catch (err) {
@@ -209,7 +209,7 @@ export default function SectionView({
                         <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                         </svg>
-                        {formatJoinCodeForDisplay(section.joinCode)}
+                        {formatJoinCodeForDisplay(section.join_code)}
                       </div>
                       {section.schedule && (
                         <p className="text-sm text-gray-600 mt-2">
@@ -273,7 +273,7 @@ export default function SectionView({
 
         {showCreateModal && (
           <CreateSectionModal
-            classId={classId}
+            class_id={class_id}
             onClose={() => setShowCreateModal(false)}
             onSuccess={() => {
               setShowCreateModal(false);
@@ -313,7 +313,7 @@ export default function SectionView({
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
-              {formatJoinCodeForDisplay(selectedSection.joinCode)}
+              {formatJoinCodeForDisplay(selectedSection.join_code)}
             </span>
           </div>
           <span>•</span>
@@ -372,7 +372,7 @@ export default function SectionView({
             >
               <div className="mb-4">
                 <div className="text-3xl font-bold text-blue-600 mb-2 font-mono tracking-wider">
-                  {session.joinCode}
+                  {session.join_code}
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -394,7 +394,7 @@ export default function SectionView({
                 }`}>
                   {session.status}
                 </span>
-                <span>{new Date(session.lastActivity).toLocaleTimeString()}</span>
+                <span>{new Date(session.last_activity).toLocaleTimeString()}</span>
               </div>
             </button>
           ))}

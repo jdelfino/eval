@@ -16,7 +16,7 @@ describe('SectionView', () => {
   const mockOnJoinSession = jest.fn();
 
   const defaultProps = {
-    classId: 'class-1',
+    class_id: 'class-1',
     className: 'CS101 Fall 2025',
     onBack: mockOnBack,
     onCreateSession: mockOnCreateSession,
@@ -192,20 +192,20 @@ describe('SectionView', () => {
     const mockSessions = [
       {
         id: 'session-1',
-        joinCode: 'ABC123',
+        join_code: 'ABC123',
         problemText: 'Solve fizzbuzz',
         studentCount: 5,
-        createdAt: '2025-12-19T10:00:00Z',
-        lastActivity: '2025-12-19T10:30:00Z',
+        created_at: '2025-12-19T10:00:00Z',
+        last_activity: '2025-12-19T10:30:00Z',
         status: 'active' as const,
       },
       {
         id: 'session-2',
-        joinCode: 'XYZ789',
+        join_code: 'XYZ789',
         problemText: '',
         studentCount: 3,
-        createdAt: '2025-12-19T09:00:00Z',
-        lastActivity: '2025-12-19T09:45:00Z',
+        created_at: '2025-12-19T09:00:00Z',
+        last_activity: '2025-12-19T09:45:00Z',
         status: 'completed' as const,
       },
     ];
@@ -292,11 +292,11 @@ describe('SectionView', () => {
     const mockSessions = [
       {
         id: 'session-1',
-        joinCode: 'ABC123',
+        join_code: 'ABC123',
         problemText: '',
         studentCount: 5,
-        createdAt: '2025-12-19T10:00:00Z',
-        lastActivity: '2025-12-19T10:30:00Z',
+        created_at: '2025-12-19T10:00:00Z',
+        last_activity: '2025-12-19T10:30:00Z',
         status: 'active' as const,
       },
     ];
@@ -533,7 +533,7 @@ describe('SectionView', () => {
       const newSection = {
         id: 'new-section',
         name: 'Test Section',
-        joinCode: 'ABC123',
+        join_code: 'ABC123',
         studentCount: 0,
         sessionCount: 0,
         activeSessionCount: 0

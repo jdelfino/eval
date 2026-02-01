@@ -7,7 +7,7 @@ import { AnalysisGroup } from '../../hooks/useAnalysisGroups';
 const makeGroup = (overrides: Partial<AnalysisGroup> = {}): AnalysisGroup => ({
   id: '0',
   label: 'Missing base case',
-  studentIds: ['s1', 's2'],
+  student_ids: ['s1', 's2'],
   recommendedStudentId: 's1',
   ...overrides,
 });
@@ -15,14 +15,14 @@ const makeGroup = (overrides: Partial<AnalysisGroup> = {}): AnalysisGroup => ({
 const allGroup: AnalysisGroup = {
   id: 'all',
   label: 'All Submissions',
-  studentIds: [],
+  student_ids: [],
   recommendedStudentId: null,
 };
 
 const groups: AnalysisGroup[] = [
   allGroup,
-  makeGroup({ id: '0', label: 'Missing base case', studentIds: ['s1', 's2'] }),
-  makeGroup({ id: '1', label: 'Off-by-one error', studentIds: ['s3'] }),
+  makeGroup({ id: '0', label: 'Missing base case', student_ids: ['s1', 's2'] }),
+  makeGroup({ id: '1', label: 'Off-by-one error', student_ids: ['s3'] }),
 ];
 
 describe('GroupNavigationHeader', () => {
@@ -145,7 +145,7 @@ describe('GroupNavigationHeader', () => {
   });
 
   it('shows completion summary only for "all" group', () => {
-    const completionEstimate = { finished: 10, inProgress: 3, notStarted: 2 };
+    const completion_estimate = { finished: 10, in_progress: 3, not_started: 2 };
 
     const { rerender } = render(
       <GroupNavigationHeader
@@ -153,7 +153,7 @@ describe('GroupNavigationHeader', () => {
         activeGroupIndex={0}
         onNavigate={jest.fn()}
         onDismiss={jest.fn()}
-        completionEstimate={completionEstimate}
+        completion_estimate={completion_estimate}
       />
     );
 
@@ -169,21 +169,21 @@ describe('GroupNavigationHeader', () => {
         activeGroupIndex={1}
         onNavigate={jest.fn()}
         onDismiss={jest.fn()}
-        completionEstimate={completionEstimate}
+        completion_estimate={completion_estimate}
       />
     );
 
     expect(screen.queryByTestId('completion-summary')).not.toBeInTheDocument();
   });
 
-  it('shows overallNote only for "all" group', () => {
+  it('shows overall_note only for "all" group', () => {
     const { rerender } = render(
       <GroupNavigationHeader
         groups={groups}
         activeGroupIndex={0}
         onNavigate={jest.fn()}
         onDismiss={jest.fn()}
-        overallNote="Most students did well"
+        overall_note="Most students did well"
       />
     );
 
@@ -197,7 +197,7 @@ describe('GroupNavigationHeader', () => {
         activeGroupIndex={1}
         onNavigate={jest.fn()}
         onDismiss={jest.fn()}
-        overallNote="Most students did well"
+        overall_note="Most students did well"
       />
     );
 

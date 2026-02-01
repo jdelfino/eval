@@ -5,18 +5,18 @@
 /**
  * Regression test for coding-tool-ahs
  *
- * Bug: Instructor session view was not passing executionResult to CodeEditor,
+ * Bug: Instructor session view was not passing execution_result to CodeEditor,
  * causing output to display in a redundant OutputPanel instead of the
  * editor's built-in output area.
  *
- * Fix: Pass executionResult prop to CodeEditor component.
+ * Fix: Pass execution_result prop to CodeEditor component.
  */
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-// We need to test that CodeEditor receives executionResult when rendered
+// We need to test that CodeEditor receives execution_result when rendered
 // in the instructor session context. Since the full instructor page has many
 // dependencies, we test the CodeEditor directly with the props pattern used
 // by the instructor page.
@@ -60,11 +60,11 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
     // When viewing student code in instructor session, execution results
     // should be passed to CodeEditor and displayed in its output area.
 
-    const executionResult = {
+    const execution_result = {
       success: true,
       output: 'Hello from student code!',
       error: '',
-      executionTime: 42,
+      execution_time: 42,
     };
 
     // Render CodeEditor with the same props pattern used in instructor page
@@ -76,7 +76,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         isRunning={false}
         readOnly
         problem={{ title: 'Test Problem' }}
-        executionResult={executionResult}
+        execution_result={execution_result}
       />
     );
 
@@ -87,11 +87,11 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
   });
 
   it('should display error output when execution fails', () => {
-    const executionResult = {
+    const execution_result = {
       success: false,
       output: '',
       error: 'NameError: name "undefined_var" is not defined',
-      executionTime: 15,
+      execution_time: 15,
     };
 
     render(
@@ -101,7 +101,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         onRun={() => {}}
         readOnly
         problem={{ title: 'Test Problem' }}
-        executionResult={executionResult}
+        execution_result={execution_result}
       />
     );
 
@@ -117,7 +117,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         onRun={() => {}}
         readOnly
         problem={{ title: 'Test Problem' }}
-        executionResult={null}
+        execution_result={null}
       />
     );
 

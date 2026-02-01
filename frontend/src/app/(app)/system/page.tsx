@@ -19,9 +19,9 @@ import { Alert } from '@/components/ui/Alert';
 interface Invitation {
   id: string;
   email: string;
-  namespaceId: string;
+  namespace_id: string;
   targetRole: 'namespace-admin' | 'instructor';
-  createdAt: string;
+  created_at: string;
   expiresAt: string;
   consumedAt?: string;
   revokedAt?: string;
@@ -30,7 +30,7 @@ interface Invitation {
 
 // Filters for invitations
 interface InvitationFilters {
-  namespaceId: string;
+  namespace_id: string;
   targetRole: 'namespace-admin' | 'instructor' | 'all';
   status: 'pending' | 'consumed' | 'revoked' | 'expired' | 'all';
 }
@@ -110,7 +110,7 @@ function SystemAdminContent() {
   const [invitationsError, setInvitationsError] = useState<string | null>(null);
   const [showCreateInvitationForm, setShowCreateInvitationForm] = useState(false);
   const [invitationFilters, setInvitationFilters] = useState<InvitationFilters>({
-    namespaceId: 'all',
+    namespace_id: 'all',
     targetRole: 'all',
     status: 'all',
   });
@@ -122,8 +122,8 @@ function SystemAdminContent() {
 
     try {
       const params = new URLSearchParams();
-      if (invitationFilters.namespaceId !== 'all') {
-        params.set('namespaceId', invitationFilters.namespaceId);
+      if (invitationFilters.namespace_id !== 'all') {
+        params.set('namespace_id', invitationFilters.namespace_id);
       }
       if (invitationFilters.targetRole !== 'all') {
         params.set('targetRole', invitationFilters.targetRole);
@@ -146,10 +146,10 @@ function SystemAdminContent() {
   // Create invitation
   const createInvitation = async (
     email: string,
-    namespaceId: string,
+    namespace_id: string,
     targetRole: 'namespace-admin' | 'instructor'
   ) => {
-    await apiPost('/system/invitations', { email, namespaceId, targetRole });
+    await apiPost('/system/invitations', { email, namespace_id, targetRole });
     // Refresh list
     await fetchInvitations();
     setShowCreateInvitationForm(false);
@@ -348,9 +348,9 @@ function SystemAdminContent() {
               </label>
               <select
                 id="filter-namespace"
-                value={invitationFilters.namespaceId}
+                value={invitationFilters.namespace_id}
                 onChange={(e) =>
-                  setInvitationFilters((f) => ({ ...f, namespaceId: e.target.value }))
+                  setInvitationFilters((f) => ({ ...f, namespace_id: e.target.value }))
                 }
                 className="px-3 py-2 rounded-lg border border-gray-300 min-w-[150px] text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
