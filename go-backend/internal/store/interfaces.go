@@ -468,6 +468,47 @@ type UserRepository interface {
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
 }
 
+// Invitation represents an invitation in the database.
+type Invitation struct {
+	ID          uuid.UUID  `json:"id"`
+	Email       string     `json:"email"`
+	UserID      *uuid.UUID `json:"user_id"`
+	TargetRole  string     `json:"target_role"`
+	NamespaceID string     `json:"namespace_id"`
+	CreatedBy   uuid.UUID  `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	ConsumedAt  *time.Time `json:"consumed_at"`
+	ConsumedBy  *uuid.UUID `json:"consumed_by"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	Status      string     `json:"status"` // computed: pending, consumed, revoked, expired
+}
+
+// CreateInvitationParams contains the fields for creating an invitation.
+type CreateInvitationParams struct {
+	Email       string
+	TargetRole  string
+	NamespaceID string
+	CreatedBy   uuid.UUID
+	ExpiresAt   time.Time
+}
+
+// InvitationFilters contains optional filters for listing invitations.
+type InvitationFilters struct {
+	NamespaceID *string
+	Status      *string // filter by computed status
+}
+
+// InvitationRepository defines the interface for invitation data access.
+type InvitationRepository interface {
+	ListInvitations(ctx context.Context, filters InvitationFilters) ([]Invitation, error)
+	GetInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error)
+	CreateInvitation(ctx context.Context, params CreateInvitationParams) (*Invitation, error)
+	RevokeInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error)
+	ConsumeInvitation(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*Invitation, error)
+}
+
 // AuditLog represents a row in the audit_logs table.
 type AuditLog struct {
 	ID          uuid.UUID       `json:"id"`
