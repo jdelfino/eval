@@ -70,6 +70,10 @@ func (m *fullMockUserRepo) DeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 
+func (m *fullMockUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	return nil, nil
+}
+
 func (m *fullMockUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
 	if m.countByRoleFn != nil {
 		return m.countByRoleFn(ctx, namespaceID)

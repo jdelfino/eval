@@ -120,7 +120,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 		// Protected routes
 		if s != nil {
-			r.Mount("/auth", handler.NewAuthHandler(s).Routes())
+			r.Mount("/auth", handler.NewAuthHandler(s, s, s, s).Routes())
 
 			// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {

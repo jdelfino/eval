@@ -49,6 +49,10 @@ func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string
 	return nil, nil
 }
 
+func (m *mockUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	return m.user, m.err
+}
+
 func TestUserLookupAdapter_GetUserByExternalID(t *testing.T) {
 	nsID := "ns-1"
 	userID := uuid.New()

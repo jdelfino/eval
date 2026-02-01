@@ -421,6 +421,15 @@ type DashboardRepository interface {
 	InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error)
 }
 
+// CreateUserParams contains the fields for creating a new user.
+type CreateUserParams struct {
+	ExternalID  string
+	Email       string
+	Role        string
+	NamespaceID *string
+	DisplayName *string
+}
+
 // UpdateUserAdminParams contains the fields an admin can update on a user.
 type UpdateUserAdminParams struct {
 	Email       *string
@@ -466,6 +475,9 @@ type UserRepository interface {
 
 	// CountUsersByRole counts users grouped by role within a namespace.
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
+
+	// CreateUser creates a new user and returns it.
+	CreateUser(ctx context.Context, params CreateUserParams) (*User, error)
 }
 
 // Invitation represents an invitation in the database.

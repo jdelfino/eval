@@ -298,5 +298,41 @@ func (s *Store) CountUsersByRole(ctx context.Context, namespaceID string) (map[s
 	return counts, rows.Err()
 }
 
+// CreateUser creates a new user and returns it.
+func (s *Store) CreateUser(ctx context.Context, params CreateUserParams) (*User, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		INSERT INTO users (external_id, email, role, namespace_id, display_name)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
+
+	var user User
+	err = conn.QueryRow(ctx, query,
+		params.ExternalID,
+		params.Email,
+		params.Role,
+		params.NamespaceID,
+		params.DisplayName,
+	).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.Email,
+		&user.Role,
+		&user.NamespaceID,
+		&user.DisplayName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // Compile-time check that Store implements UserRepository.
 var _ UserRepository = (*Store)(nil)

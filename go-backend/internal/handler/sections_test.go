@@ -877,6 +877,9 @@ func (m *sectionTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
 func (m *sectionTestUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
 	return nil, nil
 }
+func (m *sectionTestUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	return nil, nil
+}
 
 // --- MySections tests ---
 
