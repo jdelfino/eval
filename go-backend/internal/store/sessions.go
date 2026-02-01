@@ -186,7 +186,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 	if params.EndedAt != nil {
 		query += fmt.Sprintf(",\n		    ended_at = $%d", argIdx)
 		args = append(args, *params.EndedAt)
-		argIdx++
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
 	}
 
 	if params.ClearEndedAt {
