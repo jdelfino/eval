@@ -187,29 +187,37 @@ func (s *Store) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Count members with this role (FOR UPDATE locks the rows)
-	var count int
-	err = tx.QueryRow(ctx,
-		`SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND role = $2 FOR UPDATE`,
+	// Lock and fetch all member user_ids with this role.
+	// Cannot use COUNT(*) ... FOR UPDATE — aggregates are incompatible with FOR UPDATE in PG 15+.
+	rows, err := tx.Query(ctx,
+		`SELECT user_id FROM section_memberships WHERE section_id = $1 AND role = $2 FOR UPDATE`,
 		sectionID, role,
-	).Scan(&count)
+	)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
-	if count <= 1 {
-		// Check whether the target user is actually the one member.
-		var targetExists bool
-		err = tx.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM section_memberships WHERE section_id = $1 AND user_id = $2 AND role = $3)`,
-			sectionID, userID, role,
-		).Scan(&targetExists)
-		if err != nil {
+	var count int
+	var targetExists bool
+	for rows.Next() {
+		var uid uuid.UUID
+		if err := rows.Scan(&uid); err != nil {
 			return err
 		}
-		if !targetExists {
-			return ErrNotFound
+		count++
+		if uid == userID {
+			targetExists = true
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if !targetExists {
+		return ErrNotFound
+	}
+	if count <= 1 {
 		return ErrLastMember
 	}
 
