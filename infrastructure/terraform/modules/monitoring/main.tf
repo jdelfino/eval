@@ -29,7 +29,7 @@ resource "google_monitoring_dashboard" "go_api" {
               dataSets = [
                 {
                   timeSeriesQuery = {
-                    prometheusQuery = "sum by (status_code) (rate(http_requests_total[5m]))"
+                    prometheusQuery = "sum by (status) (rate(http_requests_total[5m]))"
                   }
                   plotType = "LINE"
                 }
@@ -53,7 +53,7 @@ resource "google_monitoring_dashboard" "go_api" {
               dataSets = [
                 {
                   timeSeriesQuery = {
-                    prometheusQuery = "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))"
+                    prometheusQuery = "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))"
                   }
                   plotType = "LINE"
                 }
@@ -157,7 +157,7 @@ resource "google_monitoring_dashboard" "go_api" {
               dataSets = [
                 {
                   timeSeriesQuery = {
-                    prometheusQuery = "db_pool_acquired_connections / db_pool_max_connections"
+                    prometheusQuery = "db_pool_connections{state=\"acquired\"} / db_pool_max_connections"
                   }
                   plotType = "LINE"
                 }
@@ -181,7 +181,7 @@ resource "google_monitoring_dashboard" "go_api" {
               dataSets = [
                 {
                   timeSeriesQuery = {
-                    prometheusQuery = "db_pool_acquired_connections"
+                    prometheusQuery = "db_pool_connections{state=\"acquired\"}"
                   }
                   plotType = "LINE"
                 },
