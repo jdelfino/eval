@@ -696,8 +696,8 @@ func TestGetClassDetail_WithSectionsAndInstructors(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.Class.ID != classID {
-		t.Errorf("expected class id %q, got %q", classID, got.Class.ID)
+	if got.ID != classID {
+		t.Errorf("expected class id %q, got %q", classID, got.ID)
 	}
 	if len(got.Sections) != 1 {
 		t.Fatalf("expected 1 section, got %d", len(got.Sections))

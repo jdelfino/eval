@@ -90,7 +90,7 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 	if len(filters.Tags) > 0 {
 		query += fmt.Sprintf(" AND tags && $%d", argIdx)
 		args = append(args, filters.Tags)
-		argIdx++
+		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
 	}
 
 	if filters.PublicOnly {

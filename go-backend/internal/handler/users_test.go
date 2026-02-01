@@ -22,8 +22,7 @@ type fullMockUserRepo struct {
 	listUsersFn          func(ctx context.Context, filters store.UserFilters) ([]store.User, error)
 	updateUserAdminFn    func(ctx context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error)
 	deleteUserFn         func(ctx context.Context, id uuid.UUID) error
-	listByNamespaceFn    func(ctx context.Context, namespaceID string) ([]store.User, error)
-	countByRoleFn        func(ctx context.Context, namespaceID string) (map[string]int, error)
+countByRoleFn        func(ctx context.Context, namespaceID string) (map[string]int, error)
 	getUserByIDFn        func(ctx context.Context, id uuid.UUID) (*store.User, error)
 	getUserByExternalIDFn func(ctx context.Context, externalID string) (*store.User, error)
 	getUserByEmailFn     func(ctx context.Context, email string) (*store.User, error)
