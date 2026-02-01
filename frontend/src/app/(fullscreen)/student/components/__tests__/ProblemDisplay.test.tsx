@@ -5,7 +5,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProblemDisplay from '../ProblemDisplay';
 import { Problem } from '@/types/problem';
-import { TestCase } from '@/types/testing';
+import { TestCase } from '@/types/problem';
 
 // Helper to create a minimal problem
 function createProblem(overrides: Partial<Problem> = {}): Problem {

@@ -3,7 +3,7 @@
  * @jest-environment node
  */
 
-import { withRetry, withRetryInfo, fetchWithRetry, createUserFriendlyError } from '../api-utils';
+import { withRetry, withRetryInfo } from '../api-utils';
 
 describe('api-utils', () => {
   beforeEach(() => {
@@ -144,112 +144,4 @@ describe('api-utils', () => {
     });
   });
 
-  describe('fetchWithRetry', () => {
-    const mockFetch = jest.fn();
-    global.fetch = mockFetch;
-
-    beforeEach(() => {
-      mockFetch.mockReset();
-    });
-
-    it('should return response on successful fetch', async () => {
-      const mockResponse = new Response('ok', { status: 200 });
-      mockFetch.mockResolvedValue(mockResponse);
-
-      const response = await fetchWithRetry('/test');
-
-      expect(response).toBe(mockResponse);
-      expect(mockFetch).toHaveBeenCalledWith('/test', undefined);
-    });
-
-    it('should pass fetch options', async () => {
-      const mockResponse = new Response('ok', { status: 200 });
-      mockFetch.mockResolvedValue(mockResponse);
-
-      const fetchOptions = { method: 'POST', body: 'data' };
-      await fetchWithRetry('/test', { fetchOptions });
-
-      expect(mockFetch).toHaveBeenCalledWith('/test', fetchOptions);
-    });
-
-    it('should retry on network errors', async () => {
-      mockFetch
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
-
-      const resultPromise = fetchWithRetry('/test', { maxRetries: 1, initialDelay: 100 });
-
-      await jest.runAllTimersAsync();
-
-      const response = await resultPromise;
-      expect(response.status).toBe(200);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('should retry on 500 status codes', async () => {
-      mockFetch
-        .mockResolvedValueOnce(new Response('error', { status: 500, statusText: 'Internal Server Error' }))
-        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
-
-      const resultPromise = fetchWithRetry('/test', { maxRetries: 1, initialDelay: 100 });
-
-      await jest.runAllTimersAsync();
-
-      const response = await resultPromise;
-      expect(response.status).toBe(200);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('should not retry on 400 status codes', async () => {
-      mockFetch.mockResolvedValue(new Response('error', { status: 400, statusText: 'Bad Request' }));
-
-      const response = await fetchWithRetry('/test');
-
-      expect(response.status).toBe(400);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should retry on configurable status codes', async () => {
-      mockFetch
-        .mockResolvedValueOnce(new Response('error', { status: 429, statusText: 'Too Many Requests' }))
-        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
-
-      const resultPromise = fetchWithRetry('/test', {
-        maxRetries: 1,
-        initialDelay: 100,
-        retryStatusCodes: [429],
-      });
-
-      await jest.runAllTimersAsync();
-
-      const response = await resultPromise;
-      expect(response.status).toBe(200);
-    });
-  });
-
-  describe('createUserFriendlyError', () => {
-    it('should create error with user-friendly message', () => {
-      const error = createUserFriendlyError(new Error('ECONNREFUSED'));
-
-      expect(error.message).toBe('Connection error. Please check your internet and try again.');
-      expect((error as any).originalError).toBeInstanceOf(Error);
-      expect((error as any).category).toBe('network');
-      expect((error as any).isRetryable).toBe(true);
-    });
-
-    it('should handle string input', () => {
-      const error = createUserFriendlyError('Unauthorized');
-
-      expect(error.message).toBe('Your session has expired. Please sign in again.');
-      expect((error as any).category).toBe('auth');
-      expect((error as any).isRetryable).toBe(false);
-    });
-
-    it('should preserve original error', () => {
-      const original = new Error('Server error 500');
-      const error = createUserFriendlyError(original);
-
-      expect((error as any).originalError).toBe(original);
-    });
-  });
 });

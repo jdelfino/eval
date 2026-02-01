@@ -5,7 +5,7 @@
  * for transient failures.
  */
 
-import { isRetryableError, classifyError } from './error-messages';
+import { isRetryableError } from './error-messages';
 
 /**
  * Options for retry behavior
@@ -189,95 +189,3 @@ export async function withRetryInfo<T>(
   throw lastError!;
 }
 
-/**
- * Options for fetchWithRetry
- */
-export interface FetchWithRetryOptions extends RetryOptions {
-  /** Fetch options (method, headers, body, etc.) */
-  fetchOptions?: RequestInit;
-  /** HTTP status codes that should trigger a retry (default: [408, 429, 500, 502, 503, 504]) */
-  retryStatusCodes?: number[];
-}
-
-/**
- * Default HTTP status codes that should trigger retry
- */
-const defaultRetryStatusCodes = [408, 429, 500, 502, 503, 504];
-
-/**
- * Fetch wrapper with automatic retry for transient failures
- *
- * Retries on network errors and configurable HTTP status codes.
- *
- * @param url - The URL to fetch
- * @param options - Fetch and retry options
- * @returns Promise resolving to the fetch Response
- *
- * @example
- * ```ts
- * const response = await fetchWithRetry('/api/data', {
- *   fetchOptions: { method: 'POST', body: JSON.stringify(data) },
- *   maxRetries: 2,
- * });
- * ```
- */
-export async function fetchWithRetry(
-  url: string,
-  options: FetchWithRetryOptions = {}
-): Promise<Response> {
-  const {
-    fetchOptions,
-    retryStatusCodes = defaultRetryStatusCodes,
-    ...retryOptions
-  } = options;
-
-  return withRetry(
-    async () => {
-      const response = await fetch(url, fetchOptions);
-
-      // Check if we should retry based on status code
-      if (retryStatusCodes.includes(response.status)) {
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-      }
-
-      return response;
-    },
-    retryOptions
-  );
-}
-
-/**
- * Fetch JSON data with automatic retry
- *
- * @param url - The URL to fetch
- * @param options - Fetch and retry options
- * @returns Promise resolving to the parsed JSON data
- */
-export async function fetchJsonWithRetry<T>(
-  url: string,
-  options: FetchWithRetryOptions = {}
-): Promise<T> {
-  const response = await fetchWithRetry(url, options);
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Request failed: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Creates an error with a user-friendly message while preserving the original
- *
- * @param error - The original error
- * @returns Error with user-friendly message
- */
-export function createUserFriendlyError(error: Error | string): Error {
-  const classified = classifyError(error);
-  const userError = new Error(classified.userMessage);
-  (userError as any).originalError = error;
-  (userError as any).category = classified.category;
-  (userError as any).isRetryable = classified.isRetryable;
-  return userError;
-}
