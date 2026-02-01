@@ -1,9 +1,10 @@
-# GCP GKE Autopilot Module
+# GCP GKE Standard Module
 #
-# Creates a GKE Autopilot cluster with private cluster configuration,
-# Workload Identity enabled, and VPC-native networking.
+# Creates a GKE Standard cluster with two node pools (default + executor),
+# private cluster configuration, Workload Identity, and VPC-native networking.
 #
-# Autopilot clusters have $0 control plane fee - you pay only for pod resources.
+# The executor pool is tainted so only executor pods schedule there.
+# Both pools support scale-to-zero via configurable min node counts.
 
 # -----------------------------------------------------------------------------
 # Local Values
@@ -37,16 +38,17 @@ resource "google_project_service" "container" {
 }
 
 # -----------------------------------------------------------------------------
-# GKE Autopilot Cluster
+# GKE Standard Cluster
 # -----------------------------------------------------------------------------
 
-resource "google_container_cluster" "autopilot" {
+resource "google_container_cluster" "main" {
   name     = local.cluster_name
   project  = var.project_id
-  location = var.region
+  location = var.zone
 
-  # Enable Autopilot mode - this manages node pools automatically
-  enable_autopilot = true
+  # Standard cluster pattern: remove default node pool, manage separately
+  initial_node_count       = 1
+  remove_default_node_pool = true
 
   # Deletion protection
   deletion_protection = var.deletion_protection
@@ -107,4 +109,74 @@ resource "google_container_cluster" "autopilot" {
   resource_labels = local.labels
 
   depends_on = [google_project_service.container]
+}
+
+# -----------------------------------------------------------------------------
+# Default Node Pool
+# -----------------------------------------------------------------------------
+
+resource "google_container_node_pool" "default" {
+  name     = "default"
+  project  = var.project_id
+  location = var.zone
+  cluster  = google_container_cluster.main.name
+
+  autoscaling {
+    min_node_count = var.default_pool_min_nodes
+    max_node_count = var.default_pool_max_nodes
+  }
+
+  node_config {
+    machine_type = var.default_pool_machine_type
+    spot         = var.default_pool_spot
+
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
+  }
+
+  management {
+    auto_repair  = true
+    auto_upgrade = true
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Executor Node Pool
+# -----------------------------------------------------------------------------
+
+resource "google_container_node_pool" "executor" {
+  name     = "executor"
+  project  = var.project_id
+  location = var.zone
+  cluster  = google_container_cluster.main.name
+
+  autoscaling {
+    min_node_count = var.executor_pool_min_nodes
+    max_node_count = var.executor_pool_max_nodes
+  }
+
+  node_config {
+    machine_type = var.executor_pool_machine_type
+    spot         = var.executor_pool_spot
+
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
+
+    taint {
+      key    = "executor-only"
+      value  = "true"
+      effect = "NO_SCHEDULE"
+    }
+  }
+
+  management {
+    auto_repair  = true
+    auto_upgrade = true
+  }
 }

@@ -1,4 +1,4 @@
-# GCP GKE Autopilot Module Variables
+# GCP GKE Standard Module Variables
 #
 # All required variables have no defaults - forces explicit configuration.
 # Values are provided by the calling environment.
@@ -23,7 +23,12 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region for the cluster"
+  description = "GCP region (used by other modules sharing this variable set)"
+  type        = string
+}
+
+variable "zone" {
+  description = "GCP zone for the zonal GKE cluster (e.g. us-east1-b)"
   type        = string
 }
 
@@ -141,4 +146,60 @@ variable "cluster_resource_labels" {
   description = "The GCP labels (key/value pairs) to be applied to the cluster"
   type        = map(string)
   default     = {}
+}
+
+# -----------------------------------------------------------------------------
+# Default Node Pool
+# -----------------------------------------------------------------------------
+
+variable "default_pool_machine_type" {
+  description = "Machine type for the default node pool"
+  type        = string
+  default     = "e2-small"
+}
+
+variable "default_pool_min_nodes" {
+  description = "Minimum number of nodes in the default pool (0 for scale-to-zero)"
+  type        = number
+  default     = 0
+}
+
+variable "default_pool_max_nodes" {
+  description = "Maximum number of nodes in the default pool"
+  type        = number
+  default     = 3
+}
+
+variable "default_pool_spot" {
+  description = "Use spot VMs for the default node pool"
+  type        = bool
+  default     = true
+}
+
+# -----------------------------------------------------------------------------
+# Executor Node Pool
+# -----------------------------------------------------------------------------
+
+variable "executor_pool_machine_type" {
+  description = "Machine type for the executor node pool"
+  type        = string
+  default     = "e2-medium"
+}
+
+variable "executor_pool_min_nodes" {
+  description = "Minimum number of nodes in the executor pool (0 for scale-to-zero)"
+  type        = number
+  default     = 0
+}
+
+variable "executor_pool_max_nodes" {
+  description = "Maximum number of nodes in the executor pool"
+  type        = number
+  default     = 5
+}
+
+variable "executor_pool_spot" {
+  description = "Use spot VMs for the executor node pool"
+  type        = bool
+  default     = true
 }

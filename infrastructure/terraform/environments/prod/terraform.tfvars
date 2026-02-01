@@ -43,6 +43,7 @@ nat_zone = "us-east1-b"
 # GKE Configuration
 # -----------------------------------------------------------------------------
 
+gke_zone                   = "us-east1-b"
 gke_release_channel        = "REGULAR"
 gke_deletion_protection    = true
 gke_master_ipv4_cidr_block = "172.16.0.0/28"
@@ -87,13 +88,6 @@ authorized_domains = [
 project_number = "580381260766"
 github_owner   = "jdelfino"
 github_repo    = "eval"
-
-# -----------------------------------------------------------------------------
-# Redis Configuration
-# -----------------------------------------------------------------------------
-
-redis_tier           = "BASIC"
-redis_memory_size_gb = 1
 
 # -----------------------------------------------------------------------------
 # Centrifugo Configuration
