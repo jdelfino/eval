@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -43,18 +44,51 @@ func (h *ProblemHandler) Routes() chi.Router {
 }
 
 // List handles GET /api/v1/problems — returns all problems visible to the user.
+// Supports query params: class_id, author_id, tags (comma-separated), include_public, sort_by, sort_order.
 func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
-	var classID *uuid.UUID
-	if classIDStr := r.URL.Query().Get("class_id"); classIDStr != "" {
+	q := r.URL.Query()
+	filters := store.ProblemFilters{
+		SortBy:    q.Get("sort_by"),
+		SortOrder: q.Get("sort_order"),
+	}
+
+	if classIDStr := q.Get("class_id"); classIDStr != "" {
 		parsed, err := uuid.Parse(classIDStr)
 		if err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid class_id")
 			return
 		}
-		classID = &parsed
+		filters.ClassID = &parsed
 	}
 
-	problems, err := h.problems.ListProblems(r.Context(), classID)
+	if authorIDStr := q.Get("author_id"); authorIDStr != "" {
+		parsed, err := uuid.Parse(authorIDStr)
+		if err != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid author_id")
+			return
+		}
+		filters.AuthorID = &parsed
+	}
+
+	if tagsStr := q.Get("tags"); tagsStr != "" {
+		filters.Tags = strings.Split(tagsStr, ",")
+	}
+
+	if q.Get("include_public") == "true" {
+		filters.IncludePublic = true
+	}
+
+	// Use filtered query if any extended filters are set
+	hasExtended := filters.AuthorID != nil || len(filters.Tags) > 0 ||
+		filters.IncludePublic || filters.SortBy != "" || filters.SortOrder != ""
+
+	var problems []store.Problem
+	var err error
+	if hasExtended {
+		problems, err = h.problems.ListProblemsFiltered(r.Context(), filters)
+	} else {
+		problems, err = h.problems.ListProblems(r.Context(), filters.ClassID)
+	}
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -95,6 +129,8 @@ type createProblemRequest struct {
 	TestCases         json.RawMessage `json:"test_cases"`
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	ClassID           *uuid.UUID      `json:"class_id"`
+	Tags              []string        `json:"tags"`
+	Solution          *string         `json:"solution"`
 }
 
 // Create handles POST /api/v1/problems — creates a new problem (instructor+).
@@ -119,6 +155,8 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ExecutionSettings: req.ExecutionSettings,
 		AuthorID:          authUser.ID,
 		ClassID:           req.ClassID,
+		Tags:              req.Tags,
+		Solution:          req.Solution,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -136,6 +174,8 @@ type updateProblemRequest struct {
 	TestCases         json.RawMessage `json:"test_cases"`
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	ClassID           *uuid.UUID      `json:"class_id"`
+	Tags              []string        `json:"tags"`
+	Solution          *string         `json:"solution"`
 }
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
@@ -157,6 +197,8 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		TestCases:         req.TestCases,
 		ExecutionSettings: req.ExecutionSettings,
 		ClassID:           req.ClassID,
+		Tags:              req.Tags,
+		Solution:          req.Solution,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {

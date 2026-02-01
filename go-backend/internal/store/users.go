@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -99,6 +100,216 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserP
 	}
 
 	return &user, nil
+}
+
+// GetUserByEmail retrieves a user by email address.
+// Returns ErrNotFound if the user does not exist.
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
+		FROM users
+		WHERE email = $1`
+
+	var user User
+	err = conn.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.Email,
+		&user.Role,
+		&user.NamespaceID,
+		&user.DisplayName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &user, nil
+}
+
+// ListUsers retrieves users with optional filters.
+func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
+		FROM users
+		WHERE 1=1`
+
+	var args []any
+	argIdx := 1
+
+	if filters.NamespaceID != nil {
+		query += fmt.Sprintf(" AND namespace_id = $%d", argIdx)
+		args = append(args, *filters.NamespaceID)
+		argIdx++
+	}
+
+	if filters.Role != nil {
+		query += fmt.Sprintf(" AND role = $%d", argIdx)
+		args = append(args, *filters.Role)
+		argIdx++ //nolint:ineffassign
+	}
+
+	query += " ORDER BY created_at"
+
+	rows, err := conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID,
+			&u.ExternalID,
+			&u.Email,
+			&u.Role,
+			&u.NamespaceID,
+			&u.DisplayName,
+			&u.CreatedAt,
+			&u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// UpdateUserAdmin updates a user's fields as an admin and returns the updated user.
+// Returns ErrNotFound if the user does not exist.
+func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params UpdateUserAdminParams) (*User, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		UPDATE users
+		SET email        = COALESCE($2, email),
+		    display_name = COALESCE($3, display_name),
+		    role         = COALESCE($4, role),
+		    namespace_id = COALESCE($5, namespace_id),
+		    updated_at   = now()
+		WHERE id = $1
+		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
+
+	var user User
+	err = conn.QueryRow(ctx, query, id, params.Email, params.DisplayName, params.Role, params.NamespaceID).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.Email,
+		&user.Role,
+		&user.NamespaceID,
+		&user.DisplayName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+
+	return &user, nil
+}
+
+// DeleteUser deletes a user by ID.
+// Returns ErrNotFound if the user does not exist.
+func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return err
+	}
+
+	tag, err := conn.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListUsersByNamespace retrieves all users in a namespace.
+func (s *Store) ListUsersByNamespace(ctx context.Context, namespaceID string) ([]User, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
+		FROM users
+		WHERE namespace_id = $1
+		ORDER BY created_at`
+
+	rows, err := conn.Query(ctx, query, namespaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID,
+			&u.ExternalID,
+			&u.Email,
+			&u.Role,
+			&u.NamespaceID,
+			&u.DisplayName,
+			&u.CreatedAt,
+			&u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// CountUsersByRole counts users grouped by role within a namespace.
+func (s *Store) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	const query = `
+		SELECT role, COUNT(*)
+		FROM users
+		WHERE namespace_id = $1
+		GROUP BY role`
+
+	rows, err := conn.Query(ctx, query, namespaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var role string
+		var count int
+		if err := rows.Scan(&role, &count); err != nil {
+			return nil, err
+		}
+		counts[role] = count
+	}
+	return counts, rows.Err()
 }
 
 // Compile-time check that Store implements UserRepository.

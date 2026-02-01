@@ -153,11 +153,23 @@ type UpdateProblemParams struct {
 	Solution          *string
 }
 
+// ProblemFilters contains optional filters for listing problems.
+type ProblemFilters struct {
+	ClassID       *uuid.UUID
+	AuthorID      *uuid.UUID
+	Tags          []string
+	IncludePublic bool
+	SortBy        string // "created_at", "title", "updated_at"
+	SortOrder     string // "asc", "desc"
+}
+
 // ProblemRepository defines the interface for problem data access.
 type ProblemRepository interface {
 	// ListProblems retrieves all problems visible to the current user (RLS-filtered).
 	// If classID is non-nil, results are filtered to that class.
 	ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem, error)
+	// ListProblemsFiltered retrieves problems with extended filters.
+	ListProblemsFiltered(ctx context.Context, filters ProblemFilters) ([]Problem, error)
 	// GetProblem retrieves a problem by ID.
 	// Returns ErrNotFound if the problem does not exist.
 	GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error)
@@ -200,10 +212,21 @@ type UpdateSectionParams struct {
 	Active   *bool
 }
 
+// MySectionInfo represents a section with its class info for the "my sections" endpoint.
+type MySectionInfo struct {
+	Section   Section `json:"section"`
+	ClassName string  `json:"class_name"`
+}
+
 // SectionRepository defines the interface for section data access.
 type SectionRepository interface {
 	// ListSectionsByClass retrieves all sections for a given class (RLS-filtered).
 	ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]Section, error)
+	// ListMySections retrieves sections the user is enrolled in with class info.
+	ListMySections(ctx context.Context, userID uuid.UUID) ([]MySectionInfo, error)
+	// UpdateSectionJoinCode updates a section's join code.
+	// Returns ErrNotFound if the section does not exist.
+	UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*Section, error)
 	// GetSection retrieves a section by ID.
 	// Returns ErrNotFound if the section does not exist.
 	GetSection(ctx context.Context, id uuid.UUID) (*Section, error)
@@ -366,6 +389,20 @@ type RevisionRepository interface {
 	CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error)
 }
 
+// UpdateUserAdminParams contains the fields an admin can update on a user.
+type UpdateUserAdminParams struct {
+	Email       *string
+	DisplayName *string
+	Role        *string
+	NamespaceID *string
+}
+
+// UserFilters contains optional filters for listing users.
+type UserFilters struct {
+	NamespaceID *string
+	Role        *string
+}
+
 // UserRepository defines the interface for user data access.
 type UserRepository interface {
 	// GetUserByID retrieves a user by their primary key ID.
@@ -376,7 +413,28 @@ type UserRepository interface {
 	// Returns ErrNotFound if the user does not exist.
 	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
 
+	// GetUserByEmail retrieves a user by email address.
+	// Returns ErrNotFound if the user does not exist.
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+
 	// UpdateUser updates a user's mutable fields and returns the updated user.
 	// Returns ErrNotFound if the user does not exist.
 	UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserParams) (*User, error)
+
+	// ListUsers retrieves users with optional filters.
+	ListUsers(ctx context.Context, filters UserFilters) ([]User, error)
+
+	// UpdateUserAdmin updates a user's fields as an admin and returns the updated user.
+	// Returns ErrNotFound if the user does not exist.
+	UpdateUserAdmin(ctx context.Context, id uuid.UUID, params UpdateUserAdminParams) (*User, error)
+
+	// DeleteUser deletes a user by ID.
+	// Returns ErrNotFound if the user does not exist.
+	DeleteUser(ctx context.Context, id uuid.UUID) error
+
+	// ListUsersByNamespace retrieves all users in a namespace.
+	ListUsersByNamespace(ctx context.Context, namespaceID string) ([]User, error)
+
+	// CountUsersByRole counts users grouped by role within a namespace.
+	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
 }

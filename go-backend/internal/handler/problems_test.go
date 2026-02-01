@@ -46,6 +46,10 @@ func (m *mockProblemRepo) DeleteProblem(ctx context.Context, id uuid.UUID) error
 	return m.deleteProblemFn(ctx, id)
 }
 
+func (m *mockProblemRepo) ListProblemsFiltered(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
+	return nil, nil
+}
+
 func testProblem() *store.Problem {
 	desc := "Write a function that adds two numbers"
 	starter := "func add(a, b int) int {\n\treturn 0\n}"

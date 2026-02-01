@@ -59,6 +59,89 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 	return problems, rows.Err()
 }
 
+// ListProblemsFiltered retrieves problems with extended filters.
+func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters) ([]Problem, error) {
+	conn, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT id, namespace_id, title, description, starter_code, test_cases,
+		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
+		FROM problems
+		WHERE 1=1`
+
+	var args []any
+	argIdx := 1
+
+	if filters.ClassID != nil {
+		query += fmt.Sprintf(" AND class_id = $%d", argIdx)
+		args = append(args, *filters.ClassID)
+		argIdx++
+	}
+
+	if filters.AuthorID != nil {
+		query += fmt.Sprintf(" AND author_id = $%d", argIdx)
+		args = append(args, *filters.AuthorID)
+		argIdx++
+	}
+
+	if len(filters.Tags) > 0 {
+		query += fmt.Sprintf(" AND tags && $%d", argIdx)
+		args = append(args, filters.Tags)
+		argIdx++
+	}
+
+	if filters.IncludePublic {
+		query += " AND class_id IS NULL"
+	}
+
+	// Sorting
+	sortBy := "created_at"
+	switch filters.SortBy {
+	case "title":
+		sortBy = "title"
+	case "updated_at":
+		sortBy = "updated_at"
+	}
+	sortOrder := "ASC"
+	if filters.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+
+	rows, err := conn.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var problems []Problem
+	for rows.Next() {
+		var p Problem
+		if err := rows.Scan(
+			&p.ID,
+			&p.NamespaceID,
+			&p.Title,
+			&p.Description,
+			&p.StarterCode,
+			&p.TestCases,
+			&p.ExecutionSettings,
+			&p.AuthorID,
+			&p.ClassID,
+			&p.Tags,
+			&p.Solution,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		problems = append(problems, p)
+	}
+	return problems, rows.Err()
+}
+
 // GetProblem retrieves a problem by its ID.
 // Returns ErrNotFound if the problem does not exist.
 func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) {

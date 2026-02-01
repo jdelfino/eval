@@ -49,6 +49,14 @@ func (m *mockSectionRepo) DeleteSection(ctx context.Context, id uuid.UUID) error
 	return m.deleteSectionFn(ctx, id)
 }
 
+func (m *mockSectionRepo) ListMySections(_ context.Context, _ uuid.UUID) ([]store.MySectionInfo, error) {
+	return nil, nil
+}
+
+func (m *mockSectionRepo) UpdateSectionJoinCode(_ context.Context, _ uuid.UUID, _ string) (*store.Section, error) {
+	return nil, nil
+}
+
 func testSection() *store.Section {
 	semester := "Fall 2025"
 	return &store.Section{

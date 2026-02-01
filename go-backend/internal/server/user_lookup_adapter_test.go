@@ -28,6 +28,30 @@ func (m *mockUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.Update
 	return m.user, m.err
 }
 
+func (m *mockUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
+	return m.user, m.err
+}
+
+func (m *mockUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	return nil, nil
+}
+
+func (m *mockUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	return m.user, m.err
+}
+
+func (m *mockUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockUserRepo) ListUsersByNamespace(_ context.Context, _ string) ([]store.User, error) {
+	return nil, nil
+}
+
+func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
+	return nil, nil
+}
+
 func TestUserLookupAdapter_GetUserByExternalID(t *testing.T) {
 	nsID := "ns-1"
 	userID := uuid.New()

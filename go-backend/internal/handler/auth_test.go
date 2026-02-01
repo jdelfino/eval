@@ -34,6 +34,30 @@ func (m *mockUserRepo) UpdateUser(ctx context.Context, id uuid.UUID, params stor
 	return m.updateUserFn(ctx, id, params)
 }
 
+func (m *mockUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+
+func (m *mockUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	return nil, nil
+}
+
+func (m *mockUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	return nil, nil
+}
+
+func (m *mockUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
+func (m *mockUserRepo) ListUsersByNamespace(_ context.Context, _ string) ([]store.User, error) {
+	return nil, nil
+}
+
+func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
+	return nil, nil
+}
+
 func testUser() *store.User {
 	return &store.User{
 		ID:          uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
