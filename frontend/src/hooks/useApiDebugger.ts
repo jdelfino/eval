@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ExecutionTrace, TraceStep } from '@/types/session';
+import { apiFetch } from '@/lib/api-client';
 
 export interface DebuggerState {
   trace: ExecutionTrace | null;
@@ -33,16 +34,11 @@ export function useApiDebugger(session_id: string | null) {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const response = await fetch(`/api/sessions/${session_id}/trace`, {
+      const response = await apiFetch(`/api/sessions/${session_id}/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, stdin, maxSteps }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to trace code execution');
-      }
 
       const trace: ExecutionTrace = await response.json();
       setState({
