@@ -152,6 +152,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Delete("/sections/{id}/instructors/{userID}", sectionHandler.RemoveInstructor)
 			})
 
+			// Instructor dashboard (instructor+)
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				dashboardHandler := handler.NewDashboardHandler(s)
+				r.Get("/instructor/dashboard", dashboardHandler.Dashboard)
+			})
+
 			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
 
 			// User management routes
@@ -186,6 +193,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
 			executeHandler := handler.NewExecuteHandler(s, s, execClient)
 			r.Post("/sessions/{id}/execute", executeHandler.Execute)
+
+			// Standalone code execution (instructor+) — no session context
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Post("/execute", executeHandler.StandaloneExecute)
+			})
 
 			sessionStudentHandler := handler.NewSessionStudentHandler(s, sessionPub, logger)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)

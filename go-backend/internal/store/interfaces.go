@@ -399,6 +399,28 @@ type RevisionRepository interface {
 	CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error)
 }
 
+// DashboardSection represents a section summary in the instructor dashboard.
+type DashboardSection struct {
+	ID               uuid.UUID   `json:"id"`
+	Name             string      `json:"name"`
+	StudentCount     int         `json:"student_count"`
+	ActiveSessionIDs []uuid.UUID `json:"active_session_ids"`
+}
+
+// DashboardClass represents a class summary in the instructor dashboard.
+type DashboardClass struct {
+	ID       uuid.UUID          `json:"id"`
+	Name     string             `json:"name"`
+	Sections []DashboardSection `json:"sections"`
+}
+
+// DashboardRepository defines the interface for dashboard data access.
+type DashboardRepository interface {
+	// InstructorDashboard returns classes with sections (student counts, active session IDs)
+	// for the given instructor.
+	InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error)
+}
+
 // UpdateUserAdminParams contains the fields an admin can update on a user.
 type UpdateUserAdminParams struct {
 	Email       *string
@@ -444,4 +466,54 @@ type UserRepository interface {
 
 	// CountUsersByRole counts users grouped by role within a namespace.
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
+}
+
+// AuditLog represents a row in the audit_logs table.
+type AuditLog struct {
+	ID          uuid.UUID       `json:"id"`
+	NamespaceID string          `json:"namespace_id"`
+	Action      string          `json:"action"`
+	ActorID     *uuid.UUID      `json:"actor_id"`
+	TargetID    *string         `json:"target_id"`
+	TargetType  *string         `json:"target_type"`
+	Details     json.RawMessage `json:"details"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// AuditLogFilters contains optional filters for listing audit logs.
+type AuditLogFilters struct {
+	Limit   int
+	Offset  int
+	Action  *string
+	ActorID *uuid.UUID
+}
+
+// CreateAuditLogParams contains the fields for creating an audit log entry.
+type CreateAuditLogParams struct {
+	NamespaceID string
+	Action      string
+	ActorID     *uuid.UUID
+	TargetID    *string
+	TargetType  *string
+	Details     json.RawMessage
+}
+
+// AuditLogRepository defines the interface for audit log data access.
+type AuditLogRepository interface {
+	ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error)
+	CreateAuditLog(ctx context.Context, params CreateAuditLogParams) (*AuditLog, error)
+}
+
+// AdminStats contains aggregate system statistics.
+type AdminStats struct {
+	UsersByRole    map[string]int `json:"users_by_role"`
+	ClassCount     int            `json:"class_count"`
+	SectionCount   int            `json:"section_count"`
+	ActiveSessions int            `json:"active_sessions"`
+}
+
+// AdminRepository defines the interface for admin data access.
+type AdminRepository interface {
+	AdminStats(ctx context.Context) (*AdminStats, error)
+	ClearData(ctx context.Context, keepUserID uuid.UUID) error
 }
