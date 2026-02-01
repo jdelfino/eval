@@ -16,8 +16,7 @@ import React, { useState, useEffect, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+import { publicFetchRaw } from '@/lib/public-api-client';
 
 // Page state types
 type PageState =
@@ -186,7 +185,7 @@ function StudentRegistrationContent() {
     setPageState({ status: 'validating-code' });
 
     try {
-      const response = await fetch(`${API_BASE}/auth/register-student?code=${encodeURIComponent(cleaned)}`);
+      const response = await publicFetchRaw(`/auth/register-student?code=${encodeURIComponent(cleaned)}`);
 
       if (!response.ok) {
         const data = await response.json();
@@ -241,7 +240,7 @@ function StudentRegistrationContent() {
     setPageState({ status: 'submitting' });
 
     try {
-      const response = await fetch(`${API_BASE}/auth/register-student`, {
+      const response = await publicFetchRaw('/auth/register-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

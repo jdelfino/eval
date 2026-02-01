@@ -17,8 +17,7 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+import { publicFetchRaw } from '@/lib/public-api-client';
 
 // Page state types
 type PageState =
@@ -134,7 +133,7 @@ export default function AcceptInvitePage() {
         if (accessToken) queryParams.set('access_token', accessToken);
         queryParams.set('type', type);
 
-        const response = await fetch(`${API_BASE}/auth/accept-invite?${queryParams.toString()}`);
+        const response = await publicFetchRaw(`/auth/accept-invite?${queryParams.toString()}`);
 
         if (!response.ok) {
           const data = await response.json();
@@ -209,7 +208,7 @@ export default function AcceptInvitePage() {
 
     try {
       // Submit profile and password to the backend
-      const response = await fetch(`${API_BASE}/auth/accept-invite`, {
+      const response = await publicFetchRaw('/auth/accept-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

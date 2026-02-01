@@ -15,8 +15,7 @@ import { codeToHtml } from 'shiki';
 import MarkdownContent from '@/components/MarkdownContent';
 import SolutionBlock from './SolutionBlock';
 import InstructorActions from './InstructorActions';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || '';
+import { publicFetchRaw } from '@/lib/public-api-client';
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -35,9 +34,9 @@ interface PublicProblem {
 
 const getProblem = cache(async function getProblem(id: string): Promise<PublicProblem | null> {
   try {
-    const res = await fetch(`${API_BASE}/public/problems/${id}`, {
+    const res = await publicFetchRaw(`/public/problems/${id}`, {
       next: { revalidate: 60 },
-    });
+    } as RequestInit);
     if (!res.ok) return null;
     return res.json();
   } catch {

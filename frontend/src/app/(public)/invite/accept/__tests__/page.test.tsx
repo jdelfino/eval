@@ -22,6 +22,11 @@ jest.mock('next/navigation', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+// Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
+jest.mock('@/lib/public-api-client', () => ({
+  publicFetchRaw: (...args: Parameters<typeof fetch>) => global.fetch(...args),
+}));
+
 // Mock the location hash hook
 let mockLocationHash = '';
 const mockReload = jest.fn();

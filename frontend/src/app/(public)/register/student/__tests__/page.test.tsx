@@ -29,6 +29,12 @@ jest.mock('@/contexts/AuthContext', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+// Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
+jest.mock('@/lib/public-api-client', () => ({
+  publicFetchRaw: (path: string, options?: RequestInit) =>
+    global.fetch(path, options),
+}));
+
 describe('StudentRegistrationPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();

@@ -3,8 +3,7 @@
 import React, { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorAlert } from '@/components/ErrorAlert';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+import { publicFetchRaw } from '@/lib/public-api-client';
 
 export default function BootstrapPage() {
   const [email, setEmail] = useState('');
@@ -47,7 +46,7 @@ export default function BootstrapPage() {
     const username = email.trim().split('@')[0];
 
     try {
-      const response = await fetch(`${API_BASE}/auth/register`, {
+      const response = await publicFetchRaw('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, username }),
