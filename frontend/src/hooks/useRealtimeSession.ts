@@ -175,6 +175,11 @@ export function useRealtimeSession({
     }
   }, [session_id, mapStudent]);
 
+  // Reset initialLoadRef when sessionId changes so new session data is fetched
+  useEffect(() => {
+    initialLoadRef.current = false;
+  }, [session_id]);
+
   /**
    * Subscribe to Centrifugo channel for real-time updates
    */
