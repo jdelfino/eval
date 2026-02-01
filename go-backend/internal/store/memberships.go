@@ -198,6 +198,18 @@ func (s *Store) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID
 	}
 
 	if count <= 1 {
+		// Check whether the target user is actually the one member.
+		var targetExists bool
+		err = tx.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM section_memberships WHERE section_id = $1 AND user_id = $2 AND role = $3)`,
+			sectionID, userID, role,
+		).Scan(&targetExists)
+		if err != nil {
+			return err
+		}
+		if !targetExists {
+			return ErrNotFound
+		}
 		return ErrLastMember
 	}
 

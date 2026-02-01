@@ -1510,6 +1510,48 @@ func TestAddInstructor_InternalError(t *testing.T) {
 	}
 }
 
+// TestRemoveInstructor_NotMemberButOtherInstructorExists verifies that removing
+// a user who is NOT an instructor of the section returns 404 (not 400) even when
+// other instructors exist. This is the edge case for PLAT-59r: the store must
+// distinguish "target is the last instructor" from "target is not a member at all".
+func TestRemoveInstructor_NotMemberButOtherInstructorExists(t *testing.T) {
+	sectionID := uuid.New()
+	nonMemberUser := uuid.New()
+
+	membRepo := &mockMembershipRepo{
+		deleteMembershipIfNotLastFn: func(_ context.Context, sid, uid uuid.UUID, role string) error {
+			if sid != sectionID {
+				t.Fatalf("unexpected sectionID: %v", sid)
+			}
+			if uid != nonMemberUser {
+				t.Fatalf("unexpected userID: %v", uid)
+			}
+			if role != "instructor" {
+				t.Fatalf("unexpected role: %v", role)
+			}
+			// The store should return ErrNotFound when the target is not a member,
+			// even if there is only one instructor (who is someone else).
+			return store.ErrNotFound
+		},
+	}
+
+	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("userID", nonMemberUser.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.RemoveInstructor(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when target is not a member, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRemoveInstructor_InternalError(t *testing.T) {
 	sectionID := uuid.New()
 	userToRemove := uuid.New()
