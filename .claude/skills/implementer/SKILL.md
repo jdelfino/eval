@@ -15,10 +15,17 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - Mock properly in tests. Do not add production fallbacks to make tests pass.
 - No type casts that bypass the type system.
 - No optional chaining on required properties.
+- **Every production code change requires tests.** No exceptions for migrations, refactors, copy-paste, or "just wiring things up." If you wrote or modified production code, you must write tests for it. Never defer tests to a follow-up issue.
 
 ## Phase 1: Write Failing Tests
 
 Write tests for the behavior you are about to change or add. Do this **before** touching any production code.
+
+**This phase is NOT optional.** Common excuses that do NOT exempt you from writing tests:
+- "It's just a migration" — migrated code has new integration points that need testing
+- "It's just wiring up an API client" — API client calls, error handling, and auth headers need tests
+- "The old code didn't have tests" — that's a reason to add them, not skip them
+- "I'll add tests later" — no, tests ship with the code, always
 
 1. Read the relevant production code to understand current behavior
 2. Write new test cases that describe the desired behavior after your change
