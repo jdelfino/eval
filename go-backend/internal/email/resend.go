@@ -68,7 +68,7 @@ func (c *ResendClient) SendInvitation(ctx context.Context, to, inviterName, name
 	if err != nil {
 		return fmt.Errorf("send email: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("resend API error: status %d", resp.StatusCode)

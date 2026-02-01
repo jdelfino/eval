@@ -62,7 +62,6 @@ func (s *Store) ListInvitations(ctx context.Context, filters InvitationFilters) 
 	if filters.NamespaceID != nil {
 		conditions = append(conditions, fmt.Sprintf("namespace_id = $%d", argIdx))
 		args = append(args, *filters.NamespaceID)
-		argIdx++
 	}
 
 	if filters.Status != nil {

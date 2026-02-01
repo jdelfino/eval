@@ -41,7 +41,6 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 	if filters.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argIdx)
 		args = append(args, filters.Offset)
-		argIdx++
 	}
 
 	rows, err := conn.Query(ctx, query, args...)
