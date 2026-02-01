@@ -636,3 +636,125 @@ func TestDeleteClass_RBACForbidden(t *testing.T) {
 		t.Fatalf("expected 403 for student DELETE, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// classTestUserRepo implements store.UserRepository for class tests.
+type classTestUserRepo struct {
+	getUserByIDFn func(ctx context.Context, id uuid.UUID) (*store.User, error)
+}
+
+func (m *classTestUserRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
+	if m.getUserByIDFn != nil {
+		return m.getUserByIDFn(ctx, id)
+	}
+	return nil, store.ErrNotFound
+}
+
+func (m *classTestUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+
+func (m *classTestUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+
+func (m *classTestUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+
+func (m *classTestUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	return nil, nil
+}
+
+func (m *classTestUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+
+func (m *classTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
+	return store.ErrNotFound
+}
+
+func (m *classTestUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
+	return nil, nil
+}
+
+func TestGetClassDetail_WithSectionsAndInstructors(t *testing.T) {
+	c := testClass()
+	classID := c.ID
+	sectionID := uuid.MustParse("aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee")
+	instructorID := uuid.MustParse("bbbb1111-cccc-dddd-eeee-ffffffffffff")
+	studentID := uuid.MustParse("cccc1111-dddd-eeee-ffff-aaaaaaaaaaaa")
+
+	classRepo := &mockClassRepo{
+		getClassFn: func(_ context.Context, id uuid.UUID) (*store.Class, error) {
+			if id != classID {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return c, nil
+		},
+	}
+
+	sectionRepo := &mockSectionRepo{
+		listSectionsByClassFn: func(_ context.Context, cid uuid.UUID) ([]store.Section, error) {
+			if cid != classID {
+				t.Fatalf("unexpected class id: %v", cid)
+			}
+			return []store.Section{
+				{ID: sectionID, ClassID: classID, Name: "Section A"},
+			}, nil
+		},
+	}
+
+	membershipRepo := &mockMembershipRepo{
+		listMembersFn: func(_ context.Context, sid uuid.UUID) ([]store.SectionMembership, error) {
+			if sid != sectionID {
+				t.Fatalf("unexpected section id: %v", sid)
+			}
+			return []store.SectionMembership{
+				{ID: uuid.New(), UserID: instructorID, SectionID: sectionID, Role: "instructor"},
+				{ID: uuid.New(), UserID: studentID, SectionID: sectionID, Role: "student"},
+			}, nil
+		},
+	}
+
+	displayName := "Prof. Smith"
+	userRepo := &classTestUserRepo{
+		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+			if id == instructorID {
+				return &store.User{ID: instructorID, Email: "smith@example.com", DisplayName: &displayName}, nil
+			}
+			return nil, store.ErrNotFound
+		},
+	}
+
+	h := NewClassHandler(classRepo, sectionRepo, membershipRepo, userRepo)
+	req := httptest.NewRequest(http.MethodGet, "/"+classID.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got classDetailResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Class.ID != classID {
+		t.Errorf("expected class id %q, got %q", classID, got.Class.ID)
+	}
+	if len(got.Sections) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(got.Sections))
+	}
+	if len(got.InstructorNames) != 1 {
+		t.Fatalf("expected 1 instructor name, got %d", len(got.InstructorNames))
+	}
+	if got.InstructorNames[0] != "Prof. Smith" {
+		t.Errorf("expected instructor name %q, got %q", "Prof. Smith", got.InstructorNames[0])
+	}
+}

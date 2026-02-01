@@ -490,3 +490,354 @@ func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 		t.Fatalf("expected 403 for non-system-admin PATCH, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// nsTestUserRepo implements store.UserRepository for namespace handler tests.
+type nsTestUserRepo struct {
+	listUsersFn   func(ctx context.Context, filters store.UserFilters) ([]store.User, error)
+	countByRoleFn func(ctx context.Context, namespaceID string) (map[string]int, error)
+}
+
+func (m *nsTestUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+func (m *nsTestUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+func (m *nsTestUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+func (m *nsTestUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+func (m *nsTestUserRepo) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
+	return m.listUsersFn(ctx, filters)
+}
+func (m *nsTestUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	return nil, store.ErrNotFound
+}
+func (m *nsTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
+	return store.ErrNotFound
+}
+func (m *nsTestUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
+	return m.countByRoleFn(ctx, namespaceID)
+}
+
+func TestDeleteNamespace_Success(t *testing.T) {
+	ns := testNamespace()
+	ns.Active = false
+
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
+			if id != "test-ns" {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			if params.Active == nil || *params.Active != false {
+				t.Fatalf("expected active=false, got %v", params.Active)
+			}
+			return ns, nil
+		},
+	}
+
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got store.Namespace
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Active != false {
+		t.Errorf("expected active=false, got %v", got.Active)
+	}
+}
+
+func TestDeleteNamespace_NotFound(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNSListUsers_Success(t *testing.T) {
+	nsID := "test-ns"
+	userID := uuid.New()
+	users := &nsTestUserRepo{
+		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+			if filters.NamespaceID == nil || *filters.NamespaceID != nsID {
+				t.Fatalf("expected namespace filter %q, got %v", nsID, filters.NamespaceID)
+			}
+			return []store.User{
+				{ID: userID, Email: "alice@example.com", Role: "student", NamespaceID: &nsID},
+			}, nil
+		},
+	}
+
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", nsID)
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got []store.User
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(got))
+	}
+	if got[0].Email != "alice@example.com" {
+		t.Errorf("expected email alice@example.com, got %q", got[0].Email)
+	}
+}
+
+func TestNSListUsers_Empty(t *testing.T) {
+	users := &nsTestUserRepo{
+		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+			return nil, nil
+		},
+	}
+
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if body != "[]\n" {
+		t.Errorf("expected empty array, got %q", body)
+	}
+}
+
+func TestGetCapacity_Success(t *testing.T) {
+	maxInst := 5
+	maxStud := 50
+	ns := testNamespace()
+	ns.MaxInstructors = &maxInst
+	ns.MaxStudents = &maxStud
+
+	repo := &mockNamespaceRepo{
+		getNamespaceFn: func(_ context.Context, id string) (*store.Namespace, error) {
+			if id != "test-ns" {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return ns, nil
+		},
+	}
+	users := &nsTestUserRepo{
+		countByRoleFn: func(_ context.Context, namespaceID string) (map[string]int, error) {
+			if namespaceID != "test-ns" {
+				t.Fatalf("unexpected namespace id: %v", namespaceID)
+			}
+			return map[string]int{"instructor": 2, "student": 10}, nil
+		},
+	}
+
+	h := NewNamespaceHandler(repo, users)
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetCapacity(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got capacityResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.MaxInstructors == nil || *got.MaxInstructors != 5 {
+		t.Errorf("expected max_instructors=5, got %v", got.MaxInstructors)
+	}
+	if got.MaxStudents == nil || *got.MaxStudents != 50 {
+		t.Errorf("expected max_students=50, got %v", got.MaxStudents)
+	}
+	if got.CurrentCounts["instructor"] != 2 {
+		t.Errorf("expected instructor count 2, got %d", got.CurrentCounts["instructor"])
+	}
+	if got.CurrentCounts["student"] != 10 {
+		t.Errorf("expected student count 10, got %d", got.CurrentCounts["student"])
+	}
+}
+
+func TestGetCapacity_NotFound(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	h := NewNamespaceHandler(repo, &nsTestUserRepo{})
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetCapacity(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetCapacity_CountError(t *testing.T) {
+	ns := testNamespace()
+	repo := &mockNamespaceRepo{
+		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {
+			return ns, nil
+		},
+	}
+	users := &nsTestUserRepo{
+		countByRoleFn: func(_ context.Context, _ string) (map[string]int, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	h := NewNamespaceHandler(repo, users)
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetCapacity(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateCapacity_Success(t *testing.T) {
+	maxInst := 10
+	maxStud := 100
+	ns := testNamespace()
+	ns.MaxInstructors = &maxInst
+	ns.MaxStudents = &maxStud
+
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
+			if id != "test-ns" {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			if params.MaxInstructors == nil || *params.MaxInstructors != 10 {
+				t.Fatalf("expected max_instructors=10, got %v", params.MaxInstructors)
+			}
+			if params.MaxStudents == nil || *params.MaxStudents != 100 {
+				t.Fatalf("expected max_students=100, got %v", params.MaxStudents)
+			}
+			return ns, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"max_instructors": 10,
+		"max_students":    100,
+	})
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodPut, "/test-ns/capacity", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCapacity(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got store.Namespace
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.MaxInstructors == nil || *got.MaxInstructors != 10 {
+		t.Errorf("expected max_instructors=10, got %v", got.MaxInstructors)
+	}
+	if got.MaxStudents == nil || *got.MaxStudents != 100 {
+		t.Errorf("expected max_students=100, got %v", got.MaxStudents)
+	}
+}
+
+func TestUpdateCapacity_NotFound(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
+	h := NewNamespaceHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodPut, "/test-ns/capacity", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "test-ns")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCapacity(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
