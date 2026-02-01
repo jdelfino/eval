@@ -17,12 +17,14 @@ import (
 
 	"github.com/jdelfino/eval/internal/ai"
 	"github.com/jdelfino/eval/internal/auth"
+	emailpkg "github.com/jdelfino/eval/internal/email"
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/executor"
 	"github.com/jdelfino/eval/internal/handler"
 	"github.com/jdelfino/eval/internal/metrics"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/internal/revision"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 )
@@ -43,6 +45,7 @@ type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
 	pool       DatabasePool
+	revBuffer  *revision.RevisionBuffer
 }
 
 // New creates a new Server with the configured middleware chain and routes.
@@ -95,6 +98,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	// Health endpoints
 	r.Get("/healthz", handler.Healthz)
 	r.Handle("/readyz", handler.NewReadyzHandler(pool))
+
+	var revBuffer *revision.RevisionBuffer
 
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
@@ -175,6 +180,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			sysUserHandler := handler.NewUserHandler(s)
 			r.Mount("/system/users", sysUserHandler.SystemRoutes())
 
+			// Invitation routes
+			var emailCli emailpkg.Client
+			if cfg.ResendAPIKey != "" {
+				emailCli = emailpkg.NewResendClient(cfg.ResendAPIKey)
+			} else {
+				emailCli = emailpkg.NoOpClient{}
+			}
+			invitationHandler := handler.NewInvitationHandler(s, s, emailCli, cfg.InviteBaseURL)
+			r.Mount("/namespaces/{id}/invitations", invitationHandler.Routes())
+			r.Mount("/system/invitations", invitationHandler.SystemRoutes())
+
 			// Create real-time publisher (no-op if Centrifugo is not configured)
 			var sessionPub realtime.SessionPublisher
 			if cfg.CentrifugoURL != "" && cfg.CentrifugoAPIKey != "" {
@@ -184,7 +200,11 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				sessionPub = realtime.NoOpSessionPublisher{}
 			}
 
-			r.Mount("/sessions", handler.NewSessionHandler(s, sessionPub, logger).Routes())
+			// Create revision buffer for auto-creating revisions on code save.
+			revBuffer = revision.NewRevisionBuffer(s, logger)
+			revBuffer.Start()
+
+			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(s, sessionPub, revBuffer, logger).Routes())
 
 			sessionStateHandler := handler.NewSessionStateHandler(s, s, s, sessionPub, logger)
 			r.Get("/sessions/{id}/state", sessionStateHandler.State)
@@ -218,7 +238,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
-			sessionStudentHandler := handler.NewSessionStudentHandler(s, sessionPub, logger)
+			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(s, sessionPub, revBuffer, logger)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
 			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
 			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
@@ -230,8 +250,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
 			Handler: r,
 		},
-		logger: logger,
-		pool:   pool,
+		logger:    logger,
+		pool:      pool,
+		revBuffer: revBuffer,
 	}
 }
 
@@ -244,5 +265,8 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server without interrupting active connections.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.revBuffer != nil {
+		s.revBuffer.Stop()
+	}
 	return s.httpServer.Shutdown(ctx)
 }

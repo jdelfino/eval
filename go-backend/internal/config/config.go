@@ -50,6 +50,10 @@ type Config struct {
 	IdentityPlatformAuthDomain string `env:"IDENTITY_PLATFORM_AUTH_DOMAIN"`
 	OAuthClientID              string `env:"OAUTH_CLIENT_ID"`
 	OAuthClientSecret          string `env:"OAUTH_CLIENT_SECRET"`
+
+	// Invitation / Email Configuration
+	ResendAPIKey  string `env:"RESEND_API_KEY"`
+	InviteBaseURL string `env:"INVITE_BASE_URL" envDefault:"http://localhost:3000/invite/accept"`
 }
 
 // Load parses environment variables and returns a Config struct.
