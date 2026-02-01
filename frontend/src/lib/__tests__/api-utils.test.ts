@@ -155,10 +155,10 @@ describe('api-utils', () => {
       const mockResponse = new Response('ok', { status: 200 });
       mockFetch.mockResolvedValue(mockResponse);
 
-      const response = await fetchWithRetry('/api/test');
+      const response = await fetchWithRetry('/test');
 
       expect(response).toBe(mockResponse);
-      expect(mockFetch).toHaveBeenCalledWith('/api/test', undefined);
+      expect(mockFetch).toHaveBeenCalledWith('/test', undefined);
     });
 
     it('should pass fetch options', async () => {
@@ -166,9 +166,9 @@ describe('api-utils', () => {
       mockFetch.mockResolvedValue(mockResponse);
 
       const fetchOptions = { method: 'POST', body: 'data' };
-      await fetchWithRetry('/api/test', { fetchOptions });
+      await fetchWithRetry('/test', { fetchOptions });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/test', fetchOptions);
+      expect(mockFetch).toHaveBeenCalledWith('/test', fetchOptions);
     });
 
     it('should retry on network errors', async () => {
@@ -176,7 +176,7 @@ describe('api-utils', () => {
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce(new Response('ok', { status: 200 }));
 
-      const resultPromise = fetchWithRetry('/api/test', { maxRetries: 1, initialDelay: 100 });
+      const resultPromise = fetchWithRetry('/test', { maxRetries: 1, initialDelay: 100 });
 
       await jest.runAllTimersAsync();
 
@@ -190,7 +190,7 @@ describe('api-utils', () => {
         .mockResolvedValueOnce(new Response('error', { status: 500, statusText: 'Internal Server Error' }))
         .mockResolvedValueOnce(new Response('ok', { status: 200 }));
 
-      const resultPromise = fetchWithRetry('/api/test', { maxRetries: 1, initialDelay: 100 });
+      const resultPromise = fetchWithRetry('/test', { maxRetries: 1, initialDelay: 100 });
 
       await jest.runAllTimersAsync();
 
@@ -202,7 +202,7 @@ describe('api-utils', () => {
     it('should not retry on 400 status codes', async () => {
       mockFetch.mockResolvedValue(new Response('error', { status: 400, statusText: 'Bad Request' }));
 
-      const response = await fetchWithRetry('/api/test');
+      const response = await fetchWithRetry('/test');
 
       expect(response.status).toBe(400);
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -213,7 +213,7 @@ describe('api-utils', () => {
         .mockResolvedValueOnce(new Response('error', { status: 429, statusText: 'Too Many Requests' }))
         .mockResolvedValueOnce(new Response('ok', { status: 200 }));
 
-      const resultPromise = fetchWithRetry('/api/test', {
+      const resultPromise = fetchWithRetry('/test', {
         maxRetries: 1,
         initialDelay: 100,
         retryStatusCodes: [429],

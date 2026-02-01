@@ -34,7 +34,7 @@ const pastSession = {
 
 function mockSectionFetch(role: 'instructor' | 'student', sessions: object[] = [pastSession]) {
   return (url: string) => {
-    if (url === '/api/sections/my') {
+    if (url === '/sections/my') {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
@@ -45,7 +45,7 @@ function mockSectionFetch(role: 'instructor' | 'student', sessions: object[] = [
         }),
       });
     }
-    if (url === '/api/sections/section-1/sessions') {
+    if (url === '/sections/section-1/sessions') {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ sessions }),

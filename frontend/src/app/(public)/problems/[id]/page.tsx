@@ -4,26 +4,45 @@
  * Displays problem title, description, and a click-to-reveal solution
  * with syntax highlighting. Includes a self-link for copy/paste into slides.
  * Server-rendered with OG meta tags for link previews.
+ *
+ * Fetches data from the Go backend public API.
  */
 
 import { cache, Suspense } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { codeToHtml } from 'shiki';
-import { getProblemRepository } from '@/server/persistence';
-import { getClassRepository } from '@/server/classes';
-import { SERVICE_ROLE_MARKER } from '@/server/supabase/client';
 import MarkdownContent from '@/components/MarkdownContent';
 import SolutionBlock from './SolutionBlock';
 import InstructorActions from './InstructorActions';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || '';
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
-const getProblem = cache(async function getProblem(id: string) {
-  const repo = getProblemRepository(SERVICE_ROLE_MARKER);
-  return repo.getById(id);
+interface PublicProblem {
+  id: string;
+  title: string;
+  description?: string;
+  solution?: string;
+  starter_code?: string;
+  class_id: string;
+  class_name?: string;
+  tags: string[];
+}
+
+const getProblem = cache(async function getProblem(id: string): Promise<PublicProblem | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/public/problems/${id}`, {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 });
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -51,9 +70,7 @@ export default async function PublicProblemPage({ params }: Params) {
     notFound();
   }
 
-  const classRepo = getClassRepository(SERVICE_ROLE_MARKER);
-  const classInfo = await classRepo.getClass(problem.classId);
-  const className = classInfo?.name || '';
+  const className = problem.class_name || '';
 
   let solutionHtml: string | null = null;
   if (problem.solution) {
@@ -76,7 +93,7 @@ export default async function PublicProblemPage({ params }: Params) {
       </a>
 
       <Suspense fallback={null}>
-        <InstructorActions problemId={problem.id} problemTitle={problem.title} classId={problem.classId} className={className} />
+        <InstructorActions problemId={problem.id} problemTitle={problem.title} classId={problem.class_id} className={className} />
       </Suspense>
 
       {problem.description && (

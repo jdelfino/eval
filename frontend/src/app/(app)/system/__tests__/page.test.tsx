@@ -305,7 +305,7 @@ describe('SystemAdminPage', () => {
       await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/system/invitations', expect.objectContaining({
+        expect(mockFetch).toHaveBeenCalledWith('/system/invitations', expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
             email: 'new@example.com',
@@ -348,7 +348,7 @@ describe('SystemAdminPage', () => {
       await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/system/invitations', expect.objectContaining({
+        expect(mockFetch).toHaveBeenCalledWith('/system/invitations', expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
             email: 'instructor@example.com',

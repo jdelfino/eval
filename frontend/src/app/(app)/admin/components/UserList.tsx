@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { User } from '@/server/auth/types';
+import type { User } from '@/types/auth';
 
 interface UserListProps {
   users: User[];

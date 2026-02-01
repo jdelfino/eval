@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Problem } from '@/types/problem';
 import { apiFetch } from '@/lib/api-client';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
@@ -56,7 +55,8 @@ function PublicViewContent() {
     }
   }, [sessionId]);
 
-  // Listen for Broadcast messages (more reliable than postgres_changes, recommended by Supabase)
+  // Connection status for polling-based updates
+  // TODO: Replace with Centrifugo realtime subscription
   const [isConnected, setIsConnected] = useState(false);
 
   // Show connection status in the global header
@@ -72,43 +72,6 @@ function PublicViewContent() {
     }
     return () => setHeaderSlot(null);
   }, [sessionId, connectionState, setHeaderSlot]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const supabase = getSupabaseBrowserClient();
-    const channelName = `session:${sessionId}`;
-
-    const channel = supabase
-      .channel(channelName)
-      .on('broadcast', { event: 'featured_student_changed' }, (payload) => {
-        if (payload.payload) {
-          const { featuredStudentId, featuredCode } = payload.payload;
-          setState(prev => prev ? {
-            ...prev,
-            featuredStudentId,
-            featuredCode,
-            hasFeaturedSubmission: !!featuredCode,
-          } : prev);
-        }
-      })
-      .on('broadcast', { event: 'problem_updated' }, (payload) => {
-        if (payload.payload) {
-          const { problem } = payload.payload;
-          setState(prev => prev ? {
-            ...prev,
-            problem,
-          } : prev);
-        }
-      })
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [sessionId]);
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger(sessionId);

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
-import { Problem, ExecutionSettings } from '@/server/types/problem';
+import { Problem, ExecutionSettings } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import CodeEditor from './components/CodeEditor';

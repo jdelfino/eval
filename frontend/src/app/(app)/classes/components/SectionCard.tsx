@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { Section } from '@/server/classes/types';
-import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
+import type { Section } from '@/types/classes';
+import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { apiFetch } from '@/lib/api-client';
 
 interface Instructor {

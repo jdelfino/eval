@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SessionStudentPane } from '../SessionStudentPane';
-import { WalkthroughScript, AnalysisIssue } from '@/server/types/analysis';
+import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
 import { AnalysisGroup } from '../../hooks/useAnalysisGroups';
 
 // Mock the CodeEditor component since it depends on Monaco

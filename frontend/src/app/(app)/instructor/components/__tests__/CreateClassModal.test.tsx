@@ -122,7 +122,7 @@ describe('CreateClassModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes', {
+      expect(global.fetch).toHaveBeenCalledWith('/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -152,7 +152,7 @@ describe('CreateClassModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes', {
+      expect(global.fetch).toHaveBeenCalledWith('/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +178,7 @@ describe('CreateClassModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/classes', expect.objectContaining({
         body: JSON.stringify({
           name: 'CS101',
           description: '',

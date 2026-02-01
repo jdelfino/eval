@@ -183,7 +183,7 @@ describe('ClassList', () => {
 
     await waitFor(() => {
       // fetchWithRetry passes undefined as second argument when no fetchOptions provided
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes', undefined);
+      expect(global.fetch).toHaveBeenCalledWith('/classes', undefined);
     });
   });
 

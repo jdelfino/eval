@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import StudentAnalysisDetails from '../StudentAnalysisDetails';
-import { AnalysisIssue } from '@/server/types/analysis';
+import { AnalysisIssue } from '@/types/analysis';
 
 const makeIssue = (overrides: Partial<AnalysisIssue> = {}): AnalysisIssue => ({
   title: 'Missing base case',

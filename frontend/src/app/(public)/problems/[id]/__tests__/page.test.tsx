@@ -12,10 +12,12 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import PublicProblemPage, { generateMetadata } from '../page';
-import { getProblemRepository } from '@/server/persistence';
 import { notFound } from 'next/navigation';
 
-jest.mock('@/server/persistence');
+// Mock global fetch for the Go API
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
 jest.mock('next/navigation', () => ({
   notFound: jest.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -47,36 +49,34 @@ jest.mock('@/components/MarkdownContent', () => {
   };
 });
 
-const mockGetProblemRepository = getProblemRepository as jest.MockedFunction<typeof getProblemRepository>;
 const mockNotFound = notFound as jest.MockedFunction<typeof notFound>;
 
-function mockRepo(getById: jest.Mock) {
-  mockGetProblemRepository.mockReturnValue({ getById } as any);
+const mockProblem = {
+  id: 'problem-123',
+  title: 'Two Sum',
+  description: 'Find two numbers that add up to a target.',
+  solution: 'def two_sum(nums, target):\n    lookup = {}',
+  starter_code: 'def two_sum():\n    pass',
+  class_id: 'class-1',
+  class_name: 'CS 101',
+  tags: ['arrays'],
+};
+
+function mockApiResponse(data: unknown, ok = true) {
+  mockFetch.mockResolvedValue({
+    ok,
+    json: () => Promise.resolve(data),
+  });
 }
 
 describe('Public Problem Page', () => {
-  const mockProblem = {
-    id: 'problem-123',
-    title: 'Two Sum',
-    description: 'Find two numbers that add up to a target.',
-    solution: 'def two_sum(nums, target):\n    lookup = {}',
-    starterCode: 'def two_sum():\n    pass',
-    testCases: [],
-    authorId: 'user-1',
-    classId: 'class-1',
-    namespaceId: 'default',
-    tags: ['arrays'],
-    createdAt: new Date('2025-01-01'),
-    updatedAt: new Date('2025-01-01'),
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe('page rendering', () => {
     it('renders problem title as h1', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -85,7 +85,7 @@ describe('Public Problem Page', () => {
     });
 
     it('renders self-link with problem path', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -96,7 +96,7 @@ describe('Public Problem Page', () => {
     });
 
     it('renders problem description via MarkdownContent', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -105,7 +105,7 @@ describe('Public Problem Page', () => {
     });
 
     it('renders solution in a collapsed details element', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -118,7 +118,7 @@ describe('Public Problem Page', () => {
 
     it('renders syntax-highlighted solution via shiki', async () => {
       const { codeToHtml } = require('shiki');
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -131,7 +131,7 @@ describe('Public Problem Page', () => {
     });
 
     it('renders solution block with highlighted HTML', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
@@ -140,7 +140,7 @@ describe('Public Problem Page', () => {
     });
 
     it('calls notFound for missing problem', async () => {
-      mockRepo(jest.fn().mockResolvedValue(null));
+      mockApiResponse(null, false);
 
       await expect(
         PublicProblemPage({ params: Promise.resolve({ id: 'nonexistent' }) })
@@ -152,7 +152,7 @@ describe('Public Problem Page', () => {
 
   describe('generateMetadata', () => {
     it('returns correct title and OG tags', async () => {
-      mockRepo(jest.fn().mockResolvedValue(mockProblem));
+      mockApiResponse(mockProblem);
 
       const metadata = await generateMetadata({ params: Promise.resolve({ id: 'problem-123' }) });
 
@@ -163,7 +163,7 @@ describe('Public Problem Page', () => {
     });
 
     it('returns fallback metadata for missing problem', async () => {
-      mockRepo(jest.fn().mockResolvedValue(null));
+      mockApiResponse(null, false);
 
       const metadata = await generateMetadata({ params: Promise.resolve({ id: 'nonexistent' }) });
 

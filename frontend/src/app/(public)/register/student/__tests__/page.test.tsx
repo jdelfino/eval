@@ -328,7 +328,7 @@ describe('StudentRegistrationPage', () => {
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/auth/register-student', expect.objectContaining({
+        expect(mockFetch).toHaveBeenCalledWith('/auth/register-student', expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
             code: 'ABC123',

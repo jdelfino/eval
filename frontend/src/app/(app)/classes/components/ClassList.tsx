@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { Class } from '@/server/classes/types';
+import type { Class } from '@/types/classes';
 
 interface ClassListProps {
   classes: Class[];

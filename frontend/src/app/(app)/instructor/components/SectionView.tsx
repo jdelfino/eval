@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, apiDelete } from '@/lib/api-client';
 import CreateSectionModal from './CreateSectionModal';
-import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
+import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { BackButton } from '@/components/ui/BackButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 

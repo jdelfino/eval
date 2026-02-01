@@ -12,7 +12,7 @@ import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem, ExecutionSettings } from '@/server/types/problem';
+import { Problem, ExecutionSettings } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 

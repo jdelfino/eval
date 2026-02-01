@@ -3,7 +3,7 @@
  */
 import { renderHook, act } from '@testing-library/react';
 import { useDebugger } from '../useDebugger';
-import { ExecutionTrace } from '@/server/types';
+import { ExecutionTrace } from '@/types/session';
 
 describe('useDebugger', () => {
   let sendMessage: jest.Mock;

@@ -68,7 +68,7 @@ describe('InstructorActions auto-start from query params', () => {
     render(<InstructorActions {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/sessions', {
+      expect(mockFetch).toHaveBeenCalledWith('/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sectionId: 'section-1', problemId: 'prob-1' }),

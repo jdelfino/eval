@@ -1,5 +1,5 @@
 import React from 'react';
-import { CallFrame } from '@/server/types';
+import { CallFrame } from '@/types/session';
 
 interface CallStackPanelProps {
   callStack: CallFrame[];

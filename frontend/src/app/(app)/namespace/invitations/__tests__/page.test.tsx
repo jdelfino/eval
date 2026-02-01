@@ -125,7 +125,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/namespace/invitations'),
+          expect.stringContaining('/namespace/invitations'),
           expect.objectContaining({ credentials: 'include' })
         );
       });
@@ -281,7 +281,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/api/namespace/invitations',
+          '/namespace/invitations',
           expect.objectContaining({
             method: 'POST',
             body: JSON.stringify({ email: 'new@example.com', expiresInDays: 7 }),
@@ -410,7 +410,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/api/namespace/invitations/inv-1',
+          '/namespace/invitations/inv-1',
           expect.objectContaining({ method: 'DELETE' })
         );
       });
@@ -444,7 +444,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/api/namespace/invitations/inv-1/resend',
+          '/namespace/invitations/inv-1/resend',
           expect.objectContaining({ method: 'POST' })
         );
       });

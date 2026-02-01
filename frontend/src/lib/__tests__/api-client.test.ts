@@ -58,10 +58,10 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('@/lib/api-client');
-      const result = await apiGet('/api/v1/users');
+      const result = await apiGet('/v1/users');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/users',
+        'http://localhost:8080/v1/users',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -82,10 +82,10 @@ describe('api-client', () => {
       });
 
       const { apiPost } = require('@/lib/api-client');
-      const result = await apiPost('/api/v1/users', { email: 'test@example.com' });
+      const result = await apiPost('/v1/users', { email: 'test@example.com' });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/users',
+        'http://localhost:8080/v1/users',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -107,10 +107,10 @@ describe('api-client', () => {
       });
 
       const { apiPatch } = require('@/lib/api-client');
-      await apiPatch('/api/v1/users/1', { name: 'updated' });
+      await apiPatch('/v1/users/1', { name: 'updated' });
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/users/1',
+        'http://localhost:8080/v1/users/1',
         expect.objectContaining({ method: 'PATCH' })
       );
     });
@@ -125,10 +125,10 @@ describe('api-client', () => {
       });
 
       const { apiDelete } = require('@/lib/api-client');
-      await apiDelete('/api/v1/users/1');
+      await apiDelete('/v1/users/1');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v1/users/1',
+        'http://localhost:8080/v1/users/1',
         expect.objectContaining({ method: 'DELETE' })
       );
     });
@@ -144,7 +144,7 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('@/lib/api-client');
-      await expect(apiGet('/api/v1/missing')).rejects.toThrow();
+      await expect(apiGet('/v1/missing')).rejects.toThrow();
     });
   });
 });

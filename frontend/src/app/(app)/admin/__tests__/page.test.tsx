@@ -78,13 +78,13 @@ import AdminPageWrapper from '../page';
 beforeEach(() => {
   mockFetch.mockReset();
   mockFetch.mockImplementation((url: string) => {
-    if (url.includes('/api/admin/stats')) {
+    if (url.includes('/admin/stats')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
     }
-    if (url.includes('/api/admin/users')) {
+    if (url.includes('/admin/users')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ users: mockUsers }) });
     }
-    if (url.includes('/api/namespace/invitations')) {
+    if (url.includes('/namespace/invitations')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ invitations: [] }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -139,13 +139,13 @@ describe('Admin Page - Namespace Admins tab', () => {
       { id: 'u3', email: 'nsadmin@test.com', role: 'namespace-admin', displayName: 'NS Admin', createdAt: new Date().toISOString() },
     ];
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/api/admin/stats')) {
+      if (url.includes('/admin/stats')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
       }
-      if (url.includes('/api/admin/users')) {
+      if (url.includes('/admin/users')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ users: usersWithNsAdmin }) });
       }
-      if (url.includes('/api/namespace/invitations')) {
+      if (url.includes('/namespace/invitations')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ invitations: [] }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });

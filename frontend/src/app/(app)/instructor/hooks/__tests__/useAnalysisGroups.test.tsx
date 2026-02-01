@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import useAnalysisGroups from '../useAnalysisGroups';
-import { WalkthroughScript, AnalysisIssue } from '@/server/types/analysis';
+import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -94,7 +94,7 @@ describe('useAnalysisGroups', () => {
     expect(result.current.analysisState).toBe('ready');
     expect(result.current.script).toEqual(script);
     expect(result.current.groups.length).toBeGreaterThan(0);
-    expect(mockFetch).toHaveBeenCalledWith('/api/sessions/session-1/analyze', { method: 'POST' });
+    expect(mockFetch).toHaveBeenCalledWith('/sessions/session-1/analyze', { method: 'POST' });
   });
 
   it('groups are ordered: "All Submissions" first, then issues by index', async () => {

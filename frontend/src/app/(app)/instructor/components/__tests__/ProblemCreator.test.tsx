@@ -96,7 +96,7 @@ describe('ProblemCreator Component', () => {
   // Helper to create a fetch mock that handles classes API and delegates to a problem handler
   const createFetchMock = (problemHandler?: (url: string, opts?: any) => Promise<any>) => {
     return jest.fn((url: string, opts?: any) => {
-      if (typeof url === 'string' && url.includes('/api/classes')) {
+      if (typeof url === 'string' && url.includes('/classes')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({ classes: [] }),
@@ -147,7 +147,7 @@ describe('ProblemCreator Component', () => {
 
       // Only the classes fetch should have been called, no problem create
       const problemCalls = (global.fetch as jest.Mock).mock.calls.filter(
-        (c: any[]) => typeof c[0] === 'string' && !c[0].includes('/api/classes')
+        (c: any[]) => typeof c[0] === 'string' && !c[0].includes('/classes')
       );
       expect(problemCalls).toHaveLength(0);
     });
@@ -185,7 +185,7 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/problems', {
+        expect(global.fetch).toHaveBeenCalledWith('/problems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: expect.stringContaining('"title":"Test Problem"'),
@@ -229,7 +229,7 @@ describe('ProblemCreator Component', () => {
 
     it('should load existing problem data in edit mode', async () => {
       (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: mockExistingProblem }),
@@ -245,7 +245,7 @@ describe('ProblemCreator Component', () => {
 
       // Should fetch problem data
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/problems/problem-456');
+        expect(global.fetch).toHaveBeenCalledWith('/problems/problem-456');
       });
 
       // Should populate form
@@ -261,7 +261,7 @@ describe('ProblemCreator Component', () => {
 
     it('should display error when loading problem fails', async () => {
       (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: false,
             json: async () => ({ error: 'Not found' }),
@@ -282,13 +282,13 @@ describe('ProblemCreator Component', () => {
       const updatedProblem = { ...mockExistingProblem, title: 'Updated Problem' };
 
       (global.fetch as jest.Mock) = createFetchMock((url, opts) => {
-        if (url.includes('/api/problems/') && opts?.method === 'PATCH') {
+        if (url.includes('/problems/') && opts?.method === 'PATCH') {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: updatedProblem }),
           });
         }
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: mockExistingProblem }),
@@ -313,7 +313,7 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/problems/problem-456', {
+        expect(global.fetch).toHaveBeenCalledWith('/problems/problem-456', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: expect.stringContaining('"title":"Updated Problem"'),
@@ -328,14 +328,14 @@ describe('ProblemCreator Component', () => {
     it('should handle update failure', async () => {
       let patchCalled = false;
       (global.fetch as jest.Mock) = createFetchMock((url, opts) => {
-        if (url.includes('/api/problems/') && opts?.method === 'PATCH') {
+        if (url.includes('/problems/') && opts?.method === 'PATCH') {
           patchCalled = true;
           return Promise.resolve({
             ok: false,
             json: async () => ({ error: 'Update failed' }),
           });
         }
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: mockExistingProblem }),
@@ -458,7 +458,7 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/problems', {
+        expect(global.fetch).toHaveBeenCalledWith('/problems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: expect.any(String),
@@ -467,7 +467,7 @@ describe('ProblemCreator Component', () => {
 
       // Verify the call - stdin is empty so executionSettings should not be included
       const problemCalls = (global.fetch as jest.Mock).mock.calls.filter(
-        (c: any[]) => c[1]?.method === 'POST' && c[0] === '/api/problems'
+        (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
       );
       const callArgs = problemCalls[0];
       const body = JSON.parse(callArgs[1].body);
@@ -494,7 +494,7 @@ describe('ProblemCreator Component', () => {
       };
 
       (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: problemWithExecSettings }),
@@ -560,7 +560,7 @@ describe('ProblemCreator Component', () => {
 
     beforeEach(() => {
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.includes('/api/classes')) {
+        if (url.includes('/classes')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ classes: mockClasses }),
@@ -611,7 +611,7 @@ describe('ProblemCreator Component', () => {
 
       await waitFor(() => {
         const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/api/problems'
+          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
         );
         expect(calls.length).toBe(1);
         const body = JSON.parse(calls[0][1].body);
@@ -641,7 +641,7 @@ describe('ProblemCreator Component', () => {
 
       await waitFor(() => {
         const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/api/problems'
+          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
         );
         expect(calls.length).toBe(1);
         const body = JSON.parse(calls[0][1].body);
@@ -760,7 +760,7 @@ describe('ProblemCreator Component', () => {
 
       await waitFor(() => {
         const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/api/problems'
+          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
         );
         expect(calls.length).toBe(1);
         const body = JSON.parse(calls[0][1].body);
@@ -775,7 +775,7 @@ describe('ProblemCreator Component', () => {
       };
 
       (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/api/problems/')) {
+        if (url.includes('/problems/')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({ problem: problemWithSolution }),

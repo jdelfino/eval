@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AnalysisIssue } from '@/server/types/analysis';
+import { AnalysisIssue } from '@/types/analysis';
 import { severityStyles } from '../constants/analysis';
 
 interface StudentAnalysisDetailsProps {

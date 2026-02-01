@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ExecutionTrace, TraceStep } from '@/server/types';
+import { ExecutionTrace, TraceStep } from '@/types/session';
 
 export interface DebuggerState {
   trace: ExecutionTrace | null;

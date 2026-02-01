@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { WalkthroughScript, AnalysisIssue } from '@/server/types/analysis';
+import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
 import { apiFetch } from '@/lib/api-client';
 
 export interface AnalysisGroup {

@@ -57,7 +57,7 @@ describe('CreateSessionFromProblemModal', () => {
       expect(screen.getByText('Section B')).toBeInTheDocument();
     });
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-1/sections');
+    expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
   });
 
   it('creates a session when a section is selected and submitted', async () => {
@@ -91,7 +91,7 @@ describe('CreateSessionFromProblemModal', () => {
     });
 
     // Verify session creation call
-    expect(global.fetch).toHaveBeenCalledWith('/api/sessions', expect.objectContaining({
+    expect(global.fetch).toHaveBeenCalledWith('/sessions', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ sectionId: 'sec-1', problemId: 'prob-1' }),
     }));
@@ -115,7 +115,7 @@ describe('CreateSessionFromProblemModal', () => {
 
     // Should only fetch sections, not classes (className is provided as prop)
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-1/sections');
+    expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
   });
 
   it('pre-selects last-used section when classId matches', async () => {

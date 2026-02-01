@@ -4,8 +4,8 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProblemDisplay from '../ProblemDisplay';
-import { Problem } from '@/server/types/problem';
-import { TestCase } from '@/server/testing/types';
+import { Problem } from '@/types/problem';
+import { TestCase } from '@/types/testing';
 
 // Helper to create a minimal problem
 function createProblem(overrides: Partial<Problem> = {}): Problem {

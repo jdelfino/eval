@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
 import { hasRolePermission } from '@/lib/permissions';
-import type { Class, Section } from '@/server/classes/types';
+import type { Class, Section } from '@/types/classes';
 import { apiFetch } from '@/lib/api-client';
 import SectionCard from '../components/SectionCard';
 import CreateSectionForm from '../components/CreateSectionForm';

@@ -159,7 +159,7 @@ describe('CodeEditor Component', () => {
       fireEvent.click(runButton);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/execute', {
+        expect(global.fetch).toHaveBeenCalledWith('/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -266,7 +266,7 @@ describe('CodeEditor Component', () => {
 
       // Check that fetch was called with correct params
       const callArgs = (global.fetch as jest.Mock).mock.calls[0];
-      expect(callArgs[0]).toBe('/api/execute');
+      expect(callArgs[0]).toBe('/execute');
 
       const body = JSON.parse(callArgs[1].body);
       expect(body.code).toBe(codeToRun);

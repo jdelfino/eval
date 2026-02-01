@@ -72,7 +72,7 @@ describe('CopyLinkDropdown', () => {
       expect(screen.getByText('Section C')).toBeInTheDocument();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('/api/classes/class-1/sections');
+    expect(mockFetch).toHaveBeenCalledWith('/classes/class-1/sections');
   });
 
   it('copies deep-link URL when a section is clicked', async () => {

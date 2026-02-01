@@ -90,7 +90,7 @@ describe('SectionView', () => {
     render(<SectionView {...defaultProps} />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-1/sections');
+      expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
     });
   });
 
@@ -175,7 +175,7 @@ describe('SectionView', () => {
     });
 
     // Should fetch sessions for the selected section
-    expect(global.fetch).toHaveBeenCalledWith('/api/sections/section-1/sessions');
+    expect(global.fetch).toHaveBeenCalledWith('/sections/section-1/sessions');
   });
 
   it('should display sessions for selected section', async () => {
@@ -519,7 +519,7 @@ describe('SectionView', () => {
       // Verify API was called with correct data
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          '/api/classes/class-1/sections',
+          '/classes/class-1/sections',
           expect.objectContaining({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

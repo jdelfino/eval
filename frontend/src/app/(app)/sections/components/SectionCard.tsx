@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
-import type { Session } from '@/server/types';
+import type { Session } from '@/types/session';
 
 export const ACTIVE_SESSION_POLL_INTERVAL_MS = 10000;
 

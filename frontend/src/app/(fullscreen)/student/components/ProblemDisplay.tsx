@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Problem } from '@/server/types/problem';
+import { Problem } from '@/types/problem';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {

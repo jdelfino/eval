@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import SectionCard from '../SectionCard';
-import type { Section } from '@/server/classes/types';
+import type { Section } from '@/types/classes';
 
 // Mock next/link
 jest.mock('next/link', () => {
@@ -11,7 +11,7 @@ jest.mock('next/link', () => {
 });
 
 // Mock join code formatting
-jest.mock('@/server/classes/join-code-service', () => ({
+jest.mock('@/lib/join-code', () => ({
   formatJoinCodeForDisplay: (code: string) => code,
 }));
 

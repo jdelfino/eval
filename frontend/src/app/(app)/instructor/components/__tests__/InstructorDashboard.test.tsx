@@ -19,7 +19,7 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
-jest.mock('@/server/auth/permissions', () => ({
+jest.mock('@/lib/permissions', () => ({
   hasRolePermission: (role: string, permission: string) => {
     // Instructors can create classes and sessions
     if (role === 'instructor') {

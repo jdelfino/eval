@@ -1,4 +1,4 @@
-import { IssueSeverity } from '@/server/types/analysis';
+import { IssueSeverity } from '@/types/analysis';
 
 /**
  * Visual styles for each issue severity level.

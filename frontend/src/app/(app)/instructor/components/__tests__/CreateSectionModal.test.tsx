@@ -137,7 +137,7 @@ describe('CreateSectionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-123/sections', {
+      expect(global.fetch).toHaveBeenCalledWith('/classes/class-123/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,7 +179,7 @@ describe('CreateSectionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-123/sections', {
+      expect(global.fetch).toHaveBeenCalledWith('/classes/class-123/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -212,7 +212,7 @@ describe('CreateSectionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-123/sections', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/classes/class-123/sections', expect.objectContaining({
         body: JSON.stringify({
           name: 'Section A',
           schedule: 'MWF 10am',
@@ -364,7 +364,7 @@ describe('CreateSectionModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/classes/class-123/sections', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/classes/class-123/sections', expect.objectContaining({
         body: JSON.stringify({
           name: 'Section A',
           schedule: '',

@@ -113,7 +113,7 @@ describe('ProblemLibrary', () => {
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/problems?')
+      expect.stringContaining('/problems?')
     );
   });
 
@@ -193,7 +193,7 @@ describe('ProblemLibrary', () => {
   it('retries loading when retry button is clicked', async () => {
     let problemCallCount = 0;
     global.fetch = jest.fn((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/classes')) {
+      if (typeof url === 'string' && url.includes('/classes')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ classes: [] }),
@@ -345,7 +345,7 @@ describe('ProblemLibrary', () => {
     beforeEach(() => {
       // First call returns classes, second returns problems
       global.fetch = jest.fn((url: string) => {
-        if (typeof url === 'string' && url.includes('/api/classes')) {
+        if (typeof url === 'string' && url.includes('/classes')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ classes: mockClasses }),
@@ -409,7 +409,7 @@ describe('ProblemLibrary', () => {
       await waitFor(() => {
         // Find the most recent call without classId
         const lastCall = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => typeof c[0] === 'string' && c[0].includes('/api/problems')
+          (c: any[]) => typeof c[0] === 'string' && c[0].includes('/problems')
         ).pop();
         expect(lastCall[0]).not.toContain('classId=');
       });

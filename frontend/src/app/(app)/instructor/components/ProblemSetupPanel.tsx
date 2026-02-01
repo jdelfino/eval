@@ -10,7 +10,7 @@ import { Panel } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { PanelErrorBoundary } from './PanelError';
 import SessionProblemEditor from './SessionProblemEditor';
-import { Problem } from '@/server/types/problem';
+import { Problem } from '@/types/problem';
 
 interface ProblemSetupPanelProps {
   /** Callback when problem is updated */

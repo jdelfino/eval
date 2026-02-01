@@ -5,7 +5,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import UserList from '../UserList';
-import type { User } from '@/server/auth/types';
+import type { User } from '@/types/auth';
 
 const mockUsers: User[] = [
   {

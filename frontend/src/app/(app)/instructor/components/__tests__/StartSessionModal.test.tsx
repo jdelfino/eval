@@ -308,7 +308,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/sessions', {
+        expect(global.fetch).toHaveBeenCalledWith('/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -355,7 +355,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/sessions', {
+        expect(global.fetch).toHaveBeenCalledWith('/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

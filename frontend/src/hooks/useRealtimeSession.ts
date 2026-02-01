@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Centrifuge, Subscription } from 'centrifuge';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import { apiGet, apiPost } from '@/lib/api-client';
-import { Session, Student, ExecutionResult } from '@/server/types';
-import { ExecutionSettings } from '@/server/types/problem';
+import { Session, Student, ExecutionResult } from '@/types/session';
+import { ExecutionSettings } from '@/types/problem';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 

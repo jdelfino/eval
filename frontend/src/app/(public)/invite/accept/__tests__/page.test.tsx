@@ -192,7 +192,7 @@ describe('AcceptInvitePage', () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/auth/accept-invite', {
+        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', {
           credentials: 'include',
         });
       });
@@ -397,7 +397,7 @@ describe('AcceptInvitePage', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/auth/accept-invite', expect.objectContaining({
+        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
         }));
       });
@@ -553,7 +553,7 @@ describe('AcceptInvitePage', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/auth/accept-invite', expect.objectContaining({
+        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ displayName: 'John Doe' }),
         }));

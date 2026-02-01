@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasRolePermission } from '@/lib/permissions';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
+import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { apiFetch } from '@/lib/api-client';
 import CreateClassModal from './CreateClassModal';
 

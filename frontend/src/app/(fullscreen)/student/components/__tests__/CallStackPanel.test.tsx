@@ -4,7 +4,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { CallStackPanel } from '../CallStackPanel';
-import { CallFrame } from '@/server/types';
+import { CallFrame } from '@/types/session';
 
 describe('CallStackPanel', () => {
   it('does not render when call stack has fewer than 2 entries', () => {

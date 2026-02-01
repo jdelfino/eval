@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem } from '@/server/types/problem';
+import { Problem } from '@/types/problem';
 import { useDebugger } from '@/hooks/useDebugger';
 
 interface SessionProblemEditorProps {
