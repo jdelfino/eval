@@ -302,6 +302,21 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	// Check session is active before updating problem.
+	existing, err := h.sessions.GetSession(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if existing.Status != "active" {
+		httputil.WriteError(w, http.StatusConflict, "session is not active")
+		return
+	}
+
 	session, err := h.sessions.UpdateSessionProblem(r.Context(), id, req.Problem)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -312,8 +327,13 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract problem ID from the JSON payload if present.
+	var problemMeta struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(req.Problem, &problemMeta)
 	publishAsync(r, h.logger, id, func(ctx context.Context) error {
-		return h.publisher.ProblemUpdated(ctx, id.String(), id.String())
+		return h.publisher.ProblemUpdated(ctx, id.String(), problemMeta.ID)
 	})
 
 	httputil.WriteJSON(w, http.StatusOK, session)
@@ -342,7 +362,8 @@ func (h *SessionHandler) History(w http.ResponseWriter, r *http.Request) {
 		filters.Search = &search
 	}
 
-	sessions, err := h.sessions.ListSessionHistory(r.Context(), authUser.ID, string(authUser.Role), filters)
+	isCreator := authUser.Role != auth.RoleStudent
+	sessions, err := h.sessions.ListSessionHistory(r.Context(), authUser.ID, isCreator, filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

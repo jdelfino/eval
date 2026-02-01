@@ -66,26 +66,6 @@ func (h *SessionStateHandler) State(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, resp)
 }
 
-// Details handles GET /api/v1/sessions/{id}/details — instructor-only composite read.
-func (h *SessionStateHandler) Details(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-
-	resp, err := h.buildStateResponse(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "session not found")
-			return
-		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	httputil.WriteJSON(w, http.StatusOK, resp)
-}
-
 func (h *SessionStateHandler) buildStateResponse(ctx context.Context, id uuid.UUID) (*sessionStateResponse, error) {
 	session, err := h.sessions.GetSession(ctx, id)
 	if err != nil {
@@ -173,10 +153,15 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.sessions.UpdateSession(r.Context(), id, store.UpdateSessionParams{
-		FeaturedStudentID: req.StudentID,
-		FeaturedCode:      req.Code,
-	})
+	params := store.UpdateSessionParams{}
+	if req.StudentID != nil {
+		params.FeaturedStudentID = req.StudentID
+		params.FeaturedCode = req.Code
+	} else {
+		params.ClearFeatured = true
+	}
+
+	session, err := h.sessions.UpdateSession(r.Context(), id, params)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")

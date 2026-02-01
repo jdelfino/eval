@@ -117,7 +117,8 @@ func TestPublicState_Success(t *testing.T) {
 	}
 }
 
-func TestDetails_Success(t *testing.T) {
+// TestDetails_RoutesToState verifies that /details uses the same State handler.
+func TestDetails_RoutesToState(t *testing.T) {
 	sess := testSession()
 	students := []store.SessionStudent{*testSessionStudent()}
 	section := testSection()
@@ -136,11 +137,12 @@ func TestDetails_Success(t *testing.T) {
 		testLogger(),
 	)
 
+	// Details route now points to State handler
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/details", nil)
 	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
 	w := httptest.NewRecorder()
 
-	h.Details(w, req)
+	h.State(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())

@@ -193,6 +193,11 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		query += ",\n		    ended_at = NULL"
 	}
 
+	if params.ClearFeatured {
+		query += ",\n		    featured_student_id = NULL"
+		query += ",\n		    featured_code = NULL"
+	}
+
 	query += `
 		WHERE id = $1
 		RETURNING id, namespace_id, section_id, section_name, problem,
@@ -224,7 +229,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 // ListSessionHistory retrieves sessions based on user role.
 // Instructors see sessions they created; students see sessions they participated in.
-func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, role string, filters SessionHistoryFilters) ([]Session, error) {
+func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error) {
 	conn, err := s.conn(ctx)
 	if err != nil {
 		return nil, err
@@ -240,12 +245,12 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, role s
 	argIdx := 1
 
 	// Role-aware filtering
-	if role == "student" {
-		query += fmt.Sprintf(" AND $%d = ANY(participants)", argIdx)
+	if isCreator {
+		query += fmt.Sprintf(" AND creator_id = $%d", argIdx)
 		args = append(args, userID)
 		argIdx++
 	} else {
-		query += fmt.Sprintf(" AND creator_id = $%d", argIdx)
+		query += fmt.Sprintf(" AND $%d = ANY(participants)", argIdx)
 		args = append(args, userID)
 		argIdx++
 	}

@@ -1112,12 +1112,12 @@ func TestHistorySession_Success(t *testing.T) {
 	userID := uuid.New()
 
 	repo := &mockSessionRepo{
-		listSessionHistoryFn: func(_ context.Context, uid uuid.UUID, role string, filters store.SessionHistoryFilters) ([]store.Session, error) {
+		listSessionHistoryFn: func(_ context.Context, uid uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
 			if uid != userID {
 				t.Fatalf("expected userID %v, got %v", userID, uid)
 			}
-			if role != string(auth.RoleInstructor) {
-				t.Fatalf("expected role %q, got %q", auth.RoleInstructor, role)
+			if !isCreator {
+				t.Fatalf("expected isCreator true for instructor role")
 			}
 			return []store.Session{*sess}, nil
 		},
@@ -1151,6 +1151,9 @@ func TestUpdateSessionProblem_Success(t *testing.T) {
 	updatedSess.Problem = newProblem
 
 	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
 		updateSessionProblemFn: func(_ context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
 			if id != sess.ID {
 				t.Fatalf("unexpected id: %v", id)
@@ -1203,7 +1206,7 @@ func TestUpdateSessionProblem_Success(t *testing.T) {
 
 func TestUpdateSessionProblem_NotFound(t *testing.T) {
 	repo := &mockSessionRepo{
-		updateSessionProblemFn: func(_ context.Context, _ uuid.UUID, _ json.RawMessage) (*store.Session, error) {
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
 			return nil, store.ErrNotFound
 		},
 	}

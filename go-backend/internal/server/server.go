@@ -157,7 +157,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
-				r.Get("/sessions/{id}/details", sessionStateHandler.Details)
+				r.Get("/sessions/{id}/details", sessionStateHandler.State)
 				r.Post("/sessions/{id}/feature", sessionStateHandler.Feature)
 			})
 

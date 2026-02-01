@@ -250,6 +250,7 @@ type UpdateSessionParams struct {
 	Status            *string
 	EndedAt           *time.Time
 	ClearEndedAt      bool
+	ClearFeatured     bool
 }
 
 // SessionHistoryFilters contains optional filters for listing session history.
@@ -279,7 +280,7 @@ type SessionRepository interface {
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
 	// ListSessionHistory retrieves sessions based on user role.
 	// Instructors see sessions they created; students see sessions they participated in.
-	ListSessionHistory(ctx context.Context, userID uuid.UUID, role string, filters SessionHistoryFilters) ([]Session, error)
+	ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error)
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
