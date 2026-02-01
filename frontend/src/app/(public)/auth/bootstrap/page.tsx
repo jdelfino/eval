@@ -12,7 +12,14 @@ export default function BootstrapPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Confirmation guard: user must explicitly confirm before proceeding
+  const [confirmed, setConfirmed] = useState(false);
   const router = useRouter();
+
+  // TODO: Add a useEffect that calls GET /auth/bootstrap-status on mount to check
+  // whether bootstrap is still allowed (i.e., no system admin exists yet).
+  // The Go backend does not have this endpoint yet. Once it does, redirect away
+  // if bootstrap is no longer permitted.
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -72,7 +79,25 @@ export default function BootstrapPage() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        {!confirmed && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm text-amber-800 font-medium mb-2">
+              Warning: This action creates a system administrator account with full access to the platform.
+            </p>
+            <p className="text-xs text-amber-700 mb-4">
+              Only proceed if you are setting up this system for the first time.
+            </p>
+            <button
+              type="button"
+              onClick={() => setConfirmed(true)}
+              className="w-full py-2 px-4 rounded-lg text-amber-900 bg-amber-200 hover:bg-amber-300 font-semibold transition-all duration-200 text-sm"
+            >
+              I understand, proceed with admin setup
+            </button>
+          </div>
+        )}
+
+        {confirmed && <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -129,7 +154,7 @@ export default function BootstrapPage() {
           >
             {isLoading ? 'Creating account...' : 'Create System Admin Account'}
           </button>
-        </form>
+        </form>}
 
         <p className="text-center text-xs text-gray-500">
           This page is for initial system setup only. After setup, system admins must sign in with MFA.
