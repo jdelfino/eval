@@ -119,6 +119,9 @@ describe('SessionView', () => {
     author_id: 'author-1',
     class_id: 'test-class-id',
     tags: [],
+    test_cases: null,
+    execution_settings: null,
+    solution: null,
     created_at: new Date('2024-01-01'),
     updated_at: new Date('2024-01-02'),
   };

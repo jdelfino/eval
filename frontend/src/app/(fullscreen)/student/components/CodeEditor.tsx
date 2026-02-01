@@ -11,13 +11,7 @@ import type { Problem } from '@/types/problem';
 import { apiFetch } from '@/lib/api-client';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2 } from 'lucide-react';
-
-interface ExecutionResult {
-  success: boolean;
-  output: string;
-  error: string;
-  execution_time: number;
-}
+import type { ExecutionResult } from '@/types/api';
 
 interface CodeEditorProps {
   code: string;

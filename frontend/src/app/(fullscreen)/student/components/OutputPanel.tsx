@@ -2,14 +2,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-
-interface ExecutionResult {
-  success: boolean;
-  output: string;
-  error: string;
-  execution_time: number;
-  stdin?: string; // Input provided to the program
-}
+import type { ExecutionResult } from '@/types/api';
 
 interface OutputPanelProps {
   result: ExecutionResult | null;

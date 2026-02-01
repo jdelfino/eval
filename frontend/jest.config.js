@@ -28,6 +28,7 @@ module.exports = {
         '<rootDir>/src/contexts/**/__tests__/**/*.test.tsx',
         '<rootDir>/src/lib/**/__tests__/**/*.test.ts',
         '<rootDir>/src/config/**/__tests__/**/*.test.ts',
+        '<rootDir>/src/types/**/__tests__/**/*.test.ts',
       ],
       testPathIgnorePatterns: [
         '/node_modules/',

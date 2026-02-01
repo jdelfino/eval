@@ -79,8 +79,8 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: unknown;
-  execution_settings: unknown;
+  test_cases: import('./problem').TestCase[] | null;
+  execution_settings: import('./problem').ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];

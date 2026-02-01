@@ -13,6 +13,10 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     id: 'test-problem-1',
     title: 'Test Problem',
     description: 'A test problem description',
+    starter_code: null,
+    test_cases: null,
+    execution_settings: null,
+    solution: null,
     namespace_id: 'test-namespace',
     author_id: 'author-1',
     class_id: 'test-class-id',
@@ -144,7 +148,7 @@ factorial(5)  # Returns 120
     });
 
     it('does not render description section when description is empty', () => {
-      const problem = createProblem({ description: undefined });
+      const problem = createProblem({ description: null });
       render(<ProblemDisplay problem={problem} />);
       expect(screen.queryByText('Description')).not.toBeInTheDocument();
     });
