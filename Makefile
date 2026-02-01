@@ -3,10 +3,10 @@
 # ──────────────────────────────────────────────
 .PHONY: build test test-integration lint docker-build
 
-build: build-api build-executor
-test: test-api test-executor
+build: build-api build-executor build-frontend
+test: test-api test-executor test-frontend
 test-integration: test-integration-executor
-lint: lint-api lint-executor
+lint: lint-api lint-executor lint-frontend
 
 docker-build: docker-build-api docker-build-executor
 
@@ -48,6 +48,23 @@ test-integration-executor:
 
 docker-build-executor:
 	docker build -t executor:local executor/
+
+# ──────────────────────────────────────────────
+# Frontend
+# ──────────────────────────────────────────────
+.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend
+
+build-frontend:
+	cd frontend && npm run build
+
+test-frontend:
+	cd frontend && npx jest --no-coverage
+
+lint-frontend:
+	cd frontend && npm run lint
+
+typecheck-frontend:
+	cd frontend && npx tsc --noEmit
 
 # ──────────────────────────────────────────────
 # Local development
