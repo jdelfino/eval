@@ -59,6 +59,9 @@ jest.mock('@/components/InvitationList', () => ({
   default: () => <div data-testid="invitation-list">Invitation List</div>,
 }));
 
+// Shape matches the SystemStats interface in the admin page component.
+// Note: the /admin/stats endpoint does not yet exist in the Go backend;
+// this mock reflects the frontend's expected contract (see SystemStats in ../page.tsx).
 const mockStats = {
   users: { total: 50, byRole: { admin: 2, instructor: 8, student: 40 } },
   classes: { total: 5 },
