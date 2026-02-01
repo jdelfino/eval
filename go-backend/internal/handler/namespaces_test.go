@@ -931,6 +931,87 @@ func TestUpdateCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 	}
 }
 
+// --- RBAC Forbidden tests (middleware-level) ---
+
+func TestDeleteNamespace_RBACForbidden(t *testing.T) {
+	repo := &mockNamespaceRepo{}
+	h := NewNamespaceHandler(repo, nil)
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student DELETE namespace, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestNSListUsers_RBACForbidden(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, &nsTestUserRepo{})
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET namespace users, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGetCapacity_RBACForbidden(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, &nsTestUserRepo{})
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET capacity, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateCapacity_RBACForbidden(t *testing.T) {
+	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	router := h.Routes()
+
+	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
+	req := httptest.NewRequest(http.MethodPut, "/test-ns/capacity", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleNamespaceAdmin,
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for namespace-admin PUT capacity, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestUpdateCapacity_NotFound(t *testing.T) {
 	repo := &mockNamespaceRepo{
 		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
