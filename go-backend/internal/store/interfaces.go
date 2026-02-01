@@ -249,6 +249,13 @@ type UpdateSessionParams struct {
 	FeaturedCode      *string
 	Status            *string
 	EndedAt           *time.Time
+	ClearEndedAt      bool
+}
+
+// SessionHistoryFilters contains optional filters for listing session history.
+type SessionHistoryFilters struct {
+	ClassID *uuid.UUID
+	Search  *string
 }
 
 // SessionFilters contains optional filters for listing sessions.
@@ -270,6 +277,9 @@ type SessionRepository interface {
 	// UpdateSession updates a session's mutable fields and returns the updated session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
+	// ListSessionHistory retrieves sessions based on user role.
+	// Instructors see sessions they created; students see sessions they participated in.
+	ListSessionHistory(ctx context.Context, userID uuid.UUID, role string, filters SessionHistoryFilters) ([]Session, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.

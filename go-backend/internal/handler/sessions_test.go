@@ -897,6 +897,253 @@ func TestUpdateSession_IdempotentEnd_NoPublish(t *testing.T) {
 	}
 }
 
+func TestDeleteSession_Success(t *testing.T) {
+	sess := testSession()
+	now := time.Now()
+	completedSess := *sess
+	completedSess.Status = "completed"
+	completedSess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			if id != sess.ID {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return sess, nil
+		},
+		updateSessionFn: func(_ context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+			if params.Status == nil || *params.Status != "completed" {
+				t.Fatalf("expected status 'completed', got %v", params.Status)
+			}
+			if params.EndedAt == nil {
+				t.Fatalf("expected ended_at to be set")
+			}
+			return &completedSess, nil
+		},
+	}
+	pub := newMockPublisher()
+	h := NewSessionHandler(repo, pub, testLogger())
+
+	req := httptest.NewRequest(http.MethodDelete, "/"+sess.ID.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got store.Session
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Status != "completed" {
+		t.Errorf("expected status 'completed', got %q", got.Status)
+	}
+
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionEndedCalls) != 1 {
+		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
+	}
+}
+
+func TestDeleteSession_NotFound(t *testing.T) {
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	id := uuid.New()
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestDeleteSession_AlreadyCompleted(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	now := time.Now()
+	sess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	req := httptest.NewRequest(http.MethodDelete, "/"+sess.ID.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReopenSession_Success(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	now := time.Now()
+	sess.EndedAt = &now
+
+	reopenedSess := *sess
+	reopenedSess.Status = "active"
+	reopenedSess.EndedAt = nil
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			if id != sess.ID {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return sess, nil
+		},
+		updateSessionFn: func(_ context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+			if params.Status == nil || *params.Status != "active" {
+				t.Fatalf("expected status 'active', got %v", params.Status)
+			}
+			if !params.ClearEndedAt {
+				t.Fatalf("expected ClearEndedAt to be true")
+			}
+			return &reopenedSess, nil
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got store.Session
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Status != "active" {
+		t.Errorf("expected status 'active', got %q", got.Status)
+	}
+}
+
+func TestReopenSession_NotFound(t *testing.T) {
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	id := uuid.New()
+	req := httptest.NewRequest(http.MethodPost, "/"+id.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestReopenSession_NotCompleted(t *testing.T) {
+	sess := testSession() // status "active"
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHistorySession_Success(t *testing.T) {
+	sess := testSession()
+	userID := uuid.New()
+
+	repo := &mockSessionRepo{
+		listSessionHistoryFn: func(_ context.Context, uid uuid.UUID, role string, filters store.SessionHistoryFilters) ([]store.Session, error) {
+			if uid != userID {
+				t.Fatalf("expected userID %v, got %v", userID, uid)
+			}
+			if role != string(auth.RoleInstructor) {
+				t.Fatalf("expected role %q, got %q", auth.RoleInstructor, role)
+			}
+			return []store.Session{*sess}, nil
+		},
+	}
+	h := NewSessionHandler(repo, noopPublisher(), testLogger())
+
+	req := httptest.NewRequest(http.MethodGet, "/history", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.History(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got []store.Session
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(got))
+	}
+}
+
 func TestUpdateSession_IdempotentFeaturedStudent_NoPublish(t *testing.T) {
 	// Featured student is already set to the same ID; re-sending should not publish.
 	featuredID := uuid.New()
