@@ -174,7 +174,7 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.invitations.RevokeInvitation(r.Context(), invID)
+	inv, err := h.invitations.GetInvitation(r.Context(), invID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
@@ -189,7 +189,17 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, inv)
+	revoked, err := h.invitations.RevokeInvitation(r.Context(), invID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, revoked)
 }
 
 // Resend handles POST /api/v1/namespaces/{nsID}/invitations/{invID}/resend

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 )
 
@@ -47,7 +48,7 @@ func (c *ResendClient) SendInvitation(ctx context.Context, to, inviterName, name
 			`<p>%s has invited you to join <strong>%s</strong>.</p>`+
 				`<p><a href="%s">Accept Invitation</a></p>`+
 				`<p>This invitation will expire in 7 days.</p>`,
-			inviterName, namespaceName, acceptURL,
+			html.EscapeString(inviterName), html.EscapeString(namespaceName), html.EscapeString(acceptURL),
 		),
 	}
 

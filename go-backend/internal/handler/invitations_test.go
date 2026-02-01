@@ -389,16 +389,23 @@ func TestGetInvitation_InvalidID(t *testing.T) {
 
 func TestRevokeInvitation_Success(t *testing.T) {
 	inv := testInvitation("test-ns")
+	revokedInv := *inv
 	now := time.Now()
-	inv.RevokedAt = &now
-	inv.Status = "revoked"
+	revokedInv.RevokedAt = &now
+	revokedInv.Status = "revoked"
 
 	repo := &mockInvitationRepo{
-		revokeInvitationFn: func(_ context.Context, id uuid.UUID) (*store.Invitation, error) {
+		getInvitationFn: func(_ context.Context, id uuid.UUID) (*store.Invitation, error) {
 			if id != inv.ID {
 				t.Fatalf("unexpected id: %v", id)
 			}
 			return inv, nil
+		},
+		revokeInvitationFn: func(_ context.Context, id uuid.UUID) (*store.Invitation, error) {
+			if id != inv.ID {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return &revokedInv, nil
 		},
 	}
 
@@ -414,9 +421,37 @@ func TestRevokeInvitation_Success(t *testing.T) {
 	}
 }
 
+func TestRevokeInvitation_WrongNamespace(t *testing.T) {
+	inv := testInvitation("other-ns")
+	revokeCalled := false
+	repo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+		revokeInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			revokeCalled = true
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/"+inv.ID.String(), nil)
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	rec := httptest.NewRecorder()
+
+	h.Revoke(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if revokeCalled {
+		t.Fatal("RevokeInvitation should not have been called for wrong namespace")
+	}
+}
+
 func TestRevokeInvitation_NotFound(t *testing.T) {
 	repo := &mockInvitationRepo{
-		revokeInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
 			return nil, store.ErrNotFound
 		},
 	}
