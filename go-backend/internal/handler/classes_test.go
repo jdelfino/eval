@@ -67,7 +67,7 @@ func TestListClasses_Success(t *testing.T) {
 		},
 	}
 
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -98,7 +98,7 @@ func TestListClasses_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -123,7 +123,7 @@ func TestListClasses_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -147,7 +147,7 @@ func TestGetClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+c.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", c.ID.String())
@@ -179,7 +179,7 @@ func TestGetClass_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -197,7 +197,7 @@ func TestGetClass_NotFound(t *testing.T) {
 
 func TestGetClass_InvalidID(t *testing.T) {
 	repo := &mockClassRepo{}
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -236,7 +236,7 @@ func TestCreateClass_Success(t *testing.T) {
 		"name":        "CS 101",
 		"description": "Intro to CS",
 	})
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -263,7 +263,7 @@ func TestCreateClass_Success(t *testing.T) {
 }
 
 func TestCreateClass_Unauthorized(t *testing.T) {
-	h := NewClassHandler(&mockClassRepo{})
+	h := NewClassHandler(&mockClassRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -276,7 +276,7 @@ func TestCreateClass_Unauthorized(t *testing.T) {
 
 func TestCreateClass_RBACForbidden(t *testing.T) {
 	repo := &mockClassRepo{}
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -318,7 +318,7 @@ func TestUpdateClass_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"name": newName,
 	})
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+c.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -352,7 +352,7 @@ func TestUpdateClass_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -380,7 +380,7 @@ func TestDeleteClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+classID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", classID.String())
@@ -404,7 +404,7 @@ func TestDeleteClass_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -422,7 +422,7 @@ func TestDeleteClass_NotFound(t *testing.T) {
 
 func TestDeleteClass_InvalidID(t *testing.T) {
 	repo := &mockClassRepo{}
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -439,7 +439,7 @@ func TestDeleteClass_InvalidID(t *testing.T) {
 }
 
 func TestCreateClass_MissingName(t *testing.T) {
-	h := NewClassHandler(&mockClassRepo{})
+	h := NewClassHandler(&mockClassRepo{}, nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"description": "no name"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -459,7 +459,7 @@ func TestCreateClass_MissingName(t *testing.T) {
 }
 
 func TestCreateClass_InvalidBody(t *testing.T) {
-	h := NewClassHandler(&mockClassRepo{})
+	h := NewClassHandler(&mockClassRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -485,7 +485,7 @@ func TestCreateClass_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "CS 101"})
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -505,7 +505,7 @@ func TestCreateClass_InternalError(t *testing.T) {
 
 func TestUpdateClass_InvalidID(t *testing.T) {
 	repo := &mockClassRepo{}
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -525,7 +525,7 @@ func TestUpdateClass_InvalidID(t *testing.T) {
 
 func TestUpdateClass_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewClassHandler(&mockClassRepo{})
+	h := NewClassHandler(&mockClassRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -551,7 +551,7 @@ func TestUpdateClass_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -576,7 +576,7 @@ func TestGetClass_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -600,7 +600,7 @@ func TestDeleteClass_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -618,7 +618,7 @@ func TestDeleteClass_InternalError(t *testing.T) {
 
 func TestDeleteClass_RBACForbidden(t *testing.T) {
 	repo := &mockClassRepo{}
-	h := NewClassHandler(repo)
+	h := NewClassHandler(repo, nil, nil, nil)
 	router := h.Routes()
 
 	id := uuid.New()

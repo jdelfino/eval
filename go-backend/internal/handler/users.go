@@ -40,7 +40,7 @@ func (h *UserHandler) NamespaceRoutes() chi.Router {
 	r.Use(custommw.RequireRole(auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
 
 	r.Get("/", h.ListNamespace)
-	r.Delete("/{id}", h.Delete)
+	r.Delete("/{id}", h.DeleteNamespaceScoped)
 	r.Put("/{id}/role", h.UpdateRole)
 
 	return r
@@ -149,6 +149,47 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DeleteNamespaceScoped handles DELETE /api/v1/admin/users/{id} — delete a user within caller's namespace.
+func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	// Verify target user is in the caller's namespace
+	target, err := h.users.GetUserByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if target.NamespaceID == nil || *target.NamespaceID != authUser.NamespaceID {
+		httputil.WriteError(w, http.StatusForbidden, "user is not in your namespace")
+		return
+	}
+
+	err = h.users.DeleteUser(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // updateRoleRequest is the request body for PUT /admin/users/{id}/role.
 type updateRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=namespace-admin instructor student"`
@@ -156,8 +197,29 @@ type updateRoleRequest struct {
 
 // UpdateRole handles PUT /api/v1/admin/users/{id}/role — change user role (namespace-admin+).
 func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	id, ok := httputil.ParseUUIDParam(w, r, "id")
 	if !ok {
+		return
+	}
+
+	// Verify target user is in the caller's namespace
+	target, err := h.users.GetUserByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if target.NamespaceID == nil || *target.NamespaceID != authUser.NamespaceID {
+		httputil.WriteError(w, http.StatusForbidden, "user is not in your namespace")
 		return
 	}
 

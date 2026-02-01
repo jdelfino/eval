@@ -23,13 +23,8 @@ type SectionHandler struct {
 	users       store.UserRepository
 }
 
-// NewSectionHandler creates a new SectionHandler with the given section repository.
-func NewSectionHandler(sections store.SectionRepository) *SectionHandler {
-	return &SectionHandler{sections: sections}
-}
-
-// NewSectionHandlerFull creates a new SectionHandler with all needed repositories.
-func NewSectionHandlerFull(sections store.SectionRepository, sessions store.SessionRepository, memberships store.MembershipRepository, users store.UserRepository) *SectionHandler {
+// NewSectionHandler creates a new SectionHandler with the given repositories.
+func NewSectionHandler(sections store.SectionRepository, sessions store.SessionRepository, memberships store.MembershipRepository, users store.UserRepository) *SectionHandler {
 	return &SectionHandler{sections: sections, sessions: sessions, memberships: memberships, users: users}
 }
 
@@ -311,7 +306,7 @@ func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request)
 
 	var instructors []store.SectionMembership
 	for _, m := range members {
-		if m.Role == "instructor" {
+		if m.Role == string(auth.RoleInstructor) {
 			instructors = append(instructors, m)
 		}
 	}
@@ -393,7 +388,7 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 
 	instructorCount := 0
 	for _, m := range members {
-		if m.Role == "instructor" {
+		if m.Role == string(auth.RoleInstructor) {
 			instructorCount++
 		}
 	}

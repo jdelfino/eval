@@ -124,13 +124,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 					r.Mount("/realtime", centrifugoHandler.Routes())
 				}
 			}
-			r.Mount("/namespaces", handler.NewNamespaceHandlerFull(s, s).Routes())
-			r.Mount("/classes", handler.NewClassHandlerFull(s, s, s, s).Routes())
+			r.Mount("/namespaces", handler.NewNamespaceHandler(s, s).Routes())
+			r.Mount("/classes", handler.NewClassHandler(s, s, s, s).Routes())
 
 			membershipHandler := handler.NewMembershipHandler(s)
 			r.Post("/sections/join", membershipHandler.Join)
 
-			sectionHandler := handler.NewSectionHandlerFull(s, s, s, s)
+			sectionHandler := handler.NewSectionHandler(s, s, s, s)
 			r.Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {

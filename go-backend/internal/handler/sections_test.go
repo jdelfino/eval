@@ -83,7 +83,7 @@ func TestListSectionsByClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", sec.ClassID.String())
@@ -118,7 +118,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -141,7 +141,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 
 func TestListSectionsByClass_InvalidClassID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -165,7 +165,7 @@ func TestListSectionsByClass_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -192,7 +192,7 @@ func TestGetSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+sec.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
@@ -224,7 +224,7 @@ func TestGetSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -242,7 +242,7 @@ func TestGetSection_NotFound(t *testing.T) {
 
 func TestGetSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -285,7 +285,7 @@ func TestCreateSection_Success(t *testing.T) {
 		"name":     "Section A",
 		"semester": "Fall 2025",
 	})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -315,7 +315,7 @@ func TestCreateSection_Success(t *testing.T) {
 }
 
 func TestCreateSection_Unauthorized(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", uuid.New().String())
@@ -331,7 +331,7 @@ func TestCreateSection_Unauthorized(t *testing.T) {
 }
 
 func TestCreateSection_InvalidClassID(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -349,7 +349,7 @@ func TestCreateSection_InvalidClassID(t *testing.T) {
 
 func TestCreateSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	router := h.ClassRoutes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -398,7 +398,7 @@ func TestUpdateSection_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"name": newName,
 	})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+sec.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -432,7 +432,7 @@ func TestUpdateSection_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -460,7 +460,7 @@ func TestDeleteSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -484,7 +484,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -502,7 +502,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 
 func TestDeleteSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -520,7 +520,7 @@ func TestDeleteSection_InvalidID(t *testing.T) {
 
 func TestDeleteSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	router := h.Routes()
 
 	id := uuid.New()
@@ -541,7 +541,7 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 
 func TestCreateSection_MissingName(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"semester": "Fall 2025"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -565,7 +565,7 @@ func TestCreateSection_MissingName(t *testing.T) {
 
 func TestCreateSection_InvalidBody(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -587,7 +587,7 @@ func TestCreateSection_InvalidBody(t *testing.T) {
 }
 
 func TestUpdateSection_InvalidID(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -607,7 +607,7 @@ func TestUpdateSection_InvalidID(t *testing.T) {
 
 func TestUpdateSection_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{})
+	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -633,7 +633,7 @@ func TestUpdateSection_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -658,7 +658,7 @@ func TestGetSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -682,7 +682,7 @@ func TestDeleteSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -714,7 +714,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -750,7 +750,7 @@ func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -786,7 +786,7 @@ func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo)
+	h := NewSectionHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()

@@ -20,13 +20,8 @@ type ClassHandler struct {
 	users       store.UserRepository
 }
 
-// NewClassHandler creates a new ClassHandler with the given repository.
-func NewClassHandler(classes store.ClassRepository) *ClassHandler {
-	return &ClassHandler{classes: classes}
-}
-
-// NewClassHandlerFull creates a new ClassHandler with all needed repositories.
-func NewClassHandlerFull(classes store.ClassRepository, sections store.SectionRepository, memberships store.MembershipRepository, users store.UserRepository) *ClassHandler {
+// NewClassHandler creates a new ClassHandler with the given repositories.
+func NewClassHandler(classes store.ClassRepository, sections store.SectionRepository, memberships store.MembershipRepository, users store.UserRepository) *ClassHandler {
 	return &ClassHandler{classes: classes, sections: sections, memberships: memberships, users: users}
 }
 
@@ -87,48 +82,47 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If we don't have the section/membership repos, return basic response
-	if h.sections == nil {
-		httputil.WriteJSON(w, http.StatusOK, class)
-		return
-	}
+	// Enrich with sections and instructor names when repos are available
+	sections := []store.Section{}
+	instructorNames := []string{}
 
-	sections, err := h.sections.ListSectionsByClass(r.Context(), id)
-	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if sections == nil {
-		sections = []store.Section{}
-	}
-
-	// Collect unique instructor names from all section memberships
-	instructorNameSet := map[string]struct{}{}
-	for _, sec := range sections {
-		if h.memberships == nil {
-			break
-		}
-		members, err := h.memberships.ListMembers(r.Context(), sec.ID)
+	if h.sections != nil {
+		secs, err := h.sections.ListSectionsByClass(r.Context(), id)
 		if err != nil {
-			continue
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
 		}
-		for _, m := range members {
-			if m.Role == "instructor" && h.users != nil {
-				u, err := h.users.GetUserByID(r.Context(), m.UserID)
-				if err == nil {
-					name := u.Email
-					if u.DisplayName != nil {
-						name = *u.DisplayName
+		if secs != nil {
+			sections = secs
+		}
+
+		// Collect unique instructor names from all section memberships
+		// TODO(PLAT-0mf): Replace N+1 queries with a single store-level join
+		if h.memberships != nil && h.users != nil {
+			instructorNameSet := map[string]struct{}{}
+			for _, sec := range sections {
+				members, err := h.memberships.ListMembers(r.Context(), sec.ID)
+				if err != nil {
+					continue
+				}
+				for _, m := range members {
+					if m.Role == string(auth.RoleInstructor) {
+						u, err := h.users.GetUserByID(r.Context(), m.UserID)
+						if err == nil {
+							name := u.Email
+							if u.DisplayName != nil {
+								name = *u.DisplayName
+							}
+							instructorNameSet[name] = struct{}{}
+						}
 					}
-					instructorNameSet[name] = struct{}{}
 				}
 			}
+			instructorNames = make([]string, 0, len(instructorNameSet))
+			for name := range instructorNameSet {
+				instructorNames = append(instructorNames, name)
+			}
 		}
-	}
-
-	instructorNames := make([]string, 0, len(instructorNameSet))
-	for name := range instructorNameSet {
-		instructorNames = append(instructorNames, name)
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{

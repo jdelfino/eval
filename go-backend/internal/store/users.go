@@ -242,45 +242,6 @@ func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// ListUsersByNamespace retrieves all users in a namespace.
-func (s *Store) ListUsersByNamespace(ctx context.Context, namespaceID string) ([]User, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	const query = `
-		SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
-		FROM users
-		WHERE namespace_id = $1
-		ORDER BY created_at`
-
-	rows, err := conn.Query(ctx, query, namespaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var users []User
-	for rows.Next() {
-		var u User
-		if err := rows.Scan(
-			&u.ID,
-			&u.ExternalID,
-			&u.Email,
-			&u.Role,
-			&u.NamespaceID,
-			&u.DisplayName,
-			&u.CreatedAt,
-			&u.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-	return users, rows.Err()
-}
-
 // CountUsersByRole counts users grouped by role within a namespace.
 func (s *Store) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
 	conn, err := s.conn(ctx)

@@ -18,13 +18,8 @@ type NamespaceHandler struct {
 	users      store.UserRepository
 }
 
-// NewNamespaceHandler creates a new NamespaceHandler with the given repository.
-func NewNamespaceHandler(namespaces store.NamespaceRepository) *NamespaceHandler {
-	return &NamespaceHandler{namespaces: namespaces}
-}
-
-// NewNamespaceHandlerFull creates a new NamespaceHandler with all needed repositories.
-func NewNamespaceHandlerFull(namespaces store.NamespaceRepository, users store.UserRepository) *NamespaceHandler {
+// NewNamespaceHandler creates a new NamespaceHandler with the given repositories.
+func NewNamespaceHandler(namespaces store.NamespaceRepository, users store.UserRepository) *NamespaceHandler {
 	return &NamespaceHandler{namespaces: namespaces, users: users}
 }
 
@@ -33,24 +28,30 @@ func (h *NamespaceHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", h.List)
-	r.Get("/{id}", h.Get)
 
-	// Namespace sub-resources
 	r.Route("/{id}", func(r chi.Router) {
-		r.Get("/users", h.ListUsers)
-		r.Get("/capacity", h.GetCapacity)
+		r.Get("/", h.Get)
+
+		// Namespace sub-resources (namespace-admin+)
+		r.Group(func(r chi.Router) {
+			r.Use(custommw.RequireRole(auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+			r.Get("/users", h.ListUsers)
+			r.Get("/capacity", h.GetCapacity)
+		})
+
+		// System-admin only
 		r.Group(func(r chi.Router) {
 			r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+			r.Patch("/", h.Update)
+			r.Delete("/", h.Delete)
 			r.Put("/capacity", h.UpdateCapacity)
 		})
 	})
 
-	// System-admin only routes
+	// System-admin only: create
 	r.Group(func(r chi.Router) {
 		r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
 		r.Post("/", h.Create)
-		r.Patch("/{id}", h.Update)
-		r.Delete("/{id}", h.Delete)
 	})
 
 	return r
@@ -179,11 +180,11 @@ func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, ns)
 }
 
-// ListUsers handles GET /api/v1/namespaces/{id}/users — list users in a namespace.
+// ListUsers handles GET /api/v1/namespaces/{id}/users — list users in a namespace (namespace-admin+).
 func (h *NamespaceHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	users, err := h.users.ListUsersByNamespace(r.Context(), id)
+	users, err := h.users.ListUsers(r.Context(), store.UserFilters{NamespaceID: &id})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -203,7 +204,7 @@ type capacityResponse struct {
 	CurrentCounts  map[string]int `json:"current_counts"`
 }
 
-// GetCapacity handles GET /api/v1/namespaces/{id}/capacity — namespace limits + current counts.
+// GetCapacity handles GET /api/v1/namespaces/{id}/capacity — namespace limits + current counts (namespace-admin+).
 func (h *NamespaceHandler) GetCapacity(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
@@ -236,7 +237,7 @@ type updateCapacityRequest struct {
 	MaxStudents    *int `json:"max_students" validate:"omitempty,gte=0"`
 }
 
-// UpdateCapacity handles PUT /api/v1/namespaces/{id}/capacity — update capacity limits.
+// UpdateCapacity handles PUT /api/v1/namespaces/{id}/capacity — update capacity limits (system-admin only).
 func (h *NamespaceHandler) UpdateCapacity(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 

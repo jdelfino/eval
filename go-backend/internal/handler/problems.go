@@ -74,13 +74,13 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.Tags = strings.Split(tagsStr, ",")
 	}
 
-	if q.Get("include_public") == "true" {
-		filters.IncludePublic = true
+	if q.Get("public_only") == "true" {
+		filters.PublicOnly = true
 	}
 
 	// Use filtered query if any extended filters are set
 	hasExtended := filters.AuthorID != nil || len(filters.Tags) > 0 ||
-		filters.IncludePublic || filters.SortBy != "" || filters.SortOrder != ""
+		filters.PublicOnly || filters.SortBy != "" || filters.SortOrder != ""
 
 	var problems []store.Problem
 	var err error

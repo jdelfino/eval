@@ -68,12 +68,6 @@ func (m *fullMockUserRepo) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return m.deleteUserFn(ctx, id)
 }
 
-func (m *fullMockUserRepo) ListUsersByNamespace(ctx context.Context, namespaceID string) ([]store.User, error) {
-	if m.listByNamespaceFn != nil {
-		return m.listByNamespaceFn(ctx, namespaceID)
-	}
-	return nil, nil
-}
 
 func (m *fullMockUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
 	if m.countByRoleFn != nil {

@@ -158,7 +158,7 @@ type ProblemFilters struct {
 	ClassID       *uuid.UUID
 	AuthorID      *uuid.UUID
 	Tags          []string
-	IncludePublic bool
+	PublicOnly bool
 	SortBy        string // "created_at", "title", "updated_at"
 	SortOrder     string // "asc", "desc"
 }
@@ -431,9 +431,6 @@ type UserRepository interface {
 	// DeleteUser deletes a user by ID.
 	// Returns ErrNotFound if the user does not exist.
 	DeleteUser(ctx context.Context, id uuid.UUID) error
-
-	// ListUsersByNamespace retrieves all users in a namespace.
-	ListUsersByNamespace(ctx context.Context, namespaceID string) ([]User, error)
 
 	// CountUsersByRole counts users grouped by role within a namespace.
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)

@@ -93,7 +93,7 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 		argIdx++
 	}
 
-	if filters.IncludePublic {
+	if filters.PublicOnly {
 		query += " AND class_id IS NULL"
 	}
 

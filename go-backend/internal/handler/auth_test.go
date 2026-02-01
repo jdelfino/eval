@@ -50,9 +50,6 @@ func (m *mockUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
 	return nil
 }
 
-func (m *mockUserRepo) ListUsersByNamespace(_ context.Context, _ string) ([]store.User, error) {
-	return nil, nil
-}
 
 func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
 	return nil, nil
