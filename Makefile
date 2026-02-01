@@ -18,6 +18,9 @@ docker-build: docker-build-api docker-build-executor
 build-api:
 	cd go-backend && go build -o ./tmp/server ./cmd/server
 
+build-bootstrap:
+	cd go-backend && go build -o ./tmp/bootstrap ./cmd/bootstrap
+
 test-api:
 	cd go-backend && go test -race ./...
 
@@ -97,6 +100,9 @@ reset-db:
 	docker-compose up -d postgres
 	@until pg_isready -h localhost -p 5432 -q; do sleep 0.5; done
 	$(MAKE) seed
+
+bootstrap:
+	cd go-backend && go run ./cmd/bootstrap $(ARGS)
 
 status:
 	@docker-compose ps
