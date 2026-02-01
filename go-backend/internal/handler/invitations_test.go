@@ -74,6 +74,8 @@ type invitationTestRepos struct {
 	inv *mockInvitationRepo
 }
 
+var _ store.Repos = (*invitationTestRepos)(nil)
+
 func (r *invitationTestRepos) ListInvitations(ctx context.Context, filters store.InvitationFilters) ([]store.Invitation, error) {
 	return r.inv.ListInvitations(ctx, filters)
 }

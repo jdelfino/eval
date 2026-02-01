@@ -37,6 +37,8 @@ type revisionTestRepos struct {
 	rev *mockRevisionRepo
 }
 
+var _ store.Repos = (*revisionTestRepos)(nil)
+
 func (r *revisionTestRepos) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]store.Revision, error) {
 	return r.rev.ListRevisions(ctx, sessionID, userID)
 }

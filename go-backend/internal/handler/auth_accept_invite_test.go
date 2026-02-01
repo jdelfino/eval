@@ -56,15 +56,6 @@ func (m *mockAuthRepos) GetClass(ctx context.Context, id uuid.UUID) (*store.Clas
 // Verify that mockAuthRepos implements store.Repos
 var _ store.Repos = (*mockAuthRepos)(nil)
 
-// newAuthHandlerWithDeps creates an AuthHandler with the provided mock repos injected into context.
-// This is a legacy helper for tests that use the old pattern. Tests should prefer
-// creating mockAuthRepos directly and using store.WithRepos.
-func newAuthHandlerWithDeps(users store.UserRepository, invitations store.InvitationRepository, memberships store.MembershipRepository, classes store.ClassRepository) *AuthHandler {
-	// Note: This function is kept for backward compatibility but doesn't actually use the parameters
-	// in the new DI pattern. Callers should inject repos into the request context instead.
-	return NewAuthHandler()
-}
-
 // --- GET /auth/accept-invite ---
 
 func TestAcceptInviteGet_Success(t *testing.T) {

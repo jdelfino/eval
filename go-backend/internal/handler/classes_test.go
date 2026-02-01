@@ -29,6 +29,8 @@ type classesTestRepos struct {
 	listSectionsByClassFn      func(ctx context.Context, classID uuid.UUID) ([]store.Section, error)
 }
 
+var _ store.Repos = (*classesTestRepos)(nil)
+
 func (m *classesTestRepos) ListClasses(ctx context.Context) ([]store.Class, error) {
 	return m.listClassesFn(ctx)
 }

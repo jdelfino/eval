@@ -50,6 +50,8 @@ type adminTestRepos struct {
 	auditLogRepo *mockAuditLogRepo
 }
 
+var _ store.Repos = (*adminTestRepos)(nil)
+
 // AdminStats delegates to the embedded mock if set
 func (a *adminTestRepos) AdminStats(ctx context.Context) (*store.AdminStats, error) {
 	if a.adminRepo != nil {

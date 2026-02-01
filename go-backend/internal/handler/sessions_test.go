@@ -23,6 +23,8 @@ type sessionTestRepos struct {
 	sess *mockSessionRepo
 }
 
+var _ store.Repos = (*sessionTestRepos)(nil)
+
 func (r *sessionTestRepos) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
 	return r.sess.ListSessions(ctx, filters)
 }

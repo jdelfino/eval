@@ -78,6 +78,8 @@ type membershipTestRepos struct {
 	mem *mockMembershipRepo
 }
 
+var _ store.Repos = (*membershipTestRepos)(nil)
+
 func (r *membershipTestRepos) GetSectionByJoinCode(ctx context.Context, code string) (*store.Section, error) {
 	return r.mem.GetSectionByJoinCode(ctx, code)
 }

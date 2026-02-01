@@ -22,6 +22,8 @@ type centrifugoTestRepos struct {
 	studentRepo *mockSessionStudentRepo
 }
 
+var _ store.Repos = (*centrifugoTestRepos)(nil)
+
 func (r *centrifugoTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
 	return r.sessionRepo.GetSession(ctx, id)
 }

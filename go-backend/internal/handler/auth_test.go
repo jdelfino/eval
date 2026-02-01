@@ -82,6 +82,8 @@ type authTestRepos struct {
 	userRepo *mockUserRepo
 }
 
+var _ store.Repos = (*authTestRepos)(nil)
+
 func (r *authTestRepos) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
 	return r.userRepo.GetUserByID(ctx, id)
 }

@@ -60,6 +60,8 @@ type problemTestRepos struct {
 	prob *mockProblemRepo
 }
 
+var _ store.Repos = (*problemTestRepos)(nil)
+
 func (r *problemTestRepos) ListProblems(ctx context.Context, classID *uuid.UUID) ([]store.Problem, error) {
 	return r.prob.ListProblems(ctx, classID)
 }

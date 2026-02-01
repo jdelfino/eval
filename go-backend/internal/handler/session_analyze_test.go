@@ -32,6 +32,8 @@ type analyzeTestRepos struct {
 	sess *mockSessionRepo
 }
 
+var _ store.Repos = (*analyzeTestRepos)(nil)
+
 func (r *analyzeTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
 	return r.sess.GetSession(ctx, id)
 }

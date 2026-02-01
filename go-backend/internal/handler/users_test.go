@@ -87,6 +87,8 @@ type userTestRepos struct {
 	users *fullMockUserRepo
 }
 
+var _ store.Repos = (*userTestRepos)(nil)
+
 func (r *userTestRepos) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
 	return r.users.ListUsers(ctx, filters)
 }

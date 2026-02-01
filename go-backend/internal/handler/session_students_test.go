@@ -22,6 +22,8 @@ type sessionStudentTestRepos struct {
 	students *mockSessionStudentRepo
 }
 
+var _ store.Repos = (*sessionStudentTestRepos)(nil)
+
 func (r *sessionStudentTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return r.students.JoinSession(ctx, params)
 }

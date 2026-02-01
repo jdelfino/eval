@@ -29,6 +29,8 @@ type dashboardRepos struct {
 	dashboard *mockDashboardRepo
 }
 
+var _ store.Repos = (*dashboardRepos)(nil)
+
 func (r *dashboardRepos) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]store.DashboardClass, error) {
 	return r.dashboard.InstructorDashboard(ctx, userID)
 }

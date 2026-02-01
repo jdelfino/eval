@@ -89,6 +89,8 @@ type executeTestRepos struct {
 	students *execMockSessionStudentRepo
 }
 
+var _ store.Repos = (*executeTestRepos)(nil)
+
 func (r *executeTestRepos) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
 	return r.sessions.ListSessions(ctx, filters)
 }

@@ -911,6 +911,8 @@ type sectionTestRepos struct {
 	users *sectionTestUserRepo
 }
 
+var _ store.Repos = (*sectionTestRepos)(nil)
+
 func (r *sectionTestRepos) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]store.Section, error) {
 	return r.sec.ListSectionsByClass(ctx, classID)
 }

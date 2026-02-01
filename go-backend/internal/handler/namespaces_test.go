@@ -48,6 +48,8 @@ type namespaceTestRepos struct {
 	users *nsTestUserRepo
 }
 
+var _ store.Repos = (*namespaceTestRepos)(nil)
+
 func (r *namespaceTestRepos) ListNamespaces(ctx context.Context) ([]store.Namespace, error) {
 	return r.ns.ListNamespaces(ctx)
 }

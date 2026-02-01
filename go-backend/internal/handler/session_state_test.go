@@ -21,6 +21,8 @@ type sessionStateTestRepos struct {
 	sec      *mockSectionRepo
 }
 
+var _ store.Repos = (*sessionStateTestRepos)(nil)
+
 func (r *sessionStateTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
 	return r.sess.GetSession(ctx, id)
 }
