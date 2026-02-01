@@ -180,3 +180,18 @@ resource "google_container_node_pool" "executor" {
     auto_upgrade = true
   }
 }
+
+# -----------------------------------------------------------------------------
+# Fleet Membership (Connect Gateway)
+# -----------------------------------------------------------------------------
+
+resource "google_gke_hub_membership" "main" {
+  membership_id = local.cluster_name
+  project       = var.project_id
+
+  endpoint {
+    gke_cluster {
+      resource_link = google_container_cluster.main.id
+    }
+  }
+}
