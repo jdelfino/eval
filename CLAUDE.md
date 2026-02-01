@@ -30,14 +30,15 @@ make deps-down           # Stop Docker Compose services
 make seed                # Load seed data into local DB
 make reset-db            # Destroy and recreate DB with seed data
 
-# Testing
-make test                # Run Go tests
-make go-test             # Run Go tests with race detector
-make go-lint             # Run golangci-lint
+# Build & test (all projects)
+make build               # Build all binaries
+make test                # Run all unit tests (with race detector)
+make test-integration    # Run all integration tests
+make lint                # Lint all projects
+make docker-build        # Build all Docker images
 
-# Building
-make go-build            # Build Go binary
-make docker-build        # Build Docker image locally
+# Per-project: build-<project>, test-<project>, lint-<project>
+# Projects: api (go-backend), executor
 ```
 
 ## Development Guidelines

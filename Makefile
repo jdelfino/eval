@@ -1,4 +1,58 @@
-.PHONY: dev deps-up deps-down wait-deps seed reset-db status test logs
+# ──────────────────────────────────────────────
+# Aggregate targets
+# ──────────────────────────────────────────────
+.PHONY: build test test-integration lint docker-build
+
+build: build-api build-executor
+test: test-api test-executor
+test-integration: test-integration-executor
+lint: lint-api lint-executor
+
+docker-build: docker-build-api docker-build-executor
+
+# ──────────────────────────────────────────────
+# API (go-backend)
+# ──────────────────────────────────────────────
+.PHONY: build-api test-api lint-api docker-build-api
+
+build-api:
+	cd go-backend && go build -o ./tmp/server ./cmd/server
+
+test-api:
+	cd go-backend && go test -race ./...
+
+lint-api:
+	cd go-backend && golangci-lint run ./...
+
+docker-build-api:
+	docker build -t go-api:local go-backend/
+
+# ──────────────────────────────────────────────
+# Executor
+# ──────────────────────────────────────────────
+.PHONY: build-executor test-executor lint-executor test-integration-executor docker-build-executor
+
+build-executor:
+	cd executor && go build -o ./tmp/executor ./cmd/executor
+
+test-executor:
+	cd executor && go test -race ./...
+
+lint-executor:
+	cd executor && golangci-lint run ./...
+
+test-integration-executor:
+	docker-compose up -d executor --wait
+	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
+	docker-compose down executor
+
+docker-build-executor:
+	docker build -t executor:local executor/
+
+# ──────────────────────────────────────────────
+# Local development
+# ──────────────────────────────────────────────
+.PHONY: dev deps-up deps-down wait-deps seed reset-db status logs
 
 dev: deps-up wait-deps
 	cd go-backend && air
@@ -33,28 +87,5 @@ status:
 	@echo "Service health:"
 	@docker-compose ps --format json | jq -r '.[] | "\(.Name): \(.Health // "N/A")"'
 
-test:
-	cd go-backend && go test ./...
-
 logs:
 	docker-compose logs -f
-
-# Go Backend targets
-.PHONY: go-build go-test go-lint docker-build test-integration
-
-go-build:
-	cd go-backend && go build -o ./tmp/server ./cmd/server
-
-go-test:
-	cd go-backend && go test -v -race ./...
-
-go-lint:
-	cd go-backend && golangci-lint run ./...
-
-docker-build:
-	docker build -t go-api:local go-backend/
-
-test-integration: ## Run executor integration tests (requires Docker)
-	docker-compose up -d executor --wait
-	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
-	docker-compose down executor
