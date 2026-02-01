@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/server/auth/permissions';
+import { hasRolePermission } from '@/lib/permissions';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNamespaces } from '@/hooks/useNamespaces';
 import NamespaceList from './components/NamespaceList';
 import CreateNamespaceForm from './components/CreateNamespaceForm';
 import InvitationList from '@/components/InvitationList';
 import CreateInvitationForm from './components/CreateInvitationForm';
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -131,14 +132,7 @@ function SystemAdminContent() {
         params.set('status', invitationFilters.status);
       }
 
-      const response = await fetch(`/api/system/invitations?${params.toString()}`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch invitations');
-      }
-
+      const response = await apiFetch(`/system/invitations?${params.toString()}`);
       const data = await response.json();
       setInvitations(data.invitations);
     } catch (error) {
@@ -155,18 +149,7 @@ function SystemAdminContent() {
     namespaceId: string,
     targetRole: 'namespace-admin' | 'instructor'
   ) => {
-    const response = await fetch('/api/system/invitations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email, namespaceId, targetRole }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create invitation');
-    }
-
+    await apiPost('/system/invitations', { email, namespaceId, targetRole });
     // Refresh list
     await fetchInvitations();
     setShowCreateInvitationForm(false);
@@ -174,32 +157,14 @@ function SystemAdminContent() {
 
   // Revoke invitation
   const revokeInvitation = async (id: string) => {
-    const response = await fetch(`/api/system/invitations/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to revoke invitation');
-    }
-
+    await apiDelete(`/system/invitations/${id}`);
     // Refresh list
     await fetchInvitations();
   };
 
   // Resend invitation
   const resendInvitation = async (id: string) => {
-    const response = await fetch(`/api/system/invitations/${id}/resend`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to resend invitation');
-    }
-
+    await apiPost(`/system/invitations/${id}/resend`, {});
     // Refresh list
     await fetchInvitations();
   };

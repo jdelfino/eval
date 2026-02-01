@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { apiPost } from '@/lib/api-client';
 
 interface CreateSectionModalProps {
   classId: string;
@@ -53,16 +54,7 @@ export default function CreateSectionModal({ classId, onClose, onSuccess }: Crea
         body.capacity = capacityNum;
       }
 
-      const response = await fetch(`/api/classes/${classId}/sections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create section');
-      }
+      await apiPost(`/classes/${classId}/sections`, body);
 
       // Success
       setName('');

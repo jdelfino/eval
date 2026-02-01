@@ -2,11 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/server/auth/permissions';
+import { hasRolePermission } from '@/lib/permissions';
 import { useRouter, useParams } from 'next/navigation';
 import { useNamespaces } from '@/hooks/useNamespaces';
-import { User } from '@/server/auth/types';
-import { Namespace } from '@/server/auth/types';
+import { apiFetch } from '@/lib/api-client';
+
+interface User {
+  id: string;
+  email: string;
+  displayName?: string;
+  role: string;
+  createdAt: string;
+}
+
+interface Namespace {
+  id: string;
+  displayName: string;
+  active: boolean;
+}
 import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -56,11 +69,9 @@ export default function NamespaceUsersPage() {
   const fetchData = async () => {
     try {
       // Fetch namespace details
-      const nsResponse = await fetch(`/api/system/namespaces/${namespaceId}`);
-      if (nsResponse.ok) {
-        const nsData = await nsResponse.json();
-        setNamespace(nsData.namespace);
-      }
+      const nsResponse = await apiFetch(`/system/namespaces/${namespaceId}`);
+      const nsData = await nsResponse.json();
+      setNamespace(nsData.namespace);
 
       // Fetch users
       const fetchedUsers = await getNamespaceUsers(namespaceId);

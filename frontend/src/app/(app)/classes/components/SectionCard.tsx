@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Section } from '@/server/classes/types';
 import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
+import { apiFetch } from '@/lib/api-client';
 
 interface Instructor {
   id: string;
@@ -43,11 +44,9 @@ export default function SectionCard({
   useEffect(() => {
     const fetchInstructors = async () => {
       try {
-        const response = await fetch(`/api/sections/${section.id}/instructors`);
-        if (response.ok) {
-          const data = await response.json();
-          setInstructors(data.instructors || []);
-        }
+        const response = await apiFetch(`/sections/${section.id}/instructors`);
+        const data = await response.json();
+        setInstructors(data.instructors || []);
       } catch (err) {
         console.error('Failed to fetch instructors:', err);
       } finally {
@@ -74,11 +73,9 @@ export default function SectionCard({
 
   const refreshInstructors = async () => {
     try {
-      const response = await fetch(`/api/sections/${section.id}/instructors`);
-      if (response.ok) {
-        const data = await response.json();
-        setInstructors(data.instructors || []);
-      }
+      const response = await apiFetch(`/sections/${section.id}/instructors`);
+      const data = await response.json();
+      setInstructors(data.instructors || []);
     } catch (err) {
       console.error('Failed to refresh instructors:', err);
     }

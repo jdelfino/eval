@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/server/auth/permissions';
+import { hasRolePermission } from '@/lib/permissions';
 import { useSelectedNamespace } from '@/hooks/useSelectedNamespace';
 import NamespaceHeader from '@/components/NamespaceHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -18,7 +18,16 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Table } from '@/components/ui/Table';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import type { User, UserRole } from '@/server/auth/types';
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
+import type { UserRole } from '@/types/api';
+
+interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  createdAt: string;
+}
 
 interface Invitation {
   id: string;
@@ -76,11 +85,9 @@ function AdminPage() {
     if (!isAdmin) return;
 
     try {
-      const res = await fetch(buildUrl('/api/admin/stats'), { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      const res = await apiFetch(buildUrl('/admin/stats'));
+      const data = await res.json();
+      setStats(data);
     } catch (err) {
       console.error('Failed to load stats:', err);
     }
@@ -91,11 +98,9 @@ function AdminPage() {
 
     setInvitationsLoading(true);
     try {
-      const res = await fetch('/api/namespace/invitations', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setInvitations(data.invitations || []);
-      }
+      const res = await apiFetch('/namespace/invitations');
+      const data = await res.json();
+      setInvitations(data.invitations || []);
     } catch (err) {
       console.error('Failed to load invitations:', err);
     } finally {
@@ -104,47 +109,21 @@ function AdminPage() {
   };
 
   const handleInviteInstructor = async (email: string) => {
-    const response = await fetch('/api/namespace/invitations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to send invitation');
-    }
+    await apiPost('/namespace/invitations', { email });
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleRevokeInvitation = async (invitationId: string) => {
-    const response = await fetch(`/api/namespace/invitations/${invitationId}`, {
-      method: 'DELETE',
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to revoke invitation');
-    }
+    await apiDelete(`/namespace/invitations/${invitationId}`);
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleResendInvitation = async (invitationId: string) => {
-    const response = await fetch(`/api/namespace/invitations/${invitationId}/resend`, {
-      method: 'POST',
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to resend invitation');
-    }
+    await apiPost(`/namespace/invitations/${invitationId}/resend`);
 
     // Reload invitations
     await loadInvitations();
@@ -156,8 +135,7 @@ function AdminPage() {
     try {
       if (isAdmin) {
         // Admins can see all users including other admins
-        const res = await fetch(buildUrl('/api/admin/users'), { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load users');
+        const res = await apiFetch(buildUrl('/admin/users'));
         const data = await res.json();
         const users = data.users || [];
         setAllUsers(users);
@@ -167,13 +145,9 @@ function AdminPage() {
       } else {
         // Instructors can only see instructors and students
         const [instructorsRes, studentsRes] = await Promise.all([
-          fetch(buildUrl('/api/admin/users', { role: 'instructor' }), { credentials: 'include' }),
-          fetch(buildUrl('/api/admin/users', { role: 'student' }), { credentials: 'include' })
+          apiFetch(buildUrl('/admin/users', { role: 'instructor' })),
+          apiFetch(buildUrl('/admin/users', { role: 'student' }))
         ]);
-
-        if (!instructorsRes.ok || !studentsRes.ok) {
-          throw new Error('Failed to load users');
-        }
 
         const instructorsData = await instructorsRes.json();
         const studentsData = await studentsRes.json();
@@ -214,17 +188,11 @@ function AdminPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
+      await apiFetch(`/admin/users/${userId}/role`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
-        credentials: 'include'
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to change role');
-      }
 
       // Reload users and stats
       await loadUsers();
@@ -237,15 +205,7 @@ function AdminPage() {
   };
 
   const handleDeleteUser = async (userId: string, _username: string) => {
-    const response = await fetch(`/api/admin/users/${userId}`, {
-      method: 'DELETE',
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to delete user');
-    }
+    await apiDelete(`/admin/users/${userId}`);
 
     // Reload users
     await loadUsers();

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { apiFetch, apiDelete } from '@/lib/api-client';
 import CreateSectionModal from './CreateSectionModal';
 import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
 import { BackButton } from '@/components/ui/BackButton';
@@ -66,10 +67,7 @@ export default function SectionView({
   const loadSections = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/classes/${classId}/sections`);
-      if (!response.ok) {
-        throw new Error('Failed to load sections');
-      }
+      const response = await apiFetch(`/classes/${classId}/sections`);
       const data = await response.json();
       setSections(data.sections || []);
       setError(null);
@@ -92,14 +90,7 @@ export default function SectionView({
     setShowDeleteConfirm(false);
     setDeletingId(sectionToDelete.id);
     try {
-      const response = await fetch(`/api/sections/${sectionToDelete.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete section');
-      }
+      await apiDelete(`/sections/${sectionToDelete.id}`);
 
       // If deleted section was selected, clear selection
       if (selectedSection?.id === sectionToDelete.id) {
@@ -120,10 +111,7 @@ export default function SectionView({
   const loadSessions = async (sectionId: string) => {
     try {
       setLoadingSessions(true);
-      const response = await fetch(`/api/sections/${sectionId}/sessions`);
-      if (!response.ok) {
-        throw new Error('Failed to load sessions');
-      }
+      const response = await apiFetch(`/sections/${sectionId}/sessions`);
       const data = await response.json();
       setSessions(data.sessions || []);
     } catch (err) {

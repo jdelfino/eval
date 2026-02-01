@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Session } from '@/server/types';
+import type { Session } from '@/types/api';
+import { apiFetch } from '@/lib/api-client';
 import { BackButton } from '@/components/ui/BackButton';
 
 interface SectionDetail {
@@ -44,8 +45,7 @@ export default function SectionDetailPage() {
       setError(null);
 
       // Get section details
-      const sectionsResponse = await fetch('/api/sections/my');
-      if (!sectionsResponse.ok) throw new Error('Failed to load sections');
+      const sectionsResponse = await apiFetch('/sections/my');
       const sectionsData = await sectionsResponse.json();
       const sectionDetail = sectionsData.sections.find((s: any) => s.id === sectionId);
       
@@ -57,8 +57,7 @@ export default function SectionDetailPage() {
       setSection(sectionDetail);
 
       // Get all sessions for this section
-      const sessionsResponse = await fetch(`/api/sections/${sectionId}/sessions`);
-      if (!sessionsResponse.ok) throw new Error('Failed to load sessions');
+      const sessionsResponse = await apiFetch(`/sections/${sectionId}/sessions`);
       const sessionsData = await sessionsResponse.json();
       
       // Separate active and past sessions

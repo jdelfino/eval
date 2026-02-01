@@ -13,7 +13,8 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings } from '@/server/types/problem';
+import { Problem, ExecutionSettings } from '@/types/problem';
+import { apiPost } from '@/lib/api-client';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
 interface SessionContext {
@@ -102,15 +103,7 @@ export function SessionView({
     if (!sessionProblem?.solution || !onClearPublicView) return;
 
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/feature`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: sessionProblem.solution }),
-      });
-
-      if (!res.ok) {
-        console.error('Failed to show solution:', await res.text());
-      }
+      await apiPost(`/sessions/${sessionId}/feature`, { code: sessionProblem.solution });
     } catch (error) {
       console.error('Failed to show solution:', error);
     }

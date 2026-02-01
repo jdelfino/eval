@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch, apiPost } from '@/lib/api-client';
 
 interface ProblemInfo {
   id: string;
@@ -45,11 +46,7 @@ export default function StartSessionModal({
   const loadProblems = async () => {
     try {
       setLoadingProblems(true);
-      const response = await fetch('/api/problems');
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to load problems');
-      }
+      const response = await apiFetch('/problems');
       const data = await response.json();
       setProblems(data.problems || []);
       setError(null);
@@ -75,20 +72,7 @@ export default function StartSessionModal({
         body.problemId = selectedOption;
       }
 
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create session');
-      }
-
-      const { session } = await response.json();
+      const { session } = await apiPost<{ session: { id: string } }>('/sessions', body);
       onSessionCreated(session.id);
       router.push(`/instructor/session/${session.id}`);
     } catch (err) {

@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
-import { Problem } from '@/server/types/problem';
+import { Problem } from '@/types/problem';
+import { apiFetch } from '@/lib/api-client';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -43,11 +44,7 @@ function PublicViewContent() {
     if (!sessionId) return;
 
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/public-state`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to load session');
-      }
+      const res = await apiFetch(`/sessions/${sessionId}/public-state`);
       const data = await res.json();
       setState(data);
       setError(null);

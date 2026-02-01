@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
+import { apiFetch, apiPost } from '@/lib/api-client';
 
 interface SectionInfo {
   id: string;
@@ -47,10 +48,7 @@ export default function CreateSessionFromProblemModal({
   const loadSections = async (targetClassId: string) => {
     try {
       setLoadingSections(true);
-      const response = await fetch(`/api/classes/${targetClassId}/sections`);
-      if (!response.ok) {
-        throw new Error('Failed to load sections');
-      }
+      const response = await apiFetch(`/classes/${targetClassId}/sections`);
       const data = await response.json();
       const loadedSections: SectionInfo[] = data.sections || [];
       setSections(loadedSections);
@@ -83,23 +81,10 @@ export default function CreateSessionFromProblemModal({
       setLoading(true);
       setError(null);
 
-      const createResponse = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sectionId: selectedSectionId,
-          problemId: problemId,
-        }),
+      const { session } = await apiPost<{ session: { id: string; joinCode: string } }>('/sessions', {
+        sectionId: selectedSectionId,
+        problemId: problemId,
       });
-
-      if (!createResponse.ok) {
-        const errorData = await createResponse.json();
-        throw new Error(errorData.error || 'Failed to create session');
-      }
-
-      const { session } = await createResponse.json();
       setLastUsedSection(selectedSectionId, classId);
       onSuccess(session.id, session.joinCode);
     } catch (err) {

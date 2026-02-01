@@ -10,10 +10,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/server/auth/permissions';
+import { hasRolePermission } from '@/lib/permissions';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { formatJoinCodeForDisplay } from '@/server/classes/join-code-service';
-import { fetchWithRetry } from '@/lib/api-utils';
+import { apiFetch } from '@/lib/api-client';
 import CreateClassModal from './CreateClassModal';
 
 interface SectionInfo {
@@ -58,14 +58,7 @@ export function InstructorDashboard({
       setError(null);
 
       // Fetch classes with their sections and active session info
-      const response = await fetchWithRetry('/api/instructor/dashboard', {
-        maxRetries: 2,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load dashboard data');
-      }
-
+      const response = await apiFetch('/instructor/dashboard');
       const data = await response.json();
       setClassesWithSections(data.classes || []);
     } catch (err) {

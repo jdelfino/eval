@@ -4,6 +4,8 @@ import React, { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorAlert } from '@/components/ErrorAlert';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
 export default function BootstrapPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,7 +40,7 @@ export default function BootstrapPage() {
     const username = email.trim().split('@')[0];
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password, username }),

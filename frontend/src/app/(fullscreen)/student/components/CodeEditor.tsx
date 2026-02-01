@@ -5,9 +5,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import ExecutionSettingsComponent from './ExecutionSettings';
 import { DebuggerSidebar } from './DebuggerSidebar';
 import MarkdownContent from '@/components/MarkdownContent';
-import type { ExecutionSettings } from '@/server/types/problem';
+import type { ExecutionSettings } from '@/types/problem';
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
-import type { Problem } from '@/server/types/problem';
+import type { Problem } from '@/types/problem';
+import { apiFetch } from '@/lib/api-client';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2 } from 'lucide-react';
 
@@ -349,7 +350,7 @@ export default function CodeEditor({
     setLocalExecutionResult(null);
 
     try {
-      const response = await fetch('/api/execute', {
+      const response = await apiFetch('/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -359,11 +360,6 @@ export default function CodeEditor({
           attachedFiles,
         }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to execute code');
-      }
 
       const result = await response.json();
       setLocalExecutionResult(result);

@@ -19,6 +19,8 @@ import Link from 'next/link';
 import { getSupabaseClient } from '@/lib/supabase-client';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
 // Page state types
 type PageState =
   | { status: 'verifying' }
@@ -181,9 +183,7 @@ export default function AcceptInvitePage() {
         // Session established, now fetch invitation details
         setPageState({ status: 'loading-invitation' });
 
-        const response = await fetch('/api/auth/accept-invite', {
-          credentials: 'include',
-        });
+        const response = await fetch(`${API_BASE}/auth/accept-invite`);
 
         if (!response.ok) {
           const data = await response.json();
@@ -250,10 +250,9 @@ export default function AcceptInvitePage() {
 
     try {
       // First, create the user profile
-      const response = await fetch('/api/auth/accept-invite', {
+      const response = await fetch(`${API_BASE}/auth/accept-invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           displayName: displayName.trim() || undefined,
         }),

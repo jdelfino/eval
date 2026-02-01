@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api-client';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { BackButton } from '@/components/ui/BackButton';
@@ -48,11 +49,7 @@ export default function SessionDetails({ sessionId, onClose }: SessionDetailsPro
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/sessions/${sessionId}/details`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch session details');
-      }
-
+      const response = await apiFetch(`/sessions/${sessionId}/details`);
       const data = await response.json();
       setSession(data);
       

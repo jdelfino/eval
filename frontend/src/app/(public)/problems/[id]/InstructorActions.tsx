@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CreateSessionFromProblemModal from '@/app/(app)/instructor/components/CreateSessionFromProblemModal';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
+import { apiFetch, apiPost } from '@/lib/api-client';
 
 interface InstructorActionsProps {
   problemId: string;
@@ -36,15 +37,7 @@ export default function InstructorActions({ problemId, problemTitle, classId, cl
 
     (async () => {
       try {
-        const response = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sectionId, problemId }),
-        });
-        if (!response.ok) {
-          throw new Error('Failed to create session');
-        }
-        const { session } = await response.json();
+        const { session } = await apiPost<{ session: { id: string } }>('/sessions', { sectionId, problemId });
         setLastUsedSection(sectionId, classId);
         const channel = new BroadcastChannel('instructor-session-created');
         channel.postMessage({ sessionId: session.id, problemTitle });
@@ -67,25 +60,14 @@ export default function InstructorActions({ problemId, problemTitle, classId, cl
   };
 
   const createSession = async (sectionId: string) => {
-    const response = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sectionId, problemId }),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create session');
-    }
-    const { session } = await response.json();
+    const { session } = await apiPost<{ session: { id: string } }>('/sessions', { sectionId, problemId });
     return session;
   };
 
   const handleStartSession = async () => {
     setStarting(true);
     try {
-      const response = await fetch(`/api/classes/${classId}/sections`);
-      if (!response.ok) {
-        throw new Error('Failed to load sections');
-      }
+      const response = await apiFetch(`/classes/${classId}/sections`);
       const data = await response.json();
       const sections: { id: string; name: string; joinCode: string }[] = data.sections || [];
 

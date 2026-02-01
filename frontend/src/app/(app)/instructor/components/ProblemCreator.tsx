@@ -11,7 +11,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { ProblemInput } from '@/server/types/problem';
+import type { ProblemInput } from '@/types/problem';
+import { apiFetch, apiPost, apiPatch } from '@/lib/api-client';
 import type { ClassInfo } from '../types';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
@@ -57,14 +58,12 @@ export default function ProblemCreator({
   useEffect(() => {
     const loadClasses = async () => {
       try {
-        const response = await fetch('/api/classes');
-        if (response.ok) {
-          const data = await response.json();
-          setClasses(data.classes || []);
-          // Pre-populate if classId prop provided
-          if (classId) {
-            setSelectedClassId(classId);
-          }
+        const response = await apiFetch('/classes');
+        const data = await response.json();
+        setClasses(data.classes || []);
+        // Pre-populate if classId prop provided
+        if (classId) {
+          setSelectedClassId(classId);
         }
       } catch {
         // Classes won't be populated but form still works
@@ -84,10 +83,7 @@ export default function ProblemCreator({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/problems/${id}`);
-      if (!response.ok) {
-        throw new Error('Failed to load problem');
-      }
+      const response = await apiFetch(`/problems/${id}`);
       const { problem } = await response.json();
       setTitle(problem.title || '');
       setDescription(problem.description || '');
@@ -155,30 +151,14 @@ export default function ProblemCreator({
         problemInput.executionSettings = execSettings;
       }
 
-      let response;
+      let result: { problem: { id: string } };
       if (isEditMode) {
-        // Update existing problem
-        response = await fetch(`/api/problems/${problemId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(problemInput),
-        });
+        result = await apiPatch<{ problem: { id: string } }>(`/problems/${problemId}`, problemInput);
       } else {
-        // Create new problem
-        response = await fetch('/api/problems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(problemInput),
-        });
+        result = await apiPost<{ problem: { id: string } }>('/problems', problemInput);
       }
 
-      if (!response.ok) {
-        const data = await response.json();
-        const details = data.details?.map((d: any) => d.message).join('; ');
-        throw new Error(details || data.error || `Failed to ${isEditMode ? 'update' : 'create'} problem`);
-      }
-
-      const { problem } = await response.json();
+      const { problem } = result;
 
       if (!isEditMode) {
         // Reset form only when creating

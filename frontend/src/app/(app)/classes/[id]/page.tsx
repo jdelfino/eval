@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
-import { hasRolePermission } from '@/server/auth/permissions';
+import { hasRolePermission } from '@/lib/permissions';
 import type { Class, Section } from '@/server/classes/types';
+import { apiFetch } from '@/lib/api-client';
 import SectionCard from '../components/SectionCard';
 import CreateSectionForm from '../components/CreateSectionForm';
 import { BackButton } from '@/components/ui/BackButton';
@@ -48,9 +49,7 @@ export default function ClassDetailsPage() {
 
   const loadClassDetails = async () => {
     try {
-      const response = await fetch(`/api/classes/${classId}`);
-      if (!response.ok) throw new Error('Failed to load class');
-
+      const response = await apiFetch(`/classes/${classId}`);
       const data = await response.json();
       setClassData(data.class);
       setSections(data.sections || []);

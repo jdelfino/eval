@@ -10,6 +10,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api-client';
 
 interface Namespace {
   id: string;
@@ -38,12 +39,10 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
         // For system admin, we fetch all namespaces anyway, so skip this
         if (user.role === 'system-admin') return;
 
-        const response = await fetch(`/api/system/namespaces/${user.namespaceId}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.namespace) {
-            setCurrentNamespace(data.namespace);
-          }
+        const response = await apiFetch(`/system/namespaces/${user.namespaceId}`);
+        const data = await response.json();
+        if (data.success && data.namespace) {
+          setCurrentNamespace(data.namespace);
         }
       } catch (error) {
         console.error('Failed to load namespace:', error);
@@ -60,21 +59,19 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
     const loadNamespaces = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/system/namespaces');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.namespaces) {
-            setNamespaces(data.namespaces);
-            
-            // Load selected namespace from localStorage or default to user's namespace
-            const savedNamespaceId = localStorage.getItem('selectedNamespaceId');
-            const initialNamespaceId = savedNamespaceId || user.namespaceId || 'default';
-            setSelectedNamespaceId(initialNamespaceId);
-            
-            // Set current namespace
-            const selected = data.namespaces.find((ns: Namespace) => ns.id === initialNamespaceId);
-            setCurrentNamespace(selected || data.namespaces[0] || null);
-          }
+        const response = await apiFetch('/system/namespaces');
+        const data = await response.json();
+        if (data.success && data.namespaces) {
+          setNamespaces(data.namespaces);
+
+          // Load selected namespace from localStorage or default to user's namespace
+          const savedNamespaceId = localStorage.getItem('selectedNamespaceId');
+          const initialNamespaceId = savedNamespaceId || user.namespaceId || 'default';
+          setSelectedNamespaceId(initialNamespaceId);
+
+          // Set current namespace
+          const selected = data.namespaces.find((ns: Namespace) => ns.id === initialNamespaceId);
+          setCurrentNamespace(selected || data.namespaces[0] || null);
         }
       } catch (error) {
         console.error('Failed to load namespaces:', error);

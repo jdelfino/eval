@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
 import InvitationList, { Invitation } from '@/components/InvitationList';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -46,15 +47,7 @@ function InvitationsPageContent() {
         params.set('status', statusFilter);
       }
 
-      const response = await fetch(`/api/namespace/invitations?${params}`, {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to fetch invitations');
-      }
-
+      const response = await apiFetch(`/namespace/invitations?${params}`);
       const data = await response.json();
       setInvitations(data.invitations);
     } catch (err) {
@@ -92,17 +85,7 @@ function InvitationsPageContent() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/namespace/invitations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email: trimmedEmail, expiresInDays }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create invitation');
-      }
+      await apiPost('/namespace/invitations', { email: trimmedEmail, expiresInDays });
 
       setEmail('');
       setSuccessMessage(`Invitation sent to ${trimmedEmail}`);
@@ -120,31 +103,13 @@ function InvitationsPageContent() {
   };
 
   const handleRevoke = async (id: string) => {
-    const response = await fetch(`/api/namespace/invitations/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to revoke invitation');
-    }
-
+    await apiDelete(`/namespace/invitations/${id}`);
     // Refresh the list
     await fetchInvitations();
   };
 
   const handleResend = async (id: string) => {
-    const response = await fetch(`/api/namespace/invitations/${id}/resend`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to resend invitation');
-    }
-
+    await apiPost(`/namespace/invitations/${id}/resend`, {});
     // Refresh the list
     await fetchInvitations();
   };

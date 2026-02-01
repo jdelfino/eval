@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import CreateClassModal from './CreateClassModal';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { fetchWithRetry } from '@/lib/api-utils';
+import { apiFetch } from '@/lib/api-client';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { ClassWithSections } from '../types';
 
@@ -31,10 +31,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetchWithRetry('/api/classes', { maxRetries: 2 });
-      if (!response.ok) {
-        throw new Error('Failed to load classes');
-      }
+      const response = await apiFetch('/classes');
       const data = await response.json();
       setClasses(data.classes || []);
     } catch (err) {
@@ -57,15 +54,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
     setDeletingId(classToDelete.id);
     setDeleteError(null);
     try {
-      const response = await fetchWithRetry(`/api/classes/${classToDelete.id}`, {
-        fetchOptions: { method: 'DELETE' },
-        maxRetries: 2,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete class');
-      }
+      await apiFetch(`/classes/${classToDelete.id}`, { method: 'DELETE' });
 
       // Reload classes
       await loadClasses();

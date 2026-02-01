@@ -20,7 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
-import { Problem, ExecutionSettings } from '@/server/types/problem';
+import { Problem, ExecutionSettings } from '@/types/problem';
+import { apiPost } from '@/lib/api-client';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 
@@ -146,14 +147,7 @@ export default function InstructorSessionPage() {
     if (!sessionId) return;
     try {
       setReopening(true);
-      const response = await fetch(`/api/sessions/${sessionId}/reopen`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || 'Failed to reopen session');
-        return;
-      }
+      await apiPost(`/sessions/${sessionId}/reopen`);
       // Reload the page to get fresh active session state
       window.location.reload();
     } catch (err: any) {

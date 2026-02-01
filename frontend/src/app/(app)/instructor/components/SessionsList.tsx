@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api-client';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface SessionData {
@@ -52,11 +53,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
         params.append('search', searchQuery);
       }
 
-      const response = await fetch(`/api/sessions/history?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch sessions');
-      }
-
+      const response = await apiFetch(`/sessions/history?${params.toString()}`);
       const data = await response.json();
       setSessions(data.sessions || []);
     } catch (err) {

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ErrorAlert } from '@/components/ErrorAlert';
+import { apiPost } from '@/lib/api-client';
 
 interface CreateClassModalProps {
   onClose: () => void;
@@ -38,16 +39,7 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
     setLoading(true);
 
     try {
-      const response = await fetch('/api/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, description: trimmedDesc }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create class');
-      }
+      await apiPost('/classes', { name: trimmedName, description: trimmedDesc });
 
       // Success
       setName('');

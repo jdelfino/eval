@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { apiFetch, apiDelete } from '@/lib/api-client';
 import ProblemSearch from './ProblemSearch';
 import ProblemCard from './ProblemCard';
 import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
@@ -47,10 +48,9 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     if (!user) return;
     const loadClasses = async () => {
       try {
-        const response = await fetch('/api/classes');
-        if (response.ok) {
-          const data = await response.json();
-          const loadedClasses: ClassInfo[] = data.classes || [];
+        const response = await apiFetch('/classes');
+        const data = await response.json();
+        const loadedClasses: ClassInfo[] = data.classes || [];
           setClasses(loadedClasses);
           // Default to first class, or check localStorage
           const savedClassId = localStorage.getItem('problemLibrary_classId');
@@ -59,7 +59,6 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
           } else if (loadedClasses.length > 0) {
             setSelectedClassId(loadedClasses[0].id);
           }
-        }
       } catch {
         // Silently fail - class picker just won't be populated
       } finally {
@@ -94,11 +93,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
         params.set('classId', selectedClassId);
       }
 
-      const response = await fetch(`/api/problems?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to load problems');
-      }
-
+      const response = await apiFetch(`/problems?${params}`);
       const data = await response.json();
       setProblems(data.problems || []);
     } catch (err) {
@@ -184,14 +179,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
 
   const handleDelete = async (problemId: string, title: string) => {
     try {
-      const response = await fetch(`/api/problems/${problemId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete problem');
-      }
+      await apiDelete(`/problems/${problemId}`);
 
       // Reload problems after deletion
       await loadProblems();
