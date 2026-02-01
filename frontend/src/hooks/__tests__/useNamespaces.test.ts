@@ -69,12 +69,22 @@ describe('useNamespaces', () => {
     mockApiGet.mockRejectedValue(new Error('Network error'));
     const { result } = renderHook(() => useNamespaces());
 
+    let thrownError: Error | undefined;
     await act(async () => {
-      try { await result.current.fetchNamespaces(); } catch (_) { /* expected */ }
+      try {
+        await result.current.fetchNamespaces();
+      } catch (e) {
+        thrownError = e as Error;
+      }
     });
 
+    // Verify the error was re-thrown with correct message
+    expect(thrownError).toBeInstanceOf(Error);
+    expect(thrownError!.message).toBe('Network error');
+    // Verify internal hook state reflects the error
     expect(result.current.error).toBe('Network error');
     expect(result.current.loading).toBe(false);
+    expect(result.current.namespaces).toEqual([]);
   });
 
   it('createNamespace posts and refreshes list', async () => {

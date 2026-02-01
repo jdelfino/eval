@@ -1,6 +1,7 @@
 /**
  * Tests for api-client
  */
+export {};
 
 // Mock firebase before importing api-client
 const mockGetIdToken = jest.fn();
@@ -144,7 +145,10 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('../api-client');
-      await expect(apiGet('/v1/missing')).rejects.toThrow();
+      const err: any = await apiGet('/v1/missing').catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Not found');
+      expect(err.status).toBe(404);
     });
   });
 });
