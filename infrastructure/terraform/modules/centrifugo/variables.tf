@@ -31,18 +31,6 @@ variable "region" {
 # Centrifugo Configuration
 # -----------------------------------------------------------------------------
 
-variable "api_key" {
-  description = "API key for Centrifugo server API authentication"
-  type        = string
-  sensitive   = true
-}
-
-variable "token_secret" {
-  description = "HMAC secret for Centrifugo JWT token verification"
-  type        = string
-  sensitive   = true
-}
-
 variable "allowed_origins" {
   description = "List of allowed origins for Centrifugo CORS"
   type        = list(string)

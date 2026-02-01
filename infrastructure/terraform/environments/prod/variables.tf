@@ -233,18 +233,6 @@ variable "github_repo" {
 # Centrifugo Variables
 # -----------------------------------------------------------------------------
 
-variable "centrifugo_api_key" {
-  description = "API key for Centrifugo server API authentication"
-  type        = string
-  sensitive   = true
-}
-
-variable "centrifugo_token_secret" {
-  description = "HMAC secret for Centrifugo JWT token verification"
-  type        = string
-  sensitive   = true
-}
-
 variable "centrifugo_allowed_origins" {
   description = "List of allowed origins for Centrifugo CORS"
   type        = list(string)

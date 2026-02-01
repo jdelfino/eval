@@ -94,8 +94,3 @@ github_repo    = "eval"
 # -----------------------------------------------------------------------------
 
 centrifugo_allowed_origins = ["https://eval.delquillan.com"]
-
-# Centrifugo secrets - provide via environment variables (don't commit secrets):
-#   export TF_VAR_centrifugo_api_key="your-api-key"
-#   export TF_VAR_centrifugo_token_secret="your-token-secret"
-# Or via: terraform apply -var-file="secrets.tfvars" (gitignored)
