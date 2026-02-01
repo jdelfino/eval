@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { RealtimeChannel } from '@supabase/supabase-js';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { Centrifuge, Subscription } from 'centrifuge';
+import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
+import { apiGet, apiPost } from '@/lib/api-client';
 import { Session, Student, ExecutionResult } from '@/server/types';
 import { ExecutionSettings } from '@/server/types/problem';
 
@@ -30,34 +31,17 @@ function debounce<T extends (...args: any[]) => any>(
   };
 }
 
-/**
- * Fetch with retry logic
- */
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  retries = 3
-): Promise<Response> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await fetch(url, options);
-      if (res.ok || res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404) {
-        // Don't retry client errors or successful responses
-        return res;
-      }
-      // Server error - retry
-      if (i === retries - 1) {
-        return res;
-      }
-    } catch (e) {
-      if (i === retries - 1) {
-        throw e;
-      }
-      // Exponential backoff
-      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
-    }
-  }
-  throw new Error('Fetch failed after retries');
+// Response shape from Go backend (snake_case)
+interface SessionStateResponse {
+  session: Partial<Session>;
+  students: Array<{
+    user_id: string;
+    name: string;
+    code?: string;
+    last_update: string;
+    execution_settings?: ExecutionSettings;
+  }>;
+  join_code: string;
 }
 
 export interface UseRealtimeSessionOptions {
@@ -72,13 +56,13 @@ export interface FeaturedStudent {
 }
 
 /**
- * High-level hook for managing session state with Supabase Realtime
+ * High-level hook for managing session state with Centrifugo real-time
  *
  * Features:
  * - Loads initial session state from API
- * - Subscribes to Broadcast events for real-time updates (student_joined, student_code_updated,
+ * - Subscribes to Centrifugo channel for real-time updates (student_joined, student_code_updated,
  *   session_ended, featured_student_changed, problem_updated)
- * - Falls back to polling (every 2s) when broadcast is disconnected
+ * - Falls back to polling (every 2s) when subscription is not active
  * - Provides debounced code updates (300ms)
  * - Handles errors with retry logic
  */
@@ -95,22 +79,33 @@ export function useRealtimeSession({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Broadcast connection state
-  const [isBroadcastConnected, setIsBroadcastConnected] = useState(false);
+  // Connection state
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const broadcastChannelRef = useRef<RealtimeChannel | null>(null);
+  const centrifugeRef = useRef<Centrifuge | null>(null);
+  const subscriptionRef = useRef<Subscription | null>(null);
 
   // Track if initial state has been loaded
   const initialLoadRef = useRef(false);
 
   // Store pending code updates that arrive before student_joined events
-  // This handles race conditions where student_code_updated arrives before student_joined
   const pendingCodeUpdatesRef = useRef<Map<string, {
     code: string;
     executionSettings?: ExecutionSettings;
     lastUpdate?: string;
   }>>(new Map());
+
+  /**
+   * Convert backend snake_case student to frontend Student type
+   */
+  const mapStudent = useCallback((s: SessionStateResponse['students'][0]): Student => ({
+    userId: s.user_id,
+    name: s.name,
+    code: s.code || '',
+    lastUpdate: new Date(s.last_update),
+    executionSettings: s.execution_settings,
+  }), []);
 
   /**
    * Load initial session state from API
@@ -125,38 +120,21 @@ export function useRealtimeSession({
         setLoading(true);
         setError(null);
 
-        const res = await fetchWithRetry(`/api/sessions/${sessionId}/state`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({ error: 'Failed to load session' }));
-          throw new Error(errorData.error || 'Failed to load session');
-        }
-
-        const data = await res.json();
+        const data = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/state`);
 
         // Set session data
         setSession(data.session);
 
-        // Convert students array to Map (API returns 'id' but we use 'userId' internally)
+        // Convert students array to Map
         const studentsMap = new Map<string, Student>();
-        data.students.forEach((student: any) => {
-          studentsMap.set(student.id, {
-            userId: student.id,
-            name: student.name,
-            code: student.code || '',
-            lastUpdate: new Date(student.lastUpdate),
-            executionSettings: student.executionSettings,
-          });
+        data.students.forEach((student) => {
+          const mapped = mapStudent(student);
+          studentsMap.set(mapped.userId, mapped);
         });
         setStudents(studentsMap);
 
         // Set featured student
-        setFeaturedStudent(data.featuredStudent || {});
+        setFeaturedStudent({});
 
         initialLoadRef.current = true;
       } catch (e: any) {
@@ -168,214 +146,212 @@ export function useRealtimeSession({
     };
 
     loadState();
-  }, [sessionId, userId]);
+  }, [sessionId, userId, mapStudent]);
 
   /**
-   * Fetch session state (used for initial load and polling fallback)
+   * Fetch session state (used for polling fallback)
    */
   const fetchState = useCallback(async () => {
     if (!sessionId) return;
 
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/state`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to load session' }));
-        throw new Error(errorData.error || 'Failed to load session');
-      }
-
-      const data = await res.json();
+      const data = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/state`);
 
       // Set session data
       setSession(data.session);
 
-      // Convert students array to Map (API returns 'id' but we use 'userId' internally)
+      // Convert students array to Map
       const studentsMap = new Map<string, Student>();
-      data.students.forEach((student: any) => {
-        studentsMap.set(student.id, {
-          userId: student.id,
-          name: student.name,
-          code: student.code || '',
-          lastUpdate: new Date(student.lastUpdate),
-          executionSettings: student.executionSettings,
-        });
+      data.students.forEach((student) => {
+        const mapped = mapStudent(student);
+        studentsMap.set(mapped.userId, mapped);
       });
       setStudents(studentsMap);
-
-      // Set featured student
-      setFeaturedStudent(data.featuredStudent || {});
 
       setError(null);
     } catch (e: any) {
       console.error('[useRealtimeSession] Failed to fetch state:', e);
       setError(e.message || 'Failed to fetch session state');
     }
-  }, [sessionId]);
+  }, [sessionId, mapStudent]);
 
   /**
-   * Subscribe to Broadcast channel for faster real-time updates
-   * Broadcast is more reliable than postgres_changes (recommended by Supabase)
+   * Subscribe to Centrifugo channel for real-time updates
    */
   useEffect(() => {
     if (!sessionId) return;
 
-    // Set initial connecting status before creating channel
     setConnectionStatus('connecting');
 
-    const supabase = getSupabaseBrowserClient();
+    const centrifuge = createCentrifuge();
+    centrifugeRef.current = centrifuge;
+
     const channelName = `session:${sessionId}`;
+    const sub = centrifuge.newSubscription(channelName, {
+      getToken: () => getSubscriptionToken(channelName),
+    });
 
-    const channel = supabase
-      .channel(channelName)
-      .on('broadcast', { event: 'student_joined' }, (payload) => {
-        if (payload.payload?.student) {
-          const { student } = payload.payload;
-          setStudents(prev => {
-            const updated = new Map(prev);
+    sub.on('publication', (ctx) => {
+      const { event, payload } = ctx.data;
 
-            // Check for pending code updates that arrived before this student_joined event
-            const pendingUpdate = pendingCodeUpdatesRef.current.get(student.userId);
-            if (pendingUpdate) {
-              // Apply pending code update and clear it
-              updated.set(student.userId, {
-                userId: student.userId,
-                name: student.name,
-                code: pendingUpdate.code,
-                lastUpdate: pendingUpdate.lastUpdate ? new Date(pendingUpdate.lastUpdate) : new Date(),
-                executionSettings: pendingUpdate.executionSettings ?? student.executionSettings,
-              });
-              pendingCodeUpdatesRef.current.delete(student.userId);
-            } else {
-              updated.set(student.userId, {
-                userId: student.userId,
-                name: student.name,
-                code: student.code || '',
-                lastUpdate: new Date(),
-                executionSettings: student.executionSettings,
-              });
-            }
-            return updated;
-          });
+      switch (event) {
+        case 'student_joined': {
+          if (payload?.student) {
+            const { student } = payload;
+            setStudents(prev => {
+              const updated = new Map(prev);
+              const pendingUpdate = pendingCodeUpdatesRef.current.get(student.userId);
+              if (pendingUpdate) {
+                updated.set(student.userId, {
+                  userId: student.userId,
+                  name: student.name,
+                  code: pendingUpdate.code,
+                  lastUpdate: pendingUpdate.lastUpdate ? new Date(pendingUpdate.lastUpdate) : new Date(),
+                  executionSettings: pendingUpdate.executionSettings ?? student.executionSettings,
+                });
+                pendingCodeUpdatesRef.current.delete(student.userId);
+              } else {
+                updated.set(student.userId, {
+                  userId: student.userId,
+                  name: student.name,
+                  code: student.code || '',
+                  lastUpdate: new Date(),
+                  executionSettings: student.executionSettings,
+                });
+              }
+              return updated;
+            });
+          }
+          break;
         }
-      })
-      .on('broadcast', { event: 'student_code_updated' }, (payload) => {
-        if (payload.payload) {
-          const { studentId, code, executionSettings, lastUpdate } = payload.payload;
-          setStudents(prev => {
-            const updated = new Map(prev);
-            const student = updated.get(studentId);
-            if (student) {
-              updated.set(studentId, {
-                ...student,
-                code: code || '',
-                lastUpdate: lastUpdate ? new Date(lastUpdate) : new Date(),
-                executionSettings: executionSettings ?? student.executionSettings,
-              });
-            } else {
-              // Student not yet known - store as pending update
-              // Will be applied when student_joined event arrives
-              pendingCodeUpdatesRef.current.set(studentId, {
-                code: code || '',
-                executionSettings,
-                lastUpdate,
-              });
-            }
-            return updated;
-          });
-        }
-      })
-      .on('broadcast', { event: 'session_ended' }, (payload) => {
-        if (payload.payload) {
-          const { endedAt } = payload.payload;
-          setSession(prev => prev ? {
-            ...prev,
-            status: 'completed',
-            endedAt: endedAt ? new Date(endedAt) : new Date(),
-          } : prev);
-        }
-      })
-      .on('broadcast', { event: 'featured_student_changed' }, (payload) => {
-        if (payload.payload) {
-          const { featuredStudentId, featuredCode } = payload.payload;
-          setSession(prev => prev ? {
-            ...prev,
-            featuredStudentId,
-            featuredCode,
-          } : prev);
-          setFeaturedStudent({
-            studentId: featuredStudentId,
-            code: featuredCode,
-          });
-        }
-      })
-      .on('broadcast', { event: 'session_replaced' }, (payload) => {
-        if (payload.payload) {
-          const { newSessionId } = payload.payload;
-          setReplacementInfo({ newSessionId });
-          setSession(prev => prev ? {
-            ...prev,
-            status: 'completed',
-          } : prev);
-        }
-      })
-      .on('broadcast', { event: 'problem_updated' }, (payload) => {
-        if (payload.payload) {
-          const { problem } = payload.payload;
-          setSession(prev => prev ? {
-            ...prev,
-            problem,
-          } : prev);
-        }
-      })
-      .subscribe((status) => {
-        const isConnected = status === 'SUBSCRIBED';
-        setIsBroadcastConnected(isConnected);
 
-        if (status === 'SUBSCRIBED') {
-          setConnectionStatus('connected');
-          setConnectionError(null);
-        } else if (status === 'CHANNEL_ERROR') {
-          setConnectionStatus('failed');
-          setConnectionError('Failed to connect to real-time server');
-        } else if (status === 'TIMED_OUT') {
-          setConnectionStatus('failed');
-          setConnectionError('Connection timed out');
-        } else if (status === 'CLOSED') {
-          setConnectionStatus('disconnected');
-          setConnectionError(null);
-        } else {
-          setConnectionStatus('connecting');
+        case 'student_code_updated': {
+          if (payload) {
+            const { studentId, code, executionSettings, lastUpdate } = payload;
+            setStudents(prev => {
+              const updated = new Map(prev);
+              const student = updated.get(studentId);
+              if (student) {
+                updated.set(studentId, {
+                  ...student,
+                  code: code || '',
+                  lastUpdate: lastUpdate ? new Date(lastUpdate) : new Date(),
+                  executionSettings: executionSettings ?? student.executionSettings,
+                });
+              } else {
+                pendingCodeUpdatesRef.current.set(studentId, {
+                  code: code || '',
+                  executionSettings,
+                  lastUpdate,
+                });
+              }
+              return updated;
+            });
+          }
+          break;
         }
-      });
 
-    broadcastChannelRef.current = channel;
+        case 'session_ended': {
+          if (payload) {
+            const { endedAt } = payload;
+            setSession(prev => prev ? {
+              ...prev,
+              status: 'completed',
+              endedAt: endedAt ? new Date(endedAt) : new Date(),
+            } : prev);
+          }
+          break;
+        }
+
+        case 'featured_student_changed': {
+          if (payload) {
+            const { featuredStudentId, featuredCode } = payload;
+            setSession(prev => prev ? {
+              ...prev,
+              featuredStudentId,
+              featuredCode,
+            } : prev);
+            setFeaturedStudent({
+              studentId: featuredStudentId,
+              code: featuredCode,
+            });
+          }
+          break;
+        }
+
+        case 'session_replaced': {
+          if (payload) {
+            const { newSessionId } = payload;
+            setReplacementInfo({ newSessionId });
+            setSession(prev => prev ? {
+              ...prev,
+              status: 'completed',
+            } : prev);
+          }
+          break;
+        }
+
+        case 'problem_updated': {
+          if (payload) {
+            const { problem } = payload;
+            setSession(prev => prev ? {
+              ...prev,
+              problem,
+            } : prev);
+          }
+          break;
+        }
+      }
+    });
+
+    sub.on('subscribed', () => {
+      setIsSubscribed(true);
+      setConnectionStatus('connected');
+      setConnectionError(null);
+    });
+
+    sub.on('subscribing', () => {
+      setIsSubscribed(false);
+      setConnectionStatus('connecting');
+    });
+
+    sub.on('unsubscribed', () => {
+      setIsSubscribed(false);
+      setConnectionStatus('disconnected');
+      setConnectionError(null);
+    });
+
+    sub.on('error', (ctx) => {
+      setIsSubscribed(false);
+      setConnectionStatus('failed');
+      setConnectionError(ctx.error?.message || 'Failed to connect to real-time server');
+    });
+
+    subscriptionRef.current = sub;
+    sub.subscribe();
+    centrifuge.connect();
 
     return () => {
-      supabase.removeChannel(channel);
-      broadcastChannelRef.current = null;
+      sub.unsubscribe();
+      centrifuge.disconnect();
+      subscriptionRef.current = null;
+      centrifugeRef.current = null;
       setConnectionStatus('disconnected');
     };
   }, [sessionId]);
 
   /**
-   * Polling fallback: Poll for updates every 2 seconds when broadcast is disconnected
-   * This compensates for Realtime connection issues
-   * Only poll when not loading (initial load complete)
+   * Polling fallback: Poll for updates every 2 seconds when not subscribed
    */
   useEffect(() => {
-    if (!sessionId || isBroadcastConnected || loading) return;
+    if (!sessionId || isSubscribed || loading) return;
 
     const pollInterval = setInterval(() => {
       fetchState();
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [sessionId, isBroadcastConnected, loading, fetchState]);
+  }, [sessionId, isSubscribed, loading, fetchState]);
 
   /**
    * Update student code (debounced)
@@ -386,22 +362,11 @@ export function useRealtimeSession({
     executionSettings?: ExecutionSettings
   ) => {
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId,
-          code,
-          executionSettings,
-        }),
+      await apiPost(`/sessions/${sessionId}/code`, {
+        studentId,
+        code,
+        executionSettings,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to save code' }));
-        throw new Error(errorData.error || 'Failed to save code');
-      }
 
       // Optimistically update local state
       setStudents(prev => {
@@ -439,25 +404,11 @@ export function useRealtimeSession({
     executionSettings?: ExecutionSettings
   ): Promise<ExecutionResult> => {
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId,
-          code,
-          executionSettings,
-        }),
+      return await apiPost<ExecutionResult>(`/sessions/${sessionId}/execute`, {
+        studentId,
+        code,
+        executionSettings,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to execute code' }));
-        throw new Error(errorData.error || 'Failed to execute code');
-      }
-
-      const result = await res.json();
-      return result;
     } catch (e: any) {
       console.error('[useRealtimeSession] Failed to execute code:', e);
       throw e;
@@ -469,22 +420,9 @@ export function useRealtimeSession({
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/feature`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId,
-        }),
+      const data = await apiPost(`/sessions/${sessionId}/feature`, {
+        studentId,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to feature student' }));
-        throw new Error(errorData.error || 'Failed to feature student');
-      }
-
-      const data = await res.json();
 
       // Optimistically update local state
       setFeaturedStudent({
@@ -504,18 +442,7 @@ export function useRealtimeSession({
    */
   const clearFeaturedStudent = useCallback(async () => {
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/feature`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to clear public view' }));
-        throw new Error(errorData.error || 'Failed to clear public view');
-      }
+      await apiPost(`/sessions/${sessionId}/feature`, {});
 
       // Optimistically clear local state
       setFeaturedStudent({});
@@ -530,24 +457,10 @@ export function useRealtimeSession({
    */
   const joinSession = useCallback(async (studentId: string, name: string) => {
     try {
-      const res = await fetchWithRetry(`/api/sessions/${sessionId}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId,
-          name,
-        }),
+      return await apiPost(`/sessions/${sessionId}/join`, {
+        studentId,
+        name,
       });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to join session' }));
-        throw new Error(errorData.error || 'Failed to join session');
-      }
-
-      const data = await res.json();
-      return data;
     } catch (e: any) {
       console.error('[useRealtimeSession] Failed to join session:', e);
       throw e;
@@ -563,11 +476,11 @@ export function useRealtimeSession({
     loading,
     error,
 
-    // Connection status (based on broadcast channel)
-    isConnected: isBroadcastConnected,
+    // Connection status (based on Centrifugo subscription)
+    isConnected: isSubscribed,
     connectionStatus,
     connectionError,
-    isBroadcastConnected,
+    isBroadcastConnected: isSubscribed,
 
     // Actions
     updateCode,

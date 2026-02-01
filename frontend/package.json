@@ -46,6 +46,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.1",
     "@vercel/sandbox": "^1.1.6",
+    "centrifuge": "^5.5.3",
     "diff-match-patch": "^1.0.5",
     "firebase": "^12.8.0",
     "lucide-react": "^0.562.0",
