@@ -41,11 +41,6 @@
   "homepage": "https://github.com/jdelfino/coding-tool#readme",
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.89.0",
-    "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.36.1",
-    "@vercel/sandbox": "^1.1.6",
     "centrifuge": "^5.5.3",
     "diff-match-patch": "^1.0.5",
     "firebase": "^12.8.0",

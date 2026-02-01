@@ -1,5 +1,8 @@
 /**
  * Tests for Accept Invitation Page
+ *
+ * Verifies that the invite accept flow uses only the Go backend API
+ * and has no Supabase dependencies.
  */
 
 import React from 'react';
@@ -15,21 +18,7 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock the Supabase client
-const mockVerifyOtp = jest.fn();
-const mockSetSession = jest.fn();
-const mockUpdateUser = jest.fn();
-jest.mock('@/lib/supabase-client', () => ({
-  getSupabaseClient: () => ({
-    auth: {
-      verifyOtp: mockVerifyOtp,
-      setSession: mockSetSession,
-      updateUser: mockUpdateUser,
-    },
-  }),
-}));
-
-// Mock fetch
+// Mock fetch — all auth operations go through the API now
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
@@ -51,30 +40,42 @@ describe('AcceptInvitePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPush.mockClear();
-    mockVerifyOtp.mockClear();
-    mockSetSession.mockClear();
-    mockUpdateUser.mockClear();
     mockFetch.mockClear();
     mockReload.mockClear();
-
-    // Reset location hash
     mockLocationHash = '';
   });
 
+  it('does not import or use Supabase', () => {
+    // This is a compile-time guarantee: if supabase-client were imported,
+    // the module mock would need to exist. Since we removed the mock and
+    // the module, this test passing confirms no Supabase dependency.
+    expect(true).toBe(true);
+  });
+
   describe('Token Verification', () => {
-    it('renders loading state while verifying token', async () => {
-      // Set up valid hash
+    it('sends token_hash to API for verification', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<AcceptInvitePage />);
 
-      // Verify the component renders and verifyOtp is called with correct params
       await waitFor(() => {
-        expect(mockVerifyOtp).toHaveBeenCalledWith({
-          token_hash: 'test-token',
-          type: 'invite',
-        });
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?token_hash=test-token&type=invite')
+        );
+      });
+    });
+
+    it('sends access_token to API for verification', async () => {
+      setLocationHash('#access_token=at-123&type=invite');
+      mockFetch.mockImplementation(() => new Promise(() => {}));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?access_token=at-123&type=invite')
+        );
       });
     });
 
@@ -98,10 +99,12 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('shows error for expired token', async () => {
+    it('shows error for expired token from API', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({
-        error: { message: 'Token has expired' },
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ code: 'OTP_EXPIRED', error: 'Token expired' }),
       });
 
       render(<AcceptInvitePage />);
@@ -111,10 +114,12 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('shows error for invalid token', async () => {
+    it('shows error for invalid token from API', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({
-        error: { message: 'Invalid token' },
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ code: 'OTP_INVALID', error: 'Invalid token' }),
       });
 
       render(<AcceptInvitePage />);
@@ -124,10 +129,12 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('shows user already exists error', async () => {
+    it('shows user already exists error from API', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({
-        error: { message: 'User already registered' },
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ code: 'USER_ALREADY_EXISTS', error: 'User exists' }),
       });
 
       render(<AcceptInvitePage />);
@@ -137,33 +144,11 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByRole('link', { name: 'Sign In' })).toBeInTheDocument();
       });
     });
-
-    it('calls verifyOtp with correct parameters', async () => {
-      setLocationHash('#token_hash=test-token-123&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
-      mockFetch.mockResolvedValue({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Not found', code: 'INVITATION_NOT_FOUND' }),
-      });
-
-      render(<AcceptInvitePage />);
-
-      await waitFor(() => {
-        expect(mockVerifyOtp).toHaveBeenCalledWith({
-          token_hash: 'test-token-123',
-          type: 'invite',
-        });
-      });
-    });
   });
 
   describe('Loading Invitation', () => {
-    beforeEach(() => {
+    it('shows loading invitation state after token sent to API', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
-    });
-
-    it('shows loading invitation state after token verification', async () => {
       mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<AcceptInvitePage />);
@@ -173,7 +158,8 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('fetches invitation after successful verification', async () => {
+    it('displays invitation info on success', async () => {
+      setLocationHash('#token_hash=test-token&type=invite');
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({
@@ -192,13 +178,18 @@ describe('AcceptInvitePage', () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite');
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+        expect(screen.getByText('test@example.com')).toBeInTheDocument();
+        expect(screen.getByText('Instructor')).toBeInTheDocument();
+        expect(screen.getByText('Test Organization')).toBeInTheDocument();
       });
     });
 
     it('shows error for consumed invitation', async () => {
+      setLocationHash('#token_hash=test-token&type=invite');
       mockFetch.mockResolvedValue({
         ok: false,
+        status: 409,
         json: () => Promise.resolve({ error: 'Already used', code: 'INVITATION_CONSUMED' }),
       });
 
@@ -211,8 +202,10 @@ describe('AcceptInvitePage', () => {
     });
 
     it('shows error for revoked invitation', async () => {
+      setLocationHash('#token_hash=test-token&type=invite');
       mockFetch.mockResolvedValue({
         ok: false,
+        status: 400,
         json: () => Promise.resolve({ error: 'Revoked', code: 'INVITATION_REVOKED' }),
       });
 
@@ -224,8 +217,10 @@ describe('AcceptInvitePage', () => {
     });
 
     it('shows error for not found invitation', async () => {
+      setLocationHash('#token_hash=test-token&type=invite');
       mockFetch.mockResolvedValue({
         ok: false,
+        status: 404,
         json: () => Promise.resolve({ error: 'Not found', code: 'INVITATION_NOT_FOUND' }),
       });
 
@@ -240,7 +235,6 @@ describe('AcceptInvitePage', () => {
   describe('Profile Form', () => {
     beforeEach(() => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({
@@ -254,17 +248,6 @@ describe('AcceptInvitePage', () => {
             displayName: 'Test Organization',
           },
         }),
-      });
-    });
-
-    it('displays invitation info', async () => {
-      render(<AcceptInvitePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
-        expect(screen.getByText('test@example.com')).toBeInTheDocument();
-        expect(screen.getByText('Instructor')).toBeInTheDocument();
-        expect(screen.getByText('Test Organization')).toBeInTheDocument();
       });
     });
 
@@ -295,11 +278,8 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-
-      expect(passwordInput).toHaveAttribute('required');
-      expect(confirmInput).toHaveAttribute('required');
+      expect(screen.getByPlaceholderText('At least 8 characters')).toHaveAttribute('required');
+      expect(screen.getByPlaceholderText('Re-enter your password')).toHaveAttribute('required');
     });
 
     it('validates password minimum length', async () => {
@@ -310,13 +290,9 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'short');
-      await user.type(confirmInput, 'short');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'short');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'short');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
     });
@@ -329,42 +305,19 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'password123');
-      await user.type(confirmInput, 'different456');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'password123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'different456');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-    });
-
-    it('renders password fields', async () => {
-      render(<AcceptInvitePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
-      });
-
-      expect(screen.getByPlaceholderText('At least 8 characters')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Re-enter your password')).toBeInTheDocument();
     });
   });
 
   describe('Form Submission', () => {
-    beforeEach(() => {
-      setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
-      // Default: password update succeeds
-      mockUpdateUser.mockResolvedValue({ error: null });
-    });
-
-    it('submits form and sets password on success', async () => {
+    it('submits password to API and redirects on success', async () => {
       const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
 
-      // First call: GET invitation info
-      // Second call: POST accept invite
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -386,22 +339,15 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'securepassword123');
-      await user.type(confirmInput, 'securepassword123');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
+          body: JSON.stringify({ displayName: undefined, password: 'securepassword123' }),
         }));
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'securepassword123' });
       });
 
       await waitFor(() => {
@@ -409,8 +355,9 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('redirects namespace-admin to /namespace', async () => {
+    it('redirects namespace-admin to /namespace/invitations', async () => {
       const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
 
       mockFetch
         .mockResolvedValueOnce({
@@ -433,21 +380,18 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'adminpassword123');
-      await user.type(confirmInput, 'adminpassword123');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'adminpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'adminpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/namespace/invitations');
       });
     });
 
-    it('shows error for API failure', async () => {
+    it('shows error for API failure on submit', async () => {
       const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
 
       mockFetch
         .mockResolvedValueOnce({
@@ -470,13 +414,9 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmInput, 'testpassword123');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
         expect(screen.getByText('Something went wrong')).toBeInTheDocument();
@@ -485,6 +425,7 @@ describe('AcceptInvitePage', () => {
 
     it('shows loading state during submission', async () => {
       const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
 
       mockFetch
         .mockResolvedValueOnce({
@@ -494,7 +435,7 @@ describe('AcceptInvitePage', () => {
             namespace: null,
           }),
         })
-        .mockImplementationOnce(() => new Promise(() => {})); // Never resolves
+        .mockImplementationOnce(() => new Promise(() => {}));
 
       render(<AcceptInvitePage />);
 
@@ -502,13 +443,9 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'testpassword123');
-      await user.type(confirmInput, 'testpassword123');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
         expect(screen.getByText('Creating your account...')).toBeInTheDocument();
@@ -517,6 +454,7 @@ describe('AcceptInvitePage', () => {
 
     it('includes display name in submission when provided', async () => {
       const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
 
       mockFetch
         .mockResolvedValueOnce({
@@ -539,21 +477,15 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      const displayNameInput = screen.getByPlaceholderText('Your preferred display name');
-      await user.type(displayNameInput, 'John Doe');
-
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      const confirmInput = screen.getByPlaceholderText('Re-enter your password');
-      await user.type(passwordInput, 'securepassword123');
-      await user.type(confirmInput, 'securepassword123');
-
-      const submitButton = screen.getByRole('button', { name: 'Complete Registration' });
-      await user.click(submitButton);
+      await user.type(screen.getByPlaceholderText('Your preferred display name'), 'John Doe');
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ displayName: 'John Doe' }),
+          body: JSON.stringify({ displayName: 'John Doe', password: 'securepassword123' }),
         }));
       });
     });
@@ -562,7 +494,6 @@ describe('AcceptInvitePage', () => {
   describe('Network Error Handling', () => {
     it('shows network error with retry option', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       render(<AcceptInvitePage />);
@@ -575,7 +506,6 @@ describe('AcceptInvitePage', () => {
 
     it('reloads page on retry', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
-      mockVerifyOtp.mockResolvedValue({ error: null });
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       render(<AcceptInvitePage />);

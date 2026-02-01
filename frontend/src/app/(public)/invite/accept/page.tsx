@@ -7,16 +7,15 @@
  *
  * Flow:
  * 1. User clicks invite link in email, lands here with token in URL hash
- * 2. Page verifies token with Supabase verifyOtp (or setSession if already verified)
- * 3. On success, fetches invitation details from our API
+ * 2. Page sends token to Go backend for verification via GET /auth/accept-invite
+ * 3. On success, fetches invitation details from the API response
  * 4. User fills in optional display name and required password
- * 5. On submit, creates profile and sets password, then redirects to appropriate dashboard
+ * 5. On submit, creates profile and sets password via POST /auth/accept-invite, then redirects
  */
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getSupabaseClient } from '@/lib/supabase-client';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -107,12 +106,7 @@ export default function AcceptInvitePage() {
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
       try {
-        const supabase = getSupabaseClient();
-
         // Extract tokens from URL hash
-        // Supabase redirects with either:
-        // - #token_hash=...&type=invite (needs client-side verification)
-        // - #access_token=...&type=invite (already verified server-side)
         const hash = locationHash.substring(1);
         const params = new URLSearchParams(hash);
         const tokenHash = params.get('token_hash');
@@ -120,78 +114,40 @@ export default function AcceptInvitePage() {
         const type = params.get('type');
 
         // Accept both invite and magiclink types
-        // magiclink is used when resending to a user who already exists in auth.users
         if (type !== 'invite' && type !== 'magiclink') {
           setPageState({ status: 'error', error: 'otp_invalid' });
           return;
         }
 
-        // Case 1: Already verified (access_token in URL)
-        // Supabase verified server-side and redirected with tokens
-        if (accessToken) {
-          // Set the session from URL tokens
-          const refreshToken = params.get('refresh_token');
-          if (!refreshToken) {
-            console.error('[AcceptInvite] No refresh token in URL');
-            setPageState({ status: 'error', error: 'otp_invalid' });
-            return;
-          }
-
-          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (sessionError || !session) {
-            console.error('[AcceptInvite] Session error:', sessionError);
-            setPageState({ status: 'error', error: 'otp_invalid' });
-            return;
-          }
-
-          // Session established, proceed to fetch invitation
-        }
-        // Case 2: Needs verification (token_hash in URL)
-        else if (tokenHash) {
-          // Verify the token with Supabase
-          // Use the type from URL (invite or magiclink)
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: type as 'invite' | 'magiclink',
-          });
-
-          if (verifyError) {
-            console.error('[AcceptInvite] Verify OTP error:', verifyError);
-
-            // Map Supabase errors to our error types
-            if (verifyError.message.includes('expired')) {
-              setPageState({ status: 'error', error: 'otp_expired' });
-            } else if (verifyError.message.includes('already') || verifyError.message.includes('registered')) {
-              setPageState({ status: 'error', error: 'user_already_exists' });
-            } else {
-              setPageState({ status: 'error', error: 'otp_invalid' });
-            }
-            return;
-          }
-          // Token verified, proceed to fetch invitation
-        }
-        // Case 3: No valid token
-        else {
+        // Must have either token_hash or access_token
+        if (!tokenHash && !accessToken) {
           setPageState({ status: 'error', error: 'otp_invalid' });
           return;
         }
 
-        // Session established, now fetch invitation details
+        // Send token to backend for verification and invitation lookup
         setPageState({ status: 'loading-invitation' });
 
-        const response = await fetch(`${API_BASE}/auth/accept-invite`);
+        const queryParams = new URLSearchParams();
+        if (tokenHash) queryParams.set('token_hash', tokenHash);
+        if (accessToken) queryParams.set('access_token', accessToken);
+        queryParams.set('type', type);
+
+        const response = await fetch(`${API_BASE}/auth/accept-invite?${queryParams.toString()}`);
 
         if (!response.ok) {
           const data = await response.json();
-          console.error('[AcceptInvite] Fetch invitation error:', data);
+          console.error('[AcceptInvite] Verify/fetch error:', data);
 
           // Map API error codes to our error types
           const errorCode = data.code as string;
-          if (errorCode === 'INVITATION_CONSUMED') {
+          if (errorCode === 'OTP_EXPIRED' || errorCode === 'TOKEN_EXPIRED') {
+            setPageState({ status: 'error', error: 'otp_expired' });
+          } else if (errorCode === 'OTP_INVALID' || errorCode === 'TOKEN_INVALID') {
+            setPageState({ status: 'error', error: 'otp_invalid' });
+          } else if (errorCode === 'USER_ALREADY_EXISTS') {
+            setPageState({ status: 'error', error: 'user_already_exists' });
+          } else if (errorCode === 'INVITATION_CONSUMED') {
             setPageState({ status: 'error', error: 'invitation_consumed' });
           } else if (errorCode === 'INVITATION_REVOKED') {
             setPageState({ status: 'error', error: 'invitation_revoked' });
@@ -249,12 +205,13 @@ export default function AcceptInvitePage() {
     setPageState({ status: 'submitting', invitation });
 
     try {
-      // First, create the user profile
+      // Submit profile and password to the backend
       const response = await fetch(`${API_BASE}/auth/accept-invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           displayName: displayName.trim() || undefined,
+          password,
         }),
       });
 
@@ -281,32 +238,11 @@ export default function AcceptInvitePage() {
 
       const data = await response.json();
 
-      // Now set the user's password
-      const supabase = getSupabaseClient();
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password: password,
-      });
-
-      if (passwordError) {
-        console.error('[AcceptInvite] Password update error:', passwordError);
-        // Profile was created but password wasn't set
-        // Still redirect but warn the user
-        setSubmitError('Account created but password could not be set. You can set it via "Forgot Password" on the sign-in page.');
-        // Still transition to success after a delay so they can read the message
-        setTimeout(() => {
-          setPageState({ status: 'success' });
-          redirectBasedOnRole(data.user.role);
-        }, 3000);
-        return;
-      }
-
       setPageState({ status: 'success' });
       redirectBasedOnRole(data.user.role);
     } catch (error) {
       console.error('[AcceptInvite] Submit error:', error);
       setSubmitError('Unable to connect. Please try again.');
-      // We need to restore the ready state - but we lost the invitation info
-      // So we'll show a generic error
       setPageState({ status: 'error', error: 'network_error' });
     }
   };
