@@ -445,6 +445,158 @@ func TestMergeExecutionSettings_AllLayersEmpty(t *testing.T) {
 	}
 }
 
+// --- StandaloneExecute tests ---
+
+func setupStandaloneExecuteHandler(execClient ExecutorClient) http.Handler {
+	h := NewExecuteHandler(&mockSessionRepo{}, &execMockSessionStudentRepo{}, execClient)
+	r := chi.NewRouter()
+	r.Post("/execute", h.StandaloneExecute)
+	return r
+}
+
+func TestStandaloneExecute_HappyPath(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Success:         true,
+				Output:          "hello\n",
+				ExecutionTimeMs: 30,
+			}, nil
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{
+		"code":     `print("hello")`,
+		"language": "python",
+		"stdin":    "some input",
+		"files":    []map[string]string{{"name": "test.txt", "content": "data"}},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp executor.ExecuteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !resp.Success {
+		t.Fatal("expected success=true")
+	}
+	if resp.Output != "hello\n" {
+		t.Fatalf("expected output 'hello\\n', got %q", resp.Output)
+	}
+	// Verify executor received correct fields
+	if capturedReq.Code != `print("hello")` {
+		t.Fatalf("expected code forwarded, got %q", capturedReq.Code)
+	}
+	if capturedReq.Stdin != "some input" {
+		t.Fatalf("expected stdin 'some input', got %q", capturedReq.Stdin)
+	}
+	if len(capturedReq.Files) != 1 || capturedReq.Files[0].Name != "test.txt" {
+		t.Fatalf("expected 1 file 'test.txt', got %v", capturedReq.Files)
+	}
+}
+
+func TestStandaloneExecute_MinimalRequest(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStandaloneExecute_401NoAuth(t *testing.T) {
+	handler := setupStandaloneExecuteHandler(&mockExecutorClient{})
+	body, _ := json.Marshal(map[string]any{"code": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStandaloneExecute_422MissingCode(t *testing.T) {
+	handler := setupStandaloneExecuteHandler(&mockExecutorClient{})
+	body, _ := json.Marshal(map[string]any{"language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStandaloneExecute_400InvalidJSON(t *testing.T) {
+	handler := setupStandaloneExecuteHandler(&mockExecutorClient{})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader([]byte("{bad")))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStandaloneExecute_500ExecutorError(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return nil, fmt.Errorf("connection refused")
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
 	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)

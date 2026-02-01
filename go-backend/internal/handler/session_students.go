@@ -8,6 +8,7 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/internal/revision"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -16,12 +17,18 @@ import (
 type SessionStudentHandler struct {
 	sessionStudents store.SessionStudentRepository
 	publisher       realtime.SessionPublisher
+	revBuffer       *revision.RevisionBuffer
 	logger          *slog.Logger
 }
 
 // NewSessionStudentHandler creates a new SessionStudentHandler with the given repository.
 func NewSessionStudentHandler(sessionStudents store.SessionStudentRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionStudentHandler {
 	return &SessionStudentHandler{sessionStudents: sessionStudents, publisher: publisher, logger: logger}
+}
+
+// NewSessionStudentHandlerWithBuffer creates a new SessionStudentHandler with a revision buffer.
+func NewSessionStudentHandlerWithBuffer(sessionStudents store.SessionStudentRepository, publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionStudentHandler {
+	return &SessionStudentHandler{sessionStudents: sessionStudents, publisher: publisher, revBuffer: revBuffer, logger: logger}
 }
 
 // joinSessionRequest is the request body for POST /sessions/{id}/join.
@@ -95,6 +102,12 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Record code change in revision buffer (if configured).
+	if h.revBuffer != nil {
+		nsID := authUser.NamespaceID
+		h.revBuffer.Record(r.Context(), nsID, sessionID, authUser.ID, req.Code)
 	}
 
 	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {

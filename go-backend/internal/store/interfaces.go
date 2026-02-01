@@ -399,6 +399,37 @@ type RevisionRepository interface {
 	CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error)
 }
 
+// DashboardSection represents a section summary in the instructor dashboard.
+type DashboardSection struct {
+	ID               uuid.UUID   `json:"id"`
+	Name             string      `json:"name"`
+	StudentCount     int         `json:"student_count"`
+	ActiveSessionIDs []uuid.UUID `json:"active_session_ids"`
+}
+
+// DashboardClass represents a class summary in the instructor dashboard.
+type DashboardClass struct {
+	ID       uuid.UUID          `json:"id"`
+	Name     string             `json:"name"`
+	Sections []DashboardSection `json:"sections"`
+}
+
+// DashboardRepository defines the interface for dashboard data access.
+type DashboardRepository interface {
+	// InstructorDashboard returns classes with sections (student counts, active session IDs)
+	// for the given instructor.
+	InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error)
+}
+
+// CreateUserParams contains the fields for creating a new user.
+type CreateUserParams struct {
+	ExternalID  string
+	Email       string
+	Role        string
+	NamespaceID *string
+	DisplayName *string
+}
+
 // UpdateUserAdminParams contains the fields an admin can update on a user.
 type UpdateUserAdminParams struct {
 	Email       *string
@@ -444,4 +475,98 @@ type UserRepository interface {
 
 	// CountUsersByRole counts users grouped by role within a namespace.
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
+
+	// CreateUser creates a new user and returns it.
+	CreateUser(ctx context.Context, params CreateUserParams) (*User, error)
+}
+
+// Invitation represents an invitation in the database.
+type Invitation struct {
+	ID          uuid.UUID  `json:"id"`
+	Email       string     `json:"email"`
+	UserID      *uuid.UUID `json:"user_id"`
+	TargetRole  string     `json:"target_role"`
+	NamespaceID string     `json:"namespace_id"`
+	CreatedBy   uuid.UUID  `json:"created_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	ConsumedAt  *time.Time `json:"consumed_at"`
+	ConsumedBy  *uuid.UUID `json:"consumed_by"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	Status      string     `json:"status"` // computed: pending, consumed, revoked, expired
+}
+
+// CreateInvitationParams contains the fields for creating an invitation.
+type CreateInvitationParams struct {
+	Email       string
+	TargetRole  string
+	NamespaceID string
+	CreatedBy   uuid.UUID
+	ExpiresAt   time.Time
+}
+
+// InvitationFilters contains optional filters for listing invitations.
+type InvitationFilters struct {
+	NamespaceID *string
+	Status      *string // filter by computed status
+}
+
+// InvitationRepository defines the interface for invitation data access.
+type InvitationRepository interface {
+	ListInvitations(ctx context.Context, filters InvitationFilters) ([]Invitation, error)
+	GetInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error)
+	CreateInvitation(ctx context.Context, params CreateInvitationParams) (*Invitation, error)
+	RevokeInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error)
+	ConsumeInvitation(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*Invitation, error)
+}
+
+// AuditLog represents a row in the audit_logs table.
+type AuditLog struct {
+	ID          uuid.UUID       `json:"id"`
+	NamespaceID string          `json:"namespace_id"`
+	Action      string          `json:"action"`
+	ActorID     *uuid.UUID      `json:"actor_id"`
+	TargetID    *string         `json:"target_id"`
+	TargetType  *string         `json:"target_type"`
+	Details     json.RawMessage `json:"details"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// AuditLogFilters contains optional filters for listing audit logs.
+type AuditLogFilters struct {
+	Limit   int
+	Offset  int
+	Action  *string
+	ActorID *uuid.UUID
+}
+
+// CreateAuditLogParams contains the fields for creating an audit log entry.
+type CreateAuditLogParams struct {
+	NamespaceID string
+	Action      string
+	ActorID     *uuid.UUID
+	TargetID    *string
+	TargetType  *string
+	Details     json.RawMessage
+}
+
+// AuditLogRepository defines the interface for audit log data access.
+type AuditLogRepository interface {
+	ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error)
+	CreateAuditLog(ctx context.Context, params CreateAuditLogParams) (*AuditLog, error)
+}
+
+// AdminStats contains aggregate system statistics.
+type AdminStats struct {
+	UsersByRole    map[string]int `json:"users_by_role"`
+	ClassCount     int            `json:"class_count"`
+	SectionCount   int            `json:"section_count"`
+	ActiveSessions int            `json:"active_sessions"`
+}
+
+// AdminRepository defines the interface for admin data access.
+type AdminRepository interface {
+	AdminStats(ctx context.Context) (*AdminStats, error)
+	ClearData(ctx context.Context, keepUserID uuid.UUID) error
 }

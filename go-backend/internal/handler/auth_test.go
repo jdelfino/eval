@@ -20,6 +20,7 @@ type mockUserRepo struct {
 	getUserByIDFn         func(ctx context.Context, id uuid.UUID) (*store.User, error)
 	getUserByExternalIDFn func(ctx context.Context, externalID string) (*store.User, error)
 	updateUserFn          func(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error)
+	createUserFn          func(ctx context.Context, params store.CreateUserParams) (*store.User, error)
 }
 
 func (m *mockUserRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
@@ -55,6 +56,13 @@ func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string
 	return nil, nil
 }
 
+func (m *mockUserRepo) CreateUser(ctx context.Context, params store.CreateUserParams) (*store.User, error) {
+	if m.createUserFn != nil {
+		return m.createUserFn(ctx, params)
+	}
+	return nil, nil
+}
+
 func testUser() *store.User {
 	return &store.User{
 		ID:          uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
@@ -79,7 +87,7 @@ func TestGetMe_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler(repo)
+	h := NewAuthHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: user.ID, Email: user.Email, Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -101,7 +109,7 @@ func TestGetMe_Success(t *testing.T) {
 }
 
 func TestGetMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler(&mockUserRepo{})
+	h := NewAuthHandler(&mockUserRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -119,7 +127,7 @@ func TestGetMe_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler(repo)
+	h := NewAuthHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
@@ -151,7 +159,7 @@ func TestUpdateMe_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": newName})
-	h := NewAuthHandler(repo)
+	h := NewAuthHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
@@ -174,7 +182,7 @@ func TestUpdateMe_Success(t *testing.T) {
 }
 
 func TestUpdateMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler(&mockUserRepo{})
+	h := NewAuthHandler(&mockUserRepo{}, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPut, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -193,7 +201,7 @@ func TestUpdateMe_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": "New Name"})
-	h := NewAuthHandler(repo)
+	h := NewAuthHandler(repo, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})

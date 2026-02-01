@@ -14,6 +14,7 @@ import (
 	"github.com/jdelfino/eval/internal/auth"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/internal/revision"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -22,12 +23,18 @@ import (
 type SessionHandler struct {
 	sessions  store.SessionRepository
 	publisher realtime.SessionPublisher
+	revBuffer *revision.RevisionBuffer
 	logger    *slog.Logger
 }
 
 // NewSessionHandler creates a new SessionHandler with the given repository.
 func NewSessionHandler(sessions store.SessionRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionHandler {
 	return &SessionHandler{sessions: sessions, publisher: publisher, logger: logger}
+}
+
+// NewSessionHandlerWithBuffer creates a new SessionHandler with a revision buffer.
+func NewSessionHandlerWithBuffer(sessions store.SessionRepository, publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{sessions: sessions, publisher: publisher, revBuffer: revBuffer, logger: logger}
 }
 
 // Routes returns a chi.Router with session routes mounted.
@@ -192,6 +199,13 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Flush pending revisions when session ends.
+	if req.Status != nil && *req.Status == "completed" && previous.Status != "completed" {
+		if h.revBuffer != nil {
+			h.revBuffer.FlushSession(r.Context(), id)
+		}
+	}
+
 	// Publish real-time events only when the value actually changed.
 	if req.Status != nil && *req.Status == "completed" && previous.Status != "completed" {
 		publishAsync(r, h.logger, id, func(ctx context.Context) error {
@@ -241,6 +255,11 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Flush pending revisions when session ends.
+	if h.revBuffer != nil {
+		h.revBuffer.FlushSession(r.Context(), id)
 	}
 
 	publishAsync(r, h.logger, id, func(ctx context.Context) error {

@@ -82,3 +82,64 @@ func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteRespo
 
 	return &resp, nil
 }
+
+// TraceStep represents a single step in a debugger trace.
+type TraceStep struct {
+	Line      int               `json:"line"`
+	Variables map[string]string `json:"variables"`
+	Output    string            `json:"output,omitempty"`
+}
+
+// TraceRequest is the request for a debugger trace.
+type TraceRequest struct {
+	Code string `json:"code"`
+}
+
+// TraceResponse is the response from the executor trace endpoint.
+type TraceResponse struct {
+	Steps []TraceStep `json:"steps"`
+}
+
+// Trace sends code to the executor service for step-through debugger tracing.
+func (c *Client) Trace(ctx context.Context, req TraceRequest) (*TraceResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("executor: marshal trace request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/trace", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("executor: create trace request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("executor: send trace request: %w", err)
+	}
+	defer func() { _ = httpResp.Body.Close() }()
+
+	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 5<<20))
+	if err != nil {
+		return nil, fmt.Errorf("executor: read trace response: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		snippet := string(respBody)
+		if len(snippet) > 200 {
+			snippet = snippet[:200]
+		}
+		return nil, fmt.Errorf("executor: trace unexpected status %d: %s", httpResp.StatusCode, snippet)
+	}
+
+	var resp TraceResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		snippet := string(respBody)
+		if len(snippet) > 200 {
+			snippet = snippet[:200]
+		}
+		return nil, fmt.Errorf("executor: decode trace response: %w (body: %s)", err, snippet)
+	}
+
+	return &resp, nil
+}

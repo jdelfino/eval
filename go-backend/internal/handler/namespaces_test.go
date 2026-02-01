@@ -521,6 +521,9 @@ func (m *nsTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
 func (m *nsTestUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
 	return m.countByRoleFn(ctx, namespaceID)
 }
+func (m *nsTestUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	return nil, nil
+}
 
 func TestDeleteNamespace_Success(t *testing.T) {
 	ns := testNamespace()
