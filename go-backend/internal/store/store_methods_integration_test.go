@@ -213,7 +213,6 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 		if len(filters.Tags) > 0 {
 			query += fmt.Sprintf(" AND tags && $%d", argIdx)
 			args = append(args, filters.Tags)
-			argIdx++
 		}
 		if filters.PublicOnly {
 			query += " AND class_id IS NULL"
@@ -365,7 +364,6 @@ func TestIntegration_ListUsers(t *testing.T) {
 		if filters.Role != nil {
 			query += fmt.Sprintf(" AND role = $%d", argIdx)
 			args = append(args, *filters.Role)
-			argIdx++
 		}
 		query += " ORDER BY created_at"
 
@@ -504,8 +502,11 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 		}
 		// Verify deleted
 		var count int
-		db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2",
+		err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2",
 			sectionID, instructor2).Scan(&count)
+		if err != nil {
+			t.Fatalf("count query: %v", err)
+		}
 		if count != 0 {
 			t.Error("instructor2 membership should be deleted")
 		}
@@ -726,7 +727,10 @@ func TestIntegration_DeleteUser(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE id = $1", userID).Scan(&count)
+		err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE id = $1", userID).Scan(&count)
+		if err != nil {
+			t.Fatalf("count query: %v", err)
+		}
 		if count != 0 {
 			t.Error("user should be deleted")
 		}
