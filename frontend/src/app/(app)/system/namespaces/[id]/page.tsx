@@ -47,14 +47,14 @@ export default function NamespaceUsersPage() {
 
   // Redirect if not system admin
   useEffect(() => {
-    if (!authLoading && (!currentUser || !hasRolePermission(currentUser.Role, 'system.admin'))) {
+    if (!authLoading && (!currentUser || !hasRolePermission(currentUser.role, 'system.admin'))) {
       router.push('/');
     }
   }, [currentUser, authLoading, router]);
 
   // Fetch namespace and users
   useEffect(() => {
-    if (currentUser && hasRolePermission(currentUser.Role, 'system.admin') && namespace_id) {
+    if (currentUser && hasRolePermission(currentUser.role, 'system.admin') && namespace_id) {
       fetchData();
     }
   }, [currentUser, namespace_id]);
@@ -106,7 +106,7 @@ export default function NamespaceUsersPage() {
   }
 
   // Verify system admin role
-  if (!hasRolePermission(currentUser.Role, 'system.admin')) {
+  if (!hasRolePermission(currentUser.role, 'system.admin')) {
     return null; // Will redirect
   }
 
@@ -164,15 +164,15 @@ export default function NamespaceUsersPage() {
       ) : (
         <div className="flex flex-col gap-4">
           {users.map(user => (
-            <Card key={user.ID} variant="outlined" className="p-6">
+            <Card key={user.id} variant="outlined" className="p-6">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-1">{user.DisplayName || user.Email}</h3>
-                  {user.DisplayName && (
-                    <p className="text-sm text-gray-500 mb-2">{user.Email}</p>
+                  <h3 className="text-lg font-semibold mb-1">{user.display_name || user.email}</h3>
+                  {user.display_name && (
+                    <p className="text-sm text-gray-500 mb-2">{user.email}</p>
                   )}
 
-                  {editingUserId === user.ID ? (
+                  {editingUserId === user.id ? (
                     <div className="flex gap-2 items-center mb-2">
                       <select
                         value={editingRole}
@@ -187,7 +187,7 @@ export default function NamespaceUsersPage() {
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => handleUpdateRole(user.ID)}
+                        onClick={() => handleUpdateRole(user.id)}
                         disabled={loading}
                         className="bg-green-600 hover:bg-green-700 from-green-600 to-green-600 hover:from-green-700 hover:to-green-700"
                       >
@@ -204,19 +204,19 @@ export default function NamespaceUsersPage() {
                     </div>
                   ) : (
                     <div className="mb-2">
-                      <Badge variant={getRoleBadgeVariant(user.Role)}>
-                        {user.Role}
+                      <Badge variant={getRoleBadgeVariant(user.role)}>
+                        {user.role}
                       </Badge>
                     </div>
                   )}
 
                   <div className="text-sm text-gray-500">
-                    Created: {new Date(user.CreatedAt).toLocaleString()}
+                    Created: {new Date(user.created_at).toLocaleString()}
                   </div>
                 </div>
 
                 {/* User Actions */}
-                {deletingUserId === user.ID ? (
+                {deletingUserId === user.id ? (
                   <Alert variant="warning" className="p-4 ml-4">
                     <p className="text-sm mb-2">
                       Delete this user?
@@ -225,7 +225,7 @@ export default function NamespaceUsersPage() {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => handleDeleteUser(user.ID)}
+                        onClick={() => handleDeleteUser(user.id)}
                         disabled={loading}
                       >
                         Yes
@@ -246,8 +246,8 @@ export default function NamespaceUsersPage() {
                       variant="secondary"
                       size="sm"
                       onClick={() => {
-                        setEditingUserId(user.ID);
-                        setEditingRole(user.Role as 'namespace-admin' | 'instructor' | 'student');
+                        setEditingUserId(user.id);
+                        setEditingRole(user.role as 'namespace-admin' | 'instructor' | 'student');
                       }}
                       disabled={loading}
                     >
@@ -256,7 +256,7 @@ export default function NamespaceUsersPage() {
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => setDeletingUserId(user.ID)}
+                      onClick={() => setDeletingUserId(user.id)}
                       disabled={loading}
                     >
                       Delete

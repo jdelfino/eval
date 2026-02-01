@@ -83,7 +83,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       setError(null);
 
       const params = new URLSearchParams({
-        author_id: user.ID,
+        author_id: user.id,
         includePublic: 'true',
         sortBy,
         sortOrder,

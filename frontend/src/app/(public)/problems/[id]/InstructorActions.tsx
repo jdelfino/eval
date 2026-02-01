@@ -23,7 +23,7 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   const searchParams = useSearchParams();
   const autoStartAttempted = useRef(false);
 
-  const isInstructor = !isLoading && user && ['instructor', 'namespace-admin', 'system-admin'].includes(user.Role);
+  const isInstructor = !isLoading && user && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
 
   useEffect(() => {
     if (isLoading || autoStartAttempted.current) return;

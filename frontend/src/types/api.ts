@@ -28,16 +28,16 @@ export interface ApiError {
 // Domain types — field names match JSON keys from the Go backend
 // ---------------------------------------------------------------------------
 
-/** User — Go struct has NO json tags, so Go encodes with PascalCase. */
+/** User — matches Go store.User JSON tags (snake_case). */
 export interface User {
-  ID: string;
-  ExternalID: string | null;
-  Email: string;
-  Role: UserRole;
-  NamespaceID: string | null;
-  DisplayName: string | null;
-  CreatedAt: string;
-  UpdatedAt: string;
+  id: string;
+  external_id: string | null;
+  email: string;
+  role: UserRole;
+  namespace_id: string | null;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Namespace {

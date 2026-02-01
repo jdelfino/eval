@@ -13,15 +13,15 @@ import { useAuth } from '@/contexts/AuthContext';
  * Compute the namespace synchronously from the current user.
  * Safe for SSR: falls back to user.namespace_id when window is unavailable.
  */
-function getInitialNamespace(user: Pick<{ Role: string; NamespaceID: string | null }, 'Role' | 'NamespaceID'> | null): string | null {
+function getInitialNamespace(user: Pick<{ role: string; namespace_id: string | null }, 'role' | 'namespace_id'> | null): string | null {
   if (!user) return null;
-  if (typeof window === 'undefined') return user.NamespaceID;
-  if (user.Role === 'system-admin') {
+  if (typeof window === 'undefined') return user.namespace_id;
+  if (user.role === 'system-admin') {
     const saved = localStorage.getItem('selectedNamespaceId');
     if (saved === 'all') return null;
-    return saved || user.NamespaceID || 'default';
+    return saved || user.namespace_id || 'default';
   }
-  return user.NamespaceID;
+  return user.namespace_id;
 }
 
 export function useSelectedNamespace(): string | null {
@@ -37,7 +37,7 @@ export function useNamespaceQueryParam(): string {
   const { user } = useAuth();
   const selectedNamespaceId = useSelectedNamespace();
 
-  if (!user || user.Role !== 'system-admin' || !selectedNamespaceId) {
+  if (!user || user.role !== 'system-admin' || !selectedNamespaceId) {
     return '';
   }
 

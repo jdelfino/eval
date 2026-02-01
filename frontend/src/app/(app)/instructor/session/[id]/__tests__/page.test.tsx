@@ -91,12 +91,12 @@ describe('InstructorSessionPage', () => {
   const mockFeatureStudent = jest.fn();
 
   const mockUser = {
-    ID: 'user-1',
-    Email: 'instructor@example.com',
-    DisplayName: 'Test Instructor',
-    Role: 'instructor' as const,
-    NamespaceID: 'namespace-1',
-    CreatedAt: '2024-01-01',
+    id: 'user-1',
+    email: 'instructor@example.com',
+    display_name: 'Test Instructor',
+    role: 'instructor' as const,
+    namespace_id: 'namespace-1',
+    created_at: '2024-01-01',
   };
 
   const mockSession = {
@@ -466,7 +466,7 @@ describe('InstructorSessionPage', () => {
 
     it('uses email as fallback for userName', () => {
       (useAuth as jest.Mock).mockReturnValue({
-        user: { ...mockUser, DisplayName: undefined },
+        user: { ...mockUser, display_name: undefined },
         isLoading: false,
       });
 

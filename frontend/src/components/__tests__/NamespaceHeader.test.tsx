@@ -16,14 +16,14 @@ global.fetch = jest.fn();
 function mockAuthUser(overrides: Record<string, unknown> = {}) {
   return {
     user: {
-      ID: 'user1',
-      ExternalID: null,
-      Email: 'user1@example.com',
-      Role: 'instructor' as const,
-      NamespaceID: 'stanford',
-      DisplayName: 'User One',
-      CreatedAt: '2024-01-01T00:00:00Z',
-      UpdatedAt: '2024-01-01T00:00:00Z',
+      id: 'user1',
+      external_id: null,
+      email: 'user1@example.com',
+      role: 'instructor' as const,
+      namespace_id: 'stanford',
+      display_name: 'User One',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
       ...overrides,
     },
     isAuthenticated: true,
@@ -44,11 +44,11 @@ describe('NamespaceHeader', () => {
   describe('For non-system-admin users', () => {
     it('displays namespace name for instructor', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        ID: 'user1',
-        Email: 'instructor1@example.com',
-        Role: 'instructor',
-        NamespaceID: 'stanford',
-        DisplayName: 'Instructor One',
+        id: 'user1',
+        email: 'instructor1@example.com',
+        role: 'instructor',
+        namespace_id: 'stanford',
+        display_name: 'Instructor One',
       }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -74,11 +74,11 @@ describe('NamespaceHeader', () => {
 
     it('displays namespace name for namespace-admin', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        ID: 'admin1',
-        Email: 'admin@example.com',
-        Role: 'namespace-admin',
-        NamespaceID: 'mit',
-        DisplayName: 'Admin One',
+        id: 'admin1',
+        email: 'admin@example.com',
+        role: 'namespace-admin',
+        namespace_id: 'mit',
+        display_name: 'Admin One',
       }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -104,11 +104,11 @@ describe('NamespaceHeader', () => {
 
     it('displays namespace name for student', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        ID: 'student1',
-        Email: 'student1@example.com',
-        Role: 'student',
-        NamespaceID: 'stanford',
-        DisplayName: 'Student One',
+        id: 'student1',
+        email: 'student1@example.com',
+        role: 'student',
+        namespace_id: 'stanford',
+        display_name: 'Student One',
       }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -134,7 +134,7 @@ describe('NamespaceHeader', () => {
 
     it('falls back to namespace_id if displayName is not available', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        NamespaceID: 'testns',
+        namespace_id: 'testns',
       }));
 
       // Mock fetch to fail
@@ -180,11 +180,11 @@ describe('NamespaceHeader', () => {
   describe('For system-admin users', () => {
     it('displays namespace dropdown for system-admin', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        ID: 'sysadmin1',
-        Email: 'sysadmin@example.com',
-        Role: 'system-admin',
-        NamespaceID: 'default',
-        DisplayName: 'System Admin',
+        id: 'sysadmin1',
+        email: 'sysadmin@example.com',
+        role: 'system-admin',
+        namespace_id: 'default',
+        display_name: 'System Admin',
       }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -234,11 +234,11 @@ describe('NamespaceHeader', () => {
       localStorage.setItem('selectedNamespaceId', 'stanford');
 
       mockUseAuth.mockReturnValue(mockAuthUser({
-        ID: 'sysadmin1',
-        Email: 'sysadmin@example.com',
-        Role: 'system-admin',
-        NamespaceID: 'default',
-        DisplayName: 'System Admin',
+        id: 'sysadmin1',
+        email: 'sysadmin@example.com',
+        role: 'system-admin',
+        namespace_id: 'default',
+        display_name: 'System Admin',
       }));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -290,7 +290,7 @@ describe('NamespaceHeader', () => {
 
     it('returns null when user has no namespace_id', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        NamespaceID: null,
+        namespace_id: null,
       }));
 
       const { container } = render(<NamespaceHeader />);
@@ -299,7 +299,7 @@ describe('NamespaceHeader', () => {
 
     it('handles fetch errors gracefully', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser({
-        NamespaceID: 'stanford',
+        namespace_id: 'stanford',
       }));
 
       // Mock fetch to throw error

@@ -37,7 +37,7 @@ export default function ClassDetailsPage() {
     }
 
     // Check if user has permission to read classes
-    if (user && !hasRolePermission(user.Role, 'class.read')) {
+    if (user && !hasRolePermission(user.role, 'class.read')) {
       router.push('/');
       return;
     }
@@ -93,7 +93,7 @@ export default function ClassDetailsPage() {
     );
   }
 
-  if (!user || !hasRolePermission(user.Role, 'class.read') || !classData) {
+  if (!user || !hasRolePermission(user.role, 'class.read') || !classData) {
     return null;
   }
 

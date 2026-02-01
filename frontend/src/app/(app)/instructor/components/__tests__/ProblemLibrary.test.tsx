@@ -47,10 +47,10 @@ jest.mock('../ProblemCard', () => {
 
 describe('ProblemLibrary', () => {
   const mockUser = {
-    ID: 'user-123',
-    Role: 'instructor' as const,
-    DisplayName: 'Test Instructor',
-    CreatedAt: '2025-01-01T00:00:00.000Z',
+    id: 'user-123',
+    role: 'instructor' as const,
+    display_name: 'Test Instructor',
+    created_at: '2025-01-01T00:00:00.000Z',
   };
 
   const mockProblems = [

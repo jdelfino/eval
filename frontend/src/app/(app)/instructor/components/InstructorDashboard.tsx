@@ -49,8 +49,8 @@ export function InstructorDashboard({
   const [error, setError] = useState<Error | null>(null);
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
 
-  const canCreateClass = user && hasRolePermission(user.Role, 'class.create');
-  const canCreateSession = user && hasRolePermission(user.Role, 'session.create');
+  const canCreateClass = user && hasRolePermission(user.role, 'class.create');
+  const canCreateSession = user && hasRolePermission(user.role, 'session.create');
 
   const loadDashboardData = useCallback(async () => {
     try {

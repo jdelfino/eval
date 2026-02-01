@@ -31,14 +31,14 @@ const fakeNamespace = {
 };
 
 const fakeUser = {
-  ID: 'u1',
-  ExternalID: null,
-  Email: 'a@b.com',
-  Role: 'instructor' as const,
-  NamespaceID: 'ns-1',
-  DisplayName: 'A',
-  CreatedAt: '2024-01-01T00:00:00Z',
-  UpdatedAt: '2024-01-01T00:00:00Z',
+  id: 'u1',
+  external_id: null,
+  email: 'a@b.com',
+  role: 'instructor' as const,
+  namespace_id: 'ns-1',
+  display_name: 'A',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
 };
 
 describe('useNamespaces', () => {
@@ -151,7 +151,7 @@ describe('useNamespaces', () => {
   });
 
   it('updateUserRole patches user role', async () => {
-    mockApiPatch.mockResolvedValue({ user: { ...fakeUser, Role: 'student' } });
+    mockApiPatch.mockResolvedValue({ user: { ...fakeUser, role: 'student' } });
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => { await result.current.updateUserRole('u1', 'student'); });

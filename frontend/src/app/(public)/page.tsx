@@ -45,11 +45,11 @@ export default function Home() {
   useEffect(() => {
     if (!isLoading && user) {
       let path: string;
-      if (user.Role === 'system-admin') {
+      if (user.role === 'system-admin') {
         path = '/system';
-      } else if (user.Role === 'namespace-admin') {
+      } else if (user.role === 'namespace-admin') {
         path = '/admin';
-      } else if (user.Role === 'instructor') {
+      } else if (user.role === 'instructor') {
         path = '/instructor';
       } else {
         path = '/sections';

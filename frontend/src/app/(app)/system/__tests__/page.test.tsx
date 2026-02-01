@@ -19,9 +19,9 @@ jest.mock('next/navigation', () => ({
 
 // Mock AuthContext
 const mockUser = {
-  ID: 'admin-1',
-  Role: 'system-admin' as const,
-  NamespaceID: null,
+  id: 'admin-1',
+  role: 'system-admin' as const,
+  namespace_id: null,
 };
 
 const mockSignOut = jest.fn();

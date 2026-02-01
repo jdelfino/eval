@@ -5,7 +5,7 @@
 import { renderHook } from '@testing-library/react';
 import { usePermission, useAnyPermission, useAllPermissions, hasPermission } from '../usePermissions';
 
-const makeUser = (Role: 'system-admin' | 'namespace-admin' | 'instructor' | 'student') => ({ Role });
+const makeUser = (role: 'system-admin' | 'namespace-admin' | 'instructor' | 'student') => ({ role });
 
 describe('usePermission', () => {
   it('returns true when user has permission', () => {

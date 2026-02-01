@@ -25,7 +25,7 @@ interface User {
   id: string;
   email: string;
   role: UserRole;
-  displayName?: string;
+  display_name?: string;
   created_at: string;
 }
 
@@ -70,11 +70,11 @@ function AdminPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
 
-  const isAdmin = user ? hasRolePermission(user.Role, 'user.changeRole') : false;
+  const isAdmin = user ? hasRolePermission(user.role, 'user.changeRole') : false;
 
   // Build URL with optional namespace param for system-admin
   const buildUrl = (base: string, params: Record<string, string> = {}) => {
-    if (user?.Role === 'system-admin' && selectedNamespace) {
+    if (user?.role === 'system-admin' && selectedNamespace) {
       params.namespace = selectedNamespace;
     }
     const query = new URLSearchParams(params).toString();
@@ -314,7 +314,7 @@ function AdminPage() {
                     <Table.Body>
                       {allUsers.map((u) => (
                         <Table.Row key={u.id}>
-                          <Table.Cell>{u.displayName || u.email}</Table.Cell>
+                          <Table.Cell>{u.display_name || u.email}</Table.Cell>
                           <Table.Cell className="text-sm text-gray-500">{u.email}</Table.Cell>
                           <Table.Cell>
                             <Badge variant={getRoleBadgeVariant(u.role)} className="capitalize">
@@ -325,7 +325,7 @@ function AdminPage() {
                             {new Date(u.created_at).toLocaleDateString()}
                           </Table.Cell>
                           <Table.Cell align="right">
-                            {u.id !== user?.ID && (
+                            {u.id !== user?.id && (
                               <select
                                 value={u.role}
                                 onChange={(e) => handleChangeRole(u.id, e.target.value as UserRole)}
@@ -334,7 +334,7 @@ function AdminPage() {
                               >
                                 <option value="student">Student</option>
                                 <option value="instructor">Instructor</option>
-                                {user.Role === 'system-admin' && (
+                                {user.role === 'system-admin' && (
                                   <>
                                     <option value="namespace-admin">Namespace Admin</option>
                                     <option value="system-admin">System Admin</option>
@@ -342,7 +342,7 @@ function AdminPage() {
                                 )}
                               </select>
                             )}
-                            {u.id === user?.ID && (
+                            {u.id === user?.id && (
                               <span className="text-sm text-gray-500">(You)</span>
                             )}
                           </Table.Cell>
@@ -364,7 +364,7 @@ function AdminPage() {
                   </p>
                   <UserList
                     users={namespaceAdmins}
-                    currentUserId={user.ID}
+                    currentUserId={user.id}
                     showActions={false}
                   />
                 </div>
@@ -396,7 +396,7 @@ function AdminPage() {
                 <h2 className="text-xl font-semibold mb-4">Instructors</h2>
                 <UserList
                   users={instructors}
-                  currentUserId={user.ID}
+                  currentUserId={user.id}
                   onDelete={handleDeleteUser}
                   showActions={true}
                 />
@@ -412,7 +412,7 @@ function AdminPage() {
                 </p>
                 <UserList
                   users={students}
-                  currentUserId={user.ID}
+                  currentUserId={user.id}
                   showActions={false}
                 />
               </div>

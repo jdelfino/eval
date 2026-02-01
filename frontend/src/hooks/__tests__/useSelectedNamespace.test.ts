@@ -7,7 +7,7 @@ import { renderHook } from '@testing-library/react';
 import { useSelectedNamespace, useNamespaceQueryParam } from '../useSelectedNamespace';
 
 // Mock useAuth
-let mockUser: any = { Role: 'system-admin', NamespaceID: 'default' };
+let mockUser: any = { role: 'system-admin', namespace_id: 'default' };
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
@@ -16,7 +16,7 @@ describe('useSelectedNamespace', () => {
   beforeEach(() => {
     localStorage.clear();
     // Reset mockUser to defaults
-    mockUser = { Role: 'system-admin', NamespaceID: 'default' };
+    mockUser = { role: 'system-admin', namespace_id: 'default' };
   });
 
   it('returns localStorage value for system-admin', () => {
@@ -31,7 +31,7 @@ describe('useSelectedNamespace', () => {
   });
 
   it('returns user NamespaceID for non-system-admin', () => {
-    mockUser = { Role: 'instructor', NamespaceID: 'instructor-ns' };
+    mockUser = { role: 'instructor', namespace_id: 'instructor-ns' };
     const { result } = renderHook(() => useSelectedNamespace());
     expect(result.current).toBe('instructor-ns');
   });
@@ -50,8 +50,8 @@ describe('useSelectedNamespace', () => {
 
     // Auth finishes loading, user is now available
     mockUser = {
-      Role: 'instructor',
-      NamespaceID: 'ns-async',
+      role: 'instructor',
+      namespace_id: 'ns-async',
     };
     rerender();
     expect(result.current).toBe('ns-async');
@@ -61,7 +61,7 @@ describe('useSelectedNamespace', () => {
 describe('useNamespaceQueryParam', () => {
   beforeEach(() => {
     localStorage.clear();
-    mockUser = { Role: 'system-admin', NamespaceID: 'default' };
+    mockUser = { role: 'system-admin', namespace_id: 'default' };
   });
 
   it('returns namespace query param for system-admin', () => {
@@ -71,7 +71,7 @@ describe('useNamespaceQueryParam', () => {
   });
 
   it('returns empty string for non-system-admin', () => {
-    mockUser = { Role: 'instructor', NamespaceID: 'some-ns' };
+    mockUser = { role: 'instructor', namespace_id: 'some-ns' };
     const { result } = renderHook(() => useNamespaceQueryParam());
     expect(result.current).toBe('');
   });

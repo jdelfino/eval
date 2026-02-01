@@ -17,7 +17,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { ID: 'user-1', Role: 'instructor' },
+    user: { id: 'user-1', role: 'instructor' },
     isLoading: false,
   }),
 }));

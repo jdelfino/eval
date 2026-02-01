@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import NamespaceHeader from '@/components/NamespaceHeader';
 
-const mockUser: any = { Role: 'system-admin', NamespaceID: 'default' };
+const mockUser: any = { role: 'system-admin', namespace_id: 'default' };
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
@@ -20,8 +20,8 @@ const mockNamespaces = [
 
 beforeEach(() => {
   localStorage.clear();
-  mockUser.Role = 'system-admin';
-  mockUser.NamespaceID = 'default';
+  mockUser.role = 'system-admin';
+  mockUser.namespace_id = 'default';
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ success: true, namespaces: mockNamespaces }),

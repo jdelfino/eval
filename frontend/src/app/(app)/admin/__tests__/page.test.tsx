@@ -13,14 +13,14 @@ jest.mock('next/navigation', () => ({
 
 // Mock AuthContext
 const mockUser = {
-  ID: 'admin-1',
-  Role: 'system-admin' as const,
-  NamespaceID: 'ns-1',
-  Email: 'admin@test.com',
-  DisplayName: 'Admin',
-  CreatedAt: new Date().toISOString(),
-  UpdatedAt: new Date().toISOString(),
-  ExternalID: null,
+  id: 'admin-1',
+  role: 'system-admin' as const,
+  namespace_id: 'ns-1',
+  email: 'admin@test.com',
+  display_name: 'Admin',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  external_id: null,
 };
 
 jest.mock('@/contexts/AuthContext', () => ({
@@ -67,8 +67,8 @@ const mockStats = {
 };
 
 const mockUsers = [
-  { id: 'u1', email: 'a@test.com', role: 'instructor', displayName: 'A', created_at: new Date().toISOString() },
-  { id: 'u2', email: 'b@test.com', role: 'student', displayName: 'B', created_at: new Date().toISOString() },
+  { id: 'u1', email: 'a@test.com', role: 'instructor', display_name: 'A', created_at: new Date().toISOString() },
+  { id: 'u2', email: 'b@test.com', role: 'student', display_name: 'B', created_at: new Date().toISOString() },
 ];
 
 // Mock fetch
@@ -137,7 +137,7 @@ describe('Admin Page - Namespace Admins tab', () => {
     // Include a namespace-admin user in the mock data
     const usersWithNsAdmin = [
       ...mockUsers,
-      { id: 'u3', email: 'nsadmin@test.com', role: 'namespace-admin', displayName: 'NS Admin', created_at: new Date().toISOString() },
+      { id: 'u3', email: 'nsadmin@test.com', role: 'namespace-admin', display_name: 'NS Admin', created_at: new Date().toISOString() },
     ];
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/admin/stats')) {

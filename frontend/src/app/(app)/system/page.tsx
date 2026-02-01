@@ -178,21 +178,21 @@ function SystemAdminContent() {
 
   // Redirect if not system admin
   useEffect(() => {
-    if (!authLoading && (!user || !hasRolePermission(user.Role, 'system.admin'))) {
+    if (!authLoading && (!user || !hasRolePermission(user.role, 'system.admin'))) {
       router.push('/');
     }
   }, [user, authLoading, router]);
 
   // Fetch namespaces on mount (needed for both tabs)
   useEffect(() => {
-    if (user && hasRolePermission(user.Role, 'system.admin')) {
+    if (user && hasRolePermission(user.role, 'system.admin')) {
       fetchNamespaces(includeInactive);
     }
   }, [user, includeInactive, fetchNamespaces]);
 
   // Fetch invitations when tab is active or filters change
   useEffect(() => {
-    if (user && hasRolePermission(user.Role, 'system.admin') && activeTab === 'invitations') {
+    if (user && hasRolePermission(user.role, 'system.admin') && activeTab === 'invitations') {
       fetchInvitations();
     }
   }, [user, activeTab, fetchInvitations]);
@@ -207,7 +207,7 @@ function SystemAdminContent() {
   }
 
   // Verify system admin role
-  if (!hasRolePermission(user.Role, 'system.admin')) {
+  if (!hasRolePermission(user.role, 'system.admin')) {
     return null; // Will redirect
   }
 

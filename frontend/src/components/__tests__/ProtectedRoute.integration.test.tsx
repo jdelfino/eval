@@ -41,16 +41,16 @@ jest.mock('@/lib/api-client', () => ({
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
-function makeUser(Role: string) {
+function makeUser(role: string) {
   return {
-    ID: 'u1',
-    Email: 'test@test.com',
-    Role,
-    NamespaceID: 'ns-1',
-    DisplayName: 'Test User',
-    ExternalID: null,
-    CreatedAt: '2024-01-01T00:00:00Z',
-    UpdatedAt: '2024-01-01T00:00:00Z',
+    id: 'u1',
+    email: 'test@test.com',
+    role,
+    namespace_id: 'ns-1',
+    display_name: 'Test User',
+    external_id: null,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
   };
 }
 

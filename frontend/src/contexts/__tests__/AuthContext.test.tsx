@@ -33,13 +33,13 @@ jest.mock('@/lib/api-client', () => ({
 }));
 
 const mockUser = {
-  ID: 'user-123',
-  Email: 'test@example.com',
-  Role: 'instructor' as const,
-  NamespaceID: 'ns-1',
-  DisplayName: 'Test User',
-  CreatedAt: '2024-01-01T00:00:00Z',
-  UpdatedAt: '2024-01-01T00:00:00Z',
+  id: 'user-123',
+  email: 'test@example.com',
+  role: 'instructor' as const,
+  namespace_id: 'ns-1',
+  display_name: 'Test User',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
 };
 
 describe('AuthContext', () => {
@@ -183,7 +183,7 @@ describe('AuthContext', () => {
         expect(result.current.user).toEqual(mockUser);
       });
 
-      const updatedUser = { ...mockUser, DisplayName: 'Updated Name' };
+      const updatedUser = { ...mockUser, display_name: 'Updated Name' };
       mockApiGet.mockResolvedValue(updatedUser);
 
       await act(async () => {

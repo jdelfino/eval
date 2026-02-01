@@ -26,9 +26,9 @@ describe('Sidebar', () => {
     jest.clearAllMocks();
     mockPathname.mockReturnValue('/instructor');
     mockUser.mockReturnValue({
-      ID: 'user1',
-      Email: 'test@example.com',
-      Role: 'instructor',
+      id: 'user1',
+      email: 'test@example.com',
+      role: 'instructor',
     });
   });
 
@@ -66,9 +66,9 @@ describe('Sidebar', () => {
   describe('role filtering', () => {
     it('shows only student items for student role', () => {
       mockUser.mockReturnValue({
-        ID: 'user1',
-        Email: 'student@example.com',
-        Role: 'student',
+        id: 'user1',
+        email: 'student@example.com',
+        role: 'student',
       });
 
       render(<Sidebar />);
@@ -80,9 +80,9 @@ describe('Sidebar', () => {
 
     it('shows admin items for namespace-admin role', () => {
       mockUser.mockReturnValue({
-        ID: 'user1',
-        Email: 'admin@example.com',
-        Role: 'namespace-admin',
+        id: 'user1',
+        email: 'admin@example.com',
+        role: 'namespace-admin',
       });
 
       render(<Sidebar />);
@@ -94,9 +94,9 @@ describe('Sidebar', () => {
 
     it('shows all items for system-admin role', () => {
       mockUser.mockReturnValue({
-        ID: 'user1',
-        Email: 'sysadmin@example.com',
-        Role: 'system-admin',
+        id: 'user1',
+        email: 'sysadmin@example.com',
+        role: 'system-admin',
       });
 
       render(<Sidebar />);
@@ -242,9 +242,9 @@ describe('Sidebar', () => {
   describe('nav groups', () => {
     it('renders nav groups in correct order', () => {
       mockUser.mockReturnValue({
-        ID: 'user1',
-        Email: 'sysadmin@example.com',
-        Role: 'system-admin',
+        id: 'user1',
+        email: 'sysadmin@example.com',
+        role: 'system-admin',
       });
 
       render(<Sidebar />);
@@ -258,9 +258,9 @@ describe('Sidebar', () => {
 
     it('renders only Main group for student', () => {
       mockUser.mockReturnValue({
-        ID: 'user1',
-        Email: 'student@example.com',
-        Role: 'student',
+        id: 'user1',
+        email: 'student@example.com',
+        role: 'student',
       });
 
       render(<Sidebar collapsed={false} />);
