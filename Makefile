@@ -5,7 +5,7 @@
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
-test-integration: test-integration-executor
+test-integration: test-integration-executor test-integration-contract
 lint: lint-api lint-executor lint-frontend
 
 docker-build: docker-build-api docker-build-executor
@@ -48,6 +48,14 @@ test-integration-executor:
 
 docker-build-executor:
 	docker build -t executor:local executor/
+
+# ──────────────────────────────────────────────
+# Contract tests (frontend ↔ API)
+# ──────────────────────────────────────────────
+.PHONY: test-integration-contract
+
+test-integration-contract:
+	./scripts/run-contract-tests.sh
 
 # ──────────────────────────────────────────────
 # Frontend
