@@ -3,15 +3,18 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/store"
 )
 
 // mockConn implements the RLSConn interface for testing.
@@ -47,6 +50,14 @@ func (m *mockConn) Exec(ctx context.Context, sql string, args ...any) (pgconn.Co
 		m.setConfigArgs = append(m.setConfigArgs, setConfigCall{setting: setting, value: value})
 	}
 	return pgconn.CommandTag{}, nil
+}
+
+func (m *mockConn) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockConn) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return nil
 }
 
 func (m *mockConn) Release() {
@@ -89,11 +100,15 @@ func TestRLSContextMiddleware_NoUser(t *testing.T) {
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		// Should not have a connection in context
-		conn := ConnFromContext(r.Context())
-		if conn != nil {
-			t.Error("Expected no connection in context for unauthenticated request")
-		}
+		// Should not have repos in context for unauthenticated request
+		func() {
+			defer func() {
+				if r := recover(); r == nil {
+					t.Error("Expected panic from ReposFromContext for unauthenticated request")
+				}
+			}()
+			store.ReposFromContext(r.Context())
+		}()
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -128,9 +143,9 @@ func TestRLSContextMiddleware_WithUser(t *testing.T) {
 		Role:        auth.RoleInstructor,
 	}
 
-	var ctxConn RLSConn
+	var ctxRepos store.Repos
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctxConn = ConnFromContext(r.Context())
+		ctxRepos = store.ReposFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -171,9 +186,9 @@ func TestRLSContextMiddleware_WithUser(t *testing.T) {
 		}
 	}
 
-	// Verify connection was in context
-	if ctxConn == nil {
-		t.Error("Connection should be available in context")
+	// Verify repos was in context
+	if ctxRepos == nil {
+		t.Error("Repos should be available in context")
 	}
 
 	// Verify connection was released after request
@@ -308,28 +323,6 @@ func TestRLSContextMiddleware_SystemAdminEmptyNamespace(t *testing.T) {
 	}
 	if !foundNamespace {
 		t.Error("app.namespace_id should be set even if empty")
-	}
-}
-
-func TestConnFromContext_NoConnection(t *testing.T) {
-	ctx := context.Background()
-	conn := ConnFromContext(ctx)
-	if conn != nil {
-		t.Errorf("ConnFromContext() = %v, want nil", conn)
-	}
-}
-
-func TestConnFromContext_WithConnection(t *testing.T) {
-	ctx := context.Background()
-	mock := &mockConn{}
-	ctx = withConn(ctx, mock)
-
-	conn := ConnFromContext(ctx)
-	if conn == nil {
-		t.Error("ConnFromContext() returned nil, want connection")
-	}
-	if conn != mock {
-		t.Error("ConnFromContext() returned different connection than stored")
 	}
 }
 

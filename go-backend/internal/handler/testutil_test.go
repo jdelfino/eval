@@ -206,6 +206,197 @@ func testSessionStudent() *store.SessionStudent {
 	}
 }
 
+// --- stubRepos satisfies store.Repos; all methods panic if called unexpectedly ---
+
+// stubRepos is a zero-value struct that implements every method in store.Repos
+// by panicking. Tests embed it in a composite mock and override only the
+// interfaces they exercise.
+type stubRepos struct{}
+
+func (stubRepos) ListUsers(context.Context, store.UserFilters) ([]store.User, error) {
+	panic("stubRepos: unexpected ListUsers call")
+}
+func (stubRepos) GetUserByID(context.Context, uuid.UUID) (*store.User, error) {
+	panic("stubRepos: unexpected GetUserByID call")
+}
+func (stubRepos) GetUserByExternalID(context.Context, string) (*store.User, error) {
+	panic("stubRepos: unexpected GetUserByExternalID call")
+}
+func (stubRepos) GetUserByEmail(context.Context, string) (*store.User, error) {
+	panic("stubRepos: unexpected GetUserByEmail call")
+}
+func (stubRepos) UpdateUser(context.Context, uuid.UUID, store.UpdateUserParams) (*store.User, error) {
+	panic("stubRepos: unexpected UpdateUser call")
+}
+func (stubRepos) UpdateUserAdmin(context.Context, uuid.UUID, store.UpdateUserAdminParams) (*store.User, error) {
+	panic("stubRepos: unexpected UpdateUserAdmin call")
+}
+func (stubRepos) DeleteUser(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteUser call")
+}
+func (stubRepos) CountUsersByRole(context.Context, string) (map[string]int, error) {
+	panic("stubRepos: unexpected CountUsersByRole call")
+}
+func (stubRepos) CreateUser(context.Context, store.CreateUserParams) (*store.User, error) {
+	panic("stubRepos: unexpected CreateUser call")
+}
+func (stubRepos) ListClasses(context.Context) ([]store.Class, error) {
+	panic("stubRepos: unexpected ListClasses call")
+}
+func (stubRepos) GetClass(context.Context, uuid.UUID) (*store.Class, error) {
+	panic("stubRepos: unexpected GetClass call")
+}
+func (stubRepos) CreateClass(context.Context, store.CreateClassParams) (*store.Class, error) {
+	panic("stubRepos: unexpected CreateClass call")
+}
+func (stubRepos) UpdateClass(context.Context, uuid.UUID, store.UpdateClassParams) (*store.Class, error) {
+	panic("stubRepos: unexpected UpdateClass call")
+}
+func (stubRepos) DeleteClass(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteClass call")
+}
+func (stubRepos) ListClassInstructorNames(context.Context, uuid.UUID) ([]string, error) {
+	panic("stubRepos: unexpected ListClassInstructorNames call")
+}
+func (stubRepos) ListSectionsByClass(context.Context, uuid.UUID) ([]store.Section, error) {
+	panic("stubRepos: unexpected ListSectionsByClass call")
+}
+func (stubRepos) ListMySections(context.Context, uuid.UUID) ([]store.MySectionInfo, error) {
+	panic("stubRepos: unexpected ListMySections call")
+}
+func (stubRepos) UpdateSectionJoinCode(context.Context, uuid.UUID, string) (*store.Section, error) {
+	panic("stubRepos: unexpected UpdateSectionJoinCode call")
+}
+func (stubRepos) GetSection(context.Context, uuid.UUID) (*store.Section, error) {
+	panic("stubRepos: unexpected GetSection call")
+}
+func (stubRepos) CreateSection(context.Context, store.CreateSectionParams) (*store.Section, error) {
+	panic("stubRepos: unexpected CreateSection call")
+}
+func (stubRepos) UpdateSection(context.Context, uuid.UUID, store.UpdateSectionParams) (*store.Section, error) {
+	panic("stubRepos: unexpected UpdateSection call")
+}
+func (stubRepos) DeleteSection(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteSection call")
+}
+func (stubRepos) ListSessions(context.Context, store.SessionFilters) ([]store.Session, error) {
+	panic("stubRepos: unexpected ListSessions call")
+}
+func (stubRepos) GetSession(context.Context, uuid.UUID) (*store.Session, error) {
+	panic("stubRepos: unexpected GetSession call")
+}
+func (stubRepos) CreateSession(context.Context, store.CreateSessionParams) (*store.Session, error) {
+	panic("stubRepos: unexpected CreateSession call")
+}
+func (stubRepos) UpdateSession(context.Context, uuid.UUID, store.UpdateSessionParams) (*store.Session, error) {
+	panic("stubRepos: unexpected UpdateSession call")
+}
+func (stubRepos) ListSessionHistory(context.Context, uuid.UUID, bool, store.SessionHistoryFilters) ([]store.Session, error) {
+	panic("stubRepos: unexpected ListSessionHistory call")
+}
+func (stubRepos) UpdateSessionProblem(context.Context, uuid.UUID, json.RawMessage) (*store.Session, error) {
+	panic("stubRepos: unexpected UpdateSessionProblem call")
+}
+func (stubRepos) JoinSession(context.Context, store.JoinSessionParams) (*store.SessionStudent, error) {
+	panic("stubRepos: unexpected JoinSession call")
+}
+func (stubRepos) UpdateCode(context.Context, uuid.UUID, uuid.UUID, string) (*store.SessionStudent, error) {
+	panic("stubRepos: unexpected UpdateCode call")
+}
+func (stubRepos) ListSessionStudents(context.Context, uuid.UUID) ([]store.SessionStudent, error) {
+	panic("stubRepos: unexpected ListSessionStudents call")
+}
+func (stubRepos) GetSessionStudent(context.Context, uuid.UUID, uuid.UUID) (*store.SessionStudent, error) {
+	panic("stubRepos: unexpected GetSessionStudent call")
+}
+func (stubRepos) ListRevisions(context.Context, uuid.UUID, *uuid.UUID) ([]store.Revision, error) {
+	panic("stubRepos: unexpected ListRevisions call")
+}
+func (stubRepos) CreateRevision(context.Context, store.CreateRevisionParams) (*store.Revision, error) {
+	panic("stubRepos: unexpected CreateRevision call")
+}
+func (stubRepos) GetSectionByJoinCode(context.Context, string) (*store.Section, error) {
+	panic("stubRepos: unexpected GetSectionByJoinCode call")
+}
+func (stubRepos) CreateMembership(context.Context, store.CreateMembershipParams) (*store.SectionMembership, error) {
+	panic("stubRepos: unexpected CreateMembership call")
+}
+func (stubRepos) DeleteMembership(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteMembership call")
+}
+func (stubRepos) ListMembers(context.Context, uuid.UUID) ([]store.SectionMembership, error) {
+	panic("stubRepos: unexpected ListMembers call")
+}
+func (stubRepos) ListMembersByRole(context.Context, uuid.UUID, string) ([]store.SectionMembership, error) {
+	panic("stubRepos: unexpected ListMembersByRole call")
+}
+func (stubRepos) DeleteMembershipIfNotLast(context.Context, uuid.UUID, uuid.UUID, string) error {
+	panic("stubRepos: unexpected DeleteMembershipIfNotLast call")
+}
+func (stubRepos) ListNamespaces(context.Context) ([]store.Namespace, error) {
+	panic("stubRepos: unexpected ListNamespaces call")
+}
+func (stubRepos) GetNamespace(context.Context, string) (*store.Namespace, error) {
+	panic("stubRepos: unexpected GetNamespace call")
+}
+func (stubRepos) CreateNamespace(context.Context, store.CreateNamespaceParams) (*store.Namespace, error) {
+	panic("stubRepos: unexpected CreateNamespace call")
+}
+func (stubRepos) UpdateNamespace(context.Context, string, store.UpdateNamespaceParams) (*store.Namespace, error) {
+	panic("stubRepos: unexpected UpdateNamespace call")
+}
+func (stubRepos) ListProblems(context.Context, *uuid.UUID) ([]store.Problem, error) {
+	panic("stubRepos: unexpected ListProblems call")
+}
+func (stubRepos) ListProblemsFiltered(context.Context, store.ProblemFilters) ([]store.Problem, error) {
+	panic("stubRepos: unexpected ListProblemsFiltered call")
+}
+func (stubRepos) GetProblem(context.Context, uuid.UUID) (*store.Problem, error) {
+	panic("stubRepos: unexpected GetProblem call")
+}
+func (stubRepos) CreateProblem(context.Context, store.CreateProblemParams) (*store.Problem, error) {
+	panic("stubRepos: unexpected CreateProblem call")
+}
+func (stubRepos) UpdateProblem(context.Context, uuid.UUID, store.UpdateProblemParams) (*store.Problem, error) {
+	panic("stubRepos: unexpected UpdateProblem call")
+}
+func (stubRepos) DeleteProblem(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteProblem call")
+}
+func (stubRepos) AdminStats(context.Context) (*store.AdminStats, error) {
+	panic("stubRepos: unexpected AdminStats call")
+}
+func (stubRepos) ClearData(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected ClearData call")
+}
+func (stubRepos) ListAuditLogs(context.Context, store.AuditLogFilters) ([]store.AuditLog, error) {
+	panic("stubRepos: unexpected ListAuditLogs call")
+}
+func (stubRepos) CreateAuditLog(context.Context, store.CreateAuditLogParams) (*store.AuditLog, error) {
+	panic("stubRepos: unexpected CreateAuditLog call")
+}
+func (stubRepos) InstructorDashboard(context.Context, uuid.UUID) ([]store.DashboardClass, error) {
+	panic("stubRepos: unexpected InstructorDashboard call")
+}
+func (stubRepos) ListInvitations(context.Context, store.InvitationFilters) ([]store.Invitation, error) {
+	panic("stubRepos: unexpected ListInvitations call")
+}
+func (stubRepos) GetInvitation(context.Context, uuid.UUID) (*store.Invitation, error) {
+	panic("stubRepos: unexpected GetInvitation call")
+}
+func (stubRepos) CreateInvitation(context.Context, store.CreateInvitationParams) (*store.Invitation, error) {
+	panic("stubRepos: unexpected CreateInvitation call")
+}
+func (stubRepos) RevokeInvitation(context.Context, uuid.UUID) (*store.Invitation, error) {
+	panic("stubRepos: unexpected RevokeInvitation call")
+}
+func (stubRepos) ConsumeInvitation(context.Context, uuid.UUID, uuid.UUID) (*store.Invitation, error) {
+	panic("stubRepos: unexpected ConsumeInvitation call")
+}
+
+// Compile-time check that stubRepos implements store.Repos.
+var _ store.Repos = stubRepos{}
+
 // --- Mock token generator ---
 
 type mockTokenGenerator struct {

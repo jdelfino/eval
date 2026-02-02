@@ -14,14 +14,11 @@ import (
 )
 
 // AdminHandler handles admin-only routes.
-type AdminHandler struct {
-	admin store.AdminRepository
-	audit store.AuditLogRepository
-}
+type AdminHandler struct{}
 
 // NewAdminHandler creates a new AdminHandler.
-func NewAdminHandler(admin store.AdminRepository, audit store.AuditLogRepository) *AdminHandler {
-	return &AdminHandler{admin: admin, audit: audit}
+func NewAdminHandler() *AdminHandler {
+	return &AdminHandler{}
 }
 
 // Routes returns a chi.Router with admin routes (system-admin only).
@@ -38,7 +35,8 @@ func (h *AdminHandler) Routes() chi.Router {
 
 // Stats handles GET /api/v1/admin/stats.
 func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	stats, err := h.admin.AdminStats(r.Context())
+	repos := store.ReposFromContext(r.Context())
+	stats, err := repos.AdminStats(r.Context())
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to retrieve stats")
 		return
@@ -72,7 +70,8 @@ func (h *AdminHandler) AuditLog(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logs, err := h.audit.ListAuditLogs(r.Context(), filters)
+	repos := store.ReposFromContext(r.Context())
+	logs, err := repos.ListAuditLogs(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to retrieve audit logs")
 		return
@@ -88,7 +87,8 @@ func (h *AdminHandler) ClearData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.admin.ClearData(r.Context(), user.ID); err != nil {
+	repos := store.ReposFromContext(r.Context())
+	if err := repos.ClearData(r.Context(), user.ID); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to clear data")
 		return
 	}

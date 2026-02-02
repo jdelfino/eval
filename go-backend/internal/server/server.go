@@ -49,14 +49,14 @@ type Server struct {
 }
 
 // New creates a new Server with the configured middleware chain and routes.
-// s may be nil (e.g. in tests without a database); when nil, the
+// userStore may be nil (e.g. in tests without a database); when nil, the
 // authentication middleware is skipped on API routes.
-func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store) *Server {
-	return NewWithRegistry(cfg, logger, pool, s, prometheus.DefaultRegisterer)
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository) *Server {
+	return NewWithRegistry(cfg, logger, pool, userStore, prometheus.DefaultRegisterer)
 }
 
 // NewWithRegistry creates a new Server using the provided Prometheus registerer.
-func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool, s *store.Store, reg prometheus.Registerer) *Server {
+func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository, reg prometheus.Registerer) *Server {
 	httpMetrics := httpmiddleware.NewHTTPMetrics(reg)
 
 	r := chi.NewRouter()
@@ -105,10 +105,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.Timeout(30 * time.Second))
 		// Auth middleware - validates JWT and populates user context
-		if s != nil {
+		if userStore != nil {
 			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
 			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
-			adapter := NewUserLookupAdapter(s)
+			adapter := NewUserLookupAdapter(userStore)
 			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
 			r.Use(authenticator.Authenticate)
 		}
@@ -119,8 +119,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 		}
 
 		// Protected routes
-		if s != nil {
-			r.Mount("/auth", handler.NewAuthHandler(s, s, s, s).Routes())
+		if userStore != nil {
+			r.Mount("/auth", handler.NewAuthHandler().Routes())
 
 			// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
@@ -128,17 +128,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				if err != nil {
 					logger.Warn("failed to create centrifugo token generator; token endpoint unavailable", "error", err)
 				} else {
-					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, s, s, cfg.CentrifugoTokenExpiry)
+					centrifugoHandler := handler.NewCentrifugoHandler(tokenGen, cfg.CentrifugoTokenExpiry)
 					r.Mount("/realtime", centrifugoHandler.Routes())
 				}
 			}
-			r.Mount("/namespaces", handler.NewNamespaceHandler(s, s).Routes())
-			r.Mount("/classes", handler.NewClassHandler(s, s).Routes())
+			r.Mount("/namespaces", handler.NewNamespaceHandler().Routes())
+			r.Mount("/classes", handler.NewClassHandler().Routes())
 
-			membershipHandler := handler.NewMembershipHandler(s)
+			membershipHandler := handler.NewMembershipHandler()
 			r.Post("/sections/join", membershipHandler.Join)
 
-			sectionHandler := handler.NewSectionHandler(s, s, s, s)
+			sectionHandler := handler.NewSectionHandler()
 			r.Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
@@ -161,23 +161,23 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Instructor dashboard (instructor+)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
-				dashboardHandler := handler.NewDashboardHandler(s)
+				dashboardHandler := handler.NewDashboardHandler()
 				r.Get("/instructor/dashboard", dashboardHandler.Dashboard)
 			})
 
-			r.Mount("/problems", handler.NewProblemHandler(s).Routes())
+			r.Mount("/problems", handler.NewProblemHandler().Routes())
 
 			// Admin routes (system-admin only)
-			adminHandler := handler.NewAdminHandler(s, s)
+			adminHandler := handler.NewAdminHandler()
 			r.Route("/admin", func(r chi.Router) {
 				r.Mount("/", adminHandler.Routes())
 				// User management routes (namespace-admin+)
-				userHandler := handler.NewUserHandler(s)
+				userHandler := handler.NewUserHandler()
 				r.Mount("/users", userHandler.NamespaceRoutes())
 			})
 
 			// System-level user management routes
-			sysUserHandler := handler.NewUserHandler(s)
+			sysUserHandler := handler.NewUserHandler()
 			r.Mount("/system/users", sysUserHandler.SystemRoutes())
 
 			// Invitation routes
@@ -187,7 +187,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			} else {
 				emailCli = emailpkg.NoOpClient{}
 			}
-			invitationHandler := handler.NewInvitationHandler(s, s, emailCli, cfg.InviteBaseURL)
+			invitationHandler := handler.NewInvitationHandler(emailCli, cfg.InviteBaseURL)
 			r.Mount("/namespaces/{id}/invitations", invitationHandler.Routes())
 			r.Mount("/system/invitations", invitationHandler.SystemRoutes())
 
@@ -201,12 +201,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 
 			// Create revision buffer for auto-creating revisions on code save.
-			revBuffer = revision.NewRevisionBuffer(s, logger)
+			// Uses a pool-backed Store (no RLS) because the buffer flushes
+			// asynchronously outside any request context.
+			poolStore := store.New(pool.PgxPool())
+			revBuffer = revision.NewRevisionBuffer(poolStore, logger)
 			revBuffer.Start()
 
-			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(s, sessionPub, revBuffer, logger).Routes())
+			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer, logger).Routes())
 
-			sessionStateHandler := handler.NewSessionStateHandler(s, s, s, sessionPub, logger)
+			sessionStateHandler := handler.NewSessionStateHandler(sessionPub, logger)
 			r.Get("/sessions/{id}/state", sessionStateHandler.State)
 			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
 			r.Group(func(r chi.Router) {
@@ -215,12 +218,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Post("/sessions/{id}/feature", sessionStateHandler.Feature)
 			})
 
-			revisionHandler := handler.NewRevisionHandler(s)
+			revisionHandler := handler.NewRevisionHandler()
 			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
 			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
 
 			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
-			executeHandler := handler.NewExecuteHandler(s, s, execClient)
+			executeHandler := handler.NewExecuteHandler(execClient)
 			r.Post("/sessions/{id}/execute", executeHandler.Execute)
 
 			// Standalone code execution (instructor+) — no session context
@@ -230,15 +233,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			})
 
 			// Advanced session features (instructor+): trace and AI analysis
-			traceHandler := handler.NewTraceHandler(s, execClient)
-			analyzeHandler := handler.NewAnalyzeHandler(s, &ai.StubClient{})
+			traceHandler := handler.NewTraceHandler(execClient)
+			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
 				r.Post("/sessions/{id}/trace", traceHandler.Trace)
 				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
-			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(s, sessionPub, revBuffer, logger)
+			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(sessionPub, revBuffer, logger)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
 			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
 			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)

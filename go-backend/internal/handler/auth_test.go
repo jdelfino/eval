@@ -76,6 +76,46 @@ func testUser() *store.User {
 
 func strPtr(s string) *string { return &s }
 
+// authTestRepos embeds stubRepos and delegates UserRepository methods to a mock.
+type authTestRepos struct {
+	stubRepos
+	userRepo *mockUserRepo
+}
+
+var _ store.Repos = (*authTestRepos)(nil)
+
+func (r *authTestRepos) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
+	return r.userRepo.GetUserByID(ctx, id)
+}
+func (r *authTestRepos) GetUserByExternalID(ctx context.Context, externalID string) (*store.User, error) {
+	return r.userRepo.GetUserByExternalID(ctx, externalID)
+}
+func (r *authTestRepos) UpdateUser(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
+	return r.userRepo.UpdateUser(ctx, id, params)
+}
+func (r *authTestRepos) CreateUser(ctx context.Context, params store.CreateUserParams) (*store.User, error) {
+	return r.userRepo.CreateUser(ctx, params)
+}
+func (r *authTestRepos) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
+	return r.userRepo.GetUserByEmail(ctx, email)
+}
+func (r *authTestRepos) ListUsers(ctx context.Context, f store.UserFilters) ([]store.User, error) {
+	return r.userRepo.ListUsers(ctx, f)
+}
+func (r *authTestRepos) UpdateUserAdmin(ctx context.Context, id uuid.UUID, p store.UpdateUserAdminParams) (*store.User, error) {
+	return r.userRepo.UpdateUserAdmin(ctx, id, p)
+}
+func (r *authTestRepos) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	return r.userRepo.DeleteUser(ctx, id)
+}
+func (r *authTestRepos) CountUsersByRole(ctx context.Context, ns string) (map[string]int, error) {
+	return r.userRepo.CountUsersByRole(ctx, ns)
+}
+
+func withAuthRepos(ctx context.Context, repo *mockUserRepo) context.Context {
+	return store.WithRepos(ctx, &authTestRepos{userRepo: repo})
+}
+
 func TestGetMe_Success(t *testing.T) {
 	user := testUser()
 	repo := &mockUserRepo{
@@ -87,9 +127,10 @@ func TestGetMe_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler(repo, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: user.ID, Email: user.Email, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, &authTestRepos{stubRepos: stubRepos{}, userRepo: repo})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -109,7 +150,7 @@ func TestGetMe_Success(t *testing.T) {
 }
 
 func TestGetMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler(&mockUserRepo{}, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -127,9 +168,10 @@ func TestGetMe_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler(repo, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = withAuthRepos(ctx, repo)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -159,10 +201,11 @@ func TestUpdateMe_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": newName})
-	h := NewAuthHandler(repo, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = withAuthRepos(ctx, repo)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -182,7 +225,7 @@ func TestUpdateMe_Success(t *testing.T) {
 }
 
 func TestUpdateMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler(&mockUserRepo{}, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodPut, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -201,10 +244,11 @@ func TestUpdateMe_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": "New Name"})
-	h := NewAuthHandler(repo, nil, nil, nil)
+	h := NewAuthHandler()
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = withAuthRepos(ctx, repo)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

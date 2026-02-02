@@ -12,11 +12,6 @@ import (
 // Results can be filtered by section_id and/or status.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, namespace_id, section_id, section_name, problem,
 		       featured_student_id, featured_code, creator_id, participants,
@@ -38,7 +33,7 @@ func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Ses
 	}
 	query += " ORDER BY created_at DESC"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +67,6 @@ func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Ses
 // GetSession retrieves a session by its ID.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) GetSession(ctx context.Context, id uuid.UUID) (*Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, section_id, section_name, problem,
 		       featured_student_id, featured_code, creator_id, participants,
@@ -85,7 +75,7 @@ func (s *Store) GetSession(ctx context.Context, id uuid.UUID) (*Session, error) 
 		WHERE id = $1`
 
 	var sess Session
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&sess.ID,
 		&sess.NamespaceID,
 		&sess.SectionID,
@@ -109,11 +99,6 @@ func (s *Store) GetSession(ctx context.Context, id uuid.UUID) (*Session, error) 
 
 // CreateSession creates a new session and returns the created record.
 func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
 		VALUES ($1, $2, $3, $4, $5)
@@ -122,7 +107,7 @@ func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (
 		          status, created_at, last_activity, ended_at`
 
 	var sess Session
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.SectionID,
 		params.SectionName,
@@ -153,11 +138,6 @@ func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (
 // UpdateSession updates a session's mutable fields and returns the updated record.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		UPDATE sessions
 		SET last_activity = now()`
@@ -205,7 +185,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		          status, created_at, last_activity, ended_at`
 
 	var sess Session
-	err = conn.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, args...).Scan(
 		&sess.ID,
 		&sess.NamespaceID,
 		&sess.SectionID,
@@ -230,11 +210,6 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 // ListSessionHistory retrieves sessions based on user role.
 // Instructors see sessions they created; students see sessions they participated in.
 func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, namespace_id, section_id, section_name, problem,
 		       featured_student_id, featured_code, creator_id, participants,
@@ -269,7 +244,7 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCrea
 
 	query += " ORDER BY created_at DESC"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -303,11 +278,6 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCrea
 // UpdateSessionProblem updates the problem JSON snapshot and last_activity for a session.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE sessions
 		SET problem = $2, last_activity = now()
@@ -317,7 +287,7 @@ func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem 
 		          status, created_at, last_activity, ended_at`
 
 	var sess Session
-	err = conn.QueryRow(ctx, query, id, problem).Scan(
+	err := s.q.QueryRow(ctx, query, id, problem).Scan(
 		&sess.ID,
 		&sess.NamespaceID,
 		&sess.SectionID,

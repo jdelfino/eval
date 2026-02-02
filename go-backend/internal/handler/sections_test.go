@@ -92,12 +92,13 @@ func TestListSectionsByClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", sec.ClassID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -127,12 +128,13 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -150,12 +152,13 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 
 func TestListSectionsByClass_InvalidClassID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -174,12 +177,13 @@ func TestListSectionsByClass_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -201,12 +205,13 @@ func TestGetSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+sec.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -233,12 +238,13 @@ func TestGetSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -251,12 +257,13 @@ func TestGetSection_NotFound(t *testing.T) {
 
 func TestGetSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -294,7 +301,7 @@ func TestCreateSection_Success(t *testing.T) {
 		"name":     "Section A",
 		"semester": "Fall 2025",
 	})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -305,6 +312,7 @@ func TestCreateSection_Success(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -324,7 +332,7 @@ func TestCreateSection_Success(t *testing.T) {
 }
 
 func TestCreateSection_Unauthorized(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", uuid.New().String())
@@ -340,7 +348,7 @@ func TestCreateSection_Unauthorized(t *testing.T) {
 }
 
 func TestCreateSection_InvalidClassID(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -358,7 +366,7 @@ func TestCreateSection_InvalidClassID(t *testing.T) {
 
 func TestCreateSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	router := h.ClassRoutes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -377,6 +385,7 @@ func TestCreateSection_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -407,13 +416,14 @@ func TestUpdateSection_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"name": newName,
 	})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+sec.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -441,13 +451,14 @@ func TestUpdateSection_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -469,12 +480,13 @@ func TestDeleteSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -493,12 +505,13 @@ func TestDeleteSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -511,12 +524,13 @@ func TestDeleteSection_NotFound(t *testing.T) {
 
 func TestDeleteSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -529,7 +543,7 @@ func TestDeleteSection_InvalidID(t *testing.T) {
 
 func TestDeleteSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	router := h.Routes()
 
 	id := uuid.New()
@@ -538,6 +552,7 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -550,7 +565,7 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 
 func TestCreateSection_MissingName(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"semester": "Fall 2025"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -574,7 +589,7 @@ func TestCreateSection_MissingName(t *testing.T) {
 
 func TestCreateSection_InvalidBody(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -596,7 +611,7 @@ func TestCreateSection_InvalidBody(t *testing.T) {
 }
 
 func TestUpdateSection_InvalidID(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -616,7 +631,7 @@ func TestUpdateSection_InvalidID(t *testing.T) {
 
 func TestUpdateSection_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -642,13 +657,14 @@ func TestUpdateSection_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -667,12 +683,13 @@ func TestGetSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -691,12 +708,13 @@ func TestDeleteSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -723,7 +741,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -734,6 +752,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -759,7 +778,7 @@ func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -770,6 +789,7 @@ func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -795,7 +815,7 @@ func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -806,6 +826,7 @@ func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -881,6 +902,58 @@ func (m *sectionTestUserRepo) CreateUser(_ context.Context, _ store.CreateUserPa
 	return nil, nil
 }
 
+// sectionTestRepos embeds stubRepos and overrides section-related methods.
+type sectionTestRepos struct {
+	stubRepos
+	sec   *mockSectionRepo
+	sess  *mockSessionRepo
+	memb  *mockMembershipRepo
+	users *sectionTestUserRepo
+}
+
+var _ store.Repos = (*sectionTestRepos)(nil)
+
+func (r *sectionTestRepos) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]store.Section, error) {
+	return r.sec.ListSectionsByClass(ctx, classID)
+}
+func (r *sectionTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
+	return r.sec.GetSection(ctx, id)
+}
+func (r *sectionTestRepos) CreateSection(ctx context.Context, params store.CreateSectionParams) (*store.Section, error) {
+	return r.sec.CreateSection(ctx, params)
+}
+func (r *sectionTestRepos) UpdateSection(ctx context.Context, id uuid.UUID, params store.UpdateSectionParams) (*store.Section, error) {
+	return r.sec.UpdateSection(ctx, id, params)
+}
+func (r *sectionTestRepos) DeleteSection(ctx context.Context, id uuid.UUID) error {
+	return r.sec.DeleteSection(ctx, id)
+}
+func (r *sectionTestRepos) ListMySections(ctx context.Context, userID uuid.UUID) ([]store.MySectionInfo, error) {
+	return r.sec.ListMySections(ctx, userID)
+}
+func (r *sectionTestRepos) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*store.Section, error) {
+	return r.sec.UpdateSectionJoinCode(ctx, id, joinCode)
+}
+func (r *sectionTestRepos) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
+	return r.sess.ListSessions(ctx, filters)
+}
+func (r *sectionTestRepos) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]store.SectionMembership, error) {
+	return r.memb.ListMembersByRole(ctx, sectionID, role)
+}
+func (r *sectionTestRepos) CreateMembership(ctx context.Context, params store.CreateMembershipParams) (*store.SectionMembership, error) {
+	return r.memb.CreateMembership(ctx, params)
+}
+func (r *sectionTestRepos) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID uuid.UUID, role string) error {
+	return r.memb.DeleteMembershipIfNotLast(ctx, sectionID, userID, role)
+}
+func (r *sectionTestRepos) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
+	return r.users.GetUserByEmail(ctx, email)
+}
+
+func secRepos(sec *mockSectionRepo, sess *mockSessionRepo, memb *mockMembershipRepo, users *sectionTestUserRepo) *sectionTestRepos {
+	return &sectionTestRepos{sec: sec, sess: sess, memb: memb, users: users}
+}
+
 // --- MySections tests ---
 
 func TestMySections_Success(t *testing.T) {
@@ -897,9 +970,10 @@ func TestMySections_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -922,7 +996,7 @@ func TestMySections_Success(t *testing.T) {
 }
 
 func TestMySections_Unauthorized(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	rec := httptest.NewRecorder()
 
@@ -940,9 +1014,10 @@ func TestMySections_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -971,12 +1046,13 @@ func TestSectionListSessions_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, sessRepo, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, sessRepo, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -996,7 +1072,7 @@ func TestSectionListSessions_Success(t *testing.T) {
 }
 
 func TestSectionListSessions_InvalidID(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, &mockSessionRepo{}, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -1030,12 +1106,13 @@ func TestRegenerateCode_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1061,12 +1138,13 @@ func TestRegenerateCode_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1097,12 +1175,13 @@ func TestListInstructors_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1132,12 +1211,13 @@ func TestListInstructors_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1189,7 +1269,7 @@ func TestAddInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, userRepo)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1197,6 +1277,7 @@ func TestAddInstructor_Success(t *testing.T) {
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, userRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1222,7 +1303,7 @@ func TestAddInstructor_UserNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, userRepo)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"email": "nobody@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1230,6 +1311,7 @@ func TestAddInstructor_UserNotFound(t *testing.T) {
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, nil, userRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1251,7 +1333,7 @@ func TestAddInstructor_NotInstructorRole(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, userRepo)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"email": "student@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1259,6 +1341,7 @@ func TestAddInstructor_NotInstructorRole(t *testing.T) {
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, nil, userRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1294,7 +1377,7 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, userRepo)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1302,6 +1385,7 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, userRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1333,13 +1417,14 @@ func TestRemoveInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	rctx.URLParams.Add("userID", userToRemove.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1360,13 +1445,14 @@ func TestRemoveInstructor_LastInstructor(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	rctx.URLParams.Add("userID", userToRemove.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1395,13 +1481,14 @@ func TestRemoveInstructor_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	rctx.URLParams.Add("userID", userToRemove.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1419,9 +1506,10 @@ func TestMySections_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1440,12 +1528,13 @@ func TestSectionListSessions_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, sessRepo, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, sessRepo, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1463,12 +1552,13 @@ func TestRegenerateCode_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(repo, nil, nil, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1496,7 +1586,7 @@ func TestAddInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, userRepo)
+	h := NewSectionHandler()
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1504,6 +1594,7 @@ func TestAddInstructor_InternalError(t *testing.T) {
 	rctx.URLParams.Add("id", uuid.New().String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, userRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1539,13 +1630,14 @@ func TestRemoveInstructor_NotMemberButOtherInstructorExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	rctx.URLParams.Add("userID", nonMemberUser.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1566,13 +1658,14 @@ func TestRemoveInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	rctx.URLParams.Add("userID", userToRemove.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1591,12 +1684,13 @@ func TestListInstructors_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(&mockSectionRepo{}, nil, membRepo, nil)
+	h := NewSectionHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -1623,7 +1717,7 @@ func buildSectionInstructorRouter(h *SectionHandler) chi.Router {
 }
 
 func TestListSessions_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, &mockSessionRepo{}, nil, nil)
+	h := NewSectionHandler()
 	router := buildSectionInstructorRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/sessions", nil)
@@ -1642,7 +1736,7 @@ func TestListSessions_RBACForbidden(t *testing.T) {
 }
 
 func TestRegenerateCode_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, nil, nil)
+	h := NewSectionHandler()
 	router := buildSectionInstructorRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/regenerate-code", nil)
@@ -1661,7 +1755,7 @@ func TestRegenerateCode_RBACForbidden(t *testing.T) {
 }
 
 func TestListInstructors_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, nil)
+	h := NewSectionHandler()
 	router := buildSectionInstructorRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/instructors", nil)
@@ -1680,7 +1774,7 @@ func TestListInstructors_RBACForbidden(t *testing.T) {
 }
 
 func TestAddInstructor_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, &sectionTestUserRepo{})
+	h := NewSectionHandler()
 	router := buildSectionInstructorRouter(h)
 
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
@@ -1701,7 +1795,7 @@ func TestAddInstructor_RBACForbidden(t *testing.T) {
 }
 
 func TestRemoveInstructor_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler(&mockSectionRepo{}, nil, &mockMembershipRepo{}, nil)
+	h := NewSectionHandler()
 	router := buildSectionInstructorRouter(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)

@@ -16,13 +16,11 @@ import (
 )
 
 // ProblemHandler handles problem management routes.
-type ProblemHandler struct {
-	problems store.ProblemRepository
-}
+type ProblemHandler struct{}
 
-// NewProblemHandler creates a new ProblemHandler with the given repository.
-func NewProblemHandler(problems store.ProblemRepository) *ProblemHandler {
-	return &ProblemHandler{problems: problems}
+// NewProblemHandler creates a new ProblemHandler.
+func NewProblemHandler() *ProblemHandler {
+	return &ProblemHandler{}
 }
 
 // Routes returns a chi.Router with problem routes mounted.
@@ -91,8 +89,9 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.PublicOnly = true
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	var problems []store.Problem
-	problems, err := h.problems.ListProblemsFiltered(r.Context(), filters)
+	problems, err := repos.ListProblemsFiltered(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -112,7 +111,8 @@ func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	problem, err := h.problems.GetProblem(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	problem, err := repos.GetProblem(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")
@@ -150,7 +150,8 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	problem, err := h.problems.CreateProblem(r.Context(), store.CreateProblemParams{
+	repos := store.ReposFromContext(r.Context())
+	problem, err := repos.CreateProblem(r.Context(), store.CreateProblemParams{
 		NamespaceID:       authUser.NamespaceID,
 		Title:             req.Title,
 		Description:       req.Description,
@@ -194,7 +195,8 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	problem, err := h.problems.UpdateProblem(r.Context(), id, store.UpdateProblemParams{
+	repos := store.ReposFromContext(r.Context())
+	problem, err := repos.UpdateProblem(r.Context(), id, store.UpdateProblemParams{
 		Title:             req.Title,
 		Description:       req.Description,
 		StarterCode:       req.StarterCode,
@@ -223,7 +225,8 @@ func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.problems.DeleteProblem(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteProblem(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")

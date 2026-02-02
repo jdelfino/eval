@@ -50,11 +50,6 @@ const invitationColumns = `id, email, user_id, target_role, namespace_id, create
 
 // ListInvitations retrieves invitations with optional filters.
 func (s *Store) ListInvitations(ctx context.Context, filters InvitationFilters) ([]Invitation, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	var conditions []string
 	var args []any
 	argIdx := 1
@@ -83,7 +78,7 @@ func (s *Store) ListInvitations(ctx context.Context, filters InvitationFilters) 
 	}
 	query += " ORDER BY created_at DESC"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -102,13 +97,8 @@ func (s *Store) ListInvitations(ctx context.Context, filters InvitationFilters) 
 
 // GetInvitation retrieves an invitation by ID.
 func (s *Store) GetInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := "SELECT " + invitationColumns + " FROM invitations WHERE id = $1"
-	inv, err := scanInvitation(conn.QueryRow(ctx, query, id))
+	inv, err := scanInvitation(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
@@ -117,16 +107,11 @@ func (s *Store) GetInvitation(ctx context.Context, id uuid.UUID) (*Invitation, e
 
 // CreateInvitation creates a new invitation and returns it.
 func (s *Store) CreateInvitation(ctx context.Context, params CreateInvitationParams) (*Invitation, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `INSERT INTO invitations (email, target_role, namespace_id, created_by, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING ` + invitationColumns
 
-	inv, err := scanInvitation(conn.QueryRow(ctx, query,
+	inv, err := scanInvitation(s.q.QueryRow(ctx, query,
 		params.Email,
 		params.TargetRole,
 		params.NamespaceID,
@@ -141,16 +126,11 @@ func (s *Store) CreateInvitation(ctx context.Context, params CreateInvitationPar
 
 // RevokeInvitation sets revoked_at on an invitation and returns it.
 func (s *Store) RevokeInvitation(ctx context.Context, id uuid.UUID) (*Invitation, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `UPDATE invitations SET revoked_at = now(), updated_at = now()
 		WHERE id = $1 AND revoked_at IS NULL AND consumed_at IS NULL
 		RETURNING ` + invitationColumns
 
-	inv, err := scanInvitation(conn.QueryRow(ctx, query, id))
+	inv, err := scanInvitation(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
@@ -159,16 +139,11 @@ func (s *Store) RevokeInvitation(ctx context.Context, id uuid.UUID) (*Invitation
 
 // ConsumeInvitation marks an invitation as consumed by a user.
 func (s *Store) ConsumeInvitation(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*Invitation, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `UPDATE invitations SET consumed_at = now(), consumed_by = $2, user_id = $2, updated_at = now()
 		WHERE id = $1 AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at > now()
 		RETURNING ` + invitationColumns
 
-	inv, err := scanInvitation(conn.QueryRow(ctx, query, id, userID))
+	inv, err := scanInvitation(s.q.QueryRow(ctx, query, id, userID))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}

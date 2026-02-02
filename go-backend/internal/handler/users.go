@@ -13,13 +13,11 @@ import (
 )
 
 // UserHandler handles user management routes.
-type UserHandler struct {
-	users store.UserRepository
-}
+type UserHandler struct{}
 
-// NewUserHandler creates a new UserHandler with the given repository.
-func NewUserHandler(users store.UserRepository) *UserHandler {
-	return &UserHandler{users: users}
+// NewUserHandler creates a new UserHandler.
+func NewUserHandler() *UserHandler {
+	return &UserHandler{}
 }
 
 // SystemRoutes returns a chi.Router with system-level user routes (system-admin only).
@@ -56,7 +54,8 @@ func (h *UserHandler) ListSystem(w http.ResponseWriter, r *http.Request) {
 		filters.NamespaceID = &ns
 	}
 
-	users, err := h.users.ListUsers(r.Context(), filters)
+	repos := store.ReposFromContext(r.Context())
+	users, err := repos.ListUsers(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -77,8 +76,9 @@ func (h *UserHandler) ListNamespace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	nsID := authUser.NamespaceID
-	users, err := h.users.ListUsers(r.Context(), store.UserFilters{NamespaceID: &nsID})
+	users, err := repos.ListUsers(r.Context(), store.UserFilters{NamespaceID: &nsID})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -111,7 +111,8 @@ func (h *UserHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.UpdateUserAdmin(r.Context(), id, store.UpdateUserAdminParams{
+	repos := store.ReposFromContext(r.Context())
+	user, err := repos.UpdateUserAdmin(r.Context(), id, store.UpdateUserAdminParams{
 		Email:       req.Email,
 		DisplayName: req.DisplayName,
 		Role:        req.Role,
@@ -136,7 +137,8 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.users.DeleteUser(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	err := repos.DeleteUser(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -162,8 +164,10 @@ func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
+
 	// Verify target user is in the caller's namespace
-	target, err := h.users.GetUserByID(r.Context(), id)
+	target, err := repos.GetUserByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -177,7 +181,7 @@ func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = h.users.DeleteUser(r.Context(), id)
+	err = repos.DeleteUser(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -208,8 +212,10 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repos := store.ReposFromContext(r.Context())
+
 	// Verify target user is in the caller's namespace
-	target, err := h.users.GetUserByID(r.Context(), id)
+	target, err := repos.GetUserByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
@@ -228,7 +234,7 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.UpdateUserAdmin(r.Context(), id, store.UpdateUserAdminParams{
+	user, err := repos.UpdateUserAdmin(r.Context(), id, store.UpdateUserAdminParams{
 		Role: &req.Role,
 	})
 	if err != nil {

@@ -42,7 +42,7 @@ func main() {
 		"min_conns", cfg.DatabaseMinConns,
 	)
 
-	// Create store for user lookups
+	// Create store for user lookups (uses pool directly, no RLS)
 	userStore := store.New(pool.PgxPool())
 
 	// Create and start server

@@ -9,17 +9,12 @@ import (
 // ListClasses retrieves all classes visible to the current user.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
 		FROM classes
 		ORDER BY created_at`
 
-	rows, err := conn.Query(ctx, query)
+	rows, err := s.q.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -47,18 +42,13 @@ func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
 // GetClass retrieves a class by its ID.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) GetClass(ctx context.Context, id uuid.UUID) (*Class, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
 		FROM classes
 		WHERE id = $1`
 
 	var c Class
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&c.ID,
 		&c.NamespaceID,
 		&c.Name,
@@ -76,18 +66,13 @@ func (s *Store) GetClass(ctx context.Context, id uuid.UUID) (*Class, error) {
 
 // CreateClass creates a new class and returns the created record.
 func (s *Store) CreateClass(ctx context.Context, params CreateClassParams) (*Class, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO classes (namespace_id, name, description, created_by)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
 
 	var c Class
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.Name,
 		params.Description,
@@ -111,11 +96,6 @@ func (s *Store) CreateClass(ctx context.Context, params CreateClassParams) (*Cla
 // UpdateClass updates a class's mutable fields and returns the updated record.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClassParams) (*Class, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE classes
 		SET name        = COALESCE($2, name),
@@ -125,7 +105,7 @@ func (s *Store) UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClas
 		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
 
 	var c Class
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		id,
 		params.Name,
 		params.Description,
@@ -148,12 +128,7 @@ func (s *Store) UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClas
 // DeleteClass deletes a class by its ID.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) DeleteClass(ctx context.Context, id uuid.UUID) error {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := conn.Exec(ctx, "DELETE FROM classes WHERE id = $1", id)
+	tag, err := s.q.Exec(ctx, "DELETE FROM classes WHERE id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -166,11 +141,6 @@ func (s *Store) DeleteClass(ctx context.Context, id uuid.UUID) error {
 // ListClassInstructorNames returns distinct instructor display names (or emails)
 // for all sections of a class, using a single joined query.
 func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT DISTINCT COALESCE(u.display_name, u.email)
 		FROM sections s
@@ -180,7 +150,7 @@ func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID)
 		  AND sm.role = 'instructor'
 		ORDER BY 1`
 
-	rows, err := conn.Query(ctx, query, classID)
+	rows, err := s.q.Query(ctx, query, classID)
 	if err != nil {
 		return nil, err
 	}

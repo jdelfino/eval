@@ -99,18 +99,13 @@ func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, cod
 
 // ListSessionStudents retrieves all students in a session.
 func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, session_id, user_id, name, code, execution_settings, last_update
 		FROM session_students
 		WHERE session_id = $1
 		ORDER BY last_update DESC`
 
-	rows, err := conn.Query(ctx, query, sessionID)
+	rows, err := s.q.Query(ctx, query, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,18 +133,13 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 // GetSessionStudent retrieves a single student's record in a session.
 // Returns ErrNotFound if the student is not in the session.
 func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, session_id, user_id, name, code, execution_settings, last_update
 		FROM session_students
 		WHERE session_id = $1 AND user_id = $2`
 
 	var ss SessionStudent
-	err = conn.QueryRow(ctx, query, sessionID, userID).Scan(
+	err := s.q.QueryRow(ctx, query, sessionID, userID).Scan(
 		&ss.ID,
 		&ss.SessionID,
 		&ss.UserID,

@@ -81,6 +81,38 @@ func (m *fullMockUserRepo) CountUsersByRole(ctx context.Context, namespaceID str
 	return nil, nil
 }
 
+// userTestRepos embeds stubRepos and overrides user methods.
+type userTestRepos struct {
+	stubRepos
+	users *fullMockUserRepo
+}
+
+var _ store.Repos = (*userTestRepos)(nil)
+
+func (r *userTestRepos) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
+	return r.users.ListUsers(ctx, filters)
+}
+func (r *userTestRepos) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
+	return r.users.GetUserByID(ctx, id)
+}
+func (r *userTestRepos) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
+	return r.users.UpdateUserAdmin(ctx, id, params)
+}
+func (r *userTestRepos) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	return r.users.DeleteUser(ctx, id)
+}
+func (r *userTestRepos) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
+	return r.users.CountUsersByRole(ctx, namespaceID)
+}
+
+func userReposMiddleware(repo *fullMockUserRepo) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), &userTestRepos{users: repo})))
+		})
+	}
+}
+
 func TestListSystemUsers_Success(t *testing.T) {
 	nsID := "test-ns"
 	users := []store.User{
@@ -92,8 +124,9 @@ func TestListSystemUsers_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/system/users", nil)
@@ -131,8 +164,9 @@ func TestListNamespaceUsers_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
@@ -160,8 +194,9 @@ func TestDeleteUser_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/system/users/"+userID.String(), nil)
@@ -184,8 +219,9 @@ func TestDeleteUser_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/system/users/"+uuid.New().String(), nil)
@@ -224,8 +260,9 @@ func TestUpdateAdmin_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"email":"updated@example.com","role":"instructor"}`
@@ -282,8 +319,9 @@ func TestUpdateAdmin_ClearNullableFields(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"namespace_id":""}`
@@ -316,8 +354,9 @@ func TestUpdateAdmin_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"email":"x@example.com"}`
@@ -342,8 +381,9 @@ func TestUpdateAdmin_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"email":"x@example.com"}`
@@ -377,8 +417,9 @@ func TestDeleteNamespaceScoped_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+targetID.String(), nil)
@@ -405,8 +446,9 @@ func TestDeleteNamespaceScoped_CrossNamespaceForbidden(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+targetID.String(), nil)
@@ -438,8 +480,9 @@ func TestDeleteNamespaceScoped_UserNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+uuid.New().String(), nil)
@@ -484,8 +527,9 @@ func TestUpdateRole_Success(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	body := `{"role":"instructor"}`
@@ -522,8 +566,9 @@ func TestUpdateRole_CrossNamespaceForbidden(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	body := `{"role":"instructor"}`
@@ -549,8 +594,9 @@ func TestUpdateRole_UserNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	body := `{"role":"instructor"}`
@@ -578,8 +624,9 @@ func TestListSystemUsers_WithFilters(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/system/users?role=instructor&namespace_id=ns1", nil)
@@ -609,8 +656,9 @@ func TestListSystemUsers_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/system/users", nil)
@@ -633,8 +681,9 @@ func TestListNamespaceUsers_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
@@ -654,8 +703,9 @@ func TestListNamespaceUsers_InternalError(t *testing.T) {
 func TestUpdateAdmin_InvalidUUID(t *testing.T) {
 	repo := &fullMockUserRepo{}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"email":"x@example.com"}`
@@ -676,8 +726,9 @@ func TestUpdateAdmin_InvalidUUID(t *testing.T) {
 func TestDeleteUser_InvalidUUID(t *testing.T) {
 	repo := &fullMockUserRepo{}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/system/users/not-a-uuid", nil)
@@ -703,8 +754,9 @@ func TestUpdateRole_InvalidBody(t *testing.T) {
 		},
 	}
 
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	body := `{}`
@@ -727,8 +779,9 @@ func TestUpdateRole_InvalidBody(t *testing.T) {
 
 func TestListSystemUsers_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/system/users", nil)
@@ -746,8 +799,9 @@ func TestListSystemUsers_RBACForbidden(t *testing.T) {
 
 func TestUpdateAdmin_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	body := `{"email":"x@example.com"}`
@@ -767,8 +821,9 @@ func TestUpdateAdmin_RBACForbidden(t *testing.T) {
 
 func TestDeleteUser_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/system/users", h.SystemRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/system/users/"+uuid.New().String(), nil)
@@ -786,8 +841,9 @@ func TestDeleteUser_RBACForbidden(t *testing.T) {
 
 func TestListNamespaceUsers_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
@@ -805,8 +861,9 @@ func TestListNamespaceUsers_RBACForbidden(t *testing.T) {
 
 func TestDeleteNamespaceScoped_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+uuid.New().String(), nil)
@@ -824,8 +881,9 @@ func TestDeleteNamespaceScoped_RBACForbidden(t *testing.T) {
 
 func TestUpdateRole_RBACForbidden(t *testing.T) {
 	repo := &fullMockUserRepo{}
-	h := NewUserHandler(repo)
+	h := NewUserHandler()
 	r := chi.NewRouter()
+	r.Use(userReposMiddleware(repo))
 	r.Mount("/admin/users", h.NamespaceRoutes())
 
 	body := `{"role":"instructor"}`

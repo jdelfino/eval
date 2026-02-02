@@ -38,10 +38,17 @@ func TestRegisterStudentGet_Success(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, membershipRepo, classRepo)
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      classRepo,
+	}
 	req := httptest.NewRequest(http.MethodGet, "/register-student?code="+section.JoinCode, nil)
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.GetRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -61,10 +68,17 @@ func TestRegisterStudentGet_Success(t *testing.T) {
 }
 
 func TestRegisterStudentGet_MissingCode(t *testing.T) {
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/register-student", nil)
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.GetRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
@@ -78,10 +92,17 @@ func TestRegisterStudentGet_InvalidCode(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/register-student?code=INVALID", nil)
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.GetRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusNotFound {
@@ -97,10 +118,17 @@ func TestRegisterStudentGet_InactiveSection(t *testing.T) {
 			return section, nil
 		},
 	}
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/register-student?code="+section.JoinCode, nil)
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.GetRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusGone {
@@ -161,7 +189,13 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(userRepo, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"join_code":    section.JoinCode,
 		"external_id":  "firebase-uid-456",
@@ -172,6 +206,7 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusCreated {
@@ -194,7 +229,13 @@ func TestRegisterStudentPost_InvalidJoinCode(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"join_code":   "INVALID",
 		"external_id": "firebase-uid-456",
@@ -204,6 +245,7 @@ func TestRegisterStudentPost_InvalidJoinCode(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusNotFound {
@@ -220,7 +262,13 @@ func TestRegisterStudentPost_InactiveSection(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"join_code":   section.JoinCode,
 		"external_id": "firebase-uid-456",
@@ -230,6 +278,7 @@ func TestRegisterStudentPost_InactiveSection(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusGone {
@@ -250,7 +299,13 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(userRepo, &mockInvitationRepo{}, membershipRepo, &mockClassRepo{})
+	h := NewAuthHandler()
+	authRepos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"join_code":   section.JoinCode,
 		"external_id": "firebase-uid-456",
@@ -260,6 +315,7 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
+	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {

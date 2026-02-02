@@ -26,18 +26,13 @@ type CreateMembershipParams struct {
 // GetSectionByJoinCode retrieves a section by its join code.
 // Returns ErrNotFound if no section has the given code.
 func (s *Store) GetSectionByJoinCode(ctx context.Context, code string) (*Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
 		FROM sections
 		WHERE join_code = $1`
 
 	var sec Section
-	err = conn.QueryRow(ctx, query, code).Scan(
+	err := s.q.QueryRow(ctx, query, code).Scan(
 		&sec.ID,
 		&sec.NamespaceID,
 		&sec.ClassID,
@@ -57,18 +52,13 @@ func (s *Store) GetSectionByJoinCode(ctx context.Context, code string) (*Section
 
 // CreateMembership creates a new section membership and returns the created record.
 func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipParams) (*SectionMembership, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO section_memberships (user_id, section_id, role)
 		VALUES ($1, $2, $3)
 		RETURNING id, user_id, section_id, role, joined_at`
 
 	var m SectionMembership
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.UserID,
 		params.SectionID,
 		params.Role,
@@ -89,12 +79,7 @@ func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipPar
 // DeleteMembership deletes a user's membership from a section.
 // Returns ErrNotFound if the membership does not exist.
 func (s *Store) DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := conn.Exec(ctx, "DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID)
+	tag, err := s.q.Exec(ctx, "DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID)
 	if err != nil {
 		return err
 	}
@@ -106,18 +91,13 @@ func (s *Store) DeleteMembership(ctx context.Context, sectionID, userID uuid.UUI
 
 // ListMembers retrieves all memberships for a given section.
 func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, user_id, section_id, role, joined_at
 		FROM section_memberships
 		WHERE section_id = $1
 		ORDER BY joined_at`
 
-	rows, err := conn.Query(ctx, query, sectionID)
+	rows, err := s.q.Query(ctx, query, sectionID)
 	if err != nil {
 		return nil, err
 	}
@@ -142,18 +122,13 @@ func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]Section
 
 // ListMembersByRole retrieves memberships for a given section filtered by role.
 func (s *Store) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]SectionMembership, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, user_id, section_id, role, joined_at
 		FROM section_memberships
 		WHERE section_id = $1 AND role = $2
 		ORDER BY joined_at`
 
-	rows, err := conn.Query(ctx, query, sectionID, role)
+	rows, err := s.q.Query(ctx, query, sectionID, role)
 	if err != nil {
 		return nil, err
 	}

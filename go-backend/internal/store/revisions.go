@@ -10,11 +10,6 @@ import (
 // ListRevisions retrieves all revisions for a session, optionally filtered by user.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]Revision, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
 		SELECT id, namespace_id, session_id, user_id, timestamp,
 		       is_diff, diff, full_code, base_revision_id, execution_result
@@ -27,7 +22,7 @@ func (s *Store) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *
 	}
 	query += " ORDER BY timestamp"
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -57,11 +52,6 @@ func (s *Store) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *
 
 // CreateRevision creates a new revision and returns the created record.
 func (s *Store) CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, diff, full_code, base_revision_id, execution_result)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -69,7 +59,7 @@ func (s *Store) CreateRevision(ctx context.Context, params CreateRevisionParams)
 		          is_diff, diff, full_code, base_revision_id, execution_result`
 
 	var rev Revision
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.SessionID,
 		params.UserID,

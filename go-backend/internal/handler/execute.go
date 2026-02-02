@@ -22,21 +22,13 @@ type ExecutorClient interface {
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	sessions        store.SessionRepository
-	sessionStudents store.SessionStudentRepository
-	executor        ExecutorClient
+	executor ExecutorClient
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
-func NewExecuteHandler(
-	sessions store.SessionRepository,
-	sessionStudents store.SessionStudentRepository,
-	exec ExecutorClient,
-) *ExecuteHandler {
+func NewExecuteHandler(exec ExecutorClient) *ExecuteHandler {
 	return &ExecuteHandler{
-		sessions:        sessions,
-		sessionStudents: sessionStudents,
-		executor:        exec,
+		executor: exec,
 	}
 }
 
@@ -73,7 +65,8 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Look up session
-	session, err := h.sessions.GetSession(r.Context(), sessionID)
+	repos := store.ReposFromContext(r.Context())
+	session, err := repos.GetSession(r.Context(), sessionID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -109,7 +102,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Merge execution settings: get student record for middle layer
 	var studentRecord *store.SessionStudent
-	sr, err := h.sessionStudents.GetSessionStudent(r.Context(), sessionID, req.StudentID)
+	sr, err := repos.GetSessionStudent(r.Context(), sessionID, req.StudentID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

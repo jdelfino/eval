@@ -21,20 +21,19 @@ import (
 
 // SessionHandler handles session management routes.
 type SessionHandler struct {
-	sessions  store.SessionRepository
 	publisher realtime.SessionPublisher
 	revBuffer *revision.RevisionBuffer
 	logger    *slog.Logger
 }
 
-// NewSessionHandler creates a new SessionHandler with the given repository.
-func NewSessionHandler(sessions store.SessionRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{sessions: sessions, publisher: publisher, logger: logger}
+// NewSessionHandler creates a new SessionHandler.
+func NewSessionHandler(publisher realtime.SessionPublisher, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{publisher: publisher, logger: logger}
 }
 
 // NewSessionHandlerWithBuffer creates a new SessionHandler with a revision buffer.
-func NewSessionHandlerWithBuffer(sessions store.SessionRepository, publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{sessions: sessions, publisher: publisher, revBuffer: revBuffer, logger: logger}
+func NewSessionHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{publisher: publisher, revBuffer: revBuffer, logger: logger}
 }
 
 // Routes returns a chi.Router with session routes mounted.
@@ -79,7 +78,8 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 		filters.Status = &status
 	}
 
-	sessions, err := h.sessions.ListSessions(r.Context(), filters)
+	repos := store.ReposFromContext(r.Context())
+	sessions, err := repos.ListSessions(r.Context(), filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -99,7 +99,8 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.sessions.GetSession(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	session, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -132,7 +133,8 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	session, err := h.sessions.CreateSession(r.Context(), store.CreateSessionParams{
+	repos := store.ReposFromContext(r.Context())
+	session, err := repos.CreateSession(r.Context(), store.CreateSessionParams{
 		NamespaceID: authUser.NamespaceID,
 		SectionID:   req.SectionID,
 		SectionName: req.SectionName,
@@ -166,8 +168,9 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	// Fetch current state to detect actual changes for event publishing.
-	previous, err := h.sessions.GetSession(r.Context(), id)
+	previous, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -189,7 +192,7 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.EndedAt = &now
 	}
 
-	session, err := h.sessions.UpdateSession(r.Context(), id, params)
+	session, err := repos.UpdateSession(r.Context(), id, params)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -231,7 +234,8 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.sessions.GetSession(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	existing, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -248,7 +252,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	status := "completed"
 	now := time.Now()
-	session, err := h.sessions.UpdateSession(r.Context(), id, store.UpdateSessionParams{
+	session, err := repos.UpdateSession(r.Context(), id, store.UpdateSessionParams{
 		Status:  &status,
 		EndedAt: &now,
 	})
@@ -276,7 +280,8 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := h.sessions.GetSession(r.Context(), id)
+	repos := store.ReposFromContext(r.Context())
+	existing, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -292,7 +297,7 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := "active"
-	session, err := h.sessions.UpdateSession(r.Context(), id, store.UpdateSessionParams{
+	session, err := repos.UpdateSession(r.Context(), id, store.UpdateSessionParams{
 		Status:       &status,
 		ClearEndedAt: true,
 	})
@@ -321,8 +326,9 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	// Check session is active before updating problem.
-	existing, err := h.sessions.GetSession(r.Context(), id)
+	existing, err := repos.GetSession(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -336,7 +342,7 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.sessions.UpdateSessionProblem(r.Context(), id, req.Problem)
+	session, err := repos.UpdateSessionProblem(r.Context(), id, req.Problem)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
@@ -381,8 +387,9 @@ func (h *SessionHandler) History(w http.ResponseWriter, r *http.Request) {
 		filters.Search = &search
 	}
 
+	repos := store.ReposFromContext(r.Context())
 	isCreator := authUser.Role != auth.RoleStudent
-	sessions, err := h.sessions.ListSessionHistory(r.Context(), authUser.ID, isCreator, filters)
+	sessions, err := repos.ListSessionHistory(r.Context(), authUser.ID, isCreator, filters)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

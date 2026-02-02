@@ -9,18 +9,13 @@ import (
 // ListSectionsByClass retrieves all sections for a given class.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
 		FROM sections
 		WHERE class_id = $1
 		ORDER BY created_at`
 
-	rows, err := conn.Query(ctx, query, classID)
+	rows, err := s.q.Query(ctx, query, classID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,18 +45,13 @@ func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]S
 // GetSection retrieves a section by its ID.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) GetSection(ctx context.Context, id uuid.UUID) (*Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
 		FROM sections
 		WHERE id = $1`
 
 	var sec Section
-	err = conn.QueryRow(ctx, query, id).Scan(
+	err := s.q.QueryRow(ctx, query, id).Scan(
 		&sec.ID,
 		&sec.NamespaceID,
 		&sec.ClassID,
@@ -81,18 +71,13 @@ func (s *Store) GetSection(ctx context.Context, id uuid.UUID) (*Section, error) 
 
 // CreateSection creates a new section and returns the created record.
 func (s *Store) CreateSection(ctx context.Context, params CreateSectionParams) (*Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		INSERT INTO sections (namespace_id, class_id, name, semester, join_code)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
 
 	var sec Section
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.ClassID,
 		params.Name,
@@ -119,11 +104,6 @@ func (s *Store) CreateSection(ctx context.Context, params CreateSectionParams) (
 // UpdateSection updates a section's mutable fields and returns the updated record.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSectionParams) (*Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE sections
 		SET name       = COALESCE($2, name),
@@ -134,7 +114,7 @@ func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSe
 		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
 
 	var sec Section
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		id,
 		params.Name,
 		params.Semester,
@@ -160,12 +140,7 @@ func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSe
 // DeleteSection deletes a section by its ID.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return err
-	}
-
-	tag, err := conn.Exec(ctx, "DELETE FROM sections WHERE id = $1", id)
+	tag, err := s.q.Exec(ctx, "DELETE FROM sections WHERE id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -177,11 +152,6 @@ func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
 
 // ListMySections retrieves sections the user is enrolled in with class info.
 func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySectionInfo, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		SELECT s.id, s.namespace_id, s.class_id, s.name, s.semester, s.join_code, s.active,
 		       s.created_at, s.updated_at, c.name
@@ -191,7 +161,7 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 		WHERE sm.user_id = $1
 		ORDER BY s.created_at`
 
-	rows, err := conn.Query(ctx, query, userID)
+	rows, err := s.q.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,11 +192,6 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 // UpdateSectionJoinCode updates a section's join code.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*Section, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `
 		UPDATE sections
 		SET join_code = $2, updated_at = now()
@@ -234,7 +199,7 @@ func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCod
 		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
 
 	var sec Section
-	err = conn.QueryRow(ctx, query, id, joinCode).Scan(
+	err := s.q.QueryRow(ctx, query, id, joinCode).Scan(
 		&sec.ID,
 		&sec.NamespaceID,
 		&sec.ClassID,

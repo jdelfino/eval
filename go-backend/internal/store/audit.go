@@ -10,11 +10,6 @@ import (
 
 // ListAuditLogs retrieves audit log entries with optional filters.
 func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	query := `SELECT id, namespace_id, action, actor_id, target_id, target_type, details, created_at
 		FROM audit_logs WHERE 1=1`
 	args := []any{}
@@ -43,7 +38,7 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 		args = append(args, filters.Offset)
 	}
 
-	rows, err := conn.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
 	}
@@ -70,17 +65,12 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 
 // CreateAuditLog creates a new audit log entry.
 func (s *Store) CreateAuditLog(ctx context.Context, params CreateAuditLogParams) (*AuditLog, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	const query = `INSERT INTO audit_logs (namespace_id, action, actor_id, target_id, target_type, details)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, namespace_id, action, actor_id, target_id, target_type, details, created_at`
 
 	var l AuditLog
-	err = conn.QueryRow(ctx, query,
+	err := s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.Action, params.ActorID,
 		params.TargetID, params.TargetType, params.Details,
 	).Scan(&l.ID, &l.NamespaceID, &l.Action, &l.ActorID,
@@ -94,17 +84,12 @@ func (s *Store) CreateAuditLog(ctx context.Context, params CreateAuditLogParams)
 
 // AdminStats returns aggregate system statistics.
 func (s *Store) AdminStats(ctx context.Context) (*AdminStats, error) {
-	conn, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	stats := &AdminStats{
 		UsersByRole: make(map[string]int),
 	}
 
 	// Users by role
-	rows, err := conn.Query(ctx, `SELECT role, COUNT(*) FROM users GROUP BY role`)
+	rows, err := s.q.Query(ctx, `SELECT role, COUNT(*) FROM users GROUP BY role`)
 	if err != nil {
 		return nil, fmt.Errorf("count users by role: %w", err)
 	}
@@ -122,19 +107,19 @@ func (s *Store) AdminStats(ctx context.Context) (*AdminStats, error) {
 	}
 
 	// Class count
-	err = conn.QueryRow(ctx, `SELECT COUNT(*) FROM classes`).Scan(&stats.ClassCount)
+	err = s.q.QueryRow(ctx, `SELECT COUNT(*) FROM classes`).Scan(&stats.ClassCount)
 	if err != nil {
 		return nil, fmt.Errorf("count classes: %w", err)
 	}
 
 	// Section count
-	err = conn.QueryRow(ctx, `SELECT COUNT(*) FROM sections`).Scan(&stats.SectionCount)
+	err = s.q.QueryRow(ctx, `SELECT COUNT(*) FROM sections`).Scan(&stats.SectionCount)
 	if err != nil {
 		return nil, fmt.Errorf("count sections: %w", err)
 	}
 
 	// Active sessions
-	err = conn.QueryRow(ctx, `SELECT COUNT(*) FROM sessions WHERE status = 'active'`).Scan(&stats.ActiveSessions)
+	err = s.q.QueryRow(ctx, `SELECT COUNT(*) FROM sessions WHERE status = 'active'`).Scan(&stats.ActiveSessions)
 	if err != nil && err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("count active sessions: %w", err)
 	}

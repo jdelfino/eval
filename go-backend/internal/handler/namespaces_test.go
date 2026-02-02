@@ -41,6 +41,44 @@ func (m *mockNamespaceRepo) UpdateNamespace(ctx context.Context, id string, para
 	return m.updateNamespaceFn(ctx, id, params)
 }
 
+// namespaceTestRepos embeds stubRepos and overrides namespace/user methods.
+type namespaceTestRepos struct {
+	stubRepos
+	ns    *mockNamespaceRepo
+	users *nsTestUserRepo
+}
+
+var _ store.Repos = (*namespaceTestRepos)(nil)
+
+func (r *namespaceTestRepos) ListNamespaces(ctx context.Context) ([]store.Namespace, error) {
+	return r.ns.ListNamespaces(ctx)
+}
+func (r *namespaceTestRepos) GetNamespace(ctx context.Context, id string) (*store.Namespace, error) {
+	return r.ns.GetNamespace(ctx, id)
+}
+func (r *namespaceTestRepos) CreateNamespace(ctx context.Context, params store.CreateNamespaceParams) (*store.Namespace, error) {
+	return r.ns.CreateNamespace(ctx, params)
+}
+func (r *namespaceTestRepos) UpdateNamespace(ctx context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
+	return r.ns.UpdateNamespace(ctx, id, params)
+}
+func (r *namespaceTestRepos) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
+	if r.users != nil {
+		return r.users.ListUsers(ctx, filters)
+	}
+	panic("namespaceTestRepos: unexpected ListUsers call")
+}
+func (r *namespaceTestRepos) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
+	if r.users != nil {
+		return r.users.CountUsersByRole(ctx, namespaceID)
+	}
+	panic("namespaceTestRepos: unexpected CountUsersByRole call")
+}
+
+func nsRepos(repo *mockNamespaceRepo, users *nsTestUserRepo) *namespaceTestRepos {
+	return &namespaceTestRepos{ns: repo, users: users}
+}
+
 func testNamespace() *store.Namespace {
 	createdBy := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	return &store.Namespace{
@@ -62,9 +100,10 @@ func TestListNamespaces_Success(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -93,9 +132,10 @@ func TestListNamespaces_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -119,9 +159,10 @@ func TestListNamespaces_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -143,7 +184,7 @@ func TestGetNamespace_Success(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns", nil)
 
 	// Set chi URL param
@@ -151,6 +192,7 @@ func TestGetNamespace_Success(t *testing.T) {
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -176,12 +218,13 @@ func TestGetNamespace_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "nonexistent")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -215,10 +258,11 @@ func TestCreateNamespace_Success(t *testing.T) {
 		"id":           "test-ns",
 		"display_name": "Test Namespace",
 	})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -238,7 +282,7 @@ func TestCreateNamespace_Success(t *testing.T) {
 }
 
 func TestCreateNamespace_Unauthorized(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -253,7 +297,7 @@ func TestCreateNamespace_RBACForbidden(t *testing.T) {
 	// Test that the Routes() method applies RequireRole middleware to POST.
 	// A non-system-admin should get 403.
 	repo := &mockNamespaceRepo{}
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -266,6 +310,7 @@ func TestCreateNamespace_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -296,13 +341,14 @@ func TestUpdateNamespace_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"display_name": newName,
 	})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/test-ns", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -329,13 +375,14 @@ func TestUpdateNamespace_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"display_name": "New Name"})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/nonexistent", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "nonexistent")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -347,7 +394,7 @@ func TestUpdateNamespace_NotFound(t *testing.T) {
 }
 
 func TestCreateNamespace_MissingRequiredFields(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	h := NewNamespaceHandler()
 	// Missing both id and display_name
 	body, _ := json.Marshal(map[string]any{})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -364,7 +411,7 @@ func TestCreateNamespace_MissingRequiredFields(t *testing.T) {
 }
 
 func TestCreateNamespace_InvalidBody(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
@@ -389,10 +436,11 @@ func TestCreateNamespace_InternalError(t *testing.T) {
 		"id":           "test-ns",
 		"display_name": "Test Namespace",
 	})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -410,12 +458,13 @@ func TestGetNamespace_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -427,7 +476,7 @@ func TestGetNamespace_InternalError(t *testing.T) {
 }
 
 func TestUpdateNamespace_InvalidBody(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/test-ns", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -452,13 +501,14 @@ func TestUpdateNamespace_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"display_name": "Updated"})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/test-ns", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -471,7 +521,7 @@ func TestUpdateNamespace_InternalError(t *testing.T) {
 
 func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 	repo := &mockNamespaceRepo{}
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{"display_name": "New Name"})
@@ -481,6 +531,7 @@ func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleInstructor,
 	})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -541,12 +592,13 @@ func TestDeleteNamespace_Success(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -564,12 +616,13 @@ func TestDeleteNamespace_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -587,12 +640,13 @@ func TestDeleteNamespace_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -617,12 +671,13 @@ func TestNSListUsers_Success(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", nsID)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: nsID})
+	ctx = store.WithRepos(ctx, nsRepos(&mockNamespaceRepo{}, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -651,12 +706,13 @@ func TestNSListUsers_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(&mockNamespaceRepo{}, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -696,12 +752,13 @@ func TestGetCapacity_Success(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(repo, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -736,12 +793,13 @@ func TestGetCapacity_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, &nsTestUserRepo{})
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -765,12 +823,13 @@ func TestGetCapacity_CountError(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "test-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(repo, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -807,13 +866,14 @@ func TestUpdateCapacity_Success(t *testing.T) {
 		"max_instructors": 10,
 		"max_students":    100,
 	})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPut, "/test-ns/capacity", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -843,12 +903,13 @@ func TestListUsers_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/other-ns/users", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "other-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(&mockNamespaceRepo{}, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -866,12 +927,13 @@ func TestListUsers_SystemAdmin_AllowsCrossNamespace(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, users)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/any-ns/users", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "any-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin, NamespaceID: ""})
+	ctx = store.WithRepos(ctx, nsRepos(&mockNamespaceRepo{}, users))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -890,12 +952,13 @@ func TestGetCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 		},
 	}
 
-	h := NewNamespaceHandler(repo, &nsTestUserRepo{})
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodGet, "/other-ns/capacity", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "other-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -917,13 +980,14 @@ func TestUpdateCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPut, "/other-ns/capacity", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "other-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleNamespaceAdmin, NamespaceID: "my-ns"})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -938,7 +1002,7 @@ func TestUpdateCapacity_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 
 func TestDeleteNamespace_RBACForbidden(t *testing.T) {
 	repo := &mockNamespaceRepo{}
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodDelete, "/test-ns", nil)
@@ -946,6 +1010,7 @@ func TestDeleteNamespace_RBACForbidden(t *testing.T) {
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -957,7 +1022,7 @@ func TestDeleteNamespace_RBACForbidden(t *testing.T) {
 }
 
 func TestNSListUsers_RBACForbidden(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, &nsTestUserRepo{})
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/users", nil)
@@ -976,7 +1041,7 @@ func TestNSListUsers_RBACForbidden(t *testing.T) {
 }
 
 func TestGetCapacity_RBACForbidden(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, &nsTestUserRepo{})
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/test-ns/capacity", nil)
@@ -995,7 +1060,7 @@ func TestGetCapacity_RBACForbidden(t *testing.T) {
 }
 
 func TestUpdateCapacity_RBACForbidden(t *testing.T) {
-	h := NewNamespaceHandler(&mockNamespaceRepo{}, nil)
+	h := NewNamespaceHandler()
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
@@ -1023,13 +1088,14 @@ func TestUpdateCapacity_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"max_instructors": 5})
-	h := NewNamespaceHandler(repo, nil)
+	h := NewNamespaceHandler()
 	req := httptest.NewRequest(http.MethodPut, "/test-ns/capacity", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-ns")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

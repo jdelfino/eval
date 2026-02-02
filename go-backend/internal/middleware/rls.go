@@ -5,18 +5,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/store"
 )
-
-// connContextKey is the key for storing the RLS-configured connection in context.
-type connContextKey struct{}
-
-// Execer is the interface for executing SQL commands.
-type Execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
 
 // Releaser is the interface for releasing connections.
 type Releaser interface {
@@ -24,8 +16,10 @@ type Releaser interface {
 }
 
 // RLSConn combines the interfaces needed for RLS middleware.
+// It embeds store.Querier (Exec, Query, QueryRow) so the connection
+// can be used to construct a Store, plus Releaser for cleanup.
 type RLSConn interface {
-	Execer
+	store.Querier
 	Releaser
 }
 
@@ -93,8 +87,9 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 				return
 			}
 
-			// Attach connection to context for handlers
-			ctx = withConn(ctx, conn)
+			// Create per-request Store and attach to context
+			s := store.New(conn)
+			ctx = store.WithRepos(ctx, s)
 			r = r.WithContext(ctx)
 
 			next.ServeHTTP(w, r)
@@ -103,7 +98,7 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 }
 
 // setRLSVariables sets the PostgreSQL session variables for RLS policies.
-func setRLSVariables(ctx context.Context, conn Execer, user *auth.User) error {
+func setRLSVariables(ctx context.Context, conn store.Querier, user *auth.User) error {
 	// Set user ID
 	_, err := conn.Exec(ctx, "SELECT set_config('app.user_id', $1, true)", user.ID.String())
 	if err != nil {
@@ -125,24 +120,3 @@ func setRLSVariables(ctx context.Context, conn Execer, user *auth.User) error {
 	return nil
 }
 
-// withConn stores the RLS-configured connection in the context.
-func withConn(ctx context.Context, conn RLSConn) context.Context {
-	return context.WithValue(ctx, connContextKey{}, conn)
-}
-
-// ConnFromContext retrieves the RLS-configured connection from the context.
-// Returns nil if no connection is present (e.g., for unauthenticated requests).
-//
-// Handlers should use this to get the connection for database operations:
-//
-//	conn := middleware.ConnFromContext(r.Context())
-//	if conn == nil {
-//	    // Handle unauthenticated case or error
-//	}
-func ConnFromContext(ctx context.Context) RLSConn {
-	conn, ok := ctx.Value(connContextKey{}).(RLSConn)
-	if !ok {
-		return nil
-	}
-	return conn
-}

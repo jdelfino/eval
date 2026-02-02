@@ -13,6 +13,32 @@ import (
 	"github.com/jdelfino/eval/internal/store"
 )
 
+// sessionStateTestRepos embeds stubRepos for session state tests.
+type sessionStateTestRepos struct {
+	stubRepos
+	sess     *mockSessionRepo
+	students *mockSessionStudentRepo
+	sec      *mockSectionRepo
+}
+
+var _ store.Repos = (*sessionStateTestRepos)(nil)
+
+func (r *sessionStateTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
+	return r.sess.GetSession(ctx, id)
+}
+func (r *sessionStateTestRepos) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
+	return r.students.ListSessionStudents(ctx, sessionID)
+}
+func (r *sessionStateTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
+	return r.sec.GetSection(ctx, id)
+}
+func (r *sessionStateTestRepos) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+	return r.sess.UpdateSession(ctx, id, params)
+}
+func stateRepos(sess *mockSessionRepo, students *mockSessionStudentRepo, sec *mockSectionRepo) *sessionStateTestRepos {
+	return &sessionStateTestRepos{sess: sess, students: students, sec: sec}
+}
+
 // mockSectionRepo and testSection are defined in sections_test.go
 
 func TestState_Success(t *testing.T) {
@@ -20,22 +46,21 @@ func TestState_Success(t *testing.T) {
 	students := []store.SessionStudent{*testSessionStudent()}
 	section := testSection()
 
-	h := NewSessionStateHandler(
-		&mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		}},
-		&mockSessionStudentRepo{listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
-			return students, nil
-		}},
-		&mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
-			return section, nil
-		}},
-		noopPublisher(),
-		testLogger(),
-	)
+	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+		return sess, nil
+	}}
+	studRepo := &mockSessionStudentRepo{listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
+		return students, nil
+	}}
+	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+		return section, nil
+	}}
+	h := NewSessionStateHandler(noopPublisher(), testLogger())
 
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/state", nil)
-	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, studRepo, secRepo))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.State(w, req)
@@ -57,19 +82,16 @@ func TestState_Success(t *testing.T) {
 }
 
 func TestState_SessionNotFound(t *testing.T) {
-	h := NewSessionStateHandler(
-		&mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return nil, store.ErrNotFound
-		}},
-		&mockSessionStudentRepo{},
-		&mockSectionRepo{},
-		noopPublisher(),
-		testLogger(),
-	)
+	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+		return nil, store.ErrNotFound
+	}}
+	h := NewSessionStateHandler(noopPublisher(), testLogger())
 
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+id.String()+"/state", nil)
-	req = req.WithContext(withChiParam(req.Context(), "id", id.String()))
+	ctx := withChiParam(req.Context(), "id", id.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.State(w, req)
@@ -83,20 +105,18 @@ func TestPublicState_Success(t *testing.T) {
 	sess := testSession()
 	section := testSection()
 
-	h := NewSessionStateHandler(
-		&mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		}},
-		&mockSessionStudentRepo{},
-		&mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
-			return section, nil
-		}},
-		noopPublisher(),
-		testLogger(),
-	)
+	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+		return sess, nil
+	}}
+	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+		return section, nil
+	}}
+	h := NewSessionStateHandler(noopPublisher(), testLogger())
 
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/public-state", nil)
-	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, secRepo))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.PublicState(w, req)
@@ -123,23 +143,22 @@ func TestDetails_RoutesToState(t *testing.T) {
 	students := []store.SessionStudent{*testSessionStudent()}
 	section := testSection()
 
-	h := NewSessionStateHandler(
-		&mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		}},
-		&mockSessionStudentRepo{listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
-			return students, nil
-		}},
-		&mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
-			return section, nil
-		}},
-		noopPublisher(),
-		testLogger(),
-	)
+	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+		return sess, nil
+	}}
+	studRepo := &mockSessionStudentRepo{listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
+		return students, nil
+	}}
+	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+		return section, nil
+	}}
+	h := NewSessionStateHandler(noopPublisher(), testLogger())
 
 	// Details route now points to State handler
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/details", nil)
-	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, studRepo, secRepo))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.State(w, req)
@@ -166,22 +185,19 @@ func TestFeature_Success(t *testing.T) {
 	updatedSess.FeaturedStudentID = &studentID
 	updatedSess.FeaturedCode = &code
 
-	h := NewSessionStateHandler(
-		&mockSessionRepo{
-			updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-				return &updatedSess, nil
-			},
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return &updatedSess, nil
 		},
-		&mockSessionStudentRepo{},
-		&mockSectionRepo{},
-		noopPublisher(),
-		testLogger(),
-	)
+	}
+	h := NewSessionStateHandler(noopPublisher(), testLogger())
 
 	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.Feature(w, req)
@@ -202,22 +218,19 @@ func TestFeature_PublishesFeaturedStudentChanged(t *testing.T) {
 
 	pub := newMockPublisher()
 
-	h := NewSessionStateHandler(
-		&mockSessionRepo{
-			updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
-				return &updatedSess, nil
-			},
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return &updatedSess, nil
 		},
-		&mockSessionStudentRepo{},
-		&mockSectionRepo{},
-		pub,
-		testLogger(),
-	)
+	}
+	h := NewSessionStateHandler(pub, testLogger())
 
 	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(withChiParam(req.Context(), "id", sess.ID.String()))
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	h.Feature(w, req)

@@ -68,35 +68,72 @@ func testInvitation(nsID string) *store.Invitation {
 	}
 }
 
+// invitationTestRepos embeds stubRepos and overrides invitation methods.
+type invitationTestRepos struct {
+	stubRepos
+	inv *mockInvitationRepo
+}
+
+var _ store.Repos = (*invitationTestRepos)(nil)
+
+func (r *invitationTestRepos) ListInvitations(ctx context.Context, filters store.InvitationFilters) ([]store.Invitation, error) {
+	return r.inv.ListInvitations(ctx, filters)
+}
+func (r *invitationTestRepos) GetInvitation(ctx context.Context, id uuid.UUID) (*store.Invitation, error) {
+	return r.inv.GetInvitation(ctx, id)
+}
+func (r *invitationTestRepos) CreateInvitation(ctx context.Context, params store.CreateInvitationParams) (*store.Invitation, error) {
+	return r.inv.CreateInvitation(ctx, params)
+}
+func (r *invitationTestRepos) RevokeInvitation(ctx context.Context, id uuid.UUID) (*store.Invitation, error) {
+	return r.inv.RevokeInvitation(ctx, id)
+}
+func (r *invitationTestRepos) ConsumeInvitation(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*store.Invitation, error) {
+	return r.inv.ConsumeInvitation(ctx, id, userID)
+}
+
 func invitationHandler(repo *mockInvitationRepo, emailClient email.Client) *InvitationHandler {
 	if emailClient == nil {
 		emailClient = email.NoOpClient{}
 	}
-	return NewInvitationHandler(repo, nil, emailClient, "http://localhost:3000/invite/accept")
+	return NewInvitationHandler(emailClient, "http://localhost:3000/invite/accept")
 }
 
-func withNsCtx(req *http.Request, nsID string, user *auth.User) *http.Request {
+func invitationRepos(repo *mockInvitationRepo) *invitationTestRepos {
+	return &invitationTestRepos{inv: repo}
+}
+
+func withNsCtx(req *http.Request, nsID string, user *auth.User, repos ...store.Repos) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", nsID)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, user)
+	if len(repos) > 0 {
+		ctx = store.WithRepos(ctx, repos[0])
+	}
 	return req.WithContext(ctx)
 }
 
-func withInvCtx(req *http.Request, nsID, invID string, user *auth.User) *http.Request {
+func withInvCtx(req *http.Request, nsID, invID string, user *auth.User, repos ...store.Repos) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", nsID)
 	rctx.URLParams.Add("invID", invID)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, user)
+	if len(repos) > 0 {
+		ctx = store.WithRepos(ctx, repos[0])
+	}
 	return req.WithContext(ctx)
 }
 
-func withSystemInvCtx(req *http.Request, invID string, user *auth.User) *http.Request {
+func withSystemInvCtx(req *http.Request, invID string, user *auth.User, repos ...store.Repos) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("invID", invID)
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = auth.WithUser(ctx, user)
+	if len(repos) > 0 {
+		ctx = store.WithRepos(ctx, repos[0])
+	}
 	return req.WithContext(ctx)
 }
 
@@ -123,7 +160,7 @@ func TestListInvitations_Success(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"))
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.List(rec, req)
@@ -150,7 +187,7 @@ func TestListInvitations_Empty(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"))
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.List(rec, req)
@@ -192,7 +229,7 @@ func TestListInvitations_InternalError(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"))
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.List(rec, req)
@@ -227,7 +264,7 @@ func TestCreateInvitation_Success(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"))
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
@@ -301,7 +338,7 @@ func TestCreateInvitation_InternalError(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"))
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
@@ -324,7 +361,7 @@ func TestGetInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+inv.ID.String(), nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Get(rec, req)
@@ -344,7 +381,7 @@ func TestGetInvitation_NotFound(t *testing.T) {
 	h := invitationHandler(repo, nil)
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
-	req = withInvCtx(req, "test-ns", id.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", id.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Get(rec, req)
@@ -364,7 +401,7 @@ func TestGetInvitation_WrongNamespace(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+inv.ID.String(), nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Get(rec, req)
@@ -411,7 +448,7 @@ func TestRevokeInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+inv.ID.String(), nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Revoke(rec, req)
@@ -436,7 +473,7 @@ func TestRevokeInvitation_WrongNamespace(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+inv.ID.String(), nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Revoke(rec, req)
@@ -459,7 +496,7 @@ func TestRevokeInvitation_NotFound(t *testing.T) {
 	h := invitationHandler(repo, nil)
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
-	req = withInvCtx(req, "test-ns", id.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", id.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Revoke(rec, req)
@@ -480,7 +517,7 @@ func TestResendInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, emailCli)
 	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Resend(rec, req)
@@ -507,7 +544,7 @@ func TestResendInvitation_NotPending(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Resend(rec, req)
@@ -528,7 +565,7 @@ func TestResendInvitation_EmailError(t *testing.T) {
 
 	h := invitationHandler(repo, emailCli)
 	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
-	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"))
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.Resend(rec, req)
@@ -598,6 +635,7 @@ func TestSystemListInvitations_Success(t *testing.T) {
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -628,6 +666,7 @@ func TestSystemCreateInvitation_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -667,7 +706,7 @@ func TestSystemGetInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+inv.ID.String(), nil)
-	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin())
+	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin(), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.SystemGet(rec, req)
@@ -687,7 +726,7 @@ func TestSystemGetInvitation_NotFound(t *testing.T) {
 	h := invitationHandler(repo, nil)
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
-	req = withSystemInvCtx(req, id.String(), sysAdmin())
+	req = withSystemInvCtx(req, id.String(), sysAdmin(), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.SystemGet(rec, req)
@@ -711,7 +750,7 @@ func TestSystemRevokeInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+inv.ID.String(), nil)
-	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin())
+	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin(), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.SystemRevoke(rec, req)
@@ -732,7 +771,7 @@ func TestSystemResendInvitation_Success(t *testing.T) {
 
 	h := invitationHandler(repo, emailCli)
 	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
-	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin())
+	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin(), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.SystemResend(rec, req)
@@ -759,7 +798,7 @@ func TestSystemResendInvitation_NotPending(t *testing.T) {
 
 	h := invitationHandler(repo, nil)
 	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
-	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin())
+	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin(), invitationRepos(repo))
 	rec := httptest.NewRecorder()
 
 	h.SystemResend(rec, req)

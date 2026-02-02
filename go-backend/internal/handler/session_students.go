@@ -15,20 +15,19 @@ import (
 
 // SessionStudentHandler handles session student participation routes.
 type SessionStudentHandler struct {
-	sessionStudents store.SessionStudentRepository
-	publisher       realtime.SessionPublisher
-	revBuffer       *revision.RevisionBuffer
-	logger          *slog.Logger
+	publisher realtime.SessionPublisher
+	revBuffer *revision.RevisionBuffer
+	logger    *slog.Logger
 }
 
-// NewSessionStudentHandler creates a new SessionStudentHandler with the given repository.
-func NewSessionStudentHandler(sessionStudents store.SessionStudentRepository, publisher realtime.SessionPublisher, logger *slog.Logger) *SessionStudentHandler {
-	return &SessionStudentHandler{sessionStudents: sessionStudents, publisher: publisher, logger: logger}
+// NewSessionStudentHandler creates a new SessionStudentHandler.
+func NewSessionStudentHandler(publisher realtime.SessionPublisher, logger *slog.Logger) *SessionStudentHandler {
+	return &SessionStudentHandler{publisher: publisher, logger: logger}
 }
 
 // NewSessionStudentHandlerWithBuffer creates a new SessionStudentHandler with a revision buffer.
-func NewSessionStudentHandlerWithBuffer(sessionStudents store.SessionStudentRepository, publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionStudentHandler {
-	return &SessionStudentHandler{sessionStudents: sessionStudents, publisher: publisher, revBuffer: revBuffer, logger: logger}
+func NewSessionStudentHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionStudentHandler {
+	return &SessionStudentHandler{publisher: publisher, revBuffer: revBuffer, logger: logger}
 }
 
 // joinSessionRequest is the request body for POST /sessions/{id}/join.
@@ -54,7 +53,8 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
-	student, err := h.sessionStudents.JoinSession(r.Context(), store.JoinSessionParams{
+	repos := store.ReposFromContext(r.Context())
+	student, err := repos.JoinSession(r.Context(), store.JoinSessionParams{
 		SessionID: sessionID,
 		UserID:    authUser.ID,
 		Name:      req.Name,
@@ -94,7 +94,8 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return // BindJSON already wrote the error response
 	}
 
-	student, err := h.sessionStudents.UpdateCode(r.Context(), sessionID, authUser.ID, req.Code)
+	repos := store.ReposFromContext(r.Context())
+	student, err := repos.UpdateCode(r.Context(), sessionID, authUser.ID, req.Code)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session student not found")
@@ -129,7 +130,8 @@ func (h *SessionStudentHandler) ListStudents(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	students, err := h.sessionStudents.ListSessionStudents(r.Context(), sessionID)
+	repos := store.ReposFromContext(r.Context())
+	students, err := repos.ListSessionStudents(r.Context(), sessionID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return

@@ -15,9 +15,46 @@ import (
 	"github.com/jdelfino/eval/internal/store"
 )
 
-func newAuthHandlerWithDeps(users store.UserRepository, invitations store.InvitationRepository, memberships store.MembershipRepository, classes store.ClassRepository) *AuthHandler {
-	return NewAuthHandler(users, invitations, memberships, classes)
+// mockAuthRepos is a composite type that embeds stubRepos and delegates to specific mock repos.
+type mockAuthRepos struct {
+	stubRepos
+	userRepo       *mockUserRepo
+	invRepo        *mockInvitationRepo
+	membershipRepo *mockMembershipRepo
+	classRepo      *mockClassRepo
 }
+
+// Delegate to the appropriate mock repo for user methods.
+func (m *mockAuthRepos) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
+	return m.userRepo.GetUserByID(ctx, id)
+}
+func (m *mockAuthRepos) CreateUser(ctx context.Context, params store.CreateUserParams) (*store.User, error) {
+	return m.userRepo.CreateUser(ctx, params)
+}
+
+// Delegate to the appropriate mock repo for invitation methods.
+func (m *mockAuthRepos) GetInvitation(ctx context.Context, id uuid.UUID) (*store.Invitation, error) {
+	return m.invRepo.GetInvitation(ctx, id)
+}
+func (m *mockAuthRepos) ConsumeInvitation(ctx context.Context, id uuid.UUID, userID uuid.UUID) (*store.Invitation, error) {
+	return m.invRepo.ConsumeInvitation(ctx, id, userID)
+}
+
+// Delegate to the appropriate mock repo for membership methods.
+func (m *mockAuthRepos) CreateMembership(ctx context.Context, params store.CreateMembershipParams) (*store.SectionMembership, error) {
+	return m.membershipRepo.CreateMembership(ctx, params)
+}
+func (m *mockAuthRepos) GetSectionByJoinCode(ctx context.Context, code string) (*store.Section, error) {
+	return m.membershipRepo.GetSectionByJoinCode(ctx, code)
+}
+
+// Delegate to the appropriate mock repo for class methods.
+func (m *mockAuthRepos) GetClass(ctx context.Context, id uuid.UUID) (*store.Class, error) {
+	return m.classRepo.GetClass(ctx, id)
+}
+
+// Verify that mockAuthRepos implements store.Repos
+var _ store.Repos = (*mockAuthRepos)(nil)
 
 // --- GET /auth/accept-invite ---
 
@@ -32,8 +69,16 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token="+inv.ID.String(), nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.GetAcceptInvite(rec, req)
@@ -52,8 +97,16 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 }
 
 func TestAcceptInviteGet_MissingToken(t *testing.T) {
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/accept-invite", nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.GetAcceptInvite(rec, req)
@@ -64,8 +117,16 @@ func TestAcceptInviteGet_MissingToken(t *testing.T) {
 }
 
 func TestAcceptInviteGet_InvalidUUID(t *testing.T) {
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, &mockInvitationRepo{}, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token=not-a-uuid", nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.GetAcceptInvite(rec, req)
@@ -81,8 +142,16 @@ func TestAcceptInviteGet_NotFound(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token="+uuid.New().String(), nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.GetAcceptInvite(rec, req)
@@ -100,8 +169,16 @@ func TestAcceptInviteGet_NotPending(t *testing.T) {
 			return inv, nil
 		},
 	}
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token="+inv.ID.String(), nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.GetAcceptInvite(rec, req)
@@ -156,7 +233,13 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(userRepo, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 
 	body, _ := json.Marshal(map[string]string{
 		"token":        inv.ID.String(),
@@ -165,6 +248,8 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.PostAcceptInvite(rec, req)
@@ -191,13 +276,21 @@ func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"token":       inv.ID.String(),
 		"external_id": "firebase-uid-123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.PostAcceptInvite(rec, req)
@@ -214,13 +307,21 @@ func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(&mockUserRepo{}, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &mockUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"token":       uuid.New().String(),
 		"external_id": "firebase-uid-123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.PostAcceptInvite(rec, req)
@@ -243,13 +344,21 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 		},
 	}
 
-	h := newAuthHandlerWithDeps(userRepo, invRepo, &mockMembershipRepo{}, &mockClassRepo{})
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
 	body, _ := json.Marshal(map[string]string{
 		"token":       inv.ID.String(),
 		"external_id": "firebase-uid-123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.PostAcceptInvite(rec, req)
