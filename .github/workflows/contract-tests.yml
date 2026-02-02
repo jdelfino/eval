@@ -1,0 +1,127 @@
+name: Contract Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'go-backend/**'
+      - 'frontend/**'
+      - 'migrations/**'
+      - 'scripts/seed.sql'
+      - 'scripts/contract-test-seed.sql'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go-backend/**'
+      - 'frontend/**'
+      - 'migrations/**'
+      - 'scripts/seed.sql'
+      - 'scripts/contract-test-seed.sql'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '20'
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: eval
+          POSTGRES_PASSWORD: eval_local_password
+          POSTGRES_DB: eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eval"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go-backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run migrations
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: eval
+          PGPASSWORD: eval_local_password
+          PGDATABASE: eval
+        run: |
+          for f in migrations/*.up.sql; do
+            echo "Applying $f..."
+            psql -f "$f"
+          done
+
+      - name: Seed contract test data
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: eval
+          PGPASSWORD: eval_local_password
+          PGDATABASE: eval
+        run: psql -f scripts/contract-test-seed.sql
+
+      - name: Build Go server
+        run: go build -o server ./cmd/server
+        working-directory: go-backend
+
+      - name: Start Go server
+        env:
+          AUTH_MODE: test
+          DATABASE_URL: postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable
+        run: |
+          PORT=$(shuf -i 10000-60000 -n 1)
+          echo "PORT=$PORT" >> "$GITHUB_ENV"
+          PORT=$PORT ./go-backend/server &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "http://localhost:$PORT/healthz" > /dev/null 2>&1; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"
+          exit 1
+
+      - name: Run contract tests
+        env:
+          CONTRACT_NS: contract-${{ github.run_id }}-${{ github.run_attempt }}
+          API_BASE_URL: http://localhost:${{ env.PORT }}
+        run: npx jest --selectProjects contract --no-coverage
+        working-directory: frontend
+
+      - name: Cleanup namespace
+        if: always()
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: eval
+          PGPASSWORD: eval_local_password
+          PGDATABASE: eval
+        run: |
+          psql -c "DELETE FROM namespaces WHERE slug = 'contract-${{ github.run_id }}-${{ github.run_attempt }}';"
