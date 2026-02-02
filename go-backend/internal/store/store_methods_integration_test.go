@@ -1189,17 +1189,17 @@ func TestIntegration_UpsertUser_Update(t *testing.T) {
 
 	s := New(db.pool)
 
-	// Insert first
+	// Insert first as system-admin (no namespace required)
 	original, err := s.UpsertUser(ctx, CreateUserParams{
 		ExternalID: "firebase-uid-upsert",
 		Email:      "old@example.com",
-		Role:       "student",
+		Role:       "system-admin",
 	})
 	if err != nil {
 		t.Fatalf("UpsertUser first call: %v", err)
 	}
 
-	// Upsert with same external_id, different fields
+	// Upsert with same external_id, different email
 	updated, err := s.UpsertUser(ctx, CreateUserParams{
 		ExternalID: "firebase-uid-upsert",
 		Email:      "new@example.com",
