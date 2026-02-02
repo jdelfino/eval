@@ -46,10 +46,10 @@ func TestIntegration_CreateSession(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-session"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-create-session"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -114,10 +114,10 @@ func TestIntegration_GetSession(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-session"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-get-session"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -178,10 +178,10 @@ func TestIntegration_ListSessions(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-sessions"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-list-sessions"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -284,10 +284,10 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-session"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-update-session"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	studentID := uuid.New()
@@ -427,10 +427,10 @@ func TestIntegration_JoinSession(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-join-session"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-join-session"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	studentID := uuid.New()
@@ -552,10 +552,10 @@ func TestIntegration_UpdateCode(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-code"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-update-code"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	studentID := uuid.New()
@@ -622,10 +622,10 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-ss"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-list-ss"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	s1 := uuid.New()
@@ -695,10 +695,10 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-ss"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-get-ss"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	studentID := uuid.New()
@@ -755,10 +755,10 @@ func TestIntegration_CreateRevision(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-rev"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-create-rev"
+
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -812,10 +812,10 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-rev"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-list-rev"
+
 	user1 := uuid.New()
 	user2 := uuid.New()
 	db.createUser(ctx, t, user1, "u1@test.com", "instructor", nsID)
@@ -911,10 +911,10 @@ func TestIntegration_CreateProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-problem"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-create-problem"
+
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -972,10 +972,10 @@ func TestIntegration_GetProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-problem"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-get-problem"
+
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
@@ -1027,10 +1027,10 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-problem"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-update-problem"
+
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
@@ -1129,10 +1129,10 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-delete-problem"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-delete-problem"
+
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
@@ -1185,10 +1185,10 @@ func TestIntegration_ListProblems(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-problems"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-list-problems"
+
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -1261,10 +1261,10 @@ func TestIntegration_GetUserByID(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-user-id"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-get-user-id"
+
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "byid@test.com", "student", nsID)
 
@@ -1315,12 +1315,12 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-user-ext"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-get-user-ext"
+
 	userID := uuid.New()
-	extID := "firebase-uid-123"
+	extID := "firebase-uid-" + uuid.New().String()[:8]
 	// Insert user with external_id
 	_, err := db.pool.Exec(ctx,
 		`INSERT INTO users (id, external_id, email, role, namespace_id) VALUES ($1, $2, $3, $4, $5)`,
@@ -1376,10 +1376,10 @@ func TestIntegration_UpdateUser(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-user"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// was "test-ns-update-user"
+
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "update@test.com", "student", nsID)
 
