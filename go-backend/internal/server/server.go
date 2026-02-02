@@ -106,8 +106,14 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 		r.Use(middleware.Timeout(30 * time.Second))
 		// Auth middleware - validates JWT and populates user context
 		if userStore != nil {
-			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
-			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+			var validator auth.TokenValidator
+			if cfg.AuthMode == "test" {
+				logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
+				validator = auth.NewTestValidator()
+			} else {
+				jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
+				validator = auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+			}
 			adapter := NewUserLookupAdapter(userStore)
 			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
 			r.Use(authenticator.Authenticate)
