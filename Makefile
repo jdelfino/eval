@@ -42,9 +42,9 @@ lint-executor:
 	cd executor && golangci-lint run ./...
 
 test-integration-executor:
+	./scripts/ensure-test-postgres.sh
 	docker-compose up -d executor --wait
 	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
-	docker-compose down executor
 
 docker-build-executor:
 	docker build -t executor:local executor/
