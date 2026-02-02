@@ -81,5 +81,18 @@ module.exports = {
         }]
       },
     },
+    {
+      displayName: 'contract',
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/src/__tests__/contract/**/*.integration.test.ts'],
+      roots: ['<rootDir>/src'],
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      transform: {
+        '^.+\\.tsx?$': ['ts-jest', {
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }
+        }]
+      },
+    },
   ],
 };
