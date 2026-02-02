@@ -46,4 +46,4 @@ curl -sf "http://localhost:${API_PORT}/healthz" >/dev/null || { echo "Server fai
 # --- 4. Run contract tests ---
 cd frontend
 API_BASE_URL="http://localhost:${API_PORT}" CONTRACT_NS="$NS" \
-  npx jest --selectProjects contract --no-coverage
+  npx jest --selectProjects contract --no-coverage --runInBand

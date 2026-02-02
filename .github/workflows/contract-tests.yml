@@ -89,12 +89,19 @@ jobs:
       - name: Start Go server
         env:
           AUTH_MODE: test
-          DATABASE_URL: postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable
+          DATABASE_HOST: localhost
+          DATABASE_PORT: '5432'
+          DATABASE_NAME: eval
+          DATABASE_USER: eval
+          DATABASE_PASSWORD: eval_local_password
+          CENTRIFUGO_TOKEN_SECRET: test-contract-secret
+          GCP_PROJECT_ID: test-project
         run: |
           PORT=$(shuf -i 10000-60000 -n 1)
           echo "PORT=$PORT" >> "$GITHUB_ENV"
-          PORT=$PORT ./go-backend/server &
+          PORT=$PORT ./server &
           echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+        working-directory: go-backend
 
       - name: Wait for server
         run: |
@@ -112,7 +119,7 @@ jobs:
         env:
           CONTRACT_NS: contract-${{ github.run_id }}-${{ github.run_attempt }}
           API_BASE_URL: http://localhost:${{ env.PORT }}
-        run: npx jest --selectProjects contract --no-coverage
+        run: npx jest --selectProjects contract --no-coverage --runInBand
         working-directory: frontend
 
       - name: Cleanup namespace
@@ -124,4 +131,4 @@ jobs:
           PGPASSWORD: eval_local_password
           PGDATABASE: eval
         run: |
-          psql -c "DELETE FROM namespaces WHERE slug = 'contract-${{ github.run_id }}-${{ github.run_attempt }}';"
+          psql -c "DELETE FROM namespaces WHERE id = 'contract-${{ github.run_id }}-${{ github.run_attempt }}';"
