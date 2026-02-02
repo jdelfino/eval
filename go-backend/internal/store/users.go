@@ -289,5 +289,43 @@ func (s *Store) CreateUser(ctx context.Context, params CreateUserParams) (*User,
 	return &user, nil
 }
 
+// UpsertUser inserts a user or updates them on external_id conflict.
+// Used by the bootstrap CLI to idempotently create admin users.
+func (s *Store) UpsertUser(ctx context.Context, params CreateUserParams) (*User, error) {
+	const query = `
+		INSERT INTO users (external_id, email, role, namespace_id, display_name)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (external_id) DO UPDATE
+		SET email = EXCLUDED.email,
+		    role = EXCLUDED.role,
+		    namespace_id = EXCLUDED.namespace_id,
+		    display_name = EXCLUDED.display_name,
+		    updated_at = now()
+		RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`
+
+	var user User
+	err := s.q.QueryRow(ctx, query,
+		params.ExternalID,
+		params.Email,
+		params.Role,
+		params.NamespaceID,
+		params.DisplayName,
+	).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.Email,
+		&user.Role,
+		&user.NamespaceID,
+		&user.DisplayName,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // Compile-time check that Store implements UserRepository.
 var _ UserRepository = (*Store)(nil)

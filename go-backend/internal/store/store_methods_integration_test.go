@@ -1146,6 +1146,96 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 	})
 }
 
+// =============================================================================
+// UpsertUser Tests
+// =============================================================================
+
+func TestIntegration_UpsertUser_Insert(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+	db.cleanup(ctx, t)
+
+	s := New(db.pool)
+
+	user, err := s.UpsertUser(ctx, CreateUserParams{
+		ExternalID: "firebase-uid-bootstrap",
+		Email:      "admin@example.com",
+		Role:       "system-admin",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser insert: %v", err)
+	}
+
+	if user.Email != "admin@example.com" {
+		t.Errorf("email = %q, want %q", user.Email, "admin@example.com")
+	}
+	if user.Role != "system-admin" {
+		t.Errorf("role = %q, want %q", user.Role, "system-admin")
+	}
+	if user.NamespaceID != nil {
+		t.Errorf("namespace_id = %v, want nil", user.NamespaceID)
+	}
+	if user.ExternalID == nil || *user.ExternalID != "firebase-uid-bootstrap" {
+		t.Errorf("external_id = %v, want %q", user.ExternalID, "firebase-uid-bootstrap")
+	}
+}
+
+func TestIntegration_UpsertUser_Update(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+	db.cleanup(ctx, t)
+
+	s := New(db.pool)
+
+	// Insert first as system-admin (no namespace required)
+	original, err := s.UpsertUser(ctx, CreateUserParams{
+		ExternalID: "firebase-uid-upsert",
+		Email:      "old@example.com",
+		Role:       "system-admin",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser first call: %v", err)
+	}
+
+	// Upsert with same external_id, different email
+	updated, err := s.UpsertUser(ctx, CreateUserParams{
+		ExternalID: "firebase-uid-upsert",
+		Email:      "new@example.com",
+		Role:       "system-admin",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser second call: %v", err)
+	}
+
+	// Same row (same ID)
+	if updated.ID != original.ID {
+		t.Errorf("expected same ID %s, got %s", original.ID, updated.ID)
+	}
+	// Fields updated
+	if updated.Email != "new@example.com" {
+		t.Errorf("email = %q, want %q", updated.Email, "new@example.com")
+	}
+	if updated.Role != "system-admin" {
+		t.Errorf("role = %q, want %q", updated.Role, "system-admin")
+	}
+	// updated_at should be >= original
+	if updated.UpdatedAt.Before(original.CreatedAt) {
+		t.Error("updated_at should be >= created_at")
+	}
+
+	// Verify only one row exists
+	var count int
+	err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE external_id = $1", "firebase-uid-upsert").Scan(&count)
+	if err != nil {
+		t.Fatalf("count query: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 row, got %d", count)
+	}
+}
+
 // Ensure json import is used (for Problem.TestCases scanning).
 var _ = json.RawMessage{}
 var _ = pgx.ErrNoRows

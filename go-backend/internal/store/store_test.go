@@ -12,9 +12,18 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestStore_QuerierAccess(t *testing.T) {
+	// Verify the querier is stored correctly.
+	store := New(nil)
+	if store.q != nil {
+		t.Error("Store did not store the querier reference correctly")
+	}
+}
+
 func TestStore_InterfaceCompliance(t *testing.T) {
+	var _ UserRepository = (*Store)(nil)
 	var _ Repos = (*Store)(nil)
-	t.Log("Store implements Repos interface")
+	t.Log("Store implements required interfaces")
 }
 
 func TestReposFromContext_Panics(t *testing.T) {

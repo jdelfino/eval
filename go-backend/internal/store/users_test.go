@@ -162,6 +162,20 @@ func TestGetUserByID_Success(t *testing.T) {
 	}
 }
 
+func TestGetUserByID_ViaStore(t *testing.T) {
+	mock := &mockQuerier{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{err: pgx.ErrNoRows}
+		},
+	}
+	s := New(mock)
+	ctx := context.Background()
+
+	_, err := s.GetUserByID(ctx, uuid.New())
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetUserByID() error = %v, want ErrNotFound", err)
+	}
+}
 
 func TestGetUserByID_SystemAdmin(t *testing.T) {
 	// System admin has nil namespace_id
@@ -292,6 +306,20 @@ func TestGetUserByExternalID_NotFound(t *testing.T) {
 	}
 }
 
+func TestGetUserByExternalID_ViaStore(t *testing.T) {
+	mock := &mockQuerier{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{err: pgx.ErrNoRows}
+		},
+	}
+	s := New(mock)
+	ctx := context.Background()
+
+	_, err := s.GetUserByExternalID(ctx, "some-uid")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetUserByExternalID() error = %v, want ErrNotFound", err)
+	}
+}
 
 func TestGetUserByID_DatabaseError(t *testing.T) {
 	dbErr := errors.New("connection refused")
@@ -307,5 +335,49 @@ func TestGetUserByID_DatabaseError(t *testing.T) {
 	_, err := getUserByIDWithConn(ctx, mock, userID)
 	if err != dbErr {
 		t.Errorf("GetUserByID() error = %v, want %v", err, dbErr)
+	}
+}
+
+func TestUpsertUser_Success(t *testing.T) {
+	now := time.Now().Truncate(time.Microsecond)
+	userID := uuid.New()
+	externalID := "firebase-uid-admin"
+
+	mock := &mockQuerier{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{
+				values: []any{
+					userID,
+					externalID,
+					"admin@example.com",
+					"system-admin",
+					nil,
+					nil,
+					now,
+					now,
+				},
+			}
+		},
+	}
+
+	s := New(mock)
+	ctx := context.Background()
+
+	user, err := s.UpsertUser(ctx, CreateUserParams{
+		ExternalID: externalID,
+		Email:      "admin@example.com",
+		Role:       "system-admin",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser() error = %v", err)
+	}
+	if user.ID != userID {
+		t.Errorf("user.ID = %v, want %v", user.ID, userID)
+	}
+	if user.Role != "system-admin" {
+		t.Errorf("user.Role = %q, want %q", user.Role, "system-admin")
+	}
+	if user.NamespaceID != nil {
+		t.Errorf("user.NamespaceID = %v, want nil", user.NamespaceID)
 	}
 }
