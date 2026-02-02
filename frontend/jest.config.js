@@ -62,6 +62,10 @@ module.exports = {
         '<rootDir>/src/**/__tests__/**/*.integration.test.ts',
         '<rootDir>/src/**/__tests__/**/*.integration.test.tsx',
       ],
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '<rootDir>/src/__tests__/contract/',
+      ],
       roots: ['<rootDir>/src'],
       setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
       moduleNameMapper: {

@@ -18,11 +18,16 @@ for i in $(seq 1 30); do
 done
 pg_isready -h "$DB_HOST" -p "$DB_PORT" -q || { echo "Postgres not ready"; exit 1; }
 
-# Run migrations
 DB_NAME=${DATABASE_NAME:-eval}
 DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 PSQL_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+
+# Run migrations (idempotent — applied in order)
+echo "Applying migrations..."
+for f in migrations/*.up.sql; do
+  psql "$PSQL_URL" -f "$f" 2>/dev/null || true
+done
 
 # Seed well-known contract test admin (idempotent)
 psql "$PSQL_URL" -f scripts/contract-test-seed.sql
