@@ -39,8 +39,12 @@ type User struct {
 // contextKey is an unexported type for context keys to prevent collisions.
 type contextKey string
 
-// userKey is the context key for storing/retrieving the authenticated user.
-const userKey contextKey = "auth.user"
+const (
+	// userKey is the context key for storing/retrieving the authenticated user.
+	userKey contextKey = "auth.user"
+	// claimsKey is the context key for storing/retrieving JWT claims.
+	claimsKey contextKey = "auth.claims"
+)
 
 // UserFromContext retrieves the authenticated user from the context.
 // Returns nil if no user is present in the context.
@@ -55,4 +59,19 @@ func UserFromContext(ctx context.Context) *User {
 // WithUser returns a new context with the given user attached.
 func WithUser(ctx context.Context, user *User) context.Context {
 	return context.WithValue(ctx, userKey, user)
+}
+
+// ClaimsFromContext retrieves the JWT claims from the context.
+// Returns nil if no claims are present (unauthenticated request).
+func ClaimsFromContext(ctx context.Context) *Claims {
+	claims, ok := ctx.Value(claimsKey).(*Claims)
+	if !ok {
+		return nil
+	}
+	return claims
+}
+
+// WithClaims returns a new context with the given claims attached.
+func WithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, claims)
 }

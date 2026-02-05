@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 )
 
@@ -185,6 +186,9 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 			if params.Role != "student" {
 				t.Fatalf("unexpected role: %s", params.Role)
 			}
+			if params.ExternalID != "firebase-uid-456" {
+				t.Fatalf("unexpected external_id: %s", params.ExternalID)
+			}
 			return createdUser, nil
 		},
 	}
@@ -198,15 +202,17 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 	}
 	body, _ := json.Marshal(map[string]string{
 		"join_code":    section.JoinCode,
-		"external_id":  "firebase-uid-456",
-		"email":        "student@example.com",
 		"display_name": "Student User",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	// Add claims to context (simulating JWT validation middleware)
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusCreated {
@@ -237,15 +243,16 @@ func TestRegisterStudentPost_InvalidJoinCode(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"join_code":   "INVALID",
-		"external_id": "firebase-uid-456",
-		"email":       "student@example.com",
+		"join_code": "INVALID",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusNotFound {
@@ -270,15 +277,16 @@ func TestRegisterStudentPost_InactiveSection(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"join_code":   section.JoinCode,
-		"external_id": "firebase-uid-456",
-		"email":       "student@example.com",
+		"join_code": section.JoinCode,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusGone {
@@ -307,15 +315,16 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"join_code":   section.JoinCode,
-		"external_id": "firebase-uid-456",
-		"email":       "student@example.com",
+		"join_code": section.JoinCode,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	req = req.WithContext(store.WithRepos(req.Context(), authRepos))
 	h.PostRegisterStudent(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {

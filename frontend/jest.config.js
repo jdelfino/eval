@@ -90,8 +90,11 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/src/__tests__/contract/**/*.integration.test.ts'],
+      // Exclude setup test since globalSetup handles it
+      testPathIgnorePatterns: ['/node_modules/', '000-setup\\.integration\\.test\\.ts$'],
       roots: ['<rootDir>/src'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      globalSetup: '<rootDir>/src/__tests__/contract/globalSetup.ts',
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
           tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }

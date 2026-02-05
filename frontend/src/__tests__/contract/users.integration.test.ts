@@ -3,7 +3,7 @@
  * Validates the User[] response shape matches frontend type definitions.
  * Requires system-admin role.
  */
-import { contractFetch } from './helpers';
+import { contractFetch, ADMIN_TOKEN } from './helpers';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -12,7 +12,7 @@ import {
 
 describe('GET /api/v1/system/users', () => {
   it('returns an array of User objects with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/system/users');
+    const res = await contractFetch('/api/v1/system/users', ADMIN_TOKEN);
     expect(res.status).toBe(200);
 
     const users = await res.json();

@@ -97,6 +97,30 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 	}
 }
 
+// NoRLSStoreMiddleware provides database access without RLS context.
+// Use this for registration routes where users don't exist yet.
+// Security is enforced via invitation tokens / join codes, not RLS.
+func NoRLSStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			conn, err := pool.Acquire(ctx)
+			if err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			defer conn.Release()
+
+			s := store.New(conn)
+			ctx = store.WithRepos(ctx, s)
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // setRLSVariables sets the PostgreSQL session variables for RLS policies.
 func setRLSVariables(ctx context.Context, conn store.Querier, user *auth.User) error {
 	// Set user ID
