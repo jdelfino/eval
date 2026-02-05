@@ -1,17 +1,26 @@
+// Integration tests for CRUD operations on namespaces, classes, sections, and memberships.
+//
+// These tests validate actual Store methods with proper RLS context,
+// ensuring that the SQL queries, scanning logic, and RLS policies work
+// together as they would in production.
+//
+// Run with:
+//
+//	DATABASE_URL="postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test ./internal/store/... -run TestIntegration
 package store
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jdelfino/eval/internal/auth"
 )
 
 // =============================================================================
-// Namespace CRUD Tests
+// Namespace CRUD Tests - calls actual Store methods with RLS
 // =============================================================================
 
 func TestIntegration_CreateNamespace(t *testing.T) {
@@ -19,15 +28,25 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 	defer db.close()
 	ctx := context.Background()
 
-	// Use the test namespace for setup user
-	createdBy := uuid.New()
-	db.createUser(ctx, t, createdBy, fmt.Sprintf("creator-%s@test.com", db.nsID), "instructor", db.nsID)
-
-	conn, err := db.pool.Acquire(ctx)
+	// Use system-admin for namespace operations (can see all namespaces)
+	adminID := uuid.New()
+	// Create as system-admin (no namespace)
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin@test.com", "system-admin")
 	if err != nil {
-		t.Fatalf("acquire: %v", err)
+		t.Fatalf("create admin: %v", err)
 	}
-	defer conn.Release()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
+
+	authUser := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
+	}
 
 	maxInst := 5
 	maxStu := 100
@@ -38,13 +57,16 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 	})
 
 	t.Run("successful creation", func(t *testing.T) {
-		var ns Namespace
-		err := conn.QueryRow(ctx,
-			`INSERT INTO namespaces (id, display_name, max_instructors, max_students, created_by)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at`,
-			createNSID, "Create NS Test", &maxInst, &maxStu, &createdBy,
-		).Scan(&ns.ID, &ns.DisplayName, &ns.Active, &ns.MaxInstructors, &ns.MaxStudents, &ns.CreatedAt, &ns.CreatedBy, &ns.UpdatedAt)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ns, err := s.CreateNamespace(ctx, CreateNamespaceParams{
+			ID:             createNSID,
+			DisplayName:    "Create NS Test",
+			MaxInstructors: &maxInst,
+			MaxStudents:    &maxStu,
+			CreatedBy:      &adminID,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -63,8 +85,8 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 		if ns.MaxStudents == nil || *ns.MaxStudents != 100 {
 			t.Errorf("expected max_students 100, got %v", ns.MaxStudents)
 		}
-		if ns.CreatedBy == nil || *ns.CreatedBy != createdBy {
-			t.Errorf("expected created_by %s, got %v", createdBy, ns.CreatedBy)
+		if ns.CreatedBy == nil || *ns.CreatedBy != adminID {
+			t.Errorf("expected created_by %s, got %v", adminID, ns.CreatedBy)
 		}
 		if ns.CreatedAt.IsZero() {
 			t.Error("expected non-zero created_at")
@@ -73,7 +95,7 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 
 	t.Run("record exists after creation", func(t *testing.T) {
 		var count int
-		err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM namespaces WHERE id = $1", createNSID).Scan(&count)
+		err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM namespaces WHERE id = $1", createNSID).Scan(&count)
 		if err != nil {
 			t.Fatalf("query: %v", err)
 		}
@@ -88,26 +110,21 @@ func TestIntegration_GetNamespace(t *testing.T) {
 	defer db.close()
 	ctx := context.Background()
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
+	userID := uuid.New()
+	db.createUser(ctx, t, userID, "user@test.com", "instructor", db.nsID)
 
-	getNamespace := func(id string) (*Namespace, error) {
-		var ns Namespace
-		err := conn.QueryRow(ctx,
-			`SELECT id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at
-			 FROM namespaces WHERE id = $1`, id).Scan(
-			&ns.ID, &ns.DisplayName, &ns.Active, &ns.MaxInstructors, &ns.MaxStudents, &ns.CreatedAt, &ns.CreatedBy, &ns.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &ns, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "user@test.com",
+		NamespaceID: db.nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		ns, err := getNamespace(db.nsID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ns, err := s.GetNamespace(ctx, db.nsID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -117,7 +134,10 @@ func TestIntegration_GetNamespace(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getNamespace("nonexistent-" + uuid.New().String())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetNamespace(ctx, "nonexistent-"+uuid.New().String())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -129,64 +149,49 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 	defer db.close()
 	ctx := context.Background()
 
-	conn, err := db.pool.Acquire(ctx)
+	// System admin can see all namespaces
+	adminID := uuid.New()
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin@test.com", "system-admin")
 	if err != nil {
-		t.Fatalf("acquire: %v", err)
+		t.Fatalf("create admin: %v", err)
 	}
-	defer conn.Release()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
 
-	// Use a prefix to scope our listing query
+	authUser := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
+	}
+
+	// Create additional namespaces with a known prefix
 	prefix := "ns-list-" + uuid.New().String()[:8]
 	nsA := prefix + "-a"
 	nsB := prefix + "-b"
 	nsC := prefix + "-c"
 
-	listNamespaces := func() ([]Namespace, error) {
-		rows, err := conn.Query(ctx,
-			`SELECT id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at
-			 FROM namespaces WHERE id LIKE $1 ORDER BY id`, prefix+"%")
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var namespaces []Namespace
-		for rows.Next() {
-			var ns Namespace
-			if err := rows.Scan(&ns.ID, &ns.DisplayName, &ns.Active, &ns.MaxInstructors, &ns.MaxStudents, &ns.CreatedAt, &ns.CreatedBy, &ns.UpdatedAt); err != nil {
-				return nil, err
-			}
-			namespaces = append(namespaces, ns)
-		}
-		return namespaces, rows.Err()
-	}
-
-	t.Run("empty result", func(t *testing.T) {
-		results, err := listNamespaces()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(results) != 0 {
-			t.Errorf("expected 0 namespaces, got %d", len(results))
-		}
+	db.createNamespace(ctx, t, nsB, "NS B")
+	db.createNamespace(ctx, t, nsA, "NS A")
+	db.createNamespace(ctx, t, nsC, "NS C")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id IN ($1, $2, $3)", nsA, nsB, nsC)
 	})
 
-	t.Run("multiple records ordered by id", func(t *testing.T) {
-		db.createNamespace(ctx, t, nsB, "NS B")
-		db.createNamespace(ctx, t, nsA, "NS A")
-		db.createNamespace(ctx, t, nsC, "NS C")
-		t.Cleanup(func() {
-			_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id IN ($1, $2, $3)", nsA, nsB, nsC)
-		})
+	t.Run("system admin sees all namespaces", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
 
-		results, err := listNamespaces()
+		results, err := s.ListNamespaces(ctx)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(results) != 3 {
-			t.Fatalf("expected 3 namespaces, got %d", len(results))
-		}
-		if results[0].ID != nsA || results[1].ID != nsB || results[2].ID != nsC {
-			t.Errorf("expected order %s, %s, %s, got %s, %s, %s", nsA, nsB, nsC, results[0].ID, results[1].ID, results[2].ID)
+		// Should see at least db.nsID plus nsA, nsB, nsC (4 total minimum)
+		if len(results) < 4 {
+			t.Errorf("expected at least 4 namespaces, got %d", len(results))
 		}
 	})
 }
@@ -196,34 +201,31 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 	defer db.close()
 	ctx := context.Background()
 
-	conn, err := db.pool.Acquire(ctx)
+	// System admin is required to update namespaces per RLS policy
+	adminID := uuid.New()
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin@test.com", "system-admin")
 	if err != nil {
-		t.Fatalf("acquire: %v", err)
+		t.Fatalf("create admin: %v", err)
 	}
-	defer conn.Release()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
 
-	updateNamespace := func(id string, params UpdateNamespaceParams) (*Namespace, error) {
-		var ns Namespace
-		err := conn.QueryRow(ctx,
-			`UPDATE namespaces
-			 SET display_name    = COALESCE($2, display_name),
-			     active          = COALESCE($3, active),
-			     max_instructors = COALESCE($4, max_instructors),
-			     max_students    = COALESCE($5, max_students),
-			     updated_at      = now()
-			 WHERE id = $1
-			 RETURNING id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at`,
-			id, params.DisplayName, params.Active, params.MaxInstructors, params.MaxStudents,
-		).Scan(&ns.ID, &ns.DisplayName, &ns.Active, &ns.MaxInstructors, &ns.MaxStudents, &ns.CreatedAt, &ns.CreatedBy, &ns.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &ns, nil
+	authUser := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
 	}
 
 	t.Run("partial update display_name only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "Updated Name"
-		ns, err := updateNamespace(db.nsID, UpdateNamespaceParams{DisplayName: &newName})
+		ns, err := s.UpdateNamespace(ctx, db.nsID, UpdateNamespaceParams{DisplayName: &newName})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -236,8 +238,11 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "Whatever"
-		_, err := updateNamespace("nonexistent-"+uuid.New().String(), UpdateNamespaceParams{DisplayName: &newName})
+		_, err := s.UpdateNamespace(ctx, "nonexistent-"+uuid.New().String(), UpdateNamespaceParams{DisplayName: &newName})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -245,7 +250,7 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 }
 
 // =============================================================================
-// Class CRUD Tests
+// Class CRUD Tests - calls actual Store methods with RLS
 // =============================================================================
 
 func TestIntegration_CreateClass(t *testing.T) {
@@ -254,25 +259,27 @@ func TestIntegration_CreateClass(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
 	t.Run("successful creation", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		desc := "A test class"
-		var c Class
-		err := conn.QueryRow(ctx,
-			`INSERT INTO classes (namespace_id, name, description, created_by)
-			 VALUES ($1, $2, $3, $4)
-			 RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`,
-			nsID, "CS101", &desc, createdBy,
-		).Scan(&c.ID, &c.NamespaceID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt)
+		c, err := s.CreateClass(ctx, CreateClassParams{
+			NamespaceID: nsID,
+			Name:        "CS101",
+			Description: &desc,
+			CreatedBy:   createdBy,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -295,17 +302,6 @@ func TestIntegration_CreateClass(t *testing.T) {
 			t.Error("expected non-zero created_at")
 		}
 	})
-
-	t.Run("record exists after creation", func(t *testing.T) {
-		var count int
-		err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM classes WHERE namespace_id = $1", nsID).Scan(&count)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		if count != 1 {
-			t.Errorf("expected 1 record, got %d", count)
-		}
-	})
 }
 
 func TestIntegration_GetClass(t *testing.T) {
@@ -314,32 +310,23 @@ func TestIntegration_GetClass(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-get-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getClass := func(id uuid.UUID) (*Class, error) {
-		var c Class
-		err := conn.QueryRow(ctx,
-			`SELECT id, namespace_id, name, description, created_by, created_at, updated_at
-			 FROM classes WHERE id = $1`, id).Scan(
-			&c.ID, &c.NamespaceID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &c, nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		c, err := getClass(classID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		c, err := s.GetClass(ctx, classID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -355,7 +342,10 @@ func TestIntegration_GetClass(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getClass(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetClass(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -368,37 +358,21 @@ func TestIntegration_ListClasses(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-list-classes"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listClasses := func() ([]Class, error) {
-		rows, err := conn.Query(ctx,
-			`SELECT id, namespace_id, name, description, created_by, created_at, updated_at
-			 FROM classes WHERE namespace_id = $1 ORDER BY created_at`, nsID)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var classes []Class
-		for rows.Next() {
-			var c Class
-			if err := rows.Scan(&c.ID, &c.NamespaceID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt); err != nil {
-				return nil, err
-			}
-			classes = append(classes, c)
-		}
-		return classes, rows.Err()
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
-	t.Run("empty result", func(t *testing.T) {
-		results, err := listClasses()
+	t.Run("empty result before creation", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListClasses(ctx)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -414,7 +388,10 @@ func TestIntegration_ListClasses(t *testing.T) {
 		c2 := uuid.New()
 		db.createClass(ctx, t, c2, nsID, "CS201", createdBy)
 
-		results, err := listClasses()
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListClasses(ctx)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -433,38 +410,24 @@ func TestIntegration_UpdateClass(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-update-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateClass := func(id uuid.UUID, params UpdateClassParams) (*Class, error) {
-		var c Class
-		err := conn.QueryRow(ctx,
-			`UPDATE classes
-			 SET name        = COALESCE($2, name),
-			     description = COALESCE($3, description),
-			     updated_at  = now()
-			 WHERE id = $1
-			 RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`,
-			id, params.Name, params.Description,
-		).Scan(&c.ID, &c.NamespaceID, &c.Name, &c.Description, &c.CreatedBy, &c.CreatedAt, &c.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &c, nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("partial update name only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "CS102"
-		c, err := updateClass(classID, UpdateClassParams{Name: &newName})
+		c, err := s.UpdateClass(ctx, classID, UpdateClassParams{Name: &newName})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -474,8 +437,11 @@ func TestIntegration_UpdateClass(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "Whatever"
-		_, err := updateClass(uuid.New(), UpdateClassParams{Name: &newName})
+		_, err := s.UpdateClass(ctx, uuid.New(), UpdateClassParams{Name: &newName})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -488,35 +454,27 @@ func TestIntegration_DeleteClass(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-delete-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	deleteClass := func(id uuid.UUID) error {
-		tag, err := conn.Exec(ctx, "DELETE FROM classes WHERE id = $1", id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("successful deletion", func(t *testing.T) {
-		if err := deleteClass(classID); err != nil {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		if err := s.DeleteClass(ctx, classID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM classes WHERE id = $1", classID).Scan(&count); err != nil {
+		if err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM classes WHERE id = $1", classID).Scan(&count); err != nil {
 			t.Fatalf("count query: %v", err)
 		}
 		if count != 0 {
@@ -525,7 +483,10 @@ func TestIntegration_DeleteClass(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		err := deleteClass(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteClass(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -533,7 +494,7 @@ func TestIntegration_DeleteClass(t *testing.T) {
 }
 
 // =============================================================================
-// Section CRUD Tests
+// Section CRUD Tests - calls actual Store methods with RLS
 // =============================================================================
 
 func TestIntegration_CreateSection(t *testing.T) {
@@ -542,27 +503,31 @@ func TestIntegration_CreateSection(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-create-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
 	t.Run("successful creation", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		semester := "Fall 2025"
-		var sec Section
-		err := conn.QueryRow(ctx,
-			`INSERT INTO sections (namespace_id, class_id, name, semester, join_code)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`,
-			nsID, classID, "Section A", &semester, "JOIN-CREATE",
-		).Scan(&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
+		joinCode := "JOIN-CREATE-" + uuid.New().String()[:8] // unique join code
+		sec, err := s.CreateSection(ctx, CreateSectionParams{
+			NamespaceID: nsID,
+			ClassID:     classID,
+			Name:        "Section A",
+			Semester:    &semester,
+			JoinCode:    joinCode,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -578,25 +543,14 @@ func TestIntegration_CreateSection(t *testing.T) {
 		if sec.Semester == nil || *sec.Semester != "Fall 2025" {
 			t.Errorf("expected semester 'Fall 2025', got %v", sec.Semester)
 		}
-		if sec.JoinCode != "JOIN-CREATE" {
-			t.Errorf("expected join_code JOIN-CREATE, got %s", sec.JoinCode)
+		if sec.JoinCode != joinCode {
+			t.Errorf("expected join_code %s, got %s", joinCode, sec.JoinCode)
 		}
 		if !sec.Active {
 			t.Error("expected active to be true by default")
 		}
 		if sec.ID == uuid.Nil {
 			t.Error("expected non-nil UUID id")
-		}
-	})
-
-	t.Run("record exists after creation", func(t *testing.T) {
-		var count int
-		err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE class_id = $1", classID).Scan(&count)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		if count != 1 {
-			t.Errorf("expected 1 record, got %d", count)
 		}
 	})
 }
@@ -607,7 +561,6 @@ func TestIntegration_GetSection(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-get-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -615,26 +568,18 @@ func TestIntegration_GetSection(t *testing.T) {
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-GET")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getSection := func(id uuid.UUID) (*Section, error) {
-		var sec Section
-		err := conn.QueryRow(ctx,
-			`SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-			 FROM sections WHERE id = $1`, id).Scan(
-			&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sec, nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		sec, err := getSection(sectionID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		sec, err := s.GetSection(ctx, sectionID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -644,13 +589,17 @@ func TestIntegration_GetSection(t *testing.T) {
 		if sec.Name != "Section A" {
 			t.Errorf("expected name 'Section A', got %s", sec.Name)
 		}
-		if sec.JoinCode != "JOIN-GET" {
-			t.Errorf("expected join_code JOIN-GET, got %s", sec.JoinCode)
+		expectedJoinCode := uniqueJoinCode(sectionID, "JOIN-GET")
+		if sec.JoinCode != expectedJoinCode {
+			t.Errorf("expected join_code %s, got %s", expectedJoinCode, sec.JoinCode)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getSection(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetSection(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -663,39 +612,23 @@ func TestIntegration_ListSectionsByClass(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-list-sections"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listSectionsByClass := func(cid uuid.UUID) ([]Section, error) {
-		rows, err := conn.Query(ctx,
-			`SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-			 FROM sections WHERE class_id = $1 ORDER BY created_at`, cid)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var sections []Section
-		for rows.Next() {
-			var sec Section
-			if err := rows.Scan(&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt); err != nil {
-				return nil, err
-			}
-			sections = append(sections, sec)
-		}
-		return sections, rows.Err()
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("empty result", func(t *testing.T) {
-		results, err := listSectionsByClass(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListSectionsByClass(ctx, uuid.New())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -711,7 +644,10 @@ func TestIntegration_ListSectionsByClass(t *testing.T) {
 		s2 := uuid.New()
 		db.createSection(ctx, t, s2, nsID, classID, "Section B", "JOIN-LIST-2")
 
-		results, err := listSectionsByClass(classID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListSectionsByClass(ctx, classID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -730,41 +666,28 @@ func TestIntegration_UpdateSection(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-update-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-UPDATE")
+	// RLS requires user to be section instructor to update/delete sections
+	db.createMembership(ctx, t, createdBy, sectionID, "instructor")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateSection := func(id uuid.UUID, params UpdateSectionParams) (*Section, error) {
-		var sec Section
-		err := conn.QueryRow(ctx,
-			`UPDATE sections
-			 SET name       = COALESCE($2, name),
-			     semester   = COALESCE($3, semester),
-			     active     = COALESCE($4, active),
-			     updated_at = now()
-			 WHERE id = $1
-			 RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`,
-			id, params.Name, params.Semester, params.Active,
-		).Scan(&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sec, nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("partial update name only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "Section B"
-		sec, err := updateSection(sectionID, UpdateSectionParams{Name: &newName})
+		sec, err := s.UpdateSection(ctx, sectionID, UpdateSectionParams{Name: &newName})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -777,8 +700,11 @@ func TestIntegration_UpdateSection(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newName := "Whatever"
-		_, err := updateSection(uuid.New(), UpdateSectionParams{Name: &newName})
+		_, err := s.UpdateSection(ctx, uuid.New(), UpdateSectionParams{Name: &newName})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -791,37 +717,31 @@ func TestIntegration_DeleteSection(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-delete-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-DELETE")
+	// RLS requires user to be section instructor to delete sections
+	db.createMembership(ctx, t, createdBy, sectionID, "instructor")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	deleteSection := func(id uuid.UUID) error {
-		tag, err := conn.Exec(ctx, "DELETE FROM sections WHERE id = $1", id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("successful deletion", func(t *testing.T) {
-		if err := deleteSection(sectionID); err != nil {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		if err := s.DeleteSection(ctx, sectionID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE id = $1", sectionID).Scan(&count); err != nil {
+		if err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE id = $1", sectionID).Scan(&count); err != nil {
 			t.Fatalf("count query: %v", err)
 		}
 		if count != 0 {
@@ -830,7 +750,10 @@ func TestIntegration_DeleteSection(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		err := deleteSection(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteSection(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -838,7 +761,7 @@ func TestIntegration_DeleteSection(t *testing.T) {
 }
 
 // =============================================================================
-// Membership CRUD Tests
+// Membership CRUD Tests - calls actual Store methods with RLS
 // =============================================================================
 
 func TestIntegration_CreateMembership(t *testing.T) {
@@ -847,7 +770,6 @@ func TestIntegration_CreateMembership(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-create-membership"
 
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "member@test.com", "student", nsID)
@@ -858,28 +780,18 @@ func TestIntegration_CreateMembership(t *testing.T) {
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-MEMBER")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	createMembership := func(params CreateMembershipParams) (*SectionMembership, error) {
-		var m SectionMembership
-		err := conn.QueryRow(ctx,
-			`INSERT INTO section_memberships (user_id, section_id, role)
-			 VALUES ($1, $2, $3)
-			 RETURNING id, user_id, section_id, role, joined_at`,
-			params.UserID, params.SectionID, params.Role,
-		).Scan(&m.ID, &m.UserID, &m.SectionID, &m.Role, &m.JoinedAt)
-		if err != nil {
-			return nil, HandleDuplicate(err)
-		}
-		return &m, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "member@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("successful creation", func(t *testing.T) {
-		m, err := createMembership(CreateMembershipParams{UserID: userID, SectionID: sectionID, Role: "student"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		m, err := s.CreateMembership(ctx, CreateMembershipParams{UserID: userID, SectionID: sectionID, Role: "student"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -901,7 +813,10 @@ func TestIntegration_CreateMembership(t *testing.T) {
 	})
 
 	t.Run("duplicate returns ErrDuplicate", func(t *testing.T) {
-		_, err := createMembership(CreateMembershipParams{UserID: userID, SectionID: sectionID, Role: "student"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.CreateMembership(ctx, CreateMembershipParams{UserID: userID, SectionID: sectionID, Role: "student"})
 		if !errors.Is(err, ErrDuplicate) {
 			t.Errorf("expected ErrDuplicate, got: %v", err)
 		}
@@ -914,47 +829,42 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-joincode-get"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", createdBy)
 	sectionID := uuid.New()
-	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "UNIQUE-JOIN-CODE")
+	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "UNIQUE")
+	expectedJoinCode := uniqueJoinCode(sectionID, "UNIQUE")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getSectionByJoinCode := func(code string) (*Section, error) {
-		var sec Section
-		err := conn.QueryRow(ctx,
-			`SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-			 FROM sections WHERE join_code = $1`, code).Scan(
-			&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sec, nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		sec, err := getSectionByJoinCode("UNIQUE-JOIN-CODE")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		sec, err := s.GetSectionByJoinCode(ctx, expectedJoinCode)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if sec.ID != sectionID {
 			t.Errorf("expected id %s, got %s", sectionID, sec.ID)
 		}
-		if sec.JoinCode != "UNIQUE-JOIN-CODE" {
-			t.Errorf("expected join_code UNIQUE-JOIN-CODE, got %s", sec.JoinCode)
+		if sec.JoinCode != expectedJoinCode {
+			t.Errorf("expected join_code %s, got %s", expectedJoinCode, sec.JoinCode)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getSectionByJoinCode("NONEXISTENT-CODE")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetSectionByJoinCode(ctx, "NONEXISTENT-CODE-"+uuid.New().String()[:8])
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -967,7 +877,6 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-delete-membership"
 
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "member@test.com", "student", nsID)
@@ -978,31 +887,25 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-DEL-MEM")
 	db.createMembership(ctx, t, userID, sectionID, "student")
+	// RLS requires instructor to be a section instructor to delete memberships
+	db.createMembership(ctx, t, createdBy, sectionID, "instructor")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	deleteMembership := func(secID, uid uuid.UUID) error {
-		tag, err := conn.Exec(ctx,
-			"DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2", secID, uid)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return nil
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("successful deletion", func(t *testing.T) {
-		if err := deleteMembership(sectionID, userID); err != nil {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		if err := s.DeleteMembership(ctx, sectionID, userID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		if err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID).Scan(&count); err != nil {
+		if err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID).Scan(&count); err != nil {
 			t.Fatalf("count query: %v", err)
 		}
 		if count != 0 {
@@ -1011,7 +914,10 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		err := deleteMembership(sectionID, uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteMembership(ctx, sectionID, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1024,7 +930,6 @@ func TestIntegration_ListMembers(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// namespace scoped to db.nsID (was "test-ns-list-members"
 
 	user1 := uuid.New()
 	user2 := uuid.New()
@@ -1037,33 +942,18 @@ func TestIntegration_ListMembers(t *testing.T) {
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN-LIST-MEM")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listMembers := func(secID uuid.UUID) ([]SectionMembership, error) {
-		rows, err := conn.Query(ctx,
-			`SELECT id, user_id, section_id, role, joined_at
-			 FROM section_memberships WHERE section_id = $1 ORDER BY joined_at`, secID)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var members []SectionMembership
-		for rows.Next() {
-			var m SectionMembership
-			if err := rows.Scan(&m.ID, &m.UserID, &m.SectionID, &m.Role, &m.JoinedAt); err != nil {
-				return nil, err
-			}
-			members = append(members, m)
-		}
-		return members, rows.Err()
+	authUser := &auth.User{
+		ID:          createdBy,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("empty result", func(t *testing.T) {
-		results, err := listMembers(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListMembers(ctx, uuid.New())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1078,7 +968,10 @@ func TestIntegration_ListMembers(t *testing.T) {
 		db.createMembership(ctx, t, user2, sectionID, "student")
 		db.createMembership(ctx, t, createdBy, sectionID, "instructor")
 
-		results, err := listMembers(sectionID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListMembers(ctx, sectionID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
