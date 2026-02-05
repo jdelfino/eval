@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -556,12 +557,14 @@ func TestIntegration_CreateSection(t *testing.T) {
 
 	t.Run("successful creation", func(t *testing.T) {
 		semester := "Fall 2025"
+		// Use unique join code to avoid collision with leftover data from other test runs
+		uniqueJoinCode := "JOIN-CREATE-" + uuid.New().String()[:8]
 		var sec Section
 		err := conn.QueryRow(ctx,
 			`INSERT INTO sections (namespace_id, class_id, name, semester, join_code)
 			 VALUES ($1, $2, $3, $4, $5)
 			 RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`,
-			nsID, classID, "Section A", &semester, "JOIN-CREATE",
+			nsID, classID, "Section A", &semester, uniqueJoinCode,
 		).Scan(&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester, &sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -578,8 +581,8 @@ func TestIntegration_CreateSection(t *testing.T) {
 		if sec.Semester == nil || *sec.Semester != "Fall 2025" {
 			t.Errorf("expected semester 'Fall 2025', got %v", sec.Semester)
 		}
-		if sec.JoinCode != "JOIN-CREATE" {
-			t.Errorf("expected join_code JOIN-CREATE, got %s", sec.JoinCode)
+		if sec.JoinCode != uniqueJoinCode {
+			t.Errorf("expected join_code %s, got %s", uniqueJoinCode, sec.JoinCode)
 		}
 		if !sec.Active {
 			t.Error("expected active to be true by default")
@@ -644,8 +647,9 @@ func TestIntegration_GetSection(t *testing.T) {
 		if sec.Name != "Section A" {
 			t.Errorf("expected name 'Section A', got %s", sec.Name)
 		}
-		if sec.JoinCode != "JOIN-GET" {
-			t.Errorf("expected join_code JOIN-GET, got %s", sec.JoinCode)
+		// Join code has unique suffix appended by createSection helper
+		if !strings.HasPrefix(sec.JoinCode, "JOIN-GET") {
+			t.Errorf("expected join_code to start with JOIN-GET, got %s", sec.JoinCode)
 		}
 	})
 
@@ -928,6 +932,12 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 	}
 	defer conn.Release()
 
+	// Get the actual join code from the database (it has a unique suffix appended)
+	var actualJoinCode string
+	if err := conn.QueryRow(ctx, "SELECT join_code FROM sections WHERE id = $1", sectionID).Scan(&actualJoinCode); err != nil {
+		t.Fatalf("failed to get join code: %v", err)
+	}
+
 	getSectionByJoinCode := func(code string) (*Section, error) {
 		var sec Section
 		err := conn.QueryRow(ctx,
@@ -941,15 +951,15 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 	}
 
 	t.Run("found", func(t *testing.T) {
-		sec, err := getSectionByJoinCode("UNIQUE-JOIN-CODE")
+		sec, err := getSectionByJoinCode(actualJoinCode)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if sec.ID != sectionID {
 			t.Errorf("expected id %s, got %s", sectionID, sec.ID)
 		}
-		if sec.JoinCode != "UNIQUE-JOIN-CODE" {
-			t.Errorf("expected join_code UNIQUE-JOIN-CODE, got %s", sec.JoinCode)
+		if sec.JoinCode != actualJoinCode {
+			t.Errorf("expected join_code %s, got %s", actualJoinCode, sec.JoinCode)
 		}
 	})
 
