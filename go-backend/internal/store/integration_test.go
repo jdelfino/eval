@@ -1046,14 +1046,18 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	ctx := context.Background()
 	tdb.cleanup(ctx, t)
 
-	// --- Seed all test data as superuser (before any subtests taint the pool) ---
+	// Clean up registration-specific test namespaces from prior runs
+	// (CASCADE deletes all child rows)
 	nsID := "reg-test-ns"
+	inactiveNsID := "reg-test-ns-inactive"
+	_, _ = tdb.pool.Exec(ctx, `DELETE FROM namespaces WHERE id IN ($1, $2)`, nsID, inactiveNsID)
+
+	// --- Seed all test data as superuser (before any subtests taint the pool) ---
 	_, err := tdb.pool.Exec(ctx, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Registration Test NS', true)`, nsID)
 	if err != nil {
 		t.Fatalf("create namespace: %v", err)
 	}
 
-	inactiveNsID := "reg-test-ns-inactive"
 	_, err = tdb.pool.Exec(ctx, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Inactive NS', false)`, inactiveNsID)
 	if err != nil {
 		t.Fatalf("create inactive namespace: %v", err)
@@ -1130,7 +1134,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 
 		// Invitations: sees non-expired, hides expired (active filter)
 		var invCount int
-		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM invitations").Scan(&invCount)
+		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM invitations WHERE namespace_id = $1", nsID).Scan(&invCount)
 		if err != nil {
 			t.Fatalf("query invitations: %v", err)
 		}
@@ -1140,7 +1144,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 
 		// Sections: active=true filter hides inactive
 		var secCount int
-		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections").Scan(&secCount)
+		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM sections WHERE namespace_id = $1", nsID).Scan(&secCount)
 		if err != nil {
 			t.Fatalf("query sections: %v", err)
 		}

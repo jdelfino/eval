@@ -153,8 +153,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Protected routes that require an existing user
 			if userStore != nil {
 				// Auth routes for existing users (me endpoints)
-				authHandler := handler.NewAuthHandler()
-				r.Mount("/auth", authHandler.Routes())
+				r.Get("/auth/me", handler.NewAuthHandler().GetMe)
+				r.Put("/auth/me", handler.NewAuthHandler().UpdateMe)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
