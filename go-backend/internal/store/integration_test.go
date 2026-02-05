@@ -25,13 +25,17 @@ import (
 	"github.com/jdelfino/eval/internal/db"
 )
 
-// testDB holds the test database connection pool.
+// testDB holds the test database connection pool and a random namespace for isolation.
 type testDB struct {
 	pool *pgxpool.Pool
+	nsID string // random namespace scoped to this test run
 }
 
-// setupTestDB creates a connection pool for integration tests.
-// Returns nil, nil if DATABASE_URL is not set (tests should skip).
+// setupTestDB creates a connection pool for integration tests and provisions
+// a random namespace (ns-<uuid>) so that concurrent test runs do not interfere
+// with each other. Cleanup deletes only this namespace; ON DELETE CASCADE
+// removes all child rows automatically.
+// Returns nil if DATABASE_URL is not set (tests should skip).
 func setupTestDB(t *testing.T) *testDB {
 	t.Helper()
 
@@ -54,13 +58,26 @@ func setupTestDB(t *testing.T) *testDB {
 	}
 
 	// Ensure eval_app role exists for RLS testing.
-	// The eval_app role is a non-superuser that respects RLS policies.
 	if err := ensureAppRole(ctx, pool); err != nil {
 		pool.Close()
 		t.Fatalf("failed to ensure eval_app role: %v", err)
 	}
 
-	return &testDB{pool: pool}
+	nsID := "ns-" + uuid.New().String()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`,
+		nsID, "Test NS "+nsID)
+	if err != nil {
+		pool.Close()
+		t.Fatalf("failed to create test namespace: %v", err)
+	}
+
+	tdb := &testDB{pool: pool, nsID: nsID}
+	t.Cleanup(func() {
+		tdb.cleanup(context.Background(), t)
+		tdb.close()
+	})
+	return tdb
 }
 
 // ensureAppRole creates the eval_app role if it doesn't exist.
@@ -145,30 +162,14 @@ func (tdb *testDB) setRLSContext(ctx context.Context, conn *pgxpool.Conn, user *
 	return nil
 }
 
-// cleanup removes all test data from the database.
+// cleanup removes test data by deleting the test namespace.
+// ON DELETE CASCADE removes all child rows automatically.
+// System-admin users (no namespace) are cleaned up by ID.
 func (tdb *testDB) cleanup(ctx context.Context, t *testing.T) {
 	t.Helper()
-
-	// Delete in reverse dependency order
-	tables := []string{
-		"session_backend_state",
-		"revisions",
-		"session_students",
-		"sessions",
-		"section_memberships",
-		"sections",
-		"classes",
-		"problems",
-		"invitations",
-		"users",
-		"namespaces",
-	}
-
-	for _, table := range tables {
-		_, err := tdb.pool.Exec(ctx, fmt.Sprintf("DELETE FROM %s", table))
-		if err != nil {
-			t.Logf("warning: failed to delete from %s: %v", table, err)
-		}
+	_, err := tdb.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", tdb.nsID)
+	if err != nil {
+		t.Logf("warning: failed to delete namespace %s: %v", tdb.nsID, err)
 	}
 }
 
@@ -274,11 +275,6 @@ func (tdb *testDB) queryNamespacesAsUser(ctx context.Context, user *auth.User) (
 // =============================================================================
 
 func TestRLSPolicies_NamespaceIsolation(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -286,31 +282,29 @@ func TestRLSPolicies_NamespaceIsolation(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
 
-	// Create two namespaces
-	nsA := testNamespace{ID: "test-namespace-a", DisplayName: "Test Namespace A"}
-	nsB := testNamespace{ID: "test-namespace-b", DisplayName: "Test Namespace B"}
-
-	if err := tdb.createNamespace(ctx, nsA); err != nil {
-		t.Fatalf("create namespace A: %v", err)
-	}
+	// tdb.nsID is namespace A; create a second namespace for isolation test
+	nsBID := "ns-" + uuid.New().String()
+	nsB := testNamespace{ID: nsBID, DisplayName: "Test Namespace B"}
 	if err := tdb.createNamespace(ctx, nsB); err != nil {
 		t.Fatalf("create namespace B: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = tdb.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsBID)
+	})
 
 	// Create users in each namespace
 	userA := testUser{
 		ID:          uuid.New(),
-		Email:       "user-a@test.com",
+		Email:       fmt.Sprintf("user-a-%s@test.com", tdb.nsID),
 		Role:        auth.RoleStudent,
-		NamespaceID: nsA.ID,
+		NamespaceID: tdb.nsID,
 	}
 	userB := testUser{
 		ID:          uuid.New(),
-		Email:       "user-b@test.com",
+		Email:       fmt.Sprintf("user-b-%s@test.com", nsBID),
 		Role:        auth.RoleStudent,
-		NamespaceID: nsB.ID,
+		NamespaceID: nsBID,
 	}
 
 	if err := tdb.createUser(ctx, userA); err != nil {
@@ -370,18 +364,13 @@ func TestRLSPolicies_NamespaceIsolation(t *testing.T) {
 		if len(visibleNamespaces) != 1 {
 			t.Errorf("expected 1 namespace, got %d: %v", len(visibleNamespaces), visibleNamespaces)
 		}
-		if len(visibleNamespaces) > 0 && visibleNamespaces[0] != nsA.ID {
-			t.Errorf("expected namespace %s, got %s", nsA.ID, visibleNamespaces[0])
+		if len(visibleNamespaces) > 0 && visibleNamespaces[0] != tdb.nsID {
+			t.Errorf("expected namespace %s, got %s", tdb.nsID, visibleNamespaces[0])
 		}
 	})
 }
 
 func TestRLSPolicies_SystemAdminSeesAll(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -389,39 +378,40 @@ func TestRLSPolicies_SystemAdminSeesAll(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
 
-	// Create namespaces
-	nsA := testNamespace{ID: "test-ns-a", DisplayName: "Namespace A"}
-	nsB := testNamespace{ID: "test-ns-b", DisplayName: "Namespace B"}
-
-	if err := tdb.createNamespace(ctx, nsA); err != nil {
-		t.Fatalf("create namespace A: %v", err)
-	}
+	// tdb.nsID is namespace A; create a second namespace
+	nsBID := "ns-" + uuid.New().String()
+	nsB := testNamespace{ID: nsBID, DisplayName: "Namespace B"}
 	if err := tdb.createNamespace(ctx, nsB); err != nil {
 		t.Fatalf("create namespace B: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = tdb.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsBID)
+	})
 
-	// Create system-admin (no namespace)
+	// Create system-admin (no namespace) with run-specific email
 	sysAdmin := testUser{
 		ID:          uuid.New(),
-		Email:       "sysadmin@test.com",
+		Email:       fmt.Sprintf("sysadmin-%s@test.com", uuid.New().String()[:8]),
 		Role:        auth.RoleSystemAdmin,
 		NamespaceID: "", // system-admin has no namespace
 	}
+	t.Cleanup(func() {
+		_, _ = tdb.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", sysAdmin.ID)
+	})
 
 	// Create users in namespaces
 	userA := testUser{
 		ID:          uuid.New(),
-		Email:       "user-a@test.com",
+		Email:       fmt.Sprintf("user-a-%s@test.com", tdb.nsID),
 		Role:        auth.RoleStudent,
-		NamespaceID: nsA.ID,
+		NamespaceID: tdb.nsID,
 	}
 	userB := testUser{
 		ID:          uuid.New(),
-		Email:       "user-b@test.com",
+		Email:       fmt.Sprintf("user-b-%s@test.com", nsBID),
 		Role:        auth.RoleStudent,
-		NamespaceID: nsB.ID,
+		NamespaceID: nsBID,
 	}
 
 	if err := tdb.createUser(ctx, sysAdmin); err != nil {
@@ -453,10 +443,10 @@ func TestRLSPolicies_SystemAdminSeesAll(t *testing.T) {
 
 		foundA, foundB := false, false
 		for _, nsID := range visibleNamespaces {
-			if nsID == nsA.ID {
+			if nsID == tdb.nsID {
 				foundA = true
 			}
-			if nsID == nsB.ID {
+			if nsID == nsBID {
 				foundB = true
 			}
 		}
@@ -510,11 +500,6 @@ func TestRLSPolicies_SystemAdminSeesAll(t *testing.T) {
 }
 
 func TestRLSPolicies_RoleBasedAccess(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -522,32 +507,25 @@ func TestRLSPolicies_RoleBasedAccess(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
 
-	// Create namespace
-	ns := testNamespace{ID: "test-namespace", DisplayName: "Test Namespace"}
-	if err := tdb.createNamespace(ctx, ns); err != nil {
-		t.Fatalf("create namespace: %v", err)
-	}
-
-	// Create users with different roles
+	// Create users with different roles in the test namespace
 	instructor := testUser{
 		ID:          uuid.New(),
-		Email:       "instructor@test.com",
+		Email:       fmt.Sprintf("instructor-%s@test.com", tdb.nsID),
 		Role:        auth.RoleInstructor,
-		NamespaceID: ns.ID,
+		NamespaceID: tdb.nsID,
 	}
 	student := testUser{
 		ID:          uuid.New(),
-		Email:       "student@test.com",
+		Email:       fmt.Sprintf("student-%s@test.com", tdb.nsID),
 		Role:        auth.RoleStudent,
-		NamespaceID: ns.ID,
+		NamespaceID: tdb.nsID,
 	}
 	nsAdmin := testUser{
 		ID:          uuid.New(),
-		Email:       "ns-admin@test.com",
+		Email:       fmt.Sprintf("ns-admin-%s@test.com", tdb.nsID),
 		Role:        auth.RoleNamespaceAdmin,
-		NamespaceID: ns.ID,
+		NamespaceID: tdb.nsID,
 	}
 
 	if err := tdb.createUser(ctx, instructor); err != nil {
@@ -603,11 +581,6 @@ func TestRLSPolicies_RoleBasedAccess(t *testing.T) {
 // =============================================================================
 
 func TestTransaction_RollbackOnError(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -615,13 +588,6 @@ func TestTransaction_RollbackOnError(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
-
-	// Create namespace
-	ns := testNamespace{ID: "tx-test-namespace", DisplayName: "Transaction Test Namespace"}
-	if err := tdb.createNamespace(ctx, ns); err != nil {
-		t.Fatalf("create namespace: %v", err)
-	}
 
 	userID := uuid.New()
 	intentionalErr := errors.New("intentional error for rollback test")
@@ -639,7 +605,7 @@ func TestTransaction_RollbackOnError(t *testing.T) {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO users (id, email, role, namespace_id)
 			VALUES ($1, $2, $3, $4)
-		`, userID, "rollback-test@test.com", "student", ns.ID)
+		`, userID, fmt.Sprintf("rollback-%s@test.com", tdb.nsID), "student", tdb.nsID)
 		if err != nil {
 			return fmt.Errorf("insert user: %w", err)
 		}
@@ -665,11 +631,6 @@ func TestTransaction_RollbackOnError(t *testing.T) {
 }
 
 func TestTransaction_CommitOnSuccess(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -677,13 +638,6 @@ func TestTransaction_CommitOnSuccess(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
-
-	// Create namespace
-	ns := testNamespace{ID: "commit-test-namespace", DisplayName: "Commit Test Namespace"}
-	if err := tdb.createNamespace(ctx, ns); err != nil {
-		t.Fatalf("create namespace: %v", err)
-	}
 
 	userID := uuid.New()
 
@@ -700,7 +654,7 @@ func TestTransaction_CommitOnSuccess(t *testing.T) {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO users (id, email, role, namespace_id)
 			VALUES ($1, $2, $3, $4)
-		`, userID, "commit-test@test.com", "student", ns.ID)
+		`, userID, fmt.Sprintf("commit-%s@test.com", tdb.nsID), "student", tdb.nsID)
 		if err != nil {
 			return fmt.Errorf("insert user: %w", err)
 		}
@@ -725,11 +679,6 @@ func TestTransaction_CommitOnSuccess(t *testing.T) {
 }
 
 func TestTransaction_Savepoint(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("DATABASE_URL not set, skipping integration test")
-	}
-
 	tdb := setupTestDB(t)
 	if tdb == nil {
 		t.Skip("DATABASE_URL not set, skipping integration test")
@@ -737,13 +686,6 @@ func TestTransaction_Savepoint(t *testing.T) {
 	defer tdb.close()
 
 	ctx := context.Background()
-	tdb.cleanup(ctx, t)
-
-	// Create namespace
-	ns := testNamespace{ID: "savepoint-test-namespace", DisplayName: "Savepoint Test Namespace"}
-	if err := tdb.createNamespace(ctx, ns); err != nil {
-		t.Fatalf("create namespace: %v", err)
-	}
 
 	userID1 := uuid.New()
 	userID2 := uuid.New()
@@ -762,7 +704,7 @@ func TestTransaction_Savepoint(t *testing.T) {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO users (id, email, role, namespace_id)
 			VALUES ($1, $2, $3, $4)
-		`, userID1, "savepoint-user1@test.com", "student", ns.ID)
+		`, userID1, fmt.Sprintf("savepoint-user1-%s@test.com", tdb.nsID), "student", tdb.nsID)
 		if err != nil {
 			return fmt.Errorf("insert user 1: %w", err)
 		}
@@ -777,7 +719,7 @@ func TestTransaction_Savepoint(t *testing.T) {
 		_, err = nested.Exec(ctx, `
 			INSERT INTO users (id, email, role, namespace_id)
 			VALUES ($1, $2, $3, $4)
-		`, userID2, "savepoint-user2@test.com", "student", ns.ID)
+		`, userID2, fmt.Sprintf("savepoint-user2-%s@test.com", tdb.nsID), "student", tdb.nsID)
 		if err != nil {
 			return fmt.Errorf("insert user 2: %w", err)
 		}
@@ -999,18 +941,18 @@ func TestWithTx_Integration(t *testing.T) {
 	}
 	defer pool.Close()
 
-	// Clean up test data
-	_, _ = pool.PgxPool().Exec(ctx, "DELETE FROM users WHERE email LIKE 'withtx-%'")
-	_, _ = pool.PgxPool().Exec(ctx, "DELETE FROM namespaces WHERE id = 'withtx-test-ns'")
-
-	// Create namespace for test
+	// Create a random namespace for this test run
+	withtxNS := "ns-withtx-" + uuid.New().String()
 	_, err = pool.PgxPool().Exec(ctx, `
 		INSERT INTO namespaces (id, display_name, active)
-		VALUES ('withtx-test-ns', 'WithTx Test Namespace', true)
-	`)
+		VALUES ($1, $2, true)
+	`, withtxNS, "WithTx Test Namespace")
 	if err != nil {
 		t.Fatalf("create namespace: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = pool.PgxPool().Exec(context.Background(), "DELETE FROM namespaces WHERE id = $1", withtxNS)
+	})
 
 	userID := uuid.New()
 
@@ -1019,7 +961,7 @@ func TestWithTx_Integration(t *testing.T) {
 			_, err := tx.Exec(ctx, `
 				INSERT INTO users (id, email, role, namespace_id)
 				VALUES ($1, $2, $3, $4)
-			`, userID, "withtx-success@test.com", "student", "withtx-test-ns")
+			`, userID, fmt.Sprintf("withtx-success-%s@test.com", withtxNS), "student", withtxNS)
 			return err
 		})
 
@@ -1046,7 +988,7 @@ func TestWithTx_Integration(t *testing.T) {
 			_, err := tx.Exec(ctx, `
 				INSERT INTO users (id, email, role, namespace_id)
 				VALUES ($1, $2, $3, $4)
-			`, rollbackUserID, "withtx-rollback@test.com", "student", "withtx-test-ns")
+			`, rollbackUserID, fmt.Sprintf("withtx-rollback-%s@test.com", withtxNS), "student", withtxNS)
 			if err != nil {
 				return err
 			}

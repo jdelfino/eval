@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/store"
 )
 
@@ -229,6 +230,9 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 			if params.Role != inv.TargetRole {
 				t.Fatalf("unexpected role: %s", params.Role)
 			}
+			if params.ExternalID != "firebase-uid-123" {
+				t.Fatalf("unexpected external_id: %s", params.ExternalID)
+			}
 			return createdUser, nil
 		},
 	}
@@ -243,12 +247,14 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{
 		"token":        inv.ID.String(),
-		"external_id":  "firebase-uid-123",
 		"display_name": "New User",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := store.WithRepos(req.Context(), repos)
+	// Add claims to context (simulating JWT validation middleware)
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -284,12 +290,13 @@ func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"token":       inv.ID.String(),
-		"external_id": "firebase-uid-123",
+		"token": inv.ID.String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := store.WithRepos(req.Context(), repos)
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -315,12 +322,13 @@ func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"token":       uuid.New().String(),
-		"external_id": "firebase-uid-123",
+		"token": uuid.New().String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := store.WithRepos(req.Context(), repos)
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: "test@example.com"}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -352,12 +360,13 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"token":       inv.ID.String(),
-		"external_id": "firebase-uid-123",
+		"token": inv.ID.String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := store.WithRepos(req.Context(), repos)
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

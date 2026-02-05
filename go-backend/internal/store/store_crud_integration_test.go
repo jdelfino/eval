@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,13 +18,10 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	// Create a user first so we can reference it as created_by
-	nsSetup := "test-ns-create-ns-setup"
-	db.createNamespace(ctx, t, nsSetup, "Setup NS")
+	// Use the test namespace for setup user
 	createdBy := uuid.New()
-	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsSetup)
+	db.createUser(ctx, t, createdBy, fmt.Sprintf("creator-%s@test.com", db.nsID), "instructor", db.nsID)
 
 	conn, err := db.pool.Acquire(ctx)
 	if err != nil {
@@ -34,19 +32,24 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 	maxInst := 5
 	maxStu := 100
 
+	createNSID := "ns-create-" + uuid.New().String()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", createNSID)
+	})
+
 	t.Run("successful creation", func(t *testing.T) {
 		var ns Namespace
 		err := conn.QueryRow(ctx,
 			`INSERT INTO namespaces (id, display_name, max_instructors, max_students, created_by)
 			 VALUES ($1, $2, $3, $4, $5)
 			 RETURNING id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at`,
-			"test-ns-create-ns", "Create NS Test", &maxInst, &maxStu, &createdBy,
+			createNSID, "Create NS Test", &maxInst, &maxStu, &createdBy,
 		).Scan(&ns.ID, &ns.DisplayName, &ns.Active, &ns.MaxInstructors, &ns.MaxStudents, &ns.CreatedAt, &ns.CreatedBy, &ns.UpdatedAt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if ns.ID != "test-ns-create-ns" {
-			t.Errorf("expected id test-ns-create-ns, got %s", ns.ID)
+		if ns.ID != createNSID {
+			t.Errorf("expected id %s, got %s", createNSID, ns.ID)
 		}
 		if ns.DisplayName != "Create NS Test" {
 			t.Errorf("expected display_name 'Create NS Test', got %s", ns.DisplayName)
@@ -70,7 +73,7 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 
 	t.Run("record exists after creation", func(t *testing.T) {
 		var count int
-		err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM namespaces WHERE id = $1", "test-ns-create-ns").Scan(&count)
+		err := conn.QueryRow(ctx, "SELECT COUNT(*) FROM namespaces WHERE id = $1", createNSID).Scan(&count)
 		if err != nil {
 			t.Fatalf("query: %v", err)
 		}
@@ -84,9 +87,6 @@ func TestIntegration_GetNamespace(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
-
-	db.createNamespace(ctx, t, "test-ns-get-ns", "Get NS Test")
 
 	conn, err := db.pool.Acquire(ctx)
 	if err != nil {
@@ -107,20 +107,17 @@ func TestIntegration_GetNamespace(t *testing.T) {
 	}
 
 	t.Run("found", func(t *testing.T) {
-		ns, err := getNamespace("test-ns-get-ns")
+		ns, err := getNamespace(db.nsID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if ns.ID != "test-ns-get-ns" {
-			t.Errorf("expected id test-ns-get-ns, got %s", ns.ID)
-		}
-		if ns.DisplayName != "Get NS Test" {
-			t.Errorf("expected display_name 'Get NS Test', got %s", ns.DisplayName)
+		if ns.ID != db.nsID {
+			t.Errorf("expected id %s, got %s", db.nsID, ns.ID)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getNamespace("nonexistent-ns")
+		_, err := getNamespace("nonexistent-" + uuid.New().String())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -131,7 +128,6 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
 	conn, err := db.pool.Acquire(ctx)
 	if err != nil {
@@ -139,10 +135,16 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 	}
 	defer conn.Release()
 
+	// Use a prefix to scope our listing query
+	prefix := "ns-list-" + uuid.New().String()[:8]
+	nsA := prefix + "-a"
+	nsB := prefix + "-b"
+	nsC := prefix + "-c"
+
 	listNamespaces := func() ([]Namespace, error) {
 		rows, err := conn.Query(ctx,
 			`SELECT id, display_name, active, max_instructors, max_students, created_at, created_by, updated_at
-			 FROM namespaces ORDER BY id`)
+			 FROM namespaces WHERE id LIKE $1 ORDER BY id`, prefix+"%")
 		if err != nil {
 			return nil, err
 		}
@@ -169,9 +171,12 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 	})
 
 	t.Run("multiple records ordered by id", func(t *testing.T) {
-		db.createNamespace(ctx, t, "ns-b", "NS B")
-		db.createNamespace(ctx, t, "ns-a", "NS A")
-		db.createNamespace(ctx, t, "ns-c", "NS C")
+		db.createNamespace(ctx, t, nsB, "NS B")
+		db.createNamespace(ctx, t, nsA, "NS A")
+		db.createNamespace(ctx, t, nsC, "NS C")
+		t.Cleanup(func() {
+			_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id IN ($1, $2, $3)", nsA, nsB, nsC)
+		})
 
 		results, err := listNamespaces()
 		if err != nil {
@@ -180,8 +185,8 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 		if len(results) != 3 {
 			t.Fatalf("expected 3 namespaces, got %d", len(results))
 		}
-		if results[0].ID != "ns-a" || results[1].ID != "ns-b" || results[2].ID != "ns-c" {
-			t.Errorf("expected order ns-a, ns-b, ns-c, got %s, %s, %s", results[0].ID, results[1].ID, results[2].ID)
+		if results[0].ID != nsA || results[1].ID != nsB || results[2].ID != nsC {
+			t.Errorf("expected order %s, %s, %s, got %s, %s, %s", nsA, nsB, nsC, results[0].ID, results[1].ID, results[2].ID)
 		}
 	})
 }
@@ -190,9 +195,6 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
-
-	db.createNamespace(ctx, t, "test-ns-update-ns", "Original Name")
 
 	conn, err := db.pool.Acquire(ctx)
 	if err != nil {
@@ -221,7 +223,7 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 
 	t.Run("partial update display_name only", func(t *testing.T) {
 		newName := "Updated Name"
-		ns, err := updateNamespace("test-ns-update-ns", UpdateNamespaceParams{DisplayName: &newName})
+		ns, err := updateNamespace(db.nsID, UpdateNamespaceParams{DisplayName: &newName})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -235,7 +237,7 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		newName := "Whatever"
-		_, err := updateNamespace("nonexistent-ns", UpdateNamespaceParams{DisplayName: &newName})
+		_, err := updateNamespace("nonexistent-"+uuid.New().String(), UpdateNamespaceParams{DisplayName: &newName})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -250,10 +252,9 @@ func TestIntegration_CreateClass(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-class"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 
@@ -311,10 +312,9 @@ func TestIntegration_GetClass(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-class"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-get-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -366,10 +366,9 @@ func TestIntegration_ListClasses(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-classes"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-list-classes"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 
@@ -382,7 +381,7 @@ func TestIntegration_ListClasses(t *testing.T) {
 	listClasses := func() ([]Class, error) {
 		rows, err := conn.Query(ctx,
 			`SELECT id, namespace_id, name, description, created_by, created_at, updated_at
-			 FROM classes ORDER BY created_at`)
+			 FROM classes WHERE namespace_id = $1 ORDER BY created_at`, nsID)
 		if err != nil {
 			return nil, err
 		}
@@ -432,10 +431,9 @@ func TestIntegration_UpdateClass(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-class"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-update-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -488,10 +486,9 @@ func TestIntegration_DeleteClass(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-delete-class"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-delete-class"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -543,10 +540,9 @@ func TestIntegration_CreateSection(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-section"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-create-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -609,10 +605,9 @@ func TestIntegration_GetSection(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-get-section"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-get-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -666,10 +661,9 @@ func TestIntegration_ListSectionsByClass(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-sections"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-list-sections"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -734,10 +728,9 @@ func TestIntegration_UpdateSection(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-update-section"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-update-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -796,10 +789,9 @@ func TestIntegration_DeleteSection(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-delete-section"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-delete-section"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -853,10 +845,10 @@ func TestIntegration_CreateMembership(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-create-membership"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-create-membership"
+
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "member@test.com", "student", nsID)
 	createdBy := uuid.New()
@@ -920,10 +912,9 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-joincode-get"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-joincode-get"
 	createdBy := uuid.New()
 	db.createUser(ctx, t, createdBy, "creator@test.com", "instructor", nsID)
 	classID := uuid.New()
@@ -974,10 +965,10 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-delete-membership"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-delete-membership"
+
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "member@test.com", "student", nsID)
 	createdBy := uuid.New()
@@ -1031,10 +1022,10 @@ func TestIntegration_ListMembers(t *testing.T) {
 	db := setupIntegrationDB(t)
 	defer db.close()
 	ctx := context.Background()
-	db.cleanup(ctx, t)
 
-	nsID := "test-ns-list-members"
-	db.createNamespace(ctx, t, nsID, "Test NS")
+	nsID := db.nsID
+	// namespace scoped to db.nsID (was "test-ns-list-members"
+
 	user1 := uuid.New()
 	user2 := uuid.New()
 	db.createUser(ctx, t, user1, "stu1@test.com", "student", nsID)

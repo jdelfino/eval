@@ -43,7 +43,7 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - name: Unit tests
-        run: npx jest --no-coverage
+        run: npm test
         working-directory: frontend
 
   lint:

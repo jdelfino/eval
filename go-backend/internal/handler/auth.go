@@ -124,12 +124,18 @@ func (h *AuthHandler) GetAcceptInvite(w http.ResponseWriter, r *http.Request) {
 // acceptInviteRequest is the request body for POST /auth/accept-invite.
 type acceptInviteRequest struct {
 	Token       string  `json:"token" validate:"required,uuid"`
-	ExternalID  string  `json:"external_id" validate:"required"`
 	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=255"`
 }
 
 // PostAcceptInvite creates a user profile and consumes the invitation.
+// The user's external_id comes from JWT claims (not request body) for security.
 func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	req, err := httputil.BindJSON[acceptInviteRequest](w, r)
 	if err != nil {
 		return
@@ -153,8 +159,9 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use external_id from JWT claims (not request body) to prevent impersonation
 	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
-		ExternalID:  req.ExternalID,
+		ExternalID:  claims.Subject,
 		Email:       inv.Email,
 		Role:        inv.TargetRole,
 		NamespaceID: &inv.NamespaceID,
@@ -218,13 +225,18 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 // registerStudentRequest is the request body for POST /auth/register-student.
 type registerStudentRequest struct {
 	JoinCode    string  `json:"join_code" validate:"required"`
-	ExternalID  string  `json:"external_id" validate:"required"`
-	Email       string  `json:"email" validate:"required,email"`
 	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=255"`
 }
 
 // PostRegisterStudent creates a student user and enrolls them in a section.
+// The user's external_id and email come from JWT claims (not request body) for security.
 func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	req, err := httputil.BindJSON[registerStudentRequest](w, r)
 	if err != nil {
 		return
@@ -246,9 +258,10 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Use external_id and email from JWT claims (not request body) to prevent impersonation
 	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
-		ExternalID:  req.ExternalID,
-		Email:       req.Email,
+		ExternalID:  claims.Subject,
+		Email:       claims.Email,
 		Role:        "student",
 		NamespaceID: &section.NamespaceID,
 		DisplayName: req.DisplayName,

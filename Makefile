@@ -5,7 +5,7 @@
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
-test-integration: test-integration-executor
+test-integration: test-integration-store test-integration-executor test-integration-contract
 lint: lint-api lint-executor lint-frontend
 
 docker-build: docker-build-api docker-build-executor
@@ -45,12 +45,29 @@ lint-executor:
 	cd executor && golangci-lint run ./...
 
 test-integration-executor:
+	./scripts/ensure-test-postgres.sh
 	docker-compose up -d executor --wait
 	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
-	docker-compose down executor
 
 docker-build-executor:
 	docker build -t executor:local executor/
+
+# ──────────────────────────────────────────────
+# Contract tests (frontend ↔ API)
+# ──────────────────────────────────────────────
+.PHONY: test-integration-contract
+
+test-integration-contract:
+	./scripts/run-contract-tests.sh
+
+# ──────────────────────────────────────────────
+# Store integration tests
+# ──────────────────────────────────────────────
+.PHONY: test-integration-store
+
+test-integration-store:
+	./scripts/ensure-test-postgres.sh
+	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 ./internal/store/... -run TestIntegration
 
 # ──────────────────────────────────────────────
 # Frontend

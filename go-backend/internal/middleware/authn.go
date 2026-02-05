@@ -26,46 +26,77 @@ type UserLookup interface {
 	GetUserByExternalID(ctx context.Context, externalID string) (*UserRecord, error)
 }
 
-// Authenticator is Chi middleware that validates Bearer JWT tokens and
-// populates the authenticated user in the request context.
-type Authenticator struct {
+// JWTValidator is Chi middleware that validates Bearer JWT tokens and
+// populates the claims in the request context.
+//
+// This middleware only validates the token — it does NOT require the user
+// to exist in the database. Use UserLoader middleware after this to
+// require an existing user profile.
+type JWTValidator struct {
 	validator auth.TokenValidator
-	users     UserLookup
 	logger    *slog.Logger
 }
 
-// NewAuthenticator creates an Authenticator middleware.
-func NewAuthenticator(v auth.TokenValidator, u UserLookup, l *slog.Logger) *Authenticator {
-	return &Authenticator{validator: v, users: u, logger: l}
+// NewJWTValidator creates a JWT validation middleware.
+func NewJWTValidator(v auth.TokenValidator, l *slog.Logger) *JWTValidator {
+	return &JWTValidator{validator: v, logger: l}
 }
 
-// Authenticate returns a Chi middleware that validates Bearer tokens.
-func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
+// Validate returns a Chi middleware that validates Bearer tokens and adds claims to context.
+func (j *JWTValidator) Validate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
-			a.logger.Warn("missing authorization header")
+			j.logger.Warn("missing authorization header")
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
 		token, ok := strings.CutPrefix(header, "Bearer ")
 		if !ok || token == "" {
-			a.logger.Warn("malformed authorization header")
+			j.logger.Warn("malformed authorization header")
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
-		claims, err := a.validator.Validate(r.Context(), token)
+		claims, err := j.validator.Validate(r.Context(), token)
 		if err != nil {
-			a.logger.Warn("token validation failed", "error", err)
+			j.logger.Warn("token validation failed", "error", err)
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}
 
-		record, err := a.users.GetUserByExternalID(r.Context(), claims.Subject)
+		ctx := auth.WithClaims(r.Context(), claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// UserLoader is Chi middleware that loads the user profile from the database
+// based on JWT claims. It requires JWTValidator middleware to run first.
+type UserLoader struct {
+	users  UserLookup
+	logger *slog.Logger
+}
+
+// NewUserLoader creates a user loading middleware.
+func NewUserLoader(u UserLookup, l *slog.Logger) *UserLoader {
+	return &UserLoader{users: u, logger: l}
+}
+
+// Load returns a Chi middleware that loads the user and adds it to context.
+// Returns 401 if the user doesn't exist in the database.
+func (u *UserLoader) Load(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := auth.ClaimsFromContext(r.Context())
+		if claims == nil {
+			u.logger.Warn("user loader called without claims in context")
+			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
+			return
+		}
+
+		record, err := u.users.GetUserByExternalID(r.Context(), claims.Subject)
 		if err != nil {
-			a.logger.Warn("user lookup failed", "external_id", claims.Subject, "error", err)
+			u.logger.Warn("user lookup failed", "external_id", claims.Subject, "error", err)
 			writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 			return
 		}

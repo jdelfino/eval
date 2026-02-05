@@ -104,25 +104,62 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.Timeout(30 * time.Second))
-		// Auth middleware - validates JWT and populates user context
+
+		// Create auth components
+		var jwtValidator *custommw.JWTValidator
+		var userLoader *custommw.UserLoader
 		if userStore != nil {
-			jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
-			validator := auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+			var validator auth.TokenValidator
+			if cfg.AuthMode == "test" {
+				logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
+				validator = auth.NewTestValidator()
+			} else {
+				jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
+				validator = auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+			}
 			adapter := NewUserLookupAdapter(userStore)
-			authenticator := custommw.NewAuthenticator(validator, adapter, logger)
-			r.Use(authenticator.Authenticate)
+			jwtValidator = custommw.NewJWTValidator(validator, logger)
+			userLoader = custommw.NewUserLoader(adapter, logger)
+
+			// JWT validation for all authenticated routes
+			r.Use(jwtValidator.Validate)
 		}
 
-		// RLS middleware - after auth, only if pool is available (not in tests)
-		if pgxPool := pool.PgxPool(); pgxPool != nil {
-			r.Use(custommw.RLSContextMiddleware(pgxPool))
-		}
-
-		// Protected routes
+		// Registration routes - JWT validated but no user lookup required
+		// (these are for new users who don't have a profile yet)
 		if userStore != nil {
-			r.Mount("/auth", handler.NewAuthHandler().Routes())
+			r.Group(func(r chi.Router) {
+				// Provide database access without RLS (security via invitation tokens / join codes)
+				if pgxPool := pool.PgxPool(); pgxPool != nil {
+					r.Use(custommw.NoRLSStoreMiddleware(pgxPool))
+				}
+				authHandler := handler.NewAuthHandler()
+				r.Get("/auth/accept-invite", authHandler.GetAcceptInvite)
+				r.Post("/auth/accept-invite", authHandler.PostAcceptInvite)
+				r.Get("/auth/register-student", authHandler.GetRegisterStudent)
+				r.Post("/auth/register-student", authHandler.PostRegisterStudent)
+			})
+		}
 
-			// Centrifugo realtime token endpoint
+		// Routes requiring existing user profile
+		r.Group(func(r chi.Router) {
+			// User loader - requires user to exist in database
+			if userStore != nil {
+				r.Use(userLoader.Load)
+			}
+
+			// RLS middleware - after user load, only if pool is available (not in tests)
+			if pgxPool := pool.PgxPool(); pgxPool != nil {
+				r.Use(custommw.RLSContextMiddleware(pgxPool))
+			}
+
+			// Protected routes that require an existing user
+			if userStore != nil {
+				// Auth routes for existing users (me endpoints)
+				r.Get("/auth/me", handler.NewAuthHandler().GetMe)
+				r.Put("/auth/me", handler.NewAuthHandler().UpdateMe)
+
+				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
 				tokenGen, err := realtime.NewHMACTokenGenerator(cfg.CentrifugoTokenSecret)
 				if err != nil {
@@ -245,7 +282,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
 			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
 			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
-		}
+			}
+		})
 	})
 
 	return &Server{
