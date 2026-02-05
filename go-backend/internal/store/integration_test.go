@@ -162,6 +162,22 @@ func (tdb *testDB) setRLSContext(ctx context.Context, conn *pgxpool.Conn, user *
 	return nil
 }
 
+// setRegistrationRLSContext sets the role to eval_app and sets app.role to 'registration'.
+// This mirrors what RegistrationStoreMiddleware does in production.
+func (tdb *testDB) setRegistrationRLSContext(ctx context.Context, conn *pgxpool.Conn) error {
+	_, err := conn.Exec(ctx, "SET ROLE eval_app")
+	if err != nil {
+		return fmt.Errorf("set role to eval_app: %w", err)
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.role', 'registration', false)")
+	if err != nil {
+		return fmt.Errorf("set app.role: %w", err)
+	}
+
+	return nil
+}
+
 // cleanup removes test data by deleting the test namespace.
 // ON DELETE CASCADE removes all child rows automatically.
 // System-admin users (no namespace) are cleaned up by ID.
@@ -1007,6 +1023,436 @@ func TestWithTx_Integration(t *testing.T) {
 		}
 		if count != 0 {
 			t.Error("user should not exist after WithTx rollback")
+		}
+	})
+}
+
+// =============================================================================
+// Registration RLS Policy Tests
+// =============================================================================
+
+func TestRLSPolicies_RegistrationContext(t *testing.T) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	tdb := setupTestDB(t)
+	if tdb == nil {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	defer tdb.close()
+
+	ctx := context.Background()
+	tdb.cleanup(ctx, t)
+
+	// --- Seed test data as superuser (bypasses RLS) ---
+	nsID := "reg-test-ns"
+	_, err := tdb.pool.Exec(ctx, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Registration Test NS', true)`, nsID)
+	if err != nil {
+		t.Fatalf("create namespace: %v", err)
+	}
+
+	inactiveNsID := "reg-test-ns-inactive"
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Inactive NS', false)`, inactiveNsID)
+	if err != nil {
+		t.Fatalf("create inactive namespace: %v", err)
+	}
+
+	// Create an instructor (needed as created_by / FK references)
+	instructorID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'instructor@test.com', 'instructor', $2)`, instructorID, nsID)
+	if err != nil {
+		t.Fatalf("create instructor: %v", err)
+	}
+
+	// Create a class
+	classID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, 'Test Class', $3)`, classID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+
+	// Create active and inactive sections
+	activeSectionID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO sections (id, namespace_id, class_id, name, join_code, active) VALUES ($1, $2, $3, 'Active Section', 'ABC-123', true)`, activeSectionID, nsID, classID)
+	if err != nil {
+		t.Fatalf("create active section: %v", err)
+	}
+
+	inactiveSectionID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO sections (id, namespace_id, class_id, name, join_code, active) VALUES ($1, $2, $3, 'Inactive Section', 'XYZ-789', false)`, inactiveSectionID, nsID, classID)
+	if err != nil {
+		t.Fatalf("create inactive section: %v", err)
+	}
+
+	// Create invitations: pending, consumed, expired, revoked
+	pendingInvID := uuid.New()
+	consumedInvID := uuid.New()
+	expiredInvID := uuid.New()
+	revokedInvID := uuid.New()
+
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO invitations (id, email, target_role, namespace_id, created_by, expires_at) VALUES ($1, 'pending@test.com', 'instructor', $2, $3, now() + interval '7 days')`, pendingInvID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create pending invitation: %v", err)
+	}
+
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO invitations (id, email, target_role, namespace_id, created_by, expires_at, consumed_at) VALUES ($1, 'consumed@test.com', 'instructor', $2, $3, now() + interval '7 days', now())`, consumedInvID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create consumed invitation: %v", err)
+	}
+
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO invitations (id, email, target_role, namespace_id, created_by, expires_at) VALUES ($1, 'expired@test.com', 'instructor', $2, $3, now() - interval '1 day')`, expiredInvID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create expired invitation: %v", err)
+	}
+
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO invitations (id, email, target_role, namespace_id, created_by, expires_at, revoked_at) VALUES ($1, 'revoked@test.com', 'instructor', $2, $3, now() + interval '7 days', now())`, revokedInvID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create revoked invitation: %v", err)
+	}
+
+	// A separate pending invitation that will be consumed in the UPDATE test
+	consumeTestInvID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO invitations (id, email, target_role, namespace_id, created_by, expires_at) VALUES ($1, 'consume-test@test.com', 'instructor', $2, $3, now() + interval '7 days')`, consumeTestInvID, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create consume-test invitation: %v", err)
+	}
+
+	// Users for membership tests
+	memberUserID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'member-test@test.com', 'student', $2)`, memberUserID, nsID)
+	if err != nil {
+		t.Fatalf("create member-test user: %v", err)
+	}
+
+	instrMemberID := uuid.New()
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'instr-member@test.com', 'instructor', $2)`, instrMemberID, nsID)
+	if err != nil {
+		t.Fatalf("create instr-member user: %v", err)
+	}
+
+	// A problem (for testing that registration context cannot see it)
+	_, err = tdb.pool.Exec(ctx, `INSERT INTO problems (namespace_id, title, author_id) VALUES ($1, 'Test Problem', $2)`, nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create problem: %v", err)
+	}
+
+	// --- Tests using registration context ---
+
+	t.Run("can SELECT non-expired non-revoked invitations", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		rows, err := conn.Query(ctx, "SELECT id FROM invitations")
+		if err != nil {
+			t.Fatalf("query invitations: %v", err)
+		}
+		defer rows.Close()
+
+		visible := make(map[uuid.UUID]bool)
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			visible[id] = true
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("rows error: %v", err)
+		}
+
+		// Should see: pending, consumed (not expired/revoked), consume-test
+		// Should NOT see: expired, revoked
+		if !visible[pendingInvID] {
+			t.Error("should see pending invitation")
+		}
+		if !visible[consumedInvID] {
+			t.Error("should see consumed (but valid) invitation")
+		}
+		if !visible[consumeTestInvID] {
+			t.Error("should see consume-test invitation")
+		}
+		if visible[expiredInvID] {
+			t.Error("should NOT see expired invitation")
+		}
+		if visible[revokedInvID] {
+			t.Error("should NOT see revoked invitation")
+		}
+	})
+
+	t.Run("can UPDATE (consume) pending invitation", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Should be able to set consumed_at on a pending invitation
+		tag, err := conn.Exec(ctx, `UPDATE invitations SET consumed_at = now() WHERE id = $1`, consumeTestInvID)
+		if err != nil {
+			t.Fatalf("update invitation: %v", err)
+		}
+		if tag.RowsAffected() != 1 {
+			t.Errorf("expected 1 row affected, got %d", tag.RowsAffected())
+		}
+	})
+
+	t.Run("cannot UPDATE already-consumed invitation", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Already-consumed invitation should not be visible to UPDATE
+		tag, err := conn.Exec(ctx, `UPDATE invitations SET consumed_at = now() WHERE id = $1`, consumedInvID)
+		if err != nil {
+			t.Fatalf("update consumed invitation: %v", err)
+		}
+		if tag.RowsAffected() != 0 {
+			t.Error("should not be able to update already-consumed invitation")
+		}
+	})
+
+	t.Run("can SELECT active sections only", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		rows, err := conn.Query(ctx, "SELECT id FROM sections")
+		if err != nil {
+			t.Fatalf("query sections: %v", err)
+		}
+		defer rows.Close()
+
+		var ids []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			ids = append(ids, id)
+		}
+
+		if len(ids) != 1 {
+			t.Fatalf("expected 1 visible section (active), got %d", len(ids))
+		}
+		if ids[0] != activeSectionID {
+			t.Errorf("expected active section %s, got %s", activeSectionID, ids[0])
+		}
+	})
+
+	t.Run("can SELECT classes", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		var count int
+		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM classes").Scan(&count)
+		if err != nil {
+			t.Fatalf("query classes: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected 1 class visible, got %d", count)
+		}
+	})
+
+	t.Run("can SELECT active namespaces only", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		rows, err := conn.Query(ctx, "SELECT id FROM namespaces")
+		if err != nil {
+			t.Fatalf("query namespaces: %v", err)
+		}
+		defer rows.Close()
+
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			ids = append(ids, id)
+		}
+
+		// Should see the active namespace but NOT the inactive one
+		foundActive, foundInactive := false, false
+		for _, id := range ids {
+			if id == nsID {
+				foundActive = true
+			}
+			if id == inactiveNsID {
+				foundInactive = true
+			}
+		}
+		if !foundActive {
+			t.Error("registration context should see active namespace")
+		}
+		if foundInactive {
+			t.Error("registration context should NOT see inactive namespace")
+		}
+	})
+
+	t.Run("can INSERT users", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		newUserID := uuid.New()
+		_, err = conn.Exec(ctx, `INSERT INTO users (id, external_id, email, role, namespace_id) VALUES ($1, $2, 'newstudent@test.com', 'student', $3)`, newUserID, "ext-"+newUserID.String()[:8], nsID)
+		if err != nil {
+			t.Fatalf("insert user: %v", err)
+		}
+
+		// Verify user was created (check as superuser)
+		var count int
+		err = tdb.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE id = $1", newUserID).Scan(&count)
+		if err != nil {
+			t.Fatalf("verify user: %v", err)
+		}
+		if count != 1 {
+			t.Error("user should have been created")
+		}
+	})
+
+	t.Run("can INSERT student membership only", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Should be able to insert student membership
+		_, err = conn.Exec(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'student')`, memberUserID, activeSectionID)
+		if err != nil {
+			t.Fatalf("insert student membership: %v", err)
+		}
+	})
+
+	t.Run("cannot INSERT instructor membership", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Should NOT be able to insert instructor membership
+		_, err = conn.Exec(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`, instrMemberID, activeSectionID)
+		if err == nil {
+			t.Error("should not be able to insert instructor membership in registration context")
+		}
+	})
+
+	t.Run("cannot SELECT users", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Registration context should not be able to see existing users
+		var count int
+		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+		if err != nil {
+			t.Fatalf("query users: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("registration context should not see any users, got %d", count)
+		}
+	})
+
+	t.Run("cannot DELETE invitations", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		tag, err := conn.Exec(ctx, `DELETE FROM invitations WHERE id = $1`, pendingInvID)
+		if err != nil {
+			t.Fatalf("delete invitation: %v", err)
+		}
+		if tag.RowsAffected() != 0 {
+			t.Error("registration context should not be able to delete invitations")
+		}
+	})
+
+	t.Run("cannot SELECT problems", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		var count int
+		err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM problems").Scan(&count)
+		if err != nil {
+			t.Fatalf("query problems: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("registration context should not see any problems, got %d", count)
 		}
 	})
 }

@@ -23,20 +23,21 @@ COMMENT ON FUNCTION is_registration_context IS 'Returns true if session is in re
 -- REGISTRATION RLS POLICIES
 -- ============================================================================
 
--- invitations: SELECT pending only (needed to validate invitation tokens)
+-- invitations: SELECT non-expired, non-revoked (needed to validate invitation tokens)
+-- Note: consumed_at is intentionally NOT checked here. PostgreSQL evaluates
+-- SELECT USING against the new row during UPDATE, so if we required
+-- consumed_at IS NULL, the ConsumeInvitation UPDATE (which sets consumed_at)
+-- would fail. The handler checks invitation status in Go code.
 CREATE POLICY "invitations_registration_select" ON invitations
   FOR SELECT USING (
     is_registration_context()
-    AND consumed_at IS NULL
     AND revoked_at IS NULL
     AND expires_at > now()
   );
 
 -- invitations: UPDATE pending → consumed (needed to consume invitations)
--- USING filters which rows can be targeted; WITH CHECK validates the new row.
--- We need an explicit WITH CHECK because after consumed_at = now(), the row
--- no longer matches USING (which requires consumed_at IS NULL). Without WITH
--- CHECK, PostgreSQL uses USING as the implicit check, which would reject the update.
+-- USING restricts which rows can be targeted (only unconsumed, valid invitations).
+-- WITH CHECK allows the new row after consumed_at is set.
 CREATE POLICY "invitations_registration_update" ON invitations
   FOR UPDATE USING (
     is_registration_context()
