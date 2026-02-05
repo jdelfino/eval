@@ -21,15 +21,6 @@ func Healthz(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
 }
 
-// Readyz is the readiness probe handler for Kubernetes.
-// It returns 200 OK with {"status": "ok"} when the service is ready.
-// Deprecated: Use ReadyzHandler for database health checking.
-func Readyz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
-}
-
 // HealthChecker is an interface for checking database health.
 // This interface allows for easy testing with mock implementations.
 type HealthChecker interface {

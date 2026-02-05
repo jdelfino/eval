@@ -114,32 +114,3 @@ func (u *UserLoader) Load(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-
-// Authenticator is Chi middleware that validates Bearer JWT tokens and
-// populates the authenticated user in the request context.
-//
-// Deprecated: Use JWTValidator + UserLoader separately for finer control.
-// This combined middleware is kept for backward compatibility.
-type Authenticator struct {
-	validator auth.TokenValidator
-	users     UserLookup
-	logger    *slog.Logger
-}
-
-// NewAuthenticator creates an Authenticator middleware.
-//
-// Deprecated: Use NewJWTValidator and NewUserLoader separately.
-func NewAuthenticator(v auth.TokenValidator, u UserLookup, l *slog.Logger) *Authenticator {
-	return &Authenticator{validator: v, users: u, logger: l}
-}
-
-// Authenticate returns a Chi middleware that validates Bearer tokens.
-//
-// Deprecated: Use JWTValidator.Validate and UserLoader.Load separately.
-func (a *Authenticator) Authenticate(next http.Handler) http.Handler {
-	jwtValidator := NewJWTValidator(a.validator, a.logger)
-	userLoader := NewUserLoader(a.users, a.logger)
-
-	// Chain: JWT validation -> User loading -> next handler
-	return jwtValidator.Validate(userLoader.Load(next))
-}

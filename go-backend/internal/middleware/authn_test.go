@@ -108,7 +108,8 @@ func TestAuthenticate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAuthenticator(tt.validator, tt.users, logger)
+			jwtValidator := NewJWTValidator(tt.validator, logger)
+			userLoader := NewUserLoader(tt.users, logger)
 
 			var gotUser *auth.User
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +123,8 @@ func TestAuthenticate(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 
-			a.Authenticate(next).ServeHTTP(rec, req)
+			// Chain: JWT validation -> User loading -> next handler
+			jwtValidator.Validate(userLoader.Load(next)).ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
