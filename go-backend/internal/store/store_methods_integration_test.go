@@ -134,11 +134,9 @@ func (db *integrationDB) createClass(ctx context.Context, t *testing.T, id uuid.
 
 func (db *integrationDB) createSection(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, classID uuid.UUID, name, joinCode string) {
 	t.Helper()
-	// Append unique suffix to join code to avoid collisions with leftover data from other test runs
-	uniqueJoinCode := joinCode + "-" + uuid.New().String()[:8]
 	_, err := db.pool.Exec(ctx,
 		`INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, $4, $5)`,
-		id, nsID, classID, name, uniqueJoinCode)
+		id, nsID, classID, name, joinCode)
 	if err != nil {
 		t.Fatalf("create section %s: %v", name, err)
 	}
@@ -201,15 +199,14 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 	defer conn.Release()
 
 	// Helper to run the ListProblemsFiltered query directly
-	// Always filter by namespace to ensure test isolation
 	runFiltered := func(t *testing.T, filters ProblemFilters) []Problem {
 		t.Helper()
 		query := `
 			SELECT id, namespace_id, title, description, starter_code, test_cases,
 			       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-			FROM problems WHERE namespace_id = $1`
-		args := []any{nsID}
-		argIdx := 2
+			FROM problems WHERE 1=1`
+		var args []any
+		argIdx := 1
 
 		if filters.ClassID != nil {
 			query += fmt.Sprintf(" AND class_id = $%d", argIdx)
@@ -263,7 +260,6 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 	}
 
 	t.Run("no filters returns all", func(t *testing.T) {
-		// Query with namespace filter returns all problems in our test namespace
 		results := runFiltered(t, ProblemFilters{})
 		if len(results) != 3 {
 			t.Errorf("expected 3 problems, got %d", len(results))
@@ -397,16 +393,9 @@ func TestIntegration_ListUsers(t *testing.T) {
 	}
 
 	t.Run("no filters", func(t *testing.T) {
-		// Query without filters returns all users; verify our created users are present
 		results := runListUsers(t, UserFilters{})
-		foundIDs := make(map[uuid.UUID]bool)
-		for _, u := range results {
-			foundIDs[u.ID] = true
-		}
-		for _, expected := range []uuid.UUID{u1, u2, u3} {
-			if !foundIDs[expected] {
-				t.Errorf("expected user %s not found in results", expected)
-			}
+		if len(results) != 3 {
+			t.Errorf("expected 3 users, got %d", len(results))
 		}
 	})
 
@@ -419,13 +408,10 @@ func TestIntegration_ListUsers(t *testing.T) {
 	})
 
 	t.Run("filter by role", func(t *testing.T) {
-		// Filter by role within our test namespaces to avoid interference from other tests
 		role := "student"
-		nsAResults := runListUsers(t, UserFilters{NamespaceID: &nsA, Role: &role})
-		nsBResults := runListUsers(t, UserFilters{NamespaceID: &nsB, Role: &role})
-		totalStudents := len(nsAResults) + len(nsBResults)
-		if totalStudents != 2 {
-			t.Errorf("expected 2 students in our namespaces, got %d", totalStudents)
+		results := runListUsers(t, UserFilters{Role: &role})
+		if len(results) != 2 {
+			t.Errorf("expected 2 students, got %d", len(results))
 		}
 	})
 
@@ -1046,14 +1032,12 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 	}
 
 	t.Run("updates join code", func(t *testing.T) {
-		// Use unique join code to avoid collision with other tests
-		uniqueNewCode := "NEW_CODE-" + uuid.New().String()[:8]
-		sec, err := updateJoinCode(sectionID, uniqueNewCode)
+		sec, err := updateJoinCode(sectionID, "NEW_CODE")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if sec.JoinCode != uniqueNewCode {
-			t.Errorf("expected join_code %s, got %s", uniqueNewCode, sec.JoinCode)
+		if sec.JoinCode != "NEW_CODE" {
+			t.Errorf("expected join_code NEW_CODE, got %s", sec.JoinCode)
 		}
 		if sec.ID != sectionID {
 			t.Errorf("expected section %s, got %s", sectionID, sec.ID)

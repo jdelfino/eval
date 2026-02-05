@@ -214,13 +214,12 @@ func TestIntegration_ListSessions(t *testing.T) {
 
 	listSessions := func(filters SessionFilters) []Session {
 		t.Helper()
-		// Always filter by namespace for test isolation
 		query := `SELECT id, namespace_id, section_id, section_name, problem,
 		                 featured_student_id, featured_code, creator_id, participants,
 		                 status, created_at, last_activity, ended_at
-		          FROM sessions WHERE namespace_id = $1`
-		args := []any{nsID}
-		argIdx := 2
+		          FROM sessions WHERE 1=1`
+		var args []any
+		argIdx := 1
 		if filters.SectionID != nil {
 			query += fmt.Sprintf(" AND section_id = $%d", argIdx)
 			args = append(args, *filters.SectionID)
@@ -1237,16 +1236,12 @@ func TestIntegration_ListProblems(t *testing.T) {
 	}
 
 	t.Run("no filter", func(t *testing.T) {
-		// Query without filter returns all problems; verify our created problems are present
 		results := listProblems(nil)
-		foundIDs := make(map[uuid.UUID]bool)
-		for _, p := range results {
-			foundIDs[p.ID] = true
+		if len(results) != 2 {
+			t.Errorf("expected 2 problems, got %d", len(results))
 		}
-		for _, expected := range []uuid.UUID{p1, p2} {
-			if !foundIDs[expected] {
-				t.Errorf("expected problem %s not found in results", expected)
-			}
+		if len(results) == 2 && results[0].ID != p1 {
+			t.Errorf("expected first problem %s (oldest), got %s", p1, results[0].ID)
 		}
 	})
 
