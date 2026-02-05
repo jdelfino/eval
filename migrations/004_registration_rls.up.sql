@@ -33,13 +33,18 @@ CREATE POLICY "invitations_registration_select" ON invitations
   );
 
 -- invitations: UPDATE pending → consumed (needed to consume invitations)
+-- USING filters which rows can be targeted; WITH CHECK validates the new row.
+-- We need an explicit WITH CHECK because after consumed_at = now(), the row
+-- no longer matches USING (which requires consumed_at IS NULL). Without WITH
+-- CHECK, PostgreSQL uses USING as the implicit check, which would reject the update.
 CREATE POLICY "invitations_registration_update" ON invitations
   FOR UPDATE USING (
     is_registration_context()
     AND consumed_at IS NULL
     AND revoked_at IS NULL
     AND expires_at > now()
-  );
+  )
+  WITH CHECK (is_registration_context());
 
 -- sections: SELECT active only (needed to validate join codes)
 CREATE POLICY "sections_registration_select" ON sections
