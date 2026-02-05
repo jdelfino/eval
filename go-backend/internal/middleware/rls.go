@@ -77,11 +77,9 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			// Ensure connection is released when request completes
-			defer conn.Release()
+			defer releaseClean(conn)
 
 			// Set RLS session variables
-			// Using set_config(..., true) makes the setting transaction-local
 			if err := setRLSVariables(ctx, conn, user); err != nil {
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
@@ -123,7 +121,7 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			defer conn.Release()
+			defer releaseClean(conn)
 
 			// Set only app.role = 'registration'; no user_id or namespace_id
 			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, true)", "registration"); err != nil {
@@ -138,6 +136,20 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// resetQuery clears all app.* session variables in a single round-trip.
+// This is called before returning connections to the pool to prevent
+// session state from leaking between requests.
+const resetQuery = "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false), set_config('app.role', '', false)"
+
+// releaseClean resets RLS session variables and returns the connection to the pool.
+// This prevents stale session state from leaking to the next request that
+// acquires the same connection.
+func releaseClean(conn RLSConn) {
+	// Use a background context — the request context may already be cancelled.
+	_, _ = conn.Exec(context.Background(), resetQuery)
+	conn.Release()
 }
 
 // setRLSVariables sets the PostgreSQL session variables for RLS policies.
