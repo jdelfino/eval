@@ -20,11 +20,20 @@ func NewAuthHandler() *AuthHandler {
 	return &AuthHandler{}
 }
 
-// Routes returns a chi.Router with the auth routes mounted.
+// Routes returns a chi.Router with authenticated auth routes.
+// These routes require both auth middleware and RLS middleware.
 func (h *AuthHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/me", h.GetMe)
 	r.Put("/me", h.UpdateMe)
+	return r
+}
+
+// RegistrationRoutes returns a chi.Router with registration routes.
+// These routes do NOT require auth middleware; they use RegistrationStoreMiddleware
+// which sets app.role = 'registration' for limited RLS access.
+func (h *AuthHandler) RegistrationRoutes() chi.Router {
+	r := chi.NewRouter()
 	r.Get("/accept-invite", h.GetAcceptInvite)
 	r.Post("/accept-invite", h.PostAcceptInvite)
 	r.Get("/register-student", h.GetRegisterStudent)

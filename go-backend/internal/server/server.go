@@ -127,17 +127,14 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 		// Registration routes - JWT validated but no user lookup required
 		// (these are for new users who don't have a profile yet)
+		// Uses RegistrationStoreMiddleware for limited RLS access instead of bypassing RLS.
 		if userStore != nil {
 			r.Group(func(r chi.Router) {
-				// Provide database access without RLS (security via invitation tokens / join codes)
 				if pgxPool := pool.PgxPool(); pgxPool != nil {
-					r.Use(custommw.NoRLSStoreMiddleware(pgxPool))
+					r.Use(custommw.RegistrationStoreMiddleware(pgxPool))
 				}
 				authHandler := handler.NewAuthHandler()
-				r.Get("/auth/accept-invite", authHandler.GetAcceptInvite)
-				r.Post("/auth/accept-invite", authHandler.PostAcceptInvite)
-				r.Get("/auth/register-student", authHandler.GetRegisterStudent)
-				r.Post("/auth/register-student", authHandler.PostRegisterStudent)
+				r.Mount("/auth", authHandler.RegistrationRoutes())
 			})
 		}
 

@@ -21,6 +21,7 @@ import (
 type mockConn struct {
 	mu            sync.Mutex
 	setConfigArgs []setConfigCall
+	execQueries   []string // all SQL strings passed to Exec
 	execErr       error
 	released      bool
 }
@@ -31,6 +32,10 @@ type setConfigCall struct {
 }
 
 func (m *mockConn) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	m.mu.Lock()
+	m.execQueries = append(m.execQueries, sql)
+	m.mu.Unlock()
+
 	if m.execErr != nil {
 		return pgconn.CommandTag{}, m.execErr
 	}
@@ -77,6 +82,14 @@ func (m *mockConn) getSetConfigArgs() []setConfigCall {
 	defer m.mu.Unlock()
 	result := make([]setConfigCall, len(m.setConfigArgs))
 	copy(result, m.setConfigArgs)
+	return result
+}
+
+func (m *mockConn) getExecQueries() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]string, len(m.execQueries))
+	copy(result, m.execQueries)
 	return result
 }
 
@@ -376,6 +389,227 @@ func TestRLSContextMiddleware_InterfaceCompliance(t *testing.T) {
 	// Note: We can't use (*pgxpool.Conn)(nil) directly because it's a wrapper type
 	// Instead, we verify the underlying functionality is compatible
 	t.Log("Type compatibility verified at compile time")
+}
+
+// --- RegistrationStoreMiddleware tests ---
+
+func TestRegistrationStoreMiddleware_Success(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	var ctxRepos store.Repos
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxRepos = store.ReposFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Verify only app.role was set, and set to 'registration'
+	calls := mock.getSetConfigArgs()
+	if len(calls) != 1 {
+		t.Fatalf("Expected 1 set_config call, got %d", len(calls))
+	}
+	if calls[0].setting != "app.role" {
+		t.Errorf("set_config setting = %q, want %q", calls[0].setting, "app.role")
+	}
+	if calls[0].value != "registration" {
+		t.Errorf("set_config value = %q, want %q", calls[0].value, "registration")
+	}
+
+	// Verify repos was attached to context
+	if ctxRepos == nil {
+		t.Error("Repos should be available in context")
+	}
+
+	// Verify connection was released
+	if !mock.wasReleased() {
+		t.Error("Connection should be released after request completes")
+	}
+}
+
+func TestRegistrationStoreMiddleware_AcquireError(t *testing.T) {
+	acquirer := &testAcquirer{
+		acquireErr: errors.New("connection pool exhausted"),
+	}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/accept-invite", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when connection acquire fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestRegistrationStoreMiddleware_SetConfigError(t *testing.T) {
+	mock := &mockConn{
+		execErr: errors.New("database error"),
+	}
+	acquirer := &testAcquirer{conn: mock}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when set_config fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+
+	// Connection should still be released on error
+	if !mock.wasReleased() {
+		t.Error("Connection should be released even on error")
+	}
+}
+
+func TestRegistrationStoreMiddleware_NoAuthRequired(t *testing.T) {
+	// Verify the registration middleware works without any auth user in context
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify no auth user in context (registration is unauthenticated)
+		if user := auth.UserFromContext(r.Context()); user != nil {
+			t.Error("Expected no auth user in context for registration")
+		}
+		// But repos should still be available
+		repos := store.ReposFromContext(r.Context())
+		if repos == nil {
+			t.Error("Repos should be available even without auth user")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	// No auth context set — simulates unauthenticated request
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/accept-invite?token=abc", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestRegistrationStoreMiddleware_ConnectionReleasedOnPanic(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("handler panic")
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic to propagate")
+		}
+		if !mock.wasReleased() {
+			t.Error("Connection should be released even on panic")
+		}
+	}()
+
+	wrapped.ServeHTTP(rr, req)
+}
+
+func TestRLSContextMiddleware_ResetsSessionOnRelease(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	testUser := &auth.User{
+		ID:          uuid.New(),
+		Email:       "test@example.com",
+		NamespaceID: "test-namespace",
+		Role:        auth.RoleInstructor,
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := rlsMiddlewareWithAcquirer(acquirer)
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	ctx := auth.WithUser(req.Context(), testUser)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	// The last Exec call should be the reset query
+	queries := mock.getExecQueries()
+	if len(queries) < 4 {
+		t.Fatalf("Expected at least 4 exec calls (3 set + 1 reset), got %d", len(queries))
+	}
+	lastQuery := queries[len(queries)-1]
+	if lastQuery != resetQuery {
+		t.Errorf("Last exec query should be resetQuery, got %q", lastQuery)
+	}
+}
+
+func TestRegistrationStoreMiddleware_ResetsSessionOnRelease(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	// The last Exec call should be the reset query
+	queries := mock.getExecQueries()
+	if len(queries) < 2 {
+		t.Fatalf("Expected at least 2 exec calls (1 set + 1 reset), got %d", len(queries))
+	}
+	lastQuery := queries[len(queries)-1]
+	if lastQuery != resetQuery {
+		t.Errorf("Last exec query should be resetQuery, got %q", lastQuery)
+	}
 }
 
 func TestRLSContextMiddleware_AllRoles(t *testing.T) {

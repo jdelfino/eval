@@ -77,11 +77,9 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			// Ensure connection is released when request completes
-			defer conn.Release()
+			defer releaseClean(conn)
 
 			// Set RLS session variables
-			// Using set_config(..., true) makes the setting transaction-local
 			if err := setRLSVariables(ctx, conn, user); err != nil {
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
@@ -97,20 +95,39 @@ func rlsMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Ha
 	}
 }
 
-// NoRLSStoreMiddleware provides database access without RLS context.
-// Use this for registration routes where users don't exist yet.
-// Security is enforced via invitation tokens / join codes, not RLS.
-func NoRLSStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+// RegistrationStoreMiddleware acquires a database connection, sets app.role to
+// 'registration', and attaches a Store to the request context.
+//
+// Registration routes need database access before a user record exists (e.g.,
+// accepting an invitation or joining via code). Instead of bypassing RLS, we
+// use a limited 'registration' role that only permits the specific operations
+// needed by registration handlers (see migration 004_registration_rls).
+//
+// This middleware does NOT depend on auth middleware; it should be used for
+// route groups that handle unauthenticated registration flows.
+func RegistrationStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+	acquirer := &poolAcquirer{pool: pool}
+	return registrationMiddlewareWithAcquirer(acquirer)
+}
+
+// registrationMiddlewareWithAcquirer is the testable implementation.
+func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			conn, err := pool.Acquire(ctx)
+			conn, err := acquirer.AcquireConn(ctx)
 			if err != nil {
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			defer conn.Release()
+			defer releaseClean(conn)
+
+			// Set only app.role = 'registration'; no user_id or namespace_id
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, true)", "registration"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
 
 			s := store.New(conn)
 			ctx = store.WithRepos(ctx, s)
@@ -119,6 +136,20 @@ func NoRLSStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// resetQuery clears all app.* session variables in a single round-trip.
+// This is called before returning connections to the pool to prevent
+// session state from leaking between requests.
+const resetQuery = "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false), set_config('app.role', '', false)"
+
+// releaseClean resets RLS session variables and returns the connection to the pool.
+// This prevents stale session state from leaking to the next request that
+// acquires the same connection.
+func releaseClean(conn RLSConn) {
+	// Use a background context — the request context may already be cancelled.
+	_, _ = conn.Exec(context.Background(), resetQuery)
+	conn.Release()
 }
 
 // setRLSVariables sets the PostgreSQL session variables for RLS policies.
@@ -143,4 +174,3 @@ func setRLSVariables(ctx context.Context, conn store.Querier, user *auth.User) e
 
 	return nil
 }
-
