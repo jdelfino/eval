@@ -377,4 +377,53 @@ func TestListRevisions_Unauthorized(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rec.Code)
 	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp["error"] != "authentication required" {
+		t.Errorf("expected error %q, got %q", "authentication required", errResp["error"])
+	}
+}
+
+func TestListRevisions_Unauthorized_NoStoreCall(t *testing.T) {
+	// Verify that the handler short-circuits on missing auth user
+	// and never calls the store (no repos needed in context).
+	h := NewRevisionHandler()
+	sessionID := uuid.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := revisionRouteCtx(sessionID.String())
+	// No auth user AND no repos in context — should not panic
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestCreateRevision_Unauthorized_ErrorBody(t *testing.T) {
+	h := NewRevisionHandler()
+	sessionID := uuid.New()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	ctx := revisionRouteCtx(sessionID.String())
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp["error"] != "authentication required" {
+		t.Errorf("expected error %q, got %q", "authentication required", errResp["error"])
+	}
 }

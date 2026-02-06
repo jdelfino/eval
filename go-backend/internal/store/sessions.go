@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -18,22 +17,17 @@ func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Ses
 		       status, created_at, last_activity, ended_at
 		FROM sessions WHERE 1=1`
 
-	args := []any{}
-	argIdx := 1
+	ac := newArgCounter(1)
 
 	if filters.SectionID != nil {
-		query += fmt.Sprintf(" AND section_id = $%d", argIdx)
-		args = append(args, *filters.SectionID)
-		argIdx++
+		query += " AND section_id = " + ac.Next(*filters.SectionID)
 	}
 	if filters.Status != nil {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
-		args = append(args, *filters.Status)
-		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
+		query += " AND status = " + ac.Next(*filters.Status)
 	}
 	query += " ORDER BY created_at DESC"
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, err
 	}
@@ -142,31 +136,22 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		UPDATE sessions
 		SET last_activity = now()`
 
-	args := []any{id}
-	argIdx := 2
+	ac := newArgCounter(2, id)
 
 	if params.FeaturedStudentID != nil {
-		query += fmt.Sprintf(",\n		    featured_student_id = $%d", argIdx)
-		args = append(args, *params.FeaturedStudentID)
-		argIdx++
+		query += ",\n		    featured_student_id = " + ac.Next(*params.FeaturedStudentID)
 	}
 
 	if params.FeaturedCode != nil {
-		query += fmt.Sprintf(",\n		    featured_code = $%d", argIdx)
-		args = append(args, *params.FeaturedCode)
-		argIdx++
+		query += ",\n		    featured_code = " + ac.Next(*params.FeaturedCode)
 	}
 
 	if params.Status != nil {
-		query += fmt.Sprintf(",\n		    status = $%d", argIdx)
-		args = append(args, *params.Status)
-		argIdx++
+		query += ",\n		    status = " + ac.Next(*params.Status)
 	}
 
 	if params.EndedAt != nil {
-		query += fmt.Sprintf(",\n		    ended_at = $%d", argIdx)
-		args = append(args, *params.EndedAt)
-		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
+		query += ",\n		    ended_at = " + ac.Next(*params.EndedAt)
 	}
 
 	if params.ClearEndedAt {
@@ -185,7 +170,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		          status, created_at, last_activity, ended_at`
 
 	var sess Session
-	err := s.q.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, ac.args...).Scan(
 		&sess.ID,
 		&sess.NamespaceID,
 		&sess.SectionID,
@@ -216,35 +201,26 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCrea
 		       status, created_at, last_activity, ended_at
 		FROM sessions WHERE 1=1`
 
-	args := []any{}
-	argIdx := 1
+	ac := newArgCounter(1)
 
 	// Role-aware filtering
 	if isCreator {
-		query += fmt.Sprintf(" AND creator_id = $%d", argIdx)
-		args = append(args, userID)
-		argIdx++
+		query += " AND creator_id = " + ac.Next(userID)
 	} else {
-		query += fmt.Sprintf(" AND $%d = ANY(participants)", argIdx)
-		args = append(args, userID)
-		argIdx++
+		query += " AND " + ac.Next(userID) + " = ANY(participants)"
 	}
 
 	if filters.ClassID != nil {
-		query += fmt.Sprintf(" AND section_id IN (SELECT id FROM sections WHERE class_id = $%d)", argIdx)
-		args = append(args, *filters.ClassID)
-		argIdx++
+		query += " AND section_id IN (SELECT id FROM sections WHERE class_id = " + ac.Next(*filters.ClassID) + ")"
 	}
 
 	if filters.Search != nil {
-		query += fmt.Sprintf(" AND section_name ILIKE '%%' || $%d || '%%'", argIdx)
-		args = append(args, *filters.Search)
-		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
+		query += " AND section_name ILIKE '%' || " + ac.Next(*filters.Search) + " || '%'"
 	}
 
 	query += " ORDER BY created_at DESC"
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, err
 	}

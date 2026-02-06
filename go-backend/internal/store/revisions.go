@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -15,14 +14,13 @@ func (s *Store) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *
 		       is_diff, diff, full_code, base_revision_id, execution_result
 		FROM revisions WHERE session_id = $1`
 
-	args := []any{sessionID}
+	ac := newArgCounter(2, sessionID)
 	if userID != nil {
-		query += fmt.Sprintf(" AND user_id = $%d", 2)
-		args = append(args, *userID)
+		query += " AND user_id = " + ac.Next(*userID)
 	}
 	query += " ORDER BY timestamp"
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, err
 	}

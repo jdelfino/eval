@@ -12,33 +12,25 @@ import (
 func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error) {
 	query := `SELECT id, namespace_id, action, actor_id, target_id, target_type, details, created_at
 		FROM audit_logs WHERE 1=1`
-	args := []any{}
-	argIdx := 1
+	ac := newArgCounter(1)
 
 	if filters.Action != nil {
-		query += fmt.Sprintf(" AND action = $%d", argIdx)
-		args = append(args, *filters.Action)
-		argIdx++
+		query += " AND action = " + ac.Next(*filters.Action)
 	}
 	if filters.ActorID != nil {
-		query += fmt.Sprintf(" AND actor_id = $%d", argIdx)
-		args = append(args, *filters.ActorID)
-		argIdx++
+		query += " AND actor_id = " + ac.Next(*filters.ActorID)
 	}
 
 	query += " ORDER BY created_at DESC"
 
 	if filters.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT $%d", argIdx)
-		args = append(args, filters.Limit)
-		argIdx++
+		query += " LIMIT " + ac.Next(filters.Limit)
 	}
 	if filters.Offset > 0 {
-		query += fmt.Sprintf(" OFFSET $%d", argIdx)
-		args = append(args, filters.Offset)
+		query += " OFFSET " + ac.Next(filters.Offset)
 	}
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
 	}

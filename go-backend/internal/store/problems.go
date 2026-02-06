@@ -62,25 +62,18 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 		FROM problems
 		WHERE 1=1`
 
-	var args []any
-	argIdx := 1
+	ac := newArgCounter(1)
 
 	if filters.ClassID != nil {
-		query += fmt.Sprintf(" AND class_id = $%d", argIdx)
-		args = append(args, *filters.ClassID)
-		argIdx++
+		query += " AND class_id = " + ac.Next(*filters.ClassID)
 	}
 
 	if filters.AuthorID != nil {
-		query += fmt.Sprintf(" AND author_id = $%d", argIdx)
-		args = append(args, *filters.AuthorID)
-		argIdx++
+		query += " AND author_id = " + ac.Next(*filters.AuthorID)
 	}
 
 	if len(filters.Tags) > 0 {
-		query += fmt.Sprintf(" AND tags && $%d", argIdx)
-		args = append(args, filters.Tags)
-		argIdx++ //nolint:ineffassign // keep argIdx consistent for future filters
+		query += " AND tags && " + ac.Next(filters.Tags)
 	}
 
 	if filters.PublicOnly {
@@ -101,7 +94,7 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 	}
 	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, err
 	}
@@ -218,42 +211,31 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 		    description       = COALESCE($3, description),
 		    starter_code      = COALESCE($4, starter_code),`
 
-	args := []any{id, params.Title, params.Description, params.StarterCode}
-	argIdx := 5
+	ac := newArgCounter(5, id, params.Title, params.Description, params.StarterCode)
 
 	// test_cases: if provided (non-nil), set it; otherwise keep current value
 	if params.TestCases != nil {
-		query += fmt.Sprintf("\n		    test_cases         = $%d,", argIdx)
-		args = append(args, params.TestCases)
-		argIdx++
+		query += "\n		    test_cases         = " + ac.Next(params.TestCases) + ","
 	}
 
 	// execution_settings: if provided (non-nil), set it; otherwise keep current value
 	if params.ExecutionSettings != nil {
-		query += fmt.Sprintf("\n		    execution_settings = $%d,", argIdx)
-		args = append(args, params.ExecutionSettings)
-		argIdx++
+		query += "\n		    execution_settings = " + ac.Next(params.ExecutionSettings) + ","
 	}
 
 	// class_id: if provided (non-nil), set it; otherwise keep current value
 	if params.ClassID != nil {
-		query += fmt.Sprintf("\n		    class_id           = $%d,", argIdx)
-		args = append(args, *params.ClassID)
-		argIdx++
+		query += "\n		    class_id           = " + ac.Next(*params.ClassID) + ","
 	}
 
 	// tags: if provided (non-nil), set it; otherwise keep current value
 	if params.Tags != nil {
-		query += fmt.Sprintf("\n		    tags               = $%d,", argIdx)
-		args = append(args, params.Tags)
-		argIdx++
+		query += "\n		    tags               = " + ac.Next(params.Tags) + ","
 	}
 
 	// solution: if provided (non-nil), set it; otherwise keep current value
 	if params.Solution != nil {
-		query += fmt.Sprintf("\n		    solution           = $%d,", argIdx)
-		args = append(args, *params.Solution)
-		argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
+		query += "\n		    solution           = " + ac.Next(*params.Solution) + ","
 	}
 
 	query += `
@@ -263,7 +245,7 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
 
 	var p Problem
-	err := s.q.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, ac.args...).Scan(
 		&p.ID,
 		&p.NamespaceID,
 		&p.Title,

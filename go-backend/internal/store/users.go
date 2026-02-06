@@ -121,24 +121,19 @@ func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, err
 		FROM users
 		WHERE 1=1`
 
-	var args []any
-	argIdx := 1
+	ac := newArgCounter(1)
 
 	if filters.NamespaceID != nil {
-		query += fmt.Sprintf(" AND namespace_id = $%d", argIdx)
-		args = append(args, *filters.NamespaceID)
-		argIdx++
+		query += " AND namespace_id = " + ac.Next(*filters.NamespaceID)
 	}
 
 	if filters.Role != nil {
-		query += fmt.Sprintf(" AND role = $%d", argIdx)
-		args = append(args, *filters.Role)
-		argIdx++ //nolint:ineffassign
+		query += " AND role = " + ac.Next(*filters.Role)
 	}
 
 	query += " ORDER BY created_at"
 
-	rows, err := s.q.Query(ctx, query, args...)
+	rows, err := s.q.Query(ctx, query, ac.args...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,28 +165,19 @@ func (s *Store) ListUsers(ctx context.Context, filters UserFilters) ([]User, err
 // Returns ErrNotFound if the user does not exist.
 func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params UpdateUserAdminParams) (*User, error) {
 	setClauses := []string{"updated_at = now()"}
-	args := []any{id}
-	argIdx := 2
+	ac := newArgCounter(2, id)
 
 	if params.Email != nil {
-		setClauses = append(setClauses, fmt.Sprintf("email = $%d", argIdx))
-		args = append(args, *params.Email)
-		argIdx++
+		setClauses = append(setClauses, "email = "+ac.Next(*params.Email))
 	}
 	if params.DisplayName != nil {
-		setClauses = append(setClauses, fmt.Sprintf("display_name = $%d", argIdx))
-		args = append(args, *params.DisplayName)
-		argIdx++
+		setClauses = append(setClauses, "display_name = "+ac.Next(*params.DisplayName))
 	}
 	if params.Role != nil {
-		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
-		args = append(args, *params.Role)
-		argIdx++
+		setClauses = append(setClauses, "role = "+ac.Next(*params.Role))
 	}
 	if params.NamespaceID != nil {
-		setClauses = append(setClauses, fmt.Sprintf("namespace_id = $%d", argIdx))
-		args = append(args, *params.NamespaceID)
-		argIdx++ //nolint:ineffassign
+		setClauses = append(setClauses, "namespace_id = "+ac.Next(*params.NamespaceID))
 	}
 
 	query := fmt.Sprintf(`
@@ -202,7 +188,7 @@ func (s *Store) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params Update
 		strings.Join(setClauses, ", "))
 
 	var user User
-	err := s.q.QueryRow(ctx, query, args...).Scan(
+	err := s.q.QueryRow(ctx, query, ac.args...).Scan(
 		&user.ID,
 		&user.ExternalID,
 		&user.Email,
