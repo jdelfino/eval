@@ -2,7 +2,7 @@
  * Authenticated API client with injectable auth.
  *
  * Uses the auth-provider module for token retrieval, allowing
- * Firebase auth in production and test tokens in integration tests.
+ * Firebase auth in production and test tokens in E2E/integration tests.
  */
 
 import { getAuthToken } from '@/lib/auth-provider';

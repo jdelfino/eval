@@ -1,5 +1,5 @@
 /**
- * Tests for api-client
+ * Tests for api-client (Firebase/production mode)
  */
 export {};
 
@@ -17,6 +17,12 @@ jest.mock('firebase/auth', () => ({
 
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: { currentUser: mockCurrentUser },
+}));
+
+// Ensure test mode is off for these tests (Firebase path)
+jest.mock('@/lib/test-auth', () => ({
+  isTestMode: () => false,
+  getTestToken: () => null,
 }));
 
 // Mock withRetry to just call the function directly

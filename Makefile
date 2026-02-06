@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────
 # Aggregate targets
 # ──────────────────────────────────────────────
-.PHONY: build test test-integration lint docker-build
+.PHONY: build test test-integration lint docker-build test-e2e
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
@@ -59,6 +59,14 @@ docker-build-executor:
 
 test-integration-contract:
 	./scripts/run-contract-tests.sh
+
+# ──────────────────────────────────────────────
+# E2E tests (Playwright)
+# ──────────────────────────────────────────────
+.PHONY: test-e2e
+
+test-e2e:
+	./scripts/run-e2e-tests.sh
 
 # ──────────────────────────────────────────────
 # Store integration tests

@@ -26,6 +26,14 @@ jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {},
 }));
 
+// Ensure test mode is off — these tests cover the Firebase path
+jest.mock('@/lib/auth-provider', () => ({
+  isTestMode: () => false,
+  setTestUser: jest.fn(),
+  clearTestUser: jest.fn(),
+  getTestToken: jest.fn(),
+}));
+
 // Mock api-client
 const mockApiGet = jest.fn();
 jest.mock('@/lib/api-client', () => ({
