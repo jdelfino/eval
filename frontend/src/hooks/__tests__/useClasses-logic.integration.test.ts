@@ -1,8 +1,8 @@
 /**
  * Logic-path tests for useClasses.
  *
- * Unlike the unit tests that mock api-client, these use the real api-client
- * and real withRetry to exercise actual code paths: state machine transitions,
+ * Unlike the unit tests that mock the typed api module, these use the real typed API,
+ * real api-client and real withRetry to exercise actual code paths: state machine transitions,
  * optimistic updates, error propagation, and retry behavior.
  *
  * @jest-environment jsdom
@@ -69,7 +69,8 @@ describe('useClasses logic paths', () => {
       expect(result.current.loading).toBe(true);
 
       await act(async () => {
-        resolve!({ ok: true, json: () => Promise.resolve({ classes: [] }) });
+        // Backend returns plain array
+        resolve!({ ok: true, json: () => Promise.resolve([]) });
         await promise!;
       });
       expect(result.current.loading).toBe(false);
@@ -87,7 +88,8 @@ describe('useClasses logic paths', () => {
       expect(result.current.error).toBe('Not found');
 
       // Now do a successful fetch — error should clear
-      mockFetchOk({ classes: [fakeClass1] });
+      // Backend returns plain array
+      mockFetchOk([fakeClass1]);
       await act(async () => { await result.current.fetchClasses(); });
       expect(result.current.error).toBeNull();
       expect(result.current.classes).toEqual([fakeClass1]);
@@ -96,12 +98,14 @@ describe('useClasses logic paths', () => {
 
   describe('optimistic state updates', () => {
     it('createClass appends to existing classes without re-fetching', async () => {
-      mockFetchOk({ classes: [fakeClass1] });
+      // Backend returns plain array for GET
+      mockFetchOk([fakeClass1]);
       const { result } = renderHook(() => useClasses());
       await act(async () => { await result.current.fetchClasses(); });
       expect(result.current.classes).toHaveLength(1);
 
-      mockFetchOk({ class: fakeClass2 });
+      // Backend returns plain object for POST
+      mockFetchOk(fakeClass2);
       await act(async () => { await result.current.createClass('CS 201', 'Advanced'); });
 
       expect(result.current.classes).toEqual([fakeClass1, fakeClass2]);
@@ -110,12 +114,14 @@ describe('useClasses logic paths', () => {
     });
 
     it('updateClass replaces the correct item, leaves others intact', async () => {
-      mockFetchOk({ classes: [fakeClass1, fakeClass2] });
+      // Backend returns plain array for GET
+      mockFetchOk([fakeClass1, fakeClass2]);
       const { result } = renderHook(() => useClasses());
       await act(async () => { await result.current.fetchClasses(); });
 
       const updated = { ...fakeClass1, name: 'CS 102' };
-      mockFetchOk({ class: updated });
+      // Backend returns plain object for PATCH
+      mockFetchOk(updated);
       await act(async () => { await result.current.updateClass('c1', { name: 'CS 102' }); });
 
       expect(result.current.classes[0]).toEqual(updated);
@@ -123,7 +129,8 @@ describe('useClasses logic paths', () => {
     });
 
     it('deleteClass removes only the targeted item', async () => {
-      mockFetchOk({ classes: [fakeClass1, fakeClass2] });
+      // Backend returns plain array for GET
+      mockFetchOk([fakeClass1, fakeClass2]);
       const { result } = renderHook(() => useClasses());
       await act(async () => { await result.current.fetchClasses(); });
 
@@ -144,18 +151,18 @@ describe('useClasses logic paths', () => {
       });
       const { result } = renderHook(() => useClasses());
 
-      let caught: any;
+      let caught: Error & { status?: number } | undefined;
       await act(async () => {
         try {
           await result.current.createClass('');
         } catch (e) {
-          caught = e;
+          caught = e as Error & { status?: number };
         }
       });
 
       expect(caught).toBeInstanceOf(Error);
-      expect(caught.message).toBe('Permission denied');
-      expect(caught.status).toBe(403);
+      expect(caught?.message).toBe('Permission denied');
+      expect(caught?.status).toBe(403);
     });
 
     it('fetchClasses catches non-retryable error and sets error state (does not throw)', async () => {
@@ -191,10 +198,11 @@ describe('useClasses logic paths', () => {
         name: 'Section A', semester: 'Fall 2024', join_code: 'ABC',
         active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z',
       };
-      mockFetchOk({ section: fakeSection });
+      // Backend returns plain Section object
+      mockFetchOk(fakeSection);
       const { result } = renderHook(() => useClasses());
 
-      let sec: any;
+      let sec: unknown;
       await act(async () => {
         sec = await result.current.createSection('c1', 'Section A', 'Fall 2024');
       });
@@ -215,10 +223,11 @@ describe('useClasses logic paths', () => {
         name: 'Section B', semester: 'Fall 2024', join_code: 'ABC',
         active: true, created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z',
       };
-      mockFetchOk({ section: updatedSection });
+      // Backend returns plain Section object
+      mockFetchOk(updatedSection);
       const { result } = renderHook(() => useClasses());
 
-      let sec: any;
+      let sec: unknown;
       await act(async () => {
         sec = await result.current.updateSection('s1', { name: 'Section B' });
       });

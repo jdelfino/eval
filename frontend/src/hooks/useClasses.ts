@@ -3,7 +3,17 @@
  */
 
 import { useState, useCallback } from 'react';
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import {
+  listClasses as apiListClasses,
+  createClass as apiCreateClass,
+  updateClass as apiUpdateClass,
+  deleteClass as apiDeleteClass,
+  createSection as apiCreateSection,
+  updateSection as apiUpdateSection,
+  regenerateJoinCode as apiRegenerateJoinCode,
+  addCoInstructor as apiAddCoInstructor,
+  removeCoInstructor as apiRemoveCoInstructor,
+} from '@/lib/api/classes';
 import type { Class, Section } from '@/types/api';
 
 interface UseClassesReturn {
@@ -16,7 +26,7 @@ interface UseClassesReturn {
   deleteClass: (id: string) => Promise<void>;
   createSection: (class_id: string, name: string, semester?: string) => Promise<Section>;
   updateSection: (section_id: string, updates: Partial<Section>) => Promise<Section>;
-  regenerateJoinCode: (section_id: string) => Promise<string>;
+  regenerateJoinCode: (section_id: string) => Promise<Section>;
   addCoInstructor: (section_id: string, email: string) => Promise<void>;
   removeCoInstructor: (section_id: string, user_id: string) => Promise<void>;
 }
@@ -30,8 +40,8 @@ export function useClasses(): UseClassesReturn {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<{ classes: Class[] }>('/classes');
-      setClasses(data.classes);
+      const data = await apiListClasses();
+      setClasses(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -41,50 +51,50 @@ export function useClasses(): UseClassesReturn {
 
   const createClass = useCallback(async (name: string, description?: string): Promise<Class> => {
     setError(null);
-    const data = await apiPost<{ class: Class }>('/classes', { name, description });
-    setClasses(prev => [...prev, data.class]);
-    return data.class;
+    const cls = await apiCreateClass(name, description);
+    setClasses(prev => [...prev, cls]);
+    return cls;
   }, []);
 
   const updateClass = useCallback(async (id: string, updates: Partial<Class>): Promise<Class> => {
     setError(null);
-    const data = await apiPatch<{ class: Class }>(`/classes/${id}`, updates);
-    setClasses(prev => prev.map(c => c.id === id ? data.class : c));
-    return data.class;
+    const cls = await apiUpdateClass(id, updates);
+    setClasses(prev => prev.map(c => c.id === id ? cls : c));
+    return cls;
   }, []);
 
   const deleteClass = useCallback(async (id: string): Promise<void> => {
     setError(null);
-    await apiDelete(`/classes/${id}`);
+    await apiDeleteClass(id);
     setClasses(prev => prev.filter(c => c.id !== id));
   }, []);
 
   const createSection = useCallback(async (class_id: string, name: string, semester?: string): Promise<Section> => {
     setError(null);
-    const data = await apiPost<{ section: Section }>(`/classes/${class_id}/sections`, { name, semester });
-    return data.section;
+    const section = await apiCreateSection(class_id, name, semester);
+    return section;
   }, []);
 
   const updateSection = useCallback(async (section_id: string, updates: Partial<Section>): Promise<Section> => {
     setError(null);
-    const data = await apiPatch<{ section: Section }>(`/sections/${section_id}`, updates);
-    return data.section;
+    const section = await apiUpdateSection(section_id, updates);
+    return section;
   }, []);
 
-  const regenerateJoinCode = useCallback(async (section_id: string): Promise<string> => {
+  const regenerateJoinCode = useCallback(async (section_id: string): Promise<Section> => {
     setError(null);
-    const data = await apiPost<{ join_code: string }>(`/sections/${section_id}/regenerate-code`);
-    return data.join_code;
+    const section = await apiRegenerateJoinCode(section_id);
+    return section;
   }, []);
 
   const addCoInstructor = useCallback(async (section_id: string, email: string): Promise<void> => {
     setError(null);
-    await apiPost(`/sections/${section_id}/instructors`, { email });
+    await apiAddCoInstructor(section_id, email);
   }, []);
 
   const removeCoInstructor = useCallback(async (section_id: string, user_id: string): Promise<void> => {
     setError(null);
-    await apiDelete(`/sections/${section_id}/instructors/${user_id}`);
+    await apiRemoveCoInstructor(section_id, user_id);
   }, []);
 
   return {

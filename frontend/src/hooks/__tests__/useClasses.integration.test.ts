@@ -1,8 +1,8 @@
 /**
  * Cross-layer integration tests for useClasses.
  *
- * These tests exercise the full chain: useClasses hook -> real api-client -> real withRetry,
- * with only global.fetch and firebase mocked. This verifies that the hook, api-client,
+ * These tests exercise the full chain: useClasses hook -> typed api module -> api-client -> real withRetry,
+ * with only global.fetch and firebase mocked. This verifies that the hook, typed API functions, api-client,
  * and retry logic are correctly wired together end-to-end.
  *
  * @jest-environment jsdom
@@ -57,9 +57,10 @@ const fakeClass = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
-describe('useClasses integration (hook -> api-client -> fetch)', () => {
+describe('useClasses integration (hook -> typed api -> api-client -> fetch)', () => {
   it('fetchClasses sends authenticated GET to /classes and populates state', async () => {
-    mockFetchOk({ classes: [fakeClass] });
+    // Backend returns plain array (not wrapped)
+    mockFetchOk([fakeClass]);
     const { result } = renderHook(() => useClasses());
 
     await act(async () => {
@@ -83,10 +84,11 @@ describe('useClasses integration (hook -> api-client -> fetch)', () => {
   });
 
   it('createClass sends POST with JSON body, updates hook state, and returns the class', async () => {
-    mockFetchOk({ class: fakeClass });
+    // Backend returns plain object (not wrapped)
+    mockFetchOk(fakeClass);
     const { result } = renderHook(() => useClasses());
 
-    let created: any;
+    let created: unknown;
     await act(async () => {
       created = await result.current.createClass('CS 101', 'Intro');
     });
@@ -107,8 +109,8 @@ describe('useClasses integration (hook -> api-client -> fetch)', () => {
   });
 
   it('deleteClass sends DELETE, removes from hook state', async () => {
-    // First populate with fetchClasses
-    mockFetchOk({ classes: [fakeClass] });
+    // First populate with fetchClasses (backend returns plain array)
+    mockFetchOk([fakeClass]);
     const { result } = renderHook(() => useClasses());
     await act(async () => {
       await result.current.fetchClasses();
@@ -146,16 +148,18 @@ describe('useClasses integration (hook -> api-client -> fetch)', () => {
   });
 
   it('updateClass sends PATCH and updates the correct item in state', async () => {
-    mockFetchOk({ classes: [fakeClass] });
+    // Backend returns plain array for GET
+    mockFetchOk([fakeClass]);
     const { result } = renderHook(() => useClasses());
     await act(async () => {
       await result.current.fetchClasses();
     });
 
     const updated = { ...fakeClass, name: 'CS 102' };
-    mockFetchOk({ class: updated });
+    // Backend returns plain object for PATCH
+    mockFetchOk(updated);
 
-    let cls: any;
+    let cls: unknown;
     await act(async () => {
       cls = await result.current.updateClass('c1', { name: 'CS 102' });
     });
@@ -175,33 +179,45 @@ describe('useClasses integration (hook -> api-client -> fetch)', () => {
     mockFetchError(403, 'Forbidden');
     const { result } = renderHook(() => useClasses());
 
-    let caught: any;
+    let caught: Error & { status?: number } | undefined;
     await act(async () => {
       try {
         await result.current.createClass('CS 101');
       } catch (e) {
-        caught = e;
+        caught = e as Error & { status?: number };
       }
     });
 
     expect(caught).toBeInstanceOf(Error);
-    expect(caught.message).toBe('Forbidden');
-    expect(caught.status).toBe(403);
+    expect(caught?.message).toBe('Forbidden');
+    expect(caught?.status).toBe(403);
   });
 
-  it('regenerateJoinCode sends POST to correct endpoint and returns code', async () => {
-    mockFetchOk({ join_code: 'NEW456' });
+  it('regenerateJoinCode sends POST to correct endpoint and returns Section', async () => {
+    const fakeSection = {
+      id: 's1',
+      namespace_id: 'ns-1',
+      class_id: 'c1',
+      name: 'Section A',
+      semester: 'Fall 2024',
+      join_code: 'NEW456',
+      active: true,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
+    // Backend returns plain Section object (not wrapped)
+    mockFetchOk(fakeSection);
     const { result } = renderHook(() => useClasses());
 
-    let code: string = '';
+    let section: unknown;
     await act(async () => {
-      code = await result.current.regenerateJoinCode('s1');
+      section = await result.current.regenerateJoinCode('s1');
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/sections/s1/regenerate-code'),
       expect.objectContaining({ method: 'POST' })
     );
-    expect(code).toBe('NEW456');
+    expect(section).toEqual(fakeSection);
   });
 });

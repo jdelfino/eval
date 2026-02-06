@@ -68,11 +68,11 @@ export default function ClassDetailsPage() {
   };
 
   const handleRegenerateCode = async (section_id: string) => {
-    const newCode = await regenerateJoinCode(section_id);
-    setSections(sections.map(s => 
-      s.id === section_id ? { ...s, join_code: newCode } : s
+    const updatedSection = await regenerateJoinCode(section_id);
+    setSections(sections.map(s =>
+      s.id === section_id ? updatedSection : s
     ));
-    return newCode;
+    return updatedSection.join_code;
   };
 
   const handleAddInstructor = async (section_id: string, email: string) => {
