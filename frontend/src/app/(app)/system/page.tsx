@@ -211,7 +211,7 @@ function SystemAdminContent() {
   // Calculate statistics
   const totalNamespaces = namespaces.length;
   const activeNamespaces = namespaces.filter((ns) => ns.active).length;
-  const totalUsers = namespaces.reduce((sum, ns) => sum + ns.userCount, 0);
+  const totalUsers = namespaces.reduce((sum, ns) => sum + (ns.userCount || 0), 0);
   const pendingInvitations = invitations.filter(
     (inv) => !inv.consumed_at && !inv.revoked_at && new Date(inv.expires_at) > new Date()
   ).length;
