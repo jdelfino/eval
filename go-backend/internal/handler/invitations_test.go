@@ -807,3 +807,140 @@ func TestSystemResendInvitation_NotPending(t *testing.T) {
 		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// --- URL Format Tests ---
+
+// captureEmailClient captures the acceptURL passed to SendInvitation.
+type captureEmailClient struct {
+	acceptURL string
+}
+
+func (c *captureEmailClient) SendInvitation(_ context.Context, _, _, _, acceptURL string) error {
+	c.acceptURL = acceptURL
+	return nil
+}
+
+func TestCreateInvitation_URLContainsToken(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &captureEmailClient{}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, params store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":       "alice@example.com",
+		"target_role": "instructor",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify URL format uses ?token= parameter (not ?id=)
+	expectedToken := inv.ID.String()
+	expectedURL := "http://localhost:3000/invite/accept?token=" + expectedToken
+	if emailCli.acceptURL != expectedURL {
+		t.Errorf("expected acceptURL %q, got %q", expectedURL, emailCli.acceptURL)
+	}
+}
+
+func TestResendInvitation_URLContainsToken(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &captureEmailClient{}
+	repo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
+	req = withInvCtx(req, "test-ns", inv.ID.String(), nsAdmin("test-ns"), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.Resend(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify URL format uses ?token= parameter (not ?id=)
+	expectedToken := inv.ID.String()
+	expectedURL := "http://localhost:3000/invite/accept?token=" + expectedToken
+	if emailCli.acceptURL != expectedURL {
+		t.Errorf("expected acceptURL %q, got %q", expectedURL, emailCli.acceptURL)
+	}
+}
+
+func TestSystemCreateInvitation_URLContainsToken(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &captureEmailClient{}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, params store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":        "alice@example.com",
+		"target_role":  "instructor",
+		"namespace_id": "test-ns",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.SystemCreate(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify URL format uses ?token= parameter (not ?id=)
+	expectedToken := inv.ID.String()
+	expectedURL := "http://localhost:3000/invite/accept?token=" + expectedToken
+	if emailCli.acceptURL != expectedURL {
+		t.Errorf("expected acceptURL %q, got %q", expectedURL, emailCli.acceptURL)
+	}
+}
+
+func TestSystemResendInvitation_URLContainsToken(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &captureEmailClient{}
+	repo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	req := httptest.NewRequest(http.MethodPost, "/"+inv.ID.String()+"/resend", nil)
+	req = withSystemInvCtx(req, inv.ID.String(), sysAdmin(), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.SystemResend(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify URL format uses ?token= parameter (not ?id=)
+	expectedToken := inv.ID.String()
+	expectedURL := "http://localhost:3000/invite/accept?token=" + expectedToken
+	if emailCli.acceptURL != expectedURL {
+		t.Errorf("expected acceptURL %q, got %q", expectedURL, emailCli.acceptURL)
+	}
+}

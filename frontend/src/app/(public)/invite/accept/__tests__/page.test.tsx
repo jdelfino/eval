@@ -65,6 +65,20 @@ const setLocationHash = (hash: string) => {
   mockLocationHash = hash;
 };
 
+// Mock next/navigation useSearchParams for query parameter support
+let mockSearchParams = new URLSearchParams();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+  useSearchParams: () => mockSearchParams,
+}));
+
+// Helper to set search params
+const setSearchParams = (params: Record<string, string>) => {
+  mockSearchParams = new URLSearchParams(params);
+};
+
 describe('AcceptInvitePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -72,6 +86,7 @@ describe('AcceptInvitePage', () => {
     mockFetch.mockClear();
     mockReload.mockClear();
     mockLocationHash = '';
+    mockSearchParams = new URLSearchParams();
     mockCreateUserWithEmailAndPassword.mockClear();
     mockGetIdToken.mockClear();
     mockApiFetchRaw.mockClear();
@@ -85,6 +100,93 @@ describe('AcceptInvitePage', () => {
     // the module mock would need to exist. Since we removed the mock and
     // the module, this test passing confirms no Supabase dependency.
     expect(true).toBe(true);
+  });
+
+  describe('Query Parameter Token Support', () => {
+    it('sends token from query params to API for verification', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?token=11111111-1111-1111-1111-111111111111')
+        );
+      });
+    });
+
+    it('displays invitation info when token query param is valid', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      // Backend returns flat Invitation struct with snake_case JSON
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          id: '11111111-1111-1111-1111-111111111111',
+          email: 'test@example.com',
+          target_role: 'instructor',
+          namespace_id: 'test-ns',
+          status: 'pending',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+        expect(screen.getByText('test@example.com')).toBeInTheDocument();
+        expect(screen.getByText('Instructor')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for invalid token format in query params', async () => {
+      setSearchParams({ token: 'not-a-uuid' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ code: 'INVALID_TOKEN', error: 'Invalid token format' }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid Link')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for invitation not found from query param token', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: 'Not found', code: 'INVITATION_NOT_FOUND' }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Invitation Not Found')).toBeInTheDocument();
+      });
+    });
+
+    it('prefers query param token over hash-based tokens', async () => {
+      // Both are set, query param should take precedence
+      setSearchParams({ token: '22222222-2222-2222-2222-222222222222' });
+      setLocationHash('#token_hash=hash-token&type=invite');
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?token=22222222-2222-2222-2222-222222222222')
+        );
+      });
+      // Should NOT include hash-based params
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('token_hash')
+      );
+    });
   });
 
   describe('Token Verification', () => {

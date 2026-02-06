@@ -122,7 +122,7 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send email (best-effort, don't fail the request)
-	acceptURL := fmt.Sprintf("%s?id=%s", h.baseURL, inv.ID.String())
+	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	_ = h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL)
 
 	httputil.WriteJSON(w, http.StatusCreated, inv)
@@ -242,7 +242,7 @@ func (h *InvitationHandler) Resend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	acceptURL := fmt.Sprintf("%s?id=%s", h.baseURL, inv.ID.String())
+	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
 		return
@@ -308,7 +308,7 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	acceptURL := fmt.Sprintf("%s?id=%s", h.baseURL, inv.ID.String())
+	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	_ = h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, req.NamespaceID, acceptURL)
 
 	httputil.WriteJSON(w, http.StatusCreated, inv)
@@ -388,7 +388,7 @@ func (h *InvitationHandler) SystemResend(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	acceptURL := fmt.Sprintf("%s?id=%s", h.baseURL, inv.ID.String())
+	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, inv.NamespaceID, acceptURL); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
 		return
