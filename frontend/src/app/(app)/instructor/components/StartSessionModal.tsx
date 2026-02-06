@@ -9,7 +9,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch, apiPost } from '@/lib/api-client';
+import { apiPost } from '@/lib/api-client';
+import { listProblems } from '@/lib/api/problems';
 
 interface ProblemInfo {
   id: string;
@@ -46,9 +47,8 @@ export default function StartSessionModal({
   const loadProblems = async () => {
     try {
       setLoadingProblems(true);
-      const response = await apiFetch('/problems');
-      const data = await response.json();
-      setProblems(data.problems || []);
+      const problems = await listProblems();
+      setProblems(problems);
       setError(null);
     } catch (err) {
       console.error('Error loading problems:', err);

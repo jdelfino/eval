@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api-client';
+import { listSessionHistoryWithFilters } from '@/lib/api/sessions';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface SessionData {
@@ -44,18 +44,25 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
     try {
       setLoading(true);
       setError(null);
-      
-      const params = new URLSearchParams();
+
+      // Note: The typed API currently only supports sectionId and limit filters.
+      // statusFilter and searchQuery are applied client-side for now.
+      const sessions = await listSessionHistoryWithFilters();
+
+      // Apply client-side filters
+      let filteredSessions = sessions;
       if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
+        filteredSessions = filteredSessions.filter(s => s.status === statusFilter);
       }
       if (searchQuery) {
-        params.append('search', searchQuery);
+        const query = searchQuery.toLowerCase();
+        filteredSessions = filteredSessions.filter(s =>
+          s.section_name?.toLowerCase().includes(query) ||
+          s.join_code?.toLowerCase().includes(query)
+        );
       }
 
-      const response = await apiFetch(`/sessions/history?${params.toString()}`);
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      setSessions(filteredSessions as SessionData[]);
     } catch (err) {
       console.error('Error fetching sessions:', err);
       setError(err instanceof Error ? err.message : 'Failed to load sessions');

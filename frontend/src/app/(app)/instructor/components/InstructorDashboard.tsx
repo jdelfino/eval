@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { hasRolePermission } from '@/lib/permissions';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
-import { apiFetch } from '@/lib/api-client';
+import { getInstructorDashboard } from '@/lib/api/instructor';
 import CreateClassModal from './CreateClassModal';
 
 interface SectionInfo {
@@ -58,9 +58,8 @@ export function InstructorDashboard({
       setError(null);
 
       // Fetch classes with their sections and active session info
-      const response = await apiFetch('/instructor/dashboard');
-      const data = await response.json();
-      setClassesWithSections(data.classes || []);
+      const data = await getInstructorDashboard();
+      setClassesWithSections(data.classes as ClassWithSections[] || []);
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError(err instanceof Error ? err : new Error('Failed to load dashboard'));

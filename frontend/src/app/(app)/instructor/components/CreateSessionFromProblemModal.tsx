@@ -9,7 +9,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
-import { apiFetch, apiPost } from '@/lib/api-client';
+import { apiPost } from '@/lib/api-client';
+import { getClassSections } from '@/lib/api/sections';
 
 interface SectionInfo {
   id: string;
@@ -48,10 +49,8 @@ export default function CreateSessionFromProblemModal({
   const loadSections = async (targetClassId: string) => {
     try {
       setLoadingSections(true);
-      const response = await apiFetch(`/classes/${targetClassId}/sections`);
-      const data = await response.json();
-      const loadedSections: SectionInfo[] = data.sections || [];
-      setSections(loadedSections);
+      const loadedSections = await getClassSections(targetClassId);
+      setSections(loadedSections as SectionInfo[]);
 
       // Pre-select last-used section if it matches this class
       const lastUsed = getLastUsedSection();
