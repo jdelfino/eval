@@ -33,17 +33,10 @@ export interface RealtimeStudent {
   execution_settings?: ExecutionSettings;
 }
 
-/** Problem summary as returned by the API for list views. */
-export interface ProblemSummary {
-  id: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  author_id: string;
-  tags: string[];
-  class_id: string;
-  test_case_count: number | null;
-}
+/**
+ * Re-export ProblemSummary from the API module (canonical source of truth).
+ */
+export type { ProblemSummary } from '@/lib/api/problems';
 
 /**
  * Re-export ExecutionResult from api.ts to avoid duplication.
