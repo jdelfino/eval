@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -23,17 +21,16 @@ import (
 type SessionHandler struct {
 	publisher realtime.SessionPublisher
 	revBuffer *revision.RevisionBuffer
-	logger    *slog.Logger
 }
 
 // NewSessionHandler creates a new SessionHandler.
-func NewSessionHandler(publisher realtime.SessionPublisher, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{publisher: publisher, logger: logger}
+func NewSessionHandler(publisher realtime.SessionPublisher) *SessionHandler {
+	return &SessionHandler{publisher: publisher}
 }
 
 // NewSessionHandlerWithBuffer creates a new SessionHandler with a revision buffer.
-func NewSessionHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{publisher: publisher, revBuffer: revBuffer, logger: logger}
+func NewSessionHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer) *SessionHandler {
+	return &SessionHandler{publisher: publisher, revBuffer: revBuffer}
 }
 
 // Routes returns a chi.Router with session routes mounted.
@@ -211,16 +208,12 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Publish real-time events only when the value actually changed.
 	if req.Status != nil && *req.Status == "completed" && previous.Status != "completed" {
-		publishAsync(r, h.logger, id, func(ctx context.Context) error {
-			return h.publisher.SessionEnded(ctx, id.String(), "completed")
-		})
+		_ = h.publisher.SessionEnded(r.Context(), id.String(), "completed")
 	}
 	if req.FeaturedStudentID != nil && req.FeaturedCode != nil {
 		featuredChanged := previous.FeaturedStudentID == nil || *previous.FeaturedStudentID != *req.FeaturedStudentID
 		if featuredChanged {
-			publishAsync(r, h.logger, id, func(ctx context.Context) error {
-				return h.publisher.FeaturedStudentChanged(ctx, id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode)
-			})
+			_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode)
 		}
 	}
 
@@ -266,9 +259,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		h.revBuffer.FlushSession(r.Context(), id)
 	}
 
-	publishAsync(r, h.logger, id, func(ctx context.Context) error {
-		return h.publisher.SessionEnded(ctx, id.String(), "completed")
-	})
+	_ = h.publisher.SessionEnded(r.Context(), id.String(), "completed")
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }
@@ -357,9 +348,7 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(req.Problem, &problemMeta)
-	publishAsync(r, h.logger, id, func(ctx context.Context) error {
-		return h.publisher.ProblemUpdated(ctx, id.String(), problemMeta.ID)
-	})
+	_ = h.publisher.ProblemUpdated(r.Context(), id.String(), problemMeta.ID)
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

@@ -225,11 +225,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Mount("/namespaces/{id}/invitations", invitationHandler.Routes())
 			r.Mount("/system/invitations", invitationHandler.SystemRoutes())
 
-			// Create real-time publisher (no-op if Centrifugo is not configured)
+			// Create real-time publisher (no-op if Centrifugo is not configured).
+			// Wrap with AsyncSessionPublisher so handlers don't manage goroutines.
 			var sessionPub realtime.SessionPublisher
 			if cfg.CentrifugoURL != "" && cfg.CentrifugoAPIKey != "" {
 				client := realtime.NewClient(cfg.CentrifugoURL, cfg.CentrifugoAPIKey, logger)
-				sessionPub = realtime.NewSessionPublisher(client)
+				sessionPub = realtime.NewAsyncSessionPublisher(realtime.NewSessionPublisher(client), logger)
 			} else {
 				sessionPub = realtime.NoOpSessionPublisher{}
 			}
@@ -241,9 +242,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			revBuffer = revision.NewRevisionBuffer(poolStore, logger)
 			revBuffer.Start()
 
-			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer, logger).Routes())
+			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer).Routes())
 
-			sessionStateHandler := handler.NewSessionStateHandler(sessionPub, logger)
+			sessionStateHandler := handler.NewSessionStateHandler(sessionPub)
 			r.Get("/sessions/{id}/state", sessionStateHandler.State)
 			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
 			r.Group(func(r chi.Router) {
@@ -275,7 +276,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
-			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(sessionPub, revBuffer, logger)
+			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(sessionPub, revBuffer)
 			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
 			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
 			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)

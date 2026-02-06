@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -17,17 +16,12 @@ import (
 // SessionStateHandler handles composite session state endpoints.
 type SessionStateHandler struct {
 	publisher realtime.SessionPublisher
-	logger    *slog.Logger
 }
 
 // NewSessionStateHandler creates a new SessionStateHandler.
-func NewSessionStateHandler(
-	publisher realtime.SessionPublisher,
-	logger *slog.Logger,
-) *SessionStateHandler {
+func NewSessionStateHandler(publisher realtime.SessionPublisher) *SessionStateHandler {
 	return &SessionStateHandler{
 		publisher: publisher,
-		logger:    logger,
 	}
 }
 
@@ -174,9 +168,7 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 	if req.Code != nil {
 		code = *req.Code
 	}
-	publishAsync(r, h.logger, id, func(ctx context.Context) error {
-		return h.publisher.FeaturedStudentChanged(ctx, id.String(), studentID, code)
-	})
+	_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), studentID, code)
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

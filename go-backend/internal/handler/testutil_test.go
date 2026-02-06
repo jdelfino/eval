@@ -2,8 +2,6 @@ package handler
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -164,10 +162,6 @@ func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, prob
 }
 
 // --- Shared test helpers ---
-
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 func noopPublisher() realtime.SessionPublisher {
 	return realtime.NoOpSessionPublisher{}
