@@ -82,5 +82,9 @@ func (c *Client) Publish(ctx context.Context, channel string, data any) error {
 		}
 	}
 
+	// Drain the response body so the underlying TCP connection can be reused
+	// by the HTTP transport for subsequent requests.
+	_, _ = io.Copy(io.Discard, resp.Body)
+
 	return nil
 }

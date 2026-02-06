@@ -55,7 +55,7 @@ func TestState_Success(t *testing.T) {
 	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
 		return section, nil
 	}}
-	h := NewSessionStateHandler(noopPublisher(), testLogger())
+	h := NewSessionStateHandler(noopPublisher())
 
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/state", nil)
 	ctx := withChiParam(req.Context(), "id", sess.ID.String())
@@ -85,7 +85,7 @@ func TestState_SessionNotFound(t *testing.T) {
 	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
 		return nil, store.ErrNotFound
 	}}
-	h := NewSessionStateHandler(noopPublisher(), testLogger())
+	h := NewSessionStateHandler(noopPublisher())
 
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+id.String()+"/state", nil)
@@ -111,7 +111,7 @@ func TestPublicState_Success(t *testing.T) {
 	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
 		return section, nil
 	}}
-	h := NewSessionStateHandler(noopPublisher(), testLogger())
+	h := NewSessionStateHandler(noopPublisher())
 
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/public-state", nil)
 	ctx := withChiParam(req.Context(), "id", sess.ID.String())
@@ -152,7 +152,7 @@ func TestDetails_RoutesToState(t *testing.T) {
 	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
 		return section, nil
 	}}
-	h := NewSessionStateHandler(noopPublisher(), testLogger())
+	h := NewSessionStateHandler(noopPublisher())
 
 	// Details route now points to State handler
 	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/details", nil)
@@ -190,7 +190,7 @@ func TestFeature_Success(t *testing.T) {
 			return &updatedSess, nil
 		},
 	}
-	h := NewSessionStateHandler(noopPublisher(), testLogger())
+	h := NewSessionStateHandler(noopPublisher())
 
 	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
@@ -223,7 +223,7 @@ func TestFeature_PublishesFeaturedStudentChanged(t *testing.T) {
 			return &updatedSess, nil
 		},
 	}
-	h := NewSessionStateHandler(pub, testLogger())
+	h := NewSessionStateHandler(pub)
 
 	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))

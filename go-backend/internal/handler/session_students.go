@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/jdelfino/eval/internal/auth"
@@ -17,17 +15,16 @@ import (
 type SessionStudentHandler struct {
 	publisher realtime.SessionPublisher
 	revBuffer *revision.RevisionBuffer
-	logger    *slog.Logger
 }
 
 // NewSessionStudentHandler creates a new SessionStudentHandler.
-func NewSessionStudentHandler(publisher realtime.SessionPublisher, logger *slog.Logger) *SessionStudentHandler {
-	return &SessionStudentHandler{publisher: publisher, logger: logger}
+func NewSessionStudentHandler(publisher realtime.SessionPublisher) *SessionStudentHandler {
+	return &SessionStudentHandler{publisher: publisher}
 }
 
 // NewSessionStudentHandlerWithBuffer creates a new SessionStudentHandler with a revision buffer.
-func NewSessionStudentHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer, logger *slog.Logger) *SessionStudentHandler {
-	return &SessionStudentHandler{publisher: publisher, revBuffer: revBuffer, logger: logger}
+func NewSessionStudentHandlerWithBuffer(publisher realtime.SessionPublisher, revBuffer *revision.RevisionBuffer) *SessionStudentHandler {
+	return &SessionStudentHandler{publisher: publisher, revBuffer: revBuffer}
 }
 
 // joinSessionRequest is the request body for POST /sessions/{id}/join.
@@ -64,9 +61,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
-		return h.publisher.StudentJoined(ctx, sessionID.String(), authUser.ID.String(), req.Name)
-	})
+	_ = h.publisher.StudentJoined(r.Context(), sessionID.String(), authUser.ID.String(), req.Name)
 
 	httputil.WriteJSON(w, http.StatusCreated, student)
 }
@@ -111,9 +106,7 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		h.revBuffer.Record(r.Context(), nsID, sessionID, authUser.ID, req.Code)
 	}
 
-	publishAsync(r, h.logger, sessionID, func(ctx context.Context) error {
-		return h.publisher.CodeUpdated(ctx, sessionID.String(), authUser.ID.String(), req.Code)
-	})
+	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code)
 
 	httputil.WriteJSON(w, http.StatusOK, student)
 }

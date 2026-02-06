@@ -183,5 +183,73 @@ func TestAPIError_Error(t *testing.T) {
 	}
 }
 
+func TestPublish_DrainsResponseBodyOnSuccess(t *testing.T) {
+	// Track whether the response body was fully read (drained) before Close.
+	// If the body is not drained, HTTP transport cannot reuse the connection.
+	bodyDrained := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"result":{}}`))
+	}))
+	defer srv.Close()
+
+	// Wrap the default transport to intercept responses and track body reads.
+	client := realtime.NewClient(srv.URL, "test-key", testLogger)
+	realtime.SetHTTPClient(client, &http.Client{
+		Transport: &bodyTrackingTransport{
+			base:      http.DefaultTransport,
+			onDrained: func() { bodyDrained = true },
+		},
+	})
+
+	err := client.Publish(context.Background(), "ch", "data")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bodyDrained {
+		t.Error("response body was not drained before close; connection cannot be reused")
+	}
+}
+
+// bodyTrackingTransport wraps an http.RoundTripper to detect whether the
+// response body is fully read before being closed.
+type bodyTrackingTransport struct {
+	base      http.RoundTripper
+	onDrained func()
+}
+
+func (t *bodyTrackingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &drainingChecker{inner: resp.Body, onDrained: t.onDrained}
+	return resp, nil
+}
+
+// drainingChecker wraps an io.ReadCloser and calls onDrained if the reader
+// returns io.EOF (meaning it was fully consumed) before Close is called.
+type drainingChecker struct {
+	inner     io.ReadCloser
+	onDrained func()
+	hitEOF    bool
+}
+
+func (d *drainingChecker) Read(p []byte) (int, error) {
+	n, err := d.inner.Read(p)
+	if err == io.EOF {
+		d.hitEOF = true
+		if d.onDrained != nil {
+			d.onDrained()
+		}
+	}
+	return n, err
+}
+
+func (d *drainingChecker) Close() error {
+	return d.inner.Close()
+}
+
 // Verify Client implements Publisher at compile time.
 var _ realtime.Publisher = (*realtime.Client)(nil)
