@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Section } from '@/types/api';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
-import { apiFetch } from '@/lib/api-client';
+import { getSectionInstructors } from '@/lib/api/sections';
 
 interface Instructor {
   id: string;
@@ -44,9 +44,8 @@ export default function SectionCard({
   useEffect(() => {
     const fetchInstructors = async () => {
       try {
-        const response = await apiFetch(`/sections/${section.id}/instructors`);
-        const data = await response.json();
-        setInstructors(data.instructors || []);
+        const instructorsData = await getSectionInstructors(section.id);
+        setInstructors(instructorsData.map((u) => ({ id: u.id, name: u.name, email: u.email })));
       } catch (err) {
         console.error('Failed to fetch instructors:', err);
       } finally {
@@ -73,9 +72,8 @@ export default function SectionCard({
 
   const refreshInstructors = async () => {
     try {
-      const response = await apiFetch(`/sections/${section.id}/instructors`);
-      const data = await response.json();
-      setInstructors(data.instructors || []);
+      const instructorsData = await getSectionInstructors(section.id);
+      setInstructors(instructorsData.map((u) => ({ id: u.id, name: u.name, email: u.email })));
     } catch (err) {
       console.error('Failed to refresh instructors:', err);
     }

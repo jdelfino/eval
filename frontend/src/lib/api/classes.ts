@@ -7,7 +7,25 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Class, Section } from '@/types/api';
+import type { Class, Section, User } from '@/types/api';
+
+/**
+ * Response structure for getClass endpoint.
+ */
+export interface ClassDetailsResponse {
+  class: Class;
+  sections: Section[];
+  instructorNames: Record<string, string>;
+}
+
+/**
+ * Get a single class with its sections and instructor names.
+ * @param id - The class ID
+ * @returns ClassDetailsResponse containing class, sections, and instructorNames
+ */
+export async function getClass(id: string): Promise<ClassDetailsResponse> {
+  return apiGet<ClassDetailsResponse>(`/classes/${id}`);
+}
 
 /**
  * List all classes accessible to the current user.

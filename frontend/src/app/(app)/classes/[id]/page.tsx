@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
 import { hasRolePermission } from '@/lib/permissions';
 import type { Class, Section } from '@/types/api';
-import { apiFetch } from '@/lib/api-client';
+import { getClass } from '@/lib/api/classes';
 import SectionCard from '../components/SectionCard';
 import CreateSectionForm from '../components/CreateSectionForm';
 import { BackButton } from '@/components/ui/BackButton';
@@ -49,8 +49,7 @@ export default function ClassDetailsPage() {
 
   const loadClassDetails = async () => {
     try {
-      const response = await apiFetch(`/classes/${class_id}`);
-      const data = await response.json();
+      const data = await getClass(class_id);
       setClassData(data.class);
       setSections(data.sections || []);
       setInstructorNames(data.instructorNames || {});
