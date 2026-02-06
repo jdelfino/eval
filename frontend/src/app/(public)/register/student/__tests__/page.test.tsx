@@ -29,13 +29,15 @@ jest.mock('@/contexts/AuthContext', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-// Mock Firebase createUserWithEmailAndPassword
+// Mock Firebase createUserWithEmailAndPassword and deleteUser
 const mockCreateUserWithEmailAndPassword = jest.fn();
+const mockDeleteUser = jest.fn();
 const mockGetIdToken = jest.fn();
 const mockFirebaseUser = {
   getIdToken: mockGetIdToken,
   uid: 'firebase-uid-123',
   email: 'student@example.com',
+  delete: mockDeleteUser,
 };
 
 jest.mock('firebase/auth', () => ({
@@ -43,8 +45,14 @@ jest.mock('firebase/auth', () => ({
   getAuth: jest.fn(),
 }));
 
+// Track current user for cleanup tests
+let mockCurrentUser: typeof mockFirebaseUser | null = null;
 jest.mock('@/lib/firebase', () => ({
-  firebaseAuth: { currentUser: null },
+  firebaseAuth: {
+    get currentUser() {
+      return mockCurrentUser;
+    },
+  },
 }));
 
 // Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
@@ -68,10 +76,16 @@ describe('StudentRegistrationPage', () => {
     mockRefreshUser.mockResolvedValue(undefined);
     mockSearchParams.delete('code');
     mockCreateUserWithEmailAndPassword.mockClear();
+    mockDeleteUser.mockClear();
     mockGetIdToken.mockClear();
     mockApiFetchRaw.mockClear();
-    // Default: Firebase account creation succeeds
-    mockCreateUserWithEmailAndPassword.mockResolvedValue({ user: mockFirebaseUser });
+    mockCurrentUser = null;
+    // Default: Firebase account creation succeeds and sets currentUser
+    mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+      mockCurrentUser = mockFirebaseUser;
+      return Promise.resolve({ user: mockFirebaseUser });
+    });
+    mockDeleteUser.mockResolvedValue(undefined);
     mockGetIdToken.mockResolvedValue('mock-firebase-jwt-token');
   });
 
@@ -581,6 +595,198 @@ describe('StudentRegistrationPage', () => {
         expect(mockRefreshUser).toHaveBeenCalled();
       });
 
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/sections');
+      });
+    });
+  });
+
+  describe('Firebase Account Cleanup on Backend Failure', () => {
+    const setupAndFillForm = async () => {
+      const user = userEvent.setup();
+
+      // First call: validate code (unauthenticated)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          section: { id: 'sec-1', name: 'Test Section' },
+          class: { id: 'cls-1', name: 'Test Class' },
+          namespace: { id: 'ns-1', displayName: 'Test Org' },
+          instructors: [],
+        }),
+      });
+
+      render(<StudentRegistrationPage />);
+
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'student@example.com');
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Password123');
+
+      return user;
+    };
+
+    it('deletes Firebase account when backend API returns error', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend API fails with 500 error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Internal server error',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      // Verify Firebase account was created
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify Firebase account was deleted after backend failure
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('deletes Firebase account when backend returns NAMESPACE_AT_CAPACITY error', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend returns namespace at capacity error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'At capacity',
+          code: 'NAMESPACE_AT_CAPACITY',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // User sees the error
+      await waitFor(() => {
+        expect(screen.getByText('This class has reached its student limit. Contact your instructor.')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend returns INVALID_CODE error', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend returns invalid code error (code became invalid between validation and registration)
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Invalid code',
+          code: 'INVALID_CODE',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // User is returned to code entry
+      await waitFor(() => {
+        expect(screen.getByText('Join Your Section')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend returns SECTION_INACTIVE error', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend returns section inactive error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Section inactive',
+          code: 'SECTION_INACTIVE',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('deletes Firebase account when backend call throws network error', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend call throws network error
+      mockApiFetchRaw.mockRejectedValueOnce(new Error('Network error'));
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('allows retry after Firebase account cleanup on backend failure', async () => {
+      const user = await setupAndFillForm();
+
+      // First attempt: backend fails
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Temporary error',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      // Wait for cleanup
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // Form should return to ready state for retry
+      await waitFor(() => {
+        expect(screen.getByText('Temporary error')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
+      });
+
+      // Reset mocks for retry
+      mockCreateUserWithEmailAndPassword.mockClear();
+      mockDeleteUser.mockClear();
+      mockCurrentUser = null;
+      mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+        mockCurrentUser = mockFirebaseUser;
+        return Promise.resolve({ user: mockFirebaseUser });
+      });
+
+      // Second attempt: backend succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'student' },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      // Verify Firebase account was created again on retry
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify redirect on success
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/sections');
       });

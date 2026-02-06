@@ -288,40 +288,50 @@ function AcceptInviteContent() {
 
       // Step 2: Call authenticated backend API to create user profile
       // The backend extracts external_id from JWT claims (not request body)
-      const response = await apiFetchRaw('/auth/accept-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token: invitation.id,
-          display_name: displayName.trim() || undefined,
-        }),
-      });
+      // Wrap in try/catch to clean up Firebase account on failure
+      try {
+        const response = await apiFetchRaw('/auth/accept-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: invitation.id,
+            display_name: displayName.trim() || undefined,
+          }),
+        });
 
-      if (!response.ok) {
+        if (!response.ok) {
+          const data = await response.json();
+
+          // Delete Firebase account so user can retry with same email
+          await firebaseAuth.currentUser?.delete();
+
+          // Map error codes
+          if (data.code === 'INVITATION_CONSUMED') {
+            setPageState({ status: 'error', error: 'invitation_consumed' });
+            return;
+          } else if (data.code === 'INVITATION_EXPIRED') {
+            setPageState({ status: 'error', error: 'invitation_expired' });
+            return;
+          } else {
+            setSubmitError(data.error || 'Failed to complete registration');
+          }
+
+          // Restore ready state for retry
+          if (invitation) {
+            setPageState({ status: 'ready', invitation });
+          }
+          return;
+        }
+
         const data = await response.json();
 
-        // Map error codes
-        if (data.code === 'INVITATION_CONSUMED') {
-          setPageState({ status: 'error', error: 'invitation_consumed' });
-          return;
-        } else if (data.code === 'INVITATION_EXPIRED') {
-          setPageState({ status: 'error', error: 'invitation_expired' });
-          return;
-        } else {
-          setSubmitError(data.error || 'Failed to complete registration');
-        }
-
-        // Restore ready state for retry
-        if (invitation) {
-          setPageState({ status: 'ready', invitation });
-        }
-        return;
+        setPageState({ status: 'success' });
+        redirectBasedOnRole(data.user.role);
+      } catch (backendError) {
+        // Backend call failed (network error, etc.) - clean up Firebase account
+        await firebaseAuth.currentUser?.delete();
+        throw backendError;
       }
-
-      const data = await response.json();
-
-      setPageState({ status: 'success' });
-      redirectBasedOnRole(data.user.role);
     } catch (error) {
       console.error('[AcceptInvite] Submit error:', error);
 

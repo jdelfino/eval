@@ -22,13 +22,15 @@ jest.mock('next/navigation', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-// Mock Firebase createUserWithEmailAndPassword
+// Mock Firebase createUserWithEmailAndPassword and deleteUser
 const mockCreateUserWithEmailAndPassword = jest.fn();
+const mockDeleteUser = jest.fn();
 const mockGetIdToken = jest.fn();
 const mockFirebaseUser = {
   getIdToken: mockGetIdToken,
   uid: 'firebase-uid-123',
   email: 'test@example.com',
+  delete: mockDeleteUser,
 };
 
 jest.mock('firebase/auth', () => ({
@@ -36,8 +38,14 @@ jest.mock('firebase/auth', () => ({
   getAuth: jest.fn(),
 }));
 
+// Track current user for cleanup tests
+let mockCurrentUser: typeof mockFirebaseUser | null = null;
 jest.mock('@/lib/firebase', () => ({
-  firebaseAuth: { currentUser: null },
+  firebaseAuth: {
+    get currentUser() {
+      return mockCurrentUser;
+    },
+  },
 }));
 
 // Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
@@ -88,10 +96,16 @@ describe('AcceptInvitePage', () => {
     mockLocationHash = '';
     mockSearchParams = new URLSearchParams();
     mockCreateUserWithEmailAndPassword.mockClear();
+    mockDeleteUser.mockClear();
     mockGetIdToken.mockClear();
     mockApiFetchRaw.mockClear();
-    // Default: Firebase account creation succeeds
-    mockCreateUserWithEmailAndPassword.mockResolvedValue({ user: mockFirebaseUser });
+    mockCurrentUser = null;
+    // Default: Firebase account creation succeeds and sets currentUser
+    mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+      mockCurrentUser = mockFirebaseUser;
+      return Promise.resolve({ user: mockFirebaseUser });
+    });
+    mockDeleteUser.mockResolvedValue(undefined);
     mockGetIdToken.mockResolvedValue('mock-firebase-jwt-token');
   });
 
@@ -762,6 +776,231 @@ describe('AcceptInvitePage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
 
       expect(mockReload).toHaveBeenCalled();
+    });
+  });
+
+  describe('Firebase Account Cleanup on Backend Failure', () => {
+    it('deletes Firebase account when backend API returns error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      // Backend API fails with 500 error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Internal server error',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify Firebase account was created
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify Firebase account was deleted after backend failure
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('deletes Firebase account when backend returns INVITATION_CONSUMED error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend returns invitation consumed error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Invitation already used',
+          code: 'INVITATION_CONSUMED',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // User sees the consumed error page
+      await waitFor(() => {
+        expect(screen.getByText('Already Used')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend returns INVITATION_EXPIRED error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend returns invitation expired error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Invitation expired',
+          code: 'INVITATION_EXPIRED',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Invitation Expired')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend call throws network error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend call throws network error
+      mockApiFetchRaw.mockRejectedValueOnce(new Error('Network error'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('allows retry after Firebase account cleanup on backend failure', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      // First attempt: backend fails
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Temporary error',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Wait for cleanup
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // Form should return to ready state for retry
+      await waitFor(() => {
+        expect(screen.getByText('Temporary error')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Complete Registration' })).toBeInTheDocument();
+      });
+
+      // Reset mocks for retry
+      mockCreateUserWithEmailAndPassword.mockClear();
+      mockDeleteUser.mockClear();
+      mockCurrentUser = null;
+      mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+        mockCurrentUser = mockFirebaseUser;
+        return Promise.resolve({ user: mockFirebaseUser });
+      });
+
+      // Second attempt: backend succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify Firebase account was created again on retry
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify redirect on success
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/instructor');
+      });
     });
   });
 });
