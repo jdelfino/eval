@@ -38,12 +38,12 @@ describe('namespace-invitations API client', () => {
   });
 
   describe('listNamespaceInvitations', () => {
-    it('calls GET /namespace/invitations without filters', async () => {
+    it('calls GET /system/invitations without filters', async () => {
       mockApiGet.mockResolvedValue([fakeInvitation]);
 
       const result = await listNamespaceInvitations();
 
-      expect(mockApiGet).toHaveBeenCalledWith('/namespace/invitations');
+      expect(mockApiGet).toHaveBeenCalledWith('/system/invitations');
       expect(result).toEqual([fakeInvitation]);
     });
 
@@ -52,7 +52,7 @@ describe('namespace-invitations API client', () => {
 
       await listNamespaceInvitations({ status: 'pending' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/namespace/invitations?status=pending');
+      expect(mockApiGet).toHaveBeenCalledWith('/system/invitations?status=pending');
     });
 
     it('returns array directly from API', async () => {
@@ -66,12 +66,12 @@ describe('namespace-invitations API client', () => {
   });
 
   describe('createNamespaceInvitation', () => {
-    it('calls POST /namespace/invitations with email', async () => {
+    it('calls POST /system/invitations with email', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
       const result = await createNamespaceInvitation('instructor@example.com');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/namespace/invitations', {
+      expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
       });
       expect(result).toEqual(fakeInvitation);
@@ -82,7 +82,7 @@ describe('namespace-invitations API client', () => {
 
       await createNamespaceInvitation('instructor@example.com', 14);
 
-      expect(mockApiPost).toHaveBeenCalledWith('/namespace/invitations', {
+      expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
         expiresInDays: 14,
       });
@@ -99,22 +99,22 @@ describe('namespace-invitations API client', () => {
   });
 
   describe('revokeNamespaceInvitation', () => {
-    it('calls DELETE /namespace/invitations/{id}', async () => {
+    it('calls DELETE /system/invitations/{id}', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
       await revokeNamespaceInvitation('inv-1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/namespace/invitations/inv-1');
+      expect(mockApiDelete).toHaveBeenCalledWith('/system/invitations/inv-1');
     });
   });
 
   describe('resendNamespaceInvitation', () => {
-    it('calls POST /namespace/invitations/{id}/resend with empty body', async () => {
+    it('calls POST /system/invitations/{id}/resend with empty body', async () => {
       mockApiPost.mockResolvedValue(undefined);
 
       await resendNamespaceInvitation('inv-1');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/namespace/invitations/inv-1/resend', {});
+      expect(mockApiPost).toHaveBeenCalledWith('/system/invitations/inv-1/resend', {});
     });
   });
 });

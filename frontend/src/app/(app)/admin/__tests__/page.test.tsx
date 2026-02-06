@@ -59,14 +59,13 @@ jest.mock('@/components/InvitationList', () => ({
   default: () => <div data-testid="invitation-list">Invitation List</div>,
 }));
 
-// Shape matches the SystemStats interface in the admin page component.
-// Note: the /admin/stats endpoint does not yet exist in the Go backend;
-// this mock reflects the frontend's expected contract (see SystemStats in ../page.tsx).
+// Shape matches the Go backend AdminStats response.
+// getAdminStats() transforms this to the UI shape.
 const mockStats = {
-  users: { total: 50, byRole: { admin: 2, instructor: 8, student: 40 } },
-  classes: { total: 5 },
-  sections: { total: 12 },
-  sessions: { active: 3 },
+  users_by_role: { 'system-admin': 2, instructor: 8, student: 40 },
+  class_count: 5,
+  section_count: 12,
+  active_sessions: 3,
 };
 
 const mockUsers = [
@@ -87,10 +86,10 @@ beforeEach(() => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
     }
     if (url.includes('/admin/users')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ users: mockUsers }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockUsers) });
     }
-    if (url.includes('/namespace/invitations')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ invitations: [] }) });
+    if (url.includes('/system/invitations')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
@@ -147,10 +146,10 @@ describe('Admin Page - Namespace Admins tab', () => {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
       }
       if (url.includes('/admin/users')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ users: usersWithNsAdmin }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(usersWithNsAdmin) });
       }
-      if (url.includes('/namespace/invitations')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ invitations: [] }) });
+      if (url.includes('/system/invitations')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });

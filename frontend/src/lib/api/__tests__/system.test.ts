@@ -64,18 +64,15 @@ describe('system API client', () => {
   });
 
   describe('listSystemNamespaces', () => {
-    it('calls GET /system/namespaces and maps response to NamespaceInfo[]', async () => {
-      mockApiGet.mockResolvedValue({
-        success: true,
-        namespaces: [
-          { id: 'ns-1', display_name: 'University A', active: true },
-          { id: 'ns-2', display_name: 'University B', active: false },
-        ],
-      });
+    it('calls GET /namespaces and maps response to NamespaceInfo[]', async () => {
+      mockApiGet.mockResolvedValue([
+        { id: 'ns-1', display_name: 'University A', active: true },
+        { id: 'ns-2', display_name: 'University B', active: false },
+      ]);
 
       const result = await listSystemNamespaces();
 
-      expect(mockApiGet).toHaveBeenCalledWith('/system/namespaces');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces');
       expect(result).toEqual([
         { id: 'ns-1', displayName: 'University A', active: true },
         { id: 'ns-2', displayName: 'University B', active: false },
@@ -83,10 +80,9 @@ describe('system API client', () => {
     });
 
     it('maps display_name to displayName in the response', async () => {
-      mockApiGet.mockResolvedValue({
-        success: true,
-        namespaces: [{ id: 'ns-1', display_name: 'Test NS', active: true }],
-      });
+      mockApiGet.mockResolvedValue([
+        { id: 'ns-1', display_name: 'Test NS', active: true },
+      ]);
 
       const result = await listSystemNamespaces();
 
@@ -96,15 +92,14 @@ describe('system API client', () => {
   });
 
   describe('getSystemNamespace', () => {
-    it('calls GET /system/namespaces/{id} and maps to NamespaceInfo', async () => {
-      mockApiGet.mockResolvedValue({
-        success: true,
-        namespace: { id: 'ns-1', display_name: 'University A', active: true },
-      });
+    it('calls GET /namespaces/{id} and maps to NamespaceInfo', async () => {
+      mockApiGet.mockResolvedValue(
+        { id: 'ns-1', display_name: 'University A', active: true },
+      );
 
       const result = await getSystemNamespace('ns-1');
 
-      expect(mockApiGet).toHaveBeenCalledWith('/system/namespaces/ns-1');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1');
       expect(result).toEqual({
         id: 'ns-1',
         displayName: 'University A',
