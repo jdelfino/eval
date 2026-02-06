@@ -78,7 +78,7 @@ build-frontend:
 	cd frontend && npm run build
 
 test-frontend:
-	cd frontend && npx jest --no-coverage
+	cd frontend && npx jest --selectProjects client --no-coverage
 
 lint-frontend:
 	cd frontend && npm run lint

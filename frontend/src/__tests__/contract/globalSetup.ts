@@ -31,6 +31,20 @@ async function contractFetch(path: string, token: string, options?: RequestInit)
 export default async () => {
   console.log(`Contract tests global setup starting (RUN_ID: ${RUN_ID})`);
 
+  // Check if backend is reachable before proceeding
+  try {
+    const healthRes = await fetch(`${API_BASE}/healthz`, { signal: AbortSignal.timeout(3000) });
+    if (!healthRes.ok) {
+      throw new Error(`healthz returned ${healthRes.status}`);
+    }
+  } catch (err) {
+    throw new Error(
+      `Contract tests require a running backend at ${API_BASE}.\n` +
+      `Run 'make test-integration-contract' to start the backend automatically,\n` +
+      `or start it manually and set API_BASE_URL.`
+    );
+  }
+
   // Create namespace
   const nsRes = await contractFetch('/api/v1/namespaces', ADMIN_TOKEN, {
     method: 'POST',
