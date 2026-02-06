@@ -5,17 +5,58 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
+
+// sessionColumns is the standard column list for session queries.
+const sessionColumns = `id, namespace_id, section_id, section_name, problem,
+		       featured_student_id, featured_code, creator_id, participants,
+		       status, created_at, last_activity, ended_at`
+
+// scanSession scans a row into a Session struct.
+// The row must contain columns in sessionColumns order.
+func scanSession(row pgx.Row) (*Session, error) {
+	var sess Session
+	err := row.Scan(
+		&sess.ID,
+		&sess.NamespaceID,
+		&sess.SectionID,
+		&sess.SectionName,
+		&sess.Problem,
+		&sess.FeaturedStudentID,
+		&sess.FeaturedCode,
+		&sess.CreatorID,
+		&sess.Participants,
+		&sess.Status,
+		&sess.CreatedAt,
+		&sess.LastActivity,
+		&sess.EndedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &sess, nil
+}
+
+// scanSessions scans multiple rows into a slice of Sessions.
+// Each row must contain columns in sessionColumns order.
+func scanSessions(rows pgx.Rows) ([]Session, error) {
+	var sessions []Session
+	for rows.Next() {
+		sess, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, *sess)
+	}
+	return sessions, rows.Err()
+}
 
 // ListSessions retrieves all sessions visible to the current user.
 // Results can be filtered by section_id and/or status.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Session, error) {
-	query := `
-		SELECT id, namespace_id, section_id, section_name, problem,
-		       featured_student_id, featured_code, creator_id, participants,
-		       status, created_at, last_activity, ended_at
-		FROM sessions WHERE 1=1`
+	query := `SELECT ` + sessionColumns + ` FROM sessions WHERE 1=1`
 
 	ac := newArgCounter(1)
 
@@ -33,100 +74,36 @@ func (s *Store) ListSessions(ctx context.Context, filters SessionFilters) ([]Ses
 	}
 	defer rows.Close()
 
-	var sessions []Session
-	for rows.Next() {
-		var sess Session
-		if err := rows.Scan(
-			&sess.ID,
-			&sess.NamespaceID,
-			&sess.SectionID,
-			&sess.SectionName,
-			&sess.Problem,
-			&sess.FeaturedStudentID,
-			&sess.FeaturedCode,
-			&sess.CreatorID,
-			&sess.Participants,
-			&sess.Status,
-			&sess.CreatedAt,
-			&sess.LastActivity,
-			&sess.EndedAt,
-		); err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, sess)
-	}
-	return sessions, rows.Err()
+	return scanSessions(rows)
 }
 
 // GetSession retrieves a session by its ID.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) GetSession(ctx context.Context, id uuid.UUID) (*Session, error) {
-	const query = `
-		SELECT id, namespace_id, section_id, section_name, problem,
-		       featured_student_id, featured_code, creator_id, participants,
-		       status, created_at, last_activity, ended_at
-		FROM sessions
-		WHERE id = $1`
+	query := `SELECT ` + sessionColumns + ` FROM sessions WHERE id = $1`
 
-	var sess Session
-	err := s.q.QueryRow(ctx, query, id).Scan(
-		&sess.ID,
-		&sess.NamespaceID,
-		&sess.SectionID,
-		&sess.SectionName,
-		&sess.Problem,
-		&sess.FeaturedStudentID,
-		&sess.FeaturedCode,
-		&sess.CreatorID,
-		&sess.Participants,
-		&sess.Status,
-		&sess.CreatedAt,
-		&sess.LastActivity,
-		&sess.EndedAt,
-	)
+	sess, err := scanSession(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 
-	return &sess, nil
+	return sess, nil
 }
 
 // CreateSession creates a new session and returns the created record.
 func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error) {
-	const query = `
+	query := `
 		INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, namespace_id, section_id, section_name, problem,
-		          featured_student_id, featured_code, creator_id, participants,
-		          status, created_at, last_activity, ended_at`
+		RETURNING ` + sessionColumns
 
-	var sess Session
-	err := s.q.QueryRow(ctx, query,
+	return scanSession(s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.SectionID,
 		params.SectionName,
 		params.Problem,
 		params.CreatorID,
-	).Scan(
-		&sess.ID,
-		&sess.NamespaceID,
-		&sess.SectionID,
-		&sess.SectionName,
-		&sess.Problem,
-		&sess.FeaturedStudentID,
-		&sess.FeaturedCode,
-		&sess.CreatorID,
-		&sess.Participants,
-		&sess.Status,
-		&sess.CreatedAt,
-		&sess.LastActivity,
-		&sess.EndedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &sess, nil
+	))
 }
 
 // UpdateSession updates a session's mutable fields and returns the updated record.
@@ -165,41 +142,20 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	query += `
 		WHERE id = $1
-		RETURNING id, namespace_id, section_id, section_name, problem,
-		          featured_student_id, featured_code, creator_id, participants,
-		          status, created_at, last_activity, ended_at`
+		RETURNING ` + sessionColumns
 
-	var sess Session
-	err := s.q.QueryRow(ctx, query, ac.args...).Scan(
-		&sess.ID,
-		&sess.NamespaceID,
-		&sess.SectionID,
-		&sess.SectionName,
-		&sess.Problem,
-		&sess.FeaturedStudentID,
-		&sess.FeaturedCode,
-		&sess.CreatorID,
-		&sess.Participants,
-		&sess.Status,
-		&sess.CreatedAt,
-		&sess.LastActivity,
-		&sess.EndedAt,
-	)
+	sess, err := scanSession(s.q.QueryRow(ctx, query, ac.args...))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 
-	return &sess, nil
+	return sess, nil
 }
 
 // ListSessionHistory retrieves sessions based on user role.
 // Instructors see sessions they created; students see sessions they participated in.
 func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters SessionHistoryFilters) ([]Session, error) {
-	query := `
-		SELECT id, namespace_id, section_id, section_name, problem,
-		       featured_student_id, featured_code, creator_id, participants,
-		       status, created_at, last_activity, ended_at
-		FROM sessions WHERE 1=1`
+	query := `SELECT ` + sessionColumns + ` FROM sessions WHERE 1=1`
 
 	ac := newArgCounter(1)
 
@@ -226,63 +182,24 @@ func (s *Store) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCrea
 	}
 	defer rows.Close()
 
-	var sessions []Session
-	for rows.Next() {
-		var sess Session
-		if err := rows.Scan(
-			&sess.ID,
-			&sess.NamespaceID,
-			&sess.SectionID,
-			&sess.SectionName,
-			&sess.Problem,
-			&sess.FeaturedStudentID,
-			&sess.FeaturedCode,
-			&sess.CreatorID,
-			&sess.Participants,
-			&sess.Status,
-			&sess.CreatedAt,
-			&sess.LastActivity,
-			&sess.EndedAt,
-		); err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, sess)
-	}
-	return sessions, rows.Err()
+	return scanSessions(rows)
 }
 
 // UpdateSessionProblem updates the problem JSON snapshot and last_activity for a session.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error) {
-	const query = `
+	query := `
 		UPDATE sessions
 		SET problem = $2, last_activity = now()
 		WHERE id = $1
-		RETURNING id, namespace_id, section_id, section_name, problem,
-		          featured_student_id, featured_code, creator_id, participants,
-		          status, created_at, last_activity, ended_at`
+		RETURNING ` + sessionColumns
 
-	var sess Session
-	err := s.q.QueryRow(ctx, query, id, problem).Scan(
-		&sess.ID,
-		&sess.NamespaceID,
-		&sess.SectionID,
-		&sess.SectionName,
-		&sess.Problem,
-		&sess.FeaturedStudentID,
-		&sess.FeaturedCode,
-		&sess.CreatorID,
-		&sess.Participants,
-		&sess.Status,
-		&sess.CreatedAt,
-		&sess.LastActivity,
-		&sess.EndedAt,
-	)
+	sess, err := scanSession(s.q.QueryRow(ctx, query, id, problem))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 
-	return &sess, nil
+	return sess, nil
 }
 
 // Compile-time check that Store implements SessionRepository.
