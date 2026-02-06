@@ -34,8 +34,10 @@ function loadState(): SetupState | null {
 const setupState = loadState();
 
 // Set NEXT_PUBLIC_API_URL for typed API functions
+// The typed API functions expect paths like /sessions, but the backend serves at /api/v1/sessions
+// So NEXT_PUBLIC_API_URL must include the /api/v1 prefix
 const API_BASE = setupState?.apiBaseUrl || process.env.API_BASE_URL || 'http://localhost:8080';
-process.env.NEXT_PUBLIC_API_URL = API_BASE;
+process.env.NEXT_PUBLIC_API_URL = `${API_BASE}/api/v1`;
 
 // Fall back to generating values if global setup didn't run
 const RUN_ID = setupState?.runId || `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

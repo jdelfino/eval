@@ -1,19 +1,19 @@
 /**
- * Integration test: listInvitations()
+ * Integration test: listSystemInvitations()
  * Validates that the typed API function works correctly against the real backend.
  *
- * Note: The invitations endpoints require namespace-admin or higher permissions.
+ * Note: The system invitations endpoint requires system-admin role.
  * This test uses the admin token which has full access.
  */
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
-import { listInvitations } from '@/lib/api/invitations';
+import { listSystemInvitations } from '@/lib/api/invitations';
 import {
   expectSnakeCaseKeys,
   expectString,
   expectNullableString,
 } from './validators';
 
-describe('listInvitations()', () => {
+describe('listSystemInvitations()', () => {
   beforeAll(() => {
     configureTestAuth(ADMIN_TOKEN);
   });
@@ -23,7 +23,7 @@ describe('listInvitations()', () => {
   });
 
   it('returns SerializedInvitation[] with correct snake_case shape', async () => {
-    const invitations = await listInvitations();
+    const invitations = await listSystemInvitations();
 
     expect(Array.isArray(invitations)).toBe(true);
 

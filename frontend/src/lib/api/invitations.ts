@@ -40,51 +40,96 @@ export interface InvitationFilters {
 }
 
 /**
- * List invitations with optional filters.
+ * List invitations for a namespace.
+ * @param namespaceId - The namespace ID
  * @param filters - Optional status and email filters
  * @returns Array of SerializedInvitation objects (backend returns plain array)
  */
-export async function listInvitations(filters?: InvitationFilters): Promise<SerializedInvitation[]> {
-  if (filters && (filters.status || filters.email)) {
-    const params = new URLSearchParams();
-    if (filters.status) {
-      params.set('status', filters.status);
-    }
-    if (filters.email) {
-      params.set('email', filters.email);
-    }
-    return apiGet<SerializedInvitation[]>(`/invitations?${params}`);
+export async function listInvitations(namespaceId: string, filters?: InvitationFilters): Promise<SerializedInvitation[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) {
+    params.set('status', filters.status);
   }
-  return apiGet<SerializedInvitation[]>('/invitations');
+  if (filters?.email) {
+    params.set('email', filters.email);
+  }
+  const query = params.toString();
+  const path = query
+    ? `/namespaces/${namespaceId}/invitations?${query}`
+    : `/namespaces/${namespaceId}/invitations`;
+  return apiGet<SerializedInvitation[]>(path);
 }
 
 /**
- * Create a new invitation.
+ * List all invitations system-wide.
+ * Requires system-admin role.
+ * @returns Array of SerializedInvitation objects (backend returns plain array)
+ */
+export async function listSystemInvitations(): Promise<SerializedInvitation[]> {
+  return apiGet<SerializedInvitation[]>('/system/invitations');
+}
+
+/**
+ * Create a new invitation in a namespace.
+ * @param namespaceId - The namespace ID
  * @param email - The email to invite
+ * @param targetRole - The role for the invited user
  * @param expiresInDays - Optional expiry in days
  * @returns The created SerializedInvitation object (backend returns plain object)
  */
-export async function createInvitation(email: string, expiresInDays?: number): Promise<SerializedInvitation> {
-  const body: { email: string; expiresInDays?: number } = { email };
-  if (expiresInDays !== undefined) {
-    body.expiresInDays = expiresInDays;
+export async function createInvitation(
+  namespaceId: string,
+  email: string,
+  targetRole: 'instructor' | 'namespace-admin',
+  expiresInDays?: number
+): Promise<SerializedInvitation> {
+  interface CreateBody {
+    email: string;
+    target_role: string;
+    expires_in_days?: number;
   }
-  return apiPost<SerializedInvitation>('/invitations', body);
+  const body: CreateBody = { email, target_role: targetRole };
+  if (expiresInDays !== undefined) {
+    body.expires_in_days = expiresInDays;
+  }
+  return apiPost<SerializedInvitation>(`/namespaces/${namespaceId}/invitations`, body);
 }
 
 /**
- * Revoke an invitation.
- * @param id - The invitation ID to revoke
+ * Create a system-level invitation.
+ * Requires system-admin role.
+ * @param email - The email to invite
+ * @param targetRole - The role for the invited user
+ * @param namespaceId - The namespace ID for the invited user
+ * @returns The created SerializedInvitation object (backend returns plain object)
  */
-export async function revokeInvitation(id: string): Promise<void> {
-  await apiDelete(`/invitations/${id}`);
+export async function createSystemInvitation(
+  email: string,
+  targetRole: 'instructor' | 'namespace-admin',
+  namespaceId: string
+): Promise<SerializedInvitation> {
+  return apiPost<SerializedInvitation>('/system/invitations', {
+    email,
+    target_role: targetRole,
+    namespace_id: namespaceId,
+  });
+}
+
+/**
+ * Revoke an invitation in a namespace.
+ * @param namespaceId - The namespace ID
+ * @param invitationId - The invitation ID to revoke
+ */
+export async function revokeInvitation(namespaceId: string, invitationId: string): Promise<void> {
+  await apiDelete(`/namespaces/${namespaceId}/invitations/${invitationId}`);
 }
 
 /**
  * Resend an invitation email.
- * @param id - The invitation ID to resend
+ * @param namespaceId - The namespace ID
+ * @param invitationId - The invitation ID to resend
  * @returns The updated SerializedInvitation object (backend returns plain object)
  */
-export async function resendInvitation(id: string): Promise<SerializedInvitation> {
-  return apiPost<SerializedInvitation>(`/invitations/${id}/resend`);
+export async function resendInvitation(namespaceId: string, invitationId: string): Promise<SerializedInvitation> {
+  return apiPost<SerializedInvitation>(`/namespaces/${namespaceId}/invitations/${invitationId}/resend`);
 }

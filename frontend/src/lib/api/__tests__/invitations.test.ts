@@ -15,7 +15,9 @@ jest.mock('@/lib/api-client', () => ({
 
 import {
   listInvitations,
+  listSystemInvitations,
   createInvitation,
+  createSystemInvitation,
   revokeInvitation,
   resendInvitation,
 } from '../invitations';
@@ -38,79 +40,109 @@ describe('invitations API client', () => {
   };
 
   describe('listInvitations', () => {
-    it('calls GET /invitations and returns array directly', async () => {
+    it('calls GET /namespaces/{id}/invitations and returns array directly', async () => {
       mockApiGet.mockResolvedValue([mockInvitation]);
 
-      const result = await listInvitations();
+      const result = await listInvitations('ns-1');
 
-      expect(mockApiGet).toHaveBeenCalledWith('/invitations');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations');
       expect(result).toEqual([mockInvitation]);
     });
 
     it('includes status filter in query params', async () => {
       mockApiGet.mockResolvedValue([mockInvitation]);
 
-      await listInvitations({ status: 'pending' });
+      await listInvitations('ns-1', { status: 'pending' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/invitations?status=pending');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?status=pending');
     });
 
     it('includes email filter in query params', async () => {
       mockApiGet.mockResolvedValue([mockInvitation]);
 
-      await listInvitations({ email: 'test@example.com' });
+      await listInvitations('ns-1', { email: 'test@example.com' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/invitations?email=test%40example.com');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?email=test%40example.com');
     });
 
     it('includes both filters in query params', async () => {
       mockApiGet.mockResolvedValue([mockInvitation]);
 
-      await listInvitations({ status: 'pending', email: 'test@' });
+      await listInvitations('ns-1', { status: 'pending', email: 'test@' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/invitations?status=pending&email=test%40');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?status=pending&email=test%40');
+    });
+  });
+
+  describe('listSystemInvitations', () => {
+    it('calls GET /system/invitations and returns array directly', async () => {
+      mockApiGet.mockResolvedValue([mockInvitation]);
+
+      const result = await listSystemInvitations();
+
+      expect(mockApiGet).toHaveBeenCalledWith('/system/invitations');
+      expect(result).toEqual([mockInvitation]);
     });
   });
 
   describe('createInvitation', () => {
-    it('calls POST /invitations and returns invitation directly', async () => {
+    it('calls POST /namespaces/{id}/invitations and returns invitation directly', async () => {
       mockApiPost.mockResolvedValue(mockInvitation);
 
-      const result = await createInvitation('instructor@example.com');
+      const result = await createInvitation('ns-1', 'instructor@example.com', 'instructor');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/invitations', { email: 'instructor@example.com' });
+      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/invitations', {
+        email: 'instructor@example.com',
+        target_role: 'instructor',
+      });
       expect(result).toEqual(mockInvitation);
     });
 
-    it('includes expiresInDays when provided', async () => {
+    it('includes expires_in_days when provided', async () => {
       mockApiPost.mockResolvedValue(mockInvitation);
 
-      await createInvitation('instructor@example.com', 14);
+      await createInvitation('ns-1', 'instructor@example.com', 'namespace-admin', 14);
 
-      expect(mockApiPost).toHaveBeenCalledWith('/invitations', {
+      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/invitations', {
         email: 'instructor@example.com',
-        expiresInDays: 14,
+        target_role: 'namespace-admin',
+        expires_in_days: 14,
       });
     });
   });
 
+  describe('createSystemInvitation', () => {
+    it('calls POST /system/invitations and returns invitation directly', async () => {
+      mockApiPost.mockResolvedValue(mockInvitation);
+
+      const result = await createSystemInvitation('instructor@example.com', 'instructor', 'ns-1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
+        email: 'instructor@example.com',
+        target_role: 'instructor',
+        namespace_id: 'ns-1',
+      });
+      expect(result).toEqual(mockInvitation);
+    });
+  });
+
   describe('revokeInvitation', () => {
-    it('calls DELETE /invitations/{id} and returns void', async () => {
+    it('calls DELETE /namespaces/{id}/invitations/{invId} and returns void', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
-      await revokeInvitation('inv-1');
+      await revokeInvitation('ns-1', 'inv-1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/invitations/inv-1');
+      expect(mockApiDelete).toHaveBeenCalledWith('/namespaces/ns-1/invitations/inv-1');
     });
   });
 
   describe('resendInvitation', () => {
-    it('calls POST /invitations/{id}/resend and returns invitation directly', async () => {
+    it('calls POST /namespaces/{id}/invitations/{invId}/resend and returns invitation directly', async () => {
       mockApiPost.mockResolvedValue(mockInvitation);
 
-      const result = await resendInvitation('inv-1');
+      const result = await resendInvitation('ns-1', 'inv-1');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/invitations/inv-1/resend');
+      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/invitations/inv-1/resend');
       expect(result).toEqual(mockInvitation);
     });
   });
