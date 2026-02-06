@@ -30,11 +30,7 @@ export async function listNamespaceInvitations(
   const query = params.toString();
   const path = query ? `/namespace/invitations?${query}` : '/namespace/invitations';
 
-  interface InvitationsResponse {
-    invitations: SerializedInvitation[];
-  }
-  const response = await apiGet<InvitationsResponse>(path);
-  return response.invitations;
+  return apiGet<SerializedInvitation[]>(path);
 }
 
 /**

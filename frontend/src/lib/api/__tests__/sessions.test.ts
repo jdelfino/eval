@@ -236,11 +236,11 @@ describe('lib/api/sessions', () => {
   describe('getSessionPublicState', () => {
     it('calls GET /sessions/{id}/public-state and returns SessionPublicState', async () => {
       const fakePublicState: SessionPublicState = {
-        id: 'sess-1',
+        problem: { title: 'Test Problem' },
+        featured_student_id: null,
+        featured_code: null,
+        join_code: 'ABC123',
         status: 'active',
-        problem_title: 'Test Problem',
-        section_name: 'Section A',
-        participant_count: 5,
       };
       mockApiGet.mockResolvedValue(fakePublicState);
 
@@ -254,7 +254,18 @@ describe('lib/api/sessions', () => {
   describe('analyzeSession', () => {
     it('calls POST /sessions/{id}/analyze and returns AnalysisResponse', async () => {
       const fakeAnalysis: AnalysisResponse = {
-        script: { steps: [], summary: 'Test analysis' },
+        script: {
+          session_id: 'sess-1',
+          issues: [],
+          summary: {
+            total_submissions: 10,
+            filtered_out: 0,
+            analyzed_submissions: 10,
+            completion_estimate: { finished: 5, in_progress: 3, not_started: 2 },
+          },
+          finished_student_ids: [],
+          generated_at: new Date('2024-01-01'),
+        },
       };
       mockApiPost.mockResolvedValue(fakeAnalysis);
 

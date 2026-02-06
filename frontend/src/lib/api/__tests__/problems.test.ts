@@ -38,14 +38,18 @@ const fakeProblemSummary: ProblemSummary = {
 
 const fakeProblem: Problem = {
   id: 'p1',
+  namespace_id: 'ns-1',
   title: 'Two Sum',
   description: 'Find two numbers that add up to target',
   author_id: 'u1',
   class_id: 'c1',
   tags: ['arrays', 'easy'],
   created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
   starter_code: 'def two_sum(nums, target):',
   test_cases: [],
+  execution_settings: null,
+  solution: null,
 };
 
 describe('problems API client', () => {
@@ -55,7 +59,7 @@ describe('problems API client', () => {
 
   describe('listProblems', () => {
     it('calls GET /problems without filters', async () => {
-      mockApiGet.mockResolvedValue({ problems: [fakeProblemSummary] });
+      mockApiGet.mockResolvedValue([fakeProblemSummary]);
 
       const result = await listProblems();
 
@@ -64,7 +68,7 @@ describe('problems API client', () => {
     });
 
     it('includes author_id filter', async () => {
-      mockApiGet.mockResolvedValue({ problems: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listProblems({ author_id: 'u1' });
 
@@ -72,7 +76,7 @@ describe('problems API client', () => {
     });
 
     it('includes class_id filter', async () => {
-      mockApiGet.mockResolvedValue({ problems: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listProblems({ class_id: 'c1' });
 
@@ -80,7 +84,7 @@ describe('problems API client', () => {
     });
 
     it('includes includePublic filter', async () => {
-      mockApiGet.mockResolvedValue({ problems: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listProblems({ includePublic: true });
 
@@ -88,7 +92,7 @@ describe('problems API client', () => {
     });
 
     it('includes sorting params', async () => {
-      mockApiGet.mockResolvedValue({ problems: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listProblems({ sortBy: 'title', sortOrder: 'desc' });
 
@@ -96,7 +100,7 @@ describe('problems API client', () => {
     });
 
     it('combines multiple filters', async () => {
-      mockApiGet.mockResolvedValue({ problems: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listProblems({ author_id: 'u1', class_id: 'c1', sortBy: 'created' });
 
@@ -105,9 +109,9 @@ describe('problems API client', () => {
       );
     });
 
-    it('unwraps problems from response envelope', async () => {
+    it('returns array directly from API', async () => {
       const problems = [fakeProblemSummary, { ...fakeProblemSummary, id: 'p2' }];
-      mockApiGet.mockResolvedValue({ problems });
+      mockApiGet.mockResolvedValue(problems);
 
       const result = await listProblems();
 

@@ -60,11 +60,7 @@ export async function listProblems(filters?: ListProblemsFilters): Promise<Probl
   const query = params.toString();
   const path = query ? `/problems?${query}` : '/problems';
 
-  interface ProblemsResponse {
-    problems: ProblemSummary[];
-  }
-  const response = await apiGet<ProblemsResponse>(path);
-  return response.problems;
+  return apiGet<ProblemSummary[]>(path);
 }
 
 /**

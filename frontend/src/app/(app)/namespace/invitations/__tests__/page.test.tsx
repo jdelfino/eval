@@ -98,7 +98,7 @@ describe('InvitationsPage', () => {
     // Default: successful fetch with empty invitations
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ invitations: [] }),
+      json: () => Promise.resolve([]),
     });
   });
 
@@ -135,9 +135,7 @@ describe('InvitationsPage', () => {
     it('displays invitations after load', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          invitations: [mockPendingInvitation, mockConsumedInvitation],
-        }),
+        json: () => Promise.resolve([mockPendingInvitation, mockConsumedInvitation]),
       });
 
       render(<InvitationsPage />);
@@ -151,7 +149,7 @@ describe('InvitationsPage', () => {
     it('shows empty state when no invitations', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
+        json: () => Promise.resolve([]),
       });
 
       render(<InvitationsPage />);
@@ -177,7 +175,7 @@ describe('InvitationsPage', () => {
       mockFetch.mockClear();
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+        json: () => Promise.resolve([mockPendingInvitation]),
       });
 
       const statusSelect = screen.getByLabelText(/status/i);
@@ -251,7 +249,7 @@ describe('InvitationsPage', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
+          json: () => Promise.resolve([]),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -259,7 +257,7 @@ describe('InvitationsPage', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+          json: () => Promise.resolve([mockPendingInvitation]),
         });
 
       render(<InvitationsPage />);
@@ -315,7 +313,7 @@ describe('InvitationsPage', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
+          json: () => Promise.resolve([]),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -323,7 +321,7 @@ describe('InvitationsPage', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+          json: () => Promise.resolve([mockPendingInvitation]),
         });
 
       render(<InvitationsPage />);
@@ -351,7 +349,7 @@ describe('InvitationsPage', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
+          json: () => Promise.resolve([]),
         })
         .mockResolvedValueOnce({
           ok: false,
@@ -385,7 +383,7 @@ describe('InvitationsPage', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+          json: () => Promise.resolve([mockPendingInvitation]),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -393,7 +391,7 @@ describe('InvitationsPage', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
+          json: () => Promise.resolve([]),
         });
 
       render(<InvitationsPage />);
@@ -419,7 +417,7 @@ describe('InvitationsPage', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+          json: () => Promise.resolve([mockPendingInvitation]),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -427,7 +425,7 @@ describe('InvitationsPage', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ invitations: [mockPendingInvitation] }),
+          json: () => Promise.resolve([mockPendingInvitation]),
         });
 
       render(<InvitationsPage />);

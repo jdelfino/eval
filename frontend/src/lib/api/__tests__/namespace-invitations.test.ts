@@ -39,7 +39,7 @@ describe('namespace-invitations API client', () => {
 
   describe('listNamespaceInvitations', () => {
     it('calls GET /namespace/invitations without filters', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [fakeInvitation] });
+      mockApiGet.mockResolvedValue([fakeInvitation]);
 
       const result = await listNamespaceInvitations();
 
@@ -48,16 +48,16 @@ describe('namespace-invitations API client', () => {
     });
 
     it('includes status filter as query param', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listNamespaceInvitations({ status: 'pending' });
 
       expect(mockApiGet).toHaveBeenCalledWith('/namespace/invitations?status=pending');
     });
 
-    it('unwraps invitations from response envelope', async () => {
+    it('returns array directly from API', async () => {
       const invitations = [fakeInvitation, { ...fakeInvitation, id: 'inv-2' }];
-      mockApiGet.mockResolvedValue({ invitations });
+      mockApiGet.mockResolvedValue(invitations);
 
       const result = await listNamespaceInvitations();
 

@@ -77,8 +77,8 @@ describe('invitations API client', () => {
   });
 
   describe('listSystemInvitations', () => {
-    it('calls GET /system/invitations and returns array from wrapped response', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [mockInvitation] });
+    it('calls GET /system/invitations and returns array directly', async () => {
+      mockApiGet.mockResolvedValue([mockInvitation]);
 
       const result = await listSystemInvitations();
 

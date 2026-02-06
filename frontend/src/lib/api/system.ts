@@ -90,11 +90,7 @@ export async function listSystemInvitations(
   const query = params.toString();
   const path = query ? `/system/invitations?${query}` : '/system/invitations';
 
-  interface InvitationsResponse {
-    invitations: SerializedInvitation[];
-  }
-  const response = await apiGet<InvitationsResponse>(path);
-  return response.invitations;
+  return apiGet<SerializedInvitation[]>(path);
 }
 
 /**

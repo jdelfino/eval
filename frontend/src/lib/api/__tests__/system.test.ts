@@ -115,7 +115,7 @@ describe('system API client', () => {
 
   describe('listSystemInvitations', () => {
     it('calls GET /system/invitations without filters', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [fakeInvitation] });
+      mockApiGet.mockResolvedValue([fakeInvitation]);
 
       const result = await listSystemInvitations();
 
@@ -124,7 +124,7 @@ describe('system API client', () => {
     });
 
     it('includes namespace_id filter', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listSystemInvitations({ namespace_id: 'ns-1' });
 
@@ -132,7 +132,7 @@ describe('system API client', () => {
     });
 
     it('includes targetRole filter', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listSystemInvitations({ targetRole: 'namespace-admin' });
 
@@ -140,7 +140,7 @@ describe('system API client', () => {
     });
 
     it('includes status filter', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listSystemInvitations({ status: 'pending' });
 
@@ -148,7 +148,7 @@ describe('system API client', () => {
     });
 
     it('combines multiple filters', async () => {
-      mockApiGet.mockResolvedValue({ invitations: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listSystemInvitations({
         namespace_id: 'ns-1',
@@ -161,9 +161,9 @@ describe('system API client', () => {
       );
     });
 
-    it('unwraps invitations from response envelope', async () => {
+    it('returns array directly from API', async () => {
       const invitations = [fakeInvitation, { ...fakeInvitation, id: 'inv-2' }];
-      mockApiGet.mockResolvedValue({ invitations });
+      mockApiGet.mockResolvedValue(invitations);
 
       const result = await listSystemInvitations();
 
