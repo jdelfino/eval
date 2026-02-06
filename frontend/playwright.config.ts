@@ -50,38 +50,12 @@ export default defineConfig({
     },
   ],
 
-  /* Start both Go backend and Next.js dev server before tests */
-  webServer: [
-    {
-      command: 'go run ./go-backend/cmd/server',
-      cwd: '..',
-      port: 8080,
-      reuseExistingServer: !!process.env.E2E_REUSE_SERVERS || !process.env.CI,
-      timeout: 60 * 1000,
-      env: {
-        AUTH_MODE: 'test',
-        DATABASE_HOST: process.env.DATABASE_HOST || 'localhost',
-        DATABASE_PORT: process.env.DATABASE_PORT || '5432',
-        DATABASE_NAME: process.env.DATABASE_NAME || 'eval',
-        DATABASE_USER: process.env.DATABASE_USER || 'eval',
-        DATABASE_PASSWORD: process.env.DATABASE_PASSWORD || 'eval_local_password',
-        CENTRIFUGO_TOKEN_SECRET: 'test-e2e-secret',
-        GCP_PROJECT_ID: 'test-project',
-        PORT: '8080',
-      },
-    },
-    {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: !!process.env.E2E_REUSE_SERVERS || !process.env.CI,
-      timeout: 120 * 1000,
-      env: {
-        ...process.env,
-        NEXT_PUBLIC_AUTH_MODE: 'test',
-        NEXT_PUBLIC_API_URL: 'http://localhost:8080',
-      },
-    },
-  ],
+  /*
+   * No webServer config — server orchestration is handled by
+   * scripts/run-e2e-tests.sh (local) and the CI workflow.
+   * Run `make test-e2e` which starts postgres, Go API, and Next.js
+   * before invoking Playwright.
+   */
 
   /* Test timeout */
   timeout: 30 * 1000,

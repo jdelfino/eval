@@ -11,7 +11,7 @@
  * Uses AUTH_MODE=test — no external auth provider required.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/test-fixture';
 import {
   loginAsSystemAdmin,
   navigateToNamespaces,

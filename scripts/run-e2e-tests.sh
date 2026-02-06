@@ -1,45 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- Config ---
-DB_HOST=${DATABASE_HOST:-localhost}
-DB_PORT=${DATABASE_PORT:-5432}
-DB_NAME=${DATABASE_NAME:-eval}
-DB_USER=${DATABASE_USER:-eval}
-DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
-PSQL_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+# E2E test runner.
+#
+# Ensures Postgres and Go API are running (reuses if already up),
+# starts Next.js if needed, then runs Playwright.
 
-# --- 1. Ensure Postgres is running + admin seeded ---
-./scripts/ensure-test-postgres.sh
-
-# --- 2. Start Go API on port 8080 ---
 API_PORT=${API_PORT:-8080}
+NEXT_PORT=3000
 
-AUTH_MODE=test \
-DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME" \
-DATABASE_USER="$DB_USER" DATABASE_PASSWORD="$DB_PASS" \
-CENTRIFUGO_TOKEN_SECRET=test-e2e-secret \
-GCP_PROJECT_ID=test-project \
-PORT="$API_PORT" \
-  go run ./go-backend/cmd/server &
-SERVER_PID=$!
-
+PIDS_TO_KILL=()
 cleanup() {
-  kill "$SERVER_PID" 2>/dev/null || true
-  wait "$SERVER_PID" 2>/dev/null || true
+  for pid in "${PIDS_TO_KILL[@]}"; do
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
 }
 trap cleanup EXIT
 
-# Wait for healthy
-for i in $(seq 1 30); do
-  if curl -sf "http://localhost:${API_PORT}/healthz" >/dev/null 2>&1; then break; fi
-  sleep 1
-done
-curl -sf "http://localhost:${API_PORT}/healthz" >/dev/null || { echo "Server failed to start"; exit 1; }
+# --- 1. Postgres + migrations + seed ---
+./scripts/ensure-test-postgres.sh
 
-# --- 3. Run E2E tests ---
+# --- 2. Go API (reuse if running) ---
+API_PID=$(./scripts/ensure-test-api.sh)
+if [ -n "$API_PID" ]; then
+  PIDS_TO_KILL+=("$API_PID")
+fi
+
+# --- 3. Next.js (reuse if running) ---
+if curl -sf "http://localhost:${NEXT_PORT}" >/dev/null 2>&1; then
+  echo "Next.js already running on port ${NEXT_PORT}"
+else
+  echo "Starting Next.js on port ${NEXT_PORT}..."
+  (cd frontend && NEXT_PUBLIC_AUTH_MODE=test NEXT_PUBLIC_API_URL=/api/v1 API_PROXY_URL="http://localhost:${API_PORT}" npm run dev) &
+  PIDS_TO_KILL+=($!)
+
+  for i in $(seq 1 60); do
+    if curl -sf "http://localhost:${NEXT_PORT}" >/dev/null 2>&1; then break; fi
+    sleep 2
+  done
+  curl -sf "http://localhost:${NEXT_PORT}" >/dev/null || { echo "Next.js failed to start"; exit 1; }
+  echo "Next.js ready"
+fi
+
+# --- 4. Run Playwright ---
 cd frontend
 NEXT_PUBLIC_AUTH_MODE=test \
-NEXT_PUBLIC_API_URL="http://localhost:${API_PORT}" \
+NEXT_PUBLIC_API_URL=/api/v1 \
 API_BASE_URL="http://localhost:${API_PORT}" \
   npx playwright test "$@"

@@ -83,4 +83,19 @@ export async function startSession(token: string, sectionId: string, sectionName
   return res.json();
 }
 
+export async function registerStudent(
+  joinCode: string,
+  externalId: string,
+  email: string,
+  displayName: string
+): Promise<any> {
+  const token = testToken(externalId, email);
+  const res = await apiFetch('/api/v1/auth/register-student', token, {
+    method: 'POST',
+    body: JSON.stringify({ join_code: joinCode, display_name: displayName }),
+  });
+  if (res.status !== 201) throw new Error(`Failed to register student: ${res.status}`);
+  return res.json();
+}
+
 export { ADMIN_TOKEN };

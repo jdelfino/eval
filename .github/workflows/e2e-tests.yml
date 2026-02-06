@@ -118,7 +118,8 @@ jobs:
       - name: Start Next.js dev server
         env:
           NEXT_PUBLIC_AUTH_MODE: test
-          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: /api/v1
+          API_PROXY_URL: http://localhost:8080
         run: |
           npm run dev &
           echo "NEXT_PID=$!" >> "$GITHUB_ENV"
@@ -139,10 +140,8 @@ jobs:
       - name: Run Playwright tests
         env:
           NEXT_PUBLIC_AUTH_MODE: test
-          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: /api/v1
           API_BASE_URL: http://localhost:8080
-          # Tell Playwright to reuse our pre-started servers instead of launching its own
-          E2E_REUSE_SERVERS: 'true'
         run: npx playwright test --project=chromium
         working-directory: frontend
 

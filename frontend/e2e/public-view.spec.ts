@@ -8,7 +8,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { testToken, createInvitation, acceptInvitation } from './fixtures/api-setup';
+import { registerStudent } from './fixtures/api-setup';
 
 test.describe('Public View Feature', () => {
   test('Public view updates when instructor features different students', async ({ page, browser, testNamespace, setupInstructor }) => {
@@ -19,9 +19,6 @@ test.describe('Public View Feature', () => {
     const instructor = await setupInstructor();
     const studentExternalId = `student-${testNamespace}`;
     const studentEmail = `${studentExternalId}@test.local`;
-    const studentToken = testToken(studentExternalId, studentEmail);
-    const invId = await createInvitation(studentEmail, 'student', testNamespace);
-    await acceptInvitation(invId, studentToken, 'E2E Student');
 
     const instructorContext = await browser.newContext();
     const instructorPage = await instructorContext.newPage();
@@ -112,21 +109,14 @@ test.describe('Public View Feature', () => {
       await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible({ timeout: 5_000 });
 
       // ===== STUDENT JOINS AND WRITES CODE =====
+      // Register the student via API (creates user + enrolls in section)
+      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
+
       await signInAs(page, studentEmail);
       await page.goto('/sections');
       await expect(page.locator('h1:has-text("My Sections")')).toBeVisible({ timeout: 5_000 });
 
-      // Join section
-      const joinSectionButton = page.locator(
-        'button:has-text("Join Section"), button:has-text("Join Your First Section")'
-      ).first();
-      await joinSectionButton.click();
-      await expect(page).toHaveURL('/sections/join', { timeout: 5_000 });
-      await page.fill('input#join_code', joinCode);
-      await page.click('button[type="submit"]:has-text("Join Section")');
-      await expect(page).toHaveURL('/sections', { timeout: 5_000 });
-
-      // Join active session
+      // Join active session (student is already enrolled via registerStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
       await expect(joinNowButton).toBeVisible({ timeout: 10_000 });
       await joinNowButton.click();
