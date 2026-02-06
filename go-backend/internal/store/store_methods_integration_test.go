@@ -283,6 +283,7 @@ func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uui
 	}
 }
 
+
 // =============================================================================
 // Test: ListProblemsFiltered - calls actual Store method with RLS
 // =============================================================================
@@ -651,6 +652,384 @@ func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
 		}
 		if len(results) > 0 && results[0].ID != nsA {
 			t.Errorf("expected namespace %s, got %s", nsA, results[0].ID)
+		}
+	})
+}
+
+// =============================================================================
+// Test: Namespace Isolation - User in ns-A cannot SELECT users from ns-B
+// =============================================================================
+
+func TestIntegration_NamespaceIsolation_UserVisibility(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsA := db.nsID
+	nsB := "ns-" + uuid.New().String()
+	db.createNamespace(ctx, t, nsB, "Namespace B")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsB)
+	})
+
+	// Create users in each namespace
+	userA := uuid.New()
+	userB := uuid.New()
+	db.createUser(ctx, t, userA, "userA@test.com", "instructor", nsA)
+	db.createUser(ctx, t, userB, "userB@test.com", "instructor", nsB)
+
+	authUserA := &auth.User{
+		ID:          userA,
+		Email:       "userA@test.com",
+		NamespaceID: nsA,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("ListUsers does not return users from other namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		results, err := s.ListUsers(ctx, UserFilters{})
+		if err != nil {
+			t.Fatalf("ListUsers: %v", err)
+		}
+
+		// Should only see users in namespace A
+		for _, u := range results {
+			if u.ID == userB {
+				t.Errorf("user in namespace A should not see user from namespace B")
+			}
+			if u.NamespaceID != nil && *u.NamespaceID == nsB {
+				t.Errorf("user in namespace A should not see any users from namespace B")
+			}
+		}
+
+		// Should see at least the user in namespace A
+		found := false
+		for _, u := range results {
+			if u.ID == userA {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("user should see themselves in their own namespace")
+		}
+	})
+
+	t.Run("GetUser returns not found for user in other namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.GetUserByID(ctx, userB)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound when accessing user in namespace B, got: %v", err)
+		}
+	})
+
+	t.Run("GetUserByEmail returns not found for user in other namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.GetUserByEmail(ctx, "userB@test.com")
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound when accessing user by email in namespace B, got: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// Test: Namespace Isolation - Instructor in ns-A cannot INSERT class in ns-B
+// =============================================================================
+
+func TestIntegration_NamespaceIsolation_CreateClass(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsA := db.nsID
+	nsB := "ns-" + uuid.New().String()
+	db.createNamespace(ctx, t, nsB, "Namespace B")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsB)
+	})
+
+	// Create instructor in namespace A
+	instructorA := uuid.New()
+	db.createUser(ctx, t, instructorA, "instructorA@test.com", "instructor", nsA)
+
+	authUserA := &auth.User{
+		ID:          instructorA,
+		Email:       "instructorA@test.com",
+		NamespaceID: nsA,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("instructor in ns-A can create class in ns-A", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		class, err := s.CreateClass(ctx, CreateClassParams{
+			NamespaceID: nsA,
+			Name:        "CS101 in A",
+			CreatedBy:   instructorA,
+		})
+		if err != nil {
+			t.Fatalf("CreateClass in own namespace should succeed: %v", err)
+		}
+		if class.NamespaceID != nsA {
+			t.Errorf("class should be in namespace A, got %s", class.NamespaceID)
+		}
+	})
+
+	t.Run("instructor in ns-A cannot create class in ns-B", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.CreateClass(ctx, CreateClassParams{
+			NamespaceID: nsB, // Trying to create in different namespace
+			Name:        "Unauthorized Class",
+			CreatedBy:   instructorA,
+		})
+		if err == nil {
+			t.Fatalf("CreateClass in another namespace should fail (RLS violation)")
+		}
+		// RLS INSERT policy violation typically results in a permission error
+		// The exact error depends on PostgreSQL RLS policy behavior
+		t.Logf("Got expected error when creating class in wrong namespace: %v", err)
+	})
+}
+
+// =============================================================================
+// Test: Namespace Isolation - User in ns-A cannot see sessions from ns-B
+// =============================================================================
+
+func TestIntegration_NamespaceIsolation_Sessions(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsA := db.nsID
+	nsB := "ns-" + uuid.New().String()
+	db.createNamespace(ctx, t, nsB, "Namespace B")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsB)
+	})
+
+	// Create users in each namespace
+	instructorA := uuid.New()
+	instructorB := uuid.New()
+	db.createUser(ctx, t, instructorA, "instructorA@test.com", "instructor", nsA)
+	db.createUser(ctx, t, instructorB, "instructorB@test.com", "instructor", nsB)
+
+	// Create classes and sections in each namespace
+	classA := uuid.New()
+	classB := uuid.New()
+	db.createClass(ctx, t, classA, nsA, "Class A", instructorA)
+	db.createClass(ctx, t, classB, nsB, "Class B", instructorB)
+
+	sectionA := uuid.New()
+	sectionB := uuid.New()
+	db.createSection(ctx, t, sectionA, nsA, classA, "Section A", "CODE-A")
+	db.createSection(ctx, t, sectionB, nsB, classB, "Section B", "CODE-B")
+
+	db.createMembership(ctx, t, instructorA, sectionA, "instructor")
+	db.createMembership(ctx, t, instructorB, sectionB, "instructor")
+
+	// Create sessions in each namespace
+	sessionA := uuid.New()
+	sessionB := uuid.New()
+	db.createSession(ctx, t, sessionA, nsA, sectionA, "Section A", instructorA)
+	db.createSession(ctx, t, sessionB, nsB, sectionB, "Section B", instructorB)
+
+	authUserA := &auth.User{
+		ID:          instructorA,
+		Email:       "instructorA@test.com",
+		NamespaceID: nsA,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("ListSessions does not return sessions from other namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		results, err := s.ListSessions(ctx, SessionFilters{})
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
+
+		// Should not see sessions from namespace B
+		for _, sess := range results {
+			if sess.ID == sessionB {
+				t.Errorf("user in namespace A should not see session from namespace B")
+			}
+			if sess.NamespaceID == nsB {
+				t.Errorf("user in namespace A should not see any sessions from namespace B")
+			}
+		}
+
+		// Should see the session in namespace A
+		found := false
+		for _, sess := range results {
+			if sess.ID == sessionA {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("user should see session in their own namespace")
+		}
+	})
+
+	t.Run("GetSession returns not found for session in other namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.GetSession(ctx, sessionB)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound when accessing session in namespace B, got: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// Test: System Admin CAN see all namespaces
+// =============================================================================
+
+func TestIntegration_SystemAdminCanSeeAllNamespaces(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsA := db.nsID
+	nsB := "ns-" + uuid.New().String()
+	db.createNamespace(ctx, t, nsB, "Namespace B")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsB)
+	})
+
+	// Create users in each namespace
+	userA := uuid.New()
+	userB := uuid.New()
+	db.createUser(ctx, t, userA, "userA@test.com", "instructor", nsA)
+	db.createUser(ctx, t, userB, "userB@test.com", "instructor", nsB)
+
+	// Create a system admin (no namespace)
+	adminID := uuid.New()
+	err := db.execAsSuperuser(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin@test.com", "system-admin")
+	if err != nil {
+		t.Fatalf("create system admin: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
+
+	authAdmin := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
+	}
+
+	t.Run("system admin can see all namespaces", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authAdmin)
+		defer conn.Release()
+
+		results, err := s.ListNamespaces(ctx)
+		if err != nil {
+			t.Fatalf("ListNamespaces: %v", err)
+		}
+
+		// Should see at least nsA and nsB (may see others from other tests)
+		foundA := false
+		foundB := false
+		for _, ns := range results {
+			if ns.ID == nsA {
+				foundA = true
+			}
+			if ns.ID == nsB {
+				foundB = true
+			}
+		}
+		if !foundA {
+			t.Errorf("system admin should see namespace A (%s)", nsA)
+		}
+		if !foundB {
+			t.Errorf("system admin should see namespace B (%s)", nsB)
+		}
+	})
+
+	t.Run("system admin can see users from any namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authAdmin)
+		defer conn.Release()
+
+		// System admin should be able to get users from both namespaces
+		user, err := s.GetUserByID(ctx, userA)
+		if err != nil {
+			t.Errorf("system admin should be able to get user from namespace A: %v", err)
+		} else if user.ID != userA {
+			t.Errorf("expected user %s, got %s", userA, user.ID)
+		}
+
+		user, err = s.GetUserByID(ctx, userB)
+		if err != nil {
+			t.Errorf("system admin should be able to get user from namespace B: %v", err)
+		} else if user.ID != userB {
+			t.Errorf("expected user %s, got %s", userB, user.ID)
+		}
+	})
+
+	// Create problems in each namespace for testing
+	problemA := uuid.New()
+	problemB := uuid.New()
+	db.createProblem(ctx, t, problemA, nsA, "Problem A", userA, nil, nil)
+	db.createProblem(ctx, t, problemB, nsB, "Problem B", userB, nil, nil)
+
+	t.Run("system admin can see problems from any namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authAdmin)
+		defer conn.Release()
+
+		// System admin should be able to get problems from both namespaces
+		problem, err := s.GetProblem(ctx, problemA)
+		if err != nil {
+			t.Errorf("system admin should be able to get problem from namespace A: %v", err)
+		} else if problem.ID != problemA {
+			t.Errorf("expected problem %s, got %s", problemA, problem.ID)
+		}
+
+		problem, err = s.GetProblem(ctx, problemB)
+		if err != nil {
+			t.Errorf("system admin should be able to get problem from namespace B: %v", err)
+		} else if problem.ID != problemB {
+			t.Errorf("expected problem %s, got %s", problemB, problem.ID)
+		}
+	})
+
+	// Create classes in each namespace for testing
+	classA := uuid.New()
+	classB := uuid.New()
+	db.createClass(ctx, t, classA, nsA, "Class A", userA)
+	db.createClass(ctx, t, classB, nsB, "Class B", userB)
+
+	t.Run("system admin can see classes from any namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authAdmin)
+		defer conn.Release()
+
+		// System admin should be able to get classes from both namespaces
+		class, err := s.GetClass(ctx, classA)
+		if err != nil {
+			t.Errorf("system admin should be able to get class from namespace A: %v", err)
+		} else if class.ID != classA {
+			t.Errorf("expected class %s, got %s", classA, class.ID)
+		}
+
+		class, err = s.GetClass(ctx, classB)
+		if err != nil {
+			t.Errorf("system admin should be able to get class from namespace B: %v", err)
+		} else if class.ID != classB {
+			t.Errorf("expected class %s, got %s", classB, class.ID)
 		}
 	})
 }
