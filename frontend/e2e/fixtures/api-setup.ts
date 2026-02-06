@@ -28,7 +28,7 @@ export async function createNamespace(id: string, displayName: string): Promise<
     method: 'POST',
     body: JSON.stringify({ id, display_name: displayName }),
   });
-  if (res.status !== 201 && res.status !== 500) {
+  if (res.status !== 201 && res.status !== 409) {
     throw new Error(`Failed to create namespace: ${res.status}`);
   }
 }

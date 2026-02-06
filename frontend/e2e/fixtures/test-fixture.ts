@@ -30,8 +30,8 @@ export const test = base.extend<TestFixtures>({
 
   setupInstructor: async ({ testNamespace }, use) => {
     const setup = async (username: string = 'e2e-instructor') => {
-      const email = `${username}@${testNamespace}.test`;
       const externalId = `${username}-${testNamespace}`;
+      const email = `${externalId}@test.local`;
       const token = testToken(externalId, email);
 
       // Create invitation and accept it to create the user

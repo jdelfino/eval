@@ -144,7 +144,7 @@ jobs:
           # Override CI so Playwright's webServer config reuses our pre-started
           # servers instead of trying to launch its own (reuseExistingServer: !process.env.CI)
           CI: ''
-        run: npx playwright test --project=chromium
+        run: npx playwright test --project=chromium --forbid-only
         working-directory: frontend
 
       - name: Upload Playwright report

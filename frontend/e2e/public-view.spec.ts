@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from './fixtures/test-fixture';
-import { signInAs } from './fixtures/auth';
+import { signInAs, navigateToDashboard } from './fixtures/auth';
 import { testToken, createInvitation, acceptInvitation } from './fixtures/api-setup';
 
 test.describe('Public View Feature', () => {
@@ -17,8 +17,8 @@ test.describe('Public View Feature', () => {
 
     // ===== SETUP USERS VIA API =====
     const instructor = await setupInstructor();
-    const studentEmail = `student@${testNamespace}.test`;
     const studentExternalId = `student-${testNamespace}`;
+    const studentEmail = `${studentExternalId}@test.local`;
     const studentToken = testToken(studentExternalId, studentEmail);
     const invId = await createInvitation(studentEmail, 'student', testNamespace);
     await acceptInvitation(invId, studentToken, 'E2E Student');
@@ -67,9 +67,7 @@ test.describe('Public View Feature', () => {
       await expect(instructorPage.locator('text=Test Section').first()).toBeVisible({ timeout: 5_000 });
 
       // Navigate back to dashboard
-      const sidebar = instructorPage.locator('aside[aria-label="Main navigation"]');
-      await sidebar.locator('a:has-text("Dashboard")').click();
-      await instructorPage.waitForURL('/instructor', { timeout: 10_000 });
+      await navigateToDashboard(instructorPage);
       await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible({ timeout: 5_000 });
       await expect(instructorPage.locator('text=Test Section')).toBeVisible({ timeout: 5_000 });
 

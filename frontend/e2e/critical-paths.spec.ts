@@ -29,8 +29,8 @@ test.describe('Critical User Paths', () => {
     const instructor = await setupInstructor();
 
     // Create a student user via API
-    const studentEmail = `student@${testNamespace}.test`;
     const studentExternalId = `student-${testNamespace}`;
+    const studentEmail = `${studentExternalId}@test.local`;
     const studentToken = testToken(studentExternalId, studentEmail);
     const invId = await createInvitation(studentEmail, 'student', testNamespace);
     await acceptInvitation(invId, studentToken, 'E2E Student');
@@ -136,7 +136,7 @@ test.describe('Critical User Paths', () => {
       // Wait for navigation to join page
       await expect(page).toHaveURL('/sections/join', { timeout: 5000 });
       await expect(page.locator('h2:has-text("Join a Section")')).toBeVisible({ timeout: 5000 });
-      await page.fill('input#joinCode', joinCode);
+      await page.fill('input#join_code', joinCode);
       await page.click('button[type="submit"]:has-text("Join Section")');
 
       // Wait for redirect back to sections page after successful join
@@ -176,8 +176,8 @@ test.describe('Critical User Paths', () => {
     const instructor = await setupInstructor();
 
     // Create a student user via API
-    const studentEmail = `student@${testNamespace}.test`;
     const studentExternalId = `student-${testNamespace}`;
+    const studentEmail = `${studentExternalId}@test.local`;
     const studentToken = testToken(studentExternalId, studentEmail);
     const invId = await createInvitation(studentEmail, 'student', testNamespace);
     await acceptInvitation(invId, studentToken, 'E2E Student');
@@ -268,7 +268,7 @@ test.describe('Critical User Paths', () => {
         .first();
       await joinSectionButton.click();
       await expect(page).toHaveURL('/sections/join', { timeout: 5000 });
-      await page.fill('input#joinCode', joinCode);
+      await page.fill('input#join_code', joinCode);
       await page.click('button[type="submit"]:has-text("Join Section")');
       await expect(page).toHaveURL('/sections', { timeout: 5000 });
 
