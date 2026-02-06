@@ -57,7 +57,7 @@ describe('AuthContext', () => {
     jest.clearAllMocks();
     authStateCallback = null;
 
-    // Capture the onAuthStateChanged callback
+    // Capture the onAuthStateChanged callback (now called async)
     mockOnAuthStateChanged.mockImplementation((_auth: any, callback: any) => {
       authStateCallback = callback;
       return jest.fn(); // unsubscribe
@@ -67,6 +67,13 @@ describe('AuthContext', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <AuthProvider>{children}</AuthProvider>
   );
+
+  // Helper to wait for Firebase setup to complete (async imports)
+  const waitForAuthSetup = async () => {
+    await waitFor(() => {
+      expect(authStateCallback).not.toBeNull();
+    });
+  };
 
   describe('useAuth outside provider', () => {
     it('throws error when used outside AuthProvider', () => {
@@ -106,6 +113,9 @@ describe('AuthContext', () => {
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
+      // Wait for async Firebase setup to complete
+      await waitForAuthSetup();
+
       await act(async () => {
         authStateCallback!({ getIdToken: jest.fn() });
       });
@@ -121,6 +131,9 @@ describe('AuthContext', () => {
 
     it('clears user when Firebase user is null', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });
+
+      // Wait for async Firebase setup to complete
+      await waitForAuthSetup();
 
       await act(async () => {
         authStateCallback!(null);
@@ -140,6 +153,9 @@ describe('AuthContext', () => {
       mockApiGet.mockResolvedValue(mockUser);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
+
+      // Wait for async Firebase setup to complete
+      await waitForAuthSetup();
 
       // Trigger initial auth state (no user)
       await act(async () => {
@@ -164,6 +180,9 @@ describe('AuthContext', () => {
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
+      // Wait for async Firebase setup to complete
+      await waitForAuthSetup();
+
       await act(async () => {
         authStateCallback!(null);
       });
@@ -181,6 +200,9 @@ describe('AuthContext', () => {
       mockApiGet.mockResolvedValue(mockUser);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
+
+      // Wait for async Firebase setup to complete
+      await waitForAuthSetup();
 
       // Set up an authenticated state
       await act(async () => {

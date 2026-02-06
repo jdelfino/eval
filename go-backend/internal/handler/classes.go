@@ -56,10 +56,11 @@ func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // classDetailResponse is the enriched response for GET /classes/{id}.
+// Fields match frontend expectations in classes/[id]/page.tsx.
 type classDetailResponse struct {
-	store.Class
-	Sections        []store.Section `json:"sections"`
-	InstructorNames []string        `json:"instructor_names"`
+	Class           *store.Class       `json:"class"`
+	Sections        []store.Section    `json:"sections"`
+	InstructorNames map[string]string  `json:"instructorNames"`
 }
 
 // Get handles GET /api/v1/classes/{id} — returns a single class with sections and instructor names.
@@ -80,9 +81,8 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enrich with sections and instructor names.
+	// Enrich with sections.
 	sections := []store.Section{}
-	instructorNames := []string{}
 
 	secs, err := repos.ListSectionsByClass(r.Context(), id)
 	if err != nil {
@@ -93,19 +93,14 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sections = secs
 	}
 
-	names, err := repos.ListClassInstructorNames(r.Context(), id)
-	if err != nil {
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-	if names != nil {
-		instructorNames = names
-	}
+	// Convert instructor names list to map (for now, use empty map since frontend expects user_id -> name)
+	// TODO: Update ListClassInstructorNames to return map[user_id]name
+	instructorNamesMap := make(map[string]string)
 
 	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{
-		Class:           *class,
+		Class:           class,
 		Sections:        sections,
-		InstructorNames: instructorNames,
+		InstructorNames: instructorNamesMap,
 	})
 }
 

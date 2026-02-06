@@ -30,7 +30,10 @@ fi
 export AUTH_MODE=test
 export DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME"
 export DATABASE_USER="$DB_USER" DATABASE_PASSWORD="$DB_PASS"
-export CENTRIFUGO_TOKEN_SECRET=test-secret
+export REDIS_URL=redis://localhost:6379
+export CENTRIFUGO_URL=http://localhost:8000
+export CENTRIFUGO_API_KEY=local-api-key
+export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
 export GCP_PROJECT_ID=test-project
 export PORT="$API_PORT"
 (cd go-backend && go run ./cmd/server) >&2 &

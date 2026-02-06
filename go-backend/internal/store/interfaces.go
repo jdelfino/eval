@@ -401,10 +401,12 @@ type RevisionRepository interface {
 
 // DashboardSection represents a section summary in the instructor dashboard.
 type DashboardSection struct {
-	ID               uuid.UUID   `json:"id"`
-	Name             string      `json:"name"`
-	StudentCount     int         `json:"student_count"`
-	ActiveSessionIDs []uuid.UUID `json:"active_session_ids"`
+	ID              uuid.UUID  `json:"id"`
+	Name            string     `json:"name"`
+	JoinCode        string     `json:"join_code"`
+	Semester        *string    `json:"semester,omitempty"`
+	StudentCount    int        `json:"studentCount"`
+	ActiveSessionID *uuid.UUID `json:"activeSessionId,omitempty"`
 }
 
 // DashboardClass represents a class summary in the instructor dashboard.

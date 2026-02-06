@@ -24,7 +24,7 @@ import { registerStudent } from './fixtures/api-setup';
  */
 
 test.describe('Critical User Paths', () => {
-  test('Complete workflow: Instructor setup and student participation', async ({ page, browser, testNamespace, setupInstructor }) => {
+  test('Complete workflow: Instructor setup and student participation', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
     // ===== API SETUP =====
     const instructor = await setupInstructor();
     const studentExternalId = `student-${testNamespace}`;
@@ -33,6 +33,26 @@ test.describe('Critical User Paths', () => {
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
     const instructorPage = await instructorContext.newPage();
+    // Capture browser console logs from instructor page
+    logCollector.attachPage(instructorPage, 'instructor-page');
+
+    // Monitor API requests for debugging
+    instructorPage.on('request', (request) => {
+      if (request.url().includes('/api/')) {
+        console.log(`[API Request] ${request.method()} ${request.url()}`);
+      }
+    });
+    instructorPage.on('response', async (response) => {
+      if (response.url().includes('/api/')) {
+        const status = response.status();
+        let body = '';
+        try {
+          body = await response.text();
+          if (body.length > 500) body = body.substring(0, 500) + '...';
+        } catch { /* ignore */ }
+        console.log(`[API Response] ${response.status()} ${response.url()} - ${body}`);
+      }
+    });
 
     try {
       await signInAs(instructorPage, instructor.email);
@@ -71,8 +91,8 @@ test.describe('Critical User Paths', () => {
       await createSectionButton.click();
 
       // Fill in section form
-      await expect(instructorPage.locator('input#sectionName').first()).toBeVisible({ timeout: 5000 });
-      await instructorPage.fill('input#sectionName', 'Test Section');
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5000 });
+      await instructorPage.fill('input#section_name', 'Test Section');
       await instructorPage
         .locator('button[type="submit"]:has-text("Create"), button:has-text("Create Section")')
         .first()
@@ -151,7 +171,7 @@ test.describe('Critical User Paths', () => {
     }
   });
 
-  test('Student code sync: code changes sync to instructor and public view', async ({ page, browser, testNamespace, setupInstructor }) => {
+  test('Student code sync: code changes sync to instructor and public view', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
     // Extend timeout for this multi-page test
     test.setTimeout(60000);
 
@@ -163,6 +183,8 @@ test.describe('Critical User Paths', () => {
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
     const instructorPage = await instructorContext.newPage();
+    // Capture browser console logs from instructor page
+    logCollector.attachPage(instructorPage, 'instructor-page');
     let publicViewPage: Awaited<ReturnType<typeof browser.newPage>> | undefined;
 
     try {
@@ -193,8 +215,8 @@ test.describe('Critical User Paths', () => {
         .locator('button:has-text("New Section"), button:has-text("Create First Section")')
         .first();
       await createSectionButton.click();
-      await expect(instructorPage.locator('input#sectionName').first()).toBeVisible({ timeout: 5000 });
-      await instructorPage.fill('input#sectionName', 'Sync Test Section');
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5000 });
+      await instructorPage.fill('input#section_name', 'Sync Test Section');
       await instructorPage
         .locator('button[type="submit"]:has-text("Create"), button:has-text("Create Section")')
         .first()

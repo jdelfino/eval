@@ -32,7 +32,12 @@ if curl -sf "http://localhost:${NEXT_PORT}" >/dev/null 2>&1; then
   echo "Next.js already running on port ${NEXT_PORT}"
 else
   echo "Starting Next.js on port ${NEXT_PORT}..."
-  (cd frontend && NEXT_PUBLIC_AUTH_MODE=test NEXT_PUBLIC_API_URL=/api/v1 API_PROXY_URL="http://localhost:${API_PORT}" npm run dev) &
+  (cd frontend && \
+    NEXT_PUBLIC_AUTH_MODE=test \
+    NEXT_PUBLIC_API_URL=/api/v1 \
+    NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+    API_PROXY_URL="http://localhost:${API_PORT}" \
+    npm run dev) &
   PIDS_TO_KILL+=($!)
 
   for i in $(seq 1 60); do
