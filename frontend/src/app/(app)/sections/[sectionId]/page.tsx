@@ -59,8 +59,8 @@ export default function SectionDetailPage() {
         name: mySectionInfo.section.name,
         className: mySectionInfo.class_name,
         classDescription: '', // Not provided by MySectionInfo
-        semester: mySectionInfo.section.semester,
-        role: mySectionInfo.role as 'instructor' | 'student',
+        semester: mySectionInfo.section.semester ?? undefined,
+        role: user!.role as 'instructor' | 'student',
       };
       setSection(sectionDetail);
 

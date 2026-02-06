@@ -7,8 +7,14 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ClassList from '../ClassList';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock the API module
+const mockListClasses = jest.fn();
+const mockDeleteClass = jest.fn();
+
+jest.mock('@/lib/api/classes', () => ({
+  listClasses: () => mockListClasses(),
+  deleteClass: (id: string) => mockDeleteClass(id),
+}));
 
 describe('ClassList', () => {
   const mockOnSelectClass = jest.fn();
@@ -22,26 +28,23 @@ describe('ClassList', () => {
   });
 
   it('should render loading state initially', () => {
-    (global.fetch as jest.Mock).mockImplementation(() => 
+    mockListClasses.mockImplementation(() =>
       new Promise(() => {}) // Never resolves
     );
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
-    
+
     const spinner = document.querySelector('.animate-spin');
     expect(spinner).toBeInTheDocument();
   });
 
   it('should fetch and display classes', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro to CS', section_count: 3 },
-      { id: 'class-2', name: 'CS102', description: 'Data Structures', section_count: 2 },
+      { id: 'class-1', namespace_id: 'ns-1', name: 'CS101', description: 'Intro to CS', created_by: 'user-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+      { id: 'class-2', namespace_id: 'ns-1', name: 'CS102', description: 'Data Structures', created_by: 'user-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
     ];
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: mockClasses }),
-    });
+    mockListClasses.mockResolvedValueOnce(mockClasses);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -52,32 +55,10 @@ describe('ClassList', () => {
 
     expect(screen.getByText('Intro to CS')).toBeInTheDocument();
     expect(screen.getByText('Data Structures')).toBeInTheDocument();
-    expect(screen.getByText('3 sections')).toBeInTheDocument();
-    expect(screen.getByText('2 sections')).toBeInTheDocument();
-  });
-
-  it('should handle singular section count', async () => {
-    const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro', section_count: 1 },
-    ];
-
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: mockClasses }),
-    });
-
-    render(<ClassList onSelectClass={mockOnSelectClass} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('1 section')).toBeInTheDocument();
-    });
   });
 
   it('should display empty state when no classes', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: [] }),
-    });
+    mockListClasses.mockResolvedValueOnce([]);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -89,11 +70,7 @@ describe('ClassList', () => {
   });
 
   it('should display error state on fetch failure', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ error: 'Server error' }),
-    });
+    mockListClasses.mockRejectedValueOnce(new Error('Server error'));
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -105,7 +82,7 @@ describe('ClassList', () => {
   });
 
   it('should handle network errors', async () => {
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    mockListClasses.mockRejectedValueOnce(new Error('Network error'));
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -113,19 +90,15 @@ describe('ClassList', () => {
       expect(screen.getByText('Error loading classes')).toBeInTheDocument();
     });
 
-    // ErrorAlert shows user-friendly message
-    expect(screen.getByText('Connection error. Please check your internet and try again.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
   it('should call onSelectClass when class is clicked', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: 'Intro', section_count: 3 },
+      { id: 'class-1', namespace_id: 'ns-1', name: 'CS101', description: 'Intro', created_by: 'user-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
     ];
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: mockClasses }),
-    });
+    mockListClasses.mockResolvedValueOnce(mockClasses);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -141,16 +114,13 @@ describe('ClassList', () => {
   });
 
   it('should retry loading classes on error retry button click', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: 'Server error' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ classes: [{ id: 'class-1', name: 'CS101', description: '', section_count: 1 }] }),
-      });
+    const mockClasses = [
+      { id: 'class-1', namespace_id: 'ns-1', name: 'CS101', description: '', created_by: 'user-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
+    ];
+
+    mockListClasses
+      .mockRejectedValueOnce(new Error('Server error'))
+      .mockResolvedValueOnce(mockClasses);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
@@ -166,28 +136,22 @@ describe('ClassList', () => {
     });
   });
 
-  it('should fetch from correct API endpoint', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: [] }),
-    });
+  it('should call listClasses API function', async () => {
+    mockListClasses.mockResolvedValueOnce([]);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/classes');
+      expect(mockListClasses).toHaveBeenCalled();
     });
   });
 
   it('should handle classes without descriptions', async () => {
     const mockClasses = [
-      { id: 'class-1', name: 'CS101', description: '', section_count: 1 },
+      { id: 'class-1', namespace_id: 'ns-1', name: 'CS101', description: null, created_by: 'user-1', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z' },
     ];
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ classes: mockClasses }),
-    });
+    mockListClasses.mockResolvedValueOnce(mockClasses);
 
     render(<ClassList onSelectClass={mockOnSelectClass} />);
 

@@ -20,7 +20,8 @@ export interface ProblemSummary {
   class_id: string;
   tags: string[];
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  test_case_count: number | null;
 }
 
 /**
@@ -101,13 +102,13 @@ export async function createProblem(data: {
  */
 export async function updateProblem(id: string, data: Partial<{
   title: string;
-  description: string;
-  starter_code: string;
+  description: string | null;
+  starter_code: string | null;
   test_cases: unknown[];
   execution_settings: unknown;
-  class_id: string;
+  class_id: string | null;
   tags: string[];
-  solution: string;
+  solution: string | null;
 }>): Promise<Problem> {
   return apiPatch<Problem>(`/problems/${id}`, data);
 }

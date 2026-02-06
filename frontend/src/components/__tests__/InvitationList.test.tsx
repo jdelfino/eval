@@ -12,39 +12,43 @@ const mockPendingInvitation: Invitation = {
   id: 'inv-1',
   email: 'pending@example.com',
   namespace_id: 'ns-1',
-  targetRole: 'instructor',
+  target_role: 'instructor',
   created_at: '2026-01-15T10:00:00Z',
-  expiresAt: '2027-02-15T10:00:00Z', // Far future - always pending
+  expires_at: '2027-02-15T10:00:00Z', // Far future - always pending
+  created_by: 'admin-1',
 };
 
 const mockConsumedInvitation: Invitation = {
   id: 'inv-2',
   email: 'consumed@example.com',
   namespace_id: 'ns-1',
-  targetRole: 'namespace-admin',
+  target_role: 'namespace-admin',
   created_at: '2026-01-10T10:00:00Z',
-  expiresAt: '2027-02-10T10:00:00Z',
-  consumedAt: '2026-01-12T10:00:00Z',
-  consumedBy: 'user-1',
+  expires_at: '2027-02-10T10:00:00Z',
+  consumed_at: '2026-01-12T10:00:00Z',
+  consumed_by: 'user-1',
+  created_by: 'admin-1',
 };
 
 const mockRevokedInvitation: Invitation = {
   id: 'inv-3',
   email: 'revoked@example.com',
   namespace_id: 'ns-2',
-  targetRole: 'instructor',
+  target_role: 'instructor',
   created_at: '2026-01-05T10:00:00Z',
-  expiresAt: '2027-02-05T10:00:00Z',
-  revokedAt: '2026-01-08T10:00:00Z',
+  expires_at: '2027-02-05T10:00:00Z',
+  revoked_at: '2026-01-08T10:00:00Z',
+  created_by: 'admin-1',
 };
 
 const mockExpiredInvitation: Invitation = {
   id: 'inv-4',
   email: 'expired@example.com',
   namespace_id: 'ns-1',
-  targetRole: 'instructor',
+  target_role: 'instructor',
   created_at: '2024-12-01T10:00:00Z',
-  expiresAt: '2024-12-15T10:00:00Z', // Already expired
+  expires_at: '2024-12-15T10:00:00Z', // Already expired
+  created_by: 'admin-1',
 };
 
 const mockNamespaces: NamespaceOption[] = [

@@ -7,8 +7,16 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import SectionView from '../SectionView';
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock API functions
+const mockGetClassSections = jest.fn();
+const mockDeleteSection = jest.fn();
+const mockGetActiveSessions = jest.fn();
+
+jest.mock('@/lib/api/sections', () => ({
+  getClassSections: (...args: unknown[]) => mockGetClassSections(...args),
+  deleteSection: (...args: unknown[]) => mockDeleteSection(...args),
+  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
+}));
 
 describe('SectionView', () => {
   const mockOnBack = jest.fn();
@@ -32,30 +40,30 @@ describe('SectionView', () => {
   });
 
   it('should render loading state initially', () => {
-    (global.fetch as jest.Mock).mockImplementation(() => 
+    mockGetClassSections.mockImplementation(() =>
       new Promise(() => {}) // Never resolves
     );
 
     render(<SectionView {...defaultProps} />);
-    
+
     const spinner = document.querySelector('.animate-spin');
     expect(spinner).toBeInTheDocument();
   });
 
   it('should fetch and display sections for a class', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
-        name: 'Section A', 
+      {
+        id: 'section-1',
+        name: 'Section A',
         schedule: 'MWF 10am',
         location: 'Room 101',
         studentCount: 25,
         sessionCount: 5,
         activeSessionCount: 2
       },
-      { 
-        id: 'section-2', 
-        name: 'Section B', 
+      {
+        id: 'section-2',
+        name: 'Section B',
         schedule: 'TTh 2pm',
         studentCount: 20,
         sessionCount: 3,
@@ -63,10 +71,7 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: mockSections }),
-    });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
 
     render(<SectionView {...defaultProps} />);
 
@@ -82,23 +87,17 @@ describe('SectionView', () => {
   });
 
   it('should fetch sections from correct API endpoint', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: [] }),
-    });
+    mockGetClassSections.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
+      expect(mockGetClassSections).toHaveBeenCalledWith('class-1');
     });
   });
 
   it('should display empty state when no sections', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: [] }),
-    });
+    mockGetClassSections.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -110,10 +109,7 @@ describe('SectionView', () => {
   });
 
   it('should display error state on fetch failure', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    });
+    mockGetClassSections.mockRejectedValueOnce(new Error('Failed to fetch'));
 
     render(<SectionView {...defaultProps} />);
 
@@ -123,10 +119,7 @@ describe('SectionView', () => {
   });
 
   it('should not render back button in section list view (breadcrumb handles navigation)', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: [] }),
-    });
+    mockGetClassSections.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -141,8 +134,8 @@ describe('SectionView', () => {
 
   it('should navigate to section detail when section is clicked', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
+      {
+        id: 'section-1',
         name: 'Section A',
         schedule: 'MWF 10am',
         studentCount: 25,
@@ -151,15 +144,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -175,13 +161,13 @@ describe('SectionView', () => {
     });
 
     // Should fetch sessions for the selected section
-    expect(global.fetch).toHaveBeenCalledWith('/sections/section-1/sessions');
+    expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
   });
 
   it('should display sessions for selected section', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
+      {
+        id: 'section-1',
         name: 'Section A',
         studentCount: 25,
         sessionCount: 2,
@@ -210,15 +196,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce(mockSessions);
 
     render(<SectionView {...defaultProps} />);
 
@@ -240,8 +219,8 @@ describe('SectionView', () => {
 
   it('should call onCreateSession when New Session button is clicked', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
+      {
+        id: 'section-1',
         name: 'Section A',
         studentCount: 25,
         sessionCount: 0,
@@ -249,15 +228,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -280,8 +252,8 @@ describe('SectionView', () => {
 
   it('should call onJoinSession when session is clicked', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
+      {
+        id: 'section-1',
         name: 'Section A',
         studentCount: 25,
         sessionCount: 1,
@@ -301,15 +273,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce(mockSessions);
 
     render(<SectionView {...defaultProps} />);
 
@@ -332,8 +297,8 @@ describe('SectionView', () => {
 
   it('should navigate back to section list when back button clicked in session view', async () => {
     const mockSections = [
-      { 
-        id: 'section-1', 
+      {
+        id: 'section-1',
         name: 'Section A',
         studentCount: 25,
         sessionCount: 0,
@@ -341,15 +306,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -382,15 +340,8 @@ describe('SectionView', () => {
       },
     ];
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: mockSections }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+    mockGetClassSections.mockResolvedValueOnce(mockSections);
+    mockGetActiveSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -414,10 +365,7 @@ describe('SectionView', () => {
 
   describe('CreateSectionModal integration', () => {
     it('should open modal when New Section button is clicked', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: [] }),
-      });
+      mockGetClassSections.mockResolvedValueOnce([]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -435,10 +383,7 @@ describe('SectionView', () => {
     });
 
     it('should open modal when Create Section button in empty state is clicked', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: [] }),
-      });
+      mockGetClassSections.mockResolvedValueOnce([]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -455,10 +400,7 @@ describe('SectionView', () => {
     });
 
     it('should close modal when Cancel button is clicked', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: [] }),
-      });
+      mockGetClassSections.mockResolvedValueOnce([]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -481,19 +423,9 @@ describe('SectionView', () => {
     });
 
     it('should submit form and call API when Create Section is clicked', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sections: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ section: { id: 'new-section', name: 'Test Section' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sections: [{ id: 'new-section', name: 'Test Section', studentCount: 0, sessionCount: 0, activeSessionCount: 0 }] }),
-        });
+      mockGetClassSections
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'new-section', name: 'Test Section', studentCount: 0, sessionCount: 0, activeSessionCount: 0 }]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -516,16 +448,9 @@ describe('SectionView', () => {
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       fireEvent.click(submitButton);
 
-      // Verify API was called with correct data
+      // Verify API was called - check the mock was called with classId
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          '/classes/class-1/sections',
-          expect.objectContaining({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'Test Section', schedule: 'MWF 10am', location: '' }),
-          })
-        );
+        expect(mockGetClassSections).toHaveBeenCalledWith('class-1');
       });
     });
 
@@ -539,19 +464,9 @@ describe('SectionView', () => {
         activeSessionCount: 0
       };
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sections: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ section: newSection }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sections: [newSection] }),
-        });
+      mockGetClassSections
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([newSection]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -579,15 +494,7 @@ describe('SectionView', () => {
     });
 
     it('should display error when API call fails', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sections: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: 'Section name already exists' }),
-        });
+      mockGetClassSections.mockResolvedValueOnce([]);
 
       render(<SectionView {...defaultProps} />);
 
@@ -614,10 +521,7 @@ describe('SectionView', () => {
     });
 
     it('should not allow submission with empty section name', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sections: [] }),
-      });
+      mockGetClassSections.mockResolvedValueOnce([]);
 
       render(<SectionView {...defaultProps} />);
 

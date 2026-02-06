@@ -1,10 +1,11 @@
 import { renderHook, act } from '@testing-library/react';
 import useAnalysisGroups from '../useAnalysisGroups';
 import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
+import * as sessionsApi from '@/lib/api/sessions';
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock the sessions API module
+jest.mock('@/lib/api/sessions');
+const mockAnalyzeSession = sessionsApi.analyzeSession as jest.MockedFunction<typeof sessionsApi.analyzeSession>;
 
 function makeIssue(overrides: Partial<AnalysisIssue> = {}): AnalysisIssue {
   return {
@@ -36,17 +37,11 @@ function makeScript(issues: AnalysisIssue[]): WalkthroughScript {
 }
 
 function mockSuccessResponse(script: WalkthroughScript) {
-  mockFetch.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({ script }),
-  });
+  mockAnalyzeSession.mockResolvedValueOnce({ script });
 }
 
 function mockErrorResponse(error: string) {
-  mockFetch.mockResolvedValueOnce({
-    ok: false,
-    json: async () => ({ error }),
-  });
+  mockAnalyzeSession.mockRejectedValueOnce(new Error(error));
 }
 
 const sampleIssues: AnalysisIssue[] = [
@@ -57,7 +52,7 @@ const sampleIssues: AnalysisIssue[] = [
 ];
 
 beforeEach(() => {
-  mockFetch.mockReset();
+  jest.clearAllMocks();
 });
 
 describe('useAnalysisGroups', () => {
@@ -94,7 +89,7 @@ describe('useAnalysisGroups', () => {
     expect(result.current.analysisState).toBe('ready');
     expect(result.current.script).toEqual(script);
     expect(result.current.groups.length).toBeGreaterThan(0);
-    expect(mockFetch).toHaveBeenCalledWith('/sessions/session-1/analyze', { method: 'POST' });
+    expect(mockAnalyzeSession).toHaveBeenCalledWith('session-1');
   });
 
   it('groups are ordered: "All Submissions" first, then issues by index', async () => {

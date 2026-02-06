@@ -10,7 +10,7 @@ import type { User as ApiUser } from '@/types/api';
 
 interface NamespaceDetail {
   id: string;
-  display_name: string;
+  displayName: string;
   active: boolean;
 }
 import { BackButton } from '@/components/ui/BackButton';
@@ -130,7 +130,7 @@ export default function NamespaceUsersPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-2">
-          {namespace?.display_name || namespace_id}
+          {namespace?.displayName || namespace_id}
         </h1>
         <p className="text-gray-500 font-mono">
           {namespace_id}

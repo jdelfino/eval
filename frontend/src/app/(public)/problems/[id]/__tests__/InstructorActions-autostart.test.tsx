@@ -36,10 +36,20 @@ jest.mock('@/lib/last-used-section', () => ({
   setLastUsedSection: (...args: unknown[]) => mockSetLastUsedSection(...args),
 }));
 
+const mockGetClassSections = jest.fn();
+const mockCreateSession = jest.fn();
+
+jest.mock('@/lib/api/sections', () => ({
+  getClassSections: (...args: unknown[]) => mockGetClassSections(...args),
+}));
+
+jest.mock('@/lib/api/sessions', () => ({
+  createSession: (...args: unknown[]) => mockCreateSession(...args),
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockLastUsedSection = null;
-  global.fetch = jest.fn();
   (globalThis as Record<string, unknown>).BroadcastChannel = jest.fn().mockImplementation(() => ({
     postMessage: jest.fn(),
     close: jest.fn(),
@@ -52,19 +62,13 @@ afterEach(() => {
 
 describe('InstructorActions auto-start', () => {
   it('auto-starts session without modal when only 1 section exists', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          sections: [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: { id: 'session-1', join_code: 'JOIN123' },
-        }),
-      });
+    mockGetClassSections.mockResolvedValueOnce([
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+    ]);
+    mockCreateSession.mockResolvedValueOnce({
+      id: 'session-1',
+      join_code: 'JOIN123',
+    });
 
     render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
@@ -81,22 +85,14 @@ describe('InstructorActions auto-start', () => {
   it('auto-starts session when last-used section matches class_id', async () => {
     mockLastUsedSection = { section_id: 'sec-2', class_id: 'class-1' };
 
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          sections: [
-            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-            { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: { id: 'session-2', join_code: 'JOIN456' },
-        }),
-      });
+    mockGetClassSections.mockResolvedValueOnce([
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ]);
+    mockCreateSession.mockResolvedValueOnce({
+      id: 'session-2',
+      join_code: 'JOIN456',
+    });
 
     render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
@@ -113,15 +109,10 @@ describe('InstructorActions auto-start', () => {
   it('opens modal when multiple sections and no last-used match', async () => {
     mockLastUsedSection = null;
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-        ],
-      }),
-    });
+    mockGetClassSections.mockResolvedValueOnce([
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ]);
 
     render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 
@@ -137,15 +128,10 @@ describe('InstructorActions auto-start', () => {
   it('opens modal when last-used section is for a different class', async () => {
     mockLastUsedSection = { section_id: 'sec-99', class_id: 'other-class' };
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-        ],
-      }),
-    });
+    mockGetClassSections.mockResolvedValueOnce([
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ]);
 
     render(<InstructorActions problem_id="prob-1" problem_title="Test Problem" class_id="class-1" className="CS 101" />);
 

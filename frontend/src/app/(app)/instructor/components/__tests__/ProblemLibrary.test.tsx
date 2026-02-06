@@ -7,6 +7,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ProblemLibrary from '../ProblemLibrary';
 import { useAuth } from '@/contexts/AuthContext';
+import { listClasses } from '@/lib/api/classes';
+import { listProblems, deleteProblem } from '@/lib/api/problems';
 
 // Mock the AuthContext
 jest.mock('@/contexts/AuthContext', () => ({
@@ -24,6 +26,16 @@ jest.mock('next/navigation', () => ({
     replace: jest.fn(),
     prefetch: jest.fn(),
   })),
+}));
+
+// Mock API modules
+jest.mock('@/lib/api/classes', () => ({
+  listClasses: jest.fn(),
+}));
+
+jest.mock('@/lib/api/problems', () => ({
+  listProblems: jest.fn(),
+  deleteProblem: jest.fn(),
 }));
 
 // Mock the child components
@@ -81,12 +93,9 @@ describe('ProblemLibrary', () => {
       isAuthenticated: true,
     });
 
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ problems: mockProblems }),
-      })
-    ) as jest.Mock;
+    (listClasses as jest.Mock).mockResolvedValue([]);
+    (listProblems as jest.Mock).mockResolvedValue(mockProblems);
+    (deleteProblem as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -112,9 +121,7 @@ describe('ProblemLibrary', () => {
       expect(screen.getByText('Problem Library')).toBeInTheDocument();
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/problems?')
-    );
+    expect(listProblems).toHaveBeenCalled();
   });
 
   it('displays problem count', async () => {
@@ -126,12 +133,7 @@ describe('ProblemLibrary', () => {
   });
 
   it('displays singular for single problem', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ problems: [mockProblems[0]] }),
-      })
-    ) as jest.Mock;
+    (listProblems as jest.Mock).mockResolvedValue([mockProblems[0]]);
 
     render(<ProblemLibrary />);
 
@@ -161,12 +163,7 @@ describe('ProblemLibrary', () => {
   });
 
   it('displays error message when fetch fails', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Failed to load' }),
-      })
-    ) as jest.Mock;
+    (listProblems as jest.Mock).mockRejectedValue(new Error('Failed to load'));
 
     render(<ProblemLibrary />);
 
@@ -176,12 +173,7 @@ describe('ProblemLibrary', () => {
   });
 
   it('shows retry button on error', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Failed to load' }),
-      })
-    ) as jest.Mock;
+    (listProblems as jest.Mock).mockRejectedValue(new Error('Failed to load'));
 
     render(<ProblemLibrary />);
 
@@ -192,25 +184,13 @@ describe('ProblemLibrary', () => {
 
   it('retries loading when retry button is clicked', async () => {
     let problemCallCount = 0;
-    global.fetch = jest.fn((url: string) => {
-      if (typeof url === 'string' && url.includes('/classes')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ classes: [] }),
-        });
-      }
+    (listProblems as jest.Mock).mockImplementation(() => {
       problemCallCount++;
       if (problemCallCount === 1) {
-        return Promise.resolve({
-          ok: false,
-          json: () => Promise.resolve({ error: 'Failed to load' }),
-        });
+        return Promise.reject(new Error('Failed to load'));
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ problems: mockProblems }),
-      });
-    }) as jest.Mock;
+      return Promise.resolve(mockProblems);
+    });
 
     render(<ProblemLibrary />);
 
@@ -228,12 +208,7 @@ describe('ProblemLibrary', () => {
   });
 
   it('displays empty state when no problems', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ problems: [] }),
-      })
-    ) as jest.Mock;
+    (listProblems as jest.Mock).mockResolvedValue([]);
 
     render(<ProblemLibrary onCreateNew={jest.fn()} />);
 
@@ -269,7 +244,7 @@ describe('ProblemLibrary', () => {
 
     // Wait a bit to ensure useEffect has run
     await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(listProblems).not.toHaveBeenCalled();
     });
   });
 
@@ -277,8 +252,10 @@ describe('ProblemLibrary', () => {
     render(<ProblemLibrary />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('author_id=user-123')
+      expect(listProblems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          author_id: 'user-123',
+        })
       );
     });
   });
@@ -287,8 +264,11 @@ describe('ProblemLibrary', () => {
     render(<ProblemLibrary />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/sortBy=created.*sortOrder=desc/)
+      expect(listProblems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sortBy: 'created',
+          sortOrder: 'desc',
+        })
       );
     });
   });
@@ -343,19 +323,8 @@ describe('ProblemLibrary', () => {
     ];
 
     beforeEach(() => {
-      // First call returns classes, second returns problems
-      global.fetch = jest.fn((url: string) => {
-        if (typeof url === 'string' && url.includes('/classes')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ classes: mockClasses }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ problems: mockProblems }),
-        });
-      }) as jest.Mock;
+      (listClasses as jest.Mock).mockResolvedValue(mockClasses);
+      (listProblems as jest.Mock).mockResolvedValue(mockProblems);
     });
 
     it('renders a class picker dropdown', async () => {
@@ -391,8 +360,10 @@ describe('ProblemLibrary', () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('class_id=class-1')
+        expect(listProblems).toHaveBeenCalledWith(
+          expect.objectContaining({
+            class_id: 'class-1',
+          })
         );
       });
     });
@@ -407,11 +378,9 @@ describe('ProblemLibrary', () => {
       fireEvent.change(screen.getByLabelText('Class:'), { target: { value: '' } });
 
       await waitFor(() => {
-        // Find the most recent call without class_id
-        const lastCall = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => typeof c[0] === 'string' && c[0].includes('/problems')
-        ).pop();
-        expect(lastCall[0]).not.toContain('class_id=');
+        // Find the most recent call and verify it doesn't have class_id
+        const lastCall = (listProblems as jest.Mock).mock.calls.pop();
+        expect(lastCall[0]).not.toHaveProperty('class_id');
       });
     });
   });

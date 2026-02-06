@@ -49,7 +49,7 @@ describe('Instructor types consolidation (PLAT-uum.49)', () => {
   });
 
   it('ClassInfo has the expected shape', () => {
-    const info: ClassInfo = { id: '1', name: 'Test' };
+    const info: ClassInfo = { id: '1', name: 'Test', namespace_id: 'ns-1', description: null };
     expect(info.id).toBe('1');
   });
 
@@ -61,6 +61,8 @@ describe('Instructor types consolidation (PLAT-uum.49)', () => {
       author_id: 'u-1',
       tags: [],
       class_id: 'c-1',
+      description: null,
+      test_case_count: null,
     };
     expect(p.id).toBe('p-1');
   });

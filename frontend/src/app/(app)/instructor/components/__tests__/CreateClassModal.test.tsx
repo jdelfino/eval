@@ -7,13 +7,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreateClassModal from '../CreateClassModal';
 
+const mockCreateClass = jest.fn();
+jest.mock('@/lib/api/classes', () => ({
+  createClass: (...args: unknown[]) => mockCreateClass(...args),
+}));
+
 describe('CreateClassModal', () => {
   const mockOnClose = jest.fn();
   const mockOnSuccess = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn();
+    mockCreateClass.mockResolvedValue({ id: 'class-1', name: 'Test Class' });
   });
 
   afterEach(() => {
@@ -73,7 +78,7 @@ describe('CreateClassModal', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockCreateClass).not.toHaveBeenCalled();
   });
 
   it('shows validation error for name exceeding max length', async () => {
@@ -88,7 +93,7 @@ describe('CreateClassModal', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockCreateClass).not.toHaveBeenCalled();
   });
 
   it('shows validation error for description exceeding max length', async () => {
@@ -106,14 +111,11 @@ describe('CreateClassModal', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockCreateClass).not.toHaveBeenCalled();
   });
 
   it('successfully creates a class with name only', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ class: { id: 'class-1', name: 'CS101' } }),
-    });
+    mockCreateClass.mockResolvedValueOnce({ id: 'class-1', name: 'CS101' });
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -122,14 +124,7 @@ describe('CreateClassModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'CS101',
-          description: '',
-        }),
-      });
+      expect(mockCreateClass).toHaveBeenCalledWith('CS101', undefined);
     });
 
     expect(mockOnSuccess).toHaveBeenCalledTimes(1);
@@ -137,39 +132,26 @@ describe('CreateClassModal', () => {
   });
 
   it('successfully creates a class with name and description', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ class: { id: 'class-1', name: 'CS101', description: 'Intro to CS' } }),
-    });
+    mockCreateClass.mockResolvedValueOnce({ id: 'class-1', name: 'CS101', description: 'Intro to CS' });
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/class name/i);
     const descInput = screen.getByLabelText(/description/i);
-    
+
     fireEvent.change(nameInput, { target: { value: 'CS101' } });
     fireEvent.change(descInput, { target: { value: 'Intro to CS' } });
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'CS101',
-          description: 'Intro to CS',
-        }),
-      });
+      expect(mockCreateClass).toHaveBeenCalledWith('CS101', 'Intro to CS');
     });
 
     expect(mockOnSuccess).toHaveBeenCalledTimes(1);
   });
 
   it('trims whitespace from name', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ class: { id: 'class-1', name: 'CS101' } }),
-    });
+    mockCreateClass.mockResolvedValueOnce({ id: 'class-1', name: 'CS101' });
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -178,20 +160,14 @@ describe('CreateClassModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create class/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/classes', expect.objectContaining({
-        body: JSON.stringify({
-          name: 'CS101',
-          description: '',
-        }),
-      }));
+      expect(mockCreateClass).toHaveBeenCalledWith('CS101', undefined);
     });
   });
 
   it('shows loading state while creating class', async () => {
-    (global.fetch as jest.Mock).mockImplementationOnce(() => 
+    mockCreateClass.mockImplementationOnce(() =>
       new Promise(resolve => setTimeout(() => resolve({
-        ok: true,
-        json: async () => ({ class: { id: 'class-1', name: 'CS101' } }),
+        id: 'class-1', name: 'CS101'
       }), 100))
     );
 
@@ -211,10 +187,7 @@ describe('CreateClassModal', () => {
   });
 
   it('shows error when API returns error', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: 'Database error' }),
-    });
+    mockCreateClass.mockRejectedValueOnce(new Error('Database error'));
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -231,10 +204,7 @@ describe('CreateClassModal', () => {
   });
 
   it('shows generic error when API fails without error message', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({}),
-    });
+    mockCreateClass.mockRejectedValueOnce(new Error(''));
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -251,7 +221,7 @@ describe('CreateClassModal', () => {
   });
 
   it('shows error when network request fails', async () => {
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+    mockCreateClass.mockRejectedValueOnce(new Error('Network error'));
 
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -261,9 +231,9 @@ describe('CreateClassModal', () => {
     const form = screen.getByRole('button', { name: /create class/i }).closest('form');
     fireEvent.submit(form!);
 
-    // Wait for fetch to be called and error to be displayed
+    // Wait for createClass to be called and error to be displayed
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
+      expect(mockCreateClass).toHaveBeenCalled();
     });
 
     // ErrorAlert shows user-friendly message
@@ -274,10 +244,9 @@ describe('CreateClassModal', () => {
   });
 
   it('disables form inputs while loading', async () => {
-    (global.fetch as jest.Mock).mockImplementationOnce(() => 
+    mockCreateClass.mockImplementationOnce(() =>
       new Promise(resolve => setTimeout(() => resolve({
-        ok: true,
-        json: async () => ({ class: { id: 'class-1', name: 'CS101' } }),
+        id: 'class-1', name: 'CS101'
       }), 100))
     );
 

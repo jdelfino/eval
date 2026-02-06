@@ -16,23 +16,11 @@ import {
   resendSystemInvitation,
   type SystemInvitationFilters,
 } from '@/lib/api/system';
+import type { SerializedInvitation } from '@/lib/api/invitations';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
-
-// Invitation type
-interface Invitation {
-  id: string;
-  email: string;
-  namespace_id: string;
-  targetRole: 'namespace-admin' | 'instructor';
-  created_at: string;
-  expiresAt: string;
-  consumedAt?: string;
-  revokedAt?: string;
-  consumedBy?: string;
-}
 
 // Filters for invitations (extends typed filters with 'all' options for UI)
 interface InvitationFilters {
@@ -126,7 +114,7 @@ function SystemAdminContent() {
   const [includeInactive, setIncludeInactive] = useState(false);
 
   // Invitation state
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitations, setInvitations] = useState<SerializedInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
   const [invitationsError, setInvitationsError] = useState<string | null>(null);
   const [showCreateInvitationForm, setShowCreateInvitationForm] = useState(false);
@@ -225,7 +213,7 @@ function SystemAdminContent() {
   const activeNamespaces = namespaces.filter((ns) => ns.active).length;
   const totalUsers = namespaces.reduce((sum, ns) => sum + ns.userCount, 0);
   const pendingInvitations = invitations.filter(
-    (inv) => !inv.consumedAt && !inv.revokedAt && new Date(inv.expiresAt) > new Date()
+    (inv) => !inv.consumed_at && !inv.revoked_at && new Date(inv.expires_at) > new Date()
   ).length;
 
   const handleCreateNamespace = async (id: string, displayName: string) => {

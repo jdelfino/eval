@@ -6,13 +6,17 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import NamespaceHeader from '@/components/NamespaceHeader';
+import * as systemApi from '@/lib/api/system';
 
 const mockUser: any = { role: 'system-admin', namespace_id: 'default' };
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
-// Mock fetch to return namespaces
+// Mock the system API module
+jest.mock('@/lib/api/system');
+
+// Mock data to return from API calls
 const mockNamespaces = [
   { id: 'ns-1', displayName: 'Namespace 1', active: true, userCount: 5 },
   { id: 'ns-2', displayName: 'Namespace 2', active: true, userCount: 3 },
@@ -22,10 +26,10 @@ beforeEach(() => {
   localStorage.clear();
   mockUser.role = 'system-admin';
   mockUser.namespace_id = 'default';
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ success: true, namespaces: mockNamespaces }),
-  });
+
+  // Mock the listSystemNamespaces API function
+  (systemApi.listSystemNamespaces as jest.Mock).mockResolvedValue(mockNamespaces);
+  (systemApi.getSystemNamespace as jest.Mock).mockResolvedValue(mockNamespaces[0]);
 });
 
 afterEach(() => {

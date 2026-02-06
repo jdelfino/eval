@@ -10,8 +10,8 @@ import type { ExecutionSettings } from '@/types/problem';
 export interface ClassInfo {
   id: string;
   name: string;
-  namespace_id?: string;
-  description?: string;
+  namespace_id: string;
+  description: string | null;
 }
 
 /** ClassInfo extended with section count, used by ClassList. */
@@ -37,12 +37,12 @@ export interface RealtimeStudent {
 export interface ProblemSummary {
   id: string;
   title: string;
-  description?: string;
+  description: string | null;
   created_at: string;
   author_id: string;
   tags: string[];
   class_id: string;
-  test_case_count?: number;
+  test_case_count: number | null;
 }
 
 /**

@@ -14,7 +14,8 @@ import { listProblems, deleteProblem } from '@/lib/api/problems';
 import ProblemSearch from './ProblemSearch';
 import ProblemCard from './ProblemCard';
 import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
-import type { ClassInfo, ProblemSummary } from '../types';
+import type { Class } from '@/types/api';
+import type { ProblemSummary } from '../types';
 
 interface ProblemLibraryProps {
   onCreateNew?: () => void;
@@ -29,7 +30,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   const [error, setError] = useState<string | null>(null);
 
   // Class and tag state
-  const [classes, setClasses] = useState<ClassInfo[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [classesLoaded, setClassesLoaded] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);

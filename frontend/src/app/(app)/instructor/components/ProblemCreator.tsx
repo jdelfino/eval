@@ -14,7 +14,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ProblemInput } from '@/types/problem';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
-import type { ClassInfo } from '../types';
+import type { Class } from '@/types/api';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { useDebugger } from '@/hooks/useDebugger';
@@ -42,7 +42,7 @@ export default function ProblemCreator({
   const [error, setError] = useState<string | null>(null);
 
   // Class and tags state
-  const [classes, setClasses] = useState<ClassInfo[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(class_id || '');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -130,25 +130,22 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      const problemInput: Partial<ProblemInput> = {
-        title: title.trim(),
-        description: description.trim(),
-        starter_code: starter_code.trim(),
-        solution: solution.trim(),
-        test_cases: [], // Test cases added separately
-        class_id: selectedClassId || undefined,
-        tags: finalTags.length > 0 ? finalTags : [],
-      };
-
       // Only include execution_settings if at least one field is set
-      const execSettings: any = {};
+      const execSettings: Record<string, unknown> = {};
       if (stdin.trim()) execSettings.stdin = stdin.trim();
       if (random_seed !== undefined) execSettings.random_seed = random_seed;
       if (attached_files.length > 0) execSettings.attached_files = attached_files;
 
-      if (Object.keys(execSettings).length > 0) {
-        problemInput.execution_settings = execSettings;
-      }
+      const problemInput = {
+        title: title.trim(),
+        description: description.trim() || null,
+        starter_code: starter_code.trim() || null,
+        solution: solution.trim() || null,
+        test_cases: [] as unknown[], // Test cases added separately
+        class_id: selectedClassId || null,
+        tags: finalTags.length > 0 ? finalTags : [],
+        ...(Object.keys(execSettings).length > 0 && { execution_settings: execSettings }),
+      };
 
       let result;
       if (isEditMode) {

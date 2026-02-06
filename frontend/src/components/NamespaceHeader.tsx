@@ -32,7 +32,7 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
         // For system admin, we fetch all namespaces anyway, so skip this
         if (user.role === 'system-admin') return;
 
-        const namespace = await getSystemNamespace(user.namespace_id);
+        const namespace = await getSystemNamespace(user.namespace_id!);
         setCurrentNamespace(namespace);
       } catch (error) {
         console.error('Failed to load namespace:', error);

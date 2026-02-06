@@ -6,6 +6,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SystemAdminPage from '../page';
+import * as systemApi from '@/lib/api/system';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -54,16 +55,28 @@ jest.mock('@/hooks/useNamespaces', () => ({
   }),
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock system API module
+const mockListSystemInvitations = jest.fn();
+const mockCreateSystemInvitation = jest.fn();
+const mockRevokeSystemInvitation = jest.fn();
+const mockResendSystemInvitation = jest.fn();
+
+jest.mock('@/lib/api/system', () => ({
+  listSystemInvitations: jest.fn(),
+  createSystemInvitation: jest.fn(),
+  revokeSystemInvitation: jest.fn(),
+  resendSystemInvitation: jest.fn(),
+}));
 
 describe('SystemAdminPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPush.mockClear();
     mockSearchParams.delete('tab');
-    mockFetch.mockClear();
+    (systemApi.listSystemInvitations as jest.Mock).mockClear();
+    (systemApi.createSystemInvitation as jest.Mock).mockClear();
+    (systemApi.revokeSystemInvitation as jest.Mock).mockClear();
+    (systemApi.resendSystemInvitation as jest.Mock).mockClear();
   });
 
   describe('Tab Navigation', () => {
@@ -77,10 +90,7 @@ describe('SystemAdminPage', () => {
 
     it('renders invitations tab from URL param', () => {
       mockSearchParams.set('tab', 'invitations');
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -89,10 +99,7 @@ describe('SystemAdminPage', () => {
 
     it('switches to invitations tab on click', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -105,10 +112,7 @@ describe('SystemAdminPage', () => {
     it('switches back to namespaces tab', async () => {
       const user = userEvent.setup();
       mockSearchParams.set('tab', 'invitations');
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -125,21 +129,16 @@ describe('SystemAdminPage', () => {
     });
 
     it('loads and displays invitations', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          invitations: [
-            {
-              id: 'inv-1',
-              email: 'test@example.com',
-              namespace_id: 'ns-1',
-              targetRole: 'instructor',
-              created_at: '2024-01-01T00:00:00Z',
-              expiresAt: '2024-01-08T00:00:00Z',
-            },
-          ],
-        }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([
+        {
+          id: 'inv-1',
+          email: 'test@example.com',
+          namespace_id: 'ns-1',
+          targetRole: 'instructor',
+          created_at: '2024-01-01T00:00:00Z',
+          expires_at: '2024-01-08T00:00:00Z',
+        },
+      ]);
 
       render(<SystemAdminPage />);
 
@@ -149,10 +148,7 @@ describe('SystemAdminPage', () => {
     });
 
     it('shows create invitation button', () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -161,10 +157,7 @@ describe('SystemAdminPage', () => {
 
     it('shows create invitation form when button clicked', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -178,10 +171,7 @@ describe('SystemAdminPage', () => {
 
     it('filters invitations by namespace', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -193,18 +183,15 @@ describe('SystemAdminPage', () => {
       await user.selectOptions(select, 'ns-1');
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('namespace_id=ns-1'),
+        expect(systemApi.listSystemInvitations).toHaveBeenCalledWith(
+          expect.objectContaining({ namespace_id: 'ns-1' }),
         );
       });
     });
 
     it('filters invitations by role', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -216,18 +203,15 @@ describe('SystemAdminPage', () => {
       await user.selectOptions(select, 'namespace-admin');
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('targetRole=namespace-admin'),
+        expect(systemApi.listSystemInvitations).toHaveBeenCalledWith(
+          expect.objectContaining({ targetRole: 'namespace-admin' }),
         );
       });
     });
 
     it('filters invitations by status', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
 
       render(<SystemAdminPage />);
 
@@ -239,14 +223,14 @@ describe('SystemAdminPage', () => {
       await user.selectOptions(select, 'pending');
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('status=pending'),
+        expect(systemApi.listSystemInvitations).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'pending' }),
         );
       });
     });
 
     it('shows error when loading fails', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      (systemApi.listSystemInvitations as jest.Mock).mockRejectedValue(new Error('Network error'));
 
       render(<SystemAdminPage />);
 
@@ -259,30 +243,12 @@ describe('SystemAdminPage', () => {
   describe('Create Invitation', () => {
     beforeEach(() => {
       mockSearchParams.set('tab', 'invitations');
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ invitations: [] }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([]);
+      (systemApi.createSystemInvitation as jest.Mock).mockResolvedValue({ id: 'inv-new' });
     });
 
     it('creates namespace-admin invitation', async () => {
       const user = userEvent.setup();
-
-      // First call: list invitations, Second call: create invitation, Third call: refresh list
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 201,
-          json: () => Promise.resolve({ invitation: { id: 'inv-new' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
-        });
 
       render(<SystemAdminPage />);
 
@@ -302,34 +268,16 @@ describe('SystemAdminPage', () => {
       await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/system/invitations', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            email: 'new@example.com',
-            namespace_id: 'ns-1',
-            targetRole: 'namespace-admin',
-          }),
-        }));
+        expect(systemApi.createSystemInvitation).toHaveBeenCalledWith(
+          'new@example.com',
+          'ns-1',
+          'namespace-admin',
+        );
       });
     });
 
     it('creates instructor invitation', async () => {
       const user = userEvent.setup();
-
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 201,
-          json: () => Promise.resolve({ invitation: { id: 'inv-new' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ invitations: [] }),
-        });
 
       render(<SystemAdminPage />);
 
@@ -345,14 +293,11 @@ describe('SystemAdminPage', () => {
       await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/system/invitations', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            email: 'instructor@example.com',
-            namespace_id: 'ns-2',
-            targetRole: 'instructor',
-          }),
-        }));
+        expect(systemApi.createSystemInvitation).toHaveBeenCalledWith(
+          'instructor@example.com',
+          'ns-2',
+          'instructor',
+        );
       });
     });
   });
@@ -364,29 +309,24 @@ describe('SystemAdminPage', () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          invitations: [
-            {
-              id: 'inv-1',
-              email: 'test1@example.com',
-              namespace_id: 'ns-1',
-              targetRole: 'instructor',
-              created_at: '2024-01-01T00:00:00Z',
-              expiresAt: futureDate.toISOString(),
-            },
-            {
-              id: 'inv-2',
-              email: 'test2@example.com',
-              namespace_id: 'ns-1',
-              targetRole: 'instructor',
-              created_at: '2024-01-01T00:00:00Z',
-              expiresAt: futureDate.toISOString(),
-            },
-          ],
-        }),
-      });
+      (systemApi.listSystemInvitations as jest.Mock).mockResolvedValue([
+        {
+          id: 'inv-1',
+          email: 'test1@example.com',
+          namespace_id: 'ns-1',
+          targetRole: 'instructor',
+          created_at: '2024-01-01T00:00:00Z',
+          expires_at: futureDate.toISOString(),
+        },
+        {
+          id: 'inv-2',
+          email: 'test2@example.com',
+          namespace_id: 'ns-1',
+          targetRole: 'instructor',
+          created_at: '2024-01-01T00:00:00Z',
+          expires_at: futureDate.toISOString(),
+        },
+      ]);
 
       render(<SystemAdminPage />);
 

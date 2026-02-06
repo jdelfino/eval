@@ -23,30 +23,38 @@ jest.mock('@/lib/firebase', () => ({
   firebaseAuth: { currentUser: mockCurrentUser },
 }));
 
+// Mock the API module
+jest.mock('@/lib/api/namespaces', () => ({
+  listNamespaces: jest.fn(),
+  createNamespace: jest.fn(),
+  updateNamespace: jest.fn(),
+  deleteNamespace: jest.fn(),
+  getNamespaceUsers: jest.fn(),
+  createUser: jest.fn(),
+  updateUserRole: jest.fn(),
+  deleteUser: jest.fn(),
+}));
+
 import { renderHook, act } from '@testing-library/react';
 import { useNamespaces } from '../useNamespaces';
+import * as apiNamespaces from '@/lib/api/namespaces';
+
+const mockApi = apiNamespaces as jest.Mocked<typeof apiNamespaces>;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  global.fetch = jest.fn();
   mockGetIdToken.mockResolvedValue('ns-token');
 });
 
-function mockFetchOk(data: unknown) {
-  (global.fetch as jest.Mock).mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(data),
-  });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mockApiOk(fn: any, data: unknown) {
+  fn.mockResolvedValue(data);
 }
 
-function mockFetchSequence(...responses: Array<{ ok: boolean; status?: number; data: unknown }>) {
-  const mock = global.fetch as jest.Mock;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mockApiSequence(fn: any, ...responses: unknown[]) {
   for (const resp of responses) {
-    mock.mockResolvedValueOnce({
-      ok: resp.ok,
-      status: resp.status ?? 200,
-      json: () => Promise.resolve(resp.data),
-    });
+    fn.mockResolvedValueOnce(resp);
   }
 }
 
@@ -73,52 +81,39 @@ const fakeUser = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
-describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)', () => {
-  it('fetchNamespaces sends authenticated GET and populates state', async () => {
-    // Backend returns plain array (not wrapped in { namespaces: [...] })
-    mockFetchOk([fakeNamespace]);
+describe('useNamespaces integration (hook -> typed API)', () => {
+  it('fetchNamespaces calls listNamespaces and populates state', async () => {
+    // Mock API returns plain array
+    mockApiOk(mockApi.listNamespaces, [fakeNamespace]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => {
       await result.current.fetchNamespaces();
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/namespaces?'),
-      expect.objectContaining({
-        method: 'GET',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer ns-token',
-        }),
-      })
-    );
+    expect(mockApi.listNamespaces).toHaveBeenCalledWith(false);
     expect(result.current.namespaces).toEqual([fakeNamespace]);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
 
-  it('fetchNamespaces with includeInactive appends query param', async () => {
-    // Backend returns plain array
-    mockFetchOk([]);
+  it('fetchNamespaces with includeInactive passes true to listNamespaces', async () => {
+    // Mock API returns plain array
+    mockApiOk(mockApi.listNamespaces, []);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => {
       await result.current.fetchNamespaces(true);
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('includeInactive=true'),
-      expect.anything()
-    );
+    expect(mockApi.listNamespaces).toHaveBeenCalledWith(true);
   });
 
-  it('createNamespace POSTs then refreshes the list', async () => {
-    mockFetchSequence(
-      // First call: POST returns plain object (not wrapped)
-      { ok: true, data: fakeNamespace },
-      // Second call: GET refresh returns plain array
-      { ok: true, data: [fakeNamespace] },
-    );
+  it('createNamespace calls API then refreshes the list', async () => {
+    // First call: createNamespace returns plain object
+    mockApi.createNamespace.mockResolvedValueOnce(fakeNamespace);
+    // Second call: listNamespaces refresh returns plain array
+    mockApi.listNamespaces.mockResolvedValueOnce([fakeNamespace]);
 
     const { result } = renderHook(() => useNamespaces());
 
@@ -128,24 +123,14 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
     });
 
     expect(ns).toEqual(fakeNamespace);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    // First call is POST
-    expect((global.fetch as jest.Mock).mock.calls[0][1]).toEqual(
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ id: 'ns-1', display_name: 'Test NS' }),
-      })
-    );
-    // Second call is GET (refresh)
-    expect((global.fetch as jest.Mock).mock.calls[1][1]).toEqual(
-      expect.objectContaining({ method: 'GET' })
-    );
+    expect(mockApi.createNamespace).toHaveBeenCalledWith('ns-1', 'Test NS');
+    expect(mockApi.listNamespaces).toHaveBeenCalledWith(false);
     expect(result.current.namespaces).toEqual([fakeNamespace]);
   });
 
-  it('getNamespaceUsers sends GET and returns users', async () => {
-    // Backend returns plain array (not wrapped in { users: [...] })
-    mockFetchOk([fakeUser]);
+  it('getNamespaceUsers calls API and returns users', async () => {
+    // Mock API returns plain array
+    mockApiOk(mockApi.getNamespaceUsers, [fakeUser]);
     const { result } = renderHook(() => useNamespaces());
 
     let users: unknown;
@@ -153,19 +138,15 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       users = await result.current.getNamespaceUsers('ns-1');
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/namespaces/ns-1/users'),
-      expect.objectContaining({ method: 'GET' })
-    );
+    expect(mockApi.getNamespaceUsers).toHaveBeenCalledWith('ns-1');
     expect(users).toEqual([fakeUser]);
   });
 
-  it('deleteNamespace sends DELETE then refreshes list', async () => {
-    mockFetchSequence(
-      { ok: true, data: {} },
-      // Refresh returns plain array
-      { ok: true, data: [] },
-    );
+  it('deleteNamespace calls API then refreshes list', async () => {
+    // First call: deleteNamespace resolves
+    mockApi.deleteNamespace.mockResolvedValueOnce(undefined);
+    // Second call: listNamespaces refresh returns empty array
+    mockApi.listNamespaces.mockResolvedValueOnce([]);
 
     const { result } = renderHook(() => useNamespaces());
 
@@ -173,17 +154,17 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       await result.current.deleteNamespace('ns-1');
     });
 
-    expect((global.fetch as jest.Mock).mock.calls[0][1]).toEqual(
-      expect.objectContaining({ method: 'DELETE' })
-    );
+    expect(mockApi.deleteNamespace).toHaveBeenCalledWith('ns-1');
+    expect(mockApi.listNamespaces).toHaveBeenCalledWith(false);
     expect(result.current.namespaces).toEqual([]);
   });
 
   describe('state transitions and error recovery', () => {
     it('loading transitions: false -> true -> false on success', async () => {
-      let resolvePromise: (v: unknown) => void;
-      (global.fetch as jest.Mock).mockReturnValue(
-        new Promise(resolve => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolvePromise: (v: any) => void;
+      mockApi.listNamespaces.mockImplementation(
+        () => new Promise(resolve => {
           resolvePromise = resolve;
         })
       );
@@ -199,11 +180,7 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       expect(result.current.loading).toBe(true);
 
       await act(async () => {
-        resolvePromise!({
-          ok: true,
-          // Backend returns plain array
-          json: () => Promise.resolve([]),
-        });
+        resolvePromise!([]);
         await fetchPromise!;
       });
 
@@ -211,12 +188,8 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
     });
 
     it('error then success: error state clears on subsequent successful fetch', async () => {
-      // First call: 404 error (non-retryable)
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        json: () => Promise.resolve({ error: 'Not found' }),
-      });
+      // First call: throws error
+      mockApi.listNamespaces.mockRejectedValueOnce(new Error('Not found'));
 
       const { result } = renderHook(() => useNamespaces());
 
@@ -227,7 +200,7 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       expect(result.current.error).toBe('Not found');
 
       // Second call: success with plain array
-      mockFetchOk([fakeNamespace]);
+      mockApi.listNamespaces.mockResolvedValueOnce([fakeNamespace]);
 
       await act(async () => {
         await result.current.fetchNamespaces();
@@ -238,11 +211,7 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
     });
 
     it('createNamespace sets error state and re-throws on API failure', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: () => Promise.resolve({ error: 'Already exists' }),
-      });
+      mockApi.createNamespace.mockRejectedValue(new Error('Already exists'));
 
       const { result } = renderHook(() => useNamespaces());
 
@@ -261,9 +230,9 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       expect(result.current.loading).toBe(false);
     });
 
-    it('createUser sends correct payload through the full chain', async () => {
-      // Backend returns plain object (not wrapped in { user: ... })
-      mockFetchOk(fakeUser);
+    it('createUser calls API with correct payload', async () => {
+      // Mock API returns plain object
+      mockApiOk(mockApi.createUser, fakeUser);
       const { result } = renderHook(() => useNamespaces());
 
       let user: unknown;
@@ -272,18 +241,7 @@ describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)',
       });
 
       expect(user).toEqual(fakeUser);
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/namespaces/ns-1/users'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            email: 'a@b.com',
-            username: 'auser',
-            password: 'pass',
-            role: 'instructor',
-          }),
-        })
-      );
+      expect(mockApi.createUser).toHaveBeenCalledWith('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
     });
   });
 });

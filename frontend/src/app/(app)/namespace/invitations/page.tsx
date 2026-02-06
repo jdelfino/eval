@@ -14,7 +14,8 @@ import {
   resendNamespaceInvitation,
   type NamespaceInvitationFilters,
 } from '@/lib/api/namespace-invitations';
-import InvitationList, { Invitation } from '@/components/InvitationList';
+import type { SerializedInvitation } from '@/lib/api/invitations';
+import InvitationList from '@/components/InvitationList';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -36,7 +37,7 @@ function InvitationsPageContent() {
   const { user, isLoading: authLoading } = useAuth();
 
   // Invitation state
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitations, setInvitations] = useState<SerializedInvitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

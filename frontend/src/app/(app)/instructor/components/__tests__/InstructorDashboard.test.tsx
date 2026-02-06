@@ -40,9 +40,13 @@ jest.mock('../CreateClassModal', () => {
   };
 });
 
-// Mock global.fetch
-global.fetch = jest.fn();
-const mockFetch = global.fetch as jest.Mock;
+// Mock the instructor API module
+jest.mock('@/lib/api/instructor', () => ({
+  getInstructorDashboard: jest.fn(),
+}));
+
+import { getInstructorDashboard } from '@/lib/api/instructor';
+const mockGetInstructorDashboard = getInstructorDashboard as jest.Mock;
 
 describe('InstructorDashboard', () => {
   const defaultProps = {
@@ -56,7 +60,7 @@ describe('InstructorDashboard', () => {
 
   describe('loading state', () => {
     it('shows loading spinner while fetching data', async () => {
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockGetInstructorDashboard.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { container } = render(<InstructorDashboard {...defaultProps} />);
 
@@ -67,9 +71,10 @@ describe('InstructorDashboard', () => {
 
   describe('empty state', () => {
     it('shows empty state when no classes exist', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ classes: [] }),
+      mockGetInstructorDashboard.mockResolvedValue({
+        classes: [],
+        sections: [],
+        sessions: [],
       });
 
       render(<InstructorDashboard {...defaultProps} />);
@@ -83,44 +88,50 @@ describe('InstructorDashboard', () => {
   });
 
   describe('dashboard table', () => {
-    const mockClasses = [
-      {
-        id: 'class-1',
-        name: 'CS 101',
-        description: 'Introduction to Programming',
-        sections: [
-          {
-            id: 'section-1',
-            name: 'Section A',
-            semester: 'Fall 2025',
-            join_code: 'ABC-123',
-            studentCount: 25,
-            activeSessionId: null,
-          },
-          {
-            id: 'section-2',
-            name: 'Section B',
-            semester: 'Fall 2025',
-            join_code: 'DEF-456',
-            studentCount: 30,
-            activeSessionId: 'session-1',
-            activeSessionJoinCode: 'XYZ-789',
-          },
-        ],
-      },
-      {
-        id: 'class-2',
-        name: 'CS 201',
-        description: 'Data Structures',
-        sections: [],
-      },
-    ];
+    const mockDashboardData = {
+      classes: [
+        {
+          id: 'class-1',
+          name: 'CS 101',
+          description: 'Introduction to Programming',
+        },
+        {
+          id: 'class-2',
+          name: 'CS 201',
+          description: 'Data Structures',
+        },
+      ],
+      sections: [
+        {
+          id: 'section-1',
+          class_id: 'class-1',
+          name: 'Section A',
+          semester: 'Fall 2025',
+          join_code: 'ABC-123',
+        },
+        {
+          id: 'section-2',
+          class_id: 'class-1',
+          name: 'Section B',
+          semester: 'Fall 2025',
+          join_code: 'DEF-456',
+        },
+      ],
+      sessions: [
+        {
+          id: 'session-1',
+          section_id: 'section-2',
+          status: 'active',
+          participants: [
+            { id: 'participant-1' },
+            { id: 'participant-2' },
+          ],
+        },
+      ],
+    };
 
     beforeEach(() => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ classes: mockClasses }),
-      });
+      mockGetInstructorDashboard.mockResolvedValue(mockDashboardData);
     });
 
     it('renders class and section data in table', async () => {
@@ -226,9 +237,10 @@ describe('InstructorDashboard', () => {
 
   describe('create class modal', () => {
     beforeEach(() => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ classes: [] }),
+      mockGetInstructorDashboard.mockResolvedValue({
+        classes: [],
+        sections: [],
+        sessions: [],
       });
     });
 
@@ -262,18 +274,14 @@ describe('InstructorDashboard', () => {
         expect(screen.queryByTestId('create-class-modal')).not.toBeInTheDocument();
       });
 
-      // Data should be reloaded (fetch called twice)
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Data should be reloaded (getInstructorDashboard called twice)
+      expect(mockGetInstructorDashboard).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('error handling', () => {
     it('shows error state when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: 'Server error' }),
-      });
+      mockGetInstructorDashboard.mockRejectedValue(new Error('Failed to fetch'));
 
       render(<InstructorDashboard {...defaultProps} />);
 
@@ -283,15 +291,12 @@ describe('InstructorDashboard', () => {
     });
 
     it('allows retry after error', async () => {
-      mockFetch
+      mockGetInstructorDashboard
+        .mockRejectedValueOnce(new Error('Failed to fetch'))
         .mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          json: async () => ({ error: 'Server error' }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ classes: [] }),
+          classes: [],
+          sections: [],
+          sessions: [],
         });
 
       render(<InstructorDashboard {...defaultProps} />);

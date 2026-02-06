@@ -12,13 +12,21 @@ import { ConnectionStatus, ConnectionState } from '@/components/ConnectionStatus
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
+// Minimal problem shape needed for public view
+interface PublicProblem {
+  title: string;
+  description?: string;
+  starter_code?: string;
+}
+
 interface PublicSessionState {
   session_id: string;
   join_code: string;
-  problem: Problem | null;
+  problem: PublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
   hasFeaturedSubmission: boolean;
+  status: string;
 }
 
 function PublicViewContent() {
@@ -44,7 +52,12 @@ function PublicViewContent() {
 
     try {
       const data = await getSessionPublicState(session_id);
-      setState(data);
+      setState({
+        ...data,
+        problem: data.problem as PublicProblem | null,
+        session_id,
+        hasFeaturedSubmission: !!(data.featured_student_id && data.featured_code),
+      });
       setError(null);
     } catch (e: any) {
       console.error('[PublicView] Failed to fetch state:', e);

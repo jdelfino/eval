@@ -32,24 +32,32 @@ export async function listSystemUsers(): Promise<User[]> {
 export async function listSystemNamespaces(): Promise<NamespaceInfo[]> {
   interface NamespacesResponse {
     success: boolean;
-    namespaces: NamespaceInfo[];
+    namespaces: Namespace[];
   }
   const response = await apiGet<NamespacesResponse>('/system/namespaces');
-  return response.namespaces;
+  return response.namespaces.map(ns => ({
+    id: ns.id,
+    displayName: ns.display_name,
+    active: ns.active,
+  }));
 }
 
 /**
  * Get a single namespace by ID (system-admin only).
  * @param namespaceId - The namespace ID
- * @returns Namespace object
+ * @returns NamespaceInfo object
  */
-export async function getSystemNamespace(namespaceId: string): Promise<Namespace> {
+export async function getSystemNamespace(namespaceId: string): Promise<NamespaceInfo> {
   interface NamespaceResponse {
     success: boolean;
     namespace: Namespace;
   }
   const response = await apiGet<NamespaceResponse>(`/system/namespaces/${namespaceId}`);
-  return response.namespace;
+  return {
+    id: response.namespace.id,
+    displayName: response.namespace.display_name,
+    active: response.namespace.active,
+  };
 }
 
 /**

@@ -11,22 +11,12 @@ import React, { useState } from 'react';
 import { Table } from '@/components/ui/Table';
 import { StatusBadge, StatusBadgeStatus } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
+import type { SerializedInvitation } from '@/lib/api/invitations';
 
 /**
- * Invitation data structure
+ * Invitation data structure - using SerializedInvitation from API
  */
-export interface Invitation {
-  id: string;
-  email: string;
-  namespace_id: string;
-  targetRole: 'namespace-admin' | 'instructor';
-  created_at: string;
-  expiresAt: string;
-  consumedAt?: string;
-  revokedAt?: string;
-  consumedBy?: string;
-  status?: 'pending' | 'consumed' | 'revoked' | 'expired';
-}
+export type Invitation = SerializedInvitation;
 
 /**
  * Namespace data for resolving display names
@@ -65,9 +55,9 @@ function getInvitationStatus(
   invitation: Invitation
 ): 'pending' | 'consumed' | 'revoked' | 'expired' {
   if (invitation.status) return invitation.status;
-  if (invitation.revokedAt) return 'revoked';
-  if (invitation.consumedAt) return 'consumed';
-  if (new Date(invitation.expiresAt) < new Date()) return 'expired';
+  if (invitation.revoked_at) return 'revoked';
+  if (invitation.consumed_at) return 'consumed';
+  if (new Date(invitation.expires_at) < new Date()) return 'expired';
   return 'pending';
 }
 
@@ -88,7 +78,7 @@ function formatDate(dateString: string): string {
 /**
  * Format a role for display
  */
-function formatRole(role: string): string {
+function formatRole(role: 'namespace-admin' | 'instructor'): string {
   if (role === 'namespace-admin') return 'Namespace Admin';
   if (role === 'instructor') return 'Instructor';
   return role;
@@ -266,7 +256,7 @@ export function InvitationList({
                 )}
                 {showRole && (
                   <Table.Cell className="text-gray-600">
-                    {formatRole(invitation.targetRole)}
+                    {formatRole(invitation.target_role)}
                   </Table.Cell>
                 )}
                 <Table.Cell>
@@ -278,7 +268,7 @@ export function InvitationList({
                   {formatDate(invitation.created_at)}
                 </Table.Cell>
                 <Table.Cell className="text-gray-500 text-sm">
-                  {formatDate(invitation.expiresAt)}
+                  {formatDate(invitation.expires_at)}
                 </Table.Cell>
                 <Table.Cell align="right">
                   {status === 'pending' && (
