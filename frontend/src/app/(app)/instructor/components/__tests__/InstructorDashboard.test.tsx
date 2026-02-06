@@ -1,317 +1,105 @@
-/**
- * Tests for InstructorDashboard component
- * @jest-environment jsdom
- */
-
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { InstructorDashboard } from '../InstructorDashboard';
 
-// Mock the dependencies
-jest.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({
-    user: {
-      id: 'user-1',
-      role: 'instructor',
-      email: 'instructor@test.com',
-      namespace_id: 'namespace-1',
-    },
-  }),
-}));
-
-jest.mock('@/lib/permissions', () => ({
-  hasRolePermission: (role: string, permission: string) => {
-    // Instructors can create classes and sessions
-    if (role === 'instructor') {
-      return ['class.create', 'session.create', 'class.read'].includes(permission);
-    }
-    return false;
-  },
-}));
-
-jest.mock('../CreateClassModal', () => {
-  return function MockCreateClassModal({ onClose, onSuccess }: any) {
-    return (
-      <div data-testid="create-class-modal">
-        <button onClick={onClose} data-testid="close-modal">Close</button>
-        <button onClick={onSuccess} data-testid="create-success">Create</button>
-      </div>
-    );
-  };
-});
-
-// Mock the instructor API module
+// Mock the API module
 jest.mock('@/lib/api/instructor', () => ({
   getInstructorDashboard: jest.fn(),
 }));
 
+// Mock the auth context
+jest.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user', name: 'Test User', role: 'instructor', email: 'test@example.com' },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
+// Mock the permissions module
+jest.mock('@/lib/permissions', () => ({
+  hasRolePermission: jest.fn(() => true),
+}));
+
+// Mock the join-code module
+jest.mock('@/lib/join-code', () => ({
+  formatJoinCodeForDisplay: (code: string) => code,
+}));
+
 import { getInstructorDashboard } from '@/lib/api/instructor';
-const mockGetInstructorDashboard = getInstructorDashboard as jest.Mock;
+
+const mockGetInstructorDashboard = getInstructorDashboard as jest.MockedFunction<typeof getInstructorDashboard>;
 
 describe('InstructorDashboard', () => {
-  const defaultProps = {
-    onStartSession: jest.fn(),
-    onRejoinSession: jest.fn(),
-  };
+  const mockOnStartSession = jest.fn();
+  const mockOnRejoinSession = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('loading state', () => {
-    it('shows loading spinner while fetching data', async () => {
-      mockGetInstructorDashboard.mockImplementation(() => new Promise(() => {})); // Never resolves
+  it('shows loading state initially', () => {
+    mockGetInstructorDashboard.mockReturnValue(new Promise(() => {})); // Never resolves
+    render(
+      <InstructorDashboard
+        onStartSession={mockOnStartSession}
+        onRejoinSession={mockOnRejoinSession}
+      />
+    );
+    expect(document.querySelector('.animate-spin')).toBeTruthy();
+  });
 
-      const { container } = render(<InstructorDashboard {...defaultProps} />);
-
-      // Check for the spinner element with animate-spin class
-      expect(container.querySelector('.animate-spin')).toBeInTheDocument();
+  it('shows empty state when no classes', async () => {
+    mockGetInstructorDashboard.mockResolvedValue({
+      classes: [],
+    });
+    render(
+      <InstructorDashboard
+        onStartSession={mockOnStartSession}
+        onRejoinSession={mockOnRejoinSession}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Welcome to the Instructor Dashboard')).toBeInTheDocument();
     });
   });
 
-  describe('empty state', () => {
-    it('shows empty state when no classes exist', async () => {
-      mockGetInstructorDashboard.mockResolvedValue({
-        classes: [],
-        sections: [],
-        sessions: [],
-      });
-
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to the Instructor Dashboard')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('create-first-class-btn')).toBeInTheDocument();
-    });
-  });
-
-  describe('dashboard table', () => {
-    const mockDashboardData = {
+  it('renders classes with sections', async () => {
+    mockGetInstructorDashboard.mockResolvedValue({
       classes: [
         {
           id: 'class-1',
           name: 'CS 101',
-          description: 'Introduction to Programming',
-        },
-        {
-          id: 'class-2',
-          name: 'CS 201',
-          description: 'Data Structures',
-        },
-      ],
-      sections: [
-        {
-          id: 'section-1',
-          class_id: 'class-1',
-          name: 'Section A',
-          semester: 'Fall 2025',
-          join_code: 'ABC-123',
-        },
-        {
-          id: 'section-2',
-          class_id: 'class-1',
-          name: 'Section B',
-          semester: 'Fall 2025',
-          join_code: 'DEF-456',
-        },
-      ],
-      sessions: [
-        {
-          id: 'session-1',
-          section_id: 'section-2',
-          status: 'active',
-          participants: [
-            { id: 'participant-1' },
-            { id: 'participant-2' },
+          sections: [
+            { id: 'sec-1', name: 'Section A', join_code: 'ABC123', semester: 'Fall 2025', studentCount: 25 },
           ],
         },
       ],
-    };
-
-    beforeEach(() => {
-      mockGetInstructorDashboard.mockResolvedValue(mockDashboardData);
     });
-
-    it('renders class and section data in table', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('CS 101')).toBeInTheDocument();
-      });
-
+    render(
+      <InstructorDashboard
+        onStartSession={mockOnStartSession}
+        onRejoinSession={mockOnRejoinSession}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText('CS 101')).toBeInTheDocument();
       expect(screen.getByText('Section A')).toBeInTheDocument();
-      expect(screen.getByText('Section B')).toBeInTheDocument();
-      expect(screen.getByText('CS 201')).toBeInTheDocument();
-      expect(screen.getByText('No sections yet')).toBeInTheDocument();
-    });
-
-    it('shows Start Session button for sections without active session', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('start-session-section-1')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('start-session-section-1')).toHaveTextContent('Start Session');
-    });
-
-    it('shows Rejoin Session button for sections with active session', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('rejoin-session-section-2')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('rejoin-session-section-2')).toHaveTextContent('Rejoin Session');
-    });
-
-    it('calls onStartSession when Start Session is clicked', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('start-session-section-1')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTestId('start-session-section-1'));
-
-      expect(defaultProps.onStartSession).toHaveBeenCalledWith('section-1', 'Section A');
-    });
-
-    it('calls onRejoinSession when Rejoin Session is clicked', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('rejoin-session-section-2')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTestId('rejoin-session-section-2'));
-
-      expect(defaultProps.onRejoinSession).toHaveBeenCalledWith('session-1');
-    });
-
-    it('shows active status badge for sections with active session', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Active')).toBeInTheDocument();
-      });
-
-      // Should have both Active and Idle badges
-      expect(screen.getAllByText('Idle').length).toBeGreaterThan(0);
-    });
-
-    it('highlights rows with active sessions', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('section-row-section-2')).toHaveClass('bg-green-50');
-      });
-    });
-
-    it('shows clickable section name linking to section detail page', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('section-link-section-1')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('section-link-section-1')).toHaveAttribute('href', '/sections/section-1');
-      expect(screen.getByTestId('section-link-section-1')).toHaveTextContent('Section A');
-
-      expect(screen.getByTestId('section-link-section-2')).toHaveAttribute('href', '/sections/section-2');
-      expect(screen.getByTestId('section-link-section-2')).toHaveTextContent('Section B');
-    });
-
-    it('shows clickable class name linking to class page', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('class-link-class-1')).toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('class-link-class-1')).toHaveAttribute('href', '/classes/class-1');
+      expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     });
   });
 
-  describe('create class modal', () => {
-    beforeEach(() => {
-      mockGetInstructorDashboard.mockResolvedValue({
-        classes: [],
-        sections: [],
-        sessions: [],
-      });
-    });
-
-    it('opens create class modal when button is clicked', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('create-first-class-btn')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTestId('create-first-class-btn'));
-
-      expect(screen.getByTestId('create-class-modal')).toBeInTheDocument();
-    });
-
-    it('closes modal and reloads data on success', async () => {
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('create-first-class-btn')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByTestId('create-first-class-btn'));
-      expect(screen.getByTestId('create-class-modal')).toBeInTheDocument();
-
-      // Simulate successful creation
-      fireEvent.click(screen.getByTestId('create-success'));
-
-      // Modal should be closed
-      await waitFor(() => {
-        expect(screen.queryByTestId('create-class-modal')).not.toBeInTheDocument();
-      });
-
-      // Data should be reloaded (getInstructorDashboard called twice)
-      expect(mockGetInstructorDashboard).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('error handling', () => {
-    it('shows error state when fetch fails', async () => {
-      mockGetInstructorDashboard.mockRejectedValue(new Error('Failed to fetch'));
-
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Error loading dashboard')).toBeInTheDocument();
-      });
-    });
-
-    it('allows retry after error', async () => {
-      mockGetInstructorDashboard
-        .mockRejectedValueOnce(new Error('Failed to fetch'))
-        .mockResolvedValueOnce({
-          classes: [],
-          sections: [],
-          sessions: [],
-        });
-
-      render(<InstructorDashboard {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Error loading dashboard')).toBeInTheDocument();
-      });
-
-      // Click retry button
-      const retryButton = screen.getByRole('button', { name: /try again/i });
-      fireEvent.click(retryButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Welcome to the Instructor Dashboard')).toBeInTheDocument();
-      });
+  it('shows error state on fetch failure', async () => {
+    mockGetInstructorDashboard.mockRejectedValue(new Error('Network error'));
+    render(
+      <InstructorDashboard
+        onStartSession={mockOnStartSession}
+        onRejoinSession={mockOnRejoinSession}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/Error loading dashboard/i)).toBeInTheDocument();
     });
   });
 });

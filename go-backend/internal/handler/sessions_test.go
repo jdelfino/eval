@@ -20,7 +20,9 @@ import (
 // sessionTestRepos embeds stubRepos for session handler tests.
 type sessionTestRepos struct {
 	stubRepos
-	sess *mockSessionRepo
+	sess         *mockSessionRepo
+	getSectionFn func(ctx context.Context, id uuid.UUID) (*store.Section, error)
+	getProblemFn func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
 }
 
 var _ store.Repos = (*sessionTestRepos)(nil)
@@ -43,8 +45,28 @@ func (r *sessionTestRepos) UpdateSessionProblem(ctx context.Context, id uuid.UUI
 func (r *sessionTestRepos) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
 	return r.sess.ListSessionHistory(ctx, userID, isCreator, filters)
 }
+func (r *sessionTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
+	if r.getSectionFn != nil {
+		return r.getSectionFn(ctx, id)
+	}
+	return r.stubRepos.GetSection(ctx, id)
+}
+func (r *sessionTestRepos) GetProblem(ctx context.Context, id uuid.UUID) (*store.Problem, error) {
+	if r.getProblemFn != nil {
+		return r.getProblemFn(ctx, id)
+	}
+	return r.stubRepos.GetProblem(ctx, id)
+}
 func sessRepos(repo *mockSessionRepo) *sessionTestRepos {
 	return &sessionTestRepos{sess: repo}
+}
+func sessReposWithSection(repo *mockSessionRepo, section *store.Section) *sessionTestRepos {
+	return &sessionTestRepos{
+		sess: repo,
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return section, nil
+		},
+	}
 }
 
 func TestListSessions_Success(t *testing.T) {
@@ -290,7 +312,13 @@ func TestGetSession_InvalidID(t *testing.T) {
 
 func TestCreateSession_Success(t *testing.T) {
 	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	sess := testSession()
+
+	section := &store.Section{
+		ID:   sectionID,
+		Name: "Section A",
+	}
 
 	repo := &mockSessionRepo{
 		createSessionFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, error) {
@@ -308,9 +336,7 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{
-		"section_id":   "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-		"section_name": "Section A",
-		"problem":      json.RawMessage(`{"title":"Two Sum"}`),
+		"section_id": sectionID.String(),
 	})
 	h := NewSessionHandler(noopPublisher())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -320,7 +346,7 @@ func TestCreateSession_Success(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
+	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -357,9 +383,7 @@ func TestCreateSession_RBACForbidden(t *testing.T) {
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{
-		"section_id":   uuid.New().String(),
-		"section_name": "Section A",
-		"problem":      json.RawMessage(`{"title":"Two Sum"}`),
+		"section_id": uuid.New().String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -379,6 +403,9 @@ func TestCreateSession_RBACForbidden(t *testing.T) {
 }
 
 func TestCreateSession_InternalError(t *testing.T) {
+	sectionID := uuid.New()
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+
 	repo := &mockSessionRepo{
 		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
 			return nil, errors.New("db error")
@@ -386,9 +413,7 @@ func TestCreateSession_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{
-		"section_id":   uuid.New().String(),
-		"section_name": "Section A",
-		"problem":      json.RawMessage(`{"title":"Two Sum"}`),
+		"section_id": sectionID.String(),
 	})
 	h := NewSessionHandler(noopPublisher())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -398,7 +423,7 @@ func TestCreateSession_InternalError(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
+	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -554,7 +579,7 @@ func TestUpdateSession_InvalidID(t *testing.T) {
 
 func TestCreateSession_MissingRequiredFields(t *testing.T) {
 	h := NewSessionHandler(noopPublisher())
-	// Missing section_id, section_name, problem
+	// Missing section_id (the only required field)
 	body, _ := json.Marshal(map[string]any{})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

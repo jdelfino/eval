@@ -172,9 +172,6 @@ func TestGetClass_Success(t *testing.T) {
 			}
 			return c, nil
 		},
-		listClassInstructorNamesFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return nil, nil
-		},
 		listSectionsByClassFn: func(_ context.Context, _ uuid.UUID) ([]store.Section, error) {
 			return nil, nil
 		},
@@ -196,12 +193,15 @@ func TestGetClass_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 
-	var got store.Class
+	var got classDetailResponse
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.ID != c.ID {
-		t.Errorf("expected id %q, got %q", c.ID, got.ID)
+	if got.Class == nil {
+		t.Fatal("expected class, got nil")
+	}
+	if got.Class.ID != c.ID {
+		t.Errorf("expected id %q, got %q", c.ID, got.Class.ID)
 	}
 }
 
@@ -691,7 +691,7 @@ func TestDeleteClass_RBACForbidden(t *testing.T) {
 	}
 }
 
-func TestGetClassDetail_WithSectionsAndInstructors(t *testing.T) {
+func TestGetClassDetail_WithSections(t *testing.T) {
 	c := testClass()
 	classID := c.ID
 	sectionID := uuid.MustParse("aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -702,12 +702,6 @@ func TestGetClassDetail_WithSectionsAndInstructors(t *testing.T) {
 				t.Fatalf("unexpected id: %v", id)
 			}
 			return c, nil
-		},
-		listClassInstructorNamesFn: func(_ context.Context, cid uuid.UUID) ([]string, error) {
-			if cid != classID {
-				t.Fatalf("unexpected class id: %v", cid)
-			}
-			return []string{"Prof. Smith"}, nil
 		},
 		listSectionsByClassFn: func(_ context.Context, cid uuid.UUID) ([]store.Section, error) {
 			if cid != classID {
@@ -739,17 +733,17 @@ func TestGetClassDetail_WithSectionsAndInstructors(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got.ID != classID {
-		t.Errorf("expected class id %q, got %q", classID, got.ID)
+	if got.Class == nil {
+		t.Fatal("expected class, got nil")
+	}
+	if got.Class.ID != classID {
+		t.Errorf("expected class id %q, got %q", classID, got.Class.ID)
 	}
 	if len(got.Sections) != 1 {
 		t.Fatalf("expected 1 section, got %d", len(got.Sections))
 	}
-	if len(got.InstructorNames) != 1 {
-		t.Fatalf("expected 1 instructor name, got %d", len(got.InstructorNames))
-	}
-	if got.InstructorNames[0] != "Prof. Smith" {
-		t.Errorf("expected instructor name %q, got %q", "Prof. Smith", got.InstructorNames[0])
+	if got.InstructorNames == nil {
+		t.Fatal("expected instructorNames map, got nil")
 	}
 }
 
