@@ -140,6 +140,15 @@ export interface Revision {
 // Composite response types
 // ---------------------------------------------------------------------------
 
+/**
+ * MySectionInfo — matches Go MySectionInfo struct.
+ * Returns section with class name for student-facing section list.
+ */
+export interface MySectionInfo {
+  section: Section;
+  class_name: string;
+}
+
 export interface SessionState {
   session: Session;
   students: SessionStudent[];

@@ -3,31 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
-import type { Session } from '@/types/api';
+import type { Session, MySectionInfo } from '@/types/api';
 
 export const ACTIVE_SESSION_POLL_INTERVAL_MS = 10000;
 
-interface SectionWithClass {
-  id: string;
-  class_id: string;
-  name: string;
-  semester?: string | null;
-  className: string;
-  classDescription: string;
-  role: 'instructor' | 'student';
-  join_code: string;
-  created_at: string;
-}
-
 interface SectionCardProps {
-  section: SectionWithClass;
+  sectionInfo: MySectionInfo;
   getActiveSessions: (section_id: string) => Promise<Session[]>;
 }
 
-export default function SectionCard({ section, getActiveSessions }: SectionCardProps) {
+export default function SectionCard({ sectionInfo, getActiveSessions }: SectionCardProps) {
   const router = useRouter();
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { section, class_name } = sectionInfo;
 
   useEffect(() => {
     loadActiveSessions();
@@ -74,8 +64,7 @@ export default function SectionCard({ section, getActiveSessions }: SectionCardP
                 </span>
               )}
             </div>
-            <p className="text-gray-600 mb-1">{section.className}</p>
-            <p className="text-sm text-gray-500">Enrolled as {section.role}</p>
+            <p className="text-gray-600 mb-1">{class_name}</p>
           </button>
 
           {/* Right: Status Badge */}

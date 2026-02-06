@@ -26,12 +26,12 @@ export default function SectionsPage() {
 
   useEffect(() => {
     // Group sections by class
-    const grouped = sections.reduce((acc, section) => {
-      const className = section.className;
+    const grouped = sections.reduce((acc, sectionInfo) => {
+      const className = sectionInfo.class_name;
       if (!acc[className]) {
         acc[className] = [];
       }
-      acc[className].push(section);
+      acc[className].push(sectionInfo);
       return acc;
     }, {} as Record<string, typeof sections>);
 
@@ -95,10 +95,10 @@ export default function SectionsPage() {
             <div key={className}>
               <h2 className="text-2xl font-semibold text-gray-900 mb-4">{className}</h2>
               <div className="space-y-3">
-                {classSections.map((section) => (
+                {classSections.map((sectionInfo) => (
                   <SectionCard
-                    key={section.id}
-                    section={section}
+                    key={sectionInfo.section.id}
+                    sectionInfo={sectionInfo}
                     getActiveSessions={getActiveSessions}
                   />
                 ))}
