@@ -45,12 +45,12 @@ func TestHealthz(t *testing.T) {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var resp healthResponse
+	var resp map[string]string
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Status != "ok" {
-		t.Errorf("status = %s, want ok", resp.Status)
+	if resp["status"] != "ok" {
+		t.Errorf("status = %s, want ok", resp["status"])
 	}
 }
 
@@ -210,12 +210,12 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 
-	var resp rateLimitResponse
+	var resp map[string]string
 	if err := json.NewDecoder(rec2.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Error != "rate limit exceeded" {
-		t.Errorf("error = %q, want %q", resp.Error, "rate limit exceeded")
+	if resp["error"] != "rate limit exceeded" {
+		t.Errorf("error = %q, want %q", resp["error"], "rate limit exceeded")
 	}
 
 	if called != 1 {

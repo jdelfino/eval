@@ -10,8 +10,9 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/executor"
-	"github.com/jdelfino/eval/pkg/executorapi"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/pkg/executorapi"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
@@ -54,12 +55,12 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[executeRequest](w, r)
+	req, err := httpbind.BindJSON[executeRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -154,7 +155,7 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	req, err := httputil.BindJSON[standaloneExecuteRequest](w, r)
+	req, err := httpbind.BindJSON[standaloneExecuteRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}

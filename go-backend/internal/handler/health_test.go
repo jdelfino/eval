@@ -10,31 +10,6 @@ import (
 	"github.com/jdelfino/eval/internal/db"
 )
 
-func TestHealthz(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rr := httptest.NewRecorder()
-
-	Healthz(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("Healthz returned status %d, want %d", rr.Code, http.StatusOK)
-	}
-
-	var resp map[string]string
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-
-	if resp["status"] != "ok" {
-		t.Errorf("Healthz returned status %q, want %q", resp["status"], "ok")
-	}
-
-	contentType := rr.Header().Get("Content-Type")
-	if contentType != "application/json" {
-		t.Errorf("Healthz returned Content-Type %q, want %q", contentType, "application/json")
-	}
-}
-
 // mockHealthChecker is a mock implementation of HealthChecker for testing.
 type mockHealthChecker struct {
 	status db.HealthStatus
@@ -64,13 +39,13 @@ func TestReadyzHandler_HealthyDatabase(t *testing.T) {
 		t.Errorf("ReadyzHandler returned status %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	var resp healthResponse
+	var resp map[string]string
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if resp.Status != "ok" {
-		t.Errorf("ReadyzHandler returned status %q, want %q", resp.Status, "ok")
+	if resp["status"] != "ok" {
+		t.Errorf("ReadyzHandler returned status %q, want %q", resp["status"], "ok")
 	}
 
 	contentType := rr.Header().Get("Content-Type")
@@ -99,13 +74,13 @@ func TestReadyzHandler_UnhealthyDatabase(t *testing.T) {
 		t.Errorf("ReadyzHandler returned status %d, want %d", rr.Code, http.StatusServiceUnavailable)
 	}
 
-	var resp healthResponse
+	var resp map[string]string
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if resp.Status != "unhealthy" {
-		t.Errorf("ReadyzHandler returned status %q, want %q", resp.Status, "unhealthy")
+	if resp["status"] != "unhealthy" {
+		t.Errorf("ReadyzHandler returned status %q, want %q", resp["status"], "unhealthy")
 	}
 
 	contentType := rr.Header().Get("Content-Type")

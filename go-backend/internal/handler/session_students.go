@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/revision"
 	"github.com/jdelfino/eval/internal/store"
@@ -40,12 +41,12 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[joinSessionRequest](w, r)
+	req, err := httpbind.BindJSON[joinSessionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -79,12 +80,12 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateCodeRequest](w, r)
+	req, err := httpbind.BindJSON[updateCodeRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -118,7 +119,7 @@ func (h *SessionStudentHandler) ListStudents(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}

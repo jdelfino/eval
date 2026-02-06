@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -27,7 +28,7 @@ func (h *RevisionHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "sessionID")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "sessionID")
 	if !ok {
 		return
 	}
@@ -73,12 +74,12 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "sessionID")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "sessionID")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[createRevisionRequest](w, r)
+	req, err := httpbind.BindJSON[createRevisionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}

@@ -1,16 +1,18 @@
-// Package httputil provides HTTP utilities for JSON binding, validation, and response writing.
-package httputil
+// Package httpbind provides HTTP request binding and parameter parsing for the Go API.
+package httpbind
 
 import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+
+	"github.com/jdelfino/eval/pkg/httputil"
 )
 
 // validate is the shared validator instance
@@ -36,12 +38,12 @@ func BindJSON[T any](w http.ResponseWriter, r *http.Request) (*T, error) {
 		// Check for body too large
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
-			WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			httputil.WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
 			return nil, err
 		}
 		// Handle empty body or malformed JSON
 		if errors.Is(err, io.EOF) || err != nil {
-			WriteError(w, http.StatusBadRequest, "invalid JSON body")
+			httputil.WriteError(w, http.StatusBadRequest, "invalid JSON body")
 			return nil, err
 		}
 	}
@@ -62,7 +64,7 @@ func BindJSON[T any](w http.ResponseWriter, r *http.Request) (*T, error) {
 			return nil, err
 		}
 		// Non-validation error during validation
-		WriteError(w, http.StatusBadRequest, "invalid JSON body")
+		httputil.WriteError(w, http.StatusBadRequest, "invalid JSON body")
 		return nil, err
 	}
 
@@ -103,30 +105,13 @@ func buildValidationMessage(fe validator.FieldError) string {
 	}
 }
 
-// WriteJSON writes a JSON response with the given status code
-func WriteJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-// WriteError writes a JSON error response with the given status code and message
-func WriteError(w http.ResponseWriter, status int, message string) {
-	WriteJSON(w, status, map[string]string{"error": message})
-}
-
-// WriteInternalError logs the error and writes a 500 response.
-// The error is logged with request context (request_id if available).
-// The user-facing message hides internal details.
-func WriteInternalError(w http.ResponseWriter, r *http.Request, err error, message string) {
-	attrs := []slog.Attr{
-		slog.String("error", err.Error()),
-		slog.String("path", r.URL.Path),
-		slog.String("method", r.Method),
+// ParseUUIDParam extracts and parses a UUID URL parameter.
+// On error, writes a 400 response and returns uuid.Nil, false.
+func ParseUUIDParam(w http.ResponseWriter, r *http.Request, param string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(chi.URLParam(r, param))
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid "+param)
+		return uuid.Nil, false
 	}
-	if reqID := middleware.GetReqID(r.Context()); reqID != "" {
-		attrs = append(attrs, slog.String("request_id", reqID))
-	}
-	slog.LogAttrs(r.Context(), slog.LevelError, "internal server error", attrs...)
-	WriteError(w, http.StatusInternalServerError, message)
+	return id, true
 }

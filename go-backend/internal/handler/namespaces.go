@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -104,7 +105,7 @@ func (h *NamespaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[createNamespaceRequest](w, r)
+	req, err := httpbind.BindJSON[createNamespaceRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -137,7 +138,7 @@ type updateNamespaceRequest struct {
 func (h *NamespaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	req, err := httputil.BindJSON[updateNamespaceRequest](w, r)
+	req, err := httpbind.BindJSON[updateNamespaceRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -272,7 +273,7 @@ func (h *NamespaceHandler) UpdateCapacity(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	req, err := httputil.BindJSON[updateCapacityRequest](w, r)
+	req, err := httpbind.BindJSON[updateCapacityRequest](w, r)
 	if err != nil {
 		return
 	}

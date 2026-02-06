@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -106,7 +107,7 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/problems/{id} — returns a single problem.
 func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -145,7 +146,7 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[createProblemRequest](w, r)
+	req, err := httpbind.BindJSON[createProblemRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -185,12 +186,12 @@ type updateProblemRequest struct {
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
 func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateProblemRequest](w, r)
+	req, err := httpbind.BindJSON[updateProblemRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -220,7 +221,7 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/problems/{id} — deletes a problem (author or system-admin, enforced by RLS).
 func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}

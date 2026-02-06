@@ -21,6 +21,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
+	"github.com/jdelfino/eval/pkg/httputil"
 )
 
 // Server wraps the HTTP server with its configuration and logger.
@@ -29,11 +30,6 @@ type Server struct {
 	logger     *slog.Logger
 	cfg        *config.Config
 	metrics    *metrics.Metrics
-}
-
-// healthResponse represents the JSON response for health endpoints.
-type healthResponse struct {
-	Status string `json:"status"`
 }
 
 // readyResponse represents the JSON response for the readiness endpoint.
@@ -66,11 +62,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Health endpoints
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
-	})
+	r.Get("/healthz", httputil.Healthz)
 
 	r.Get("/readyz", readyzHandler(cfg, m))
 
@@ -147,18 +139,11 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	}
 }
 
-// rateLimitResponse represents the JSON response when rate limit is exceeded.
-type rateLimitResponse struct {
-	Error string `json:"error"`
-}
-
 // rateLimitMiddleware wraps a handler and returns 429 when the limiter rejects.
 func rateLimitMiddleware(limiter *rate.Limiter, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !limiter.Allow() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_ = json.NewEncoder(w).Encode(rateLimitResponse{Error: "rate limit exceeded"})
+			httputil.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}
 		next(w, r)

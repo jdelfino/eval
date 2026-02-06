@@ -8,19 +8,6 @@ import (
 	"github.com/jdelfino/eval/internal/db"
 )
 
-// healthResponse represents the JSON response for health endpoints.
-type healthResponse struct {
-	Status string `json:"status"`
-}
-
-// Healthz is the liveness probe handler for Kubernetes.
-// It always returns 200 OK with {"status": "ok"}.
-func Healthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok"})
-}
-
 // HealthChecker is an interface for checking database health.
 // This interface allows for easy testing with mock implementations.
 type HealthChecker interface {
@@ -100,6 +87,8 @@ func (h *ReadyzHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	} else {
-		_ = json.NewEncoder(w).Encode(healthResponse{Status: overallStatus})
+		_ = json.NewEncoder(w).Encode(struct {
+			Status string `json:"status"`
+		}{Status: overallStatus})
 	}
 }

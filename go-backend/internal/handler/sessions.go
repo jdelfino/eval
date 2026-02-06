@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/revision"
@@ -91,7 +92,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/sessions/{id} — returns a single session.
 func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -125,7 +126,7 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[createSessionRequest](w, r)
+	req, err := httpbind.BindJSON[createSessionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -155,12 +156,12 @@ type updateSessionRequest struct {
 
 // Update handles PATCH /api/v1/sessions/{id} — updates a session (instructor+).
 func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateSessionRequest](w, r)
+	req, err := httpbind.BindJSON[updateSessionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -222,7 +223,7 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/sessions/{id} — ends a session (instructor+).
 func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -266,7 +267,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Reopen handles POST /api/v1/sessions/{id}/reopen — reopens a completed session (instructor+).
 func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -307,12 +308,12 @@ type updateSessionProblemRequest struct {
 
 // UpdateProblem handles POST /api/v1/sessions/{id}/update-problem — updates session problem JSON (instructor+).
 func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateSessionProblemRequest](w, r)
+	req, err := httpbind.BindJSON[updateSessionProblemRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}

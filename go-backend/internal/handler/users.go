@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -101,12 +102,12 @@ type updateUserAdminRequest struct {
 
 // UpdateAdmin handles PUT /api/v1/system/users/{id} — admin update user (system-admin only).
 func (h *UserHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateUserAdminRequest](w, r)
+	req, err := httpbind.BindJSON[updateUserAdminRequest](w, r)
 	if err != nil {
 		return
 	}
@@ -132,7 +133,7 @@ func (h *UserHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/{system,admin}/users/{id} — delete a user.
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -159,7 +160,7 @@ func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -207,7 +208,7 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -229,7 +230,7 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateRoleRequest](w, r)
+	req, err := httpbind.BindJSON[updateRoleRequest](w, r)
 	if err != nil {
 		return
 	}

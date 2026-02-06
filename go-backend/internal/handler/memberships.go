@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -30,7 +31,7 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[joinRequest](w, r)
+	req, err := httpbind.BindJSON[joinRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -76,7 +77,7 @@ func (h *MembershipHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -102,7 +103,7 @@ func (h *MembershipHandler) ListMembers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}

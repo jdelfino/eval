@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/realtime"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -33,7 +34,7 @@ type sessionStateResponse struct {
 
 // State handles GET /api/v1/sessions/{id}/state — composite read.
 func (h *SessionStateHandler) State(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -88,7 +89,7 @@ type sessionPublicStateResponse struct {
 
 // PublicState handles GET /api/v1/sessions/{id}/public-state — public display data.
 func (h *SessionStateHandler) PublicState(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -130,12 +131,12 @@ type featureRequest struct {
 
 // Feature handles POST /api/v1/sessions/{id}/feature — set/clear featured student.
 func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[featureRequest](w, r)
+	req, err := httpbind.BindJSON[featureRequest](w, r)
 	if err != nil {
 		return
 	}

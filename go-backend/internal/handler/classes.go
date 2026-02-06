@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -63,7 +64,7 @@ type classDetailResponse struct {
 
 // Get handles GET /api/v1/classes/{id} — returns a single class with sections and instructor names.
 func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -122,7 +123,7 @@ func (h *ClassHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[createClassRequest](w, r)
+	req, err := httpbind.BindJSON[createClassRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -150,12 +151,12 @@ type updateClassRequest struct {
 
 // Update handles PATCH /api/v1/classes/{id} — updates a class (author or system-admin, enforced by RLS).
 func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateClassRequest](w, r)
+	req, err := httpbind.BindJSON[updateClassRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -179,7 +180,7 @@ func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/classes/{id} — deletes a class (author or system-admin, enforced by RLS).
 func (h *ClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -76,7 +77,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateMeRequest](w, r)
+	req, err := httpbind.BindJSON[updateMeRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -145,7 +146,7 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[acceptInviteRequest](w, r)
+	req, err := httpbind.BindJSON[acceptInviteRequest](w, r)
 	if err != nil {
 		return
 	}
@@ -246,7 +247,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	req, err := httputil.BindJSON[registerStudentRequest](w, r)
+	req, err := httpbind.BindJSON[registerStudentRequest](w, r)
 	if err != nil {
 		return
 	}

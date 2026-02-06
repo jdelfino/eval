@@ -1,4 +1,4 @@
-package httputil_test
+package httpbind_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/pkg/httputil"
+	"github.com/jdelfino/eval/internal/httpbind"
 )
 
 func TestParseUUIDParam_Valid(t *testing.T) {
@@ -20,7 +20,7 @@ func TestParseUUIDParam_Valid(t *testing.T) {
 	var gotID uuid.UUID
 	var gotOK bool
 	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		gotID, gotOK = httputil.ParseUUIDParam(w, r, "id")
+		gotID, gotOK = httpbind.ParseUUIDParam(w, r, "id")
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/"+expected.String(), nil)
@@ -39,7 +39,7 @@ func TestParseUUIDParam_Invalid(t *testing.T) {
 	r := chi.NewRouter()
 	var gotOK bool
 	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		_, gotOK = httputil.ParseUUIDParam(w, r, "id")
+		_, gotOK = httpbind.ParseUUIDParam(w, r, "id")
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
@@ -69,7 +69,7 @@ func TestParseUUIDParam_Empty(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
-	_, ok := httputil.ParseUUIDParam(w, req, "id")
+	_, ok := httpbind.ParseUUIDParam(w, req, "id")
 	if ok {
 		t.Fatal("expected ok=false for empty param")
 	}

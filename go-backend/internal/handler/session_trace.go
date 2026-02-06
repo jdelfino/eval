@@ -9,6 +9,7 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/executor"
+	"github.com/jdelfino/eval/internal/httpbind"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -50,12 +51,12 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[traceHTTPRequest](w, r)
+	req, err := httpbind.BindJSON[traceHTTPRequest](w, r)
 	if err != nil {
 		return
 	}

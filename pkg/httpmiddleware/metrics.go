@@ -42,15 +42,15 @@ func NewHTTPMetrics(reg prometheus.Registerer) *HTTPMetrics {
 
 // NewHTTPMetricsNoop creates HTTP metrics that discard all observations. Use in tests.
 func NewHTTPMetricsNoop() *HTTPMetrics {
-	return NewHTTPMetrics(noopRegisterer{})
+	return NewHTTPMetrics(NoopRegisterer{})
 }
 
-// noopRegisterer discards all registrations.
-type noopRegisterer struct{}
+// NoopRegisterer discards all Prometheus registrations. Use in tests.
+type NoopRegisterer struct{}
 
-func (noopRegisterer) Register(prometheus.Collector) error  { return nil }
-func (noopRegisterer) MustRegister(...prometheus.Collector) {}
-func (noopRegisterer) Unregister(prometheus.Collector) bool { return true }
+func (NoopRegisterer) Register(prometheus.Collector) error  { return nil }
+func (NoopRegisterer) MustRegister(...prometheus.Collector) {}
+func (NoopRegisterer) Unregister(prometheus.Collector) bool { return true }
 
 // Middleware returns an HTTP middleware that records request metrics.
 func (m *HTTPMetrics) Middleware(next http.Handler) http.Handler {

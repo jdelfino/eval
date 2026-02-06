@@ -27,6 +27,7 @@ import (
 	"github.com/jdelfino/eval/internal/revision"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
+	"github.com/jdelfino/eval/pkg/httputil"
 )
 
 var registerDBPoolOnce sync.Once
@@ -96,7 +97,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	}
 
 	// Health endpoints
-	r.Get("/healthz", handler.Healthz)
+	r.Get("/healthz", httputil.Healthz)
 	r.Handle("/readyz", handler.NewReadyzHandler(pool))
 
 	var revBuffer *revision.RevisionBuffer

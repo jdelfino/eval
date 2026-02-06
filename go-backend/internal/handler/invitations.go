@@ -11,6 +11,7 @@ import (
 
 	"github.com/jdelfino/eval/internal/auth"
 	"github.com/jdelfino/eval/internal/email"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -103,7 +104,7 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := httputil.BindJSON[createInvitationRequest](w, r)
+	req, err := httpbind.BindJSON[createInvitationRequest](w, r)
 	if err != nil {
 		return
 	}
@@ -290,7 +291,7 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	req, err := httputil.BindJSON[systemCreateInvitationRequest](w, r)
+	req, err := httpbind.BindJSON[systemCreateInvitationRequest](w, r)
 	if err != nil {
 		return
 	}

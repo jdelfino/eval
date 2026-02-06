@@ -12,6 +12,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 	"github.com/jdelfino/eval/pkg/executorapi"
+	"github.com/jdelfino/eval/pkg/httputil"
 )
 
 // maxBodyBytes is the maximum allowed request body size (1 MB).
@@ -75,7 +76,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req executorapi.ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.metrics.ValidationErrorsTotal.WithLabelValues("invalid_request").Inc()
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		httputil.WriteError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -84,7 +85,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if reason != "" {
 			h.metrics.ValidationErrorsTotal.WithLabelValues(reason).Inc()
 		}
-		writeError(w, http.StatusBadRequest, errMsg)
+		httputil.WriteError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
@@ -95,7 +96,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			defer func() { <-h.semaphore }()
 		default:
 			h.logger.Warn("concurrency limit reached, rejecting request")
-			writeError(w, http.StatusTooManyRequests, "too many concurrent executions")
+			httputil.WriteError(w, http.StatusTooManyRequests, "too many concurrent executions")
 			return
 		}
 	}
@@ -150,7 +151,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("sandbox execution failed", "error", err, "duration_ms", duration.Milliseconds())
 		h.metrics.ExecutionsTotal.WithLabelValues("error").Inc()
-		writeError(w, http.StatusInternalServerError, "internal execution error")
+		httputil.WriteError(w, http.StatusInternalServerError, "internal execution error")
 		return
 	}
 
@@ -225,7 +226,3 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	return "", ""
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}

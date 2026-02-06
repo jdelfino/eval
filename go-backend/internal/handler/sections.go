@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/internal/httpbind"
 	custommw "github.com/jdelfino/eval/internal/middleware"
 	"github.com/jdelfino/eval/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -54,7 +55,7 @@ func (h *SectionHandler) ClassRoutes() chi.Router {
 
 // ListByClass handles GET /api/v1/classes/{classID}/sections — returns all sections for a class.
 func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
-	classID, ok := httputil.ParseUUIDParam(w, r, "classID")
+	classID, ok := httpbind.ParseUUIDParam(w, r, "classID")
 	if !ok {
 		return
 	}
@@ -75,7 +76,7 @@ func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/sections/{id} — returns a single section.
 func (h *SectionHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -108,12 +109,12 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	classID, ok := httputil.ParseUUIDParam(w, r, "classID")
+	classID, ok := httpbind.ParseUUIDParam(w, r, "classID")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[createSectionRequest](w, r)
+	req, err := httpbind.BindJSON[createSectionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -162,12 +163,12 @@ type updateSectionRequest struct {
 
 // Update handles PATCH /api/v1/sections/{id} — updates a section (instructor+).
 func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[updateSectionRequest](w, r)
+	req, err := httpbind.BindJSON[updateSectionRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
 	}
@@ -192,7 +193,7 @@ func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/sections/{id} — deletes a section (instructor+).
 func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -235,7 +236,7 @@ func (h *SectionHandler) MySections(w http.ResponseWriter, r *http.Request) {
 
 // ListSessions handles GET /api/v1/sections/{id}/sessions — returns sessions for a section.
 func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -256,7 +257,7 @@ func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 // RegenerateCode handles POST /api/v1/sections/{id}/regenerate-code — regenerate join code (instructor+).
 func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id")
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -296,7 +297,7 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 
 // ListInstructors handles GET /api/v1/sections/{id}/instructors — list section instructors.
 func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request) {
-	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -322,12 +323,12 @@ type addInstructorRequest struct {
 
 // AddInstructor handles POST /api/v1/sections/{id}/instructors — add instructor by email.
 func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
-	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	req, err := httputil.BindJSON[addInstructorRequest](w, r)
+	req, err := httpbind.BindJSON[addInstructorRequest](w, r)
 	if err != nil {
 		return
 	}
@@ -367,12 +368,12 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 
 // RemoveInstructor handles DELETE /api/v1/sections/{id}/instructors/{userID} — remove instructor.
 func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request) {
-	sectionID, ok := httputil.ParseUUIDParam(w, r, "id")
+	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
-	userID, ok := httputil.ParseUUIDParam(w, r, "userID")
+	userID, ok := httpbind.ParseUUIDParam(w, r, "userID")
 	if !ok {
 		return
 	}
