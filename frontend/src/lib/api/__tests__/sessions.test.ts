@@ -19,7 +19,7 @@ jest.mock('@/lib/api-client', () => ({
 import {
   createSession,
   endSession,
-  updateProblem,
+  updateSessionProblem,
   listSessionHistory,
   getRevisions,
 } from '../sessions';
@@ -90,14 +90,14 @@ describe('lib/api/sessions', () => {
     });
   });
 
-  describe('updateProblem', () => {
+  describe('updateSessionProblem', () => {
     it('calls POST /sessions/{id}/update-problem with problem and execution_settings', async () => {
       mockApiPost.mockResolvedValue(undefined);
 
       const problem = { title: 'Test Problem' };
       const execSettings = { timeout: 5000 };
 
-      const result = await updateProblem('sess-1', problem, execSettings);
+      const result = await updateSessionProblem('sess-1', problem, execSettings);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
         problem,
@@ -111,7 +111,7 @@ describe('lib/api/sessions', () => {
 
       const problem = { title: 'Test Problem' };
 
-      await updateProblem('sess-1', problem);
+      await updateSessionProblem('sess-1', problem);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
         problem,

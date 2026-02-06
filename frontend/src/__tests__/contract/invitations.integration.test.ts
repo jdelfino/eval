@@ -6,7 +6,7 @@
  * This test uses the admin token which has full access.
  */
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
-import { listSystemInvitations } from '@/lib/api/invitations';
+import { listSystemInvitations } from '@/lib/api/system';
 import {
   expectSnakeCaseKeys,
   expectString,

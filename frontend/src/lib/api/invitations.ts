@@ -61,15 +61,6 @@ export async function listInvitations(namespaceId: string, filters?: InvitationF
 }
 
 /**
- * List all invitations system-wide.
- * Requires system-admin role.
- * @returns Array of SerializedInvitation objects (backend returns plain array)
- */
-export async function listSystemInvitations(): Promise<SerializedInvitation[]> {
-  return apiGet<SerializedInvitation[]>('/system/invitations');
-}
-
-/**
  * Create a new invitation in a namespace.
  * @param namespaceId - The namespace ID
  * @param email - The email to invite
@@ -93,26 +84,6 @@ export async function createInvitation(
     body.expires_in_days = expiresInDays;
   }
   return apiPost<SerializedInvitation>(`/namespaces/${namespaceId}/invitations`, body);
-}
-
-/**
- * Create a system-level invitation.
- * Requires system-admin role.
- * @param email - The email to invite
- * @param targetRole - The role for the invited user
- * @param namespaceId - The namespace ID for the invited user
- * @returns The created SerializedInvitation object (backend returns plain object)
- */
-export async function createSystemInvitation(
-  email: string,
-  targetRole: 'instructor' | 'namespace-admin',
-  namespaceId: string
-): Promise<SerializedInvitation> {
-  return apiPost<SerializedInvitation>('/system/invitations', {
-    email,
-    target_role: targetRole,
-    namespace_id: namespaceId,
-  });
 }
 
 /**

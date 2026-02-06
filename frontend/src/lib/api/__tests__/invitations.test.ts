@@ -15,12 +15,14 @@ jest.mock('@/lib/api-client', () => ({
 
 import {
   listInvitations,
-  listSystemInvitations,
   createInvitation,
-  createSystemInvitation,
   revokeInvitation,
   resendInvitation,
 } from '../invitations';
+import {
+  listSystemInvitations,
+  createSystemInvitation,
+} from '../system';
 import type { SerializedInvitation } from '../invitations';
 
 describe('invitations API client', () => {
@@ -75,8 +77,8 @@ describe('invitations API client', () => {
   });
 
   describe('listSystemInvitations', () => {
-    it('calls GET /system/invitations and returns array directly', async () => {
-      mockApiGet.mockResolvedValue([mockInvitation]);
+    it('calls GET /system/invitations and returns array from wrapped response', async () => {
+      mockApiGet.mockResolvedValue({ invitations: [mockInvitation] });
 
       const result = await listSystemInvitations();
 
@@ -115,12 +117,12 @@ describe('invitations API client', () => {
     it('calls POST /system/invitations and returns invitation directly', async () => {
       mockApiPost.mockResolvedValue(mockInvitation);
 
-      const result = await createSystemInvitation('instructor@example.com', 'instructor', 'ns-1');
+      const result = await createSystemInvitation('instructor@example.com', 'ns-1', 'instructor');
 
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
-        target_role: 'instructor',
         namespace_id: 'ns-1',
+        targetRole: 'instructor',
       });
       expect(result).toEqual(mockInvitation);
     });
