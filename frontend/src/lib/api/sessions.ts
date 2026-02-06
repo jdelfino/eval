@@ -77,9 +77,12 @@ export async function getRevisions(
 }
 
 /**
- * Student data within a session details response.
+ * Summary of a student within a session details response.
+ * This is a subset of the full SessionStudent type from types/api.ts,
+ * used specifically for the session details endpoint which returns
+ * only the essential fields for display purposes.
  */
-export interface SessionStudent {
+export interface SessionStudentSummary {
   id: string;
   name: string;
   code: string;
@@ -99,7 +102,7 @@ export interface SessionDetails {
   ended_at?: string;
   status: 'active' | 'completed';
   section_name: string;
-  students: SessionStudent[];
+  students: SessionStudentSummary[];
   participant_count: number;
 }
 

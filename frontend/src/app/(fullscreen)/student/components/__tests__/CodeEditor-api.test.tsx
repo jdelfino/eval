@@ -161,7 +161,11 @@ describe('CodeEditor Component', () => {
         expect(executeStandaloneCode).toHaveBeenCalledWith(
           "print('API execution')",
           'python',
-          undefined
+          {
+            stdin: undefined,
+            random_seed: undefined,
+            attached_files: undefined,
+          }
         );
       });
 
@@ -257,7 +261,11 @@ describe('CodeEditor Component', () => {
       expect(executeStandaloneCode).toHaveBeenCalledWith(
         codeToRun,
         'python',
-        'test input'
+        {
+          stdin: 'test input',
+          random_seed: 42,
+          attached_files: attached_files,
+        }
       );
     });
 

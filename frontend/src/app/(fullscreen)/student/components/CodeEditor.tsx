@@ -344,7 +344,11 @@ export default function CodeEditor({
     setLocalExecutionResult(null);
 
     try {
-      const result = await executeStandaloneCode(code, 'python', stdin || undefined);
+      const result = await executeStandaloneCode(code, 'python', {
+        stdin: stdin || undefined,
+        random_seed,
+        attached_files,
+      });
       setLocalExecutionResult(result);
     } catch (error: any) {
       setLocalExecutionResult({

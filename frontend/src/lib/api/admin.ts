@@ -6,7 +6,7 @@
  * (some wrapped, some not), so these functions return the appropriate shapes.
  */
 
-import { apiGet, apiFetch, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPut, apiDelete } from '@/lib/api-client';
 import type { User, UserRole } from '@/types/api';
 
 /**
@@ -79,12 +79,7 @@ export async function listAdminUsers(options?: ListAdminUsersOptions): Promise<U
  * @returns The updated User object
  */
 export async function changeUserRole(userId: string, newRole: UserRole): Promise<User> {
-  const response = await apiFetch(`/admin/users/${userId}/role`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role: newRole }),
-  });
-  return response.json();
+  return apiPut<User>(`/admin/users/${userId}/role`, { role: newRole });
 }
 
 /**

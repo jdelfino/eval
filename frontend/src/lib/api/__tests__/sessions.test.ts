@@ -22,7 +22,9 @@ import {
   updateSessionProblem,
   listSessionHistory,
   getRevisions,
+  getSessionDetails,
 } from '../sessions';
+import type { SessionStudentSummary, SessionDetails } from '../sessions';
 import type { Session, Revision } from '@/types/api';
 
 const fakeSession: Session = {
@@ -164,6 +166,65 @@ describe('lib/api/sessions', () => {
       const result = await getRevisions('sess-1');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSessionDetails', () => {
+    const fakeStudentSummary: SessionStudentSummary = {
+      id: 'student-1',
+      name: 'Alice',
+      code: 'print("hello")',
+      last_update: '2024-01-01T00:00:00Z',
+    };
+
+    const fakeSessionDetails: SessionDetails = {
+      id: 'sess-1',
+      join_code: 'ABC123',
+      problem_title: 'Test Problem',
+      problem_description: 'A test problem',
+      starter_code: 'print("starter")',
+      created_at: '2024-01-01T00:00:00Z',
+      status: 'active',
+      section_name: 'Section A',
+      students: [fakeStudentSummary],
+      participant_count: 1,
+    };
+
+    it('calls GET /sessions/{id}/details and returns SessionDetails with SessionStudentSummary array', async () => {
+      mockApiGet.mockResolvedValue(fakeSessionDetails);
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/details');
+      expect(result).toEqual(fakeSessionDetails);
+      // Verify the students array conforms to SessionStudentSummary type
+      expect(result.students).toHaveLength(1);
+      expect(result.students[0]).toEqual(fakeStudentSummary);
+    });
+
+    it('returns SessionDetails with empty students array', async () => {
+      const emptyDetails: SessionDetails = {
+        ...fakeSessionDetails,
+        students: [],
+        participant_count: 0,
+      };
+      mockApiGet.mockResolvedValue(emptyDetails);
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(result.students).toEqual([]);
+    });
+
+    it('SessionStudentSummary has only summary fields (id, name, code, last_update)', () => {
+      // This is a compile-time type check - if SessionStudentSummary had additional
+      // required fields like session_id or user_id, this would fail to compile
+      const summary: SessionStudentSummary = {
+        id: 'test',
+        name: 'Test',
+        code: 'code',
+        last_update: '2024-01-01T00:00:00Z',
+      };
+      expect(Object.keys(summary)).toEqual(['id', 'name', 'code', 'last_update']);
     });
   });
 });
