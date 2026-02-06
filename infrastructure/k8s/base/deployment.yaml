@@ -19,7 +19,8 @@ spec:
         - name: go-api
           image: REGISTRY/go-api:TAG  # Placeholder, replaced by CI
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
           envFrom:
             - configMapRef:
                 name: app-config
@@ -28,7 +29,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: http
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 5
@@ -36,7 +37,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8080
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5

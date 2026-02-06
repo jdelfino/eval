@@ -4,15 +4,49 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
+
+// classColumns is the standard column list for class queries.
+const classColumns = `id, namespace_id, name, description, created_by, created_at, updated_at`
+
+// scanClass scans a row into a Class struct.
+// The row must contain columns in classColumns order.
+func scanClass(row pgx.Row) (*Class, error) {
+	var c Class
+	err := row.Scan(
+		&c.ID,
+		&c.NamespaceID,
+		&c.Name,
+		&c.Description,
+		&c.CreatedBy,
+		&c.CreatedAt,
+		&c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// scanClasses scans multiple rows into a slice of Classes.
+// Each row must contain columns in classColumns order.
+func scanClasses(rows pgx.Rows) ([]Class, error) {
+	var classes []Class
+	for rows.Next() {
+		c, err := scanClass(rows)
+		if err != nil {
+			return nil, err
+		}
+		classes = append(classes, *c)
+	}
+	return classes, rows.Err()
+}
 
 // ListClasses retrieves all classes visible to the current user.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
-	const query = `
-		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
-		FROM classes
-		ORDER BY created_at`
+	query := `SELECT ` + classColumns + ` FROM classes ORDER BY created_at`
 
 	rows, err := s.q.Query(ctx, query)
 	if err != nil {
@@ -20,109 +54,58 @@ func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
 	}
 	defer rows.Close()
 
-	var classes []Class
-	for rows.Next() {
-		var c Class
-		if err := rows.Scan(
-			&c.ID,
-			&c.NamespaceID,
-			&c.Name,
-			&c.Description,
-			&c.CreatedBy,
-			&c.CreatedAt,
-			&c.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		classes = append(classes, c)
-	}
-	return classes, rows.Err()
+	return scanClasses(rows)
 }
 
 // GetClass retrieves a class by its ID.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) GetClass(ctx context.Context, id uuid.UUID) (*Class, error) {
-	const query = `
-		SELECT id, namespace_id, name, description, created_by, created_at, updated_at
-		FROM classes
-		WHERE id = $1`
+	query := `SELECT ` + classColumns + ` FROM classes WHERE id = $1`
 
-	var c Class
-	err := s.q.QueryRow(ctx, query, id).Scan(
-		&c.ID,
-		&c.NamespaceID,
-		&c.Name,
-		&c.Description,
-		&c.CreatedBy,
-		&c.CreatedAt,
-		&c.UpdatedAt,
-	)
+	c, err := scanClass(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 
-	return &c, nil
+	return c, nil
 }
 
 // CreateClass creates a new class and returns the created record.
 func (s *Store) CreateClass(ctx context.Context, params CreateClassParams) (*Class, error) {
-	const query = `
+	query := `
 		INSERT INTO classes (namespace_id, name, description, created_by)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
+		RETURNING ` + classColumns
 
-	var c Class
-	err := s.q.QueryRow(ctx, query,
+	return scanClass(s.q.QueryRow(ctx, query,
 		params.NamespaceID,
 		params.Name,
 		params.Description,
 		params.CreatedBy,
-	).Scan(
-		&c.ID,
-		&c.NamespaceID,
-		&c.Name,
-		&c.Description,
-		&c.CreatedBy,
-		&c.CreatedAt,
-		&c.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &c, nil
+	))
 }
 
 // UpdateClass updates a class's mutable fields and returns the updated record.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) UpdateClass(ctx context.Context, id uuid.UUID, params UpdateClassParams) (*Class, error) {
-	const query = `
+	query := `
 		UPDATE classes
 		SET name        = COALESCE($2, name),
 		    description = COALESCE($3, description),
 		    updated_at  = now()
 		WHERE id = $1
-		RETURNING id, namespace_id, name, description, created_by, created_at, updated_at`
+		RETURNING ` + classColumns
 
-	var c Class
-	err := s.q.QueryRow(ctx, query,
+	c, err := scanClass(s.q.QueryRow(ctx, query,
 		id,
 		params.Name,
 		params.Description,
-	).Scan(
-		&c.ID,
-		&c.NamespaceID,
-		&c.Name,
-		&c.Description,
-		&c.CreatedBy,
-		&c.CreatedAt,
-		&c.UpdatedAt,
-	)
+	))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 
-	return &c, nil
+	return c, nil
 }
 
 // DeleteClass deletes a class by its ID.
