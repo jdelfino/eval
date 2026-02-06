@@ -12,7 +12,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ProblemInput } from '@/types/problem';
-import { apiFetch, apiPost, apiPatch } from '@/lib/api-client';
+import { listClasses } from '@/lib/api/classes';
+import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
 import type { ClassInfo } from '../types';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
@@ -56,11 +57,10 @@ export default function ProblemCreator({
 
   // Load classes on mount
   useEffect(() => {
-    const loadClasses = async () => {
+    const fetchClasses = async () => {
       try {
-        const response = await apiFetch('/classes');
-        const data = await response.json();
-        setClasses(data.classes || []);
+        const loadedClasses = await listClasses();
+        setClasses(loadedClasses);
         // Pre-populate if class_id prop provided
         if (class_id) {
           setSelectedClassId(class_id);
@@ -69,7 +69,7 @@ export default function ProblemCreator({
         // Classes won't be populated but form still works
       }
     };
-    loadClasses();
+    fetchClasses();
   }, [class_id]);
 
   // Load problem data when editing
@@ -83,8 +83,7 @@ export default function ProblemCreator({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`/problems/${id}`);
-      const { problem } = await response.json();
+      const problem = await getProblem(id);
       setTitle(problem.title || '');
       setDescription(problem.description || '');
       setStarterCode(problem.starter_code || '');
@@ -151,14 +150,12 @@ export default function ProblemCreator({
         problemInput.execution_settings = execSettings;
       }
 
-      let result: { problem: { id: string } };
+      let result;
       if (isEditMode) {
-        result = await apiPatch<{ problem: { id: string } }>(`/problems/${problem_id}`, problemInput);
+        result = await updateProblem(problem_id!, problemInput);
       } else {
-        result = await apiPost<{ problem: { id: string } }>('/problems', problemInput);
+        result = await createProblem(problemInput as Parameters<typeof createProblem>[0]);
       }
-
-      const { problem } = result;
 
       if (!isEditMode) {
         // Reset form only when creating
@@ -174,7 +171,7 @@ export default function ProblemCreator({
       }
 
       // Notify parent
-      onProblemCreated?.(problem.id);
+      onProblemCreated?.(result.id);
     } catch (err: any) {
       setError(err.message || `Failed to ${isEditMode ? 'update' : 'create'} problem`);
     } finally {

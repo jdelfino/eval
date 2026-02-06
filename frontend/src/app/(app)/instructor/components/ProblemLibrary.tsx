@@ -9,7 +9,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { apiFetch, apiDelete } from '@/lib/api-client';
+import { listClasses } from '@/lib/api/classes';
+import { listProblems, deleteProblem } from '@/lib/api/problems';
 import ProblemSearch from './ProblemSearch';
 import ProblemCard from './ProblemCard';
 import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
@@ -46,26 +47,24 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   // Load classes on mount
   useEffect(() => {
     if (!user) return;
-    const loadClasses = async () => {
+    const fetchClasses = async () => {
       try {
-        const response = await apiFetch('/classes');
-        const data = await response.json();
-        const loadedClasses: ClassInfo[] = data.classes || [];
-          setClasses(loadedClasses);
-          // Default to first class, or check localStorage
-          const savedClassId = localStorage.getItem('problemLibrary_classId');
-          if (savedClassId && loadedClasses.some(c => c.id === savedClassId)) {
-            setSelectedClassId(savedClassId);
-          } else if (loadedClasses.length > 0) {
-            setSelectedClassId(loadedClasses[0].id);
-          }
+        const loadedClasses = await listClasses();
+        setClasses(loadedClasses);
+        // Default to first class, or check localStorage
+        const savedClassId = localStorage.getItem('problemLibrary_classId');
+        if (savedClassId && loadedClasses.some(c => c.id === savedClassId)) {
+          setSelectedClassId(savedClassId);
+        } else if (loadedClasses.length > 0) {
+          setSelectedClassId(loadedClasses[0].id);
+        }
       } catch {
         // Silently fail - class picker just won't be populated
       } finally {
         setClassesLoaded(true);
       }
     };
-    loadClasses();
+    fetchClasses();
   }, [user]);
 
   // Load problems when class selection changes
@@ -82,20 +81,14 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
+      const loadedProblems = await listProblems({
         author_id: user.id,
-        includePublic: 'true',
+        class_id: selectedClassId || undefined,
+        includePublic: true,
         sortBy,
         sortOrder,
       });
-
-      if (selectedClassId) {
-        params.set('class_id', selectedClassId);
-      }
-
-      const response = await apiFetch(`/problems?${params}`);
-      const data = await response.json();
-      setProblems(data.problems || []);
+      setProblems(loadedProblems);
     } catch (err) {
       console.error('Error loading problems:', err);
       setError(err instanceof Error ? err.message : 'Failed to load problems');
@@ -179,7 +172,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
 
   const handleDelete = async (problem_id: string, title: string) => {
     try {
-      await apiDelete(`/problems/${problem_id}`);
+      await deleteProblem(problem_id);
 
       // Reload problems after deletion
       await loadProblems();
