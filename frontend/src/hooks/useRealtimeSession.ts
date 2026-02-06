@@ -312,7 +312,7 @@ export function useRealtimeSession({
             const { problem_id } = payload;
             setSession(prev => prev ? {
               ...prev,
-              problem: { ...prev.problem, id: problem_id },
+              problem: { ...prev.problem, id: problem_id } as Session['problem'],
             } : prev);
           }
           break;
