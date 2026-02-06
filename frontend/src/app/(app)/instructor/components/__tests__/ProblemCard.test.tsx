@@ -16,6 +16,7 @@ describe('ProblemCard', () => {
     author_id: 'user-123',
     tags: [],
     class_id: 'class-1',
+    test_case_count: 5,
   };
 
   const defaultProps = {
@@ -167,7 +168,7 @@ describe('ProblemCard', () => {
 
   describe('Edge Cases', () => {
     it('handles problem without description', () => {
-      const problem = { ...mockProblem, description: undefined };
+      const problem = { ...mockProblem, description: null };
       render(<ProblemCard {...defaultProps} problem={problem} />);
       expect(screen.getByText('Test Problem')).toBeInTheDocument();
       expect(screen.queryByText(/This is a test/)).not.toBeInTheDocument();

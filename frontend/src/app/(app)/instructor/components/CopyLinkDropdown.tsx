@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { getLastUsedSection } from '@/lib/last-used-section';
-import { apiFetch } from '@/lib/api-client';
+import { getClassSections } from '@/lib/api/sections';
 
 interface Section {
   id: string;
@@ -58,9 +58,8 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
       setLoading(true);
       setFetchError(false);
       try {
-        const res = await apiFetch(`/classes/${class_id}/sections`);
-        const data = await res.json();
-        setSections(data.sections ?? []);
+        const fetchedSections = await getClassSections(class_id);
+        setSections(fetchedSections ?? []);
       } catch {
         setFetchError(true);
       } finally {

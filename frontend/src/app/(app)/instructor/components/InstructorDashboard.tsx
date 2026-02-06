@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { hasRolePermission } from '@/lib/permissions';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
-import { apiFetch } from '@/lib/api-client';
+import { getInstructorDashboard } from '@/lib/api/instructor';
 import CreateClassModal from './CreateClassModal';
 
 interface SectionInfo {
@@ -58,9 +58,46 @@ export function InstructorDashboard({
       setError(null);
 
       // Fetch classes with their sections and active session info
-      const response = await apiFetch('/instructor/dashboard');
-      const data = await response.json();
-      setClassesWithSections(data.classes || []);
+      const data = await getInstructorDashboard();
+
+      // Transform the API response to include sections grouped by class
+      // and add active session info
+      const classesWithSections: ClassWithSections[] = (data.classes || []).map(
+        (classItem) => {
+          // Get sections for this class
+          const classSections = (data.sections || [])
+            .filter((section) => section.class_id === classItem.id)
+            .map((section) => {
+              // Find active session for this section if any
+              const activeSession = (data.sessions || []).find(
+                (session) => session.section_id === section.id && session.status === 'active'
+              );
+
+              // Count students in this section (from memberships or sessions)
+              const studentCount = (data.sessions || [])
+                .filter((session) => session.section_id === section.id)
+                .reduce((count, session) => count + (session.participants?.length || 0), 0);
+
+              return {
+                id: section.id,
+                name: section.name,
+                semester: section.semester || undefined,
+                join_code: section.join_code,
+                studentCount,
+                activeSessionId: activeSession?.id,
+              };
+            });
+
+          return {
+            id: classItem.id,
+            name: classItem.name,
+            description: classItem.description || undefined,
+            sections: classSections,
+          };
+        }
+      );
+
+      setClassesWithSections(classesWithSections);
     } catch (err) {
       console.error('Error loading dashboard:', err);
       setError(err instanceof Error ? err : new Error('Failed to load dashboard'));

@@ -7,7 +7,25 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Class, Section } from '@/types/api';
+import type { Class, Section, User } from '@/types/api';
+
+/**
+ * Response structure for getClass endpoint.
+ */
+export interface ClassDetailsResponse {
+  class: Class;
+  sections: Section[];
+  instructorNames: Record<string, string>;
+}
+
+/**
+ * Get a single class with its sections and instructor names.
+ * @param id - The class ID
+ * @returns ClassDetailsResponse containing class, sections, and instructorNames
+ */
+export async function getClass(id: string): Promise<ClassDetailsResponse> {
+  return apiGet<ClassDetailsResponse>(`/classes/${id}`);
+}
 
 /**
  * List all classes accessible to the current user.
@@ -46,14 +64,24 @@ export async function deleteClass(id: string): Promise<void> {
 }
 
 /**
+ * Options for creating a section.
+ */
+export interface CreateSectionOptions {
+  name: string;
+  semester?: string;
+  schedule?: string;
+  location?: string;
+  capacity?: number;
+}
+
+/**
  * Create a new section within a class.
  * @param classId - The parent class ID
- * @param name - The section name
- * @param semester - Optional semester designation
+ * @param options - Section creation options (name required, others optional)
  * @returns The created Section object (backend returns plain object)
  */
-export async function createSection(classId: string, name: string, semester?: string): Promise<Section> {
-  return apiPost<Section>(`/classes/${classId}/sections`, { name, semester });
+export async function createSection(classId: string, options: CreateSectionOptions): Promise<Section> {
+  return apiPost<Section>(`/classes/${classId}/sections`, options);
 }
 
 /**

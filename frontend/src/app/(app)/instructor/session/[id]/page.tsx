@@ -21,7 +21,7 @@ import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem, ExecutionSettings } from '@/types/problem';
-import { apiPost } from '@/lib/api-client';
+import { reopenSession } from '@/lib/api/sessions';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 
@@ -147,7 +147,7 @@ export default function InstructorSessionPage() {
     if (!session_id) return;
     try {
       setReopening(true);
-      await apiPost(`/sessions/${session_id}/reopen`);
+      await reopenSession(session_id);
       // Reload the page to get fresh active session state
       window.location.reload();
     } catch (err: any) {

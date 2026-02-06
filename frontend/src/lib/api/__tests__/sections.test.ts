@@ -18,8 +18,11 @@ import {
   joinSection,
   leaveSection,
   getActiveSessions,
+  getClassSections,
+  getSectionInstructors,
+  deleteSection,
 } from '../sections';
-import type { MySectionInfo, SectionMembership, Session } from '@/types/api';
+import type { MySectionInfo, SectionMembership, Session, Section, User } from '@/types/api';
 
 describe('sections API client', () => {
   beforeEach(() => {
@@ -106,6 +109,71 @@ describe('sections API client', () => {
 
       expect(mockApiGet).toHaveBeenCalledWith('/sections/s1/sessions');
       expect(result).toEqual(mockSessions);
+    });
+  });
+
+  describe('getClassSections', () => {
+    it('calls GET /classes/{id}/sections and returns Section array', async () => {
+      const mockSections: Section[] = [
+        {
+          id: 's1',
+          namespace_id: 'ns-1',
+          class_id: 'c1',
+          name: 'Section A',
+          semester: 'Fall 2024',
+          join_code: 'ABC',
+          active: true,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ];
+      mockApiGet.mockResolvedValue(mockSections);
+
+      const result = await getClassSections('c1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/classes/c1/sections');
+      expect(result).toEqual(mockSections);
+    });
+  });
+
+  describe('getSectionInstructors', () => {
+    it('calls GET /sections/{id}/instructors and unwraps instructors array', async () => {
+      const mockInstructors: User[] = [
+        {
+          id: 'u1',
+          external_id: 'ext-1',
+          email: 'instructor@example.com',
+          role: 'instructor',
+          namespace_id: 'ns-1',
+          display_name: 'Dr. Smith',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ];
+      mockApiGet.mockResolvedValue({ instructors: mockInstructors });
+
+      const result = await getSectionInstructors('s1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sections/s1/instructors');
+      expect(result).toEqual(mockInstructors);
+    });
+
+    it('returns empty array when no instructors', async () => {
+      mockApiGet.mockResolvedValue({ instructors: [] });
+
+      const result = await getSectionInstructors('s1');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('deleteSection', () => {
+    it('calls DELETE /sections/{id}', async () => {
+      mockApiDelete.mockResolvedValue(undefined);
+
+      await deleteSection('s1');
+
+      expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1');
     });
   });
 });

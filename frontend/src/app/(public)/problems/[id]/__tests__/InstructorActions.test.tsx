@@ -35,9 +35,15 @@ const mockClose = jest.fn();
   close: mockClose,
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock API modules
+const mockCreateSession = jest.fn();
+const mockGetClassSections = jest.fn();
+jest.mock('@/lib/api/sessions', () => ({
+  createSession: (...args: unknown[]) => mockCreateSession(...args),
+}));
+jest.mock('@/lib/api/sections', () => ({
+  getClassSections: (...args: unknown[]) => mockGetClassSections(...args),
+}));
 
 // Mock CreateSessionFromProblemModal
 jest.mock('@/app/(app)/instructor/components/CreateSessionFromProblemModal', () => {
@@ -55,24 +61,19 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSearchParams = new URLSearchParams();
   authValue = { user: mockUser, isLoading: false };
+  mockCreateSession.mockReset();
+  mockGetClassSections.mockReset();
 });
 
 describe('InstructorActions auto-start from query params', () => {
   it('auto-creates session when start=true and section_id present', async () => {
     mockSearchParams = new URLSearchParams('start=true&section_id=section-1');
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ session: { id: 'session-123' } }),
-    });
+    mockCreateSession.mockResolvedValueOnce({ id: 'session-123' });
 
     render(<InstructorActions {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section_id: 'section-1', problem_id: 'prob-1' }),
-      });
+      expect(mockCreateSession).toHaveBeenCalledWith('section-1', 'prob-1');
     });
 
     await waitFor(() => {
@@ -91,7 +92,7 @@ describe('InstructorActions auto-start from query params', () => {
     render(<InstructorActions {...defaultProps} />);
 
     await new Promise(r => setTimeout(r, 50));
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 
   it('does not auto-start when section_id param is missing', async () => {
@@ -100,16 +101,12 @@ describe('InstructorActions auto-start from query params', () => {
     render(<InstructorActions {...defaultProps} />);
 
     await new Promise(r => setTimeout(r, 50));
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 
   it('shows error message on API failure', async () => {
     mockSearchParams = new URLSearchParams('start=true&section_id=bad-section');
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ error: 'Failed to create session' }),
-    });
+    mockCreateSession.mockRejectedValueOnce(new Error('Failed to create session'));
 
     render(<InstructorActions {...defaultProps} />);
 
@@ -126,6 +123,6 @@ describe('InstructorActions auto-start from query params', () => {
 
     await new Promise(r => setTimeout(r, 50));
     expect(container.innerHTML).toBe('');
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });

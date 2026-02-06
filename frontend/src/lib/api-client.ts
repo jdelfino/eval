@@ -100,6 +100,18 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /**
+ * PUT request with JSON body.
+ */
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const response = await apiFetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return response.json();
+}
+
+/**
  * DELETE request.
  */
 export async function apiDelete(path: string): Promise<void> {

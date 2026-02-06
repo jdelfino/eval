@@ -6,7 +6,7 @@ import type { ClassInfo, ClassWithSections, ProblemSummary } from '../types';
 
 describe('Instructor shared types', () => {
   it('ClassInfo has required id and name fields', () => {
-    const info: ClassInfo = { id: '1', name: 'Test' };
+    const info: ClassInfo = { id: '1', name: 'Test', namespace_id: 'ns-1', description: null };
     expect(info.id).toBe('1');
     expect(info.name).toBe('Test');
   });
@@ -30,6 +30,8 @@ describe('Instructor shared types', () => {
       author_id: 'user-1',
       tags: ['arrays'],
       class_id: 'class-1',
+      description: null,
+      test_case_count: null,
     };
     expect(problem.id).toBe('p-1');
     expect(problem.title).toBe('Two Sum');
@@ -56,6 +58,7 @@ describe('Instructor shared types', () => {
     const info: ClassWithSections = {
       id: '1',
       name: 'Test',
+      namespace_id: 'ns-1',
       description: 'desc',
       section_count: 3,
     };

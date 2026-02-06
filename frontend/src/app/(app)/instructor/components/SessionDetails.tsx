@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api-client';
+import { getSessionDetails, type SessionDetails as SessionDetailsType } from '@/lib/api/sessions';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { BackButton } from '@/components/ui/BackButton';
@@ -12,30 +12,9 @@ interface SessionDetailsProps {
   onClose: () => void;
 }
 
-interface StudentData {
-  id: string;
-  name: string;
-  code: string;
-  last_update: string;
-}
-
-interface SessionData {
-  id: string;
-  join_code: string;
-  problem_title: string;
-  problem_description?: string;
-  starter_code?: string;
-  created_at: string;
-  ended_at?: string;
-  status: 'active' | 'completed';
-  section_name: string;
-  students: StudentData[];
-  participant_count: number;
-}
-
 export default function SessionDetails({ session_id, onClose }: SessionDetailsProps) {
   const _router = useRouter();
-  const [session, setSession] = useState<SessionData | null>(null);
+  const [session, setSession] = useState<SessionDetailsType | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +28,9 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
       setLoading(true);
       setError(null);
 
-      const response = await apiFetch(`/sessions/${session_id}/details`);
-      const data = await response.json();
+      const data = await getSessionDetails(session_id);
       setSession(data);
-      
+
       // Auto-select first student if available
       if (data.students && data.students.length > 0) {
         setSelectedStudentId(data.students[0].id);

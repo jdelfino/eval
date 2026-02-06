@@ -19,11 +19,18 @@ jest.mock('@/lib/api-client', () => ({
 import {
   createSession,
   endSession,
-  updateProblem,
+  updateSessionProblem,
   listSessionHistory,
   getRevisions,
+  getSessionDetails,
+  getSessionPublicState,
+  analyzeSession,
+  featureCode,
+  reopenSession,
+  listSessionHistoryWithFilters,
 } from '../sessions';
-import type { Session, Revision } from '@/types/api';
+import type { SessionStudentSummary, SessionDetails, AnalysisResponse } from '../sessions';
+import type { Session, Revision, SessionPublicState } from '@/types/api';
 
 const fakeSession: Session = {
   id: 'sess-1',
@@ -90,14 +97,14 @@ describe('lib/api/sessions', () => {
     });
   });
 
-  describe('updateProblem', () => {
+  describe('updateSessionProblem', () => {
     it('calls POST /sessions/{id}/update-problem with problem and execution_settings', async () => {
       mockApiPost.mockResolvedValue(undefined);
 
       const problem = { title: 'Test Problem' };
       const execSettings = { timeout: 5000 };
 
-      const result = await updateProblem('sess-1', problem, execSettings);
+      const result = await updateSessionProblem('sess-1', problem, execSettings);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
         problem,
@@ -111,7 +118,7 @@ describe('lib/api/sessions', () => {
 
       const problem = { title: 'Test Problem' };
 
-      await updateProblem('sess-1', problem);
+      await updateSessionProblem('sess-1', problem);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
         problem,
@@ -164,6 +171,165 @@ describe('lib/api/sessions', () => {
       const result = await getRevisions('sess-1');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSessionDetails', () => {
+    const fakeStudentSummary: SessionStudentSummary = {
+      id: 'student-1',
+      name: 'Alice',
+      code: 'print("hello")',
+      last_update: '2024-01-01T00:00:00Z',
+    };
+
+    const fakeSessionDetails: SessionDetails = {
+      id: 'sess-1',
+      join_code: 'ABC123',
+      problem_title: 'Test Problem',
+      problem_description: 'A test problem',
+      starter_code: 'print("starter")',
+      created_at: '2024-01-01T00:00:00Z',
+      status: 'active',
+      section_name: 'Section A',
+      students: [fakeStudentSummary],
+      participant_count: 1,
+    };
+
+    it('calls GET /sessions/{id}/details and returns SessionDetails with SessionStudentSummary array', async () => {
+      mockApiGet.mockResolvedValue(fakeSessionDetails);
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/details');
+      expect(result).toEqual(fakeSessionDetails);
+      // Verify the students array conforms to SessionStudentSummary type
+      expect(result.students).toHaveLength(1);
+      expect(result.students[0]).toEqual(fakeStudentSummary);
+    });
+
+    it('returns SessionDetails with empty students array', async () => {
+      const emptyDetails: SessionDetails = {
+        ...fakeSessionDetails,
+        students: [],
+        participant_count: 0,
+      };
+      mockApiGet.mockResolvedValue(emptyDetails);
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(result.students).toEqual([]);
+    });
+
+    it('SessionStudentSummary has only summary fields (id, name, code, last_update)', () => {
+      // This is a compile-time type check - if SessionStudentSummary had additional
+      // required fields like session_id or user_id, this would fail to compile
+      const summary: SessionStudentSummary = {
+        id: 'test',
+        name: 'Test',
+        code: 'code',
+        last_update: '2024-01-01T00:00:00Z',
+      };
+      expect(Object.keys(summary)).toEqual(['id', 'name', 'code', 'last_update']);
+    });
+  });
+
+  describe('getSessionPublicState', () => {
+    it('calls GET /sessions/{id}/public-state and returns SessionPublicState', async () => {
+      const fakePublicState: SessionPublicState = {
+        problem: { title: 'Test Problem' },
+        featured_student_id: null,
+        featured_code: null,
+        join_code: 'ABC123',
+        status: 'active',
+      };
+      mockApiGet.mockResolvedValue(fakePublicState);
+
+      const result = await getSessionPublicState('sess-1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/public-state');
+      expect(result).toEqual(fakePublicState);
+    });
+  });
+
+  describe('analyzeSession', () => {
+    it('calls POST /sessions/{id}/analyze and returns AnalysisResponse', async () => {
+      const fakeAnalysis: AnalysisResponse = {
+        script: {
+          session_id: 'sess-1',
+          issues: [],
+          summary: {
+            total_submissions: 10,
+            filtered_out: 0,
+            analyzed_submissions: 10,
+            completion_estimate: { finished: 5, in_progress: 3, not_started: 2 },
+          },
+          finished_student_ids: [],
+          generated_at: new Date('2024-01-01'),
+        },
+      };
+      mockApiPost.mockResolvedValue(fakeAnalysis);
+
+      const result = await analyzeSession('sess-1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze');
+      expect(result).toEqual(fakeAnalysis);
+    });
+  });
+
+  describe('featureCode', () => {
+    it('calls POST /sessions/{id}/feature with code body', async () => {
+      mockApiPost.mockResolvedValue(undefined);
+
+      await featureCode('sess-1', 'print("featured")');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/feature', {
+        code: 'print("featured")',
+      });
+    });
+  });
+
+  describe('reopenSession', () => {
+    it('calls POST /sessions/{id}/reopen', async () => {
+      mockApiPost.mockResolvedValue(undefined);
+
+      await reopenSession('sess-1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/reopen');
+    });
+  });
+
+  describe('listSessionHistoryWithFilters', () => {
+    it('calls GET /sessions/history without filters', async () => {
+      mockApiGet.mockResolvedValue([fakeSession]);
+
+      const result = await listSessionHistoryWithFilters();
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/history');
+      expect(result).toEqual([fakeSession]);
+    });
+
+    it('includes section_id filter', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      await listSessionHistoryWithFilters({ sectionId: 's1' });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/history?section_id=s1');
+    });
+
+    it('includes limit filter', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      await listSessionHistoryWithFilters({ limit: 10 });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/history?limit=10');
+    });
+
+    it('combines multiple filters', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      await listSessionHistoryWithFilters({ sectionId: 's1', limit: 5 });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/history?section_id=s1&limit=5');
     });
   });
 });

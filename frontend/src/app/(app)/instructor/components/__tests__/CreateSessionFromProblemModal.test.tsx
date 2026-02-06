@@ -5,6 +5,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CreateSessionFromProblemModal from '../CreateSessionFromProblemModal';
+import * as sectionsApi from '@/lib/api/sections';
+import * as sessionsApi from '@/lib/api/sessions';
+
+jest.mock('@/lib/api/sections');
+jest.mock('@/lib/api/sessions');
 
 describe('CreateSessionFromProblemModal', () => {
   const defaultProps = {
@@ -18,7 +23,6 @@ describe('CreateSessionFromProblemModal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn();
     localStorage.clear();
   });
 
@@ -27,10 +31,7 @@ describe('CreateSessionFromProblemModal', () => {
   });
 
   it('displays the class name as read-only text', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: [] }),
-    });
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce([]);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -40,15 +41,11 @@ describe('CreateSessionFromProblemModal', () => {
   });
 
   it('loads sections for the given class_id on mount', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-        ],
-      }),
-    });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ];
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -57,25 +54,17 @@ describe('CreateSessionFromProblemModal', () => {
       expect(screen.getByText('Section B')).toBeInTheDocument();
     });
 
-    expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
+    expect(sectionsApi.getClassSections).toHaveBeenCalledWith('class-1');
   });
 
   it('creates a session when a section is selected and submitted', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          sections: [
-            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: { id: 'session-1', join_code: 'JOIN123' },
-        }),
-      });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+    ];
+    const mockSession = { id: 'session-1', join_code: 'JOIN123' };
+
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+    (sessionsApi.createSession as jest.Mock).mockResolvedValueOnce(mockSession);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -87,25 +76,18 @@ describe('CreateSessionFromProblemModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create session/i }));
 
     await waitFor(() => {
-      expect(defaultProps.onSuccess).toHaveBeenCalledWith('session-1', 'JOIN123');
+      expect(defaultProps.onSuccess).toHaveBeenCalledWith('session-1', 'ABC');
     });
 
     // Verify session creation call
-    expect(global.fetch).toHaveBeenCalledWith('/sessions', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ section_id: 'sec-1', problem_id: 'prob-1' }),
-    }));
+    expect(sessionsApi.createSession).toHaveBeenCalledWith('sec-1', 'prob-1');
   });
 
   it('only fetches sections, not classes', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-        ],
-      }),
-    });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+    ];
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -114,22 +96,18 @@ describe('CreateSessionFromProblemModal', () => {
     });
 
     // Should only fetch sections, not classes (className is provided as prop)
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith('/classes/class-1/sections');
+    expect(sectionsApi.getClassSections).toHaveBeenCalledTimes(1);
+    expect(sectionsApi.getClassSections).toHaveBeenCalledWith('class-1');
   });
 
   it('pre-selects last-used section when class_id matches', async () => {
     localStorage.setItem('lastUsedSection', JSON.stringify({ section_id: 'sec-2', class_id: 'class-1' }));
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-        ],
-      }),
-    });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ];
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -141,15 +119,11 @@ describe('CreateSessionFromProblemModal', () => {
   it('does not pre-select when last-used section is for a different class', async () => {
     localStorage.setItem('lastUsedSection', JSON.stringify({ section_id: 'sec-1', class_id: 'other-class' }));
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
-        ],
-      }),
-    });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+      { id: 'sec-2', name: 'Section B', join_code: 'DEF' },
+    ];
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 
@@ -161,21 +135,13 @@ describe('CreateSessionFromProblemModal', () => {
   });
 
   it('saves last-used section on successful session creation', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          sections: [
-            { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          session: { id: 'session-1', join_code: 'JOIN123' },
-        }),
-      });
+    const mockSections = [
+      { id: 'sec-1', name: 'Section A', join_code: 'ABC' },
+    ];
+    const mockSession = { id: 'session-1', join_code: 'JOIN123' };
+
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+    (sessionsApi.createSession as jest.Mock).mockResolvedValueOnce(mockSession);
 
     render(<CreateSessionFromProblemModal {...defaultProps} />);
 

@@ -71,7 +71,7 @@ export function useClasses(): UseClassesReturn {
 
   const createSection = useCallback(async (class_id: string, name: string, semester?: string): Promise<Section> => {
     setError(null);
-    const section = await apiCreateSection(class_id, name, semester);
+    const section = await apiCreateSection(class_id, { name, semester });
     return section;
   }, []);
 

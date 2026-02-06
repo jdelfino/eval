@@ -10,14 +10,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch } from '@/lib/api-client';
-
-interface Namespace {
-  id: string;
-  displayName: string;
-  active: boolean;
-  userCount?: number;
-}
+import { getSystemNamespace, listSystemNamespaces, NamespaceInfo } from '@/lib/api/system';
 
 interface NamespaceHeaderProps {
   className?: string;
@@ -25,9 +18,9 @@ interface NamespaceHeaderProps {
 
 export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps) {
   const { user } = useAuth();
-  const [namespaces, setNamespaces] = useState<Namespace[]>([]);
+  const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([]);
   const [selectedNamespaceId, setSelectedNamespaceId] = useState<string | null>(null);
-  const [currentNamespace, setCurrentNamespace] = useState<Namespace | null>(null);
+  const [currentNamespace, setCurrentNamespace] = useState<NamespaceInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Load user's current namespace display name
@@ -39,11 +32,8 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
         // For system admin, we fetch all namespaces anyway, so skip this
         if (user.role === 'system-admin') return;
 
-        const response = await apiFetch(`/system/namespaces/${user.namespace_id}`);
-        const data = await response.json();
-        if (data.success && data.namespace) {
-          setCurrentNamespace(data.namespace);
-        }
+        const namespace = await getSystemNamespace(user.namespace_id!);
+        setCurrentNamespace(namespace);
       } catch (error) {
         console.error('Failed to load namespace:', error);
       }
@@ -59,20 +49,17 @@ export default function NamespaceHeader({ className = '' }: NamespaceHeaderProps
     const loadNamespaces = async () => {
       setIsLoading(true);
       try {
-        const response = await apiFetch('/system/namespaces');
-        const data = await response.json();
-        if (data.success && data.namespaces) {
-          setNamespaces(data.namespaces);
+        const fetchedNamespaces = await listSystemNamespaces();
+        setNamespaces(fetchedNamespaces);
 
-          // Load selected namespace from localStorage or default to user's namespace
-          const savedNamespaceId = localStorage.getItem('selectedNamespaceId');
-          const initialNamespaceId = savedNamespaceId || user.namespace_id || 'default';
-          setSelectedNamespaceId(initialNamespaceId);
+        // Load selected namespace from localStorage or default to user's namespace
+        const savedNamespaceId = localStorage.getItem('selectedNamespaceId');
+        const initialNamespaceId = savedNamespaceId || user.namespace_id || 'default';
+        setSelectedNamespaceId(initialNamespaceId);
 
-          // Set current namespace
-          const selected = data.namespaces.find((ns: Namespace) => ns.id === initialNamespaceId);
-          setCurrentNamespace(selected || data.namespaces[0] || null);
-        }
+        // Set current namespace
+        const selected = fetchedNamespaces.find((ns: NamespaceInfo) => ns.id === initialNamespaceId);
+        setCurrentNamespace(selected || fetchedNamespaces[0] || null);
       } catch (error) {
         console.error('Failed to load namespaces:', error);
       } finally {

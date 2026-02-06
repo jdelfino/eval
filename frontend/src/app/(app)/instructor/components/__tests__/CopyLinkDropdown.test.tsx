@@ -14,9 +14,11 @@ jest.mock('@/lib/last-used-section', () => ({
   getLastUsedSection: () => mockGetLastUsedSection(),
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock the sections API
+const mockGetClassSections = jest.fn();
+jest.mock('@/lib/api/sections', () => ({
+  getClassSections: (classId: string) => mockGetClassSections(classId),
+}));
 
 // window.location.origin is already 'http://localhost' in jsdom
 
@@ -25,22 +27,17 @@ const defaultProps = {
   class_id: 'class-1',
 };
 
-const sectionsResponse = {
-  sections: [
-    { id: 'sec-1', name: 'Section A' },
-    { id: 'sec-2', name: 'Section B' },
-    { id: 'sec-3', name: 'Section C' },
-  ],
-};
+const sectionsData = [
+  { id: 'sec-1', name: 'Section A' },
+  { id: 'sec-2', name: 'Section B' },
+  { id: 'sec-3', name: 'Section C' },
+];
 
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
   mockGetLastUsedSection.mockReturnValue(null);
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(sectionsResponse),
-  });
+  mockGetClassSections.mockResolvedValue(sectionsData);
 });
 
 afterEach(() => {
@@ -72,7 +69,7 @@ describe('CopyLinkDropdown', () => {
       expect(screen.getByText('Section C')).toBeInTheDocument();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('/classes/class-1/sections');
+    expect(mockGetClassSections).toHaveBeenCalledWith('class-1');
   });
 
   it('copies deep-link URL when a section is clicked', async () => {

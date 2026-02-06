@@ -7,7 +7,7 @@
  */
 
 import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
-import type { MySectionInfo, SectionMembership, Session } from '@/types/api';
+import type { MySectionInfo, SectionMembership, Session, Section, User } from '@/types/api';
 
 /**
  * List all sections the current user is enrolled in (as student or instructor).
@@ -41,4 +41,34 @@ export async function leaveSection(sectionId: string): Promise<void> {
  */
 export async function getActiveSessions(sectionId: string): Promise<Session[]> {
   return apiGet<Session[]>(`/sections/${sectionId}/sessions`);
+}
+
+/**
+ * Get all sections for a class.
+ * @param classId - The class ID
+ * @returns Array of Section objects
+ */
+export async function getClassSections(classId: string): Promise<Section[]> {
+  return apiGet<Section[]>(`/classes/${classId}/sections`);
+}
+
+/**
+ * Get instructors for a section.
+ * @param sectionId - The section ID
+ * @returns Array of User objects representing instructors
+ */
+export async function getSectionInstructors(sectionId: string): Promise<User[]> {
+  interface InstructorsResponse {
+    instructors: User[];
+  }
+  const response = await apiGet<InstructorsResponse>(`/sections/${sectionId}/instructors`);
+  return response.instructors;
+}
+
+/**
+ * Delete a section.
+ * @param sectionId - The section ID to delete
+ */
+export async function deleteSection(sectionId: string): Promise<void> {
+  await apiDelete(`/sections/${sectionId}`);
 }

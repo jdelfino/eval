@@ -48,13 +48,14 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
   }),
 }));
 
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock the API execute module
+jest.mock('@/lib/api/execute', () => ({
+  executeStandaloneCode: jest.fn(),
+}));
 
 describe('CodeEditor Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockClear();
   });
 
   describe('WebSocket Execution Mode (default)', () => {
@@ -135,16 +136,14 @@ describe('CodeEditor Component', () => {
 
   describe('API Execution Mode', () => {
     it('should execute code via API when useApiExecution is true', async () => {
+      const { executeStandaloneCode } = require('@/lib/api/execute');
       const mockOnChange = jest.fn();
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          output: 'API execution result\n',
-          error: '',
-          execution_time: 150,
-        }),
+      executeStandaloneCode.mockResolvedValueOnce({
+        success: true,
+        output: 'API execution result\n',
+        error: '',
+        execution_time: 150,
       });
 
       render(
@@ -159,16 +158,15 @@ describe('CodeEditor Component', () => {
       fireEvent.click(runButton);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: "print('API execution')",
+        expect(executeStandaloneCode).toHaveBeenCalledWith(
+          "print('API execution')",
+          'python',
+          {
             stdin: undefined,
             random_seed: undefined,
             attached_files: undefined,
-          }),
-        });
+          }
+        );
       });
 
       await waitFor(() => {
@@ -178,14 +176,10 @@ describe('CodeEditor Component', () => {
     });
 
     it('should display error when API execution fails', async () => {
+      const { executeStandaloneCode } = require('@/lib/api/execute');
       const mockOnChange = jest.fn();
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({
-          error: 'Execution failed',
-        }),
-      });
+      executeStandaloneCode.mockRejectedValueOnce(new Error('Execution failed'));
 
       render(
         <CodeEditor
@@ -205,6 +199,7 @@ describe('CodeEditor Component', () => {
     });
 
     it('should display error when code is empty', async () => {
+      const { executeStandaloneCode } = require('@/lib/api/execute');
       const mockOnChange = jest.fn();
 
       render(
@@ -223,10 +218,11 @@ describe('CodeEditor Component', () => {
         expect(screen.getByText(/Please write some code before running/)).toBeInTheDocument();
       });
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(executeStandaloneCode).not.toHaveBeenCalled();
     });
 
     it('should include execution settings in API request', async () => {
+      const { executeStandaloneCode } = require('@/lib/api/execute');
       const mockOnChange = jest.fn();
       const mockOnRandomSeedChange = jest.fn();
       const mockOnAttachedFilesChange = jest.fn();
@@ -234,14 +230,11 @@ describe('CodeEditor Component', () => {
       const attached_files = [{ name: 'data.txt', content: 'test data' }];
       const codeToRun = 'import random\nprint(random.randint(1, 100))';
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          output: '42\n',
-          error: '',
-          execution_time: 125,
-        }),
+      executeStandaloneCode.mockResolvedValueOnce({
+        success: true,
+        output: '42\n',
+        error: '',
+        execution_time: 125,
       });
 
       render(
@@ -261,21 +254,23 @@ describe('CodeEditor Component', () => {
       fireEvent.click(runButton);
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(executeStandaloneCode).toHaveBeenCalled();
       });
 
-      // Check that fetch was called with correct params
-      const callArgs = (global.fetch as jest.Mock).mock.calls[0];
-      expect(callArgs[0]).toBe('/execute');
-
-      const body = JSON.parse(callArgs[1].body);
-      expect(body.code).toBe(codeToRun);
-      expect(body.stdin).toBe('test input');
-      expect(body.random_seed).toBe(42);
-      expect(body.attached_files).toEqual(attached_files);
+      // Check that executeStandaloneCode was called with correct params
+      expect(executeStandaloneCode).toHaveBeenCalledWith(
+        codeToRun,
+        'python',
+        {
+          stdin: 'test input',
+          random_seed: 42,
+          attached_files: attached_files,
+        }
+      );
     });
 
     it('should show running state during API execution', async () => {
+      const { executeStandaloneCode } = require('@/lib/api/execute');
       const mockOnChange = jest.fn();
 
       let resolvePromise: any;
@@ -283,7 +278,7 @@ describe('CodeEditor Component', () => {
         resolvePromise = resolve;
       });
 
-      (global.fetch as jest.Mock).mockReturnValueOnce(promise);
+      executeStandaloneCode.mockReturnValueOnce(promise);
 
       render(
         <CodeEditor
@@ -303,13 +298,10 @@ describe('CodeEditor Component', () => {
 
       // Resolve the promise
       resolvePromise({
-        ok: true,
-        json: async () => ({
-          success: true,
-          output: 'Done\n',
-          error: '',
-          execution_time: 100,
-        }),
+        success: true,
+        output: 'Done\n',
+        error: '',
+        execution_time: 100,
       });
 
       // Should show results

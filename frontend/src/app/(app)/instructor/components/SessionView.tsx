@@ -14,7 +14,7 @@ import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem, ExecutionSettings } from '@/types/problem';
-import { apiPost } from '@/lib/api-client';
+import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
 interface SessionContext {
@@ -103,7 +103,7 @@ export function SessionView({
     if (!sessionProblem?.solution || !onClearPublicView) return;
 
     try {
-      await apiPost(`/sessions/${session_id}/feature`, { code: sessionProblem.solution });
+      await featureCode(session_id, sessionProblem.solution);
     } catch (error) {
       console.error('Failed to show solution:', error);
     }

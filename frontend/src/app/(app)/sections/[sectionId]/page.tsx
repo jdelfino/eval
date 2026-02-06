@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Session } from '@/types/api';
-import { apiFetch } from '@/lib/api-client';
+import { listMySections, getActiveSessions } from '@/lib/api/sections';
 import { BackButton } from '@/components/ui/BackButton';
 
 interface SectionDetail {
@@ -45,24 +45,31 @@ export default function SectionDetailPage() {
       setError(null);
 
       // Get section details
-      const sectionsResponse = await apiFetch('/sections/my');
-      const sectionsData = await sectionsResponse.json();
-      const sectionDetail = sectionsData.sections.find((s: any) => s.id === section_id);
-      
-      if (!sectionDetail) {
+      const sectionsData = await listMySections();
+      const mySectionInfo = sectionsData.find((s) => s.section.id === section_id);
+
+      if (!mySectionInfo) {
         setError('Section not found');
         return;
       }
-      
+
+      // Map MySectionInfo to SectionDetail format
+      const sectionDetail: SectionDetail = {
+        id: mySectionInfo.section.id,
+        name: mySectionInfo.section.name,
+        className: mySectionInfo.class_name,
+        classDescription: '', // Not provided by MySectionInfo
+        semester: mySectionInfo.section.semester ?? undefined,
+        role: user!.role as 'instructor' | 'student',
+      };
       setSection(sectionDetail);
 
       // Get all sessions for this section
-      const sessionsResponse = await apiFetch(`/sections/${section_id}/sessions`);
-      const sessionsData = await sessionsResponse.json();
-      
+      const sessionsData = await getActiveSessions(section_id);
+
       // Separate active and past sessions
-      const active = sessionsData.sessions.filter((s: Session) => s.status === 'active');
-      const past = sessionsData.sessions.filter((s: Session) => s.status !== 'active');
+      const active = sessionsData.filter((s: Session) => s.status === 'active');
+      const past = sessionsData.filter((s: Session) => s.status !== 'active');
       
       setActiveSessions(active);
       setPastSessions(past);

@@ -11,7 +11,7 @@ import { useState, useCallback } from 'react';
 import {
   createSession as apiCreateSession,
   endSession as apiEndSession,
-  updateProblem as apiUpdateProblem,
+  updateSessionProblem as apiUpdateSessionProblem,
 } from '@/lib/api/sessions';
 import type { Session } from '@/types/api';
 
@@ -78,7 +78,7 @@ export function useSessionOperations() {
       setError(null);
 
       try {
-        await apiUpdateProblem(session_id, problem, execution_settings);
+        await apiUpdateSessionProblem(session_id, problem, execution_settings);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to update problem';
         setError(errorMessage);

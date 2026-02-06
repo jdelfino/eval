@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { apiPost } from '@/lib/api-client';
+import { createClass } from '@/lib/api/classes';
 
 interface CreateClassModalProps {
   onClose: () => void;
@@ -39,7 +39,7 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
     setLoading(true);
 
     try {
-      await apiPost('/classes', { name: trimmedName, description: trimmedDesc });
+      await createClass(trimmedName, trimmedDesc || undefined);
 
       // Success
       setName('');

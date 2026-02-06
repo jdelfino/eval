@@ -9,7 +9,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
-import { apiFetch, apiPost } from '@/lib/api-client';
+import { getClassSections } from '@/lib/api/sections';
+import { createSession } from '@/lib/api/sessions';
 
 interface SectionInfo {
   id: string;
@@ -48,10 +49,8 @@ export default function CreateSessionFromProblemModal({
   const loadSections = async (targetClassId: string) => {
     try {
       setLoadingSections(true);
-      const response = await apiFetch(`/classes/${targetClassId}/sections`);
-      const data = await response.json();
-      const loadedSections: SectionInfo[] = data.sections || [];
-      setSections(loadedSections);
+      const loadedSections = await getClassSections(targetClassId);
+      setSections(loadedSections as SectionInfo[]);
 
       // Pre-select last-used section if it matches this class
       const lastUsed = getLastUsedSection();
@@ -81,12 +80,11 @@ export default function CreateSessionFromProblemModal({
       setLoading(true);
       setError(null);
 
-      const { session } = await apiPost<{ session: { id: string; join_code: string } }>('/sessions', {
-        section_id: selectedSectionId,
-        problem_id: problem_id,
-      });
+      const session = await createSession(selectedSectionId, problem_id);
       setLastUsedSection(selectedSectionId, class_id);
-      onSuccess(session.id, session.join_code);
+      // Session type doesn't have join_code directly, get it from section
+      const selectedSection = sections.find(s => s.id === selectedSectionId);
+      onSuccess(session.id, selectedSection?.join_code || '');
     } catch (err) {
       console.error('Error creating session:', err);
       setError(err instanceof Error ? err.message : 'Failed to create session');

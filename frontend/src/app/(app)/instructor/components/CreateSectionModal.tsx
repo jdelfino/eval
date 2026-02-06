@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { apiPost } from '@/lib/api-client';
+import { createSection } from '@/lib/api/classes';
 
 interface CreateSectionModalProps {
   class_id: string;
@@ -44,17 +44,12 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
     setLoading(true);
 
     try {
-      const body: any = { 
-        name: trimmedName, 
-        schedule: trimmedSchedule,
-        location: trimmedLocation,
-      };
-      
-      if (capacityNum !== undefined) {
-        body.capacity = capacityNum;
-      }
-
-      await apiPost(`/classes/${class_id}/sections`, body);
+      await createSection(class_id, {
+        name: trimmedName,
+        schedule: trimmedSchedule || undefined,
+        location: trimmedLocation || undefined,
+        capacity: capacityNum,
+      });
 
       // Success
       setName('');

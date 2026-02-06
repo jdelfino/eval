@@ -7,6 +7,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SessionsList from '../SessionsList';
+import * as sessionsApi from '@/lib/api/sessions';
 
 // Mock useRouter
 const mockPush = jest.fn();
@@ -16,23 +17,21 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock the sessions API module
+jest.mock('@/lib/api/sessions', () => ({
+  listSessionHistoryWithFilters: jest.fn(),
+}));
 
 describe('SessionsList', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ sessions: [] }),
-    });
+    (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue([]);
   });
 
   describe('Loading state', () => {
     it('should show loading state initially', () => {
       // Use a promise that never resolves to keep loading state
-      mockFetch.mockReturnValue(new Promise(() => {}));
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockReturnValue(new Promise(() => {}));
 
       render(<SessionsList />);
 
@@ -42,10 +41,7 @@ describe('SessionsList', () => {
 
   describe('Empty state', () => {
     it('should show empty state when no sessions exist', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue([]);
 
       render(<SessionsList />);
 
@@ -57,10 +53,7 @@ describe('SessionsList', () => {
     });
 
     it('should show filter hint in empty state when filters are active', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue([]);
 
       render(<SessionsList />);
 
@@ -78,10 +71,7 @@ describe('SessionsList', () => {
     });
 
     it('should show filter hint when search query is present', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue([]);
 
       render(<SessionsList />);
 
@@ -90,7 +80,7 @@ describe('SessionsList', () => {
       });
 
       // Enter search query
-      const searchInput = screen.getByPlaceholderText('Search by section or code...');
+      const searchInput = screen.getByPlaceholderText('Search by section...');
       fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
 
       await waitFor(() => {
@@ -101,9 +91,9 @@ describe('SessionsList', () => {
 
   describe('Error state', () => {
     it('should show error state when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockRejectedValue(
+        new Error('Failed to load sessions')
+      );
 
       render(<SessionsList />);
 
@@ -115,12 +105,9 @@ describe('SessionsList', () => {
     });
 
     it('should retry fetch when Retry button is clicked', async () => {
-      mockFetch
-        .mockResolvedValueOnce({ ok: false })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ sessions: [] }),
-        });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock)
+        .mockRejectedValueOnce(new Error('Failed to load sessions'))
+        .mockResolvedValueOnce([]);
 
       render(<SessionsList />);
 
@@ -134,7 +121,7 @@ describe('SessionsList', () => {
         expect(screen.getByText('No sessions found')).toBeInTheDocument();
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(sessionsApi.listSessionHistoryWithFilters).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -142,36 +129,38 @@ describe('SessionsList', () => {
     const mockSessions = [
       {
         id: 'session-1',
-        join_code: 'ABC123',
-        problem_title: 'Hello World',
-        created_at: new Date().toISOString(),
-        last_activity: new Date().toISOString(),
-        creator_id: 'instructor-1',
-        participant_count: 5,
-        status: 'active' as const,
+        namespace_id: 'namespace-1',
         section_id: 'section-1',
         section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'instructor-1',
+        participants: ['student-1', 'student-2', 'student-3', 'student-4', 'student-5'],
+        status: 'active' as const,
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
+        ended_at: null,
       },
       {
         id: 'session-2',
-        join_code: 'XYZ789',
-        problem_title: 'Two Sum',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        last_activity: new Date(Date.now() - 3600000).toISOString(),
-        creator_id: 'instructor-1',
-        participant_count: 10,
-        status: 'completed' as const,
-        ended_at: new Date().toISOString(),
+        namespace_id: 'namespace-1',
         section_id: 'section-1',
         section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'instructor-1',
+        participants: ['student-1', 'student-2', 'student-3', 'student-4', 'student-5', 'student-6', 'student-7', 'student-8', 'student-9', 'student-10'],
+        status: 'completed' as const,
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        last_activity: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date().toISOString(),
       },
     ];
 
     it('should display active sessions in Active Now section', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue(mockSessions);
 
       render(<SessionsList />);
 
@@ -179,15 +168,13 @@ describe('SessionsList', () => {
         expect(screen.getByText('Active Now (1)')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('ABC123')).toBeInTheDocument();
+      // Both sessions have section_name 'Section A', so use getAllByText
+      expect(screen.getAllByText('Section A').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByRole('button', { name: 'Rejoin' })).toBeInTheDocument();
     });
 
     it('should display completed sessions in Past Sessions section', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue(mockSessions);
 
       render(<SessionsList />);
 
@@ -199,10 +186,7 @@ describe('SessionsList', () => {
     });
 
     it('should show session count summary', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      (sessionsApi.listSessionHistoryWithFilters as jest.Mock).mockResolvedValue(mockSessions);
 
       render(<SessionsList />);
 

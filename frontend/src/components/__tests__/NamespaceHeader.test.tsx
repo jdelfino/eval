@@ -5,13 +5,16 @@ import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import NamespaceHeader from '../NamespaceHeader';
 import { useAuth } from '@/contexts/AuthContext';
+import * as systemApi from '@/lib/api/system';
 
 // Mock the AuthContext
 jest.mock('@/contexts/AuthContext');
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
-// Mock fetch
-global.fetch = jest.fn();
+// Mock the system API module
+jest.mock('@/lib/api/system');
+const mockGetSystemNamespace = systemApi.getSystemNamespace as jest.MockedFunction<typeof systemApi.getSystemNamespace>;
+const mockListSystemNamespaces = systemApi.listSystemNamespaces as jest.MockedFunction<typeof systemApi.listSystemNamespaces>;
 
 function mockAuthUser(overrides: Record<string, unknown> = {}) {
   return {
@@ -38,7 +41,6 @@ describe('NamespaceHeader', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    (global.fetch as jest.Mock).mockClear();
   });
 
   describe('For non-system-admin users', () => {
@@ -51,16 +53,10 @@ describe('NamespaceHeader', () => {
         display_name: 'Instructor One',
       }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespace: {
-            id: 'stanford',
-            displayName: 'Stanford University',
-            active: true,
-          },
-        }),
+      mockGetSystemNamespace.mockResolvedValueOnce({
+        id: 'stanford',
+        displayName: 'Stanford University',
+        active: true,
       });
 
       await act(async () => {
@@ -81,16 +77,10 @@ describe('NamespaceHeader', () => {
         display_name: 'Admin One',
       }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespace: {
-            id: 'mit',
-            displayName: 'MIT',
-            active: true,
-          },
-        }),
+      mockGetSystemNamespace.mockResolvedValueOnce({
+        id: 'mit',
+        displayName: 'MIT',
+        active: true,
       });
 
       await act(async () => {
@@ -111,16 +101,10 @@ describe('NamespaceHeader', () => {
         display_name: 'Student One',
       }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespace: {
-            id: 'stanford',
-            displayName: 'Stanford University',
-            active: true,
-          },
-        }),
+      mockGetSystemNamespace.mockResolvedValueOnce({
+        id: 'stanford',
+        displayName: 'Stanford University',
+        active: true,
       });
 
       await act(async () => {
@@ -137,10 +121,8 @@ describe('NamespaceHeader', () => {
         namespace_id: 'testns',
       }));
 
-      // Mock fetch to fail
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-      });
+      // Mock API to fail
+      mockGetSystemNamespace.mockRejectedValueOnce(new Error('API error'));
 
       await act(async () => {
         render(<NamespaceHeader />);
@@ -154,16 +136,10 @@ describe('NamespaceHeader', () => {
     it('does not show dropdown for non-system-admin users', async () => {
       mockUseAuth.mockReturnValue(mockAuthUser());
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespace: {
-            id: 'stanford',
-            displayName: 'Stanford University',
-            active: true,
-          },
-        }),
+      mockGetSystemNamespace.mockResolvedValueOnce({
+        id: 'stanford',
+        displayName: 'Stanford University',
+        active: true,
       });
 
       await act(async () => {
@@ -187,32 +163,26 @@ describe('NamespaceHeader', () => {
         display_name: 'System Admin',
       }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespaces: [
-            {
-              id: 'default',
-              displayName: 'Default',
-              active: true,
-              userCount: 5,
-            },
-            {
-              id: 'stanford',
-              displayName: 'Stanford University',
-              active: true,
-              userCount: 10,
-            },
-            {
-              id: 'mit',
-              displayName: 'MIT',
-              active: true,
-              userCount: 8,
-            },
-          ],
-        }),
-      });
+      mockListSystemNamespaces.mockResolvedValueOnce([
+        {
+          id: 'default',
+          displayName: 'Default',
+          active: true,
+          userCount: 5,
+        },
+        {
+          id: 'stanford',
+          displayName: 'Stanford University',
+          active: true,
+          userCount: 10,
+        },
+        {
+          id: 'mit',
+          displayName: 'MIT',
+          active: true,
+          userCount: 8,
+        },
+      ]);
 
       await act(async () => {
         render(<NamespaceHeader />);
@@ -241,26 +211,20 @@ describe('NamespaceHeader', () => {
         display_name: 'System Admin',
       }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          namespaces: [
-            {
-              id: 'default',
-              displayName: 'Default',
-              active: true,
-              userCount: 5,
-            },
-            {
-              id: 'stanford',
-              displayName: 'Stanford University',
-              active: true,
-              userCount: 10,
-            },
-          ],
-        }),
-      });
+      mockListSystemNamespaces.mockResolvedValueOnce([
+        {
+          id: 'default',
+          displayName: 'Default',
+          active: true,
+          userCount: 5,
+        },
+        {
+          id: 'stanford',
+          displayName: 'Stanford University',
+          active: true,
+          userCount: 10,
+        },
+      ]);
 
       await act(async () => {
         render(<NamespaceHeader />);
@@ -302,8 +266,8 @@ describe('NamespaceHeader', () => {
         namespace_id: 'stanford',
       }));
 
-      // Mock fetch to throw error
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+      // Mock API to throw error
+      mockGetSystemNamespace.mockRejectedValueOnce(new Error('Network error'));
 
       await act(async () => {
         render(<NamespaceHeader />);

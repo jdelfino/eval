@@ -117,6 +117,51 @@ describe('api-client', () => {
     });
   });
 
+  describe('apiPut', () => {
+    it('makes PUT request with JSON body', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1', role: 'admin' }),
+      });
+
+      const { apiPut } = require('../api-client');
+      const result = await apiPut('/v1/users/1/role', { role: 'admin' });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/v1/users/1/role',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer token-abc',
+          }),
+          body: JSON.stringify({ role: 'admin' }),
+        })
+      );
+      expect(result).toEqual({ id: '1', role: 'admin' });
+    });
+
+    it('makes PUT request without body when body is undefined', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      const { apiPut } = require('../api-client');
+      await apiPut('/v1/items/1/activate');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/v1/items/1/activate',
+        expect.objectContaining({
+          method: 'PUT',
+          body: undefined,
+        })
+      );
+    });
+  });
+
   describe('apiDelete', () => {
     it('makes DELETE request', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
@@ -299,6 +344,22 @@ describe('api-client', () => {
       try {
         const { apiDelete } = require('../api-client');
         const err: any = await apiDelete('/v1/items/1').catch((e: any) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err.message).toBe('No authenticated user');
+        expect(global.fetch).not.toHaveBeenCalled();
+      } finally {
+        firebaseMock.firebaseAuth.currentUser = original;
+      }
+    });
+
+    it('apiPut throws when currentUser is null', async () => {
+      const firebaseMock = require('@/lib/firebase');
+      const original = firebaseMock.firebaseAuth.currentUser;
+      firebaseMock.firebaseAuth.currentUser = null;
+
+      try {
+        const { apiPut } = require('../api-client');
+        const err: any = await apiPut('/v1/items/1', { name: 'test' }).catch((e: any) => e);
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toBe('No authenticated user');
         expect(global.fetch).not.toHaveBeenCalled();

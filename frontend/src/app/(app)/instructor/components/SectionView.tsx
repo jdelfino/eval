@@ -1,32 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { apiFetch, apiDelete } from '@/lib/api-client';
+import { getClassSections, deleteSection, getActiveSessions } from '@/lib/api/sections';
 import CreateSectionModal from './CreateSectionModal';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { BackButton } from '@/components/ui/BackButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-interface SectionInfo {
-  id: string;
-  name: string;
-  join_code: string;
-  schedule?: string;
-  location?: string;
-  studentCount: number;
-  sessionCount: number;
-  activeSessionCount: number;
-}
-
-interface SessionInfo {
-  id: string;
-  join_code: string;
-  problemText: string;
-  studentCount: number;
-  created_at: string;
-  last_activity: string;
-  status: 'active' | 'completed';
-}
+import type { Section, Session } from '@/types/api';
 
 interface SectionViewProps {
   class_id: string;
@@ -43,9 +23,9 @@ export default function SectionView({
   onCreateSession,
   onJoinSession
 }: SectionViewProps) {
-  const [sections, setSections] = useState<SectionInfo[]>([]);
-  const [selectedSection, setSelectedSection] = useState<SectionInfo | null>(null);
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [selectedSection, setSelectedSection] = useState<Section | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +47,8 @@ export default function SectionView({
   const loadSections = async () => {
     try {
       setLoading(true);
-      const response = await apiFetch(`/classes/${class_id}/sections`);
-      const data = await response.json();
-      setSections(data.sections || []);
+      const sections = await getClassSections(class_id);
+      setSections(sections || []);
       setError(null);
     } catch (err) {
       console.error('Error loading sections:', err);
@@ -90,7 +69,7 @@ export default function SectionView({
     setShowDeleteConfirm(false);
     setDeletingId(sectionToDelete.id);
     try {
-      await apiDelete(`/sections/${sectionToDelete.id}`);
+      await deleteSection(sectionToDelete.id);
 
       // If deleted section was selected, clear selection
       if (selectedSection?.id === sectionToDelete.id) {
@@ -111,9 +90,8 @@ export default function SectionView({
   const loadSessions = async (section_id: string) => {
     try {
       setLoadingSessions(true);
-      const response = await apiFetch(`/sections/${section_id}/sessions`);
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      const sessions = await getActiveSessions(section_id);
+      setSessions(sessions || []);
     } catch (err) {
       console.error('Error loading sessions:', err);
       setSessions([]);
@@ -211,16 +189,6 @@ export default function SectionView({
                         </svg>
                         {formatJoinCodeForDisplay(section.join_code)}
                       </div>
-                      {section.schedule && (
-                        <p className="text-sm text-gray-600 mt-2">
-                          {section.schedule}
-                        </p>
-                      )}
-                      {section.location && (
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {section.location}
-                        </p>
-                      )}
                     </div>
                     <svg
                       className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0 ml-2"
@@ -230,20 +198,6 @@ export default function SectionView({
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                  </div>
-                  <div className="flex items-center gap-6 text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100">
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                      <span>{section.studentCount} students</span>
-                    </div>
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span>{section.activeSessionCount} active</span>
-                    </div>
                   </div>
                 </button>
                 <button
@@ -316,11 +270,6 @@ export default function SectionView({
               {formatJoinCodeForDisplay(selectedSection.join_code)}
             </span>
           </div>
-          <span>•</span>
-          <span>
-            {selectedSection.schedule && `${selectedSection.schedule} • `}
-            {selectedSection.studentCount} students enrolled
-          </span>
         </div>
       </div>
 
@@ -371,21 +320,13 @@ export default function SectionView({
               className="p-6 bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 text-left"
             >
               <div className="mb-4">
-                <div className="text-3xl font-bold text-blue-600 mb-2 font-mono tracking-wider">
-                  {session.join_code}
-                </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
-                  <span>{session.studentCount} {session.studentCount === 1 ? 'student' : 'students'}</span>
+                  <span>{session.participants.length} {session.participants.length === 1 ? 'student' : 'students'}</span>
                 </div>
               </div>
-              {session.problemText && (
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                  {session.problemText}
-                </p>
-              )}
               <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
                 <span className={`px-2 py-1 rounded-full ${
                   session.status === 'active'

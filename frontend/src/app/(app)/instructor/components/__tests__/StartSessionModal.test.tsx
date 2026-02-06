@@ -5,6 +5,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StartSessionModal from '../StartSessionModal';
+import * as problemsApi from '@/lib/api/problems';
+import * as sessionsApi from '@/lib/api/sessions';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -14,6 +16,10 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
+// Mock API modules
+jest.mock('@/lib/api/problems');
+jest.mock('@/lib/api/sessions');
+
 describe('StartSessionModal', () => {
   const mockOnClose = jest.fn();
   const mockOnSessionCreated = jest.fn();
@@ -21,14 +27,13 @@ describe('StartSessionModal', () => {
   const section_name = 'Section A';
 
   const mockProblems = [
-    { id: 'problem-1', title: 'FizzBuzz', authorName: 'Instructor' },
-    { id: 'problem-2', title: 'Two Sum', authorName: 'Instructor' },
-    { id: 'problem-3', title: 'Binary Search', authorName: 'Instructor' },
+    { id: 'problem-1', title: 'FizzBuzz', description: null, author_id: 'u-1', class_id: 'c-1', tags: [], created_at: '2025-01-01', test_case_count: null },
+    { id: 'problem-2', title: 'Two Sum', description: null, author_id: 'u-1', class_id: 'c-1', tags: [], created_at: '2025-01-01', test_case_count: null },
+    { id: 'problem-3', title: 'Binary Search', description: null, author_id: 'u-1', class_id: 'c-1', tags: [], created_at: '2025-01-01', test_case_count: null },
   ];
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn();
   });
 
   afterEach(() => {
@@ -37,10 +42,7 @@ describe('StartSessionModal', () => {
 
   describe('Rendering', () => {
     it('renders the modal with title and section name', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -56,7 +58,7 @@ describe('StartSessionModal', () => {
     });
 
     it('shows loading state while fetching problems', () => {
-      (global.fetch as jest.Mock).mockImplementation(
+      jest.spyOn(problemsApi, 'listProblems').mockImplementationOnce(
         () => new Promise(() => {}) // Never resolves
       );
 
@@ -73,10 +75,7 @@ describe('StartSessionModal', () => {
     });
 
     it('displays problem list after loading', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -95,10 +94,7 @@ describe('StartSessionModal', () => {
     });
 
     it('shows Create blank session option', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -115,10 +111,7 @@ describe('StartSessionModal', () => {
     });
 
     it('shows Cancel and Start Session buttons', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -136,10 +129,7 @@ describe('StartSessionModal', () => {
 
   describe('Modal interactions', () => {
     it('closes modal when cancel button is clicked', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -156,10 +146,7 @@ describe('StartSessionModal', () => {
     });
 
     it('closes modal when clicking outside the modal content', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -177,10 +164,7 @@ describe('StartSessionModal', () => {
     });
 
     it('does not close modal when clicking inside the modal content', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -198,10 +182,7 @@ describe('StartSessionModal', () => {
     });
 
     it('closes modal when X button is clicked', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -222,10 +203,7 @@ describe('StartSessionModal', () => {
 
   describe('Problem selection', () => {
     it('allows selecting a problem from the list', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -249,10 +227,7 @@ describe('StartSessionModal', () => {
     });
 
     it('allows selecting blank session option', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -276,17 +251,22 @@ describe('StartSessionModal', () => {
 
   describe('Session creation', () => {
     it('creates session with selected problem', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            session: { id: 'session-123', join_code: 'ABC123' },
-          }),
-        });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockResolvedValueOnce({
+        id: 'session-123',
+        namespace_id: 'ns-1',
+        section_id: section_id,
+        section_name: section_name,
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: [],
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        last_activity: '2024-01-01T00:00:00Z',
+        ended_at: null,
+      });
 
       render(
         <StartSessionModal
@@ -308,14 +288,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            section_id: section_id,
-            problem_id: 'problem-1',
-          }),
-        });
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1');
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-123');
@@ -323,17 +296,22 @@ describe('StartSessionModal', () => {
     });
 
     it('creates blank session when no problem selected', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            session: { id: 'session-456', join_code: 'XYZ789' },
-          }),
-        });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockResolvedValueOnce({
+        id: 'session-456',
+        namespace_id: 'ns-1',
+        section_id: section_id,
+        section_name: section_name,
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: [],
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        last_activity: '2024-01-01T00:00:00Z',
+        ended_at: null,
+      });
 
       render(
         <StartSessionModal
@@ -355,13 +333,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            section_id: section_id,
-          }),
-        });
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, undefined);
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-456');
@@ -369,26 +341,31 @@ describe('StartSessionModal', () => {
     });
 
     it('shows loading state while creating session', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) =>
-              setTimeout(
-                () =>
-                  resolve({
-                    ok: true,
-                    json: async () => ({
-                      session: { id: 'session-123', join_code: 'ABC123' },
-                    }),
-                  }),
-                100
-              )
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  id: 'session-123',
+                  namespace_id: 'ns-1',
+                  section_id: section_id,
+                  section_name: section_name,
+                  problem: null,
+                  featured_student_id: null,
+                  featured_code: null,
+                  creator_id: 'user-1',
+                  participants: [],
+                  status: 'active',
+                  created_at: '2024-01-01T00:00:00Z',
+                  last_activity: '2024-01-01T00:00:00Z',
+                  ended_at: null,
+                }),
+              100
             )
-        );
+          )
+      );
 
       render(
         <StartSessionModal
@@ -416,26 +393,31 @@ describe('StartSessionModal', () => {
     });
 
     it('disables buttons during session creation', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) =>
-              setTimeout(
-                () =>
-                  resolve({
-                    ok: true,
-                    json: async () => ({
-                      session: { id: 'session-123', join_code: 'ABC123' },
-                    }),
-                  }),
-                100
-              )
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  id: 'session-123',
+                  namespace_id: 'ns-1',
+                  section_id: section_id,
+                  section_name: section_name,
+                  problem: null,
+                  featured_student_id: null,
+                  featured_code: null,
+                  creator_id: 'user-1',
+                  participants: [],
+                  status: 'active',
+                  created_at: '2024-01-01T00:00:00Z',
+                  last_activity: '2024-01-01T00:00:00Z',
+                  ended_at: null,
+                }),
+              100
             )
-        );
+          )
+      );
 
       render(
         <StartSessionModal
@@ -463,26 +445,31 @@ describe('StartSessionModal', () => {
     });
 
     it('does not close modal during session creation', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) =>
-              setTimeout(
-                () =>
-                  resolve({
-                    ok: true,
-                    json: async () => ({
-                      session: { id: 'session-123', join_code: 'ABC123' },
-                    }),
-                  }),
-                100
-              )
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  id: 'session-123',
+                  namespace_id: 'ns-1',
+                  section_id: section_id,
+                  section_name: section_name,
+                  problem: null,
+                  featured_student_id: null,
+                  featured_code: null,
+                  creator_id: 'user-1',
+                  participants: [],
+                  status: 'active',
+                  created_at: '2024-01-01T00:00:00Z',
+                  last_activity: '2024-01-01T00:00:00Z',
+                  ended_at: null,
+                }),
+              100
             )
-        );
+          )
+      );
 
       render(
         <StartSessionModal
@@ -513,10 +500,9 @@ describe('StartSessionModal', () => {
 
   describe('Error handling', () => {
     it('shows error when problems fail to load', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'Failed to load problems' }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockRejectedValueOnce(
+        new Error('Failed to load problems')
+      );
 
       render(
         <StartSessionModal
@@ -533,15 +519,10 @@ describe('StartSessionModal', () => {
     });
 
     it('shows error when session creation fails', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: 'Failed to create session' }),
-        });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockRejectedValueOnce(
+        new Error('Failed to create session')
+      );
 
       render(
         <StartSessionModal
@@ -567,12 +548,10 @@ describe('StartSessionModal', () => {
     });
 
     it('shows network error message', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ problems: mockProblems }),
-        })
-        .mockRejectedValueOnce(new Error('Network error'));
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sessionsApi, 'createSession').mockRejectedValueOnce(
+        new Error('Network error')
+      );
 
       render(
         <StartSessionModal
@@ -598,10 +577,7 @@ describe('StartSessionModal', () => {
     });
 
     it('requires a selection before starting session', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: mockProblems }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
 
       render(
         <StartSessionModal
@@ -624,10 +600,7 @@ describe('StartSessionModal', () => {
 
   describe('Empty state', () => {
     it('shows message when no problems available', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ problems: [] }),
-      });
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce([]);
 
       render(
         <StartSessionModal

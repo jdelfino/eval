@@ -2,23 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api-client';
+import { listSessionHistoryWithFilters } from '@/lib/api/sessions';
+import type { Session } from '@/types/api';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-interface SessionData {
-  id: string;
-  join_code: string;
-  problem_title: string;
-  problem_description?: string;
-  created_at: string;
-  last_activity: string;
-  creator_id: string;
-  participant_count: number;
-  status: 'active' | 'completed';
-  ended_at?: string;
-  section_id: string;
-  section_name: string;
-}
 
 interface SessionsListProps {
   onRejoinSession?: (session_id: string) => void;
@@ -29,7 +15,7 @@ interface SessionsListProps {
 
 export default function SessionsList({ onRejoinSession, onEndSession, onViewDetails, refreshTrigger }: SessionsListProps) {
   const router = useRouter();
-  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -44,18 +30,24 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
     try {
       setLoading(true);
       setError(null);
-      
-      const params = new URLSearchParams();
+
+      // Note: The typed API currently only supports sectionId and limit filters.
+      // statusFilter and searchQuery are applied client-side for now.
+      const sessions = await listSessionHistoryWithFilters();
+
+      // Apply client-side filters
+      let filteredSessions = sessions;
       if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
+        filteredSessions = filteredSessions.filter(s => s.status === statusFilter);
       }
       if (searchQuery) {
-        params.append('search', searchQuery);
+        const query = searchQuery.toLowerCase();
+        filteredSessions = filteredSessions.filter(s =>
+          s.section_name?.toLowerCase().includes(query)
+        );
       }
 
-      const response = await apiFetch(`/sessions/history?${params.toString()}`);
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      setSessions(filteredSessions);
     } catch (err) {
       console.error('Error fetching sessions:', err);
       setError(err instanceof Error ? err.message : 'Failed to load sessions');
@@ -194,7 +186,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
             
             <input
               type="text"
-              placeholder="Search by section or code..."
+              placeholder="Search by section..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 sm:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -232,17 +224,10 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
                     <div className="flex-1">
                       <h4 className="text-lg font-semibold text-gray-900">{session.section_name}</h4>
                       <p className="text-sm text-gray-600 mt-1">
-                        Join Code: <span className="font-mono font-bold text-blue-600">{session.join_code}</span>
-                        {' • '}
-                        {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}
+                        {session.participants.length} {session.participants.length === 1 ? 'student' : 'students'}
                         {' • '}
                         {getTimeAgo(session.created_at)}
                       </p>
-                      {session.problem_title && session.problem_title !== 'Untitled Session' && (
-                        <p className="text-sm text-gray-700 mt-2">
-                          <span className="font-medium">Problem:</span> {session.problem_title}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -278,17 +263,12 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
                 <div className="flex-1">
                   <h4 className="text-lg font-semibold text-gray-900">{session.section_name}</h4>
                   <p className="text-sm text-gray-600 mt-1">
-                    {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}
+                    {session.participants.length} {session.participants.length === 1 ? 'student' : 'students'}
                     {' • '}
                     {formatDate(session.created_at)}
                     {' • '}
-                    Duration: {formatDuration(session.created_at, session.ended_at)}
+                    Duration: {formatDuration(session.created_at, session.ended_at || undefined)}
                   </p>
-                  {session.problem_title && session.problem_title !== 'Untitled Session' && (
-                    <p className="text-sm text-gray-700 mt-2">
-                      <span className="font-medium">Problem:</span> {session.problem_title}
-                    </p>
-                  )}
                 </div>
                 
                 <div className="flex sm:flex-col sm:justify-center">

@@ -125,7 +125,7 @@ describe('useClasses', () => {
     await act(async () => { sec = await result.current.createSection('c1', 'Section A', 'Fall 2024'); });
 
     expect(sec).toEqual(fakeSection);
-    expect(mockCreateSection).toHaveBeenCalledWith('c1', 'Section A', 'Fall 2024');
+    expect(mockCreateSection).toHaveBeenCalledWith('c1', { name: 'Section A', semester: 'Fall 2024' });
   });
 
   it('updateSection patches section', async () => {

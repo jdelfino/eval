@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
-import { apiFetch } from '@/lib/api-client';
+import { analyzeSession } from '@/lib/api/sessions';
 
 export interface AnalysisGroup {
   id: string;
@@ -49,11 +49,7 @@ export default function useAnalysisGroups() {
     setError(null);
 
     try {
-      const response = await apiFetch(`/sessions/${session_id}/analyze`, {
-        method: 'POST',
-      });
-
-      const data = await response.json();
+      const data = await analyzeSession(session_id);
 
       setScript(data.script);
       setDismissedGroups(new Set());

@@ -16,8 +16,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock API modules
+jest.mock('@/lib/api/classes', () => ({
+  listClasses: jest.fn(),
+}));
+
+jest.mock('@/lib/api/problems', () => ({
+  getProblem: jest.fn(),
+  createProblem: jest.fn(),
+  updateProblem: jest.fn(),
+}));
 
 // Mock useDebugger hook
 jest.mock('@/hooks/useDebugger', () => ({
@@ -93,28 +101,11 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
 });
 
 describe('ProblemCreator Component', () => {
-  // Helper to create a fetch mock that handles classes API and delegates to a problem handler
-  const createFetchMock = (problemHandler?: (url: string, opts?: any) => Promise<any>) => {
-    return jest.fn((url: string, opts?: any) => {
-      if (typeof url === 'string' && url.includes('/classes')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ classes: [] }),
-        });
-      }
-      if (problemHandler) {
-        return problemHandler(url, opts);
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ problem: { id: 'default' } }),
-      });
-    });
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock) = createFetchMock();
+    // Set default mock implementations
+    const { listClasses } = require('@/lib/api/classes');
+    listClasses.mockResolvedValue([]);
   });
 
   describe('Layout', () => {
@@ -145,11 +136,9 @@ describe('ProblemCreator Component', () => {
       // Button should be disabled when title is empty
       expect(submitButton).toBeDisabled();
 
-      // Only the classes fetch should have been called, no problem create
-      const problemCalls = (global.fetch as jest.Mock).mock.calls.filter(
-        (c: any[]) => typeof c[0] === 'string' && !c[0].includes('/classes')
-      );
-      expect(problemCalls).toHaveLength(0);
+      // Only the listClasses should have been called, no problem create
+      const { createProblem } = require('@/lib/api/problems');
+      expect(createProblem).not.toHaveBeenCalled();
     });
 
     it('should create new problem with all fields', async () => {
@@ -161,12 +150,8 @@ describe('ProblemCreator Component', () => {
         starter_code: 'def solution():\n    pass',
       };
 
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: mockProblem }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue(mockProblem);
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
@@ -185,11 +170,13 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/problems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('"title":"Test Problem"'),
-        });
+        expect(createProblem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Test Problem',
+            description: 'Test description',
+            starter_code: 'def solution():\n    pass',
+          })
+        );
       });
 
       await waitFor(() => {
@@ -198,12 +185,8 @@ describe('ProblemCreator Component', () => {
     });
 
     it('should display error when create fails', async () => {
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: false,
-          json: async () => ({ error: 'Creation failed' }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockRejectedValue(new Error('Creation failed'));
 
       render(<ProblemCreator />);
 
@@ -228,15 +211,8 @@ describe('ProblemCreator Component', () => {
     };
 
     it('should load existing problem data in edit mode', async () => {
-      (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: mockExistingProblem }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(mockExistingProblem);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
@@ -245,7 +221,7 @@ describe('ProblemCreator Component', () => {
 
       // Should fetch problem data
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/problems/problem-456');
+        expect(getProblem).toHaveBeenCalledWith('problem-456');
       });
 
       // Should populate form
@@ -260,15 +236,8 @@ describe('ProblemCreator Component', () => {
     });
 
     it('should display error when loading problem fails', async () => {
-      (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: false,
-            json: async () => ({ error: 'Not found' }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockRejectedValue(new Error('Not found'));
 
       render(<ProblemCreator problem_id="problem-456" />);
 
@@ -281,21 +250,9 @@ describe('ProblemCreator Component', () => {
       const onProblemCreated = jest.fn();
       const updatedProblem = { ...mockExistingProblem, title: 'Updated Problem' };
 
-      (global.fetch as jest.Mock) = createFetchMock((url, opts) => {
-        if (url.includes('/problems/') && opts?.method === 'PATCH') {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: updatedProblem }),
-          });
-        }
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: mockExistingProblem }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem, updateProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(mockExistingProblem);
+      updateProblem.mockResolvedValue(updatedProblem);
 
       render(<ProblemCreator problem_id="problem-456" onProblemCreated={onProblemCreated} />);
 
@@ -313,11 +270,12 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/problems/problem-456', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('"title":"Updated Problem"'),
-        });
+        expect(updateProblem).toHaveBeenCalledWith(
+          'problem-456',
+          expect.objectContaining({
+            title: 'Updated Problem',
+          })
+        );
       });
 
       await waitFor(() => {
@@ -326,23 +284,9 @@ describe('ProblemCreator Component', () => {
     });
 
     it('should handle update failure', async () => {
-      let patchCalled = false;
-      (global.fetch as jest.Mock) = createFetchMock((url, opts) => {
-        if (url.includes('/problems/') && opts?.method === 'PATCH') {
-          patchCalled = true;
-          return Promise.resolve({
-            ok: false,
-            json: async () => ({ error: 'Update failed' }),
-          });
-        }
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: mockExistingProblem }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem, updateProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(mockExistingProblem);
+      updateProblem.mockRejectedValue(new Error('Update failed'));
 
       render(<ProblemCreator problem_id="problem-456" />);
 
@@ -401,9 +345,8 @@ describe('ProblemCreator Component', () => {
     });
 
     it('should show loading state during submission', async () => {
-      (global.fetch as jest.Mock) = createFetchMock(
-        () => new Promise(() => {}) // Never resolves
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<ProblemCreator />);
 
@@ -436,12 +379,8 @@ describe('ProblemCreator Component', () => {
         title: 'Test Problem',
       };
 
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: mockProblem }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue(mockProblem);
 
       const { rerender } = render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
@@ -458,21 +397,13 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/problems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.any(String),
-        });
+        expect(createProblem).toHaveBeenCalled();
       });
 
       // Verify the call - stdin is empty so execution_settings should not be included
-      const problemCalls = (global.fetch as jest.Mock).mock.calls.filter(
-        (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
-      );
-      const callArgs = problemCalls[0];
-      const body = JSON.parse(callArgs[1].body);
+      const callArgs = createProblem.mock.calls[0][0];
       // No execution settings since we didn't set any values
-      expect(body.execution_settings).toBeUndefined();
+      expect(callArgs.execution_settings).toBeUndefined();
     });
 
     // Note: Attached files test removed because file attachment UI is now
@@ -493,15 +424,8 @@ describe('ProblemCreator Component', () => {
         },
       };
 
-      (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: problemWithExecSettings }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(problemWithExecSettings);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
@@ -516,12 +440,8 @@ describe('ProblemCreator Component', () => {
     it('should reset execution settings after successful create', async () => {
       const mockProblem = { id: 'problem-reset' };
 
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: mockProblem }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue(mockProblem);
 
       render(<ProblemCreator />);
 
@@ -538,7 +458,7 @@ describe('ProblemCreator Component', () => {
 
       // Wait for success
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
+        expect(createProblem).toHaveBeenCalled();
       });
 
       // After successful create, the form is reset
@@ -559,18 +479,10 @@ describe('ProblemCreator Component', () => {
     ];
 
     beforeEach(() => {
-      (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.includes('/classes')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ classes: mockClasses }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: { id: 'problem-new' } }),
-        });
-      });
+      const { listClasses } = require('@/lib/api/classes');
+      const { createProblem } = require('@/lib/api/problems');
+      listClasses.mockResolvedValue(mockClasses);
+      createProblem.mockResolvedValue({ id: 'problem-new' });
     });
 
     it('should render class selector dropdown', async () => {
@@ -588,6 +500,7 @@ describe('ProblemCreator Component', () => {
 
     it('should include class_id and tags in create request', async () => {
       const onProblemCreated = jest.fn();
+      const { createProblem } = require('@/lib/api/problems');
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
@@ -610,18 +523,18 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
+        expect(createProblem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            class_id: 'class-2',
+            tags: ['loops', 'arrays'],
+          })
         );
-        expect(calls.length).toBe(1);
-        const body = JSON.parse(calls[0][1].body);
-        expect(body.class_id).toBe('class-2');
-        expect(body.tags).toEqual(['loops', 'arrays']);
       });
     });
 
     it('should flush uncommitted tag input on submit', async () => {
       const onProblemCreated = jest.fn();
+      const { createProblem } = require('@/lib/api/problems');
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
@@ -640,12 +553,11 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
+        expect(createProblem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tags: ['functions'],
+          })
         );
-        expect(calls.length).toBe(1);
-        const body = JSON.parse(calls[0][1].body);
-        expect(body.tags).toEqual(['functions']);
       });
     });
 
@@ -736,13 +648,8 @@ describe('ProblemCreator Component', () => {
 
     it('should include solution in submit payload', async () => {
       const onProblemCreated = jest.fn();
-
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: { id: 'p-1' } }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
@@ -759,12 +666,11 @@ describe('ProblemCreator Component', () => {
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
-        const calls = (global.fetch as jest.Mock).mock.calls.filter(
-          (c: any[]) => c[1]?.method === 'POST' && c[0] === '/problems'
+        expect(createProblem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            solution: 'def solve(): return 42',
+          })
         );
-        expect(calls.length).toBe(1);
-        const body = JSON.parse(calls[0][1].body);
-        expect(body.solution).toBe('def solve(): return 42');
       });
     });
 
@@ -774,15 +680,8 @@ describe('ProblemCreator Component', () => {
         solution: 'def answer(): return 42',
       };
 
-      (global.fetch as jest.Mock) = createFetchMock((url) => {
-        if (url.includes('/problems/')) {
-          return Promise.resolve({
-            ok: true,
-            json: async () => ({ problem: problemWithSolution }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      });
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(problemWithSolution);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
@@ -796,12 +695,8 @@ describe('ProblemCreator Component', () => {
     });
 
     it('should reset solution after successful create', async () => {
-      (global.fetch as jest.Mock) = createFetchMock(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({ problem: { id: 'p-reset' } }),
-        })
-      );
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
 
