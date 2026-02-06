@@ -29,10 +29,34 @@ jest.mock('@/contexts/AuthContext', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+// Mock Firebase createUserWithEmailAndPassword
+const mockCreateUserWithEmailAndPassword = jest.fn();
+const mockGetIdToken = jest.fn();
+const mockFirebaseUser = {
+  getIdToken: mockGetIdToken,
+  uid: 'firebase-uid-123',
+  email: 'student@example.com',
+};
+
+jest.mock('firebase/auth', () => ({
+  createUserWithEmailAndPassword: (...args: unknown[]) => mockCreateUserWithEmailAndPassword(...args),
+  getAuth: jest.fn(),
+}));
+
+jest.mock('@/lib/firebase', () => ({
+  firebaseAuth: { currentUser: null },
+}));
+
 // Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
 jest.mock('@/lib/public-api-client', () => ({
   publicFetchRaw: (path: string, options?: RequestInit) =>
     global.fetch(path, options),
+}));
+
+// Mock api-client for authenticated requests
+const mockApiFetchRaw = jest.fn();
+jest.mock('@/lib/api-client', () => ({
+  apiFetchRaw: (...args: unknown[]) => mockApiFetchRaw(...args),
 }));
 
 describe('StudentRegistrationPage', () => {
@@ -43,6 +67,12 @@ describe('StudentRegistrationPage', () => {
     mockRefreshUser.mockClear();
     mockRefreshUser.mockResolvedValue(undefined);
     mockSearchParams.delete('code');
+    mockCreateUserWithEmailAndPassword.mockClear();
+    mockGetIdToken.mockClear();
+    mockApiFetchRaw.mockClear();
+    // Default: Firebase account creation succeeds
+    mockCreateUserWithEmailAndPassword.mockResolvedValue({ user: mockFirebaseUser });
+    mockGetIdToken.mockResolvedValue('mock-firebase-jwt-token');
   });
 
   describe('Initial State', () => {
@@ -291,7 +321,7 @@ describe('StudentRegistrationPage', () => {
     const setupAndFillForm = async () => {
       const user = userEvent.setup();
 
-      // First call: validate code
+      // First call: validate code (unauthenticated)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -319,30 +349,70 @@ describe('StudentRegistrationPage', () => {
       return user;
     };
 
-    it('submits form and redirects on success', async () => {
+    it('creates Firebase account before calling backend API', async () => {
       const user = await setupAndFillForm();
 
-      mockFetch.mockResolvedValueOnce({
+      // Backend registration succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         status: 201,
         json: () => Promise.resolve({
           user: { id: 'user-1', role: 'student' },
-          section: { id: 'sec-1', name: 'Test Section' },
         }),
       });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
+      // Verify Firebase account was created first
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/auth/register-student', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            code: 'ABC123',
-            email: 'student@example.com',
-            password: 'Password123',
-          }),
-        }));
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(
+          expect.anything(), // firebaseAuth
+          'student@example.com',
+          'Password123'
+        );
       });
+    });
+
+    it('uses authenticated API call for registration POST', async () => {
+      const user = await setupAndFillForm();
+
+      // Backend registration succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'student' },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      // Verify authenticated API was called (not publicFetchRaw)
+      await waitFor(() => {
+        expect(mockApiFetchRaw).toHaveBeenCalledWith(
+          '/auth/register-student',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+              join_code: 'ABC123',
+            }),
+          })
+        );
+      });
+    });
+
+    it('submits form and redirects on success', async () => {
+      const user = await setupAndFillForm();
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'student' },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
       await waitFor(() => {
         expect(screen.getByText('Account Created!')).toBeInTheDocument();
@@ -356,23 +426,20 @@ describe('StudentRegistrationPage', () => {
     it('shows loading state during submission', async () => {
       const user = await setupAndFillForm();
 
-      mockFetch.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
+      mockApiFetchRaw.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
       expect(screen.getByText('Creating account...')).toBeInTheDocument();
     });
 
-    it('shows error for duplicate email', async () => {
+    it('shows error for duplicate email from Firebase', async () => {
       const user = await setupAndFillForm();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Email exists',
-          code: 'EMAIL_EXISTS',
-        }),
-      });
+      // Firebase throws error for existing email
+      const firebaseError = new Error('Firebase: Error (auth/email-already-in-use).');
+      (firebaseError as { code?: string }).code = 'auth/email-already-in-use';
+      mockCreateUserWithEmailAndPassword.mockRejectedValueOnce(firebaseError);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -382,10 +449,25 @@ describe('StudentRegistrationPage', () => {
       });
     });
 
-    it('shows error when namespace at capacity', async () => {
+    it('shows error for weak password from Firebase', async () => {
       const user = await setupAndFillForm();
 
-      mockFetch.mockResolvedValueOnce({
+      // Firebase throws error for weak password
+      const firebaseError = new Error('Firebase: Error (auth/weak-password).');
+      (firebaseError as { code?: string }).code = 'auth/weak-password';
+      mockCreateUserWithEmailAndPassword.mockRejectedValueOnce(firebaseError);
+
+      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Password must be at least 8 characters with a number and letter.')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error when namespace at capacity from backend', async () => {
+      const user = await setupAndFillForm();
+
+      mockApiFetchRaw.mockResolvedValueOnce({
         ok: false,
         json: () => Promise.resolve({
           error: 'At capacity',
@@ -452,7 +534,7 @@ describe('StudentRegistrationPage', () => {
     const setupAndFillForm = async () => {
       const user = userEvent.setup();
 
-      // First call: validate code
+      // First call: validate code (unauthenticated)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
@@ -480,21 +562,21 @@ describe('StudentRegistrationPage', () => {
       return user;
     };
 
-    it('refreshes user and redirects to /sections on successful auto-login', async () => {
+    it('refreshes user and redirects to /sections on successful registration', async () => {
       const user = await setupAndFillForm();
 
-      mockFetch.mockResolvedValueOnce({
+      // Backend registration succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         status: 201,
         json: () => Promise.resolve({
           user: { id: 'user-1', role: 'student' },
-          section: { id: 'sec-1', name: 'Test Section' },
-          // No autoLoginFailed - means auto-login succeeded
         }),
       });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
+      // User is already logged in via Firebase, so refreshUser is called
       await waitFor(() => {
         expect(mockRefreshUser).toHaveBeenCalled();
       });
@@ -502,29 +584,6 @@ describe('StudentRegistrationPage', () => {
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/sections');
       });
-    });
-
-    it('redirects to signin with message when auto-login fails', async () => {
-      const user = await setupAndFillForm();
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-          section: { id: 'sec-1', name: 'Test Section' },
-          autoLoginFailed: true, // Auto-login failed
-        }),
-      });
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/auth/signin?registered=true');
-      });
-
-      // Should not call refreshUser when auto-login fails
-      expect(mockRefreshUser).not.toHaveBeenCalled();
     });
   });
 });

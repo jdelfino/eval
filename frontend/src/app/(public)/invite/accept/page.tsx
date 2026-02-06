@@ -7,17 +7,22 @@
  *
  * Flow:
  * 1. User clicks invite link in email, lands here with token in URL hash
- * 2. Page sends token to Go backend for verification via GET /auth/accept-invite
+ * 2. Page sends token to Go backend for verification via GET /auth/accept-invite (unauthenticated)
  * 3. On success, fetches invitation details from the API response
  * 4. User fills in optional display name and required password
- * 5. On submit, creates profile and sets password via POST /auth/accept-invite, then redirects
+ * 5. Create Firebase Auth account with invitation email and password
+ * 6. Call authenticated POST /auth/accept-invite to create user profile
+ * 7. Redirect based on role
  */
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
+import { firebaseAuth } from '@/lib/firebase';
 import { publicFetchRaw } from '@/lib/public-api-client';
+import { apiFetchRaw } from '@/lib/api-client';
 
 // Page state types
 type PageState =
@@ -96,7 +101,6 @@ export default function AcceptInvitePage() {
   const reload = useLocationReload();
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -171,8 +175,6 @@ export default function AcceptInvitePage() {
           namespace: data.namespace,
         };
         setInvitation(invitationInfo);
-        // Store the token so we can include it in the POST request
-        setInvitationToken(accessToken || tokenHash);
         setPageState({ status: 'ready', invitation: invitationInfo });
       } catch (error) {
         console.error('[AcceptInvite] Unexpected error:', error);
@@ -207,15 +209,18 @@ export default function AcceptInvitePage() {
     setPageState({ status: 'submitting', invitation });
 
     try {
-      // Submit profile and password to the backend
-      const response = await publicFetchRaw('/auth/accept-invite', {
+      // Step 1: Create Firebase Auth account with invitation email
+      // This gives us a JWT token to authenticate the backend request
+      await createUserWithEmailAndPassword(firebaseAuth, invitation.email, password);
+
+      // Step 2: Call authenticated backend API to create user profile
+      // The backend extracts external_id from JWT claims (not request body)
+      const response = await apiFetchRaw('/auth/accept-invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invitation_token: invitationToken,
-          invitation_id: invitation.id,
-          displayName: displayName.trim() || undefined,
-          password,
+          token: invitation.id,
+          display_name: displayName.trim() || undefined,
         }),
       });
 
@@ -246,6 +251,18 @@ export default function AcceptInvitePage() {
       redirectBasedOnRole(data.user.role);
     } catch (error) {
       console.error('[AcceptInvite] Submit error:', error);
+
+      // Handle Firebase Auth errors
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === 'auth/email-already-in-use') {
+        setPageState({ status: 'error', error: 'user_already_exists' });
+        return;
+      } else if (firebaseError.code === 'auth/weak-password') {
+        setSubmitError('Password is too weak. Please choose a stronger password.');
+        setPageState({ status: 'ready', invitation });
+        return;
+      }
+
       setSubmitError('Unable to connect. Please try again.');
       setPageState({ status: 'error', error: 'network_error' });
     }

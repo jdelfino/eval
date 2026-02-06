@@ -6,17 +6,22 @@
  * Allows students to register using a section join code.
  *
  * Flow:
- * 1. Enter/validate join code
+ * 1. Enter/validate join code (unauthenticated GET)
  * 2. See section preview (class name, instructor)
  * 3. Fill registration form (email, password)
- * 4. On success, redirect to student dashboard
+ * 4. Create Firebase Auth account
+ * 5. Call authenticated backend API to create user profile
+ * 6. On success, redirect to student dashboard
  */
 
 import React, { useState, useEffect, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { firebaseAuth } from '@/lib/firebase';
 import { publicFetchRaw } from '@/lib/public-api-client';
+import { apiFetchRaw } from '@/lib/api-client';
 
 // Page state types
 type PageState =
@@ -240,13 +245,17 @@ function StudentRegistrationContent() {
     setPageState({ status: 'submitting' });
 
     try {
-      const response = await publicFetchRaw('/auth/register-student', {
+      // Step 1: Create Firebase Auth account
+      // This gives us a JWT token to authenticate the backend request
+      await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password);
+
+      // Step 2: Call authenticated backend API to create user profile
+      // The backend extracts external_id and email from JWT claims (not request body)
+      const response = await apiFetchRaw('/auth/register-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: join_code.replace(/-/g, ''),
-          email: email.trim(),
-          password,
+          join_code: join_code.replace(/-/g, ''),
         }),
       });
 
@@ -254,11 +263,7 @@ function StudentRegistrationContent() {
         const data = await response.json();
 
         // Map error codes to messages
-        if (data.code === 'EMAIL_EXISTS' || data.code === 'USER_CREATION_FAILED') {
-          setSubmitError(ERROR_MESSAGES.email_exists);
-        } else if (data.code === 'WEAK_PASSWORD') {
-          setSubmitError(ERROR_MESSAGES.weak_password);
-        } else if (data.code === 'NAMESPACE_AT_CAPACITY') {
+        if (data.code === 'NAMESPACE_AT_CAPACITY') {
           setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
         } else if (data.code === 'INVALID_CODE' || data.code === 'SECTION_INACTIVE') {
           // Code became invalid, go back to code entry
@@ -273,23 +278,25 @@ function StudentRegistrationContent() {
         return;
       }
 
-      const data = await response.json();
-
-      // Success!
+      // Success! User is already logged in via Firebase
       setPageState({ status: 'success' });
 
-      // If auto-login failed, redirect to sign-in with a message
-      if (data.autoLoginFailed) {
-        router.push('/auth/signin?registered=true');
-        return;
-      }
-
-      // Auto-login succeeded - refresh auth context and redirect
+      // Refresh auth context to load user profile and redirect
       await refreshUser();
       router.push('/sections');
     } catch (error) {
       console.error('[StudentRegistration] Register error:', error);
-      setSubmitError(ERROR_MESSAGES.network_error);
+
+      // Handle Firebase Auth errors
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === 'auth/email-already-in-use') {
+        setSubmitError(ERROR_MESSAGES.email_exists);
+      } else if (firebaseError.code === 'auth/weak-password') {
+        setSubmitError(ERROR_MESSAGES.weak_password);
+      } else {
+        setSubmitError(ERROR_MESSAGES.network_error);
+      }
+
       setPageState({ status: 'code-valid', section: sectionInfo! });
     }
   };
