@@ -7,13 +7,13 @@ DB_PORT=${DATABASE_PORT:-5432}
 # Start docker services (postgres, redis, centrifugo) if not already running
 if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -q 2>/dev/null; then
   echo "Starting docker services..."
-  docker-compose up -d postgres redis centrifugo --wait
+  docker compose up -d postgres redis centrifugo --wait
 fi
 
 # Also ensure centrifugo is running (for E2E tests)
 if ! curl -sf http://localhost:8000/health >/dev/null 2>&1; then
   echo "Starting Centrifugo..."
-  docker-compose up -d centrifugo --wait
+  docker compose up -d centrifugo --wait
 fi
 
 # Wait for ready (may have just started)

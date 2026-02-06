@@ -46,7 +46,7 @@ lint-executor:
 
 test-integration-executor:
 	./scripts/ensure-test-postgres.sh
-	docker-compose up -d executor --wait
+	docker compose up -d executor --wait
 	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
 
 docker-build-executor:
@@ -103,10 +103,10 @@ dev: deps-up wait-deps
 	cd go-backend && air
 
 deps-up:
-	docker-compose up -d
+	docker compose up -d
 
 deps-down:
-	docker-compose down
+	docker compose down
 
 wait-deps:
 	@echo "Waiting for postgres..."
@@ -121,8 +121,8 @@ seed:
 	psql "postgresql://eval:eval_local_password@localhost:5432/eval" -f scripts/seed.sql
 
 reset-db:
-	docker-compose down -v postgres
-	docker-compose up -d postgres
+	docker compose down -v postgres
+	docker compose up -d postgres
 	@until pg_isready -h localhost -p 5432 -q; do sleep 0.5; done
 	$(MAKE) seed
 
@@ -130,10 +130,10 @@ bootstrap:
 	cd go-backend && go run ./cmd/bootstrap $(ARGS)
 
 status:
-	@docker-compose ps
+	@docker compose ps
 	@echo ""
 	@echo "Service health:"
-	@docker-compose ps --format json | jq -r '.[] | "\(.Name): \(.Health // "N/A")"'
+	@docker compose ps --format json | jq -r '.[] | "\(.Name): \(.Health // "N/A")"'
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
