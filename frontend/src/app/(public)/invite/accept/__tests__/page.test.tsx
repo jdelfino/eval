@@ -18,13 +18,45 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock fetch — all auth operations go through the API now
+// Mock fetch — used for unauthenticated requests (GET)
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
+
+// Mock Firebase createUserWithEmailAndPassword and deleteUser
+const mockCreateUserWithEmailAndPassword = jest.fn();
+const mockDeleteUser = jest.fn();
+const mockGetIdToken = jest.fn();
+const mockFirebaseUser = {
+  getIdToken: mockGetIdToken,
+  uid: 'firebase-uid-123',
+  email: 'test@example.com',
+  delete: mockDeleteUser,
+};
+
+jest.mock('firebase/auth', () => ({
+  createUserWithEmailAndPassword: (...args: unknown[]) => mockCreateUserWithEmailAndPassword(...args),
+  getAuth: jest.fn(),
+}));
+
+// Track current user for cleanup tests
+let mockCurrentUser: typeof mockFirebaseUser | null = null;
+jest.mock('@/lib/firebase', () => ({
+  firebaseAuth: {
+    get currentUser() {
+      return mockCurrentUser;
+    },
+  },
+}));
 
 // Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
 jest.mock('@/lib/public-api-client', () => ({
   publicFetchRaw: (...args: Parameters<typeof fetch>) => global.fetch(...args),
+}));
+
+// Mock api-client for authenticated requests
+const mockApiFetchRaw = jest.fn();
+jest.mock('@/lib/api-client', () => ({
+  apiFetchRaw: (...args: unknown[]) => mockApiFetchRaw(...args),
 }));
 
 // Mock the location hash hook
@@ -41,6 +73,20 @@ const setLocationHash = (hash: string) => {
   mockLocationHash = hash;
 };
 
+// Mock next/navigation useSearchParams for query parameter support
+let mockSearchParams = new URLSearchParams();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+  useSearchParams: () => mockSearchParams,
+}));
+
+// Helper to set search params
+const setSearchParams = (params: Record<string, string>) => {
+  mockSearchParams = new URLSearchParams(params);
+};
+
 describe('AcceptInvitePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -48,6 +94,19 @@ describe('AcceptInvitePage', () => {
     mockFetch.mockClear();
     mockReload.mockClear();
     mockLocationHash = '';
+    mockSearchParams = new URLSearchParams();
+    mockCreateUserWithEmailAndPassword.mockClear();
+    mockDeleteUser.mockClear();
+    mockGetIdToken.mockClear();
+    mockApiFetchRaw.mockClear();
+    mockCurrentUser = null;
+    // Default: Firebase account creation succeeds and sets currentUser
+    mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+      mockCurrentUser = mockFirebaseUser;
+      return Promise.resolve({ user: mockFirebaseUser });
+    });
+    mockDeleteUser.mockResolvedValue(undefined);
+    mockGetIdToken.mockResolvedValue('mock-firebase-jwt-token');
   });
 
   it('does not import or use Supabase', () => {
@@ -55,6 +114,93 @@ describe('AcceptInvitePage', () => {
     // the module mock would need to exist. Since we removed the mock and
     // the module, this test passing confirms no Supabase dependency.
     expect(true).toBe(true);
+  });
+
+  describe('Query Parameter Token Support', () => {
+    it('sends token from query params to API for verification', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?token=11111111-1111-1111-1111-111111111111')
+        );
+      });
+    });
+
+    it('displays invitation info when token query param is valid', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      // Backend returns flat Invitation struct with snake_case JSON
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          id: '11111111-1111-1111-1111-111111111111',
+          email: 'test@example.com',
+          target_role: 'instructor',
+          namespace_id: 'test-ns',
+          status: 'pending',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+        expect(screen.getByText('test@example.com')).toBeInTheDocument();
+        expect(screen.getByText('Instructor')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for invalid token format in query params', async () => {
+      setSearchParams({ token: 'not-a-uuid' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ code: 'INVALID_TOKEN', error: 'Invalid token format' }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid Link')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for invitation not found from query param token', async () => {
+      setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: 'Not found', code: 'INVITATION_NOT_FOUND' }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Invitation Not Found')).toBeInTheDocument();
+      });
+    });
+
+    it('prefers query param token over hash-based tokens', async () => {
+      // Both are set, query param should take precedence
+      setSearchParams({ token: '22222222-2222-2222-2222-222222222222' });
+      setLocationHash('#token_hash=hash-token&type=invite');
+      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/accept-invite?token=22222222-2222-2222-2222-222222222222')
+        );
+      });
+      // Should NOT include hash-based params
+      expect(mockFetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('token_hash')
+      );
+    });
   });
 
   describe('Token Verification', () => {
@@ -319,24 +465,107 @@ describe('AcceptInvitePage', () => {
   });
 
   describe('Form Submission', () => {
+    it('creates Firebase account before calling backend API', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify Firebase account was created first
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(
+          expect.anything(), // firebaseAuth
+          'test@example.com',
+          'securepassword123'
+        );
+      });
+    });
+
+    it('uses authenticated API call for accept invite POST', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify authenticated API was called (not publicFetchRaw)
+      await waitFor(() => {
+        expect(mockApiFetchRaw).toHaveBeenCalledWith(
+          '/auth/accept-invite',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+              token: 'inv-1',
+              display_name: undefined,
+            }),
+          })
+        );
+      });
+    });
+
     it('submits password to API and redirects on success', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
-            namespace: { id: 'test-ns', displayName: 'Test Org' },
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            user: { id: 'user-1', role: 'instructor' },
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
 
       render(<AcceptInvitePage />);
 
@@ -349,13 +578,6 @@ describe('AcceptInvitePage', () => {
       await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ invitation_token: 'test-token', invitation_id: 'inv-1', displayName: undefined, password: 'securepassword123' }),
-        }));
-      });
-
-      await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/instructor');
       });
     });
@@ -364,20 +586,20 @@ describe('AcceptInvitePage', () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            invitation: { id: 'inv-1', email: 'admin@example.com', targetRole: 'namespace-admin' },
-            namespace: null,
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            user: { id: 'user-1', role: 'namespace-admin' },
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'admin@example.com', targetRole: 'namespace-admin' },
+          namespace: null,
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'namespace-admin' },
+        }),
+      });
 
       render(<AcceptInvitePage />);
 
@@ -394,24 +616,56 @@ describe('AcceptInvitePage', () => {
       });
     });
 
+    it('shows error for duplicate email from Firebase', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Firebase throws error for existing email
+      const firebaseError = new Error('Firebase: Error (auth/email-already-in-use).');
+      (firebaseError as { code?: string }).code = 'auth/email-already-in-use';
+      mockCreateUserWithEmailAndPassword.mockRejectedValueOnce(firebaseError);
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Account Exists')).toBeInTheDocument();
+      });
+    });
+
     it('shows error for API failure on submit', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
-            namespace: null,
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: () => Promise.resolve({
-            error: 'Something went wrong',
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Something went wrong',
+        }),
+      });
 
       render(<AcceptInvitePage />);
 
@@ -432,15 +686,15 @@ describe('AcceptInvitePage', () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
-            namespace: null,
-          }),
-        })
-        .mockImplementationOnce(() => new Promise(() => {}));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      mockApiFetchRaw.mockImplementationOnce(() => new Promise(() => {}));
 
       render(<AcceptInvitePage />);
 
@@ -461,20 +715,20 @@ describe('AcceptInvitePage', () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
-            namespace: { id: 'test-ns', displayName: 'Test Org' },
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            user: { id: 'user-1', role: 'instructor' },
-          }),
-        });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
 
       render(<AcceptInvitePage />);
 
@@ -488,9 +742,9 @@ describe('AcceptInvitePage', () => {
       await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
+        expect(mockApiFetchRaw).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ invitation_token: 'test-token', invitation_id: 'inv-1', displayName: 'John Doe', password: 'securepassword123' }),
+          body: JSON.stringify({ token: 'inv-1', display_name: 'John Doe' }),
         }));
       });
     });
@@ -522,6 +776,231 @@ describe('AcceptInvitePage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
 
       expect(mockReload).toHaveBeenCalled();
+    });
+  });
+
+  describe('Firebase Account Cleanup on Backend Failure', () => {
+    it('deletes Firebase account when backend API returns error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      // Backend API fails with 500 error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Internal server error',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify Firebase account was created
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify Firebase account was deleted after backend failure
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('deletes Firebase account when backend returns INVITATION_CONSUMED error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend returns invitation consumed error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Invitation already used',
+          code: 'INVITATION_CONSUMED',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // User sees the consumed error page
+      await waitFor(() => {
+        expect(screen.getByText('Already Used')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend returns INVITATION_EXPIRED error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend returns invitation expired error
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Invitation expired',
+          code: 'INVITATION_EXPIRED',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Invitation Expired')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when backend call throws network error', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: null,
+        }),
+      });
+
+      // Backend call throws network error
+      mockApiFetchRaw.mockRejectedValueOnce(new Error('Network error'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+
+    it('allows retry after Firebase account cleanup on backend failure', async () => {
+      const user = userEvent.setup();
+      setLocationHash('#token_hash=test-token&type=invite');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          invitation: { id: 'inv-1', email: 'test@example.com', targetRole: 'instructor' },
+          namespace: { id: 'test-ns', displayName: 'Test Org' },
+        }),
+      });
+
+      // First attempt: backend fails
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({
+          error: 'Temporary error',
+        }),
+      });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Wait for cleanup
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+
+      // Form should return to ready state for retry
+      await waitFor(() => {
+        expect(screen.getByText('Temporary error')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Complete Registration' })).toBeInTheDocument();
+      });
+
+      // Reset mocks for retry
+      mockCreateUserWithEmailAndPassword.mockClear();
+      mockDeleteUser.mockClear();
+      mockCurrentUser = null;
+      mockCreateUserWithEmailAndPassword.mockImplementation(() => {
+        mockCurrentUser = mockFirebaseUser;
+        return Promise.resolve({ user: mockFirebaseUser });
+      });
+
+      // Second attempt: backend succeeds
+      mockApiFetchRaw.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { id: 'user-1', role: 'instructor' },
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      // Verify Firebase account was created again on retry
+      await waitFor(() => {
+        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
+      });
+
+      // Verify redirect on success
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/instructor');
+      });
     });
   });
 });

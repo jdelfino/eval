@@ -6,18 +6,25 @@
  * Handles the email invitation acceptance flow for namespace-admin and instructor roles.
  *
  * Flow:
- * 1. User clicks invite link in email, lands here with token in URL hash
- * 2. Page sends token to Go backend for verification via GET /auth/accept-invite
+ * 1. User clicks invite link in email, lands here with token in URL query param (?token=<uuid>)
+ * 2. Page sends token to Go backend for verification via GET /auth/accept-invite (unauthenticated)
  * 3. On success, fetches invitation details from the API response
  * 4. User fills in optional display name and required password
- * 5. On submit, creates profile and sets password via POST /auth/accept-invite, then redirects
+ * 5. Create Firebase Auth account with invitation email and password
+ * 6. Call authenticated POST /auth/accept-invite to create user profile
+ * 7. Redirect based on role
+ *
+ * Note: Also supports legacy hash-based tokens (#token_hash=...&type=invite) for backward compatibility.
  */
 
-import React, { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
+import { firebaseAuth } from '@/lib/firebase';
 import { publicFetchRaw } from '@/lib/public-api-client';
+import { apiFetchRaw } from '@/lib/api-client';
 
 // Page state types
 type PageState =
@@ -90,13 +97,34 @@ const ERROR_MESSAGES: Record<ErrorType, { title: string; message: string }> = {
   },
 };
 
+// Loading fallback for Suspense boundary
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+// Page wrapper with Suspense boundary for useSearchParams
 export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AcceptInviteContent />
+    </Suspense>
+  );
+}
+
+function AcceptInviteContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const locationHash = useLocationHash();
   const reload = useLocationReload();
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -106,7 +134,56 @@ export default function AcceptInvitePage() {
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
       try {
-        // Extract tokens from URL hash
+        // Check for token in query params first (new format: ?token=<uuid>)
+        const queryToken = searchParams.get('token');
+
+        if (queryToken) {
+          // New format: simple token query parameter
+          setPageState({ status: 'loading-invitation' });
+
+          const response = await publicFetchRaw(`/auth/accept-invite?token=${encodeURIComponent(queryToken)}`);
+
+          if (!response.ok) {
+            const data = await response.json();
+            console.error('[AcceptInvite] Verify/fetch error:', data);
+
+            // Map API error codes to our error types
+            const errorCode = data.code as string;
+            if (errorCode === 'OTP_EXPIRED' || errorCode === 'TOKEN_EXPIRED') {
+              setPageState({ status: 'error', error: 'otp_expired' });
+            } else if (errorCode === 'OTP_INVALID' || errorCode === 'TOKEN_INVALID' || errorCode === 'INVALID_TOKEN') {
+              setPageState({ status: 'error', error: 'otp_invalid' });
+            } else if (errorCode === 'USER_ALREADY_EXISTS') {
+              setPageState({ status: 'error', error: 'user_already_exists' });
+            } else if (errorCode === 'INVITATION_CONSUMED') {
+              setPageState({ status: 'error', error: 'invitation_consumed' });
+            } else if (errorCode === 'INVITATION_REVOKED') {
+              setPageState({ status: 'error', error: 'invitation_revoked' });
+            } else if (errorCode === 'INVITATION_NOT_FOUND') {
+              setPageState({ status: 'error', error: 'invitation_not_found' });
+            } else if (errorCode === 'INVITATION_EXPIRED') {
+              setPageState({ status: 'error', error: 'invitation_expired' });
+            } else if (response.status === 401 || response.status === 400) {
+              setPageState({ status: 'error', error: 'otp_invalid' });
+            } else {
+              setPageState({ status: 'error', error: 'unknown' });
+            }
+            return;
+          }
+
+          const data = await response.json();
+          const invitationInfo: InvitationInfo = {
+            id: data.id,
+            email: data.email,
+            targetRole: data.target_role,
+            namespace: null, // Backend returns flat invitation object
+          };
+          setInvitation(invitationInfo);
+          setPageState({ status: 'ready', invitation: invitationInfo });
+          return;
+        }
+
+        // Legacy format: hash-based tokens (#token_hash=...&type=invite)
         const hash = locationHash.substring(1);
         const params = new URLSearchParams(hash);
         const tokenHash = params.get('token_hash');
@@ -171,8 +248,6 @@ export default function AcceptInvitePage() {
           namespace: data.namespace,
         };
         setInvitation(invitationInfo);
-        // Store the token so we can include it in the POST request
-        setInvitationToken(accessToken || tokenHash);
         setPageState({ status: 'ready', invitation: invitationInfo });
       } catch (error) {
         console.error('[AcceptInvite] Unexpected error:', error);
@@ -181,7 +256,7 @@ export default function AcceptInvitePage() {
     };
 
     verifyAndLoadInvitation();
-  }, [locationHash]);
+  }, [locationHash, searchParams]);
 
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
@@ -207,45 +282,70 @@ export default function AcceptInvitePage() {
     setPageState({ status: 'submitting', invitation });
 
     try {
-      // Submit profile and password to the backend
-      const response = await publicFetchRaw('/auth/accept-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invitation_token: invitationToken,
-          invitation_id: invitation.id,
-          displayName: displayName.trim() || undefined,
-          password,
-        }),
-      });
+      // Step 1: Create Firebase Auth account with invitation email
+      // This gives us a JWT token to authenticate the backend request
+      await createUserWithEmailAndPassword(firebaseAuth, invitation.email, password);
 
-      if (!response.ok) {
+      // Step 2: Call authenticated backend API to create user profile
+      // The backend extracts external_id from JWT claims (not request body)
+      // Wrap in try/catch to clean up Firebase account on failure
+      try {
+        const response = await apiFetchRaw('/auth/accept-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: invitation.id,
+            display_name: displayName.trim() || undefined,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+
+          // Delete Firebase account so user can retry with same email
+          await firebaseAuth.currentUser?.delete();
+
+          // Map error codes
+          if (data.code === 'INVITATION_CONSUMED') {
+            setPageState({ status: 'error', error: 'invitation_consumed' });
+            return;
+          } else if (data.code === 'INVITATION_EXPIRED') {
+            setPageState({ status: 'error', error: 'invitation_expired' });
+            return;
+          } else {
+            setSubmitError(data.error || 'Failed to complete registration');
+          }
+
+          // Restore ready state for retry
+          if (invitation) {
+            setPageState({ status: 'ready', invitation });
+          }
+          return;
+        }
+
         const data = await response.json();
 
-        // Map error codes
-        if (data.code === 'INVITATION_CONSUMED') {
-          setPageState({ status: 'error', error: 'invitation_consumed' });
-          return;
-        } else if (data.code === 'INVITATION_EXPIRED') {
-          setPageState({ status: 'error', error: 'invitation_expired' });
-          return;
-        } else {
-          setSubmitError(data.error || 'Failed to complete registration');
-        }
+        setPageState({ status: 'success' });
+        redirectBasedOnRole(data.user.role);
+      } catch (backendError) {
+        // Backend call failed (network error, etc.) - clean up Firebase account
+        await firebaseAuth.currentUser?.delete();
+        throw backendError;
+      }
+    } catch (error) {
+      console.error('[AcceptInvite] Submit error:', error);
 
-        // Restore ready state for retry
-        if (invitation) {
-          setPageState({ status: 'ready', invitation });
-        }
+      // Handle Firebase Auth errors
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === 'auth/email-already-in-use') {
+        setPageState({ status: 'error', error: 'user_already_exists' });
+        return;
+      } else if (firebaseError.code === 'auth/weak-password') {
+        setSubmitError('Password is too weak. Please choose a stronger password.');
+        setPageState({ status: 'ready', invitation });
         return;
       }
 
-      const data = await response.json();
-
-      setPageState({ status: 'success' });
-      redirectBasedOnRole(data.user.role);
-    } catch (error) {
-      console.error('[AcceptInvite] Submit error:', error);
       setSubmitError('Unable to connect. Please try again.');
       setPageState({ status: 'error', error: 'network_error' });
     }

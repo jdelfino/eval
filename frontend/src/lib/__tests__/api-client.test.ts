@@ -135,6 +135,68 @@ describe('api-client', () => {
     });
   });
 
+  describe('apiFetchRaw', () => {
+    it('returns raw response on success without throwing', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'test' }),
+      });
+
+      const { apiFetchRaw } = require('../api-client');
+      const response = await apiFetchRaw('/v1/items');
+
+      expect(response.ok).toBe(true);
+      expect(response.status).toBe(200);
+    });
+
+    it('returns raw response on error without throwing', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Bad request', code: 'INVALID_INPUT' }),
+      });
+
+      const { apiFetchRaw } = require('../api-client');
+      const response = await apiFetchRaw('/v1/items');
+
+      expect(response.ok).toBe(false);
+      expect(response.status).toBe(400);
+      // Unlike apiFetch, it doesn't throw
+      const data = await response.json();
+      expect(data.code).toBe('INVALID_INPUT');
+    });
+
+    it('includes Authorization header', async () => {
+      mockGetIdToken.mockResolvedValue('token-xyz');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({ id: '1' }),
+      });
+
+      const { apiFetchRaw } = require('../api-client');
+      await apiFetchRaw('/v1/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: 'ABC123' }),
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/v1/register',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer token-xyz',
+            'Content-Type': 'application/json',
+          }),
+        })
+      );
+    });
+  });
+
   describe('apiFetch error handling', () => {
     it('throws on non-ok response', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');

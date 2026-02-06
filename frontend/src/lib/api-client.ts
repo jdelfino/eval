@@ -45,6 +45,30 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 }
 
 /**
+ * Authenticated fetch that returns the raw Response without throwing on errors.
+ * Use this when you need custom error handling (e.g., mapping error codes).
+ * Still includes retry logic for network-level failures.
+ */
+export async function apiFetchRaw(path: string, options: RequestInit = {}): Promise<Response> {
+  return withRetry(async () => {
+    const authHeaders = await getAuthHeaders();
+    return fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...options.headers,
+      },
+    });
+  }, {
+    // Only retry on network errors (fetch throws), not on HTTP error responses
+    shouldRetry: (error: Error) => {
+      // Network errors from fetch() — no status means it never reached the server
+      return !(error as { status?: number }).status;
+    },
+  });
+}
+
+/**
  * GET request that returns parsed JSON.
  */
 export async function apiGet<T>(path: string): Promise<T> {
