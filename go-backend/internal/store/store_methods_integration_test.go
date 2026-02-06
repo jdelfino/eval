@@ -1,9 +1,8 @@
 // Integration tests for store methods added in PR #24.
 //
-// These tests validate the SQL queries and scanning logic by executing them
-// directly against a running PostgreSQL database. They bypass the Store.conn()
-// middleware-context mechanism and use the pool directly as a Querier, which
-// tests the same SQL and row-scanning code paths.
+// These tests validate actual Store methods with proper RLS context,
+// ensuring that the SQL queries, scanning logic, and RLS policies work
+// together as they would in production.
 //
 // Run with:
 //
@@ -22,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jdelfino/eval/internal/auth"
 )
 
 // integrationDB wraps a pool for integration tests and provides helper methods.
@@ -50,6 +50,12 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 		t.Fatalf("failed to ping database: %v", err)
 	}
 
+	// Ensure eval_app role exists for RLS testing
+	if err := ensureEvalAppRole(ctx, pool); err != nil {
+		pool.Close()
+		t.Fatalf("failed to ensure eval_app role: %v", err)
+	}
+
 	nsID := "ns-" + uuid.New().String()
 	_, err = pool.Exec(ctx,
 		`INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`,
@@ -65,6 +71,49 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 		idb.close()
 	})
 	return idb
+}
+
+// ensureEvalAppRole creates the eval_app role if it doesn't exist.
+// This role is used for RLS testing because superusers bypass RLS policies.
+func ensureEvalAppRole(ctx context.Context, pool *pgxpool.Pool) error {
+	_, err := pool.Exec(ctx, `
+		DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'eval_app') THEN
+				CREATE ROLE eval_app WITH LOGIN PASSWORD 'eval_app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+			END IF;
+		END $$
+	`)
+	if err != nil {
+		return fmt.Errorf("create role: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, "GRANT CONNECT ON DATABASE eval TO eval_app")
+	if err != nil {
+		return fmt.Errorf("grant connect: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, "GRANT USAGE ON SCHEMA public TO eval_app")
+	if err != nil {
+		return fmt.Errorf("grant usage: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eval_app")
+	if err != nil {
+		return fmt.Errorf("grant table privileges: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO eval_app")
+	if err != nil {
+		return fmt.Errorf("grant sequence privileges: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eval_app")
+	if err != nil {
+		return fmt.Errorf("grant function privileges: %w", err)
+	}
+
+	return nil
 }
 
 func (db *integrationDB) close() {
@@ -83,11 +132,75 @@ func (db *integrationDB) cleanup(ctx context.Context, t *testing.T) {
 	}
 }
 
+// setRLSContext sets the PostgreSQL session variables for RLS.
+// It also sets the role to 'eval_app' so that RLS policies are enforced
+// (superusers bypass RLS).
+func (db *integrationDB) setRLSContext(ctx context.Context, conn *pgxpool.Conn, user *auth.User) error {
+	_, err := conn.Exec(ctx, "SET ROLE eval_app")
+	if err != nil {
+		return fmt.Errorf("set role to eval_app: %w", err)
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.user_id', $1, false)", user.ID.String())
+	if err != nil {
+		return fmt.Errorf("set user_id: %w", err)
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.namespace_id', $1, false)", user.NamespaceID)
+	if err != nil {
+		return fmt.Errorf("set namespace_id: %w", err)
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", string(user.Role))
+	if err != nil {
+		return fmt.Errorf("set role: %w", err)
+	}
+
+	return nil
+}
+
+// storeWithRLS acquires a connection, sets RLS context, and returns a Store.
+// The caller must release the connection.
+func (db *integrationDB) storeWithRLS(ctx context.Context, t *testing.T, user *auth.User) (*Store, *pgxpool.Conn) {
+	t.Helper()
+	conn, err := db.pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire connection: %v", err)
+	}
+
+	if err := db.setRLSContext(ctx, conn, user); err != nil {
+		conn.Release()
+		t.Fatalf("set RLS context: %v", err)
+	}
+
+	return New(conn), conn
+}
+
+// execAsSuperuser runs SQL as superuser by resetting the role first.
+// This is needed because connections returned to the pool may still have
+// SET ROLE eval_app from previous RLS testing.
+func (db *integrationDB) execAsSuperuser(ctx context.Context, sql string, args ...interface{}) error {
+	conn, err := db.pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	// Reset to superuser role (the pool's default user)
+	_, err = conn.Exec(ctx, "RESET ROLE")
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, sql, args...)
+	return err
+}
+
 // seed helpers
 
 func (db *integrationDB) createNamespace(ctx context.Context, t *testing.T, id, displayName string) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`, id, displayName)
 	if err != nil {
 		t.Fatalf("create namespace %s: %v", id, err)
@@ -100,7 +213,7 @@ func (db *integrationDB) createUser(ctx context.Context, t *testing.T, id uuid.U
 	if nsID != "" {
 		ns = &nsID
 	}
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO users (id, email, role, namespace_id) VALUES ($1, $2, $3, $4)`,
 		id, email, role, ns)
 	if err != nil {
@@ -114,7 +227,7 @@ func (db *integrationDB) createUserWithDisplayName(ctx context.Context, t *testi
 	if nsID != "" {
 		ns = &nsID
 	}
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO users (id, email, role, namespace_id, display_name) VALUES ($1, $2, $3, $4, $5)`,
 		id, email, role, ns, displayName)
 	if err != nil {
@@ -124,7 +237,7 @@ func (db *integrationDB) createUserWithDisplayName(ctx context.Context, t *testi
 
 func (db *integrationDB) createClass(ctx context.Context, t *testing.T, id uuid.UUID, nsID, name string, createdBy uuid.UUID) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, $3, $4)`,
 		id, nsID, name, createdBy)
 	if err != nil {
@@ -132,9 +245,16 @@ func (db *integrationDB) createClass(ctx context.Context, t *testing.T, id uuid.
 	}
 }
 
-func (db *integrationDB) createSection(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, classID uuid.UUID, name, joinCode string) {
+// uniqueJoinCode generates a unique join code using the section ID.
+func uniqueJoinCode(sectionID uuid.UUID, prefix string) string {
+	return prefix + "-" + sectionID.String()[:8]
+}
+
+func (db *integrationDB) createSection(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, classID uuid.UUID, name, joinCodePrefix string) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	// Generate unique join code using section ID to avoid conflicts across test runs
+	joinCode := uniqueJoinCode(id, joinCodePrefix)
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, $4, $5)`,
 		id, nsID, classID, name, joinCode)
 	if err != nil {
@@ -144,7 +264,7 @@ func (db *integrationDB) createSection(ctx context.Context, t *testing.T, id uui
 
 func (db *integrationDB) createMembership(ctx context.Context, t *testing.T, userID, sectionID uuid.UUID, role string) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, $3)`,
 		userID, sectionID, role)
 	if err != nil {
@@ -154,7 +274,7 @@ func (db *integrationDB) createMembership(ctx context.Context, t *testing.T, use
 
 func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uuid.UUID, nsID, title string, authorID uuid.UUID, classID *uuid.UUID, tags []string) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id, class_id, tags)
 		 VALUES ($1, $2, $3, '{}', '{}', $4, $5, $6)`,
 		id, nsID, title, authorID, classID, tags)
@@ -164,7 +284,7 @@ func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uui
 }
 
 // =============================================================================
-// Test: ListProblemsFiltered
+// Test: ListProblemsFiltered - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListProblemsFiltered(t *testing.T) {
@@ -191,104 +311,74 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	db.createProblem(ctx, t, p3, nsID, "Charlie Problem", authorID, &classID, []string{"easy", "strings"})
 
-	// Use pool directly as Querier
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	// Create auth user for RLS context
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
-	// Helper to run the ListProblemsFiltered query directly
-	runFiltered := func(t *testing.T, filters ProblemFilters) []Problem {
-		t.Helper()
-		query := `
-			SELECT id, namespace_id, title, description, starter_code, test_cases,
-			       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-			FROM problems WHERE 1=1`
-		var args []any
-		argIdx := 1
+	t.Run("no filters returns all in namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
 
-		if filters.ClassID != nil {
-			query += fmt.Sprintf(" AND class_id = $%d", argIdx)
-			args = append(args, *filters.ClassID)
-			argIdx++
-		}
-		if filters.AuthorID != nil {
-			query += fmt.Sprintf(" AND author_id = $%d", argIdx)
-			args = append(args, *filters.AuthorID)
-			argIdx++
-		}
-		if len(filters.Tags) > 0 {
-			query += fmt.Sprintf(" AND tags && $%d", argIdx)
-			args = append(args, filters.Tags)
-		}
-		if filters.PublicOnly {
-			query += " AND class_id IS NULL"
-		}
-		sortBy := "created_at"
-		switch filters.SortBy {
-		case "title":
-			sortBy = "title"
-		case "updated_at":
-			sortBy = "updated_at"
-		}
-		sortOrder := "ASC"
-		if filters.SortOrder == "desc" {
-			sortOrder = "DESC"
-		}
-		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
-
-		rows, err := conn.Query(ctx, query, args...)
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{})
 		if err != nil {
-			t.Fatalf("query: %v", err)
+			t.Fatalf("ListProblemsFiltered: %v", err)
 		}
-		defer rows.Close()
-		var problems []Problem
-		for rows.Next() {
-			var p Problem
-			if err := rows.Scan(&p.ID, &p.NamespaceID, &p.Title, &p.Description, &p.StarterCode,
-				&p.TestCases, &p.ExecutionSettings, &p.AuthorID, &p.ClassID, &p.Tags, &p.Solution,
-				&p.CreatedAt, &p.UpdatedAt); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			problems = append(problems, p)
-		}
-		if err := rows.Err(); err != nil {
-			t.Fatalf("rows err: %v", err)
-		}
-		return problems
-	}
-
-	t.Run("no filters returns all", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{})
 		if len(results) != 3 {
 			t.Errorf("expected 3 problems, got %d", len(results))
 		}
 	})
 
 	t.Run("filter by class_id", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{ClassID: &classID})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{ClassID: &classID})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 problems in class, got %d", len(results))
 		}
 	})
 
 	t.Run("filter by author_id", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{AuthorID: &authorID})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{AuthorID: &authorID})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 problems by author, got %d", len(results))
 		}
 	})
 
 	t.Run("filter by tags", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{Tags: []string{"easy"}})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{Tags: []string{"easy"}})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 easy problems, got %d", len(results))
 		}
 	})
 
 	t.Run("public_only", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{PublicOnly: true})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{PublicOnly: true})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 1 {
 			t.Errorf("expected 1 public problem, got %d", len(results))
 		}
@@ -298,28 +388,52 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 	})
 
 	t.Run("sort by title asc", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{SortBy: "title"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{SortBy: "title"})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) >= 2 && results[0].Title > results[1].Title {
 			t.Errorf("expected ascending title order, got %s before %s", results[0].Title, results[1].Title)
 		}
 	})
 
 	t.Run("sort by title desc", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{SortBy: "title", SortOrder: "desc"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{SortBy: "title", SortOrder: "desc"})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) >= 2 && results[0].Title < results[1].Title {
 			t.Errorf("expected descending title order, got %s before %s", results[0].Title, results[1].Title)
 		}
 	})
 
 	t.Run("combined filters: class + tags", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{ClassID: &classID, Tags: []string{"easy"}})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{ClassID: &classID, Tags: []string{"easy"}})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 problems matching class+tags, got %d", len(results))
 		}
 	})
 
 	t.Run("invalid sort_by defaults to created_at", func(t *testing.T) {
-		results := runFiltered(t, ProblemFilters{SortBy: "invalid_column"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{SortBy: "invalid_column"})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
 		if len(results) != 3 {
 			t.Errorf("expected 3 problems, got %d", len(results))
 		}
@@ -331,7 +445,7 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListUsers
+// Test: ListUsers - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListUsers(t *testing.T) {
@@ -353,72 +467,44 @@ func TestIntegration_ListUsers(t *testing.T) {
 	db.createUser(ctx, t, u2, "instructor1@test.com", "instructor", nsA)
 	db.createUser(ctx, t, u3, "student2@test.com", "student", nsB)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	// Auth user in namespace A
+	authUser := &auth.User{
+		ID:          u1,
+		Email:       "student1@test.com",
+		NamespaceID: nsA,
+		Role:        auth.RoleStudent,
 	}
-	defer conn.Release()
 
-	runListUsers := func(t *testing.T, filters UserFilters) []User {
-		t.Helper()
-		query := `SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
-			FROM users WHERE 1=1`
-		var args []any
-		argIdx := 1
-		if filters.NamespaceID != nil {
-			query += fmt.Sprintf(" AND namespace_id = $%d", argIdx)
-			args = append(args, *filters.NamespaceID)
-			argIdx++
-		}
-		if filters.Role != nil {
-			query += fmt.Sprintf(" AND role = $%d", argIdx)
-			args = append(args, *filters.Role)
-		}
-		query += " ORDER BY created_at"
+	t.Run("user sees only own namespace users", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
 
-		rows, err := conn.Query(ctx, query, args...)
+		results, err := s.ListUsers(ctx, UserFilters{})
 		if err != nil {
-			t.Fatalf("query: %v", err)
+			t.Fatalf("ListUsers: %v", err)
 		}
-		defer rows.Close()
-		var users []User
-		for rows.Next() {
-			var u User
-			if err := rows.Scan(&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			users = append(users, u)
-		}
-		return users
-	}
-
-	t.Run("no filters", func(t *testing.T) {
-		results := runListUsers(t, UserFilters{})
-		if len(results) != 3 {
-			t.Errorf("expected 3 users, got %d", len(results))
-		}
-	})
-
-	t.Run("filter by namespace", func(t *testing.T) {
-		ns := nsA
-		results := runListUsers(t, UserFilters{NamespaceID: &ns})
+		// Should see only users in namespace A (2 users: u1 and u2)
 		if len(results) != 2 {
 			t.Errorf("expected 2 users in nsA, got %d", len(results))
+		}
+		// Verify none of the results are from namespace B
+		for _, u := range results {
+			if u.NamespaceID != nil && *u.NamespaceID == nsB {
+				t.Errorf("user in namespace A should not see namespace B users")
+			}
 		}
 	})
 
 	t.Run("filter by role", func(t *testing.T) {
-		role := "student"
-		results := runListUsers(t, UserFilters{Role: &role})
-		if len(results) != 2 {
-			t.Errorf("expected 2 students, got %d", len(results))
-		}
-	})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
 
-	t.Run("filter by both", func(t *testing.T) {
-		ns := nsA
 		role := "student"
-		results := runListUsers(t, UserFilters{NamespaceID: &ns, Role: &role})
+		results, err := s.ListUsers(ctx, UserFilters{Role: &role})
+		if err != nil {
+			t.Fatalf("ListUsers: %v", err)
+		}
+		// In namespace A, there's only 1 student (u1)
 		if len(results) != 1 {
 			t.Errorf("expected 1 student in nsA, got %d", len(results))
 		}
@@ -429,7 +515,148 @@ func TestIntegration_ListUsers(t *testing.T) {
 }
 
 // =============================================================================
-// Test: DeleteMembershipIfNotLast
+// Test: Cross-namespace isolation - user in ns-A cannot see ns-B data
+// =============================================================================
+
+func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsA := db.nsID
+	nsB := "ns-" + uuid.New().String()
+	db.createNamespace(ctx, t, nsB, "Namespace B")
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", nsB)
+	})
+
+	// Create users in each namespace
+	userA := uuid.New()
+	userB := uuid.New()
+	db.createUser(ctx, t, userA, "userA@test.com", "instructor", nsA)
+	db.createUser(ctx, t, userB, "userB@test.com", "instructor", nsB)
+
+	// Create problems in each namespace
+	problemA := uuid.New()
+	problemB := uuid.New()
+	db.createProblem(ctx, t, problemA, nsA, "Problem in A", userA, nil, nil)
+	db.createProblem(ctx, t, problemB, nsB, "Problem in B", userB, nil, nil)
+
+	// Create classes in each namespace
+	classA := uuid.New()
+	classB := uuid.New()
+	db.createClass(ctx, t, classA, nsA, "Class in A", userA)
+	db.createClass(ctx, t, classB, nsB, "Class in B", userB)
+
+	// Auth user in namespace A
+	authUserA := &auth.User{
+		ID:          userA,
+		Email:       "userA@test.com",
+		NamespaceID: nsA,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("ListProblems does not return namespace B problems", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		results, err := s.ListProblems(ctx, nil)
+		if err != nil {
+			t.Fatalf("ListProblems: %v", err)
+		}
+
+		for _, p := range results {
+			if p.ID == problemB {
+				t.Errorf("user in namespace A should not see problem from namespace B")
+			}
+			if p.NamespaceID == nsB {
+				t.Errorf("user in namespace A should not see any problems from namespace B")
+			}
+		}
+
+		// Should see the problem in namespace A
+		found := false
+		for _, p := range results {
+			if p.ID == problemA {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("user should see problem in their own namespace")
+		}
+	})
+
+	t.Run("ListClasses does not return namespace B classes", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		results, err := s.ListClasses(ctx)
+		if err != nil {
+			t.Fatalf("ListClasses: %v", err)
+		}
+
+		for _, c := range results {
+			if c.ID == classB {
+				t.Errorf("user in namespace A should not see class from namespace B")
+			}
+			if c.NamespaceID == nsB {
+				t.Errorf("user in namespace A should not see any classes from namespace B")
+			}
+		}
+
+		found := false
+		for _, c := range results {
+			if c.ID == classA {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("user should see class in their own namespace")
+		}
+	})
+
+	t.Run("GetProblem returns not found for namespace B problem", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.GetProblem(ctx, problemB)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound when accessing namespace B problem, got: %v", err)
+		}
+	})
+
+	t.Run("GetClass returns not found for namespace B class", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		_, err := s.GetClass(ctx, classB)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound when accessing namespace B class, got: %v", err)
+		}
+	})
+
+	t.Run("ListNamespaces only shows own namespace", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		results, err := s.ListNamespaces(ctx)
+		if err != nil {
+			t.Fatalf("ListNamespaces: %v", err)
+		}
+
+		if len(results) != 1 {
+			t.Errorf("expected 1 namespace, got %d", len(results))
+		}
+		if len(results) > 0 && results[0].ID != nsA {
+			t.Errorf("expected namespace %s, got %s", nsA, results[0].ID)
+		}
+	})
+}
+
+// =============================================================================
+// Test: DeleteMembershipIfNotLast - calls actual Store method
 // =============================================================================
 
 func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
@@ -454,60 +681,24 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 	db.createMembership(ctx, t, instructor2, sectionID, "instructor")
 	db.createMembership(ctx, t, student1, sectionID, "student")
 
-	// deleteMembershipIfNotLast tests the transactional delete-if-not-last logic.
-	// Note: The production code uses "SELECT COUNT(*) ... FOR UPDATE" which fails on
-	// PostgreSQL 15+ (FOR UPDATE not allowed with aggregates). This test uses a
-	// compatible approach that validates the same business logic: lock rows first,
-	// then count, then conditionally delete.
-	deleteMembershipIfNotLast := func(ctx context.Context, pool *pgxpool.Pool, sectionID, userID uuid.UUID, role string) error {
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback(ctx) //nolint:errcheck
-
-		// Lock rows, then count (compatible with PG 15+)
-		rows, err := tx.Query(ctx,
-			`SELECT id FROM section_memberships WHERE section_id = $1 AND role = $2 FOR UPDATE`,
-			sectionID, role)
-		if err != nil {
-			return err
-		}
-		count := 0
-		for rows.Next() {
-			var id uuid.UUID
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return err
-			}
-			count++
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return err
-		}
-
-		if count <= 1 {
-			return ErrLastMember
-		}
-		tag, err := tx.Exec(ctx,
-			`DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2 AND role = $3`,
-			sectionID, userID, role)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return tx.Commit(ctx)
+	// Auth user for RLS context
+	authUser := &auth.User{
+		ID:          instructor1,
+		Email:       "inst1@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("can remove one of two instructors", func(t *testing.T) {
-		err := deleteMembershipIfNotLast(ctx, db.pool, sectionID, instructor2, "instructor")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteMembershipIfNotLast(ctx, sectionID, instructor2, "instructor")
 		if err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		// Verify deleted
+
+		// Verify deleted using superuser connection
 		var count int
 		err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM section_memberships WHERE section_id = $1 AND user_id = $2",
 			sectionID, instructor2).Scan(&count)
@@ -520,14 +711,20 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 	})
 
 	t.Run("cannot remove last instructor", func(t *testing.T) {
-		err := deleteMembershipIfNotLast(ctx, db.pool, sectionID, instructor1, "instructor")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteMembershipIfNotLast(ctx, sectionID, instructor1, "instructor")
 		if !errors.Is(err, ErrLastMember) {
 			t.Errorf("expected ErrLastMember, got: %v", err)
 		}
 	})
 
 	t.Run("cannot remove last student", func(t *testing.T) {
-		err := deleteMembershipIfNotLast(ctx, db.pool, sectionID, student1, "student")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteMembershipIfNotLast(ctx, sectionID, student1, "student")
 		if !errors.Is(err, ErrLastMember) {
 			t.Errorf("expected ErrLastMember, got: %v", err)
 		}
@@ -539,9 +736,12 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 		db.createUser(ctx, t, student2, "stu2@test.com", "student", nsID)
 		db.createMembership(ctx, t, student2, sectionID, "student")
 
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		nonexistent := uuid.New()
 		db.createUser(ctx, t, nonexistent, "ghost@test.com", "student", nsID)
-		err := deleteMembershipIfNotLast(ctx, db.pool, sectionID, nonexistent, "student")
+		err := s.DeleteMembershipIfNotLast(ctx, sectionID, nonexistent, "student")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -549,7 +749,7 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetUserByEmail
+// Test: GetUserByEmail - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetUserByEmail(t *testing.T) {
@@ -562,26 +762,18 @@ func TestIntegration_GetUserByEmail(t *testing.T) {
 	testEmail := fmt.Sprintf("findme-%s@test.com", nsID)
 	db.createUser(ctx, t, userID, testEmail, "student", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getUserByEmail := func(email string) (*User, error) {
-		var u User
-		err := conn.QueryRow(ctx,
-			`SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
-			 FROM users WHERE email = $1`, email).Scan(
-			&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &u, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       testEmail,
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		u, err := getUserByEmail(testEmail)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		u, err := s.GetUserByEmail(ctx, testEmail)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -594,7 +786,10 @@ func TestIntegration_GetUserByEmail(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getUserByEmail("nonexistent-" + nsID + "@test.com")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetUserByEmail(ctx, "nonexistent-"+nsID+"@test.com")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -602,7 +797,7 @@ func TestIntegration_GetUserByEmail(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateUserAdmin
+// Test: UpdateUserAdmin - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateUserAdmin(t *testing.T) {
@@ -614,34 +809,31 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "admin-target@test.com", "student", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
+	// RLS policy: only system-admin can update other users
+	adminID := uuid.New()
+	err := db.execAsSuperuser(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin@test.com", "system-admin")
 	if err != nil {
-		t.Fatalf("acquire: %v", err)
+		t.Fatalf("create admin: %v", err)
 	}
-	defer conn.Release()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
 
-	updateUserAdmin := func(id uuid.UUID, params UpdateUserAdminParams) (*User, error) {
-		var u User
-		err := conn.QueryRow(ctx,
-			`UPDATE users
-			 SET email        = COALESCE($2, email),
-			     display_name = COALESCE($3, display_name),
-			     role         = COALESCE($4, role),
-			     namespace_id = COALESCE($5, namespace_id),
-			     updated_at   = now()
-			 WHERE id = $1
-			 RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`,
-			id, params.Email, params.DisplayName, params.Role, params.NamespaceID).Scan(
-			&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &u, nil
+	authUser := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
 	}
 
 	t.Run("partial update email only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newEmail := "updated@test.com"
-		u, err := updateUserAdmin(userID, UpdateUserAdminParams{Email: &newEmail})
+		u, err := s.UpdateUserAdmin(ctx, userID, UpdateUserAdminParams{Email: &newEmail})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -654,8 +846,11 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 	})
 
 	t.Run("partial update role only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newRole := "instructor"
-		u, err := updateUserAdmin(userID, UpdateUserAdminParams{Role: &newRole})
+		u, err := s.UpdateUserAdmin(ctx, userID, UpdateUserAdminParams{Role: &newRole})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -668,10 +863,13 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 	})
 
 	t.Run("update all fields", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		email := "fully-updated@test.com"
 		display := "Full Update"
 		role := "namespace-admin"
-		u, err := updateUserAdmin(userID, UpdateUserAdminParams{
+		u, err := s.UpdateUserAdmin(ctx, userID, UpdateUserAdminParams{
 			Email: &email, DisplayName: &display, Role: &role, NamespaceID: &nsID,
 		})
 		if err != nil {
@@ -686,8 +884,11 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		email := "nope@test.com"
-		_, err := updateUserAdmin(uuid.New(), UpdateUserAdminParams{Email: &email})
+		_, err := s.UpdateUserAdmin(ctx, uuid.New(), UpdateUserAdminParams{Email: &email})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -695,7 +896,7 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 }
 
 // =============================================================================
-// Test: DeleteUser
+// Test: DeleteUser - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_DeleteUser(t *testing.T) {
@@ -707,29 +908,36 @@ func TestIntegration_DeleteUser(t *testing.T) {
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "todelete@test.com", "student", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
+	// RLS policy: only system-admin can delete users
+	adminID := uuid.New()
+	err := db.execAsSuperuser(ctx,
+		`INSERT INTO users (id, email, role) VALUES ($1, $2, $3)`,
+		adminID, "sysadmin-del@test.com", "system-admin")
 	if err != nil {
-		t.Fatalf("acquire: %v", err)
+		t.Fatalf("create admin: %v", err)
 	}
-	defer conn.Release()
+	t.Cleanup(func() {
+		_, _ = db.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", adminID)
+	})
 
-	deleteUser := func(id uuid.UUID) error {
-		tag, err := conn.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return nil
+	authUser := &auth.User{
+		ID:          adminID,
+		Email:       "sysadmin-del@test.com",
+		NamespaceID: "",
+		Role:        auth.RoleSystemAdmin,
 	}
 
 	t.Run("delete existing user", func(t *testing.T) {
-		if err := deleteUser(userID); err != nil {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		if err := s.DeleteUser(ctx, userID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
+		// Verify using superuser connection
 		var count int
-		err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE id = $1", userID).Scan(&count)
+		err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE id = $1", userID).Scan(&count)
 		if err != nil {
 			t.Fatalf("count query: %v", err)
 		}
@@ -739,7 +947,10 @@ func TestIntegration_DeleteUser(t *testing.T) {
 	})
 
 	t.Run("delete nonexistent user", func(t *testing.T) {
-		err := deleteUser(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteUser(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -747,7 +958,7 @@ func TestIntegration_DeleteUser(t *testing.T) {
 }
 
 // =============================================================================
-// Test: CountUsersByRole
+// Test: CountUsersByRole - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_CountUsersByRole(t *testing.T) {
@@ -756,37 +967,25 @@ func TestIntegration_CountUsersByRole(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	db.createUser(ctx, t, uuid.New(), "s1@test.com", "student", nsID)
-	db.createUser(ctx, t, uuid.New(), "s2@test.com", "student", nsID)
-	db.createUser(ctx, t, uuid.New(), "i1@test.com", "instructor", nsID)
+	u1 := uuid.New()
+	u2 := uuid.New()
+	u3 := uuid.New()
+	db.createUser(ctx, t, u1, "s1@test.com", "student", nsID)
+	db.createUser(ctx, t, u2, "s2@test.com", "student", nsID)
+	db.createUser(ctx, t, u3, "i1@test.com", "instructor", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	countUsersByRole := func(namespaceID string) (map[string]int, error) {
-		rows, err := conn.Query(ctx,
-			`SELECT role, COUNT(*) FROM users WHERE namespace_id = $1 GROUP BY role`, namespaceID)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		counts := make(map[string]int)
-		for rows.Next() {
-			var role string
-			var count int
-			if err := rows.Scan(&role, &count); err != nil {
-				return nil, err
-			}
-			counts[role] = count
-		}
-		return counts, rows.Err()
+	authUser := &auth.User{
+		ID:          u3,
+		Email:       "i1@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("counts are correct", func(t *testing.T) {
-		counts, err := countUsersByRole(nsID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		counts, err := s.CountUsersByRole(ctx, nsID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -804,7 +1003,11 @@ func TestIntegration_CountUsersByRole(t *testing.T) {
 		t.Cleanup(func() {
 			_, _ = db.pool.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", emptyNS)
 		})
-		counts, err := countUsersByRole(emptyNS)
+
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		counts, err := s.CountUsersByRole(ctx, emptyNS)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -815,7 +1018,7 @@ func TestIntegration_CountUsersByRole(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListClassInstructorNames
+// Test: ListClassInstructorNames - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListClassInstructorNames(t *testing.T) {
@@ -843,37 +1046,18 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 	db.createMembership(ctx, t, inst1, sec2, "instructor") // inst1 in both sections
 	db.createMembership(ctx, t, student, sec1, "student")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listClassInstructorNames := func(classID uuid.UUID) ([]string, error) {
-		rows, err := conn.Query(ctx, `
-			SELECT DISTINCT COALESCE(u.display_name, u.email)
-			FROM sections s
-			JOIN section_memberships sm ON sm.section_id = s.id
-			JOIN users u ON u.id = sm.user_id
-			WHERE s.class_id = $1 AND sm.role = 'instructor'
-			ORDER BY 1`, classID)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var names []string
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return nil, err
-			}
-			names = append(names, name)
-		}
-		return names, rows.Err()
+	authUser := &auth.User{
+		ID:          inst1,
+		Email:       "inst1@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("returns distinct instructor names", func(t *testing.T) {
-		names, err := listClassInstructorNames(classID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		names, err := s.ListClassInstructorNames(ctx, classID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -890,7 +1074,10 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 	})
 
 	t.Run("empty class", func(t *testing.T) {
-		names, err := listClassInstructorNames(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		names, err := s.ListClassInstructorNames(ctx, uuid.New())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -901,7 +1088,7 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListMySections
+// Test: ListMySections - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListMySections(t *testing.T) {
@@ -931,43 +1118,18 @@ func TestIntegration_ListMySections(t *testing.T) {
 	db.createMembership(ctx, t, userID, sec2, "student")
 	db.createMembership(ctx, t, otherUser, sec3, "student") // other user, not me
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listMySections := func(uid uuid.UUID) ([]MySectionInfo, error) {
-		rows, err := conn.Query(ctx, `
-			SELECT s.id, s.namespace_id, s.class_id, s.name, s.semester, s.join_code, s.active,
-			       s.created_at, s.updated_at, c.name
-			FROM sections s
-			JOIN section_memberships sm ON sm.section_id = s.id
-			JOIN classes c ON c.id = s.class_id
-			WHERE sm.user_id = $1
-			ORDER BY s.created_at`, uid)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var results []MySectionInfo
-		for rows.Next() {
-			var info MySectionInfo
-			if err := rows.Scan(
-				&info.Section.ID, &info.Section.NamespaceID, &info.Section.ClassID,
-				&info.Section.Name, &info.Section.Semester, &info.Section.JoinCode,
-				&info.Section.Active, &info.Section.CreatedAt, &info.Section.UpdatedAt,
-				&info.ClassName,
-			); err != nil {
-				return nil, err
-			}
-			results = append(results, info)
-		}
-		return results, rows.Err()
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "me@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("returns my sections with class names", func(t *testing.T) {
-		results, err := listMySections(userID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListMySections(ctx, userID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -983,7 +1145,10 @@ func TestIntegration_ListMySections(t *testing.T) {
 	})
 
 	t.Run("user with no sections", func(t *testing.T) {
-		results, err := listMySections(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListMySections(ctx, uuid.New())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -994,7 +1159,7 @@ func TestIntegration_ListMySections(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateSectionJoinCode
+// Test: UpdateSectionJoinCode - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
@@ -1009,35 +1174,27 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", instructorID)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "OLD_CODE")
+	// RLS requires instructor to be a section instructor to update sections
+	db.createMembership(ctx, t, instructorID, sectionID, "instructor")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateJoinCode := func(id uuid.UUID, code string) (*Section, error) {
-		var sec Section
-		err := conn.QueryRow(ctx, `
-			UPDATE sections SET join_code = $2, updated_at = now()
-			WHERE id = $1
-			RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`,
-			id, code).Scan(
-			&sec.ID, &sec.NamespaceID, &sec.ClassID, &sec.Name, &sec.Semester,
-			&sec.JoinCode, &sec.Active, &sec.CreatedAt, &sec.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sec, nil
+	authUser := &auth.User{
+		ID:          instructorID,
+		Email:       "inst@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("updates join code", func(t *testing.T) {
-		sec, err := updateJoinCode(sectionID, "NEW_CODE")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		newCode := "NEW_CODE-" + uuid.New().String()[:8]
+		sec, err := s.UpdateSectionJoinCode(ctx, sectionID, newCode)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if sec.JoinCode != "NEW_CODE" {
-			t.Errorf("expected join_code NEW_CODE, got %s", sec.JoinCode)
+		if sec.JoinCode != newCode {
+			t.Errorf("expected join_code %s, got %s", newCode, sec.JoinCode)
 		}
 		if sec.ID != sectionID {
 			t.Errorf("expected section %s, got %s", sectionID, sec.ID)
@@ -1045,7 +1202,10 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := updateJoinCode(uuid.New(), "WHATEVER")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.UpdateSectionJoinCode(ctx, uuid.New(), "WHATEVER-"+uuid.New().String()[:8])
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1053,7 +1213,7 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListMembersByRole
+// Test: ListMembersByRole - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListMembersByRole(t *testing.T) {
@@ -1079,35 +1239,18 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 	db.createMembership(ctx, t, stu1, secID, "student")
 	db.createMembership(ctx, t, stu2, secID, "student")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listMembersByRole := func(sectionID uuid.UUID, role string) ([]SectionMembership, error) {
-		rows, err := conn.Query(ctx, `
-			SELECT id, user_id, section_id, role, joined_at
-			FROM section_memberships
-			WHERE section_id = $1 AND role = $2
-			ORDER BY joined_at`, sectionID, role)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var members []SectionMembership
-		for rows.Next() {
-			var m SectionMembership
-			if err := rows.Scan(&m.ID, &m.UserID, &m.SectionID, &m.Role, &m.JoinedAt); err != nil {
-				return nil, err
-			}
-			members = append(members, m)
-		}
-		return members, rows.Err()
+	authUser := &auth.User{
+		ID:          inst,
+		Email:       "inst@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("students only", func(t *testing.T) {
-		members, err := listMembersByRole(secID, "student")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		members, err := s.ListMembersByRole(ctx, secID, "student")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1122,7 +1265,10 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 	})
 
 	t.Run("instructors only", func(t *testing.T) {
-		members, err := listMembersByRole(secID, "instructor")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		members, err := s.ListMembersByRole(ctx, secID, "instructor")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1132,7 +1278,10 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 	})
 
 	t.Run("empty section", func(t *testing.T) {
-		members, err := listMembersByRole(uuid.New(), "student")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		members, err := s.ListMembersByRole(ctx, uuid.New(), "student")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1143,7 +1292,7 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 }
 
 // =============================================================================
-// UpsertUser Tests
+// UpsertUser Tests - calls actual Store method (superuser, no RLS needed)
 // =============================================================================
 
 func TestIntegration_UpsertUser_Insert(t *testing.T) {

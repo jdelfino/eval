@@ -1,5 +1,9 @@
 // Integration tests for sessions, session students, revisions, problems CRUD, and users.
 //
+// These tests validate actual Store methods with proper RLS context,
+// ensuring that the SQL queries, scanning logic, and RLS policies work
+// together as they would in production.
+//
 // Run with:
 //
 //	DATABASE_URL="postgres://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test ./internal/store/... -run TestIntegration
@@ -9,18 +13,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jdelfino/eval/internal/auth"
 )
 
 // seed helpers for sessions
 
 func (db *integrationDB) createSession(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, sectionID uuid.UUID, sectionName string, creatorID uuid.UUID) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO sessions (id, namespace_id, section_id, section_name, problem, creator_id) VALUES ($1, $2, $3, $4, '{}', $5)`,
 		id, nsID, sectionID, sectionName, creatorID)
 	if err != nil {
@@ -30,7 +34,7 @@ func (db *integrationDB) createSession(ctx context.Context, t *testing.T, id uui
 
 func (db *integrationDB) createSessionStudent(ctx context.Context, t *testing.T, sessionID, userID uuid.UUID, name string) {
 	t.Helper()
-	_, err := db.pool.Exec(ctx,
+	err := db.execAsSuperuser(ctx,
 		`INSERT INTO session_students (session_id, user_id, name) VALUES ($1, $2, $3)`,
 		sessionID, userID, name)
 	if err != nil {
@@ -39,7 +43,7 @@ func (db *integrationDB) createSessionStudent(ctx context.Context, t *testing.T,
 }
 
 // =============================================================================
-// Test: CreateSession
+// Test: CreateSession - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_CreateSession(t *testing.T) {
@@ -48,7 +52,6 @@ func TestIntegration_CreateSession(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-create-session"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -57,25 +60,25 @@ func TestIntegration_CreateSession(t *testing.T) {
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
 	t.Run("successful creation with defaults", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		problem := json.RawMessage(`{"title":"Two Sum"}`)
-		var sess Session
-		err := conn.QueryRow(ctx,
-			`INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id, namespace_id, section_id, section_name, problem,
-			           featured_student_id, featured_code, creator_id, participants,
-			           status, created_at, last_activity, ended_at`,
-			nsID, sectionID, "Section A", problem, creatorID,
-		).Scan(&sess.ID, &sess.NamespaceID, &sess.SectionID, &sess.SectionName, &sess.Problem,
-			&sess.FeaturedStudentID, &sess.FeaturedCode, &sess.CreatorID, &sess.Participants,
-			&sess.Status, &sess.CreatedAt, &sess.LastActivity, &sess.EndedAt)
+		sess, err := s.CreateSession(ctx, CreateSessionParams{
+			NamespaceID: nsID,
+			SectionID:   sectionID,
+			SectionName: "Section A",
+			Problem:     problem,
+			CreatorID:   creatorID,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -107,7 +110,7 @@ func TestIntegration_CreateSession(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetSession
+// Test: GetSession - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetSession(t *testing.T) {
@@ -116,7 +119,6 @@ func TestIntegration_GetSession(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-get-session"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -127,30 +129,18 @@ func TestIntegration_GetSession(t *testing.T) {
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getSession := func(id uuid.UUID) (*Session, error) {
-		var sess Session
-		err := conn.QueryRow(ctx,
-			`SELECT id, namespace_id, section_id, section_name, problem,
-			        featured_student_id, featured_code, creator_id, participants,
-			        status, created_at, last_activity, ended_at
-			 FROM sessions WHERE id = $1`, id).Scan(
-			&sess.ID, &sess.NamespaceID, &sess.SectionID, &sess.SectionName, &sess.Problem,
-			&sess.FeaturedStudentID, &sess.FeaturedCode, &sess.CreatorID, &sess.Participants,
-			&sess.Status, &sess.CreatedAt, &sess.LastActivity, &sess.EndedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sess, nil
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		sess, err := getSession(sessionID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		sess, err := s.GetSession(ctx, sessionID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -163,7 +153,10 @@ func TestIntegration_GetSession(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getSession(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetSession(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -171,7 +164,7 @@ func TestIntegration_GetSession(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListSessions
+// Test: ListSessions - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListSessions(t *testing.T) {
@@ -180,7 +173,6 @@ func TestIntegration_ListSessions(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-list-sessions"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -206,51 +198,21 @@ func TestIntegration_ListSessions(t *testing.T) {
 		t.Fatalf("update session status: %v", err)
 	}
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listSessions := func(filters SessionFilters) []Session {
-		t.Helper()
-		query := `SELECT id, namespace_id, section_id, section_name, problem,
-		                 featured_student_id, featured_code, creator_id, participants,
-		                 status, created_at, last_activity, ended_at
-		          FROM sessions WHERE 1=1`
-		var args []any
-		argIdx := 1
-		if filters.SectionID != nil {
-			query += fmt.Sprintf(" AND section_id = $%d", argIdx)
-			args = append(args, *filters.SectionID)
-			argIdx++
-		}
-		if filters.Status != nil {
-			query += fmt.Sprintf(" AND status = $%d", argIdx)
-			args = append(args, *filters.Status)
-		}
-		query += " ORDER BY created_at DESC"
-
-		rows, err := conn.Query(ctx, query, args...)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		defer rows.Close()
-		var sessions []Session
-		for rows.Next() {
-			var s Session
-			if err := rows.Scan(&s.ID, &s.NamespaceID, &s.SectionID, &s.SectionName, &s.Problem,
-				&s.FeaturedStudentID, &s.FeaturedCode, &s.CreatorID, &s.Participants,
-				&s.Status, &s.CreatedAt, &s.LastActivity, &s.EndedAt); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			sessions = append(sessions, s)
-		}
-		return sessions
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("no filters returns all desc", func(t *testing.T) {
-		results := listSessions(SessionFilters{})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListSessions(ctx, SessionFilters{})
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
 		if len(results) != 3 {
 			t.Fatalf("expected 3 sessions, got %d", len(results))
 		}
@@ -261,15 +223,27 @@ func TestIntegration_ListSessions(t *testing.T) {
 	})
 
 	t.Run("filter by section_id", func(t *testing.T) {
-		results := listSessions(SessionFilters{SectionID: &sec1})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListSessions(ctx, SessionFilters{SectionID: &sec1})
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 sessions in section A, got %d", len(results))
 		}
 	})
 
 	t.Run("filter by status", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		status := "active"
-		results := listSessions(SessionFilters{Status: &status})
+		results, err := s.ListSessions(ctx, SessionFilters{Status: &status})
+		if err != nil {
+			t.Fatalf("ListSessions: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 active sessions, got %d", len(results))
 		}
@@ -277,7 +251,7 @@ func TestIntegration_ListSessions(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateSession
+// Test: UpdateSession - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateSession(t *testing.T) {
@@ -286,7 +260,6 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-update-session"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -299,62 +272,19 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateSession := func(id uuid.UUID, params UpdateSessionParams) (*Session, error) {
-		query := `UPDATE sessions SET last_activity = now()`
-		args := []any{id}
-		argIdx := 2
-
-		if params.FeaturedStudentID != nil {
-			query += fmt.Sprintf(", featured_student_id = $%d", argIdx)
-			args = append(args, *params.FeaturedStudentID)
-			argIdx++
-		}
-		if params.FeaturedCode != nil {
-			query += fmt.Sprintf(", featured_code = $%d", argIdx)
-			args = append(args, *params.FeaturedCode)
-			argIdx++
-		}
-		if params.Status != nil {
-			query += fmt.Sprintf(", status = $%d", argIdx)
-			args = append(args, *params.Status)
-			argIdx++
-		}
-		if params.EndedAt != nil {
-			query += fmt.Sprintf(", ended_at = $%d", argIdx)
-			args = append(args, *params.EndedAt)
-			argIdx++ //nolint:ineffassign // keep argIdx consistent for future fields
-		}
-		if params.ClearEndedAt {
-			query += ", ended_at = NULL"
-		}
-		if params.ClearFeatured {
-			query += ", featured_student_id = NULL, featured_code = NULL"
-		}
-		query += ` WHERE id = $1
-		RETURNING id, namespace_id, section_id, section_name, problem,
-		          featured_student_id, featured_code, creator_id, participants,
-		          status, created_at, last_activity, ended_at`
-
-		var sess Session
-		err := conn.QueryRow(ctx, query, args...).Scan(
-			&sess.ID, &sess.NamespaceID, &sess.SectionID, &sess.SectionName, &sess.Problem,
-			&sess.FeaturedStudentID, &sess.FeaturedCode, &sess.CreatorID, &sess.Participants,
-			&sess.Status, &sess.CreatedAt, &sess.LastActivity, &sess.EndedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &sess, nil
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("update featured student", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		code := "print('hello')"
-		sess, err := updateSession(sessionID, UpdateSessionParams{
+		sess, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{
 			FeaturedStudentID: &studentID,
 			FeaturedCode:      &code,
 		})
@@ -370,7 +300,10 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	})
 
 	t.Run("clear featured", func(t *testing.T) {
-		sess, err := updateSession(sessionID, UpdateSessionParams{ClearFeatured: true})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		sess, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{ClearFeatured: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -383,9 +316,12 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	})
 
 	t.Run("update status and ended_at", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		status := "completed"
 		now := time.Now()
-		sess, err := updateSession(sessionID, UpdateSessionParams{
+		sess, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{
 			Status:  &status,
 			EndedAt: &now,
 		})
@@ -401,7 +337,10 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	})
 
 	t.Run("clear ended_at", func(t *testing.T) {
-		sess, err := updateSession(sessionID, UpdateSessionParams{ClearEndedAt: true})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		sess, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{ClearEndedAt: true})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -411,8 +350,11 @@ func TestIntegration_UpdateSession(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		status := "completed"
-		_, err := updateSession(uuid.New(), UpdateSessionParams{Status: &status})
+		_, err := s.UpdateSession(ctx, uuid.New(), UpdateSessionParams{Status: &status})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -420,7 +362,7 @@ func TestIntegration_UpdateSession(t *testing.T) {
 }
 
 // =============================================================================
-// Test: JoinSession
+// Test: JoinSession - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_JoinSession(t *testing.T) {
@@ -429,7 +371,6 @@ func TestIntegration_JoinSession(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-join-session"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -439,51 +380,33 @@ func TestIntegration_JoinSession(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Student needs to be section member to see/join session
+	db.createMembership(ctx, t, studentID, sectionID, "student")
+	// Instructor needs section membership to update sessions
+	db.createMembership(ctx, t, creatorID, sectionID, "instructor")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	// JoinSession uses a transaction (INSERT + UPDATE participants), so we replicate both statements.
-	joinSession := func(params JoinSessionParams) (*SessionStudent, error) {
-		tx, err := db.pool.Begin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback(ctx) //nolint:errcheck
-
-		var ss SessionStudent
-		err = tx.QueryRow(ctx,
-			`INSERT INTO session_students (session_id, user_id, name)
-			 VALUES ($1, $2, $3)
-			 ON CONFLICT (session_id, user_id) DO UPDATE SET name = EXCLUDED.name
-			 RETURNING id, session_id, user_id, name, code, execution_settings, last_update`,
-			params.SessionID, params.UserID, params.Name,
-		).Scan(&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name, &ss.Code, &ss.ExecutionSettings, &ss.LastUpdate)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = tx.Exec(ctx,
-			`UPDATE sessions SET participants = array_append(participants, $2)
-			 WHERE id = $1 AND NOT ($2 = ANY(participants))`,
-			params.SessionID, params.UserID)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			return nil, err
-		}
-		return &ss, nil
+	// Use system-admin as auth user.
+	// JoinSession inserts into session_students (requires user_id = app_user_id() OR is_system_admin())
+	// and updates sessions.participants (requires creator/instructor/system-admin).
+	// A student can insert their own record but can't update sessions.
+	// An instructor can update sessions but can't insert session_students for others.
+	// Only system-admin can do both.
+	systemAdminID := uuid.New()
+	db.createUser(ctx, t, systemAdminID, "sysadmin@test.com", "system-admin", "")
+	authUser := &auth.User{
+		ID:          systemAdminID,
+		Email:       "sysadmin@test.com",
+		NamespaceID: "", // system-admin doesn't belong to a namespace
+		Role:        auth.RoleSystemAdmin,
 	}
 
 	t.Run("first join", func(t *testing.T) {
-		ss, err := joinSession(JoinSessionParams{SessionID: sessionID, UserID: studentID, Name: "Alice"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ss, err := s.JoinSession(ctx, JoinSessionParams{SessionID: sessionID, UserID: studentID, Name: "Alice"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -518,7 +441,10 @@ func TestIntegration_JoinSession(t *testing.T) {
 	})
 
 	t.Run("idempotent rejoin updates name", func(t *testing.T) {
-		ss, err := joinSession(JoinSessionParams{SessionID: sessionID, UserID: studentID, Name: "Alice Updated"})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ss, err := s.JoinSession(ctx, JoinSessionParams{SessionID: sessionID, UserID: studentID, Name: "Alice Updated"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -545,7 +471,7 @@ func TestIntegration_JoinSession(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateCode
+// Test: UpdateCode - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateCode(t *testing.T) {
@@ -554,7 +480,6 @@ func TestIntegration_UpdateCode(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-update-code"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -564,40 +489,25 @@ func TestIntegration_UpdateCode(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Instructor needs section membership for session update (last_activity)
+	db.createMembership(ctx, t, creatorID, sectionID, "instructor")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 	db.createSessionStudent(ctx, t, sessionID, studentID, "Alice")
 
-	updateCode := func(sessID, userID uuid.UUID, code string) (*SessionStudent, error) {
-		tx, err := db.pool.Begin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback(ctx) //nolint:errcheck
-
-		var ss SessionStudent
-		err = tx.QueryRow(ctx,
-			`UPDATE session_students SET code = $3, last_update = now()
-			 WHERE session_id = $1 AND user_id = $2
-			 RETURNING id, session_id, user_id, name, code, execution_settings, last_update`,
-			sessID, userID, code,
-		).Scan(&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name, &ss.Code, &ss.ExecutionSettings, &ss.LastUpdate)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-
-		_, err = tx.Exec(ctx, "UPDATE sessions SET last_activity = now() WHERE id = $1", sessID)
-		if err != nil {
-			return nil, err
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return nil, err
-		}
-		return &ss, nil
+	// Use instructor as auth user - UpdateCode updates sessions.last_activity which requires session update permission
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("update code", func(t *testing.T) {
-		ss, err := updateCode(sessionID, studentID, "x = 42")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ss, err := s.UpdateCode(ctx, sessionID, studentID, "x = 42")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -607,7 +517,10 @@ func TestIntegration_UpdateCode(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := updateCode(sessionID, uuid.New(), "code")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.UpdateCode(ctx, sessionID, uuid.New(), "code")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -615,7 +528,7 @@ func TestIntegration_UpdateCode(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListSessionStudents
+// Test: ListSessionStudents - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListSessionStudents(t *testing.T) {
@@ -624,7 +537,6 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-list-ss"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -642,34 +554,21 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	db.createSessionStudent(ctx, t, sessionID, s2, "Student 2")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listStudents := func(sessID uuid.UUID) []SessionStudent {
-		t.Helper()
-		rows, err := conn.Query(ctx,
-			`SELECT id, session_id, user_id, name, code, execution_settings, last_update
-			 FROM session_students WHERE session_id = $1 ORDER BY last_update DESC`, sessID)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		defer rows.Close()
-		var students []SessionStudent
-		for rows.Next() {
-			var ss SessionStudent
-			if err := rows.Scan(&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name, &ss.Code, &ss.ExecutionSettings, &ss.LastUpdate); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			students = append(students, ss)
-		}
-		return students
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("returns students desc by last_update", func(t *testing.T) {
-		results := listStudents(sessionID)
+		store, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := store.ListSessionStudents(ctx, sessionID)
+		if err != nil {
+			t.Fatalf("ListSessionStudents: %v", err)
+		}
 		if len(results) != 2 {
 			t.Fatalf("expected 2 students, got %d", len(results))
 		}
@@ -680,7 +579,13 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 	})
 
 	t.Run("empty session", func(t *testing.T) {
-		results := listStudents(uuid.New())
+		store, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := store.ListSessionStudents(ctx, uuid.New())
+		if err != nil {
+			t.Fatalf("ListSessionStudents: %v", err)
+		}
 		if len(results) != 0 {
 			t.Errorf("expected 0 students, got %d", len(results))
 		}
@@ -688,7 +593,7 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetSessionStudent
+// Test: GetSessionStudent - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetSessionStudent(t *testing.T) {
@@ -697,7 +602,6 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-get-ss"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -711,26 +615,18 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 	db.createSessionStudent(ctx, t, sessionID, studentID, "Alice")
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getSessionStudent := func(sessID, userID uuid.UUID) (*SessionStudent, error) {
-		var ss SessionStudent
-		err := conn.QueryRow(ctx,
-			`SELECT id, session_id, user_id, name, code, execution_settings, last_update
-			 FROM session_students WHERE session_id = $1 AND user_id = $2`,
-			sessID, userID).Scan(&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name, &ss.Code, &ss.ExecutionSettings, &ss.LastUpdate)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &ss, nil
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		ss, err := getSessionStudent(sessionID, studentID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ss, err := s.GetSessionStudent(ctx, sessionID, studentID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -740,7 +636,10 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getSessionStudent(sessionID, uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetSessionStudent(ctx, sessionID, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -748,7 +647,7 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 }
 
 // =============================================================================
-// Test: CreateRevision
+// Test: CreateRevision - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_CreateRevision(t *testing.T) {
@@ -757,7 +656,6 @@ func TestIntegration_CreateRevision(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-create-rev"
 
 	creatorID := uuid.New()
 	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
@@ -768,24 +666,27 @@ func TestIntegration_CreateRevision(t *testing.T) {
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "creator@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
 	t.Run("create full code revision", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		fullCode := "print('hello')"
 		execResult := json.RawMessage(`{"status":"ok"}`)
-		var rev Revision
-		err := conn.QueryRow(ctx,
-			`INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, diff, full_code, base_revision_id, execution_result)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			 RETURNING id, namespace_id, session_id, user_id, timestamp,
-			           is_diff, diff, full_code, base_revision_id, execution_result`,
-			nsID, sessionID, creatorID, false, nil, &fullCode, nil, execResult,
-		).Scan(&rev.ID, &rev.NamespaceID, &rev.SessionID, &rev.UserID, &rev.Timestamp,
-			&rev.IsDiff, &rev.Diff, &rev.FullCode, &rev.BaseRevisionID, &rev.ExecutionResult)
+		rev, err := s.CreateRevision(ctx, CreateRevisionParams{
+			NamespaceID:     nsID,
+			SessionID:       sessionID,
+			UserID:          creatorID,
+			IsDiff:          false,
+			FullCode:        &fullCode,
+			ExecutionResult: execResult,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -805,7 +706,7 @@ func TestIntegration_CreateRevision(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListRevisions
+// Test: ListRevisions - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListRevisions(t *testing.T) {
@@ -814,7 +715,6 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-list-rev"
 
 	user1 := uuid.New()
 	user2 := uuid.New()
@@ -824,69 +724,84 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", user1)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Instructor needs section membership to see revisions
+	db.createMembership(ctx, t, user1, sectionID, "instructor")
+	db.createMembership(ctx, t, user2, sectionID, "student")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", user1)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser1 := &auth.User{
+		ID:          user1,
+		Email:       "u1@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
-	// Insert revisions
+	authUser2 := &auth.User{
+		ID:          user2,
+		Email:       "u2@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
+	}
+
+	// Insert revisions using Store methods - each user creates their own revision
 	code1 := "code1"
 	code2 := "code2"
-	_, err = conn.Exec(ctx,
-		`INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, full_code, execution_result) VALUES ($1, $2, $3, false, $4, '{}')`,
-		nsID, sessionID, user1, &code1)
+	s, conn := db.storeWithRLS(ctx, t, authUser1)
+	_, err := s.CreateRevision(ctx, CreateRevisionParams{
+		NamespaceID:     nsID,
+		SessionID:       sessionID,
+		UserID:          user1,
+		IsDiff:          false,
+		FullCode:        &code1,
+		ExecutionResult: json.RawMessage(`{}`),
+	})
 	if err != nil {
-		t.Fatalf("insert rev1: %v", err)
+		t.Fatalf("create rev1: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
-	_, err = conn.Exec(ctx,
-		`INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, full_code, execution_result) VALUES ($1, $2, $3, false, $4, '{}')`,
-		nsID, sessionID, user2, &code2)
-	if err != nil {
-		t.Fatalf("insert rev2: %v", err)
-	}
+	conn.Release()
 
-	listRevisions := func(sessID uuid.UUID, userID *uuid.UUID) []Revision {
-		t.Helper()
-		query := `SELECT id, namespace_id, session_id, user_id, timestamp,
-		                 is_diff, diff, full_code, base_revision_id, execution_result
-		          FROM revisions WHERE session_id = $1`
-		args := []any{sessID}
-		if userID != nil {
-			query += " AND user_id = $2"
-			args = append(args, *userID)
-		}
-		query += " ORDER BY timestamp"
-		rows, err := conn.Query(ctx, query, args...)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		defer rows.Close()
-		var revs []Revision
-		for rows.Next() {
-			var r Revision
-			if err := rows.Scan(&r.ID, &r.NamespaceID, &r.SessionID, &r.UserID, &r.Timestamp,
-				&r.IsDiff, &r.Diff, &r.FullCode, &r.BaseRevisionID, &r.ExecutionResult); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			revs = append(revs, r)
-		}
-		return revs
+	time.Sleep(10 * time.Millisecond)
+
+	// User2 creates their own revision
+	s2, conn2 := db.storeWithRLS(ctx, t, authUser2)
+	_, err = s2.CreateRevision(ctx, CreateRevisionParams{
+		NamespaceID:     nsID,
+		SessionID:       sessionID,
+		UserID:          user2,
+		IsDiff:          false,
+		FullCode:        &code2,
+		ExecutionResult: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("create rev2: %v", err)
 	}
+	conn2.Release()
+
+	// Use user1 (instructor) as auth for listing
+	authUser := authUser1
 
 	t.Run("all revisions for session", func(t *testing.T) {
-		results := listRevisions(sessionID, nil)
+		store, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := store.ListRevisions(ctx, sessionID, nil)
+		if err != nil {
+			t.Fatalf("ListRevisions: %v", err)
+		}
 		if len(results) != 2 {
 			t.Fatalf("expected 2 revisions, got %d", len(results))
 		}
 	})
 
 	t.Run("filter by user_id", func(t *testing.T) {
-		results := listRevisions(sessionID, &user1)
+		store, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := store.ListRevisions(ctx, sessionID, &user1)
+		if err != nil {
+			t.Fatalf("ListRevisions: %v", err)
+		}
 		if len(results) != 1 {
 			t.Fatalf("expected 1 revision, got %d", len(results))
 		}
@@ -896,7 +811,13 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	})
 
 	t.Run("empty session", func(t *testing.T) {
-		results := listRevisions(uuid.New(), nil)
+		store, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := store.ListRevisions(ctx, uuid.New(), nil)
+		if err != nil {
+			t.Fatalf("ListRevisions: %v", err)
+		}
 		if len(results) != 0 {
 			t.Errorf("expected 0 revisions, got %d", len(results))
 		}
@@ -904,7 +825,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 }
 
 // =============================================================================
-// Test: CreateProblem
+// Test: CreateProblem - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_CreateProblem(t *testing.T) {
@@ -913,36 +834,41 @@ func TestIntegration_CreateProblem(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-create-problem"
 
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	classID := uuid.New()
 	db.createClass(ctx, t, classID, nsID, "CS101", authorID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
-	defer conn.Release()
 
 	t.Run("successful creation", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		desc := "Find two numbers that sum to target"
 		starter := "def two_sum(nums, target):"
 		solution := "return [0, 1]"
 		testCases := json.RawMessage(`[{"input":[1,2],"output":3}]`)
 		execSettings := json.RawMessage(`{"timeout":5}`)
 
-		var p Problem
-		err := conn.QueryRow(ctx,
-			`INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
-			                       execution_settings, author_id, class_id, tags, solution)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			 RETURNING id, namespace_id, title, description, starter_code, test_cases,
-			           execution_settings, author_id, class_id, tags, solution, created_at, updated_at`,
-			nsID, "Two Sum", &desc, &starter, testCases, execSettings, authorID, &classID, []string{"easy", "arrays"}, &solution,
-		).Scan(&p.ID, &p.NamespaceID, &p.Title, &p.Description, &p.StarterCode, &p.TestCases,
-			&p.ExecutionSettings, &p.AuthorID, &p.ClassID, &p.Tags, &p.Solution, &p.CreatedAt, &p.UpdatedAt)
+		p, err := s.CreateProblem(ctx, CreateProblemParams{
+			NamespaceID:       nsID,
+			Title:             "Two Sum",
+			Description:       &desc,
+			StarterCode:       &starter,
+			TestCases:         testCases,
+			ExecutionSettings: execSettings,
+			AuthorID:          authorID,
+			ClassID:           &classID,
+			Tags:              []string{"easy", "arrays"},
+			Solution:          &solution,
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -965,7 +891,7 @@ func TestIntegration_CreateProblem(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetProblem
+// Test: GetProblem - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetProblem(t *testing.T) {
@@ -974,35 +900,24 @@ func TestIntegration_GetProblem(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-get-problem"
 
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
 	db.createProblem(ctx, t, problemID, nsID, "Test Problem", authorID, nil, []string{"easy"})
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getProblem := func(id uuid.UUID) (*Problem, error) {
-		var p Problem
-		err := conn.QueryRow(ctx,
-			`SELECT id, namespace_id, title, description, starter_code, test_cases,
-			        execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-			 FROM problems WHERE id = $1`, id).Scan(
-			&p.ID, &p.NamespaceID, &p.Title, &p.Description, &p.StarterCode, &p.TestCases,
-			&p.ExecutionSettings, &p.AuthorID, &p.ClassID, &p.Tags, &p.Solution, &p.CreatedAt, &p.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &p, nil
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		p, err := getProblem(problemID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		p, err := s.GetProblem(ctx, problemID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1012,7 +927,10 @@ func TestIntegration_GetProblem(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getProblem(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetProblem(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1020,7 +938,7 @@ func TestIntegration_GetProblem(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateProblem
+// Test: UpdateProblem - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateProblem(t *testing.T) {
@@ -1029,70 +947,25 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-update-problem"
 
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
 	db.createProblem(ctx, t, problemID, nsID, "Original Title", authorID, nil, []string{"easy"})
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateProblem := func(id uuid.UUID, params UpdateProblemParams) (*Problem, error) {
-		query := `UPDATE problems
-		SET title             = COALESCE($2, title),
-		    description       = COALESCE($3, description),
-		    starter_code      = COALESCE($4, starter_code)`
-		args := []any{id, params.Title, params.Description, params.StarterCode}
-		argIdx := 5
-
-		if params.TestCases != nil {
-			query += fmt.Sprintf(",\n		    test_cases         = $%d", argIdx)
-			args = append(args, params.TestCases)
-			argIdx++
-		}
-		if params.ExecutionSettings != nil {
-			query += fmt.Sprintf(",\n		    execution_settings = $%d", argIdx)
-			args = append(args, params.ExecutionSettings)
-			argIdx++
-		}
-		if params.ClassID != nil {
-			query += fmt.Sprintf(",\n		    class_id           = $%d", argIdx)
-			args = append(args, *params.ClassID)
-			argIdx++
-		}
-		if params.Tags != nil {
-			query += fmt.Sprintf(",\n		    tags               = $%d", argIdx)
-			args = append(args, params.Tags)
-			argIdx++
-		}
-		if params.Solution != nil {
-			query += fmt.Sprintf(",\n		    solution           = $%d", argIdx)
-			args = append(args, *params.Solution)
-		}
-		query += `,
-		    updated_at        = now()
-		WHERE id = $1
-		RETURNING id, namespace_id, title, description, starter_code, test_cases,
-		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
-
-		var p Problem
-		err := conn.QueryRow(ctx, query, args...).Scan(
-			&p.ID, &p.NamespaceID, &p.Title, &p.Description, &p.StarterCode, &p.TestCases,
-			&p.ExecutionSettings, &p.AuthorID, &p.ClassID, &p.Tags, &p.Solution, &p.CreatedAt, &p.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &p, nil
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("partial update title only", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newTitle := "Updated Title"
-		p, err := updateProblem(problemID, UpdateProblemParams{Title: &newTitle})
+		p, err := s.UpdateProblem(ctx, problemID, UpdateProblemParams{Title: &newTitle})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1102,8 +975,11 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 	})
 
 	t.Run("update tags", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		newTitle := "Updated Title"
-		p, err := updateProblem(problemID, UpdateProblemParams{Title: &newTitle, Tags: []string{"medium", "trees"}})
+		p, err := s.UpdateProblem(ctx, problemID, UpdateProblemParams{Title: &newTitle, Tags: []string{"medium", "trees"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1113,8 +989,11 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		title := "nope"
-		_, err := updateProblem(uuid.New(), UpdateProblemParams{Title: &title})
+		_, err := s.UpdateProblem(ctx, uuid.New(), UpdateProblemParams{Title: &title})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1122,7 +1001,7 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 }
 
 // =============================================================================
-// Test: DeleteProblem
+// Test: DeleteProblem - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_DeleteProblem(t *testing.T) {
@@ -1131,36 +1010,28 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-delete-problem"
 
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
 	problemID := uuid.New()
 	db.createProblem(ctx, t, problemID, nsID, "To Delete", authorID, nil, nil)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	deleteProblem := func(id uuid.UUID) error {
-		tag, err := conn.Exec(ctx, "DELETE FROM problems WHERE id = $1", id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		return nil
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("delete existing", func(t *testing.T) {
-		if err := deleteProblem(problemID); err != nil {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		if err := s.DeleteProblem(ctx, problemID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		var count int
-		err = db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM problems WHERE id = $1", problemID).Scan(&count)
+		err := db.pool.QueryRow(ctx, "SELECT COUNT(*) FROM problems WHERE id = $1", problemID).Scan(&count)
 		if err != nil {
 			t.Fatalf("count: %v", err)
 		}
@@ -1170,7 +1041,10 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		err := deleteProblem(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		err := s.DeleteProblem(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1178,7 +1052,7 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 }
 
 // =============================================================================
-// Test: ListProblems
+// Test: ListProblems - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_ListProblems(t *testing.T) {
@@ -1187,7 +1061,6 @@ func TestIntegration_ListProblems(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-list-problems"
 
 	authorID := uuid.New()
 	db.createUser(ctx, t, authorID, "author@test.com", "instructor", nsID)
@@ -1200,43 +1073,21 @@ func TestIntegration_ListProblems(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	db.createProblem(ctx, t, p2, nsID, "Problem B", authorID, nil, nil)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	listProblems := func(classFilter *uuid.UUID) []Problem {
-		t.Helper()
-		query := `SELECT id, namespace_id, title, description, starter_code, test_cases,
-		                 execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-		          FROM problems`
-		var args []any
-		if classFilter != nil {
-			query += " WHERE class_id = $1"
-			args = append(args, *classFilter)
-		}
-		query += " ORDER BY created_at"
-		rows, err := conn.Query(ctx, query, args...)
-		if err != nil {
-			t.Fatalf("query: %v", err)
-		}
-		defer rows.Close()
-		var problems []Problem
-		for rows.Next() {
-			var p Problem
-			if err := rows.Scan(&p.ID, &p.NamespaceID, &p.Title, &p.Description, &p.StarterCode,
-				&p.TestCases, &p.ExecutionSettings, &p.AuthorID, &p.ClassID, &p.Tags, &p.Solution,
-				&p.CreatedAt, &p.UpdatedAt); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			problems = append(problems, p)
-		}
-		return problems
+	authUser := &auth.User{
+		ID:          authorID,
+		Email:       "author@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
 	}
 
 	t.Run("no filter", func(t *testing.T) {
-		results := listProblems(nil)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblems(ctx, nil)
+		if err != nil {
+			t.Fatalf("ListProblems: %v", err)
+		}
 		if len(results) != 2 {
 			t.Errorf("expected 2 problems, got %d", len(results))
 		}
@@ -1246,7 +1097,13 @@ func TestIntegration_ListProblems(t *testing.T) {
 	})
 
 	t.Run("filter by class_id", func(t *testing.T) {
-		results := listProblems(&classID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblems(ctx, &classID)
+		if err != nil {
+			t.Fatalf("ListProblems: %v", err)
+		}
 		if len(results) != 1 {
 			t.Errorf("expected 1 problem in class, got %d", len(results))
 		}
@@ -1254,7 +1111,7 @@ func TestIntegration_ListProblems(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetUserByID
+// Test: GetUserByID - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetUserByID(t *testing.T) {
@@ -1263,31 +1120,22 @@ func TestIntegration_GetUserByID(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-get-user-id"
 
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "byid@test.com", "student", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getUserByID := func(id uuid.UUID) (*User, error) {
-		var u User
-		err := conn.QueryRow(ctx,
-			`SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
-			 FROM users WHERE id = $1`, id).Scan(
-			&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &u, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "byid@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		u, err := getUserByID(userID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		u, err := s.GetUserByID(ctx, userID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1300,7 +1148,10 @@ func TestIntegration_GetUserByID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getUserByID(uuid.New())
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetUserByID(ctx, uuid.New())
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1308,7 +1159,7 @@ func TestIntegration_GetUserByID(t *testing.T) {
 }
 
 // =============================================================================
-// Test: GetUserByExternalID
+// Test: GetUserByExternalID - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_GetUserByExternalID(t *testing.T) {
@@ -1317,7 +1168,6 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-get-user-ext"
 
 	userID := uuid.New()
 	extID := "firebase-uid-" + uuid.New().String()[:8]
@@ -1329,26 +1179,18 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	getUserByExternalID := func(externalID string) (*User, error) {
-		var u User
-		err := conn.QueryRow(ctx,
-			`SELECT id, external_id, email, role, namespace_id, display_name, created_at, updated_at
-			 FROM users WHERE external_id = $1`, externalID).Scan(
-			&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &u, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "ext@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("found", func(t *testing.T) {
-		u, err := getUserByExternalID(extID)
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		u, err := s.GetUserByExternalID(ctx, extID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1361,7 +1203,10 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		_, err := getUserByExternalID("nonexistent-uid")
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		_, err := s.GetUserByExternalID(ctx, "nonexistent-uid")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1369,7 +1214,7 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateUser
+// Test: UpdateUser - calls actual Store method with RLS
 // =============================================================================
 
 func TestIntegration_UpdateUser(t *testing.T) {
@@ -1378,35 +1223,23 @@ func TestIntegration_UpdateUser(t *testing.T) {
 	ctx := context.Background()
 
 	nsID := db.nsID
-	// was "test-ns-update-user"
 
 	userID := uuid.New()
 	db.createUser(ctx, t, userID, "update@test.com", "student", nsID)
 
-	conn, err := db.pool.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-	defer conn.Release()
-
-	updateUser := func(id uuid.UUID, params UpdateUserParams) (*User, error) {
-		var u User
-		err := conn.QueryRow(ctx,
-			`UPDATE users
-			 SET display_name = COALESCE($2, display_name), updated_at = now()
-			 WHERE id = $1
-			 RETURNING id, external_id, email, role, namespace_id, display_name, created_at, updated_at`,
-			id, params.DisplayName).Scan(
-			&u.ID, &u.ExternalID, &u.Email, &u.Role, &u.NamespaceID, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt)
-		if err != nil {
-			return nil, HandleNotFound(err)
-		}
-		return &u, nil
+	authUser := &auth.User{
+		ID:          userID,
+		Email:       "update@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleStudent,
 	}
 
 	t.Run("update display name", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		name := "New Name"
-		u, err := updateUser(userID, UpdateUserParams{DisplayName: &name})
+		u, err := s.UpdateUser(ctx, userID, UpdateUserParams{DisplayName: &name})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1416,7 +1249,10 @@ func TestIntegration_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("nil display name keeps current", func(t *testing.T) {
-		u, err := updateUser(userID, UpdateUserParams{DisplayName: nil})
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		u, err := s.UpdateUser(ctx, userID, UpdateUserParams{DisplayName: nil})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1426,8 +1262,11 @@ func TestIntegration_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
 		name := "nope"
-		_, err := updateUser(uuid.New(), UpdateUserParams{DisplayName: &name})
+		_, err := s.UpdateUser(ctx, uuid.New(), UpdateUserParams{DisplayName: &name})
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
@@ -1436,4 +1275,3 @@ func TestIntegration_UpdateUser(t *testing.T) {
 
 // Ensure imports are used.
 var _ = json.RawMessage{}
-var _ = fmt.Sprintf
