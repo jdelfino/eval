@@ -56,7 +56,7 @@ export default defineConfig({
       command: 'go run ./go-backend/cmd/server',
       cwd: '..',
       port: 8080,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: !!process.env.E2E_REUSE_SERVERS || !process.env.CI,
       timeout: 60 * 1000,
       env: {
         AUTH_MODE: 'test',
@@ -73,7 +73,7 @@ export default defineConfig({
     {
       command: 'npm run dev',
       url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: !!process.env.E2E_REUSE_SERVERS || !process.env.CI,
       timeout: 120 * 1000,
       env: {
         ...process.env,

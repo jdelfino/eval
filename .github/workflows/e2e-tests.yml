@@ -141,10 +141,9 @@ jobs:
           NEXT_PUBLIC_AUTH_MODE: test
           NEXT_PUBLIC_API_URL: http://localhost:8080
           API_BASE_URL: http://localhost:8080
-          # Override CI so Playwright's webServer config reuses our pre-started
-          # servers instead of trying to launch its own (reuseExistingServer: !process.env.CI)
-          CI: ''
-        run: npx playwright test --project=chromium --forbid-only
+          # Tell Playwright to reuse our pre-started servers instead of launching its own
+          E2E_REUSE_SERVERS: 'true'
+        run: npx playwright test --project=chromium
         working-directory: frontend
 
       - name: Upload Playwright report
