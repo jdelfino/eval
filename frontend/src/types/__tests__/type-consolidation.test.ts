@@ -66,4 +66,21 @@ describe('Instructor types consolidation (PLAT-uum.49)', () => {
     };
     expect(p.id).toBe('p-1');
   });
+
+  it('ProblemSummary supports optional updated_at field (consolidated from API module)', () => {
+    // This test verifies that ProblemSummary has been consolidated with the API module version
+    // which includes the updated_at field
+    const problemWithUpdatedAt: ProblemSummary = {
+      id: 'p-2',
+      title: 'Updated Problem',
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-06-15T12:30:00Z',
+      author_id: 'u-1',
+      tags: ['test'],
+      class_id: 'c-1',
+      description: 'A problem with updated_at',
+      test_case_count: 3,
+    };
+    expect(problemWithUpdatedAt.updated_at).toBe('2025-06-15T12:30:00Z');
+  });
 });
