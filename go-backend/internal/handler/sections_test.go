@@ -1707,7 +1707,7 @@ func TestListInstructors_InternalError(t *testing.T) {
 // for the instructor+ section endpoints.
 func buildSectionInstructorRouter(h *SectionHandler) chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermContentManage))
 	r.Get("/sections/{id}/sessions", h.ListSessions)
 	r.Post("/sections/{id}/regenerate-code", h.RegenerateCode)
 	r.Get("/sections/{id}/instructors", h.ListInstructors)

@@ -35,7 +35,7 @@ func NewInvitationHandler(emailClient email.Client, baseURL string) *InvitationH
 // Mounted under /api/v1/namespaces/{id}/invitations
 func (h *InvitationHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermUserManage))
 
 	r.Get("/", h.List)
 	r.Post("/", h.Create)
@@ -50,7 +50,7 @@ func (h *InvitationHandler) Routes() chi.Router {
 // Mounted under /api/v1/system/invitations
 func (h *InvitationHandler) SystemRoutes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermSystemAdmin))
 
 	r.Get("/", h.SystemList)
 	r.Post("/", h.SystemCreate)

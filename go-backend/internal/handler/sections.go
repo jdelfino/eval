@@ -31,7 +31,7 @@ func (h *SectionHandler) Routes() chi.Router {
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.Get)
 		r.Group(func(r chi.Router) {
-			r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+			r.Use(custommw.RequirePermission(auth.PermContentManage))
 			r.Patch("/", h.Update)
 			r.Delete("/", h.Delete)
 		})
@@ -46,7 +46,7 @@ func (h *SectionHandler) ClassRoutes() chi.Router {
 
 	r.Get("/", h.ListByClass)
 	r.Group(func(r chi.Router) {
-		r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+		r.Use(custommw.RequirePermission(auth.PermContentManage))
 		r.Post("/", h.Create)
 	})
 

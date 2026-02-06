@@ -12,7 +12,7 @@ import (
 	"github.com/jdelfino/eval/internal/auth"
 )
 
-func TestRequireRole(t *testing.T) {
+func TestRequirePermission(t *testing.T) {
 	makeUser := func(role auth.Role) *auth.User {
 		return &auth.User{
 			ID:          uuid.New(),
@@ -27,76 +27,76 @@ func TestRequireRole(t *testing.T) {
 	})
 
 	tests := []struct {
-		name         string
-		allowedRoles []auth.Role
-		user         *auth.User
-		wantStatus   int
+		name       string
+		permission auth.Permission
+		user       *auth.User
+		wantStatus int
 	}{
 		{
-			name:         "no user in context returns 401",
-			allowedRoles: []auth.Role{auth.RoleInstructor},
-			user:         nil,
-			wantStatus:   http.StatusUnauthorized,
+			name:       "no user in context returns 401",
+			permission: auth.PermContentManage,
+			user:       nil,
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:         "user with allowed role passes through",
-			allowedRoles: []auth.Role{auth.RoleInstructor},
-			user:         makeUser(auth.RoleInstructor),
-			wantStatus:   http.StatusOK,
+			name:       "user with permission passes through",
+			permission: auth.PermContentManage,
+			user:       makeUser(auth.RoleInstructor),
+			wantStatus: http.StatusOK,
 		},
 		{
-			name:         "user with disallowed role returns 403",
-			allowedRoles: []auth.Role{auth.RoleInstructor},
-			user:         makeUser(auth.RoleStudent),
-			wantStatus:   http.StatusForbidden,
+			name:       "user without permission returns 403",
+			permission: auth.PermContentManage,
+			user:       makeUser(auth.RoleStudent),
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:         "multiple allowed roles - first matches",
-			allowedRoles: []auth.Role{auth.RoleInstructor, auth.RoleSystemAdmin},
-			user:         makeUser(auth.RoleInstructor),
-			wantStatus:   http.StatusOK,
+			name:       "student can join session",
+			permission: auth.PermSessionJoin,
+			user:       makeUser(auth.RoleStudent),
+			wantStatus: http.StatusOK,
 		},
 		{
-			name:         "multiple allowed roles - second matches",
-			allowedRoles: []auth.Role{auth.RoleInstructor, auth.RoleSystemAdmin},
-			user:         makeUser(auth.RoleSystemAdmin),
-			wantStatus:   http.StatusOK,
+			name:       "student cannot manage sessions",
+			permission: auth.PermSessionManage,
+			user:       makeUser(auth.RoleStudent),
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:         "multiple allowed roles - none match",
-			allowedRoles: []auth.Role{auth.RoleInstructor, auth.RoleSystemAdmin},
-			user:         makeUser(auth.RoleStudent),
-			wantStatus:   http.StatusForbidden,
+			name:       "instructor can manage content",
+			permission: auth.PermContentManage,
+			user:       makeUser(auth.RoleInstructor),
+			wantStatus: http.StatusOK,
 		},
 		{
-			name:         "system-admin role allowed",
-			allowedRoles: []auth.Role{auth.RoleSystemAdmin},
-			user:         makeUser(auth.RoleSystemAdmin),
-			wantStatus:   http.StatusOK,
+			name:       "instructor cannot manage users",
+			permission: auth.PermUserManage,
+			user:       makeUser(auth.RoleInstructor),
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:         "namespace-admin role allowed",
-			allowedRoles: []auth.Role{auth.RoleNamespaceAdmin},
-			user:         makeUser(auth.RoleNamespaceAdmin),
-			wantStatus:   http.StatusOK,
+			name:       "namespace-admin can manage users",
+			permission: auth.PermUserManage,
+			user:       makeUser(auth.RoleNamespaceAdmin),
+			wantStatus: http.StatusOK,
 		},
 		{
-			name:         "instructor role allowed",
-			allowedRoles: []auth.Role{auth.RoleInstructor},
-			user:         makeUser(auth.RoleInstructor),
-			wantStatus:   http.StatusOK,
+			name:       "namespace-admin cannot system admin",
+			permission: auth.PermSystemAdmin,
+			user:       makeUser(auth.RoleNamespaceAdmin),
+			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:         "student role allowed",
-			allowedRoles: []auth.Role{auth.RoleStudent},
-			user:         makeUser(auth.RoleStudent),
-			wantStatus:   http.StatusOK,
+			name:       "system-admin has system admin",
+			permission: auth.PermSystemAdmin,
+			user:       makeUser(auth.RoleSystemAdmin),
+			wantStatus: http.StatusOK,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			middleware := RequireRole(tc.allowedRoles...)
+			middleware := RequirePermission(tc.permission)
 			wrapped := middleware(okHandler)
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -135,7 +135,7 @@ func TestErrorResponseIncludesRequestID(t *testing.T) {
 	})
 
 	t.Run("error response includes request_id when present", func(t *testing.T) {
-		mw := RequireRole(auth.RoleInstructor)
+		mw := RequirePermission(auth.PermContentManage)
 		wrapped := mw(okHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -160,7 +160,7 @@ func TestErrorResponseIncludesRequestID(t *testing.T) {
 	})
 
 	t.Run("error response omits request_id when not present", func(t *testing.T) {
-		mw := RequireRole(auth.RoleInstructor)
+		mw := RequirePermission(auth.PermContentManage)
 		wrapped := mw(okHandler)
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)

@@ -185,7 +185,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// Section sub-resources (instructor+)
 			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Use(custommw.RequirePermission(auth.PermContentManage))
 				r.Get("/sections/{id}/sessions", sectionHandler.ListSessions)
 				r.Post("/sections/{id}/regenerate-code", sectionHandler.RegenerateCode)
 				r.Get("/sections/{id}/instructors", sectionHandler.ListInstructors)
@@ -195,7 +195,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// Instructor dashboard (instructor+)
 			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Use(custommw.RequirePermission(auth.PermDataViewAll))
 				dashboardHandler := handler.NewDashboardHandler()
 				r.Get("/instructor/dashboard", dashboardHandler.Dashboard)
 			})
@@ -249,7 +249,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Get("/sessions/{id}/state", sessionStateHandler.State)
 			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
 			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Use(custommw.RequirePermission(auth.PermSessionManage))
 				r.Get("/sessions/{id}/details", sessionStateHandler.State)
 				r.Post("/sessions/{id}/feature", sessionStateHandler.Feature)
 			})
@@ -264,7 +264,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// Standalone code execution (instructor+) — no session context
 			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Use(custommw.RequirePermission(auth.PermSessionManage))
 				r.Post("/execute", executeHandler.StandaloneExecute)
 			})
 
@@ -272,7 +272,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			traceHandler := handler.NewTraceHandler(execClient)
 			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
 			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+				r.Use(custommw.RequirePermission(auth.PermSessionManage))
 				r.Post("/sessions/{id}/trace", traceHandler.Trace)
 				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})

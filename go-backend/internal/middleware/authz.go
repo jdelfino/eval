@@ -8,26 +8,20 @@ import (
 	"github.com/jdelfino/eval/internal/auth"
 )
 
-// RequireRole returns middleware that restricts access to users with one of the
-// specified roles. It must run after authentication middleware that populates
-// the user in the request context via auth.WithUser.
+// RequirePermission returns middleware that restricts access to users who have
+// the specified permission. It must run after authentication middleware that
+// populates the user in the request context via auth.WithUser.
 //
 // If no user is in the context, it responds with 401 Unauthorized.
-// If the user's role is not in the allowed set, it responds with 403 Forbidden.
+// If the user's role lacks the required permission, it responds with 403 Forbidden.
 //
 // Usage:
 //
 //	r.Group(func(r chi.Router) {
-//	    r.Use(RequireRole(auth.RoleInstructor, auth.RoleSystemAdmin))
+//	    r.Use(RequirePermission(auth.PermContentManage))
 //	    r.Post("/classes", createClass)
 //	})
-func RequireRole(roles ...auth.Role) func(http.Handler) http.Handler {
-	// Build a set for O(1) lookup.
-	allowed := make(map[auth.Role]struct{}, len(roles))
-	for _, r := range roles {
-		allowed[r] = struct{}{}
-	}
-
+func RequirePermission(perm auth.Permission) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := auth.UserFromContext(r.Context())
@@ -36,7 +30,7 @@ func RequireRole(roles ...auth.Role) func(http.Handler) http.Handler {
 				return
 			}
 
-			if _, ok := allowed[user.Role]; !ok {
+			if !auth.HasPermission(user.Role, perm) {
 				writeJSONError(w, r, http.StatusForbidden, "insufficient permissions")
 				return
 			}

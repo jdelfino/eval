@@ -24,7 +24,7 @@ func NewUserHandler() *UserHandler {
 // SystemRoutes returns a chi.Router with system-level user routes (system-admin only).
 func (h *UserHandler) SystemRoutes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermSystemAdmin))
 
 	r.Get("/", h.ListSystem)
 	r.Put("/{id}", h.UpdateAdmin)
@@ -36,7 +36,7 @@ func (h *UserHandler) SystemRoutes() chi.Router {
 // NamespaceRoutes returns a chi.Router with namespace-level user routes (namespace-admin+).
 func (h *UserHandler) NamespaceRoutes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermUserManage))
 
 	r.Get("/", h.ListNamespace)
 	r.Delete("/{id}", h.DeleteNamespaceScoped)

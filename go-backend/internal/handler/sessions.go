@@ -42,9 +42,9 @@ func (h *SessionHandler) Routes() chi.Router {
 	r.Get("/history", h.History)
 	r.Get("/{id}", h.Get)
 
-	// Instructor+ routes
+	// Instructor+ routes (session management)
 	r.Group(func(r chi.Router) {
-		r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+		r.Use(custommw.RequirePermission(auth.PermSessionManage))
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)

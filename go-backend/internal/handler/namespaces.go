@@ -32,14 +32,14 @@ func (h *NamespaceHandler) Routes() chi.Router {
 
 		// Namespace sub-resources (namespace-admin+)
 		r.Group(func(r chi.Router) {
-			r.Use(custommw.RequireRole(auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+			r.Use(custommw.RequirePermission(auth.PermNamespaceManage))
 			r.Get("/users", h.ListUsers)
 			r.Get("/capacity", h.GetCapacity)
 		})
 
 		// System-admin only
 		r.Group(func(r chi.Router) {
-			r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+			r.Use(custommw.RequirePermission(auth.PermSystemAdmin))
 			r.Patch("/", h.Update)
 			r.Delete("/", h.Delete)
 			r.Put("/capacity", h.UpdateCapacity)
@@ -48,7 +48,7 @@ func (h *NamespaceHandler) Routes() chi.Router {
 
 	// System-admin only: create
 	r.Group(func(r chi.Router) {
-		r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+		r.Use(custommw.RequirePermission(auth.PermSystemAdmin))
 		r.Post("/", h.Create)
 	})
 

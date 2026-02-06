@@ -294,7 +294,7 @@ func TestCreateNamespace_Unauthorized(t *testing.T) {
 }
 
 func TestCreateNamespace_RBACForbidden(t *testing.T) {
-	// Test that the Routes() method applies RequireRole middleware to POST.
+	// Test that the Routes() method applies RequirePermission middleware to POST.
 	// A non-system-admin should get 403.
 	repo := &mockNamespaceRepo{}
 	h := NewNamespaceHandler()

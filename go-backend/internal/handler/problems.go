@@ -31,9 +31,9 @@ func (h *ProblemHandler) Routes() chi.Router {
 	r.Get("/", h.List)
 	r.Get("/{id}", h.Get)
 
-	// Instructor+ routes
+	// Instructor+ routes (content management)
 	r.Group(func(r chi.Router) {
-		r.Use(custommw.RequireRole(auth.RoleInstructor, auth.RoleNamespaceAdmin, auth.RoleSystemAdmin))
+		r.Use(custommw.RequirePermission(auth.PermContentManage))
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)

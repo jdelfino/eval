@@ -24,7 +24,7 @@ func NewAdminHandler() *AdminHandler {
 // Routes returns a chi.Router with admin routes (system-admin only).
 func (h *AdminHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequireRole(auth.RoleSystemAdmin))
+	r.Use(custommw.RequirePermission(auth.PermSystemAdmin))
 
 	r.Get("/stats", h.Stats)
 	r.Get("/audit", h.AuditLog)
