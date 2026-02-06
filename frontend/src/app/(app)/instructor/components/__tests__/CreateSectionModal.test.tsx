@@ -7,10 +7,22 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreateSectionModal from '../CreateSectionModal';
 
-const mockCreateSection = jest.fn();
-jest.mock('@/lib/api/classes', () => ({
-  createSection: (...args: unknown[]) => mockCreateSection(...args),
-}));
+jest.mock('@/lib/api/classes');
+
+import * as classesApi from '@/lib/api/classes';
+const mockCreateSection = jest.mocked(classesApi.createSection);
+
+const mockSectionResponse = {
+  id: 'section-1',
+  name: 'Section A',
+  namespace_id: 'ns-1',
+  class_id: 'class-123',
+  semester: null,
+  join_code: 'ABC123',
+  active: true,
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+};
 
 describe('CreateSectionModal', () => {
   const mockOnClose = jest.fn();
@@ -129,7 +141,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('successfully creates a section with name only', async () => {
-    mockCreateSection.mockResolvedValueOnce({ id: 'section-1', name: 'Section A' });
+    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -149,13 +161,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('successfully creates a section with all fields', async () => {
-    mockCreateSection.mockResolvedValueOnce({
-      id: 'section-1',
-      name: 'Section A',
-      schedule: 'MWF 10-11am',
-      location: 'Room 101',
-      capacity: 30,
-    });
+    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -183,7 +189,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('trims whitespace from text fields', async () => {
-    mockCreateSection.mockResolvedValueOnce({ id: 'section-1', name: 'Section A' });
+    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -205,8 +211,8 @@ describe('CreateSectionModal', () => {
     });
   });
 
-  it('omits capacity from request when empty', async () => {
-    mockCreateSection.mockResolvedValueOnce({ id: 'section-1', name: 'Section A' });
+  it('sends undefined capacity when capacity field is empty', async () => {
+    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
@@ -216,13 +222,13 @@ describe('CreateSectionModal', () => {
 
     await waitFor(() => {
       const callArgs = mockCreateSection.mock.calls[0];
-      expect(callArgs[1]).not.toHaveProperty('capacity');
+      expect(callArgs[1].capacity).toBeUndefined();
     });
   });
 
   it('shows loading state while creating section', async () => {
     mockCreateSection.mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(() => resolve({ id: 'section-1', name: 'Section A' }), 100))
+      () => new Promise(resolve => setTimeout(() => resolve(mockSectionResponse), 100))
     );
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
@@ -293,7 +299,7 @@ describe('CreateSectionModal', () => {
 
   it('disables form inputs while loading', async () => {
     mockCreateSection.mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(() => resolve({ id: 'section-1', name: 'Section A' }), 100))
+      () => new Promise(resolve => setTimeout(() => resolve(mockSectionResponse), 100))
     );
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
@@ -316,7 +322,7 @@ describe('CreateSectionModal', () => {
   });
 
   it('accepts valid capacity values', async () => {
-    mockCreateSection.mockResolvedValueOnce({ id: 'section-1', name: 'Section A', capacity: 50 });
+    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 

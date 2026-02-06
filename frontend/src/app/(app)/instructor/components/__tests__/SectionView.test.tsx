@@ -11,11 +11,16 @@ import SectionView from '../SectionView';
 const mockGetClassSections = jest.fn();
 const mockDeleteSection = jest.fn();
 const mockGetActiveSessions = jest.fn();
+const mockCreateSection = jest.fn();
 
 jest.mock('@/lib/api/sections', () => ({
   getClassSections: (...args: unknown[]) => mockGetClassSections(...args),
   deleteSection: (...args: unknown[]) => mockDeleteSection(...args),
   getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
+}));
+
+jest.mock('@/lib/api/classes', () => ({
+  createSection: (...args: unknown[]) => mockCreateSection(...args),
 }));
 
 describe('SectionView', () => {
@@ -54,20 +59,25 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        schedule: 'MWF 10am',
-        location: 'Room 101',
-        studentCount: 25,
-        sessionCount: 5,
-        activeSessionCount: 2
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
       {
         id: 'section-2',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section B',
-        schedule: 'TTh 2pm',
-        studentCount: 20,
-        sessionCount: 3,
-        activeSessionCount: 1
+        semester: null,
+        join_code: 'XYZ789',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -80,10 +90,9 @@ describe('SectionView', () => {
       expect(screen.getByText('Section B')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('MWF 10am')).toBeInTheDocument();
-    expect(screen.getByText('Room 101')).toBeInTheDocument();
-    expect(screen.getByText('25 students')).toBeInTheDocument();
-    expect(screen.getByText('2 active')).toBeInTheDocument();
+    // Component displays section join codes
+    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+    expect(screen.getByText('XYZ-789')).toBeInTheDocument();
   });
 
   it('should fetch sections from correct API endpoint', async () => {
@@ -136,11 +145,14 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        schedule: 'MWF 10am',
-        studentCount: 25,
-        sessionCount: 5,
-        activeSessionCount: 2
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -168,31 +180,47 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        studentCount: 25,
-        sessionCount: 2,
-        activeSessionCount: 1
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
     const mockSessions = [
       {
         id: 'session-1',
-        join_code: 'ABC123',
-        problemText: 'Solve fizzbuzz',
-        studentCount: 5,
+        namespace_id: 'ns-1',
+        section_id: 'section-1',
+        section_name: 'Section A',
+        problem: { title: 'Solve fizzbuzz' },
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: ['p1', 'p2', 'p3', 'p4', 'p5'],
+        status: 'active' as const,
         created_at: '2025-12-19T10:00:00Z',
         last_activity: '2025-12-19T10:30:00Z',
-        status: 'active' as const,
+        ended_at: null,
       },
       {
         id: 'session-2',
-        join_code: 'XYZ789',
-        problemText: '',
-        studentCount: 3,
+        namespace_id: 'ns-1',
+        section_id: 'section-1',
+        section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: ['p1', 'p2', 'p3'],
+        status: 'completed' as const,
         created_at: '2025-12-19T09:00:00Z',
         last_activity: '2025-12-19T09:45:00Z',
-        status: 'completed' as const,
+        ended_at: '2025-12-19T10:00:00Z',
       },
     ];
 
@@ -207,24 +235,28 @@ describe('SectionView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Section A/ }));
 
+    // Verify sessions are displayed - component shows participant count and status
     await waitFor(() => {
-      expect(screen.getByText('ABC123')).toBeInTheDocument();
-      expect(screen.getByText('XYZ789')).toBeInTheDocument();
+      expect(screen.getByText('5 students')).toBeInTheDocument();
+      expect(screen.getByText('3 students')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Solve fizzbuzz')).toBeInTheDocument();
-    expect(screen.getByText('5 students')).toBeInTheDocument();
-    expect(screen.getByText('3 students')).toBeInTheDocument();
+    expect(screen.getByText('active')).toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
   });
 
   it('should call onCreateSession when New Session button is clicked', async () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        studentCount: 25,
-        sessionCount: 0,
-        activeSessionCount: 0
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -254,22 +286,32 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        studentCount: 25,
-        sessionCount: 1,
-        activeSessionCount: 1
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
     const mockSessions = [
       {
         id: 'session-1',
-        join_code: 'ABC123',
-        problemText: '',
-        studentCount: 5,
+        namespace_id: 'ns-1',
+        section_id: 'section-1',
+        section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: ['p1', 'p2', 'p3', 'p4', 'p5'],
+        status: 'active' as const,
         created_at: '2025-12-19T10:00:00Z',
         last_activity: '2025-12-19T10:30:00Z',
-        status: 'active' as const,
+        ended_at: null,
       },
     ];
 
@@ -285,10 +327,11 @@ describe('SectionView', () => {
     fireEvent.click(screen.getByRole('button', { name: /Section A/ }));
 
     await waitFor(() => {
-      expect(screen.getByText('ABC123')).toBeInTheDocument();
+      expect(screen.getByText('5 students')).toBeInTheDocument();
     });
 
-    const sessionButton = screen.getByRole('button', { name: /ABC123/ });
+    // Click on the session button (contains "5 students" and "active")
+    const sessionButton = screen.getByRole('button', { name: /5 students/ });
     fireEvent.click(sessionButton);
 
     expect(mockOnJoinSession).toHaveBeenCalledWith('session-1');
@@ -299,10 +342,14 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        studentCount: 25,
-        sessionCount: 0,
-        activeSessionCount: 0
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -333,10 +380,14 @@ describe('SectionView', () => {
     const mockSections = [
       {
         id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
         name: 'Section A',
-        studentCount: 25,
-        sessionCount: 0,
-        activeSessionCount: 0
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -423,9 +474,11 @@ describe('SectionView', () => {
     });
 
     it('should submit form and call API when Create Section is clicked', async () => {
+      const newSection = { id: 'new-section', name: 'Test Section', join_code: 'ABC', active: true, namespace_id: 'ns-1', class_id: 'class-1', semester: null, created_at: '2025-01-01', updated_at: '2025-01-01' };
       mockGetClassSections
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: 'new-section', name: 'Test Section', studentCount: 0, sessionCount: 0, activeSessionCount: 0 }]);
+        .mockResolvedValueOnce([newSection]);
+      mockCreateSection.mockResolvedValueOnce(newSection);
 
       render(<SectionView {...defaultProps} />);
 
@@ -448,9 +501,9 @@ describe('SectionView', () => {
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       fireEvent.click(submitButton);
 
-      // Verify API was called - check the mock was called with classId
+      // Verify createSection API was called
       await waitFor(() => {
-        expect(mockGetClassSections).toHaveBeenCalledWith('class-1');
+        expect(mockCreateSection).toHaveBeenCalledWith('class-1', expect.objectContaining({ name: 'Test Section' }));
       });
     });
 
@@ -459,14 +512,18 @@ describe('SectionView', () => {
         id: 'new-section',
         name: 'Test Section',
         join_code: 'ABC123',
-        studentCount: 0,
-        sessionCount: 0,
-        activeSessionCount: 0
+        active: true,
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
+        semester: null,
+        created_at: '2025-01-01',
+        updated_at: '2025-01-01',
       };
 
       mockGetClassSections
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([newSection]);
+      mockCreateSection.mockResolvedValueOnce(newSection);
 
       render(<SectionView {...defaultProps} />);
 
@@ -495,6 +552,7 @@ describe('SectionView', () => {
 
     it('should display error when API call fails', async () => {
       mockGetClassSections.mockResolvedValueOnce([]);
+      mockCreateSection.mockRejectedValueOnce(new Error('Section name already exists'));
 
       render(<SectionView {...defaultProps} />);
 

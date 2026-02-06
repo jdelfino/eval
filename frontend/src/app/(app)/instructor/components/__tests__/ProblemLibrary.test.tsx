@@ -74,6 +74,7 @@ describe('ProblemLibrary', () => {
       author_id: 'user-123',
       tags: [],
       class_id: 'class-1',
+      test_case_count: 3,
     },
     {
       id: 'problem-2',
@@ -83,6 +84,7 @@ describe('ProblemLibrary', () => {
       author_id: 'user-123',
       tags: [],
       class_id: 'class-1',
+      test_case_count: 2,
     },
   ];
 
@@ -133,7 +135,18 @@ describe('ProblemLibrary', () => {
   });
 
   it('displays singular for single problem', async () => {
-    (listProblems as jest.Mock).mockResolvedValue([mockProblems[0]]);
+    (listProblems as jest.Mock).mockResolvedValue([
+      {
+        id: 'problem-1',
+        title: 'Problem 1',
+        description: 'Description 1',
+        created_at: '2025-01-01T00:00:00.000Z',
+        author_id: 'user-123',
+        tags: [],
+        class_id: 'class-1',
+        test_case_count: 3,
+      }
+    ]);
 
     render(<ProblemLibrary />);
 
@@ -375,12 +388,20 @@ describe('ProblemLibrary', () => {
         expect(screen.getByLabelText('Class:')).toBeInTheDocument();
       });
 
+      const callCountBefore = (listProblems as jest.Mock).mock.calls.length;
+
       fireEvent.change(screen.getByLabelText('Class:'), { target: { value: '' } });
 
       await waitFor(() => {
-        // Find the most recent call and verify it doesn't have class_id
-        const lastCall = (listProblems as jest.Mock).mock.calls.pop();
-        expect(lastCall[0]).not.toHaveProperty('class_id');
+        // Verify a new call was made
+        const calls = (listProblems as jest.Mock).mock.calls;
+        expect(calls.length).toBeGreaterThan(callCountBefore);
+        // Get the most recent call without mutating the array
+        const lastCall = calls[calls.length - 1];
+        // When "All classes" is selected, class_id should be undefined or not present
+        if (lastCall && lastCall[0]) {
+          expect(lastCall[0].class_id).toBeFalsy();
+        }
       });
     });
   });

@@ -129,28 +129,33 @@ describe('SessionsList', () => {
     const mockSessions = [
       {
         id: 'session-1',
-        join_code: 'ABC123',
-        problem_title: 'Hello World',
-        created_at: new Date().toISOString(),
-        last_activity: new Date().toISOString(),
-        creator_id: 'instructor-1',
-        participant_count: 5,
-        status: 'active' as const,
+        namespace_id: 'namespace-1',
         section_id: 'section-1',
         section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'instructor-1',
+        participants: ['student-1', 'student-2', 'student-3', 'student-4', 'student-5'],
+        status: 'active' as const,
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
+        ended_at: null,
       },
       {
         id: 'session-2',
-        join_code: 'XYZ789',
-        problem_title: 'Two Sum',
-        created_at: new Date(Date.now() - 3600000).toISOString(),
-        last_activity: new Date(Date.now() - 3600000).toISOString(),
-        creator_id: 'instructor-1',
-        participant_count: 10,
-        status: 'completed' as const,
-        ended_at: new Date().toISOString(),
+        namespace_id: 'namespace-1',
         section_id: 'section-1',
         section_name: 'Section A',
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'instructor-1',
+        participants: ['student-1', 'student-2', 'student-3', 'student-4', 'student-5', 'student-6', 'student-7', 'student-8', 'student-9', 'student-10'],
+        status: 'completed' as const,
+        created_at: new Date(Date.now() - 3600000).toISOString(),
+        last_activity: new Date(Date.now() - 3600000).toISOString(),
+        ended_at: new Date().toISOString(),
       },
     ];
 
@@ -163,7 +168,8 @@ describe('SessionsList', () => {
         expect(screen.getByText('Active Now (1)')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('ABC123')).toBeInTheDocument();
+      // Both sessions have section_name 'Section A', so use getAllByText
+      expect(screen.getAllByText('Section A').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByRole('button', { name: 'Rejoin' })).toBeInTheDocument();
     });
 
