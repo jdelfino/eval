@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   // Empty turbopack config to silence the error - we use webpack config below
   turbopack: {},
