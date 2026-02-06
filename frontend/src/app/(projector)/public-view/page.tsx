@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Problem } from '@/types/problem';
-import { apiFetch } from '@/lib/api-client';
+import { getSessionPublicState } from '@/lib/api/sessions';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -43,8 +43,7 @@ function PublicViewContent() {
     if (!session_id) return;
 
     try {
-      const res = await apiFetch(`/sessions/${session_id}/public-state`);
-      const data = await res.json();
+      const data = await getSessionPublicState(session_id);
       setState(data);
       setError(null);
     } catch (e: any) {

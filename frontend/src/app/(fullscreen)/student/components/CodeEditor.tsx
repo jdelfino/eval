@@ -8,7 +8,7 @@ import MarkdownContent from '@/components/MarkdownContent';
 import type { ExecutionSettings } from '@/types/problem';
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { Problem } from '@/types/problem';
-import { apiFetch } from '@/lib/api-client';
+import { executeStandaloneCode } from '@/lib/api/execute';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2 } from 'lucide-react';
 import type { ExecutionResult } from '@/types/api';
@@ -344,18 +344,7 @@ export default function CodeEditor({
     setLocalExecutionResult(null);
 
     try {
-      const response = await apiFetch('/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code,
-          stdin: stdin || undefined,
-          random_seed,
-          attached_files,
-        }),
-      });
-
-      const result = await response.json();
+      const result = await executeStandaloneCode(code, 'python', stdin || undefined);
       setLocalExecutionResult(result);
     } catch (error: any) {
       setLocalExecutionResult({
