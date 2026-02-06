@@ -12,13 +12,11 @@ import type { Session, Revision } from '@/types/api';
 /**
  * Create a new session for a section.
  * @param sectionId - The section ID
- * @param sectionName - The section name (for display purposes)
  * @param problemId - Optional problem ID to associate with the session
  * @returns The created Session object (backend returns plain object)
  */
 export async function createSession(
   sectionId: string,
-  sectionName: string,
   problemId?: string
 ): Promise<Session> {
   const body: Record<string, string> = { section_id: sectionId };

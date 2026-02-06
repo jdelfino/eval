@@ -3,15 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Namespace } from '@/types/api';
+import type { NamespaceWithStats } from '@/lib/api/namespaces';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
-
-interface NamespaceWithStats extends Namespace {
-  userCount: number;
-}
 
 interface NamespaceListProps {
   namespaces: NamespaceWithStats[];
