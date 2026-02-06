@@ -102,7 +102,7 @@ describe('lib/api/realtime', () => {
       const mockResponse = { json: jest.fn().mockResolvedValue(fakeSessionStudent) };
       mockApiFetch.mockResolvedValue(mockResponse);
 
-      const execSettings = { timeout: 5000 };
+      const execSettings = { stdin: 'test input', random_seed: 42 };
       await updateCode('sess-1', 'student-1', 'code', execSettings);
 
       expect(mockApiFetch).toHaveBeenCalledWith('/sessions/sess-1/code', {
@@ -134,7 +134,7 @@ describe('lib/api/realtime', () => {
     it('includes execution_settings when provided', async () => {
       mockApiPost.mockResolvedValue(fakeExecutionResult);
 
-      const execSettings = { timeout: 5000 };
+      const execSettings = { stdin: 'test input', random_seed: 42 };
       await executeCode('sess-1', 'student-1', 'code', execSettings);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/execute', {
