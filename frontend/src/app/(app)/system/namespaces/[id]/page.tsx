@@ -10,7 +10,7 @@ import type { User as ApiUser } from '@/types/api';
 
 interface NamespaceDetail {
   id: string;
-  displayName: string;
+  display_name: string;
   active: boolean;
 }
 import { BackButton } from '@/components/ui/BackButton';
@@ -61,10 +61,10 @@ export default function NamespaceUsersPage() {
 
   const fetchData = async () => {
     try {
-      // Fetch namespace details
+      // Fetch namespace details (API returns object directly, not wrapped)
       const nsResponse = await apiFetch(`/system/namespaces/${namespace_id}`);
       const nsData = await nsResponse.json();
-      setNamespace(nsData.namespace);
+      setNamespace(nsData);
 
       // Fetch users
       const fetchedUsers = await getNamespaceUsers(namespace_id);
@@ -131,7 +131,7 @@ export default function NamespaceUsersPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-2">
-          {namespace?.displayName || namespace_id}
+          {namespace?.display_name || namespace_id}
         </h1>
         <p className="text-gray-500 font-mono">
           {namespace_id}

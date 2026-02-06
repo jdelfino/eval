@@ -1,12 +1,18 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import {
+  listNamespaces as apiListNamespaces,
+  createNamespace as apiCreateNamespace,
+  updateNamespace as apiUpdateNamespace,
+  deleteNamespace as apiDeleteNamespace,
+  getNamespaceUsers as apiGetNamespaceUsers,
+  createUser as apiCreateUser,
+  updateUserRole as apiUpdateUserRole,
+  deleteUser as apiDeleteUser,
+  type NamespaceWithStats,
+} from '@/lib/api/namespaces';
 import type { Namespace, User } from '@/types/api';
-
-interface NamespaceWithStats extends Namespace {
-  userCount: number;
-}
 
 export interface UseNamespacesResult {
   namespaces: NamespaceWithStats[];
@@ -34,12 +40,8 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (includeInactive) {
-        params.set('includeInactive', 'true');
-      }
-      const data = await apiGet<{ namespaces: NamespaceWithStats[] }>(`/namespaces?${params}`);
-      setNamespaces(data.namespaces);
+      const namespaceList = await apiListNamespaces(includeInactive);
+      setNamespaces(namespaceList);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch namespaces';
       setError(message);
@@ -53,9 +55,9 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPost<{ namespace: Namespace }>('/namespaces', { id, display_name: displayName });
+      const namespace = await apiCreateNamespace(id, displayName);
       await fetchNamespaces();
-      return data.namespace;
+      return namespace;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create namespace';
       setError(message);
@@ -72,9 +74,9 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPatch<{ namespace: Namespace }>(`/namespaces/${id}`, updates);
+      const namespace = await apiUpdateNamespace(id, updates);
       await fetchNamespaces();
-      return data.namespace;
+      return namespace;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update namespace';
       setError(message);
@@ -88,7 +90,7 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      await apiDelete(`/namespaces/${id}`);
+      await apiDeleteNamespace(id);
       await fetchNamespaces();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete namespace';
@@ -103,8 +105,8 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<{ users: User[] }>(`/namespaces/${namespace_id}/users`);
-      return data.users;
+      const users = await apiGetNamespaceUsers(namespace_id);
+      return users;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch users';
       setError(message);
@@ -124,8 +126,8 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPost<{ user: User }>(`/namespaces/${namespace_id}/users`, { email, username, password, role });
-      return data.user;
+      const user = await apiCreateUser(namespace_id, email, username, password, role);
+      return user;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create user';
       setError(message);
@@ -142,8 +144,8 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiPatch<{ user: User }>(`/users/${user_id}`, { role });
-      return data.user;
+      const user = await apiUpdateUserRole(user_id, role);
+      return user;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update user';
       setError(message);
@@ -157,7 +159,7 @@ export function useNamespaces(): UseNamespacesResult {
     setLoading(true);
     setError(null);
     try {
-      await apiDelete(`/users/${user_id}`);
+      await apiDeleteUser(user_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete user';
       setError(message);

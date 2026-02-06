@@ -1,7 +1,7 @@
 /**
  * Cross-layer integration tests for useNamespaces.
  *
- * Exercises the full chain: useNamespaces hook -> real api-client -> real withRetry -> mocked fetch.
+ * Exercises the full chain: useNamespaces hook -> typed API module -> real api-client -> real withRetry -> mocked fetch.
  * Also tests real logic paths: state transitions (loading/error/data), error recovery,
  * and concurrent operation behavior.
  *
@@ -73,9 +73,10 @@ const fakeUser = {
   updated_at: '2024-01-01T00:00:00Z',
 };
 
-describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
+describe('useNamespaces integration (hook -> typed API -> api-client -> fetch)', () => {
   it('fetchNamespaces sends authenticated GET and populates state', async () => {
-    mockFetchOk({ namespaces: [fakeNamespace] });
+    // Backend returns plain array (not wrapped in { namespaces: [...] })
+    mockFetchOk([fakeNamespace]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => {
@@ -97,7 +98,8 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
   });
 
   it('fetchNamespaces with includeInactive appends query param', async () => {
-    mockFetchOk({ namespaces: [] });
+    // Backend returns plain array
+    mockFetchOk([]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => {
@@ -112,13 +114,15 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
 
   it('createNamespace POSTs then refreshes the list', async () => {
     mockFetchSequence(
-      { ok: true, data: { namespace: fakeNamespace } },
-      { ok: true, data: { namespaces: [fakeNamespace] } },
+      // First call: POST returns plain object (not wrapped)
+      { ok: true, data: fakeNamespace },
+      // Second call: GET refresh returns plain array
+      { ok: true, data: [fakeNamespace] },
     );
 
     const { result } = renderHook(() => useNamespaces());
 
-    let ns: any;
+    let ns: unknown;
     await act(async () => {
       ns = await result.current.createNamespace('ns-1', 'Test NS');
     });
@@ -140,10 +144,11 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
   });
 
   it('getNamespaceUsers sends GET and returns users', async () => {
-    mockFetchOk({ users: [fakeUser] });
+    // Backend returns plain array (not wrapped in { users: [...] })
+    mockFetchOk([fakeUser]);
     const { result } = renderHook(() => useNamespaces());
 
-    let users: any;
+    let users: unknown;
     await act(async () => {
       users = await result.current.getNamespaceUsers('ns-1');
     });
@@ -158,7 +163,8 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
   it('deleteNamespace sends DELETE then refreshes list', async () => {
     mockFetchSequence(
       { ok: true, data: {} },
-      { ok: true, data: { namespaces: [] } },
+      // Refresh returns plain array
+      { ok: true, data: [] },
     );
 
     const { result } = renderHook(() => useNamespaces());
@@ -195,7 +201,8 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
       await act(async () => {
         resolvePromise!({
           ok: true,
-          json: () => Promise.resolve({ namespaces: [] }),
+          // Backend returns plain array
+          json: () => Promise.resolve([]),
         });
         await fetchPromise!;
       });
@@ -219,8 +226,8 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
 
       expect(result.current.error).toBe('Not found');
 
-      // Second call: success
-      mockFetchOk({ namespaces: [fakeNamespace] });
+      // Second call: success with plain array
+      mockFetchOk([fakeNamespace]);
 
       await act(async () => {
         await result.current.fetchNamespaces();
@@ -239,26 +246,27 @@ describe('useNamespaces integration (hook -> api-client -> fetch)', () => {
 
       const { result } = renderHook(() => useNamespaces());
 
-      let caught: any;
+      let caught: Error | undefined;
       await act(async () => {
         try {
           await result.current.createNamespace('ns-1', 'Test');
         } catch (e) {
-          caught = e;
+          caught = e as Error;
         }
       });
 
       expect(caught).toBeInstanceOf(Error);
-      expect(caught.message).toBe('Already exists');
+      expect(caught!.message).toBe('Already exists');
       expect(result.current.error).toBe('Already exists');
       expect(result.current.loading).toBe(false);
     });
 
     it('createUser sends correct payload through the full chain', async () => {
-      mockFetchOk({ user: fakeUser });
+      // Backend returns plain object (not wrapped in { user: ... })
+      mockFetchOk(fakeUser);
       const { result } = renderHook(() => useNamespaces());
 
-      let user: any;
+      let user: unknown;
       await act(async () => {
         user = await result.current.createUser('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
       });
