@@ -12,7 +12,7 @@ import {
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebase';
-import { apiGet } from '@/lib/api-client';
+import { getCurrentUser } from '@/lib/api/auth';
 import type { User } from '@/types/api';
 export type { User };
 
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
-    return apiGet<User>('/auth/me');
+    return getCurrentUser();
   }, []);
 
   // Listen to Firebase auth state changes

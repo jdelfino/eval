@@ -31,27 +31,8 @@ import {
   revokeNamespaceInvitation,
   resendNamespaceInvitation,
 } from '@/lib/api/namespace-invitations';
-import type { UserRole } from '@/types/api';
-
-interface User {
-  id: string;
-  email: string;
-  role: UserRole;
-  display_name?: string;
-  created_at: string;
-}
-
-interface Invitation {
-  id: string;
-  email: string;
-  namespace_id: string;
-  targetRole: 'instructor';
-  created_at: string;
-  expiresAt: string;
-  consumedAt?: string;
-  revokedAt?: string;
-  status?: 'pending' | 'consumed' | 'revoked' | 'expired';
-}
+import type { UserRole, User } from '@/types/api';
+import type { SerializedInvitation } from '@/lib/api/invitations';
 
 type SystemStats = AdminStats;
 
@@ -67,7 +48,7 @@ function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [roleChangeLoading, setRoleChangeLoading] = useState<string | null>(null);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitations, setInvitations] = useState<SerializedInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
 
   const isAdmin = user ? hasRolePermission(user.role, 'user.changeRole') : false;

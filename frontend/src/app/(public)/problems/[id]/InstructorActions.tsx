@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CreateSessionFromProblemModal from '@/app/(app)/instructor/components/CreateSessionFromProblemModal';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
-import { apiFetch, apiPost } from '@/lib/api-client';
+import { getClassSections } from '@/lib/api/sections';
+import { createSession as apiCreateSession } from '@/lib/api/sessions';
 
 interface InstructorActionsProps {
   problem_id: string;
@@ -37,7 +38,7 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
 
     (async () => {
       try {
-        const { session } = await apiPost<{ session: { id: string } }>('/sessions', { section_id, problem_id });
+        const session = await apiCreateSession(section_id, problem_id);
         setLastUsedSection(section_id, class_id);
         const channel = new BroadcastChannel('instructor-session-created');
         channel.postMessage({ session_id: session.id, problem_title });
@@ -60,16 +61,13 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   };
 
   const createSession = async (section_id: string) => {
-    const { session } = await apiPost<{ session: { id: string } }>('/sessions', { section_id, problem_id });
-    return session;
+    return apiCreateSession(section_id, problem_id);
   };
 
   const handleStartSession = async () => {
     setStarting(true);
     try {
-      const response = await apiFetch(`/classes/${class_id}/sections`);
-      const data = await response.json();
-      const sections: { id: string; name: string; join_code: string }[] = data.sections || [];
+      const sections = await getClassSections(class_id);
 
       // Auto-start if only one section
       if (sections.length === 1) {

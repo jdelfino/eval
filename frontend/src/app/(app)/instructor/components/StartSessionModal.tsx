@@ -9,8 +9,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiPost } from '@/lib/api-client';
 import { listProblems } from '@/lib/api/problems';
+import { createSession } from '@/lib/api/sessions';
 
 interface ProblemInfo {
   id: string;
@@ -67,12 +67,8 @@ export default function StartSessionModal({
       setLoading(true);
       setError(null);
 
-      const body: { section_id: string; problem_id?: string } = { section_id };
-      if (selectedOption !== 'blank') {
-        body.problem_id = selectedOption;
-      }
-
-      const { session } = await apiPost<{ session: { id: string } }>('/sessions', body);
+      const problemId = selectedOption !== 'blank' ? selectedOption : undefined;
+      const session = await createSession(section_id, problemId);
       onSessionCreated(session.id);
       router.push(`/instructor/session/${session.id}`);
     } catch (err) {
