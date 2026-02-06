@@ -5,10 +5,11 @@ resources:
   - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
   - ingress.yaml
 
 labels:
   - pairs:
-      app.kubernetes.io/name: go-api
       app.kubernetes.io/managed-by: kustomize
-    includeSelectors: true
+    includeSelectors: false
