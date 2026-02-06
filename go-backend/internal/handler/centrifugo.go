@@ -122,13 +122,26 @@ func (h *CentrifugoHandler) authorizeSubscription(r *http.Request, user *auth.Us
 		return nil
 	}
 
-	// Students: must be a participant.
+	// Students: must be a participant OR a section member (can see the session
+	// via RLS). Section members need to subscribe before joining so they
+	// receive real-time updates once their join request completes.
 	_, err := repos.GetSessionStudent(ctx, sessionID, user.ID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+
+	// Not yet a participant — fall back to RLS-based visibility check.
+	// GetSession uses RLS which ensures the student is a member of the
+	// session's section (via is_section_member policy).
+	_, sErr := repos.GetSession(ctx, sessionID)
+	if sErr != nil {
+		if errors.Is(sErr, store.ErrNotFound) {
 			return errForbidden
 		}
-		return err
+		return sErr
 	}
 	return nil
 }

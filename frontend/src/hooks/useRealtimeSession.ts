@@ -207,31 +207,33 @@ export function useRealtimeSession({
     });
 
     sub.on('publication', (ctx) => {
-      const { event, payload } = ctx.data;
+      // Backend publishes Event{type, data, timestamp}
+      const { type: event, data: payload } = ctx.data;
 
       switch (event) {
         case 'student_joined': {
-          if (payload?.student) {
-            const { student } = payload;
+          if (payload) {
+            // Backend sends StudentJoinedData{user_id, display_name}
+            const userId = payload.user_id;
+            const displayName = payload.display_name;
             setStudents(prev => {
               const updated = new Map(prev);
-              const pendingUpdate = pendingCodeUpdatesRef.current.get(student.user_id);
+              const pendingUpdate = pendingCodeUpdatesRef.current.get(userId);
               if (pendingUpdate) {
-                updated.set(student.user_id, {
-                  user_id: student.user_id,
-                  name: student.name,
+                updated.set(userId, {
+                  user_id: userId,
+                  name: displayName,
                   code: pendingUpdate.code,
                   last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
-                  execution_settings: pendingUpdate.execution_settings ?? student.execution_settings,
+                  execution_settings: pendingUpdate.execution_settings,
                 });
-                pendingCodeUpdatesRef.current.delete(student.user_id);
+                pendingCodeUpdatesRef.current.delete(userId);
               } else {
-                updated.set(student.user_id, {
-                  user_id: student.user_id,
-                  name: student.name,
-                  code: student.code || '',
+                updated.set(userId, {
+                  user_id: userId,
+                  name: displayName,
+                  code: '',
                   last_update: new Date(),
-                  execution_settings: student.execution_settings,
                 });
               }
               return updated;
@@ -242,7 +244,9 @@ export function useRealtimeSession({
 
         case 'student_code_updated': {
           if (payload) {
-            const { studentId, code, execution_settings, last_update } = payload;
+            // Backend sends StudentCodeUpdatedData{user_id, code}
+            const studentId = payload.user_id;
+            const code = payload.code;
             setStudents(prev => {
               const updated = new Map(prev);
               const student = updated.get(studentId);
@@ -250,14 +254,11 @@ export function useRealtimeSession({
                 updated.set(studentId, {
                   ...student,
                   code: code || '',
-                  last_update: last_update ? new Date(last_update) : new Date(),
-                  execution_settings: execution_settings ?? student.execution_settings,
+                  last_update: new Date(),
                 });
               } else {
                 pendingCodeUpdatesRef.current.set(studentId, {
                   code: code || '',
-                  execution_settings,
-                  last_update,
                 });
               }
               return updated;
@@ -267,28 +268,27 @@ export function useRealtimeSession({
         }
 
         case 'session_ended': {
-          if (payload) {
-            const { ended_at } = payload;
-            setSession(prev => prev ? {
-              ...prev,
-              status: 'completed',
-              ended_at: ended_at ? new Date(ended_at) : new Date(),
-            } : prev);
-          }
+          setSession(prev => prev ? {
+            ...prev,
+            status: 'completed',
+            ended_at: new Date(),
+          } : prev);
           break;
         }
 
         case 'featured_student_changed': {
           if (payload) {
-            const { featured_student_id, featured_code } = payload;
+            // Backend sends FeaturedStudentChangedData{user_id, code}
+            const studentId = payload.user_id;
+            const code = payload.code;
             setSession(prev => prev ? {
               ...prev,
-              featured_student_id,
-              featured_code,
+              featured_student_id: studentId,
+              featured_code: code,
             } : prev);
             setFeaturedStudent({
-              studentId: featured_student_id,
-              code: featured_code,
+              studentId,
+              code,
             });
           }
           break;
@@ -308,10 +308,11 @@ export function useRealtimeSession({
 
         case 'problem_updated': {
           if (payload) {
-            const { problem } = payload;
+            // Backend sends ProblemUpdatedData{problem_id}
+            const { problem_id } = payload;
             setSession(prev => prev ? {
               ...prev,
-              problem,
+              problem: { ...prev.problem, id: problem_id },
             } : prev);
           }
           break;
@@ -439,12 +440,13 @@ export function useRealtimeSession({
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      await apiFeatureStudent(session_id, studentId);
+      const studentCode = students.get(studentId)?.code;
+      await apiFeatureStudent(session_id, studentId, studentCode);
 
       // Optimistically update local state
       setFeaturedStudent({
         studentId,
-        code: students.get(studentId)?.code,
+        code: studentCode,
       });
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);

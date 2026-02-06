@@ -27,6 +27,12 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'test-admin-001', 'admin@test.local', 'system-admin', NULL, 'System Admin')
 ON CONFLICT (id) DO NOTHING;
 
+-- Contract test admin (for E2E and contract tests)
+INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
+VALUES
+  ('00000000-0000-0000-0000-000000000099', 'contract-admin', 'contract-admin@test.local', 'system-admin', NULL, 'Contract Test Admin')
+ON CONFLICT (id) DO NOTHING;
+
 -- Instructor (in test-school namespace)
 INSERT INTO users (id, external_id, email, role, namespace_id, display_name)
 VALUES

@@ -51,7 +51,7 @@ make docker-build        # Build all Docker images
 
 **Config:** Environment variables via `caarlos0/env`. See `.env.example` for required variables.
 
-**Testing:** All production code changes MUST include tests. Integration tests use Docker Postgres with migrations.
+**Testing:** All production code changes MUST include tests. Integration tests use Docker Postgres with migrations. When E2E tests uncover non-test production bugs, add regression tests at the narrowest feasible scope (unit > integration > contract > E2E) before merging. These tests must fail against the buggy code and pass against the fix.
 
 **Infrastructure:** Terraform modules are environment-agnostic. Environment configs in `infrastructure/terraform/environments/` provide all values. See `infrastructure/terraform/README.md` for patterns.
 

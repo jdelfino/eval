@@ -160,7 +160,10 @@ func TestCentrifugoHandler_SubscriptionToken_StudentParticipant(t *testing.T) {
 	}
 }
 
-func TestCentrifugoHandler_SubscriptionToken_StudentNotInSession(t *testing.T) {
+func TestCentrifugoHandler_SubscriptionToken_StudentSectionMember(t *testing.T) {
+	// Student is not a session participant but IS a section member (GetSession
+	// succeeds via RLS). Should be allowed to subscribe so they can receive
+	// real-time updates after joining.
 	sessionID := uuid.New()
 
 	h := NewCentrifugoHandler(&mockTokenGenerator{subToken: "sub-jwt"}, 15*time.Minute)
@@ -168,6 +171,34 @@ func TestCentrifugoHandler_SubscriptionToken_StudentNotInSession(t *testing.T) {
 	req := centrifugoReq(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(),
 		&auth.User{ID: uuid.New(), Role: auth.RoleStudent},
 		sessionRepoReturning(&store.Session{ID: sessionID}, nil),
+		studentRepoReturning(nil, store.ErrNotFound))
+
+	rr := httptest.NewRecorder()
+	h.GetToken(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var resp tokenResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Token != "sub-jwt" {
+		t.Errorf("token = %q, want %q", resp.Token, "sub-jwt")
+	}
+}
+
+func TestCentrifugoHandler_SubscriptionToken_StudentNotInSection(t *testing.T) {
+	// Student is neither a participant nor a section member (GetSession
+	// returns ErrNotFound due to RLS). Should get 403.
+	sessionID := uuid.New()
+
+	h := NewCentrifugoHandler(&mockTokenGenerator{subToken: "sub-jwt"}, 15*time.Minute)
+
+	req := centrifugoReq(http.MethodGet, "/api/v1/realtime/token?channel=session:"+sessionID.String(),
+		&auth.User{ID: uuid.New(), Role: auth.RoleStudent},
+		sessionRepoReturning(nil, store.ErrNotFound),
 		studentRepoReturning(nil, store.ErrNotFound))
 
 	rr := httptest.NewRecorder()

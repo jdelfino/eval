@@ -56,8 +56,8 @@ test.describe('Public View Feature', () => {
         'button:has-text("New Section"), button:has-text("Create First Section")'
       ).first();
       await createSectionButton.click();
-      await expect(instructorPage.locator('input#sectionName').first()).toBeVisible({ timeout: 5_000 });
-      await instructorPage.fill('input#sectionName', 'Test Section');
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5_000 });
+      await instructorPage.fill('input#section_name', 'Test Section');
       await instructorPage.locator(
         'button[type="submit"]:has-text("Create"), button:has-text("Create Section")'
       ).first().click();

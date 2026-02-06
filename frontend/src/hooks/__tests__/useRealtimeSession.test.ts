@@ -5,7 +5,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRealtimeSession } from '../useRealtimeSession';
 
 // Mock centrifuge-js
-type PublicationCallback = (ctx: { data: { event: string; payload: any } }) => void;
+type PublicationCallback = (ctx: { data: { type: string; data: any; timestamp?: string } }) => void;
 type StateCallback = (ctx?: any) => void;
 
 let mockPublicationCallback: PublicationCallback | null = null;
@@ -112,9 +112,9 @@ function resetMocks() {
   mockCentrifuge.newSubscription.mockReturnValue(mockSubscription);
 }
 
-function simulatePublication(event: string, payload: any) {
+function simulatePublication(type: string, data: any) {
   if (mockPublicationCallback) {
-    mockPublicationCallback({ data: { event, payload } });
+    mockPublicationCallback({ data: { type, data, timestamp: new Date().toISOString() } });
   }
 }
 
@@ -400,7 +400,8 @@ describe('useRealtimeSession', () => {
 
       expect(mockFeatureStudent).toHaveBeenCalledWith(
         'session-1',
-        'student-1'
+        'student-1',
+        'print("hello")'
       );
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
@@ -551,21 +552,15 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('student_joined', {
-          session_id: 'session-1',
-          student: {
-            user_id: 'student-1',
-            name: 'Alice',
-            code: 'print("hello")',
-            execution_settings: undefined,
-          },
-          timestamp: Date.now(),
+          user_id: 'student-1',
+          display_name: 'Alice',
         });
       });
 
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].user_id).toBe('student-1');
       expect(result.current.students[0].name).toBe('Alice');
-      expect(result.current.students[0].code).toBe('print("hello")');
+      expect(result.current.students[0].code).toBe('');
     });
 
     it('should handle student_code_updated event', async () => {
@@ -583,7 +578,8 @@ describe('useRealtimeSession', () => {
       // Add a student first
       act(() => {
         simulatePublication('student_joined', {
-          student: { user_id: 'student-1', name: 'Alice', code: '' },
+          user_id: 'student-1',
+          display_name: 'Alice',
         });
       });
 
@@ -591,15 +587,12 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('student_code_updated', {
-          studentId: 'student-1',
+          user_id: 'student-1',
           code: 'print("updated")',
-          execution_settings: { showTests: true },
-          last_update: new Date().toISOString(),
         });
       });
 
       expect(result.current.students[0].code).toBe('print("updated")');
-      expect(result.current.students[0].execution_settings).toEqual({ showTests: true });
     });
 
     it('should handle out-of-order events (code update before student join)', async () => {
@@ -619,10 +612,8 @@ describe('useRealtimeSession', () => {
       // Code update arrives before student join
       act(() => {
         simulatePublication('student_code_updated', {
-          studentId: 'student-1',
+          user_id: 'student-1',
           code: 'print("early update")',
-          execution_settings: { random_seed: 42 },
-          last_update: new Date().toISOString(),
         });
       });
 
@@ -631,13 +622,13 @@ describe('useRealtimeSession', () => {
       // Student join arrives after
       act(() => {
         simulatePublication('student_joined', {
-          student: { user_id: 'student-1', name: 'Alice', code: '' },
+          user_id: 'student-1',
+          display_name: 'Alice',
         });
       });
 
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].code).toBe('print("early update")');
-      expect(result.current.students[0].execution_settings).toEqual({ random_seed: 42 });
     });
 
     it('should handle session_ended event', async () => {
@@ -652,16 +643,20 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const ended_at = '2026-01-25T12:00:00Z';
+      const beforeTime = new Date();
       act(() => {
         simulatePublication('session_ended', {
           session_id: 'session-1',
-          ended_at,
+          reason: 'instructor_ended',
         });
       });
+      const afterTime = new Date();
 
       expect(result.current.session?.status).toBe('completed');
-      expect(result.current.session?.ended_at).toEqual(new Date(ended_at));
+      const ended_at = result.current.session?.ended_at;
+      expect(ended_at).toBeInstanceOf(Date);
+      expect((ended_at as Date).getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
+      expect((ended_at as Date).getTime()).toBeLessThanOrEqual(afterTime.getTime());
     });
 
     it('should handle session_ended event with default ended_at', async () => {
@@ -707,8 +702,8 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('featured_student_changed', {
-          featured_student_id: 'student-1',
-          featured_code: 'print("featured code")',
+          user_id: 'student-1',
+          code: 'print("featured code")',
         });
       });
 
@@ -739,8 +734,8 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('featured_student_changed', {
-          featured_student_id: null,
-          featured_code: null,
+          user_id: null,
+          code: null,
         });
       });
 
@@ -764,18 +759,11 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.session?.problem).toBeUndefined();
 
-      const newProblem = {
-        id: 'problem-1',
-        title: 'New Problem',
-        description: 'Solve this problem',
-        starter_code: 'def solve():\n    pass',
-      };
-
       act(() => {
-        simulatePublication('problem_updated', { problem: newProblem });
+        simulatePublication('problem_updated', { problem_id: 'problem-1' });
       });
 
-      expect(result.current.session?.problem).toEqual(newProblem);
+      expect(result.current.session?.problem).toEqual({ id: 'problem-1' });
     });
 
     it('should handle session_replaced event', async () => {
