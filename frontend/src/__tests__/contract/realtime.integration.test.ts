@@ -1,26 +1,37 @@
 /**
- * Contract test: GET /api/v1/realtime/token
- * Validates the token response shape.
+ * Integration test: getRealtimeToken()
+ * Validates that the typed API function works correctly against the real backend.
+ *
  * Note: This endpoint requires CentrifugoTokenSecret to be configured.
- * If not configured, the endpoint won't exist and we expect 404.
+ * If not configured, the endpoint will return 404.
  */
-import { contractFetch } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { getRealtimeToken } from '@/lib/api/realtime-token';
 import { expectSnakeCaseKeys, expectString } from './validators';
 
-describe('GET /api/v1/realtime/token', () => {
-  it('returns a token response with correct shape (or 404 if not configured)', async () => {
-    const res = await contractFetch('/api/v1/realtime/token');
+describe('getRealtimeToken()', () => {
+  beforeAll(() => {
+    configureTestAuth(INSTRUCTOR_TOKEN);
+  });
 
-    if (res.status === 404) {
-      // Centrifugo not configured — acceptable in test environments
-      console.warn('Realtime token endpoint not configured (404)');
-      return;
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns token response with correct shape (or throws if not configured)', async () => {
+    try {
+      const response = await getRealtimeToken();
+
+      expectString(response, 'token');
+      expectSnakeCaseKeys(response, 'tokenResponse');
+    } catch (error) {
+      // 404 is acceptable if Centrifugo not configured in test environment
+      const status = (error as { status?: number }).status;
+      if (status === 404) {
+        console.warn('Realtime token endpoint not configured (404)');
+        return;
+      }
+      throw error;
     }
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-
-    expectString(body, 'token');
-    expectSnakeCaseKeys(body, 'tokenResponse');
   });
 });

@@ -1,11 +1,12 @@
 /**
- * Contract tests for namespace-related API endpoints.
- * Validates the response shapes match frontend type definitions.
+ * Integration tests for namespace-related typed API functions.
+ * Validates that the typed functions work correctly against the real backend.
  *
  * Note: listNamespaces() and getNamespaceUsers() require system-admin role,
  * so we use the ADMIN_TOKEN for these tests.
  */
-import { contractFetch, ADMIN_TOKEN, getSetupState } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, getSetupState, resetAuthProvider } from './helpers';
+import { listNamespaces, getNamespaceUsers } from '@/lib/api/namespaces';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -14,16 +15,19 @@ import {
   expectNullableNumber,
 } from './validators';
 
-describe('GET /api/v1/namespaces (system-admin only)', () => {
-  it('returns an array of Namespace objects with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/namespaces', ADMIN_TOKEN);
-    expect(res.status).toBe(200);
+describe('listNamespaces() (system-admin only)', () => {
+  beforeAll(() => {
+    configureTestAuth(ADMIN_TOKEN);
+  });
 
-    const namespaces = await res.json();
-    // Backend returns plain array (not wrapped in { namespaces: [...] })
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns NamespaceWithStats[] with correct snake_case shape', async () => {
+    const namespaces = await listNamespaces();
+
     expect(Array.isArray(namespaces)).toBe(true);
-
-    // Validate at least one namespace exists (setup created one)
     expect(namespaces.length).toBeGreaterThan(0);
 
     const ns = namespaces[0];
@@ -43,20 +47,23 @@ describe('GET /api/v1/namespaces (system-admin only)', () => {
   });
 });
 
-describe('GET /api/v1/namespaces/{id}/users (system-admin only)', () => {
-  it('returns an array of User objects with correct snake_case shape', async () => {
+describe('getNamespaceUsers() (system-admin only)', () => {
+  beforeAll(() => {
+    configureTestAuth(ADMIN_TOKEN);
+  });
+
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns User[] with correct snake_case shape', async () => {
     const state = getSetupState();
     const namespaceId = state?.namespaceId;
     expect(namespaceId).toBeTruthy();
 
-    const res = await contractFetch(`/api/v1/namespaces/${namespaceId}/users`, ADMIN_TOKEN);
-    expect(res.status).toBe(200);
+    const users = await getNamespaceUsers(namespaceId!);
 
-    const users = await res.json();
-    // Backend returns plain array (not wrapped in { users: [...] })
     expect(Array.isArray(users)).toBe(true);
-
-    // Validate at least one user exists (setup created one)
     expect(users.length).toBeGreaterThan(0);
 
     const user = users[0];

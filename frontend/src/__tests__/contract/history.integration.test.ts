@@ -1,8 +1,9 @@
 /**
- * Contract test: GET /api/v1/sessions/history
- * Validates the session history response shape matches frontend type definitions.
+ * Integration test: listSessionHistory()
+ * Validates that the typed API function works correctly against the real backend.
  */
-import { contractFetch } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { listSessionHistory } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -10,14 +11,18 @@ import {
   expectArray,
 } from './validators';
 
-describe('GET /api/v1/sessions/history', () => {
-  it('returns an array of Session objects (not wrapped) with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/sessions/history');
-    expect(res.status).toBe(200);
+describe('listSessionHistory()', () => {
+  beforeAll(() => {
+    configureTestAuth(INSTRUCTOR_TOKEN);
+  });
 
-    const sessions = await res.json();
+  afterAll(() => {
+    resetAuthProvider();
+  });
 
-    // Backend returns plain array (not wrapped in { sessions: ... })
+  it('returns Session[] (not wrapped) with correct snake_case shape', async () => {
+    const sessions = await listSessionHistory();
+
     expect(Array.isArray(sessions)).toBe(true);
 
     // If there are sessions in history, validate shape

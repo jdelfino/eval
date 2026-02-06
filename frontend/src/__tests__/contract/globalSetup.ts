@@ -138,6 +138,7 @@ export default async () => {
     instructorExternalId: INSTRUCTOR_EXTERNAL_ID,
     instructorEmail: INSTRUCTOR_EMAIL,
     instructorToken: INSTRUCTOR_TOKEN,
+    apiBaseUrl: API_BASE,
   };
   fs.writeFileSync(stateFile, JSON.stringify(state));
 

@@ -1,8 +1,9 @@
 /**
- * Contract test: GET /api/v1/sections/my
- * Validates the MySectionInfo[] response shape matches frontend expectations.
+ * Integration test: listMySections()
+ * Validates that the typed API function works correctly against the real backend.
  */
-import { contractFetch } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { listMySections } from '@/lib/api/sections';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -10,15 +11,21 @@ import {
   expectBoolean,
 } from './validators';
 
-describe('GET /api/v1/sections/my', () => {
-  it('returns an array of MySectionInfo objects with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/sections/my');
-    expect(res.status).toBe(200);
+describe('listMySections()', () => {
+  beforeAll(() => {
+    configureTestAuth(INSTRUCTOR_TOKEN);
+  });
 
-    const sections = await res.json();
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns MySectionInfo[] with correct snake_case shape', async () => {
+    const sections = await listMySections();
+
     expect(Array.isArray(sections)).toBe(true);
 
-    // The admin may or may not be enrolled. If enrolled, validate the shape.
+    // The instructor may or may not have sections. If enrolled, validate the shape.
     if (sections.length > 0) {
       const item = sections[0];
 

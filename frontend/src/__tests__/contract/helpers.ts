@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
+import { configureTestAuth, resetAuthProvider } from '@/lib/auth-provider';
 
 // Read state from global setup
 interface SetupState {
@@ -17,6 +16,7 @@ interface SetupState {
   instructorExternalId: string;
   instructorEmail: string;
   instructorToken: string;
+  apiBaseUrl: string;
 }
 
 function loadState(): SetupState | null {
@@ -33,6 +33,10 @@ function loadState(): SetupState | null {
 
 const setupState = loadState();
 
+// Set NEXT_PUBLIC_API_URL for typed API functions
+const API_BASE = setupState?.apiBaseUrl || process.env.API_BASE_URL || 'http://localhost:8080';
+process.env.NEXT_PUBLIC_API_URL = API_BASE;
+
 // Fall back to generating values if global setup didn't run
 const RUN_ID = setupState?.runId || `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const CONTRACT_NS = setupState?.namespaceId || `contract-${RUN_ID}`;
@@ -46,22 +50,11 @@ const INSTRUCTOR_EMAIL = setupState?.instructorEmail || `instructor-${RUN_ID}@co
 const INSTRUCTOR_TOKEN = setupState?.instructorToken || `test:${INSTRUCTOR_EXTERNAL_ID}:${INSTRUCTOR_EMAIL}`;
 
 /**
- * Fetch with authorization header.
- * @param path API path (e.g., '/api/v1/classes')
- * @param token Auth token (defaults to INSTRUCTOR_TOKEN)
- * @param options Additional fetch options
+ * Create a test token in the format expected by the backend's test auth validator.
+ * @param externalId - The user's external ID
+ * @param email - The user's email
+ * @returns Token string in format "test:<externalId>:<email>"
  */
-export function contractFetch(path: string, token: string = INSTRUCTOR_TOKEN, options?: RequestInit) {
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-}
-
 export function testToken(externalId: string, email: string) {
   return `test:${externalId}:${email}`;
 }
@@ -71,4 +64,12 @@ export function getSetupState(): SetupState | null {
   return setupState;
 }
 
-export { CONTRACT_NS, ADMIN_TOKEN, INSTRUCTOR_TOKEN, INSTRUCTOR_EXTERNAL_ID, INSTRUCTOR_EMAIL };
+export {
+  CONTRACT_NS,
+  ADMIN_TOKEN,
+  INSTRUCTOR_TOKEN,
+  INSTRUCTOR_EXTERNAL_ID,
+  INSTRUCTOR_EMAIL,
+  configureTestAuth,
+  resetAuthProvider,
+};

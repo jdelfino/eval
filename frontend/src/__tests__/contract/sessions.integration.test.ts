@@ -1,12 +1,14 @@
 /**
- * Contract tests for session-related API endpoints.
- * Validates response shapes match frontend type definitions.
+ * Integration tests for session-related typed API functions.
+ * Validates that the typed functions work correctly against the real backend.
  *
  * Note: Session creation (POST /sessions) is validated by globalSetup.ts,
  * which creates a session as part of test setup.
  */
-import { contractFetch } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
+import { getSessionState } from '@/lib/api/realtime';
+import { getRevisions } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -15,19 +17,23 @@ import {
 } from './validators';
 
 describe('Sessions API', () => {
-  describe('GET /api/v1/sessions/{id}/state', () => {
-    it('returns a SessionState with correct snake_case shape', async () => {
+  beforeAll(() => {
+    configureTestAuth(INSTRUCTOR_TOKEN);
+  });
+
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  describe('getSessionState()', () => {
+    it('returns SessionState with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
-      // If setup hasn't run yet (no server), skip gracefully
       if (!sessionId) {
         console.warn('Skipping: no session ID from setup');
         return;
       }
 
-      const res = await contractFetch(`/api/v1/sessions/${sessionId}/state`);
-      expect(res.status).toBe(200);
-
-      const body = await res.json();
+      const body = await getSessionState(sessionId);
 
       // Top-level shape: { session, students, join_code }
       expect(body).toHaveProperty('session');
@@ -68,20 +74,16 @@ describe('Sessions API', () => {
     });
   });
 
-  describe('GET /api/v1/sessions/{id}/revisions', () => {
-    it('returns an array of Revision objects (not wrapped)', async () => {
+  describe('getRevisions()', () => {
+    it('returns Revision[] (not wrapped)', async () => {
       const sessionId = state.sessionId;
       if (!sessionId) {
         console.warn('Skipping: no session ID from setup');
         return;
       }
 
-      const res = await contractFetch(`/api/v1/sessions/${sessionId}/revisions`);
-      expect(res.status).toBe(200);
+      const revisions = await getRevisions(sessionId);
 
-      const revisions = await res.json();
-
-      // Backend returns plain array (not wrapped in { revisions: ... })
       expect(Array.isArray(revisions)).toBe(true);
 
       // If there are revisions, validate shape
