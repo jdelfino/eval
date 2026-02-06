@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import CreateClassModal from './CreateClassModal';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { apiFetch } from '@/lib/api-client';
+import { listClasses, deleteClass } from '@/lib/api/classes';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { ClassWithSections } from '../types';
 
@@ -31,9 +31,8 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiFetch('/classes');
-      const data = await response.json();
-      setClasses(data.classes || []);
+      const classes = await listClasses();
+      setClasses(classes || []);
     } catch (err) {
       console.error('Error loading classes:', err);
       setError(err instanceof Error ? err : new Error('Failed to load classes'));
@@ -54,7 +53,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
     setDeletingId(classToDelete.id);
     setDeleteError(null);
     try {
-      await apiFetch(`/classes/${classToDelete.id}`, { method: 'DELETE' });
+      await deleteClass(classToDelete.id);
 
       // Reload classes
       await loadClasses();

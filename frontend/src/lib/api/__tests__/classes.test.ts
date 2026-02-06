@@ -127,18 +127,37 @@ describe('lib/api/classes', () => {
       // Backend returns plain object (not wrapped)
       mockApiPost.mockResolvedValue(fakeSection);
 
-      const result = await createSection('c1', 'Section A', 'Fall 2024');
+      const result = await createSection('c1', { name: 'Section A', semester: 'Fall 2024' });
 
       expect(mockApiPost).toHaveBeenCalledWith('/classes/c1/sections', { name: 'Section A', semester: 'Fall 2024' });
       expect(result).toEqual(fakeSection);
     });
 
-    it('calls POST with semester undefined when omitted', async () => {
+    it('calls POST with only name when other fields are omitted', async () => {
       mockApiPost.mockResolvedValue(fakeSection);
 
-      const result = await createSection('c1', 'Section A');
+      const result = await createSection('c1', { name: 'Section A' });
 
-      expect(mockApiPost).toHaveBeenCalledWith('/classes/c1/sections', { name: 'Section A', semester: undefined });
+      expect(mockApiPost).toHaveBeenCalledWith('/classes/c1/sections', { name: 'Section A' });
+      expect(result).toEqual(fakeSection);
+    });
+
+    it('calls POST with schedule, location, and capacity when provided', async () => {
+      mockApiPost.mockResolvedValue(fakeSection);
+
+      const result = await createSection('c1', {
+        name: 'Section A',
+        schedule: 'MWF 10:00-11:00',
+        location: 'Room 101',
+        capacity: 30,
+      });
+
+      expect(mockApiPost).toHaveBeenCalledWith('/classes/c1/sections', {
+        name: 'Section A',
+        schedule: 'MWF 10:00-11:00',
+        location: 'Room 101',
+        capacity: 30,
+      });
       expect(result).toEqual(fakeSection);
     });
   });
