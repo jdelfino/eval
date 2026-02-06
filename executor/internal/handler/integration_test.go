@@ -21,6 +21,15 @@ import (
 	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
+// skipSandboxTest skips tests that require full nsjail sandbox functionality.
+// Set EXECUTOR_SKIP_SANDBOX_TESTS=1 to skip these locally (sandbox doesn't work in devcontainers).
+func skipSandboxTest(t *testing.T) {
+	t.Helper()
+	if os.Getenv("EXECUTOR_SKIP_SANDBOX_TESTS") != "" {
+		t.Skip("EXECUTOR_SKIP_SANDBOX_TESTS set, skipping sandbox isolation test")
+	}
+}
+
 // executorURL returns the base URL or skips the test.
 func executorURL(t *testing.T) string {
 	t.Helper()
@@ -225,6 +234,7 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 }
 
 func TestIntegration_FilesystemIsolation_EtcPasswd(t *testing.T) {
+	skipSandboxTest(t)
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: `
@@ -247,6 +257,7 @@ except Exception as e:
 }
 
 func TestIntegration_FilesystemIsolation_Proc(t *testing.T) {
+	skipSandboxTest(t)
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code: `
@@ -269,6 +280,7 @@ except Exception as e:
 }
 
 func TestIntegration_FilesystemIsolation_PythonStdlib(t *testing.T) {
+	skipSandboxTest(t)
 	u := executorURL(t)
 	// Verify Python stdlib still works with the restricted chroot.
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{

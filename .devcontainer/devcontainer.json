@@ -24,7 +24,8 @@
   "postStartCommand": "./.devcontainer/post-start.sh && ./.devcontainer/setup-secrets.sh",
 
   "remoteEnv": {
-    "BD_SOCKET": "/tmp/beads.sock"
+    "BD_SOCKET": "/tmp/beads.sock",
+    "EXECUTOR_SKIP_SANDBOX_TESTS": "1"
   },
 
   "customizations": {
