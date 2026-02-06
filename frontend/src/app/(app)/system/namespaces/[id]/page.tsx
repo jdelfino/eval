@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { hasRolePermission } from '@/lib/permissions';
 import { useRouter, useParams } from 'next/navigation';
 import { useNamespaces } from '@/hooks/useNamespaces';
-import { apiFetch } from '@/lib/api-client';
+import { getSystemNamespace } from '@/lib/api/system';
 import type { User as ApiUser } from '@/types/api';
 
 interface NamespaceDetail {
@@ -61,9 +61,8 @@ export default function NamespaceUsersPage() {
 
   const fetchData = async () => {
     try {
-      // Fetch namespace details (API returns object directly, not wrapped)
-      const nsResponse = await apiFetch(`/system/namespaces/${namespace_id}`);
-      const nsData = await nsResponse.json();
+      // Fetch namespace details using typed API
+      const nsData = await getSystemNamespace(namespace_id);
       setNamespace(nsData);
 
       // Fetch users

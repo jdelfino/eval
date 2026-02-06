@@ -7,7 +7,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
+import {
+  listNamespaceInvitations,
+  createNamespaceInvitation,
+  revokeNamespaceInvitation,
+  resendNamespaceInvitation,
+  type NamespaceInvitationFilters,
+} from '@/lib/api/namespace-invitations';
 import InvitationList, { Invitation } from '@/components/InvitationList';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +23,14 @@ import { Alert } from '@/components/ui/Alert';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type InvitationStatus = 'pending' | 'consumed' | 'revoked' | 'expired' | 'all';
+
+// Helper to convert UI status to API filter
+function toApiFilters(status: InvitationStatus): NamespaceInvitationFilters | undefined {
+  if (status === 'all') {
+    return undefined;
+  }
+  return { status };
+}
 
 function InvitationsPageContent() {
   const { user, isLoading: authLoading } = useAuth();
@@ -42,14 +56,8 @@ function InvitationsPageContent() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') {
-        params.set('status', statusFilter);
-      }
-
-      const response = await apiFetch(`/namespace/invitations?${params}`);
-      const data = await response.json();
-      setInvitations(data.invitations);
+      const data = await listNamespaceInvitations(toApiFilters(statusFilter));
+      setInvitations(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch invitations';
       setError(message);
@@ -85,7 +93,7 @@ function InvitationsPageContent() {
 
     setIsSubmitting(true);
     try {
-      await apiPost('/namespace/invitations', { email: trimmedEmail, expiresInDays });
+      await createNamespaceInvitation(trimmedEmail, expiresInDays);
 
       setEmail('');
       setSuccessMessage(`Invitation sent to ${trimmedEmail}`);
@@ -103,13 +111,13 @@ function InvitationsPageContent() {
   };
 
   const handleRevoke = async (id: string) => {
-    await apiDelete(`/namespace/invitations/${id}`);
+    await revokeNamespaceInvitation(id);
     // Refresh the list
     await fetchInvitations();
   };
 
   const handleResend = async (id: string) => {
-    await apiPost(`/namespace/invitations/${id}/resend`, {});
+    await resendNamespaceInvitation(id);
     // Refresh the list
     await fetchInvitations();
   };

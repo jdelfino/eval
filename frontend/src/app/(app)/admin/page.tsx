@@ -18,7 +18,19 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Table } from '@/components/ui/Table';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
+import {
+  getAdminStats,
+  listAdminUsers,
+  changeUserRole,
+  deleteAdminUser,
+  type AdminStats,
+} from '@/lib/api/admin';
+import {
+  listNamespaceInvitations,
+  createNamespaceInvitation,
+  revokeNamespaceInvitation,
+  resendNamespaceInvitation,
+} from '@/lib/api/namespace-invitations';
 import type { UserRole } from '@/types/api';
 
 interface User {
@@ -41,19 +53,7 @@ interface Invitation {
   status?: 'pending' | 'consumed' | 'revoked' | 'expired';
 }
 
-interface SystemStats {
-  users: {
-    total: number;
-    byRole: {
-      admin: number;
-      instructor: number;
-      student: number;
-    };
-  };
-  classes: { total: number };
-  sections: { total: number };
-  sessions: { active: number };
-}
+type SystemStats = AdminStats;
 
 function AdminPage() {
   const { user } = useAuth();
@@ -72,21 +72,16 @@ function AdminPage() {
 
   const isAdmin = user ? hasRolePermission(user.role, 'user.changeRole') : false;
 
-  // Build URL with optional namespace param for system-admin
-  const buildUrl = (base: string, params: Record<string, string> = {}) => {
-    if (user?.role === 'system-admin' && selectedNamespace) {
-      params.namespace = selectedNamespace;
-    }
-    const query = new URLSearchParams(params).toString();
-    return query ? `${base}?${query}` : base;
+  // Get namespaceId for API calls (system-admin can filter by namespace)
+  const getNamespaceId = () => {
+    return user?.role === 'system-admin' && selectedNamespace ? selectedNamespace : undefined;
   };
 
   const loadStats = async () => {
     if (!isAdmin) return;
 
     try {
-      const res = await apiFetch(buildUrl('/admin/stats'));
-      const data = await res.json();
+      const data = await getAdminStats(getNamespaceId());
       setStats(data);
     } catch (err) {
       console.error('Failed to load stats:', err);
@@ -98,9 +93,8 @@ function AdminPage() {
 
     setInvitationsLoading(true);
     try {
-      const res = await apiFetch('/namespace/invitations');
-      const data = await res.json();
-      setInvitations(data.invitations || []);
+      const data = await listNamespaceInvitations();
+      setInvitations(data || []);
     } catch (err) {
       console.error('Failed to load invitations:', err);
     } finally {
@@ -109,21 +103,21 @@ function AdminPage() {
   };
 
   const handleInviteInstructor = async (email: string) => {
-    await apiPost('/namespace/invitations', { email });
+    await createNamespaceInvitation(email);
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleRevokeInvitation = async (invitationId: string) => {
-    await apiDelete(`/namespace/invitations/${invitationId}`);
+    await revokeNamespaceInvitation(invitationId);
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleResendInvitation = async (invitationId: string) => {
-    await apiPost(`/namespace/invitations/${invitationId}/resend`);
+    await resendNamespaceInvitation(invitationId);
 
     // Reload invitations
     await loadInvitations();
@@ -133,27 +127,23 @@ function AdminPage() {
     setIsLoading(true);
     setError('');
     try {
+      const namespaceId = getNamespaceId();
       if (isAdmin) {
         // Admins can see all users including other admins
-        const res = await apiFetch(buildUrl('/admin/users'));
-        const data = await res.json();
-        const users = data.users || [];
+        const users = await listAdminUsers({ namespaceId });
         setAllUsers(users);
         setNamespaceAdmins(users.filter((u: User) => u.role === 'namespace-admin'));
         setInstructors(users.filter((u: User) => u.role === 'instructor'));
         setStudents(users.filter((u: User) => u.role === 'student'));
       } else {
         // Instructors can only see instructors and students
-        const [instructorsRes, studentsRes] = await Promise.all([
-          apiFetch(buildUrl('/admin/users', { role: 'instructor' })),
-          apiFetch(buildUrl('/admin/users', { role: 'student' }))
+        const [instructorsData, studentsData] = await Promise.all([
+          listAdminUsers({ namespaceId, role: 'instructor' }),
+          listAdminUsers({ namespaceId, role: 'student' })
         ]);
 
-        const instructorsData = await instructorsRes.json();
-        const studentsData = await studentsRes.json();
-
-        setInstructors(instructorsData.users || []);
-        setStudents(studentsData.users || []);
+        setInstructors(instructorsData || []);
+        setStudents(studentsData || []);
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to load users';
@@ -188,11 +178,7 @@ function AdminPage() {
     setError('');
 
     try {
-      await apiFetch(`/admin/users/${user_id}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      });
+      await changeUserRole(user_id, newRole);
 
       // Reload users and stats
       await loadUsers();
@@ -205,7 +191,7 @@ function AdminPage() {
   };
 
   const handleDeleteUser = async (user_id: string, _username: string) => {
-    await apiDelete(`/admin/users/${user_id}`);
+    await deleteAdminUser(user_id);
 
     // Reload users
     await loadUsers();

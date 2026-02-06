@@ -9,7 +9,13 @@ import NamespaceList from './components/NamespaceList';
 import CreateNamespaceForm from './components/CreateNamespaceForm';
 import InvitationList from '@/components/InvitationList';
 import CreateInvitationForm from './components/CreateInvitationForm';
-import { apiFetch, apiPost, apiDelete } from '@/lib/api-client';
+import {
+  listSystemInvitations,
+  createSystemInvitation,
+  revokeSystemInvitation,
+  resendSystemInvitation,
+  type SystemInvitationFilters,
+} from '@/lib/api/system';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -28,11 +34,26 @@ interface Invitation {
   consumedBy?: string;
 }
 
-// Filters for invitations
+// Filters for invitations (extends typed filters with 'all' options for UI)
 interface InvitationFilters {
   namespace_id: string;
   targetRole: 'namespace-admin' | 'instructor' | 'all';
   status: 'pending' | 'consumed' | 'revoked' | 'expired' | 'all';
+}
+
+// Helper to convert UI filters to API filters
+function toApiFilters(filters: InvitationFilters): SystemInvitationFilters {
+  const apiFilters: SystemInvitationFilters = {};
+  if (filters.namespace_id !== 'all') {
+    apiFilters.namespace_id = filters.namespace_id;
+  }
+  if (filters.targetRole !== 'all') {
+    apiFilters.targetRole = filters.targetRole;
+  }
+  if (filters.status !== 'all') {
+    apiFilters.status = filters.status;
+  }
+  return apiFilters;
 }
 
 // Loading fallback for Suspense boundary
@@ -121,20 +142,8 @@ function SystemAdminContent() {
     setInvitationsError(null);
 
     try {
-      const params = new URLSearchParams();
-      if (invitationFilters.namespace_id !== 'all') {
-        params.set('namespace_id', invitationFilters.namespace_id);
-      }
-      if (invitationFilters.targetRole !== 'all') {
-        params.set('targetRole', invitationFilters.targetRole);
-      }
-      if (invitationFilters.status !== 'all') {
-        params.set('status', invitationFilters.status);
-      }
-
-      const response = await apiFetch(`/system/invitations?${params.toString()}`);
-      const data = await response.json();
-      setInvitations(data.invitations);
+      const data = await listSystemInvitations(toApiFilters(invitationFilters));
+      setInvitations(data);
     } catch (error) {
       console.error('Failed to fetch invitations:', error);
       setInvitationsError('Failed to load invitations');
@@ -149,7 +158,7 @@ function SystemAdminContent() {
     namespace_id: string,
     targetRole: 'namespace-admin' | 'instructor'
   ) => {
-    await apiPost('/system/invitations', { email, namespace_id, targetRole });
+    await createSystemInvitation(email, namespace_id, targetRole);
     // Refresh list
     await fetchInvitations();
     setShowCreateInvitationForm(false);
@@ -157,14 +166,14 @@ function SystemAdminContent() {
 
   // Revoke invitation
   const revokeInvitation = async (id: string) => {
-    await apiDelete(`/system/invitations/${id}`);
+    await revokeSystemInvitation(id);
     // Refresh list
     await fetchInvitations();
   };
 
   // Resend invitation
   const resendInvitation = async (id: string) => {
-    await apiPost(`/system/invitations/${id}/resend`, {});
+    await resendSystemInvitation(id);
     // Refresh list
     await fetchInvitations();
   };
