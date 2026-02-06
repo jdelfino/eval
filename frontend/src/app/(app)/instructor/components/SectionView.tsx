@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { apiFetch, apiDelete } from '@/lib/api-client';
+import { getClassSections, deleteSection, getActiveSessions } from '@/lib/api/sections';
 import CreateSectionModal from './CreateSectionModal';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { BackButton } from '@/components/ui/BackButton';
@@ -67,9 +67,8 @@ export default function SectionView({
   const loadSections = async () => {
     try {
       setLoading(true);
-      const response = await apiFetch(`/classes/${class_id}/sections`);
-      const data = await response.json();
-      setSections(data.sections || []);
+      const sections = await getClassSections(class_id);
+      setSections(sections || []);
       setError(null);
     } catch (err) {
       console.error('Error loading sections:', err);
@@ -90,7 +89,7 @@ export default function SectionView({
     setShowDeleteConfirm(false);
     setDeletingId(sectionToDelete.id);
     try {
-      await apiDelete(`/sections/${sectionToDelete.id}`);
+      await deleteSection(sectionToDelete.id);
 
       // If deleted section was selected, clear selection
       if (selectedSection?.id === sectionToDelete.id) {
@@ -111,9 +110,8 @@ export default function SectionView({
   const loadSessions = async (section_id: string) => {
     try {
       setLoadingSessions(true);
-      const response = await apiFetch(`/sections/${section_id}/sessions`);
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      const sessions = await getActiveSessions(section_id);
+      setSessions(sessions || []);
     } catch (err) {
       console.error('Error loading sessions:', err);
       setSessions([]);
