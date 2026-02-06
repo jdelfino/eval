@@ -6,14 +6,31 @@ import (
 	"github.com/google/uuid"
 )
 
+const sectionColumns = `id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+
+func scanSection(row interface{ Scan(dest ...any) error }) (*Section, error) {
+	var sec Section
+	err := row.Scan(
+		&sec.ID,
+		&sec.NamespaceID,
+		&sec.ClassID,
+		&sec.Name,
+		&sec.Semester,
+		&sec.JoinCode,
+		&sec.Active,
+		&sec.CreatedAt,
+		&sec.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &sec, nil
+}
+
 // ListSectionsByClass retrieves all sections for a given class.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]Section, error) {
-	const query = `
-		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-		FROM sections
-		WHERE class_id = $1
-		ORDER BY created_at`
+	query := "SELECT " + sectionColumns + " FROM sections WHERE class_id = $1 ORDER BY created_at"
 
 	rows, err := s.q.Query(ctx, query, classID)
 	if err != nil {
@@ -23,21 +40,11 @@ func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]S
 
 	var sections []Section
 	for rows.Next() {
-		var sec Section
-		if err := rows.Scan(
-			&sec.ID,
-			&sec.NamespaceID,
-			&sec.ClassID,
-			&sec.Name,
-			&sec.Semester,
-			&sec.JoinCode,
-			&sec.Active,
-			&sec.CreatedAt,
-			&sec.UpdatedAt,
-		); err != nil {
+		sec, err := scanSection(rows)
+		if err != nil {
 			return nil, err
 		}
-		sections = append(sections, sec)
+		sections = append(sections, *sec)
 	}
 	return sections, rows.Err()
 }
@@ -45,96 +52,43 @@ func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]S
 // GetSection retrieves a section by its ID.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) GetSection(ctx context.Context, id uuid.UUID) (*Section, error) {
-	const query = `
-		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-		FROM sections
-		WHERE id = $1`
-
-	var sec Section
-	err := s.q.QueryRow(ctx, query, id).Scan(
-		&sec.ID,
-		&sec.NamespaceID,
-		&sec.ClassID,
-		&sec.Name,
-		&sec.Semester,
-		&sec.JoinCode,
-		&sec.Active,
-		&sec.CreatedAt,
-		&sec.UpdatedAt,
-	)
+	query := "SELECT " + sectionColumns + " FROM sections WHERE id = $1"
+	sec, err := scanSection(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &sec, nil
+	return sec, nil
 }
 
 // CreateSection creates a new section and returns the created record.
 func (s *Store) CreateSection(ctx context.Context, params CreateSectionParams) (*Section, error) {
-	const query = `
-		INSERT INTO sections (namespace_id, class_id, name, semester, join_code)
+	query := `INSERT INTO sections (namespace_id, class_id, name, semester, join_code)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+		RETURNING ` + sectionColumns
 
-	var sec Section
-	err := s.q.QueryRow(ctx, query,
-		params.NamespaceID,
-		params.ClassID,
-		params.Name,
-		params.Semester,
-		params.JoinCode,
-	).Scan(
-		&sec.ID,
-		&sec.NamespaceID,
-		&sec.ClassID,
-		&sec.Name,
-		&sec.Semester,
-		&sec.JoinCode,
-		&sec.Active,
-		&sec.CreatedAt,
-		&sec.UpdatedAt,
-	)
+	sec, err := scanSection(s.q.QueryRow(ctx, query,
+		params.NamespaceID, params.ClassID, params.Name, params.Semester, params.JoinCode,
+	))
 	if err != nil {
 		return nil, err
 	}
-
-	return &sec, nil
+	return sec, nil
 }
 
 // UpdateSection updates a section's mutable fields and returns the updated record.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSectionParams) (*Section, error) {
-	const query = `
-		UPDATE sections
-		SET name       = COALESCE($2, name),
-		    semester   = COALESCE($3, semester),
-		    active     = COALESCE($4, active),
-		    updated_at = now()
+	query := `UPDATE sections
+		SET name = COALESCE($2, name), semester = COALESCE($3, semester),
+		    active = COALESCE($4, active), updated_at = now()
 		WHERE id = $1
-		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+		RETURNING ` + sectionColumns
 
-	var sec Section
-	err := s.q.QueryRow(ctx, query,
-		id,
-		params.Name,
-		params.Semester,
-		params.Active,
-	).Scan(
-		&sec.ID,
-		&sec.NamespaceID,
-		&sec.ClassID,
-		&sec.Name,
-		&sec.Semester,
-		&sec.JoinCode,
-		&sec.Active,
-		&sec.CreatedAt,
-		&sec.UpdatedAt,
-	)
+	sec, err := scanSection(s.q.QueryRow(ctx, query, id, params.Name, params.Semester, params.Active))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &sec, nil
+	return sec, nil
 }
 
 // DeleteSection deletes a section by its ID.
@@ -170,16 +124,11 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 	var results []MySectionInfo
 	for rows.Next() {
 		var info MySectionInfo
+		// Scans section columns + extra class name; can't reuse scanSection.
 		if err := rows.Scan(
-			&info.Section.ID,
-			&info.Section.NamespaceID,
-			&info.Section.ClassID,
-			&info.Section.Name,
-			&info.Section.Semester,
-			&info.Section.JoinCode,
-			&info.Section.Active,
-			&info.Section.CreatedAt,
-			&info.Section.UpdatedAt,
+			&info.Section.ID, &info.Section.NamespaceID, &info.Section.ClassID,
+			&info.Section.Name, &info.Section.Semester, &info.Section.JoinCode,
+			&info.Section.Active, &info.Section.CreatedAt, &info.Section.UpdatedAt,
 			&info.ClassName,
 		); err != nil {
 			return nil, err
@@ -192,29 +141,15 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 // UpdateSectionJoinCode updates a section's join code.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*Section, error) {
-	const query = `
-		UPDATE sections
-		SET join_code = $2, updated_at = now()
+	query := `UPDATE sections SET join_code = $2, updated_at = now()
 		WHERE id = $1
-		RETURNING id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+		RETURNING ` + sectionColumns
 
-	var sec Section
-	err := s.q.QueryRow(ctx, query, id, joinCode).Scan(
-		&sec.ID,
-		&sec.NamespaceID,
-		&sec.ClassID,
-		&sec.Name,
-		&sec.Semester,
-		&sec.JoinCode,
-		&sec.Active,
-		&sec.CreatedAt,
-		&sec.UpdatedAt,
-	)
+	sec, err := scanSection(s.q.QueryRow(ctx, query, id, joinCode))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &sec, nil
+	return sec, nil
 }
 
 // Compile-time check that Store implements SectionRepository.

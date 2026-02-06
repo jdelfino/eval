@@ -7,14 +7,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const problemColumns = `id, namespace_id, title, description, starter_code, test_cases,
+		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
+
+func scanProblem(row interface{ Scan(dest ...any) error }) (*Problem, error) {
+	var p Problem
+	err := row.Scan(
+		&p.ID, &p.NamespaceID, &p.Title, &p.Description,
+		&p.StarterCode, &p.TestCases, &p.ExecutionSettings,
+		&p.AuthorID, &p.ClassID, &p.Tags, &p.Solution,
+		&p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 // ListProblems retrieves all problems visible to the current user.
 // If classID is non-nil, results are filtered to that class.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem, error) {
-	query := `
-		SELECT id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-		FROM problems`
+	query := "SELECT " + problemColumns + " FROM problems"
 
 	var args []any
 	if classID != nil {
@@ -31,36 +45,18 @@ func (s *Store) ListProblems(ctx context.Context, classID *uuid.UUID) ([]Problem
 
 	var problems []Problem
 	for rows.Next() {
-		var p Problem
-		if err := rows.Scan(
-			&p.ID,
-			&p.NamespaceID,
-			&p.Title,
-			&p.Description,
-			&p.StarterCode,
-			&p.TestCases,
-			&p.ExecutionSettings,
-			&p.AuthorID,
-			&p.ClassID,
-			&p.Tags,
-			&p.Solution,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-		); err != nil {
+		p, err := scanProblem(rows)
+		if err != nil {
 			return nil, err
 		}
-		problems = append(problems, p)
+		problems = append(problems, *p)
 	}
 	return problems, rows.Err()
 }
 
 // ListProblemsFiltered retrieves problems with extended filters.
 func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters) ([]Problem, error) {
-	query := `
-		SELECT id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-		FROM problems
-		WHERE 1=1`
+	query := "SELECT " + problemColumns + " FROM problems WHERE 1=1"
 
 	ac := newArgCounter(1)
 
@@ -102,25 +98,11 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 
 	var problems []Problem
 	for rows.Next() {
-		var p Problem
-		if err := rows.Scan(
-			&p.ID,
-			&p.NamespaceID,
-			&p.Title,
-			&p.Description,
-			&p.StarterCode,
-			&p.TestCases,
-			&p.ExecutionSettings,
-			&p.AuthorID,
-			&p.ClassID,
-			&p.Tags,
-			&p.Solution,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-		); err != nil {
+		p, err := scanProblem(rows)
+		if err != nil {
 			return nil, err
 		}
-		problems = append(problems, p)
+		problems = append(problems, *p)
 	}
 	return problems, rows.Err()
 }
@@ -128,76 +110,30 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 // GetProblem retrieves a problem by its ID.
 // Returns ErrNotFound if the problem does not exist.
 func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) {
-	const query = `
-		SELECT id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at
-		FROM problems
-		WHERE id = $1`
-
-	var p Problem
-	err := s.q.QueryRow(ctx, query, id).Scan(
-		&p.ID,
-		&p.NamespaceID,
-		&p.Title,
-		&p.Description,
-		&p.StarterCode,
-		&p.TestCases,
-		&p.ExecutionSettings,
-		&p.AuthorID,
-		&p.ClassID,
-		&p.Tags,
-		&p.Solution,
-		&p.CreatedAt,
-		&p.UpdatedAt,
-	)
+	query := "SELECT " + problemColumns + " FROM problems WHERE id = $1"
+	p, err := scanProblem(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &p, nil
+	return p, nil
 }
 
 // CreateProblem creates a new problem and returns the created record.
 func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error) {
-	const query = `
-		INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
+	query := `INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
 		                      execution_settings, author_id, class_id, tags, solution)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, namespace_id, title, description, starter_code, test_cases,
-		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
+		RETURNING ` + problemColumns
 
-	var p Problem
-	err := s.q.QueryRow(ctx, query,
-		params.NamespaceID,
-		params.Title,
-		params.Description,
-		params.StarterCode,
-		params.TestCases,
-		params.ExecutionSettings,
-		params.AuthorID,
-		params.ClassID,
-		params.Tags,
-		params.Solution,
-	).Scan(
-		&p.ID,
-		&p.NamespaceID,
-		&p.Title,
-		&p.Description,
-		&p.StarterCode,
-		&p.TestCases,
-		&p.ExecutionSettings,
-		&p.AuthorID,
-		&p.ClassID,
-		&p.Tags,
-		&p.Solution,
-		&p.CreatedAt,
-		&p.UpdatedAt,
-	)
+	p, err := scanProblem(s.q.QueryRow(ctx, query,
+		params.NamespaceID, params.Title, params.Description, params.StarterCode,
+		params.TestCases, params.ExecutionSettings, params.AuthorID, params.ClassID,
+		params.Tags, params.Solution,
+	))
 	if err != nil {
 		return nil, err
 	}
-
-	return &p, nil
+	return p, nil
 }
 
 // UpdateProblem updates a problem's mutable fields and returns the updated record.
@@ -241,30 +177,13 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 	query += `
 		    updated_at        = now()
 		WHERE id = $1
-		RETURNING id, namespace_id, title, description, starter_code, test_cases,
-		          execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
+		RETURNING ` + problemColumns
 
-	var p Problem
-	err := s.q.QueryRow(ctx, query, ac.args...).Scan(
-		&p.ID,
-		&p.NamespaceID,
-		&p.Title,
-		&p.Description,
-		&p.StarterCode,
-		&p.TestCases,
-		&p.ExecutionSettings,
-		&p.AuthorID,
-		&p.ClassID,
-		&p.Tags,
-		&p.Solution,
-		&p.CreatedAt,
-		&p.UpdatedAt,
-	)
+	p, err := scanProblem(s.q.QueryRow(ctx, query, ac.args...))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &p, nil
+	return p, nil
 }
 
 // DeleteProblem deletes a problem by its ID.

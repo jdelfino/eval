@@ -8,10 +8,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const auditLogColumns = `id, namespace_id, action, actor_id, target_id, target_type, details, created_at`
+
+func scanAuditLog(row interface{ Scan(dest ...any) error }) (*AuditLog, error) {
+	var l AuditLog
+	err := row.Scan(&l.ID, &l.NamespaceID, &l.Action, &l.ActorID,
+		&l.TargetID, &l.TargetType, &l.Details, &l.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
 // ListAuditLogs retrieves audit log entries with optional filters.
 func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error) {
-	query := `SELECT id, namespace_id, action, actor_id, target_id, target_type, details, created_at
-		FROM audit_logs WHERE 1=1`
+	query := "SELECT " + auditLogColumns + " FROM audit_logs WHERE 1=1"
 	ac := newArgCounter(1)
 
 	if filters.Action != nil {
@@ -38,12 +49,11 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 
 	var logs []AuditLog
 	for rows.Next() {
-		var l AuditLog
-		if err := rows.Scan(&l.ID, &l.NamespaceID, &l.Action, &l.ActorID,
-			&l.TargetID, &l.TargetType, &l.Details, &l.CreatedAt); err != nil {
+		l, err := scanAuditLog(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan audit log: %w", err)
 		}
-		logs = append(logs, l)
+		logs = append(logs, *l)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate audit logs: %w", err)
@@ -57,21 +67,18 @@ func (s *Store) ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]A
 
 // CreateAuditLog creates a new audit log entry.
 func (s *Store) CreateAuditLog(ctx context.Context, params CreateAuditLogParams) (*AuditLog, error) {
-	const query = `INSERT INTO audit_logs (namespace_id, action, actor_id, target_id, target_type, details)
+	query := `INSERT INTO audit_logs (namespace_id, action, actor_id, target_id, target_type, details)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, namespace_id, action, actor_id, target_id, target_type, details, created_at`
+		RETURNING ` + auditLogColumns
 
-	var l AuditLog
-	err := s.q.QueryRow(ctx, query,
+	l, err := scanAuditLog(s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.Action, params.ActorID,
 		params.TargetID, params.TargetType, params.Details,
-	).Scan(&l.ID, &l.NamespaceID, &l.Action, &l.ActorID,
-		&l.TargetID, &l.TargetType, &l.Details, &l.CreatedAt)
+	))
 	if err != nil {
 		return nil, fmt.Errorf("create audit log: %w", err)
 	}
-
-	return &l, nil
+	return l, nil
 }
 
 // AdminStats returns aggregate system statistics.

@@ -23,57 +23,39 @@ type CreateMembershipParams struct {
 	Role      string
 }
 
+const membershipColumns = `id, user_id, section_id, role, joined_at`
+
+func scanMembership(row interface{ Scan(dest ...any) error }) (*SectionMembership, error) {
+	var m SectionMembership
+	err := row.Scan(&m.ID, &m.UserID, &m.SectionID, &m.Role, &m.JoinedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 // GetSectionByJoinCode retrieves a section by its join code.
 // Returns ErrNotFound if no section has the given code.
 func (s *Store) GetSectionByJoinCode(ctx context.Context, code string) (*Section, error) {
-	const query = `
-		SELECT id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at
-		FROM sections
-		WHERE join_code = $1`
-
-	var sec Section
-	err := s.q.QueryRow(ctx, query, code).Scan(
-		&sec.ID,
-		&sec.NamespaceID,
-		&sec.ClassID,
-		&sec.Name,
-		&sec.Semester,
-		&sec.JoinCode,
-		&sec.Active,
-		&sec.CreatedAt,
-		&sec.UpdatedAt,
-	)
+	query := "SELECT " + sectionColumns + " FROM sections WHERE join_code = $1"
+	sec, err := scanSection(s.q.QueryRow(ctx, query, code))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-
-	return &sec, nil
+	return sec, nil
 }
 
 // CreateMembership creates a new section membership and returns the created record.
 func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipParams) (*SectionMembership, error) {
-	const query = `
-		INSERT INTO section_memberships (user_id, section_id, role)
+	query := `INSERT INTO section_memberships (user_id, section_id, role)
 		VALUES ($1, $2, $3)
-		RETURNING id, user_id, section_id, role, joined_at`
+		RETURNING ` + membershipColumns
 
-	var m SectionMembership
-	err := s.q.QueryRow(ctx, query,
-		params.UserID,
-		params.SectionID,
-		params.Role,
-	).Scan(
-		&m.ID,
-		&m.UserID,
-		&m.SectionID,
-		&m.Role,
-		&m.JoinedAt,
-	)
+	m, err := scanMembership(s.q.QueryRow(ctx, query, params.UserID, params.SectionID, params.Role))
 	if err != nil {
 		return nil, HandleDuplicate(err)
 	}
-
-	return &m, nil
+	return m, nil
 }
 
 // DeleteMembership deletes a user's membership from a section.
@@ -91,11 +73,7 @@ func (s *Store) DeleteMembership(ctx context.Context, sectionID, userID uuid.UUI
 
 // ListMembers retrieves all memberships for a given section.
 func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]SectionMembership, error) {
-	const query = `
-		SELECT id, user_id, section_id, role, joined_at
-		FROM section_memberships
-		WHERE section_id = $1
-		ORDER BY joined_at`
+	query := "SELECT " + membershipColumns + " FROM section_memberships WHERE section_id = $1 ORDER BY joined_at"
 
 	rows, err := s.q.Query(ctx, query, sectionID)
 	if err != nil {
@@ -105,28 +83,18 @@ func (s *Store) ListMembers(ctx context.Context, sectionID uuid.UUID) ([]Section
 
 	var members []SectionMembership
 	for rows.Next() {
-		var m SectionMembership
-		if err := rows.Scan(
-			&m.ID,
-			&m.UserID,
-			&m.SectionID,
-			&m.Role,
-			&m.JoinedAt,
-		); err != nil {
+		m, err := scanMembership(rows)
+		if err != nil {
 			return nil, err
 		}
-		members = append(members, m)
+		members = append(members, *m)
 	}
 	return members, rows.Err()
 }
 
 // ListMembersByRole retrieves memberships for a given section filtered by role.
 func (s *Store) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role string) ([]SectionMembership, error) {
-	const query = `
-		SELECT id, user_id, section_id, role, joined_at
-		FROM section_memberships
-		WHERE section_id = $1 AND role = $2
-		ORDER BY joined_at`
+	query := "SELECT " + membershipColumns + " FROM section_memberships WHERE section_id = $1 AND role = $2 ORDER BY joined_at"
 
 	rows, err := s.q.Query(ctx, query, sectionID, role)
 	if err != nil {
@@ -136,17 +104,11 @@ func (s *Store) ListMembersByRole(ctx context.Context, sectionID uuid.UUID, role
 
 	var members []SectionMembership
 	for rows.Next() {
-		var m SectionMembership
-		if err := rows.Scan(
-			&m.ID,
-			&m.UserID,
-			&m.SectionID,
-			&m.Role,
-			&m.JoinedAt,
-		); err != nil {
+		m, err := scanMembership(rows)
+		if err != nil {
 			return nil, err
 		}
-		members = append(members, m)
+		members = append(members, *m)
 	}
 	return members, rows.Err()
 }
