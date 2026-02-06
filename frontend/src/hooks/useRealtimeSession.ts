@@ -3,7 +3,14 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Centrifuge, Subscription } from 'centrifuge';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
-import { apiGet, apiPost } from '@/lib/api-client';
+import {
+  getSessionState,
+  updateCode as apiUpdateCode,
+  executeCode as apiExecuteCode,
+  featureStudent as apiFeatureStudent,
+  clearFeatured as apiClearFeatured,
+  joinSession as apiJoinSession,
+} from '@/lib/api/realtime';
 import { Session, Student, ExecutionResult } from '@/types/session';
 import { ExecutionSettings } from '@/types/problem';
 
@@ -45,18 +52,7 @@ function debounce<T extends (...args: any[]) => any>(
   return executedFunction;
 }
 
-// Response shape from Go backend (snake_case)
-interface SessionStateResponse {
-  session: Partial<Session>;
-  students: Array<{
-    user_id: string;
-    name: string;
-    code?: string;
-    last_update: string;
-    execution_settings?: ExecutionSettings;
-  }>;
-  join_code: string;
-}
+import type { SessionStudent as ApiSessionStudent } from '@/types/api';
 
 export interface UseRealtimeSessionOptions {
   session_id: string;
@@ -111,14 +107,14 @@ export function useRealtimeSession({
   }>>(new Map());
 
   /**
-   * Convert backend snake_case student to frontend Student type
+   * Convert backend API student to frontend Student type
    */
-  const mapStudent = useCallback((s: SessionStateResponse['students'][0]): Student => ({
+  const mapStudent = useCallback((s: ApiSessionStudent): Student => ({
     user_id: s.user_id,
     name: s.name,
     code: s.code || '',
     last_update: new Date(s.last_update),
-    execution_settings: s.execution_settings,
+    execution_settings: s.execution_settings as ExecutionSettings | undefined,
   }), []);
 
   /**
@@ -134,10 +130,10 @@ export function useRealtimeSession({
         setLoading(true);
         setError(null);
 
-        const data = await apiGet<SessionStateResponse>(`/sessions/${session_id}/state`);
+        const data = await getSessionState(session_id);
 
-        // Set session data
-        setSession(data.session);
+        // Set session data (cast to Partial<Session> for hook compatibility)
+        setSession(data.session as unknown as Partial<Session>);
 
         // Convert students array to Map
         const studentsMap = new Map<string, Student>();
@@ -169,10 +165,10 @@ export function useRealtimeSession({
     if (!session_id) return;
 
     try {
-      const data = await apiGet<SessionStateResponse>(`/sessions/${session_id}/state`);
+      const data = await getSessionState(session_id);
 
-      // Set session data
-      setSession(data.session);
+      // Set session data (cast to Partial<Session> for hook compatibility)
+      setSession(data.session as unknown as Partial<Session>);
 
       // Convert students array to Map
       const studentsMap = new Map<string, Student>();
@@ -381,11 +377,7 @@ export function useRealtimeSession({
     execution_settings?: ExecutionSettings
   ) => {
     try {
-      await apiPost(`/sessions/${session_id}/code`, {
-        studentId,
-        code,
-        execution_settings,
-      });
+      await apiUpdateCode(session_id, studentId, code, execution_settings);
 
       // Optimistically update local state
       setStudents(prev => {
@@ -435,11 +427,7 @@ export function useRealtimeSession({
     execution_settings?: ExecutionSettings
   ): Promise<ExecutionResult> => {
     try {
-      return await apiPost<ExecutionResult>(`/sessions/${session_id}/execute`, {
-        studentId,
-        code,
-        execution_settings,
-      });
+      return await apiExecuteCode(session_id, studentId, code, execution_settings);
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to execute code:', e);
       throw e;
@@ -451,17 +439,13 @@ export function useRealtimeSession({
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      const data = await apiPost(`/sessions/${session_id}/feature`, {
-        studentId,
-      });
+      await apiFeatureStudent(session_id, studentId);
 
       // Optimistically update local state
       setFeaturedStudent({
         studentId,
         code: students.get(studentId)?.code,
       });
-
-      return data;
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);
       throw e;
@@ -473,7 +457,7 @@ export function useRealtimeSession({
    */
   const clearFeaturedStudent = useCallback(async () => {
     try {
-      await apiPost(`/sessions/${session_id}/feature`, {});
+      await apiClearFeatured(session_id);
 
       // Optimistically clear local state
       setFeaturedStudent({});
@@ -488,10 +472,7 @@ export function useRealtimeSession({
    */
   const joinSession = useCallback(async (studentId: string, name: string) => {
     try {
-      return await apiPost(`/sessions/${session_id}/join`, {
-        studentId,
-        name,
-      });
+      return await apiJoinSession(session_id, studentId, name);
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to join session:', e);
       throw e;

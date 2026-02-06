@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiGet } from '@/lib/api-client';
-import type { Session } from '@/types/api';
+import { listSessionHistory } from '@/lib/api/sessions';
 
 export interface SessionHistory {
   id: string;
@@ -24,8 +23,9 @@ export function useSessionHistory() {
     setError(null);
 
     try {
-      const data = await apiGet<{ sessions: SessionHistory[] }>('/sessions/history');
-      setSessions(data.sessions);
+      // Backend returns plain array, cast to SessionHistory for hook compatibility
+      const data = await listSessionHistory();
+      setSessions(data as unknown as SessionHistory[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       console.error('Error fetching session history:', err);

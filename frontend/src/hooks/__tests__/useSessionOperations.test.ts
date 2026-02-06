@@ -35,7 +35,8 @@ describe('useSessionOperations', () => {
         status: 'active',
       };
 
-      mockApiPost.mockResolvedValueOnce({ session: mockSession });
+      // Backend returns plain Session object (not wrapped)
+      mockApiPost.mockResolvedValueOnce(mockSession);
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -59,7 +60,8 @@ describe('useSessionOperations', () => {
         status: 'active',
       };
 
-      mockApiPost.mockResolvedValueOnce({ session: mockSession });
+      // Backend returns plain Session object (not wrapped)
+      mockApiPost.mockResolvedValueOnce(mockSession);
 
       const { result } = renderHook(() => useSessionOperations());
 
@@ -181,8 +183,9 @@ describe('useSessionOperations', () => {
 
   describe('loading states', () => {
     it('sets loading to true during operation', async () => {
+      // Backend returns plain Session object (not wrapped)
       mockApiPost.mockImplementationOnce(
-        () => new Promise(resolve => setTimeout(() => resolve({ session: {} }), 100))
+        () => new Promise(resolve => setTimeout(() => resolve({ id: 'session-1' }), 100))
       );
 
       const { result } = renderHook(() => useSessionOperations());
