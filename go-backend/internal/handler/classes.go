@@ -43,7 +43,7 @@ func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	classes, err := repos.ListClasses(r.Context())
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -75,7 +75,7 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	secs, err := repos.ListSectionsByClass(r.Context(), id)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if secs != nil {
@@ -94,7 +94,7 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	names, err := repos.ListClassInstructorNames(r.Context(), id)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if names != nil {
@@ -135,7 +135,7 @@ func (h *ClassHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   authUser.ID,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (h *ClassHandler) Update(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *ClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "class not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

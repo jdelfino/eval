@@ -2,6 +2,7 @@ package httputil
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -313,5 +314,30 @@ func TestWriteError_NotFound(t *testing.T) {
 	}
 	if resp["error"] != "resource not found" {
 		t.Errorf("error = %q, want %q", resp["error"], "resource not found")
+	}
+}
+
+func TestWriteInternalError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	testErr := errors.New("database connection failed")
+
+	WriteInternalError(rr, req, testErr, "internal error")
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if resp["error"] != "internal error" {
+		t.Errorf("error = %q, want %q", resp["error"], "internal error")
 	}
 }
