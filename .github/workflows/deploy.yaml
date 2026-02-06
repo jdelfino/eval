@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   workflow_run:
-    workflows: ["Go API", "Executor"]
+    workflows: ["Go API", "Executor", "Frontend"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -39,6 +39,7 @@ jobs:
           # Read current live images to preserve across deploys.
           API_IMG=$(kubectl get deploy go-api -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
           EXE_IMG=$(kubectl get deploy executor -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+          FE_IMG=$(kubectl get deploy frontend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
 
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           TRIGGER="${{ github.event.workflow_run.name }}"
@@ -48,13 +49,20 @@ jobs:
           if [ "$TRIGGER" = "Go API" ]; then
             kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
             [ -n "$EXE_IMG" ] && kustomize edit set image "executor=$EXE_IMG"
+            [ -n "$FE_IMG" ] && kustomize edit set image "frontend=$FE_IMG"
           elif [ "$TRIGGER" = "Executor" ]; then
             kustomize edit set image "executor=$REGISTRY/executor:$SHA"
             [ -n "$API_IMG" ] && kustomize edit set image "go-api=$API_IMG"
+            [ -n "$FE_IMG" ] && kustomize edit set image "frontend=$FE_IMG"
+          elif [ "$TRIGGER" = "Frontend" ]; then
+            kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
+            [ -n "$API_IMG" ] && kustomize edit set image "go-api=$API_IMG"
+            [ -n "$EXE_IMG" ] && kustomize edit set image "executor=$EXE_IMG"
           else
             # Manual dispatch — preserve current live images.
             [ -n "$API_IMG" ] && kustomize edit set image "go-api=$API_IMG"
             [ -n "$EXE_IMG" ] && kustomize edit set image "executor=$EXE_IMG"
+            [ -n "$FE_IMG" ] && kustomize edit set image "frontend=$FE_IMG"
           fi
 
           kubectl apply -k .
