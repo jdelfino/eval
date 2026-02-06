@@ -1,0 +1,156 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'go-backend/**'
+      - 'frontend/**'
+      - 'migrations/**'
+      - 'scripts/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go-backend/**'
+      - 'frontend/**'
+      - 'migrations/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '20'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: eval
+          POSTGRES_PASSWORD: eval_local_password
+          POSTGRES_DB: eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eval"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go-backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Run migrations
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: eval
+          PGPASSWORD: eval_local_password
+          PGDATABASE: eval
+        run: |
+          for f in migrations/*.up.sql; do
+            echo "Applying $f..."
+            psql -f "$f"
+          done
+
+      - name: Seed contract test data
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: eval
+          PGPASSWORD: eval_local_password
+          PGDATABASE: eval
+        run: psql -f scripts/contract-test-seed.sql
+
+      - name: Build Go server
+        run: go build -o ./tmp/server ./cmd/server
+        working-directory: go-backend
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Start Go server
+        env:
+          AUTH_MODE: test
+          DATABASE_HOST: localhost
+          DATABASE_PORT: '5432'
+          DATABASE_NAME: eval
+          DATABASE_USER: eval
+          DATABASE_PASSWORD: eval_local_password
+          CENTRIFUGO_TOKEN_SECRET: test-e2e-secret
+          GCP_PROJECT_ID: test-project
+          PORT: '8080'
+        run: |
+          ./go-backend/tmp/server &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for Go server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "http://localhost:8080/healthz" > /dev/null 2>&1; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"
+          exit 1
+
+      - name: Start Next.js dev server
+        env:
+          NEXT_PUBLIC_AUTH_MODE: test
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+        run: |
+          npm run dev &
+          echo "NEXT_PID=$!" >> "$GITHUB_ENV"
+        working-directory: frontend
+
+      - name: Wait for Next.js
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf "http://localhost:3000" > /dev/null 2>&1; then
+              echo "Next.js is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Next.js failed to start"
+          exit 1
+
+      - name: Run Playwright tests
+        env:
+          NEXT_PUBLIC_AUTH_MODE: test
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          API_BASE_URL: http://localhost:8080
+          # Override CI so Playwright's webServer config reuses our pre-started
+          # servers instead of trying to launch its own (reuseExistingServer: !process.env.CI)
+          CI: ''
+        run: npx playwright test --project=chromium
+        working-directory: frontend
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
