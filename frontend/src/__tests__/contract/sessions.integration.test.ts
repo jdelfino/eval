@@ -1,8 +1,11 @@
 /**
  * Contract tests for session-related API endpoints.
  * Validates response shapes match frontend type definitions.
+ *
+ * Note: Session creation (POST /sessions) is validated by globalSetup.ts,
+ * which creates a session as part of test setup.
  */
-import { contractFetch, INSTRUCTOR_TOKEN } from './helpers';
+import { contractFetch } from './helpers';
 import { state } from './shared-state';
 import {
   expectSnakeCaseKeys,
@@ -62,44 +65,6 @@ describe('Sessions API', () => {
         expectString(student, 'last_update');
         expectSnakeCaseKeys(student, 'SessionStudent');
       }
-    });
-  });
-
-  describe('POST /api/v1/sessions', () => {
-    it('returns a Session object (not wrapped) with correct shape', async () => {
-      const sectionId = state.sectionId;
-      if (!sectionId) {
-        console.warn('Skipping: no section ID from setup');
-        return;
-      }
-
-      const res = await contractFetch('/api/v1/sessions', INSTRUCTOR_TOKEN, {
-        method: 'POST',
-        body: JSON.stringify({ section_id: sectionId }),
-      });
-      expect(res.status).toBe(201);
-
-      const session = await res.json();
-
-      // Backend returns plain Session object (not wrapped in { session: ... })
-      expectString(session, 'id');
-      expectString(session, 'namespace_id');
-      expectString(session, 'section_id');
-      expectString(session, 'section_name');
-      expect(session).toHaveProperty('problem');
-      expectNullableString(session, 'featured_student_id');
-      expectNullableString(session, 'featured_code');
-      expectString(session, 'creator_id');
-      expectArray(session, 'participants');
-      expectString(session, 'status');
-      expectString(session, 'created_at');
-      expectString(session, 'last_activity');
-      expectNullableString(session, 'ended_at');
-      expectSnakeCaseKeys(session, 'Session');
-
-      // Verify section_id matches
-      expect(session.section_id).toBe(sectionId);
-      expect(session.status).toBe('active');
     });
   });
 
