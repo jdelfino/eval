@@ -28,7 +28,7 @@ export async function listNamespaceInvitations(
     params.set('status', filters.status);
   }
   const query = params.toString();
-  const path = query ? `/namespace/invitations?${query}` : '/namespace/invitations';
+  const path = query ? `/system/invitations?${query}` : '/system/invitations';
 
   return apiGet<SerializedInvitation[]>(path);
 }
@@ -51,7 +51,7 @@ export async function createNamespaceInvitation(
   if (expiresInDays !== undefined) {
     body.expiresInDays = expiresInDays;
   }
-  return apiPost<SerializedInvitation>('/namespace/invitations', body);
+  return apiPost<SerializedInvitation>('/system/invitations', body);
 }
 
 /**
@@ -59,7 +59,7 @@ export async function createNamespaceInvitation(
  * @param invitationId - The invitation ID to revoke
  */
 export async function revokeNamespaceInvitation(invitationId: string): Promise<void> {
-  await apiDelete(`/namespace/invitations/${invitationId}`);
+  await apiDelete(`/system/invitations/${invitationId}`);
 }
 
 /**
@@ -67,5 +67,5 @@ export async function revokeNamespaceInvitation(invitationId: string): Promise<v
  * @param invitationId - The invitation ID to resend
  */
 export async function resendNamespaceInvitation(invitationId: string): Promise<void> {
-  await apiPost(`/namespace/invitations/${invitationId}/resend`, {});
+  await apiPost(`/system/invitations/${invitationId}/resend`, {});
 }

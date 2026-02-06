@@ -113,9 +113,8 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // createSessionRequest is the request body for POST /sessions.
 type createSessionRequest struct {
-	SectionID   uuid.UUID       `json:"section_id" validate:"required"`
-	SectionName string          `json:"section_name" validate:"required,min=1,max=255"`
-	Problem     json.RawMessage `json:"problem" validate:"required"`
+	SectionID uuid.UUID  `json:"section_id" validate:"required"`
+	ProblemID *uuid.UUID `json:"problem_id"` // optional - if nil, creates blank session
 }
 
 // Create handles POST /api/v1/sessions — creates a new session (instructor+).
@@ -132,15 +131,50 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repos := store.ReposFromContext(r.Context())
+
+	// Look up section to get section_name
+	section, err := repos.GetSection(r.Context(), req.SectionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "section not found")
+			return
+		}
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
+	// Get problem JSON - either from problem_id or blank
+	var problemJSON json.RawMessage
+	if req.ProblemID != nil {
+		problem, err := repos.GetProblem(r.Context(), *req.ProblemID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				httputil.WriteError(w, http.StatusNotFound, "problem not found")
+				return
+			}
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+		// Serialize the problem struct to JSON for storage in session
+		problemJSON, err = json.Marshal(problem)
+		if err != nil {
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+	} else {
+		// Blank session - empty problem object
+		problemJSON = json.RawMessage(`{}`)
+	}
+
 	session, err := repos.CreateSession(r.Context(), store.CreateSessionParams{
 		NamespaceID: authUser.NamespaceID,
 		SectionID:   req.SectionID,
-		SectionName: req.SectionName,
-		Problem:     req.Problem,
+		SectionName: section.Name,
+		Problem:     problemJSON,
 		CreatorID:   authUser.ID,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

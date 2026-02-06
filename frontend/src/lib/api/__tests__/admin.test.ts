@@ -27,19 +27,24 @@ describe('admin API client', () => {
   });
 
   describe('getAdminStats', () => {
-    it('calls GET /admin/stats and returns stats', async () => {
-      const mockStats = {
-        users: { total: 10, byRole: { admin: 1, instructor: 3, student: 6 } },
-        classes: { total: 5 },
-        sections: { total: 8 },
-        sessions: { active: 2 },
-      };
-      mockApiGet.mockResolvedValue(mockStats);
+    it('calls GET /admin/stats and transforms response', async () => {
+      // Backend returns raw shape
+      mockApiGet.mockResolvedValue({
+        users_by_role: { 'system-admin': 1, instructor: 3, student: 6 },
+        class_count: 5,
+        section_count: 8,
+        active_sessions: 2,
+      });
 
       const result = await getAdminStats();
 
       expect(mockApiGet).toHaveBeenCalledWith('/admin/stats');
-      expect(result).toEqual(mockStats);
+      expect(result).toEqual({
+        users: { total: 10, byRole: { admin: 1, instructor: 3, student: 6 } },
+        classes: { total: 5 },
+        sections: { total: 8 },
+        sessions: { active: 2 },
+      });
     });
 
     it('includes namespace query param when provided', async () => {
@@ -65,7 +70,7 @@ describe('admin API client', () => {
           updated_at: '2024-01-01T00:00:00Z',
         },
       ];
-      mockApiGet.mockResolvedValue({ users: mockUsers });
+      mockApiGet.mockResolvedValue(mockUsers);
 
       const result = await listAdminUsers();
 
@@ -74,7 +79,7 @@ describe('admin API client', () => {
     });
 
     it('includes namespace and role query params when provided', async () => {
-      mockApiGet.mockResolvedValue({ users: [] });
+      mockApiGet.mockResolvedValue([]);
 
       await listAdminUsers({ namespaceId: 'ns-1', role: 'student' });
 

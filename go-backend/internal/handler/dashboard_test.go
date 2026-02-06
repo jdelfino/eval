@@ -52,10 +52,11 @@ func TestDashboard_Success(t *testing.T) {
 					Name: "CS 101",
 					Sections: []store.DashboardSection{
 						{
-							ID:               sectionID,
-							Name:             "Section A",
-							StudentCount:     25,
-							ActiveSessionIDs: []uuid.UUID{sessionID},
+							ID:              sectionID,
+							Name:            "Section A",
+							JoinCode:        "ABC123",
+							StudentCount:    25,
+							ActiveSessionID: &sessionID,
 						},
 					},
 				},
@@ -76,25 +77,25 @@ func TestDashboard_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var result []store.DashboardClass
+	var result dashboardResponse
 	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
 		t.Fatalf("decode error: %v", err)
 	}
-	if len(result) != 1 {
-		t.Fatalf("expected 1 class, got %d", len(result))
+	if len(result.Classes) != 1 {
+		t.Fatalf("expected 1 class, got %d", len(result.Classes))
 	}
-	if result[0].ID != classID {
-		t.Errorf("expected class ID %s, got %s", classID, result[0].ID)
+	if result.Classes[0].ID != classID {
+		t.Errorf("expected class ID %s, got %s", classID, result.Classes[0].ID)
 	}
-	if len(result[0].Sections) != 1 {
-		t.Fatalf("expected 1 section, got %d", len(result[0].Sections))
+	if len(result.Classes[0].Sections) != 1 {
+		t.Fatalf("expected 1 section, got %d", len(result.Classes[0].Sections))
 	}
-	sec := result[0].Sections[0]
+	sec := result.Classes[0].Sections[0]
 	if sec.StudentCount != 25 {
 		t.Errorf("expected 25 students, got %d", sec.StudentCount)
 	}
-	if len(sec.ActiveSessionIDs) != 1 || sec.ActiveSessionIDs[0] != sessionID {
-		t.Errorf("unexpected active session IDs: %v", sec.ActiveSessionIDs)
+	if sec.ActiveSessionID == nil || *sec.ActiveSessionID != sessionID {
+		t.Errorf("unexpected active session ID: %v", sec.ActiveSessionID)
 	}
 }
 
@@ -119,12 +120,12 @@ func TestDashboard_EmptyResult(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var result []store.DashboardClass
+	var result dashboardResponse
 	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
 		t.Fatalf("decode error: %v", err)
 	}
-	if len(result) != 0 {
-		t.Errorf("expected empty array, got %d items", len(result))
+	if len(result.Classes) != 0 {
+		t.Errorf("expected empty array, got %d items", len(result.Classes))
 	}
 }
 

@@ -1,5 +1,5 @@
 /**
- * Tests for api-client
+ * Tests for api-client (Firebase/production mode)
  */
 export {};
 
@@ -17,6 +17,23 @@ jest.mock('firebase/auth', () => ({
 
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: { currentUser: mockCurrentUser },
+}));
+
+// Ensure test mode is off for these tests (Firebase path)
+// Mock auth-provider to delegate to the Firebase mock above,
+// so the existing test structure (mockGetIdToken) continues to work.
+jest.mock('@/lib/auth-provider', () => ({
+  isTestMode: () => false,
+  getTestToken: () => null,
+  getAuthToken: () => {
+    // Check the firebase mock's currentUser at call time (may be set to null by tests)
+    const firebaseMock = require('@/lib/firebase');
+    const user = firebaseMock.firebaseAuth.currentUser;
+    if (!user) {
+      return Promise.reject(new Error('No authenticated user'));
+    }
+    return user.getIdToken();
+  },
 }));
 
 // Mock withRetry to just call the function directly

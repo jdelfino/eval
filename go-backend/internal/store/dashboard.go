@@ -9,6 +9,7 @@ import (
 // InstructorDashboard returns classes with sections, student counts, and active session IDs
 // for an instructor. Uses a single query that joins classes, sections, memberships, and sessions.
 // RLS policies handle namespace filtering automatically.
+// Classes without sections are included (LEFT JOIN on sections).
 func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error) {
 	const query = `
 		SELECT
@@ -16,19 +17,23 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			c.name AS class_name,
 			sec.id   AS section_id,
 			sec.name AS section_name,
+			sec.join_code AS section_join_code,
+			sec.semester AS section_semester,
 			COALESCE(sm.student_count, 0) AS student_count,
-			COALESCE(sess.active_ids, ARRAY[]::uuid[]) AS active_session_ids
+			sess.active_id AS active_session_id
 		FROM classes c
-		JOIN sections sec ON sec.class_id = c.id
+		LEFT JOIN sections sec ON sec.class_id = c.id
 		LEFT JOIN LATERAL (
 			SELECT COUNT(*)::int AS student_count
 			FROM section_memberships
 			WHERE section_id = sec.id AND role = 'student'
 		) sm ON true
 		LEFT JOIN LATERAL (
-			SELECT ARRAY_AGG(id) AS active_ids
+			SELECT id AS active_id
 			FROM sessions
 			WHERE section_id = sec.id AND status = 'active'
+			ORDER BY created_at DESC
+			LIMIT 1
 		) sess ON true
 		WHERE c.created_by = $1
 		   OR sec.id IN (
@@ -48,19 +53,17 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 
 	for rows.Next() {
 		var (
-			classID          uuid.UUID
-			className        string
-			sectionID        uuid.UUID
-			sectionName      string
-			studentCount     int
-			activeSessionIDs []uuid.UUID
+			classID         uuid.UUID
+			className       string
+			sectionID       *uuid.UUID // nullable for classes without sections
+			sectionName     *string    // nullable for classes without sections
+			sectionJoinCode *string    // nullable for classes without sections
+			sectionSemester *string    // nullable
+			studentCount    int
+			activeSessionID *uuid.UUID // nullable if no active session
 		)
-		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &studentCount, &activeSessionIDs); err != nil {
+		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &sectionJoinCode, &sectionSemester, &studentCount, &activeSessionID); err != nil {
 			return nil, err
-		}
-
-		if activeSessionIDs == nil {
-			activeSessionIDs = []uuid.UUID{}
 		}
 
 		dc, exists := classMap[classID]
@@ -74,12 +77,17 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			classOrder = append(classOrder, classID)
 		}
 
-		dc.Sections = append(dc.Sections, DashboardSection{
-			ID:               sectionID,
-			Name:             sectionName,
-			StudentCount:     studentCount,
-			ActiveSessionIDs: activeSessionIDs,
-		})
+		// Only add section if one exists (sectionID is non-null)
+		if sectionID != nil && sectionName != nil && sectionJoinCode != nil {
+			dc.Sections = append(dc.Sections, DashboardSection{
+				ID:              *sectionID,
+				Name:            *sectionName,
+				JoinCode:        *sectionJoinCode,
+				Semester:        sectionSemester,
+				StudentCount:    studentCount,
+				ActiveSessionID: activeSessionID,
+			})
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

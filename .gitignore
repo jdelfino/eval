@@ -13,6 +13,7 @@ build/
 *.egg-info/
 .next/
 out/
+*.tsbuildinfo
 
 # Environment files (secrets)
 .env
@@ -45,6 +46,8 @@ coverage/
 htmlcov/
 .pytest_cache/
 .nyc_output/
+test-results/
+playwright-report/
 
 # Terraform
 .terraform/

@@ -1703,41 +1703,69 @@ func TestListInstructors_InternalError(t *testing.T) {
 
 // --- RBAC Forbidden tests (middleware-level, mimicking server.go routing) ---
 
-// buildSectionInstructorRouter creates a router matching the server.go layout
-// for the instructor+ section endpoints.
-func buildSectionInstructorRouter(h *SectionHandler) chi.Router {
+// buildSectionRouterMatchingServerLayout creates a router matching the server.go
+// layout: ListSessions is outside the permission group (students need it to
+// discover active sessions; RLS enforces visibility), while instructor-only
+// endpoints are inside RequirePermission.
+func buildSectionRouterMatchingServerLayout(h *SectionHandler) chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequirePermission(auth.PermContentManage))
+	// Students need to list sessions (RLS enforces visibility)
 	r.Get("/sections/{id}/sessions", h.ListSessions)
-	r.Post("/sections/{id}/regenerate-code", h.RegenerateCode)
-	r.Get("/sections/{id}/instructors", h.ListInstructors)
-	r.Post("/sections/{id}/instructors", h.AddInstructor)
-	r.Delete("/sections/{id}/instructors/{userID}", h.RemoveInstructor)
+	// Instructor+ endpoints
+	r.Group(func(r chi.Router) {
+		r.Use(custommw.RequirePermission(auth.PermContentManage))
+		r.Post("/sections/{id}/regenerate-code", h.RegenerateCode)
+		r.Get("/sections/{id}/instructors", h.ListInstructors)
+		r.Post("/sections/{id}/instructors", h.AddInstructor)
+		r.Delete("/sections/{id}/instructors/{userID}", h.RemoveInstructor)
+	})
 	return r
 }
 
-func TestListSessions_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler()
-	router := buildSectionInstructorRouter(h)
+func TestSectionListSessions_StudentAllowed(t *testing.T) {
+	// Regression test: students must be able to list sessions to discover active
+	// ones. The route lives outside RequirePermission; RLS enforces visibility.
+	sectionID := uuid.New()
+	sess := testSession()
+	repo := &mockSessionRepo{
+		listSessionsFn: func(_ context.Context, filters store.SessionFilters) ([]store.Session, error) {
+			if filters.SectionID == nil || *filters.SectionID != sectionID {
+				t.Fatalf("expected section_id %v, got %v", sectionID, filters.SectionID)
+			}
+			return []store.Session{*sess}, nil
+		},
+	}
 
-	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/sessions", nil)
+	h := NewSectionHandler()
+	router := buildSectionRouterMatchingServerLayout(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/sections/"+sectionID.String()+"/sessions", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
 	})
+	ctx = store.WithRepos(ctx, secRepos(nil, repo, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for student GET sessions, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for student GET sessions, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got []store.Session
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(got))
 	}
 }
 
 func TestRegenerateCode_RBACForbidden(t *testing.T) {
 	h := NewSectionHandler()
-	router := buildSectionInstructorRouter(h)
+	router := buildSectionRouterMatchingServerLayout(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/regenerate-code", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -1756,7 +1784,7 @@ func TestRegenerateCode_RBACForbidden(t *testing.T) {
 
 func TestListInstructors_RBACForbidden(t *testing.T) {
 	h := NewSectionHandler()
-	router := buildSectionInstructorRouter(h)
+	router := buildSectionRouterMatchingServerLayout(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/instructors", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
@@ -1775,7 +1803,7 @@ func TestListInstructors_RBACForbidden(t *testing.T) {
 
 func TestAddInstructor_RBACForbidden(t *testing.T) {
 	h := NewSectionHandler()
-	router := buildSectionInstructorRouter(h)
+	router := buildSectionRouterMatchingServerLayout(h)
 
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/instructors", bytes.NewReader(body))
@@ -1796,7 +1824,7 @@ func TestAddInstructor_RBACForbidden(t *testing.T) {
 
 func TestRemoveInstructor_RBACForbidden(t *testing.T) {
 	h := NewSectionHandler()
-	router := buildSectionInstructorRouter(h)
+	router := buildSectionRouterMatchingServerLayout(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{

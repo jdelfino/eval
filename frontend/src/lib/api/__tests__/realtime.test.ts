@@ -146,12 +146,12 @@ describe('lib/api/realtime', () => {
   });
 
   describe('featureStudent', () => {
-    it('calls POST /sessions/{id}/feature with studentId', async () => {
+    it('calls POST /sessions/{id}/feature with student_id and code', async () => {
       mockApiPost.mockResolvedValue(undefined);
 
-      const result = await featureStudent('sess-1', 'student-1');
+      const result = await featureStudent('sess-1', 'student-1', 'print("hello")');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/feature', { studentId: 'student-1' });
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/feature', { student_id: 'student-1', code: 'print("hello")' });
       expect(result).toBeUndefined();
     });
   });

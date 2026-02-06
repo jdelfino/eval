@@ -182,11 +182,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			r.Get("/sections/{id}/members", membershipHandler.ListMembers)
 			r.Delete("/sections/{id}/membership", membershipHandler.Leave)
+			// Students need to list sessions to discover active ones (RLS enforces visibility)
+			r.Get("/sections/{id}/sessions", sectionHandler.ListSessions)
 
 			// Section sub-resources (instructor+)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermContentManage))
-				r.Get("/sections/{id}/sessions", sectionHandler.ListSessions)
 				r.Post("/sections/{id}/regenerate-code", sectionHandler.RegenerateCode)
 				r.Get("/sections/{id}/instructors", sectionHandler.ListInstructors)
 				r.Post("/sections/{id}/instructors", sectionHandler.AddInstructor)

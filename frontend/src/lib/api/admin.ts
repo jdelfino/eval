@@ -27,9 +27,19 @@ export interface AdminStats {
 }
 
 /**
+ * Raw admin stats shape from the Go backend.
+ */
+interface ApiAdminStats {
+  users_by_role: Record<string, number>;
+  class_count: number;
+  section_count: number;
+  active_sessions: number;
+}
+
+/**
  * Get admin statistics for the namespace.
  * @param namespaceId - Optional namespace ID for system-admin filtering
- * @returns AdminStats object
+ * @returns AdminStats object (transformed from API shape)
  */
 export async function getAdminStats(namespaceId?: string): Promise<AdminStats> {
   const params = new URLSearchParams();
@@ -38,7 +48,23 @@ export async function getAdminStats(namespaceId?: string): Promise<AdminStats> {
   }
   const query = params.toString();
   const path = query ? `/admin/stats?${query}` : '/admin/stats';
-  return apiGet<AdminStats>(path);
+  const data = await apiGet<ApiAdminStats>(path);
+
+  const usersByRole = data.users_by_role || {};
+  const totalUsers = Object.values(usersByRole).reduce((sum, count) => sum + count, 0);
+  return {
+    users: {
+      total: totalUsers,
+      byRole: {
+        admin: (usersByRole['system-admin'] || 0) + (usersByRole['namespace-admin'] || 0),
+        instructor: usersByRole['instructor'] || 0,
+        student: usersByRole['student'] || 0,
+      },
+    },
+    classes: { total: data.class_count || 0 },
+    sections: { total: data.section_count || 0 },
+    sessions: { active: data.active_sessions || 0 },
+  };
 }
 
 /**
@@ -65,11 +91,7 @@ export async function listAdminUsers(options?: ListAdminUsersOptions): Promise<U
   const query = params.toString();
   const path = query ? `/admin/users?${query}` : '/admin/users';
 
-  interface UsersResponse {
-    users: User[];
-  }
-  const response = await apiGet<UsersResponse>(path);
-  return response.users;
+  return apiGet<User[]>(path);
 }
 
 /**

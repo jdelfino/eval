@@ -6,20 +6,38 @@
  */
 
 import { apiGet } from '@/lib/api-client';
-import type { Class, Section, Session } from '@/types/api';
 
 /**
- * Dashboard response with recent classes, sections, and sessions.
+ * Section summary within the instructor dashboard.
+ */
+export interface DashboardSection {
+  id: string;
+  name: string;
+  join_code: string;
+  semester?: string;
+  studentCount: number;
+  activeSessionId?: string;
+}
+
+/**
+ * Class summary within the instructor dashboard.
+ */
+export interface DashboardClass {
+  id: string;
+  name: string;
+  sections: DashboardSection[];
+}
+
+/**
+ * Dashboard response with classes containing nested sections.
  */
 export interface InstructorDashboard {
-  classes: Class[];
-  sections: Section[];
-  sessions: Session[];
+  classes: DashboardClass[];
 }
 
 /**
  * Get the instructor dashboard data.
- * @returns InstructorDashboard object with classes, sections, and sessions
+ * @returns InstructorDashboard object with classes and their sections
  */
 export async function getInstructorDashboard(): Promise<InstructorDashboard> {
   return apiGet<InstructorDashboard>('/instructor/dashboard');

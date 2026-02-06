@@ -30,12 +30,8 @@ export async function listSystemUsers(): Promise<User[]> {
  * @returns Array of NamespaceInfo objects
  */
 export async function listSystemNamespaces(): Promise<NamespaceInfo[]> {
-  interface NamespacesResponse {
-    success: boolean;
-    namespaces: Namespace[];
-  }
-  const response = await apiGet<NamespacesResponse>('/system/namespaces');
-  return response.namespaces.map(ns => ({
+  const namespaces = await apiGet<Namespace[]>('/namespaces');
+  return namespaces.map(ns => ({
     id: ns.id,
     displayName: ns.display_name,
     active: ns.active,
@@ -48,15 +44,11 @@ export async function listSystemNamespaces(): Promise<NamespaceInfo[]> {
  * @returns NamespaceInfo object
  */
 export async function getSystemNamespace(namespaceId: string): Promise<NamespaceInfo> {
-  interface NamespaceResponse {
-    success: boolean;
-    namespace: Namespace;
-  }
-  const response = await apiGet<NamespaceResponse>(`/system/namespaces/${namespaceId}`);
+  const ns = await apiGet<Namespace>(`/namespaces/${namespaceId}`);
   return {
-    id: response.namespace.id,
-    displayName: response.namespace.display_name,
-    active: response.namespace.active,
+    id: ns.id,
+    displayName: ns.display_name,
+    active: ns.active,
   };
 }
 

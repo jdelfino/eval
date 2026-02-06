@@ -3,6 +3,19 @@ const nextConfig = {
   reactStrictMode: true,
   // Empty turbopack config to silence the error - we use webpack config below
   turbopack: {},
+  // Proxy /api/* to the Go backend when API_PROXY_URL is set.
+  // In dev/test: avoids CORS by routing through Next.js.
+  // In production: not needed (Ingress/Gateway handles routing).
+  async rewrites() {
+    const apiUrl = process.env.API_PROXY_URL;
+    if (!apiUrl) return [];
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${apiUrl}/api/:path*`,
+      },
+    ];
+  },
   // Exclude data directory from file watching to prevent HMR during tests
   // Writing to data/*.json files should not trigger hot reload
   webpack: (config, { isServer, dev }) => {
