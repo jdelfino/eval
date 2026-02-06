@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { apiGet } from '@/lib/api-client';
-import type { Revision } from '@/types/api';
+import { getRevisions } from '@/lib/api/sessions';
 
 export interface CodeRevision {
   id: string;
@@ -33,12 +32,11 @@ export function useRevisionHistory({
       setError(null);
 
       try {
-        const data = await apiGet<{ revisions: Revision[] }>(
-          `/sessions/${session_id}/revisions?user_id=${studentId}`
-        );
+        // Backend returns plain array
+        const data = await getRevisions(session_id, studentId);
 
         // Convert to CodeRevision format
-        const processedRevisions: CodeRevision[] = data.revisions.map((rev) => ({
+        const processedRevisions: CodeRevision[] = data.map((rev) => ({
           id: rev.id,
           timestamp: new Date(rev.timestamp),
           code: rev.full_code || '',

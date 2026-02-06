@@ -54,13 +54,25 @@ jest.mock('@/lib/centrifugo', () => ({
   getSubscriptionToken: jest.fn(async () => 'mock-token'),
 }));
 
-// Mock api-client
-const mockApiGet = jest.fn();
-const mockApiPost = jest.fn();
+// Mock the typed API module
+const mockGetSessionState = jest.fn();
+const mockUpdateCode = jest.fn();
+const mockExecuteCode = jest.fn();
+const mockFeatureStudent = jest.fn();
+const mockClearFeatured = jest.fn();
+const mockJoinSession = jest.fn();
 
+jest.mock('@/lib/api/realtime', () => ({
+  getSessionState: (...args: any[]) => mockGetSessionState(...args),
+  updateCode: (...args: any[]) => mockUpdateCode(...args),
+  executeCode: (...args: any[]) => mockExecuteCode(...args),
+  featureStudent: (...args: any[]) => mockFeatureStudent(...args),
+  clearFeatured: (...args: any[]) => mockClearFeatured(...args),
+  joinSession: (...args: any[]) => mockJoinSession(...args),
+}));
+
+// Mock api-client (still needed for getAuthHeaders in centrifugo)
 jest.mock('@/lib/api-client', () => ({
-  apiGet: (...args: any[]) => mockApiGet(...args),
-  apiPost: (...args: any[]) => mockApiPost(...args),
   getAuthHeaders: jest.fn(async () => ({ Authorization: 'Bearer mock' })),
 }));
 
@@ -110,8 +122,12 @@ describe('useRealtimeSession', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetMocks();
-    mockApiGet.mockReset();
-    mockApiPost.mockReset();
+    mockGetSessionState.mockReset();
+    mockUpdateCode.mockReset();
+    mockExecuteCode.mockReset();
+    mockFeatureStudent.mockReset();
+    mockClearFeatured.mockReset();
+    mockJoinSession.mockReset();
   });
 
   describe('Initial state loading', () => {
@@ -128,7 +144,7 @@ describe('useRealtimeSession', () => {
         join_code: 'ABC123',
       };
 
-      mockApiGet.mockResolvedValueOnce(mockState);
+      mockGetSessionState.mockResolvedValueOnce(mockState);
 
       const { result } = renderHook(() =>
         useRealtimeSession({
@@ -143,14 +159,14 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/sessions/session-1/state');
+      expect(mockGetSessionState).toHaveBeenCalledWith('session-1');
       expect(result.current.session).toEqual(mockState.session);
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].user_id).toBe('student-1');
     });
 
     it('should handle loading errors', async () => {
-      mockApiGet.mockRejectedValueOnce(new Error('Session not found'));
+      mockGetSessionState.mockRejectedValueOnce(new Error('Session not found'));
 
       const { result } = renderHook(() =>
         useRealtimeSession({
@@ -167,7 +183,7 @@ describe('useRealtimeSession', () => {
     });
 
     it('should only load state once', async () => {
-      mockApiGet.mockResolvedValue({
+      mockGetSessionState.mockResolvedValue({
         session: {},
         students: [],
         join_code: '',
@@ -181,7 +197,7 @@ describe('useRealtimeSession', () => {
       );
 
       await waitFor(() => {
-        expect(mockApiGet).toHaveBeenCalledTimes(1);
+        expect(mockGetSessionState).toHaveBeenCalledTimes(1);
       });
 
       rerender();
@@ -190,14 +206,14 @@ describe('useRealtimeSession', () => {
         await new Promise(resolve => setTimeout(resolve, 100));
       });
 
-      expect(mockApiGet).toHaveBeenCalledTimes(1);
+      expect(mockGetSessionState).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('updateCode action', () => {
     beforeEach(() => {
       jest.useFakeTimers();
-      mockApiPost.mockResolvedValue({});
+      mockUpdateCode.mockResolvedValue({});
     });
 
     afterEach(() => {
@@ -205,7 +221,7 @@ describe('useRealtimeSession', () => {
     });
 
     it('should debounce code updates', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [],
         join_code: '',
@@ -224,8 +240,8 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.loading).toBe(false);
 
-      mockApiPost.mockClear();
-      mockApiPost.mockResolvedValue({});
+      mockUpdateCode.mockClear();
+      mockUpdateCode.mockResolvedValue({});
 
       act(() => {
         result.current.updateCode('student-1', 'a');
@@ -238,15 +254,17 @@ describe('useRealtimeSession', () => {
         await jest.runAllTimersAsync();
       });
 
-      expect(mockApiPost).toHaveBeenCalledTimes(1);
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/sessions/session-1/code',
-        { studentId: 'student-1', code: 'abc' }
+      expect(mockUpdateCode).toHaveBeenCalledTimes(1);
+      expect(mockUpdateCode).toHaveBeenCalledWith(
+        'session-1',
+        'student-1',
+        'abc',
+        undefined
       );
     });
 
     it('should update local state optimistically', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [
           { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
@@ -267,7 +285,7 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.loading).toBe(false);
 
-      mockApiPost.mockResolvedValueOnce({});
+      mockUpdateCode.mockResolvedValueOnce({});
 
       act(() => {
         result.current.updateCode('student-1', 'print("new code")');
@@ -285,7 +303,7 @@ describe('useRealtimeSession', () => {
 
   describe('executeCode action', () => {
     it('should execute code and return result', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: {},
         students: [],
         join_code: '',
@@ -309,7 +327,7 @@ describe('useRealtimeSession', () => {
         execution_time: 123,
       };
 
-      mockApiPost.mockResolvedValueOnce(mockResult);
+      mockExecuteCode.mockResolvedValueOnce(mockResult);
 
       let execResult;
       await act(async () => {
@@ -317,14 +335,16 @@ describe('useRealtimeSession', () => {
       });
 
       expect(execResult).toEqual(mockResult);
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/sessions/session-1/execute',
-        { studentId: 'student-1', code: 'print("Hello, World!")' }
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'session-1',
+        'student-1',
+        'print("Hello, World!")',
+        undefined
       );
     });
 
     it('should throw error on execute failure', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: {},
         students: [],
         join_code: '',
@@ -341,7 +361,7 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      mockApiPost.mockRejectedValueOnce(new Error('Execution failed'));
+      mockExecuteCode.mockRejectedValueOnce(new Error('Execution failed'));
 
       await act(async () => {
         await expect(
@@ -353,7 +373,7 @@ describe('useRealtimeSession', () => {
 
   describe('featureStudent action', () => {
     it('should feature a student', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: {},
         students: [
           { user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: new Date().toISOString() },
@@ -372,15 +392,15 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      mockApiPost.mockResolvedValueOnce({ success: true });
+      mockFeatureStudent.mockResolvedValueOnce(undefined);
 
       await act(async () => {
         await result.current.featureStudent('student-1');
       });
 
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/sessions/session-1/feature',
-        { studentId: 'student-1' }
+      expect(mockFeatureStudent).toHaveBeenCalledWith(
+        'session-1',
+        'student-1'
       );
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
@@ -389,7 +409,7 @@ describe('useRealtimeSession', () => {
 
   describe('joinSession action', () => {
     it('should join a session', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: {},
         students: [],
         join_code: '',
@@ -406,25 +426,27 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      mockApiPost.mockResolvedValueOnce({ success: true, student: { id: 'student-1', name: 'Alice' } });
+      const mockStudent = { id: 'student-1', user_id: 'student-1', session_id: 'session-1', name: 'Alice', code: '', last_update: new Date().toISOString() };
+      mockJoinSession.mockResolvedValueOnce(mockStudent);
 
       let joinResult;
       await act(async () => {
         joinResult = await result.current.joinSession('student-1', 'Alice');
       });
 
-      expect(mockApiPost).toHaveBeenCalledWith(
-        '/sessions/session-1/join',
-        { studentId: 'student-1', name: 'Alice' }
+      expect(mockJoinSession).toHaveBeenCalledWith(
+        'session-1',
+        'student-1',
+        'Alice'
       );
 
-      expect(joinResult).toEqual({ success: true, student: { id: 'student-1', name: 'Alice' } });
+      expect(joinResult).toEqual(mockStudent);
     });
   });
 
   describe('Connection status', () => {
     it('should expose connection status from Centrifugo subscription', async () => {
-      mockApiGet.mockResolvedValue({
+      mockGetSessionState.mockResolvedValue({
         session: {},
         students: [],
         join_code: '',
@@ -459,7 +481,7 @@ describe('useRealtimeSession', () => {
         }
       });
 
-      mockApiGet.mockResolvedValue({
+      mockGetSessionState.mockResolvedValue({
         session: {},
         students: [],
         join_code: '',
@@ -484,7 +506,7 @@ describe('useRealtimeSession', () => {
 
   describe('Centrifugo event handling', () => {
     beforeEach(async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [],
         join_code: '',
@@ -697,8 +719,8 @@ describe('useRealtimeSession', () => {
     });
 
     it('should handle featured_student_changed event to clear featured student', async () => {
-      mockApiGet.mockReset();
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockReset();
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1', featured_student_id: 'student-1', featured_code: 'old code' },
         students: [],
         join_code: '',
@@ -816,8 +838,8 @@ describe('useRealtimeSession', () => {
     it('should cancel pending debounced updateCode calls on unmount', async () => {
       jest.useFakeTimers();
 
-      mockApiGet.mockReset();
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockReset();
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [
           { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
@@ -825,7 +847,7 @@ describe('useRealtimeSession', () => {
         join_code: '',
       });
 
-      mockApiPost.mockResolvedValue({});
+      mockUpdateCode.mockResolvedValue({});
 
       const { result, unmount } = renderHook(() =>
         useRealtimeSession({
@@ -840,7 +862,7 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.loading).toBe(false);
 
-      mockApiPost.mockClear();
+      mockUpdateCode.mockClear();
 
       // Schedule a debounced code update
       act(() => {
@@ -857,7 +879,7 @@ describe('useRealtimeSession', () => {
       });
 
       // The debounced call should have been cancelled — no API call
-      expect(mockApiPost).not.toHaveBeenCalled();
+      expect(mockUpdateCode).not.toHaveBeenCalled();
 
       jest.useRealTimers();
     });
@@ -881,7 +903,7 @@ describe('useRealtimeSession', () => {
         // Do nothing - stay in connecting state
       });
 
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [],
         join_code: '',
@@ -901,8 +923,8 @@ describe('useRealtimeSession', () => {
       expect(result.current.loading).toBe(false);
       expect(result.current.isBroadcastConnected).toBe(false);
 
-      mockApiGet.mockClear();
-      mockApiGet.mockResolvedValue({
+      mockGetSessionState.mockClear();
+      mockGetSessionState.mockResolvedValue({
         session: { id: 'session-1' },
         students: [
           { user_id: 'student-1', name: 'Alice', code: 'polled', last_update: new Date().toISOString() },
@@ -915,11 +937,11 @@ describe('useRealtimeSession', () => {
         await Promise.resolve();
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/sessions/session-1/state');
+      expect(mockGetSessionState).toHaveBeenCalledWith('session-1');
     });
 
     it('should not poll when subscription is active', async () => {
-      mockApiGet.mockResolvedValueOnce({
+      mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [],
         join_code: '',
@@ -939,14 +961,14 @@ describe('useRealtimeSession', () => {
       expect(result.current.loading).toBe(false);
       expect(result.current.isBroadcastConnected).toBe(true);
 
-      mockApiGet.mockClear();
+      mockGetSessionState.mockClear();
 
       await act(async () => {
         jest.advanceTimersByTime(2000);
         await Promise.resolve();
       });
 
-      expect(mockApiGet).not.toHaveBeenCalled();
+      expect(mockGetSessionState).not.toHaveBeenCalled();
     });
   });
 });

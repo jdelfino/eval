@@ -1,0 +1,169 @@
+/**
+ * Unit tests for the typed API client functions for sessions.
+ * These tests verify that the typed API functions correctly call the underlying
+ * api-client methods and return responses directly (backend returns plain objects).
+ *
+ * @jest-environment jsdom
+ */
+
+const mockApiGet = jest.fn();
+const mockApiPost = jest.fn();
+const mockApiDelete = jest.fn();
+
+jest.mock('@/lib/api-client', () => ({
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
+  apiPost: (...args: unknown[]) => mockApiPost(...args),
+  apiDelete: (...args: unknown[]) => mockApiDelete(...args),
+}));
+
+import {
+  createSession,
+  endSession,
+  updateProblem,
+  listSessionHistory,
+  getRevisions,
+} from '../sessions';
+import type { Session, Revision } from '@/types/api';
+
+const fakeSession: Session = {
+  id: 'sess-1',
+  namespace_id: 'ns-1',
+  section_id: 's1',
+  section_name: 'Section A',
+  problem: null,
+  featured_student_id: null,
+  featured_code: null,
+  creator_id: 'u1',
+  participants: [],
+  status: 'active',
+  created_at: '2024-01-01T00:00:00Z',
+  last_activity: '2024-01-01T00:00:00Z',
+  ended_at: null,
+};
+
+const fakeRevision: Revision = {
+  id: 'rev-1',
+  namespace_id: 'ns-1',
+  session_id: 'sess-1',
+  user_id: 'u1',
+  timestamp: '2024-01-01T00:00:00Z',
+  is_diff: false,
+  diff: null,
+  full_code: 'print("hello")',
+  base_revision_id: null,
+  execution_result: null,
+};
+
+describe('lib/api/sessions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('createSession', () => {
+    it('calls POST /sessions with section_id and returns plain Session', async () => {
+      mockApiPost.mockResolvedValue(fakeSession);
+
+      const result = await createSession('s1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 's1' });
+      expect(result).toEqual(fakeSession);
+    });
+
+    it('includes problem_id when provided', async () => {
+      mockApiPost.mockResolvedValue(fakeSession);
+
+      const result = await createSession('s1', 'prob-1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 's1', problem_id: 'prob-1' });
+      expect(result).toEqual(fakeSession);
+    });
+  });
+
+  describe('endSession', () => {
+    it('calls DELETE /sessions/{id} and returns void', async () => {
+      mockApiDelete.mockResolvedValue(undefined);
+
+      const result = await endSession('sess-1');
+
+      expect(mockApiDelete).toHaveBeenCalledWith('/sessions/sess-1');
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('updateProblem', () => {
+    it('calls POST /sessions/{id}/update-problem with problem and execution_settings', async () => {
+      mockApiPost.mockResolvedValue(undefined);
+
+      const problem = { title: 'Test Problem' };
+      const execSettings = { timeout: 5000 };
+
+      const result = await updateProblem('sess-1', problem, execSettings);
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
+        problem,
+        execution_settings: execSettings,
+      });
+      expect(result).toBeUndefined();
+    });
+
+    it('calls with undefined execution_settings when omitted', async () => {
+      mockApiPost.mockResolvedValue(undefined);
+
+      const problem = { title: 'Test Problem' };
+
+      await updateProblem('sess-1', problem);
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/update-problem', {
+        problem,
+        execution_settings: undefined,
+      });
+    });
+  });
+
+  describe('listSessionHistory', () => {
+    it('calls GET /sessions/history and returns plain Session array', async () => {
+      mockApiGet.mockResolvedValue([fakeSession]);
+
+      const result = await listSessionHistory();
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/history');
+      expect(result).toEqual([fakeSession]);
+    });
+
+    it('returns empty array when API returns empty array', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      const result = await listSessionHistory();
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getRevisions', () => {
+    it('calls GET /sessions/{id}/revisions without user filter', async () => {
+      mockApiGet.mockResolvedValue([fakeRevision]);
+
+      const result = await getRevisions('sess-1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/revisions');
+      expect(result).toEqual([fakeRevision]);
+    });
+
+    it('includes user_id in query when provided', async () => {
+      mockApiGet.mockResolvedValue([fakeRevision]);
+
+      const result = await getRevisions('sess-1', 'u1');
+
+      expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/revisions?user_id=u1');
+      expect(result).toEqual([fakeRevision]);
+    });
+
+    it('returns empty array when API returns empty array', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      const result = await getRevisions('sess-1');
+
+      expect(result).toEqual([]);
+    });
+  });
+});

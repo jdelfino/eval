@@ -22,6 +22,7 @@ describe('useRevisionHistory', () => {
 
   describe('API mode (no WebSocket)', () => {
     it('loads revisions via API when WebSocket not available', async () => {
+      // Backend returns plain array (not wrapped)
       const mockRevisions = [
         {
           id: 'rev-1',
@@ -35,7 +36,7 @@ describe('useRevisionHistory', () => {
         },
       ];
 
-      mockApiGet.mockResolvedValueOnce({ revisions: mockRevisions });
+      mockApiGet.mockResolvedValueOnce(mockRevisions);
 
       const { result } = renderHook(() =>
         useRevisionHistory({
@@ -76,7 +77,8 @@ describe('useRevisionHistory', () => {
     });
 
     it('handles empty revisions array', async () => {
-      mockApiGet.mockResolvedValueOnce({ revisions: [] });
+      // Backend returns plain array (not wrapped)
+      mockApiGet.mockResolvedValueOnce([]);
 
       const { result } = renderHook(() =>
         useRevisionHistory({
@@ -116,6 +118,7 @@ describe('useRevisionHistory', () => {
   });
 
   describe('navigation methods', () => {
+    // Backend returns plain array (not wrapped)
     const mockRevisions = [
       { id: 'rev-1', timestamp: '2024-01-01T10:00:00Z', full_code: 'code 1' },
       { id: 'rev-2', timestamp: '2024-01-01T10:01:00Z', full_code: 'code 2' },
@@ -123,7 +126,7 @@ describe('useRevisionHistory', () => {
     ];
 
     beforeEach(() => {
-      mockApiGet.mockResolvedValueOnce({ revisions: mockRevisions });
+      mockApiGet.mockResolvedValueOnce(mockRevisions);
     });
 
     it('navigates to next revision', async () => {

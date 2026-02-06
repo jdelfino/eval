@@ -1,23 +1,28 @@
 /**
- * Contract test: GET /api/v1/classes
- * Validates the Class[] response shape matches frontend type definitions.
+ * Integration test: listClasses()
+ * Validates that the typed API function works correctly against the real backend.
  */
-import { contractFetch } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { listClasses } from '@/lib/api/classes';
 import {
   expectSnakeCaseKeys,
   expectString,
   expectNullableString,
 } from './validators';
 
-describe('GET /api/v1/classes', () => {
-  it('returns an array of Class objects with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/classes');
-    expect(res.status).toBe(200);
+describe('listClasses()', () => {
+  beforeAll(() => {
+    configureTestAuth(INSTRUCTOR_TOKEN);
+  });
 
-    const classes = await res.json();
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns Class[] with correct snake_case shape', async () => {
+    const classes = await listClasses();
+
     expect(Array.isArray(classes)).toBe(true);
-
-    // Validate at least one class exists (setup created one)
     expect(classes.length).toBeGreaterThan(0);
 
     const cls = classes[0];

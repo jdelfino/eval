@@ -7,6 +7,7 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import SectionCard from '../SectionCard';
 import { ACTIVE_SESSION_POLL_INTERVAL_MS } from '../SectionCard';
+import type { MySectionInfo } from '@/types/api';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -18,16 +19,19 @@ jest.mock('next/navigation', () => ({
 describe('SectionCard', () => {
   const mockGetActiveSessions = jest.fn();
 
-  const defaultSection = {
-    id: 'section-1',
-    class_id: 'class-1',
-    name: 'Section A',
-    semester: 'Fall 2026',
-    className: 'CS 101',
-    classDescription: 'Intro to CS',
-    role: 'student' as const,
-    join_code: 'ABC123',
-    created_at: '2026-01-01T00:00:00Z',
+  const defaultSectionInfo: MySectionInfo = {
+    section: {
+      id: 'section-1',
+      namespace_id: 'ns-1',
+      class_id: 'class-1',
+      name: 'Section A',
+      semester: 'Fall 2026',
+      join_code: 'ABC123',
+      active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+    class_name: 'CS 101',
   };
 
   beforeEach(() => {
@@ -43,7 +47,7 @@ describe('SectionCard', () => {
   it('should poll for active sessions at the configured interval', async () => {
     render(
       <SectionCard
-        section={defaultSection}
+        sectionInfo={defaultSectionInfo}
         getActiveSessions={mockGetActiveSessions}
       />
     );
@@ -75,14 +79,13 @@ describe('SectionCard', () => {
   it('should render section info', async () => {
     render(
       <SectionCard
-        section={defaultSection}
+        sectionInfo={defaultSectionInfo}
         getActiveSessions={mockGetActiveSessions}
       />
     );
 
     expect(screen.getByText('Section A')).toBeInTheDocument();
     expect(screen.getByText('CS 101')).toBeInTheDocument();
-    expect(screen.getByText('Enrolled as student')).toBeInTheDocument();
   });
 
   it('should display active sessions when available', async () => {
@@ -98,7 +101,7 @@ describe('SectionCard', () => {
 
     render(
       <SectionCard
-        section={defaultSection}
+        sectionInfo={defaultSectionInfo}
         getActiveSessions={mockGetActiveSessions}
       />
     );

@@ -4,17 +4,20 @@
 
 import { renderHook, act } from '@testing-library/react';
 
-const mockApiGet = jest.fn();
-const mockApiPost = jest.fn();
-const mockApiDelete = jest.fn();
+const mockListMySections = jest.fn();
+const mockJoinSection = jest.fn();
+const mockLeaveSection = jest.fn();
+const mockGetActiveSessions = jest.fn();
 
-jest.mock('@/lib/api-client', () => ({
-  apiGet: (...args: any[]) => mockApiGet(...args),
-  apiPost: (...args: any[]) => mockApiPost(...args),
-  apiDelete: (...args: any[]) => mockApiDelete(...args),
+jest.mock('@/lib/api/sections', () => ({
+  listMySections: (...args: unknown[]) => mockListMySections(...args),
+  joinSection: (...args: unknown[]) => mockJoinSection(...args),
+  leaveSection: (...args: unknown[]) => mockLeaveSection(...args),
+  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
 }));
 
 import { useSections } from '../useSections';
+import type { MySectionInfo, SectionMembership } from '@/types/api';
 
 const fakeSection = {
   id: 's1',
@@ -26,9 +29,11 @@ const fakeSection = {
   active: true,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
-  className: 'CS 101',
-  classDescription: 'Intro',
-  role: 'student' as const,
+};
+
+const fakeMySectionInfo: MySectionInfo = {
+  section: fakeSection,
+  class_name: 'CS 101',
 };
 
 describe('useSections', () => {
@@ -40,18 +45,18 @@ describe('useSections', () => {
   });
 
   it('fetchMySections sets sections on success', async () => {
-    mockApiGet.mockResolvedValue({ sections: [fakeSection] });
+    mockListMySections.mockResolvedValue([fakeMySectionInfo]);
     const { result } = renderHook(() => useSections());
 
     await act(async () => { await result.current.fetchMySections(); });
 
-    expect(result.current.sections).toEqual([fakeSection]);
+    expect(result.current.sections).toEqual([fakeMySectionInfo]);
     expect(result.current.loading).toBe(false);
-    expect(mockApiGet).toHaveBeenCalledWith('/sections/my');
+    expect(mockListMySections).toHaveBeenCalled();
   });
 
   it('fetchMySections sets error on failure', async () => {
-    mockApiGet.mockRejectedValue(new Error('fail'));
+    mockListMySections.mockRejectedValue(new Error('fail'));
     const { result } = renderHook(() => useSections());
 
     await act(async () => { await result.current.fetchMySections(); });
@@ -60,49 +65,57 @@ describe('useSections', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('joinSection posts and refreshes sections', async () => {
-    const joinedSection = { ...fakeSection, id: 's2' };
-    mockApiPost.mockResolvedValue({ section: joinedSection });
-    mockApiGet.mockResolvedValue({ sections: [fakeSection, { ...fakeSection, id: 's2' }] });
+  it('joinSection calls API and refreshes sections', async () => {
+    const joinedMembership: SectionMembership = {
+      id: 'mem-1',
+      user_id: 'u1',
+      section_id: 's2',
+      role: 'student',
+      joined_at: '2024-01-01T00:00:00Z',
+    };
+    const newMySectionInfo: MySectionInfo = {
+      section: { ...fakeSection, id: 's2' },
+      class_name: 'CS 101',
+    };
+    mockJoinSection.mockResolvedValue(joinedMembership);
+    mockListMySections.mockResolvedValue([fakeMySectionInfo, newMySectionInfo]);
     const { result } = renderHook(() => useSections());
 
-    let sec: any;
-    await act(async () => { sec = await result.current.joinSection('CODE'); });
+    let membership: SectionMembership | undefined;
+    await act(async () => { membership = await result.current.joinSection('CODE'); });
 
-    expect(sec).toEqual(joinedSection);
-    expect(mockApiPost).toHaveBeenCalledWith('/sections/join', { join_code: 'CODE' });
-    expect(mockApiGet).toHaveBeenCalledWith('/sections/my');
+    expect(membership).toEqual(joinedMembership);
+    expect(mockJoinSection).toHaveBeenCalledWith('CODE');
+    expect(mockListMySections).toHaveBeenCalled();
   });
 
   it('leaveSection removes section from list', async () => {
-    mockApiGet.mockResolvedValue({ sections: [fakeSection] });
-    mockApiDelete.mockResolvedValue(undefined);
+    mockListMySections.mockResolvedValue([fakeMySectionInfo]);
+    mockLeaveSection.mockResolvedValue(undefined);
     const { result } = renderHook(() => useSections());
 
     await act(async () => { await result.current.fetchMySections(); });
     await act(async () => { await result.current.leaveSection('s1'); });
 
     expect(result.current.sections).toEqual([]);
-    expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1/leave');
+    expect(mockLeaveSection).toHaveBeenCalledWith('s1');
   });
 
   it('getActiveSessions returns only active sessions', async () => {
-    mockApiGet.mockResolvedValue({
-      sessions: [
-        { id: 'sess1', status: 'active' },
-        { id: 'sess2', status: 'completed' },
-        { id: 'sess3', status: 'active' },
-      ],
-    });
+    mockGetActiveSessions.mockResolvedValue([
+      { id: 'sess1', status: 'active' },
+      { id: 'sess2', status: 'completed' },
+      { id: 'sess3', status: 'active' },
+    ]);
     const { result } = renderHook(() => useSections());
 
-    let sessions: any;
+    let sessions: unknown;
     await act(async () => { sessions = await result.current.getActiveSessions('s1'); });
 
     expect(sessions).toEqual([
       { id: 'sess1', status: 'active' },
       { id: 'sess3', status: 'active' },
     ]);
-    expect(mockApiGet).toHaveBeenCalledWith('/sections/s1/sessions');
+    expect(mockGetActiveSessions).toHaveBeenCalledWith('s1');
   });
 });

@@ -1,21 +1,20 @@
 /**
- * Authenticated API client using Firebase Auth tokens.
+ * Authenticated API client with injectable auth.
+ *
+ * Uses the auth-provider module for token retrieval, allowing
+ * Firebase auth in production and test tokens in integration tests.
  */
 
-import { firebaseAuth } from '@/lib/firebase';
+import { getAuthToken } from '@/lib/auth-provider';
 import { withRetry } from '@/lib/api-utils';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
- * Gets Authorization headers with the current Firebase user's ID token.
+ * Gets Authorization headers with a token from the auth provider.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const user = firebaseAuth.currentUser;
-  if (!user) {
-    throw new Error('No authenticated user');
-  }
-  const token = await user.getIdToken();
+  const token = await getAuthToken();
   return { Authorization: `Bearer ${token}` };
 }
 

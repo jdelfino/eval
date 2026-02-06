@@ -1,21 +1,28 @@
 /**
- * Contract test: GET /api/v1/system/users
- * Validates the User[] response shape matches frontend type definitions.
+ * Integration test: listSystemUsers()
+ * Validates that the typed API function works correctly against the real backend.
  * Requires system-admin role.
  */
-import { contractFetch, ADMIN_TOKEN } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { listSystemUsers } from '@/lib/api/system';
 import {
   expectSnakeCaseKeys,
   expectString,
   expectNullableString,
 } from './validators';
 
-describe('GET /api/v1/system/users', () => {
-  it('returns an array of User objects with correct snake_case shape', async () => {
-    const res = await contractFetch('/api/v1/system/users', ADMIN_TOKEN);
-    expect(res.status).toBe(200);
+describe('listSystemUsers()', () => {
+  beforeAll(() => {
+    configureTestAuth(ADMIN_TOKEN);
+  });
 
-    const users = await res.json();
+  afterAll(() => {
+    resetAuthProvider();
+  });
+
+  it('returns User[] with correct snake_case shape', async () => {
+    const users = await listSystemUsers();
+
     expect(Array.isArray(users)).toBe(true);
     expect(users.length).toBeGreaterThan(0);
 

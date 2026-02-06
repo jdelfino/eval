@@ -4,16 +4,25 @@
 
 import { renderHook, act } from '@testing-library/react';
 
-const mockApiGet = jest.fn();
-const mockApiPost = jest.fn();
-const mockApiPatch = jest.fn();
-const mockApiDelete = jest.fn();
+// Mock the typed namespaces API module
+const mockListNamespaces = jest.fn();
+const mockCreateNamespace = jest.fn();
+const mockUpdateNamespace = jest.fn();
+const mockDeleteNamespace = jest.fn();
+const mockGetNamespaceUsers = jest.fn();
+const mockCreateUser = jest.fn();
+const mockUpdateUserRole = jest.fn();
+const mockDeleteUser = jest.fn();
 
-jest.mock('@/lib/api-client', () => ({
-  apiGet: (...args: any[]) => mockApiGet(...args),
-  apiPost: (...args: any[]) => mockApiPost(...args),
-  apiPatch: (...args: any[]) => mockApiPatch(...args),
-  apiDelete: (...args: any[]) => mockApiDelete(...args),
+jest.mock('@/lib/api/namespaces', () => ({
+  listNamespaces: (...args: unknown[]) => mockListNamespaces(...args),
+  createNamespace: (...args: unknown[]) => mockCreateNamespace(...args),
+  updateNamespace: (...args: unknown[]) => mockUpdateNamespace(...args),
+  deleteNamespace: (...args: unknown[]) => mockDeleteNamespace(...args),
+  getNamespaceUsers: (...args: unknown[]) => mockGetNamespaceUsers(...args),
+  createUser: (...args: unknown[]) => mockCreateUser(...args),
+  updateUserRole: (...args: unknown[]) => mockUpdateUserRole(...args),
+  deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
 }));
 
 import { useNamespaces } from '../useNamespaces';
@@ -45,7 +54,8 @@ describe('useNamespaces', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('fetchNamespaces sets namespaces on success', async () => {
-    mockApiGet.mockResolvedValue({ namespaces: [fakeNamespace] });
+    // Typed API returns plain array (not wrapped)
+    mockListNamespaces.mockResolvedValue([fakeNamespace]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => { await result.current.fetchNamespaces(); });
@@ -53,20 +63,20 @@ describe('useNamespaces', () => {
     expect(result.current.namespaces).toEqual([fakeNamespace]);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
-    expect(mockApiGet).toHaveBeenCalledWith('/namespaces?');
+    expect(mockListNamespaces).toHaveBeenCalledWith(false);
   });
 
   it('fetchNamespaces passes includeInactive param', async () => {
-    mockApiGet.mockResolvedValue({ namespaces: [] });
+    mockListNamespaces.mockResolvedValue([]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => { await result.current.fetchNamespaces(true); });
 
-    expect(mockApiGet).toHaveBeenCalledWith('/namespaces?includeInactive=true');
+    expect(mockListNamespaces).toHaveBeenCalledWith(true);
   });
 
   it('fetchNamespaces sets error on failure', async () => {
-    mockApiGet.mockRejectedValue(new Error('Network error'));
+    mockListNamespaces.mockRejectedValue(new Error('Network error'));
     const { result } = renderHook(() => useNamespaces());
 
     let thrownError: Error | undefined;
@@ -88,83 +98,88 @@ describe('useNamespaces', () => {
   });
 
   it('createNamespace posts and refreshes list', async () => {
-    mockApiPost.mockResolvedValue({ namespace: fakeNamespace });
-    mockApiGet.mockResolvedValue({ namespaces: [fakeNamespace] });
+    // Typed API returns plain object (not wrapped)
+    mockCreateNamespace.mockResolvedValue(fakeNamespace);
+    mockListNamespaces.mockResolvedValue([fakeNamespace]);
     const { result } = renderHook(() => useNamespaces());
 
-    let ns: any;
+    let ns: unknown;
     await act(async () => { ns = await result.current.createNamespace('ns-1', 'Test NS'); });
 
     expect(ns).toEqual(fakeNamespace);
-    expect(mockApiPost).toHaveBeenCalledWith('/namespaces', { id: 'ns-1', display_name: 'Test NS' });
-    expect(mockApiGet).toHaveBeenCalled();
+    expect(mockCreateNamespace).toHaveBeenCalledWith('ns-1', 'Test NS');
+    expect(mockListNamespaces).toHaveBeenCalled();
   });
 
   it('updateNamespace patches and refreshes list', async () => {
     const updated = { ...fakeNamespace, display_name: 'New Name' };
-    mockApiPatch.mockResolvedValue({ namespace: updated });
-    mockApiGet.mockResolvedValue({ namespaces: [updated] });
+    // Typed API returns plain object (not wrapped)
+    mockUpdateNamespace.mockResolvedValue(updated);
+    mockListNamespaces.mockResolvedValue([updated]);
     const { result } = renderHook(() => useNamespaces());
 
-    let ns: any;
+    let ns: unknown;
     await act(async () => { ns = await result.current.updateNamespace('ns-1', { display_name: 'New Name' }); });
 
     expect(ns).toEqual(updated);
-    expect(mockApiPatch).toHaveBeenCalledWith('/namespaces/ns-1', { display_name: 'New Name' });
+    expect(mockUpdateNamespace).toHaveBeenCalledWith('ns-1', { display_name: 'New Name' });
   });
 
   it('deleteNamespace deletes and refreshes list', async () => {
-    mockApiDelete.mockResolvedValue(undefined);
-    mockApiGet.mockResolvedValue({ namespaces: [] });
+    mockDeleteNamespace.mockResolvedValue(undefined);
+    mockListNamespaces.mockResolvedValue([]);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => { await result.current.deleteNamespace('ns-1'); });
 
-    expect(mockApiDelete).toHaveBeenCalledWith('/namespaces/ns-1');
+    expect(mockDeleteNamespace).toHaveBeenCalledWith('ns-1');
     expect(result.current.namespaces).toEqual([]);
   });
 
   it('getNamespaceUsers fetches users', async () => {
-    mockApiGet.mockResolvedValue({ users: [fakeUser] });
+    // Typed API returns plain array (not wrapped)
+    mockGetNamespaceUsers.mockResolvedValue([fakeUser]);
     const { result } = renderHook(() => useNamespaces());
 
-    let users: any;
+    let users: unknown;
     await act(async () => { users = await result.current.getNamespaceUsers('ns-1'); });
 
     expect(users).toEqual([fakeUser]);
-    expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/users');
+    expect(mockGetNamespaceUsers).toHaveBeenCalledWith('ns-1');
   });
 
   it('createUser posts to namespace users endpoint', async () => {
-    mockApiPost.mockResolvedValue({ user: fakeUser });
+    // Typed API returns plain object (not wrapped)
+    mockCreateUser.mockResolvedValue(fakeUser);
     const { result } = renderHook(() => useNamespaces());
 
-    let user: any;
+    let user: unknown;
     await act(async () => {
       user = await result.current.createUser('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
     });
 
     expect(user).toEqual(fakeUser);
-    expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/users', {
-      email: 'a@b.com', username: 'auser', password: 'pass', role: 'instructor',
-    });
+    expect(mockCreateUser).toHaveBeenCalledWith('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
   });
 
   it('updateUserRole patches user role', async () => {
-    mockApiPatch.mockResolvedValue({ user: { ...fakeUser, role: 'student' } });
+    const updated = { ...fakeUser, role: 'student' as const };
+    // Typed API returns plain object (not wrapped)
+    mockUpdateUserRole.mockResolvedValue(updated);
     const { result } = renderHook(() => useNamespaces());
 
-    await act(async () => { await result.current.updateUserRole('u1', 'student'); });
+    const user = await act(async () => { return await result.current.updateUserRole('u1', 'student'); });
 
-    expect(mockApiPatch).toHaveBeenCalledWith('/users/u1', { role: 'student' });
+    expect(mockUpdateUserRole).toHaveBeenCalledWith('u1', 'student');
+    expect(user).toEqual(updated);
   });
 
   it('deleteUser deletes user', async () => {
-    mockApiDelete.mockResolvedValue(undefined);
+    mockDeleteUser.mockResolvedValue(undefined);
     const { result } = renderHook(() => useNamespaces());
 
     await act(async () => { await result.current.deleteUser('u1'); });
 
-    expect(mockApiDelete).toHaveBeenCalledWith('/users/u1');
+    expect(mockDeleteUser).toHaveBeenCalledWith('u1');
   });
 });
