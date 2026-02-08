@@ -20,6 +20,13 @@ spec:
                 name: go-api
                 port:
                   number: 80
+          - path: /connection/websocket
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: centrifugo
+                port:
+                  number: 8000
           - path: /*
             pathType: ImplementationSpecific
             backend:

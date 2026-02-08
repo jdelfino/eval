@@ -194,7 +194,25 @@ resource "kubernetes_deployment" "centrifugo" {
 }
 
 # -----------------------------------------------------------------------------
-# Service — ClusterIP for internal access
+# BackendConfig — WebSocket timeout for GCE Ingress
+# -----------------------------------------------------------------------------
+
+resource "kubernetes_manifest" "centrifugo_backend_config" {
+  manifest = {
+    apiVersion = "cloud.google.com/v1"
+    kind       = "BackendConfig"
+    metadata = {
+      name      = "centrifugo-backend-config"
+      namespace = var.namespace
+    }
+    spec = {
+      timeoutSec = 3600
+    }
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Service — ClusterIP for internal access + Ingress routing
 # -----------------------------------------------------------------------------
 
 resource "kubernetes_service" "centrifugo" {
@@ -204,6 +222,11 @@ resource "kubernetes_service" "centrifugo" {
     labels = merge(local.labels, {
       app = "centrifugo"
     })
+    annotations = {
+      "cloud.google.com/backend-config" = jsonencode({
+        default = "centrifugo-backend-config"
+      })
+    }
   }
 
   spec {
@@ -220,4 +243,6 @@ resource "kubernetes_service" "centrifugo" {
       name        = "http"
     }
   }
+
+  depends_on = [kubernetes_manifest.centrifugo_backend_config]
 }
