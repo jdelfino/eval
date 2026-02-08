@@ -1,10 +1,11 @@
 # Centrifugo Kubernetes Module
 #
-# Deploys Centrifugo v5 for real-time WebSocket messaging on Kubernetes.
+# Manages Centrifugo configuration and secrets on Kubernetes.
+# Deployment, Service, and BackendConfig are managed by kustomize (k8s/base/).
 # Uses Redis as the broker/presence engine.
 
 # -----------------------------------------------------------------------------
-# Local Values
+# Generated Secrets
 # -----------------------------------------------------------------------------
 
 resource "random_password" "api_key" {
@@ -20,13 +21,6 @@ resource "random_password" "token_secret" {
 locals {
   api_key      = random_password.api_key.result
   token_secret = random_password.token_secret.result
-
-  labels = {
-    project     = var.project_name
-    environment = var.environment
-    managed_by  = "terraform"
-    module      = "centrifugo"
-  }
 }
 
 # -----------------------------------------------------------------------------
@@ -81,168 +75,3 @@ resource "kubernetes_secret" "centrifugo_secrets" {
   type = "Opaque"
 }
 
-# -----------------------------------------------------------------------------
-# Deployment — Centrifugo server
-# -----------------------------------------------------------------------------
-
-resource "kubernetes_deployment" "centrifugo" {
-  metadata {
-    name      = "centrifugo"
-    namespace = var.namespace
-    labels = merge(local.labels, {
-      app = "centrifugo"
-    })
-  }
-
-  spec {
-    replicas = var.replicas
-
-    selector {
-      match_labels = {
-        app = "centrifugo"
-      }
-    }
-
-    template {
-      metadata {
-        labels = {
-          app = "centrifugo"
-        }
-      }
-
-      spec {
-        container {
-          name  = "centrifugo"
-          image = "centrifugo/centrifugo:${var.image_tag}"
-
-          args = ["centrifugo", "-c", "/centrifugo/config.json"]
-
-          port {
-            container_port = 8000
-            name           = "http"
-          }
-
-          env {
-            name  = "CENTRIFUGO_PORT"
-            value = "8000"
-          }
-
-          env {
-            name = "CENTRIFUGO_API_KEY"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.centrifugo_secrets.metadata[0].name
-                key  = "CENTRIFUGO_API_KEY"
-              }
-            }
-          }
-
-          env {
-            name = "CENTRIFUGO_TOKEN_HMAC_SECRET_KEY"
-            value_from {
-              secret_key_ref {
-                name = kubernetes_secret.centrifugo_secrets.metadata[0].name
-                key  = "CENTRIFUGO_TOKEN_HMAC_SECRET_KEY"
-              }
-            }
-          }
-
-          volume_mount {
-            name       = "centrifugo-config"
-            mount_path = "/centrifugo"
-            read_only  = true
-          }
-
-          resources {
-            requests = {
-              cpu    = var.cpu_request
-              memory = var.memory_request
-            }
-            limits = {
-              memory = var.memory_limit
-            }
-          }
-
-          liveness_probe {
-            http_get {
-              path = "/health"
-              port = 8000
-            }
-            initial_delay_seconds = 10
-            period_seconds        = 15
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/health"
-              port = 8000
-            }
-            initial_delay_seconds = 5
-            period_seconds        = 10
-          }
-        }
-
-        volume {
-          name = "centrifugo-config"
-          config_map {
-            name = kubernetes_config_map.centrifugo_config.metadata[0].name
-          }
-        }
-      }
-    }
-  }
-}
-
-# -----------------------------------------------------------------------------
-# BackendConfig — WebSocket timeout for GCE Ingress
-# -----------------------------------------------------------------------------
-
-resource "kubernetes_manifest" "centrifugo_backend_config" {
-  manifest = {
-    apiVersion = "cloud.google.com/v1"
-    kind       = "BackendConfig"
-    metadata = {
-      name      = "centrifugo-backend-config"
-      namespace = var.namespace
-    }
-    spec = {
-      timeoutSec = 3600
-    }
-  }
-}
-
-# -----------------------------------------------------------------------------
-# Service — ClusterIP for internal access + Ingress routing
-# -----------------------------------------------------------------------------
-
-resource "kubernetes_service" "centrifugo" {
-  metadata {
-    name      = "centrifugo"
-    namespace = var.namespace
-    labels = merge(local.labels, {
-      app = "centrifugo"
-    })
-    annotations = {
-      "cloud.google.com/backend-config" = jsonencode({
-        default = "centrifugo-backend-config"
-      })
-    }
-  }
-
-  spec {
-    type = "ClusterIP"
-
-    selector = {
-      app = "centrifugo"
-    }
-
-    port {
-      port        = 8000
-      target_port = 8000
-      protocol    = "TCP"
-      name        = "http"
-    }
-  }
-
-  depends_on = [kubernetes_manifest.centrifugo_backend_config]
-}

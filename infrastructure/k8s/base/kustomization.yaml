@@ -7,6 +7,9 @@ resources:
   - service.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml
+  - centrifugo-deployment.yaml
+  - centrifugo-service.yaml
+  - centrifugo-backend-config.yaml
   - ingress.yaml
 
 labels:

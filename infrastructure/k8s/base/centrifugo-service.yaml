@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: centrifugo
+  labels:
+    app: centrifugo
+  annotations:
+    cloud.google.com/backend-config: '{"default":"centrifugo-backend-config"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: centrifugo
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http

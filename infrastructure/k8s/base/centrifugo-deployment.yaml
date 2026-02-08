@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: centrifugo
+  labels:
+    app: centrifugo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: centrifugo
+  template:
+    metadata:
+      labels:
+        app: centrifugo
+    spec:
+      containers:
+        - name: centrifugo
+          image: centrifugo/centrifugo:v5
+          args: ["centrifugo", "-c", "/centrifugo/config.json"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: CENTRIFUGO_PORT
+              value: "8000"
+            - name: CENTRIFUGO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: centrifugo-secrets
+                  key: CENTRIFUGO_API_KEY
+            - name: CENTRIFUGO_TOKEN_HMAC_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: centrifugo-secrets
+                  key: CENTRIFUGO_TOKEN_HMAC_SECRET_KEY
+          volumeMounts:
+            - name: centrifugo-config
+              mountPath: /centrifugo
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: centrifugo-config
+          configMap:
+            name: centrifugo-config

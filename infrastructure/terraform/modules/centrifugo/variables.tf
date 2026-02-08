@@ -2,6 +2,9 @@
 #
 # All required variables have no defaults - forces explicit configuration.
 # Values are provided by the calling environment.
+#
+# Deployment, Service, and BackendConfig are managed by kustomize (k8s/base/).
+# This module manages ConfigMap (with dynamic config) and Secret (with generated keys).
 
 # -----------------------------------------------------------------------------
 # Common Variables (required by all modules)
@@ -47,42 +50,8 @@ variable "redis_port" {
   type        = number
 }
 
-variable "image_tag" {
-  description = "Centrifugo Docker image tag"
-  type        = string
-  default     = "v5"
-}
-
-variable "replicas" {
-  description = "Number of Centrifugo deployment replicas"
-  type        = number
-  default     = 2
-}
-
 variable "namespace" {
   description = "Kubernetes namespace for Centrifugo resources"
   type        = string
   default     = "default"
-}
-
-# -----------------------------------------------------------------------------
-# Resource Limits
-# -----------------------------------------------------------------------------
-
-variable "cpu_request" {
-  description = "CPU request for Centrifugo container"
-  type        = string
-  default     = "100m"
-}
-
-variable "memory_request" {
-  description = "Memory request for Centrifugo container"
-  type        = string
-  default     = "128Mi"
-}
-
-variable "memory_limit" {
-  description = "Memory limit for Centrifugo container"
-  type        = string
-  default     = "256Mi"
 }
