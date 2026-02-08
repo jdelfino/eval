@@ -267,11 +267,11 @@ resource "kubernetes_config_map" "frontend_config" {
   }
 
   data = {
-    NEXT_PUBLIC_API_URL             = "/api/v1"
-    NEXT_PUBLIC_FIREBASE_API_KEY    = module.identity_platform.api_key
+    NEXT_PUBLIC_API_URL              = "/api/v1"
+    NEXT_PUBLIC_FIREBASE_API_KEY     = module.identity_platform.api_key
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = module.identity_platform.auth_domain
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID = var.project_id
-    NEXT_PUBLIC_CENTRIFUGO_URL      = var.frontend_centrifugo_url
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID  = var.project_id
+    NEXT_PUBLIC_CENTRIFUGO_URL       = var.frontend_centrifugo_url
   }
 
   depends_on = [module.gke]
