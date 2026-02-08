@@ -12,9 +12,14 @@ resources:
   - executor-networkpolicy.yaml
   - redis-deployment.yaml
   - redis-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - frontend-configmap.yaml
 
 images:
   - name: go-api
     newName: go-api
   - name: executor
     newName: executor
+  - name: frontend
+    newName: frontend

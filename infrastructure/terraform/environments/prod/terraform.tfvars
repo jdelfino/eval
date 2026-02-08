@@ -94,3 +94,9 @@ github_repo    = "eval"
 # -----------------------------------------------------------------------------
 
 centrifugo_allowed_origins = ["https://eval.delquillan.com"]
+
+# -----------------------------------------------------------------------------
+# Frontend Configuration
+# -----------------------------------------------------------------------------
+
+frontend_centrifugo_url = "wss://eval.delquillan.com/connection/websocket"

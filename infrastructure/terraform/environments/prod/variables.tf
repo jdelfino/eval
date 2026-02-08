@@ -238,3 +238,12 @@ variable "centrifugo_allowed_origins" {
   type        = list(string)
   default     = []
 }
+
+# -----------------------------------------------------------------------------
+# Frontend Variables
+# -----------------------------------------------------------------------------
+
+variable "frontend_centrifugo_url" {
+  description = "Centrifugo WebSocket URL for frontend clients (browser-accessible)"
+  type        = string
+}
