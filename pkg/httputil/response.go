@@ -16,8 +16,23 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+// errorDetailSetter is satisfied by httpmiddleware.ResponseWriter when wrapped
+// by the logging middleware. This allows WriteError to pass error context for
+// 5xx logging without importing httpmiddleware.
+type errorDetailSetter interface {
+	SetErrorDetail(string)
+}
+
 // WriteError writes a JSON error response with the given status code and message.
+// For 5xx responses, the message is also captured on the response writer (if it
+// supports the errorDetailSetter interface) so the logging middleware can include
+// it in structured log output.
 func WriteError(w http.ResponseWriter, status int, message string) {
+	if status >= 500 {
+		if eds, ok := w.(errorDetailSetter); ok {
+			eds.SetErrorDetail(message)
+		}
+	}
 	WriteJSON(w, status, map[string]string{"error": message})
 }
 

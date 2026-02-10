@@ -109,6 +109,36 @@ func TestWriteInternalError(t *testing.T) {
 	}
 }
 
+// mockErrorDetailSetter captures SetErrorDetail calls for testing.
+type mockErrorDetailSetter struct {
+	httptest.ResponseRecorder
+	detail string
+}
+
+func (m *mockErrorDetailSetter) SetErrorDetail(detail string) {
+	m.detail = detail
+}
+
+func TestWriteError_5xx_SetsErrorDetail(t *testing.T) {
+	mock := &mockErrorDetailSetter{ResponseRecorder: *httptest.NewRecorder()}
+
+	WriteError(mock, http.StatusInternalServerError, "db connection lost")
+
+	if mock.detail != "db connection lost" {
+		t.Errorf("ErrorDetail = %q, want %q", mock.detail, "db connection lost")
+	}
+}
+
+func TestWriteError_4xx_DoesNotSetErrorDetail(t *testing.T) {
+	mock := &mockErrorDetailSetter{ResponseRecorder: *httptest.NewRecorder()}
+
+	WriteError(mock, http.StatusBadRequest, "bad input")
+
+	if mock.detail != "" {
+		t.Errorf("ErrorDetail = %q, want empty for 4xx", mock.detail)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

@@ -41,7 +41,15 @@ func Logger(logger *slog.Logger, attrFuncs ...AttrFunc) func(http.Handler) http.
 				attrs = append(attrs, fn(r)...)
 			}
 
-			logger.LogAttrs(r.Context(), slog.LevelInfo, "http request", attrs...)
+			level := slog.LevelInfo
+			if wrapped.Status >= 500 {
+				level = slog.LevelError
+				if wrapped.ErrorDetail != "" {
+					attrs = append(attrs, slog.String("error", wrapped.ErrorDetail))
+				}
+			}
+
+			logger.LogAttrs(r.Context(), level, "http request", attrs...)
 		})
 	}
 }

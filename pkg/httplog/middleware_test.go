@@ -145,6 +145,86 @@ func TestLogger(t *testing.T) {
 		}
 	})
 
+	t.Run("logs 5xx at ERROR level", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/fail", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		var logEntry map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
+			t.Fatalf("Failed to parse log output: %v", err)
+		}
+
+		if logEntry["status"] != float64(500) {
+			t.Errorf("status = %v, want 500", logEntry["status"])
+		}
+		if logEntry["level"] != "ERROR" {
+			t.Errorf("level = %v, want ERROR", logEntry["level"])
+		}
+	})
+
+	t.Run("logs 5xx with error detail", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate what WriteError does: set error detail then write header
+			if rw, ok := w.(interface{ SetErrorDetail(string) }); ok {
+				rw.SetErrorDetail("pq: row-level security violation")
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		var logEntry map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
+			t.Fatalf("Failed to parse log output: %v", err)
+		}
+
+		if logEntry["level"] != "ERROR" {
+			t.Errorf("level = %v, want ERROR", logEntry["level"])
+		}
+		if logEntry["error"] != "pq: row-level security violation" {
+			t.Errorf("error = %v, want 'pq: row-level security violation'", logEntry["error"])
+		}
+	})
+
+	t.Run("logs 2xx at INFO level", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+		handler := Logger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		var logEntry map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &logEntry); err != nil {
+			t.Fatalf("Failed to parse log output: %v", err)
+		}
+
+		if logEntry["level"] != "INFO" {
+			t.Errorf("level = %v, want INFO", logEntry["level"])
+		}
+		// Should NOT have error key for 2xx
+		if _, ok := logEntry["error"]; ok {
+			t.Errorf("2xx response should not have error key")
+		}
+	})
+
 	t.Run("AttrFunc returning nil attrs is safe", func(t *testing.T) {
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
