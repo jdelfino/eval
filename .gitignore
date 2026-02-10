@@ -71,3 +71,7 @@ secrets.tfvars
 
 # Air hot reload build output
 go-backend/tmp/
+executor/tmp/
+
+# Auto-generated Next.js type declarations
+frontend/next-env.d.ts
