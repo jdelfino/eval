@@ -95,6 +95,14 @@ typecheck-frontend:
 	cd frontend && npx tsc --noEmit
 
 # ──────────────────────────────────────────────
+# Smoke tests (post-deploy)
+# ──────────────────────────────────────────────
+.PHONY: smoke-test
+
+smoke-test:
+	./scripts/smoke-test.sh
+
+# ──────────────────────────────────────────────
 # Local development
 # ──────────────────────────────────────────────
 .PHONY: dev deps-up deps-down wait-deps seed reset-db status logs

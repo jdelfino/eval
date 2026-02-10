@@ -66,3 +66,12 @@ jobs:
           fi
 
           kubectl apply -k .
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/go-api --timeout=120s
+          kubectl rollout status deployment/frontend --timeout=120s
+          kubectl rollout status deployment/centrifugo --timeout=120s
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh
+        env:
+          SMOKE_TEST_URL: https://eval.delquillan.com
