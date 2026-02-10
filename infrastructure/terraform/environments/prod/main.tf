@@ -184,6 +184,16 @@ module "monitoring" {
   region       = var.region
 }
 
+module "dns_ssl" {
+  source = "../../modules/dns-ssl"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  domain_name = var.domain_name
+}
 
 # -----------------------------------------------------------------------------
 # KEDA (Kubernetes Event-Driven Autoscaling)

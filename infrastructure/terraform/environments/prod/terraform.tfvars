@@ -100,3 +100,9 @@ centrifugo_allowed_origins = ["https://eval.delquillan.com"]
 # -----------------------------------------------------------------------------
 
 frontend_centrifugo_url = "wss://eval.delquillan.com/connection/websocket"
+
+# -----------------------------------------------------------------------------
+# DNS / SSL Configuration
+# -----------------------------------------------------------------------------
+
+domain_name = "eval.delquillan.com"

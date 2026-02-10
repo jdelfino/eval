@@ -247,3 +247,12 @@ variable "frontend_centrifugo_url" {
   description = "Centrifugo WebSocket URL for frontend clients (browser-accessible)"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# DNS / SSL Variables
+# -----------------------------------------------------------------------------
+
+variable "domain_name" {
+  description = "Domain name for the application (e.g., eval.delquillan.com)"
+  type        = string
+}
