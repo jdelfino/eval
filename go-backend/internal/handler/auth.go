@@ -39,6 +39,7 @@ func (h *AuthHandler) RegistrationRoutes() chi.Router {
 	r.Post("/accept-invite", h.PostAcceptInvite)
 	r.Get("/register-student", h.GetRegisterStudent)
 	r.Post("/register-student", h.PostRegisterStudent)
+	r.Post("/bootstrap", h.PostBootstrap)
 	return r
 }
 
@@ -287,6 +288,41 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		Role:      "student",
 	}); err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "failed to create membership")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusCreated, user)
+}
+
+// PostBootstrap creates the initial system-admin user from a JWT with a
+// custom "role" claim set by the bootstrap CLI via Firebase Admin SDK.
+// This is a one-time setup endpoint for first deploy.
+func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromContext(r.Context())
+	if claims == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	// Verify the custom claim set by the bootstrap CLI.
+	role, _ := claims.CustomClaims["role"].(string)
+	if role != string(auth.RoleSystemAdmin) {
+		httputil.WriteError(w, http.StatusForbidden, "missing system-admin custom claim")
+		return
+	}
+
+	repos := store.ReposFromContext(r.Context())
+	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
+		ExternalID: claims.Subject,
+		Email:      claims.Email,
+		Role:       string(auth.RoleSystemAdmin),
+	})
+	if err != nil {
+		if errors.Is(store.HandleDuplicate(err), store.ErrDuplicate) {
+			httputil.WriteError(w, http.StatusConflict, "system admin already exists")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "failed to create user")
 		return
 	}
 

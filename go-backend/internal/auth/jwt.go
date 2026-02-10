@@ -21,6 +21,9 @@ type Claims struct {
 	Name          string
 	IssuedAt      time.Time
 	ExpiresAt     time.Time
+	// CustomClaims holds any additional claims set via Firebase Admin SDK
+	// (e.g., {"role": "system-admin"} for bootstrap).
+	CustomClaims map[string]any
 }
 
 // TokenValidator validates a raw JWT string and returns parsed claims.
@@ -147,6 +150,9 @@ func (v *identityPlatformValidator) Validate(ctx context.Context, rawToken strin
 		return nil, fmt.Errorf("auth: token issued in the future at %v", iat)
 	}
 
+	// Extract custom claims (non-standard fields set via Firebase Admin SDK).
+	customClaims := extractCustomClaims(payloadBytes)
+
 	return &Claims{
 		Subject:       payload.Sub,
 		Email:         payload.Email,
@@ -154,5 +160,33 @@ func (v *identityPlatformValidator) Validate(ctx context.Context, rawToken strin
 		Name:          payload.Name,
 		IssuedAt:      iat,
 		ExpiresAt:     exp,
+		CustomClaims:  customClaims,
 	}, nil
+}
+
+// standardClaims lists the JWT claim names that are part of the Identity Platform
+// token spec and should NOT be included in CustomClaims.
+var standardClaims = map[string]bool{
+	"iss": true, "aud": true, "sub": true, "iat": true, "exp": true,
+	"auth_time": true, "email": true, "email_verified": true, "name": true,
+	"picture": true, "firebase": true, "user_id": true,
+}
+
+// extractCustomClaims decodes the raw JWT payload and returns any non-standard
+// claims (i.e., claims set via Firebase Admin SDK's SetCustomUserClaims).
+func extractCustomClaims(payloadBytes []byte) map[string]any {
+	var raw map[string]any
+	if err := json.Unmarshal(payloadBytes, &raw); err != nil {
+		return nil
+	}
+	custom := make(map[string]any)
+	for k, v := range raw {
+		if !standardClaims[k] {
+			custom[k] = v
+		}
+	}
+	if len(custom) == 0 {
+		return nil
+	}
+	return custom
 }

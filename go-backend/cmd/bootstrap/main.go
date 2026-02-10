@@ -1,12 +1,13 @@
-// Command bootstrap creates or updates the initial system-admin user.
-//
-// It creates an Identity Platform (Firebase Auth) user with the given email
-// and password, then upserts a system-admin row in the database linked to
-// that user's UID.
+// Command bootstrap creates an Identity Platform (Firebase Auth) user for the
+// initial system admin and sets a custom claim so the app's /auth/bootstrap
+// endpoint can create the corresponding database record.
 //
 // Usage:
 //
 //	go run ./cmd/bootstrap --email admin@example.com
+//
+// After running, log into the app — the frontend will call POST /auth/bootstrap
+// to finalize the account.
 package main
 
 import (
@@ -20,10 +21,6 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"golang.org/x/term"
-
-	"github.com/jdelfino/eval/internal/config"
-	"github.com/jdelfino/eval/internal/db"
-	"github.com/jdelfino/eval/internal/store"
 )
 
 func main() {
@@ -42,13 +39,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
-	}
-
-	if cfg.GCPProjectID == "" {
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	if projectID == "" {
 		fmt.Fprintln(os.Stderr, "Error: GCP_PROJECT_ID environment variable is required")
 		os.Exit(1)
 	}
@@ -56,32 +48,20 @@ func main() {
 	ctx := context.Background()
 
 	// Create Identity Platform user (or retrieve existing).
-	uid, err := ensureFirebaseUser(ctx, cfg.GCPProjectID, *email, password)
+	uid, err := ensureFirebaseUser(ctx, projectID, *email, password)
 	if err != nil {
 		slog.Error("failed to ensure Firebase user", "error", err)
 		os.Exit(1)
 	}
 
-	// Upsert system-admin in the database.
-	pool, err := db.NewPool(ctx, cfg.DatabasePoolConfig())
-	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
-
-	s := store.New(pool.PgxPool())
-	user, err := s.UpsertUser(ctx, store.CreateUserParams{
-		ExternalID: uid,
-		Email:      *email,
-		Role:       "system-admin",
-	})
-	if err != nil {
-		slog.Error("failed to upsert admin user", "error", err)
+	// Set custom claim so the app knows this user is a system-admin.
+	if err := setCustomClaims(ctx, projectID, uid); err != nil {
+		slog.Error("failed to set custom claims", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("System admin ready: id=%s email=%s role=%s\n", user.ID, user.Email, user.Role)
+	fmt.Printf("System admin ready in Identity Platform: email=%s uid=%s\n", *email, uid)
+	fmt.Println("Log into the app to finalize the account.")
 }
 
 // promptPassword reads a password interactively with hidden input and confirmation.
@@ -149,4 +129,27 @@ func ensureFirebaseUser(ctx context.Context, projectID, email, password string) 
 
 	slog.Info("Identity Platform user created", "email", email, "uid", record.UID)
 	return record.UID, nil
+}
+
+// setCustomClaims sets the role=system-admin custom claim on the Firebase user.
+// The app's /auth/bootstrap endpoint reads this claim from the JWT to authorize
+// system-admin creation.
+func setCustomClaims(ctx context.Context, projectID, uid string) error {
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID})
+	if err != nil {
+		return fmt.Errorf("initializing Firebase: %w", err)
+	}
+
+	client, err := app.Auth(ctx)
+	if err != nil {
+		return fmt.Errorf("creating auth client: %w", err)
+	}
+
+	claims := map[string]any{"role": "system-admin"}
+	if err := client.SetCustomUserClaims(ctx, uid, claims); err != nil {
+		return fmt.Errorf("setting custom claims: %w", err)
+	}
+
+	slog.Info("Custom claims set", "uid", uid, "claims", claims)
+	return nil
 }
