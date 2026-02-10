@@ -20,6 +20,8 @@ resources:
   - centrifugo-deployment.yaml
   - centrifugo-service.yaml
   - centrifugo-backend-config.yaml
+  - frontend-config.yaml
+  - managed-certificate.yaml
 
 images:
   - name: go-api

@@ -1,0 +1,7 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: eval-delquillan-com
+spec:
+  domains:
+    - eval.delquillan.com
