@@ -157,12 +157,23 @@ idp_admin_request() {
   local method="$1" path="$2" body="$3"
   local token
   token=$(gcloud auth print-access-token 2>/dev/null)
-  curl -sf -X "$method" \
+  local response http_code
+  response=$(mktemp)
+  http_code=$(curl -s -o "$response" -w '%{http_code}' -X "$method" \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -H "x-goog-user-project: ${GCP_PROJECT_ID}" \
     -d "$body" \
-    "${IDP_API}/projects/${GCP_PROJECT_ID}${path}" 2>/dev/null
+    "${IDP_API}/projects/${GCP_PROJECT_ID}${path}" 2>/dev/null)
+  if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+    cat "$response"
+    rm -f "$response"
+    return 0
+  else
+    echo "  IDP API error (HTTP ${http_code}): $(cat "$response")" >&2
+    rm -f "$response"
+    return 1
+  fi
 }
 
 cleanup_smoke_user() {
