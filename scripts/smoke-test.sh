@@ -177,7 +177,9 @@ check_auth_roundtrip() {
     "${IDP_API}/accounts:signInWithPassword?key=${api_key}" 2>/dev/null)
 
   # 3. If user doesn't exist yet, create it and retry sign-in
-  if [[ "$signin_code" == "400" ]] && grep -q "EMAIL_NOT_FOUND" "$signin_response" 2>/dev/null; then
+  #    EMAIL_NOT_FOUND: legacy API response for missing user
+  #    INVALID_LOGIN_CREDENTIALS: current API response (prevents email enumeration)
+  if [[ "$signin_code" == "400" ]] && grep -qE "EMAIL_NOT_FOUND|INVALID_LOGIN_CREDENTIALS" "$signin_response" 2>/dev/null; then
     echo "  Smoke-test user not found, creating..."
     local token create_response create_code
     token=$(gcloud auth print-access-token 2>/dev/null)
