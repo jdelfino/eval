@@ -270,6 +270,28 @@ resource "kubernetes_secret" "app_secrets" {
   depends_on = [module.gke]
 }
 
+# Stable password for the persistent smoke-test Identity Platform user.
+# Generated once by Terraform; the deploy smoke test reads it via kubectl.
+resource "random_password" "smoke_test" {
+  length  = 24
+  special = true
+}
+
+resource "kubernetes_secret" "smoke_test_secrets" {
+  metadata {
+    name      = "smoke-test-secrets"
+    namespace = "default"
+  }
+
+  data = {
+    SMOKE_TEST_PASSWORD = random_password.smoke_test.result
+  }
+
+  type = "Opaque"
+
+  depends_on = [module.gke]
+}
+
 resource "kubernetes_config_map" "frontend_config" {
   metadata {
     name      = "frontend-config"

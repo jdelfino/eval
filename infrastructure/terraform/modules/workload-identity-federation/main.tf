@@ -66,6 +66,26 @@ resource "google_project_iam_member" "github_actions_roles" {
 }
 
 # -----------------------------------------------------------------------------
+# Custom Role: Smoke Test User Creation
+# -----------------------------------------------------------------------------
+# Minimal permission for deploy smoke tests to create an Identity Platform
+# user for auth round-trip validation. Intentionally excludes delete, update,
+# and list to limit blast radius if the SA is compromised.
+
+resource "google_project_iam_custom_role" "smoke_test_auth" {
+  role_id     = "smokeTestAuth"
+  title       = "Smoke Test Auth (create-only)"
+  description = "Allows creating Identity Platform users for deploy smoke tests"
+  permissions = ["firebaseauth.users.create"]
+}
+
+resource "google_project_iam_member" "github_actions_smoke_test" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.smoke_test_auth.id
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
+
+# -----------------------------------------------------------------------------
 # Workload Identity User Binding
 # -----------------------------------------------------------------------------
 

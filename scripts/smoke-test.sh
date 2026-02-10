@@ -145,103 +145,78 @@ check_no_placeholders() {
 }
 
 # --- Auth round-trip test ---
-# Creates an ephemeral Identity Platform user, signs in via the public
-# Firebase REST API, and verifies the API accepts the resulting JWT.
-# Idempotent: deletes any leftover test user before creating a new one.
+# Validates the full authentication pipeline: Firebase API key → Identity
+# Platform sign-in → JWT → Go API middleware.
+#
+# Uses a persistent smoke-test user (created on first run, reused forever).
+# The deploy SA only needs firebaseauth.users.create — no delete, no get,
+# no list. Password is stored in a k8s Secret managed by Terraform.
 
 SMOKE_TEST_EMAIL="smoke-test@eval-internal.test"
-SMOKE_TEST_UID=""  # set during test for cleanup
 IDP_API="https://identitytoolkit.googleapis.com/v1"
 
-idp_admin_request() {
-  local method="$1" path="$2" body="$3"
-  local token
-  token=$(gcloud auth print-access-token 2>/dev/null)
-  local response http_code
-  response=$(mktemp)
-  http_code=$(curl -s -o "$response" -w '%{http_code}' -X "$method" \
-    -H "Authorization: Bearer ${token}" \
-    -H "Content-Type: application/json" \
-    -H "x-goog-user-project: ${GCP_PROJECT_ID}" \
-    -d "$body" \
-    "${IDP_API}/projects/${GCP_PROJECT_ID}${path}" 2>/dev/null)
-  if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
-    cat "$response"
-    rm -f "$response"
-    return 0
-  else
-    echo "  IDP API error (HTTP ${http_code}): $(cat "$response")" >&2
-    rm -f "$response"
-    return 1
-  fi
-}
-
-cleanup_smoke_user() {
-  local uid="$1"
-  if [[ -n "$uid" ]]; then
-    idp_admin_request POST "/accounts:delete" "{\"localId\":\"${uid}\"}" >/dev/null 2>&1 || true
-  fi
-}
-
-lookup_smoke_user() {
-  local result
-  result=$(idp_admin_request POST "/accounts:lookup" "{\"email\":[\"${SMOKE_TEST_EMAIL}\"]}" 2>/dev/null) || return 1
-  echo "$result" | jq -r '.users[0].localId // empty' 2>/dev/null
-}
-
 check_auth_roundtrip() {
-  local password
-  password=$(openssl rand -base64 18)
-
-  # 1. Clean up any leftover test user from a previous failed run
-  local existing_uid
-  existing_uid=$(lookup_smoke_user) || true
-  if [[ -n "$existing_uid" ]]; then
-    echo "  Cleaning up leftover smoke-test user (${existing_uid})"
-    cleanup_smoke_user "$existing_uid"
-  fi
-
-  # 2. Create ephemeral Identity Platform user
-  local create_result
-  create_result=$(idp_admin_request POST "/accounts" \
-    "{\"email\":\"${SMOKE_TEST_EMAIL}\",\"password\":\"${password}\",\"emailVerified\":true}") || {
-    echo "  ERROR: Failed to create smoke-test user in Identity Platform"
-    return 1
-  }
-  SMOKE_TEST_UID=$(echo "$create_result" | jq -r '.localId // empty' 2>/dev/null)
-  if [[ -z "$SMOKE_TEST_UID" ]]; then
-    echo "  ERROR: Could not extract UID from create response"
-    return 1
-  fi
-
-  # Ensure cleanup on any exit path
-  trap 'cleanup_smoke_user "$SMOKE_TEST_UID"' RETURN
-
-  # 3. Get the Firebase Web API key from the cluster ConfigMap
-  local api_key
+  # 1. Read credentials from the cluster
+  local api_key password
   api_key=$(kubectl get configmap frontend-config -o jsonpath='{.data.NEXT_PUBLIC_FIREBASE_API_KEY}' 2>/dev/null) || {
     echo "  ERROR: Could not read Firebase API key from frontend-config ConfigMap"
     return 1
   }
-
-  # 4. Sign in via the public Firebase REST API (same path the frontend uses)
-  local signin_result
-  signin_result=$(curl -sf -X POST \
-    -H "Content-Type: application/json" \
-    -d "{\"email\":\"${SMOKE_TEST_EMAIL}\",\"password\":\"${password}\",\"returnSecureToken\":true}" \
-    "${IDP_API}/accounts:signInWithPassword?key=${api_key}" 2>/dev/null) || {
-    echo "  ERROR: signInWithPassword failed — Firebase API key may be invalid"
+  password=$(kubectl get secret smoke-test-secrets -o jsonpath='{.data.SMOKE_TEST_PASSWORD}' 2>/dev/null | base64 -d) || {
+    echo "  ERROR: Could not read SMOKE_TEST_PASSWORD from smoke-test-secrets Secret"
     return 1
   }
 
+  # 2. Try to sign in (works if user already exists from a previous deploy)
+  local signin_body signin_response signin_code
+  signin_body="{\"email\":\"${SMOKE_TEST_EMAIL}\",\"password\":\"${password}\",\"returnSecureToken\":true}"
+  signin_response=$(mktemp)
+  signin_code=$(curl -s -o "$signin_response" -w '%{http_code}' -X POST \
+    -H "Content-Type: application/json" \
+    -d "$signin_body" \
+    "${IDP_API}/accounts:signInWithPassword?key=${api_key}" 2>/dev/null)
+
+  # 3. If user doesn't exist yet, create it and retry sign-in
+  if [[ "$signin_code" == "400" ]] && grep -q "EMAIL_NOT_FOUND" "$signin_response" 2>/dev/null; then
+    echo "  Smoke-test user not found, creating..."
+    local token create_response create_code
+    token=$(gcloud auth print-access-token 2>/dev/null)
+    create_response=$(mktemp)
+    create_code=$(curl -s -o "$create_response" -w '%{http_code}' -X POST \
+      -H "Authorization: Bearer ${token}" \
+      -H "Content-Type: application/json" \
+      -H "x-goog-user-project: ${GCP_PROJECT_ID}" \
+      -d "{\"email\":\"${SMOKE_TEST_EMAIL}\",\"password\":\"${password}\",\"emailVerified\":true}" \
+      "${IDP_API}/projects/${GCP_PROJECT_ID}/accounts" 2>/dev/null)
+    if [[ "$create_code" -lt 200 || "$create_code" -ge 300 ]]; then
+      echo "  ERROR: Failed to create smoke-test user (HTTP ${create_code}): $(cat "$create_response")"
+      rm -f "$create_response" "$signin_response"
+      return 1
+    fi
+    rm -f "$create_response"
+
+    # Retry sign-in
+    signin_code=$(curl -s -o "$signin_response" -w '%{http_code}' -X POST \
+      -H "Content-Type: application/json" \
+      -d "$signin_body" \
+      "${IDP_API}/accounts:signInWithPassword?key=${api_key}" 2>/dev/null)
+  fi
+
+  if [[ "$signin_code" != "200" ]]; then
+    echo "  ERROR: signInWithPassword failed (HTTP ${signin_code}): $(cat "$signin_response")"
+    rm -f "$signin_response"
+    return 1
+  fi
+
   local id_token
-  id_token=$(echo "$signin_result" | jq -r '.idToken // empty' 2>/dev/null)
+  id_token=$(jq -r '.idToken // empty' "$signin_response" 2>/dev/null)
+  rm -f "$signin_response"
   if [[ -z "$id_token" ]]; then
     echo "  ERROR: Could not extract idToken from sign-in response"
     return 1
   fi
 
-  # 5. Call the API with the JWT — expect 404 (no DB row) or 401,
+  # 4. Call the API with the JWT — expect 401 or 404 (no DB row),
   #    NOT 500 (which would indicate auth middleware is broken)
   local api_code
   api_code=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -253,7 +228,7 @@ check_auth_roundtrip() {
     return 1
   fi
 
-  echo "  Auth round-trip OK (API returned ${api_code} for user with no DB row)"
+  echo "  Auth round-trip OK (API returned ${api_code} for smoke-test user)"
   return 0
 }
 

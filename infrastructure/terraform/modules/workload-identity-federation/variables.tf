@@ -56,7 +56,6 @@ variable "service_account_roles" {
     "roles/artifactregistry.writer",
     "roles/container.developer",
     "roles/gkehub.gatewayEditor",
-    "roles/gkehub.viewer",
-    "roles/firebaseauth.admin"
+    "roles/gkehub.viewer"
   ]
 }
