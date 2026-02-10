@@ -76,7 +76,10 @@ resource "google_project_iam_custom_role" "smoke_test_auth" {
   role_id     = "smokeTestAuth"
   title       = "Smoke Test Auth (create-only)"
   description = "Allows creating Identity Platform users for deploy smoke tests"
-  permissions = ["firebaseauth.users.create"]
+  permissions = [
+    "firebaseauth.users.create",
+    "serviceusage.services.use", # required for x-goog-user-project header
+  ]
 }
 
 resource "google_project_iam_member" "github_actions_smoke_test" {
