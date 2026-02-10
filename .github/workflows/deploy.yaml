@@ -30,8 +30,12 @@ jobs:
           install_components: gke-gcloud-auth-plugin
       - name: Get GKE credentials via Connect Gateway
         run: |
-          gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
-            --project=eval-prod-485520
+          for i in 1 2 3; do
+            gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
+              --project=eval-prod-485520 && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
       - name: Deploy
         run: |
           cd k8s/base
