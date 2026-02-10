@@ -14,7 +14,7 @@ resources:
   - redis-service.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml
-  - frontend-configmap.yaml
+  # frontend-configmap.yaml is managed by Terraform (contains Identity Platform keys)
   - serviceaccount.yaml
   - ingress.yaml
   - centrifugo-deployment.yaml
