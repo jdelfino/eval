@@ -152,7 +152,7 @@ check_no_placeholders() {
 # The deploy SA only needs firebaseauth.users.create — no delete, no get,
 # no list. Password is stored in a k8s Secret managed by Terraform.
 
-SMOKE_TEST_EMAIL="smoke-test@eval-internal.test"
+SMOKE_TEST_EMAIL="smoke-test-v2@eval-internal.test"
 IDP_API="https://identitytoolkit.googleapis.com/v1"
 
 check_auth_roundtrip() {
