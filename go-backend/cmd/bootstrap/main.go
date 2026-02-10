@@ -1,8 +1,12 @@
 // Command bootstrap creates or updates the initial system-admin user.
 //
+// It creates an Identity Platform (Firebase Auth) user with the given email
+// and password, then upserts a system-admin row in the database linked to
+// that user's UID.
+//
 // Usage:
 //
-//	go run ./cmd/bootstrap --email admin@example.com --external-id <firebase-uid>
+//	go run ./cmd/bootstrap --email admin@example.com
 package main
 
 import (
@@ -11,6 +15,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"syscall"
+
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
+	"golang.org/x/term"
 
 	"github.com/jdelfino/eval/internal/config"
 	"github.com/jdelfino/eval/internal/db"
@@ -19,12 +28,17 @@ import (
 
 func main() {
 	email := flag.String("email", "", "Email address for the admin user (required)")
-	externalID := flag.String("external-id", "", "Firebase UID / external ID for the admin user (required)")
 	flag.Parse()
 
-	if *email == "" || *externalID == "" {
-		fmt.Fprintln(os.Stderr, "Usage: bootstrap --email <email> --external-id <firebase-uid>")
+	if *email == "" {
+		fmt.Fprintln(os.Stderr, "Usage: bootstrap --email <email>")
 		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	password, err := promptPassword()
+	if err != nil {
+		slog.Error("failed to read password", "error", err)
 		os.Exit(1)
 	}
 
@@ -34,7 +48,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	if cfg.GCPProjectID == "" {
+		fmt.Fprintln(os.Stderr, "Error: GCP_PROJECT_ID environment variable is required")
+		os.Exit(1)
+	}
+
 	ctx := context.Background()
+
+	// Create Identity Platform user (or retrieve existing).
+	uid, err := ensureFirebaseUser(ctx, cfg.GCPProjectID, *email, password)
+	if err != nil {
+		slog.Error("failed to ensure Firebase user", "error", err)
+		os.Exit(1)
+	}
+
+	// Upsert system-admin in the database.
 	pool, err := db.NewPool(ctx, cfg.DatabasePoolConfig())
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
@@ -44,7 +72,7 @@ func main() {
 
 	s := store.New(pool.PgxPool())
 	user, err := s.UpsertUser(ctx, store.CreateUserParams{
-		ExternalID: *externalID,
+		ExternalID: uid,
 		Email:      *email,
 		Role:       "system-admin",
 	})
@@ -54,4 +82,71 @@ func main() {
 	}
 
 	fmt.Printf("System admin ready: id=%s email=%s role=%s\n", user.ID, user.Email, user.Role)
+}
+
+// promptPassword reads a password interactively with hidden input and confirmation.
+func promptPassword() (string, error) {
+	if !term.IsTerminal(int(syscall.Stdin)) {
+		return "", fmt.Errorf("bootstrap requires an interactive terminal for password input")
+	}
+
+	fmt.Fprint(os.Stderr, "Password: ")
+	pw1, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("reading password: %w", err)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	fmt.Fprint(os.Stderr, "Confirm password: ")
+	pw2, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return "", fmt.Errorf("reading confirmation: %w", err)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	password := string(pw1)
+	if password != string(pw2) {
+		return "", fmt.Errorf("passwords do not match")
+	}
+	if len(password) < 6 {
+		return "", fmt.Errorf("password must be at least 6 characters")
+	}
+
+	return password, nil
+}
+
+// ensureFirebaseUser creates an Identity Platform user or returns the existing
+// user's UID if the email is already registered.
+func ensureFirebaseUser(ctx context.Context, projectID, email, password string) (string, error) {
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID})
+	if err != nil {
+		return "", fmt.Errorf("initializing Firebase (check GCP credentials): %w", err)
+	}
+
+	client, err := app.Auth(ctx)
+	if err != nil {
+		return "", fmt.Errorf("creating auth client: %w", err)
+	}
+
+	params := (&auth.UserToCreate{}).
+		Email(email).
+		Password(password).
+		EmailVerified(true)
+
+	record, err := client.CreateUser(ctx, params)
+	if err != nil {
+		if auth.IsEmailAlreadyExists(err) {
+			existing, err := client.GetUserByEmail(ctx, email)
+			if err != nil {
+				return "", fmt.Errorf("user exists but failed to retrieve: %w", err)
+			}
+			slog.Info("Identity Platform user already exists, using existing UID",
+				"email", email, "uid", existing.UID)
+			return existing.UID, nil
+		}
+		return "", fmt.Errorf("creating Identity Platform user: %w", err)
+	}
+
+	slog.Info("Identity Platform user created", "email", email, "uid", record.UID)
+	return record.UID, nil
 }
