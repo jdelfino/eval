@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 See [README.md](README.md) for full project description and [docs/](docs/) for architecture and design.
 
-**Quick context:** Coding assignment platform for programming courses. Go backend (Chi v5) + PostgreSQL (Cloud SQL) + Centrifugo (WebSocket). Deployed on GKE Standard (with dedicated node pools) via Cloud Build. Infrastructure managed with Terraform.
+**Quick context:** Coding assignment platform for programming courses. Go backend (Chi v5) + PostgreSQL (Cloud SQL) + Centrifugo (WebSocket). Deployed on GKE Autopilot via Cloud Build. Infrastructure managed with Terraform.
 
 ## Key Files for Navigation
 

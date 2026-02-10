@@ -1,7 +1,7 @@
 # Terraform and Provider Version Constraints
 #
-# This module requires the Google Cloud provider for GKE Standard resources.
-# google-beta is required for some GKE features.
+# This module requires the Google Cloud provider for GKE Autopilot resources.
+# google-beta is required for some Autopilot features.
 
 terraform {
   required_version = ">= 1.5.0"
