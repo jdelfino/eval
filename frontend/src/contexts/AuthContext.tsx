@@ -10,7 +10,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { apiGet } from '@/lib/api-client';
-import { getCurrentUser } from '@/lib/api/auth';
+import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
 import { isTestMode, setTestUser, clearTestUser, getTestToken } from '@/lib/auth-provider';
 import type { User } from '@/types/api';
 export type { User };
@@ -105,7 +105,23 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
-    return getCurrentUser();
+    try {
+      return await getCurrentUser();
+    } catch (error: unknown) {
+      // If the user doesn't exist in the DB yet, check for bootstrap custom claim.
+      const status = (error as { status?: number }).status;
+      if (status === 401 || status === 404) {
+        const { firebaseAuth } = await import('@/lib/firebase');
+        const fbUser = firebaseAuth.currentUser;
+        if (fbUser) {
+          const tokenResult = await fbUser.getIdTokenResult();
+          if (tokenResult.claims.role === 'system-admin') {
+            return await bootstrapUser();
+          }
+        }
+      }
+      throw error;
+    }
   }, []);
 
   // Listen to Firebase auth state changes
