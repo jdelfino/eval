@@ -10,6 +10,13 @@ locals {
 
 resource "google_monitoring_dashboard" "go_api" {
   project = var.project_id
+
+  # The GCP API normalizes dashboard JSON (reorders keys, adds defaults),
+  # causing perpetual diff on every plan. Ignore after initial creation.
+  lifecycle {
+    ignore_changes = [dashboard_json]
+  }
+
   dashboard_json = jsonencode({
     displayName = local.display_name
     mosaicLayout = {
