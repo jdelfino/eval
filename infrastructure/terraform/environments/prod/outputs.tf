@@ -126,3 +126,22 @@ output "github_secrets_setup" {
   description = "Instructions for configuring GitHub Actions secrets"
   value       = module.workload_identity_federation.github_secrets_setup
 }
+
+# -----------------------------------------------------------------------------
+# DNS / SSL Outputs
+# -----------------------------------------------------------------------------
+
+output "dns_name_servers" {
+  description = "Cloud DNS nameservers — add these as NS records in GoDaddy"
+  value       = module.dns_ssl.dns_name_servers
+}
+
+output "ingress_static_ip" {
+  description = "Static IP address for the ingress load balancer"
+  value       = module.dns_ssl.static_ip_address
+}
+
+output "godaddy_instructions" {
+  description = "Instructions for GoDaddy DNS delegation"
+  value       = module.dns_ssl.godaddy_instructions
+}
