@@ -109,7 +109,7 @@ variable "gke_master_authorized_networks" {
 variable "gke_default_pool_machine_type" {
   description = "Machine type for the default GKE node pool"
   type        = string
-  default     = "e2-medium"
+  default     = "e2-standard-2"
 }
 
 variable "gke_default_pool_min_nodes" {
