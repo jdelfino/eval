@@ -1162,13 +1162,16 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 			t.Errorf("namespaces: expected 1 visible (active only), got %d", nsCount)
 		}
 
-		// Tables with no registration policy: zero rows
-		var userCount, problemCount int
+		// users: registration context has SELECT policy (needed for INSERT...RETURNING)
+		var userCount int
 		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
-		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM problems").Scan(&problemCount)
-		if userCount != 0 {
-			t.Errorf("users: expected 0 visible, got %d", userCount)
+		if userCount == 0 {
+			t.Errorf("users: expected >0 visible (registration SELECT policy), got 0")
 		}
+
+		// Tables with no registration policy: zero rows
+		var problemCount int
+		_ = conn.QueryRow(ctx, "SELECT COUNT(*) FROM problems").Scan(&problemCount)
 		if problemCount != 0 {
 			t.Errorf("problems: expected 0 visible, got %d", problemCount)
 		}
@@ -1234,6 +1237,46 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 		if err == nil {
 			t.Error("should not be able to insert instructor membership")
 		}
+	})
+
+	t.Run("INSERT system-admin via bootstrap (no namespace)", func(t *testing.T) {
+		conn, err := tdb.pool.Acquire(ctx)
+		if err != nil {
+			t.Fatalf("acquire: %v", err)
+		}
+		defer conn.Release()
+
+		if err := tdb.setRegistrationRLSContext(ctx, conn); err != nil {
+			t.Fatalf("set registration context: %v", err)
+		}
+
+		// Bootstrap creates a system-admin with NULL namespace_id.
+		// This mirrors what PostBootstrap does: registration RLS context + CreateUser
+		// with role=system-admin and no namespace.
+		bootstrapUserID := uuid.New()
+		s := New(conn)
+		user, err := s.CreateUser(ctx, CreateUserParams{
+			ExternalID: "ext-bootstrap-" + bootstrapUserID.String()[:8],
+			Email:      "bootstrap-admin@test.com",
+			Role:       "system-admin",
+			// NamespaceID intentionally nil — system-admin has no namespace
+		})
+		if err != nil {
+			t.Fatalf("CreateUser for bootstrap system-admin failed: %v", err)
+		}
+		if user.Role != "system-admin" {
+			t.Errorf("expected role system-admin, got %s", user.Role)
+		}
+		if user.NamespaceID != nil {
+			t.Errorf("expected nil namespace_id for system-admin, got %v", user.NamespaceID)
+		}
+		if user.Email != "bootstrap-admin@test.com" {
+			t.Errorf("expected email bootstrap-admin@test.com, got %s", user.Email)
+		}
+
+		// Clean up: delete the system-admin (no namespace, so CASCADE from
+		// namespace deletion won't catch it)
+		_, _ = tdb.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
 	})
 
 	t.Run("DELETE denied", func(t *testing.T) {
