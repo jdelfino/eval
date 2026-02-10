@@ -19,7 +19,7 @@ Build GCP infrastructure first - everything else depends on it.
 
 **Terraform modules:**
 - vpc/ - VPC, subnets, firewall rules
-- gke/ - GKE Autopilot cluster
+- gke/ - GKE Standard cluster
 - cloudsql/ - Cloud SQL PostgreSQL
 - identity-platform/ - Authentication
 - nat/ - NAT VM for outbound internet

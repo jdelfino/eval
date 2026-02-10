@@ -8,7 +8,7 @@ This directory contains the Terraform configuration for the eval platform infras
 infrastructure/terraform/
 ├── modules/                      # Reusable modules (no env-specific values)
 │   ├── vpc/                      # VPC with subnets for GKE and Cloud SQL
-│   ├── gke/                      # GKE Autopilot cluster
+│   ├── gke/                      # GKE Standard cluster (default + executor node pools)
 │   ├── cloudsql/                 # Cloud SQL PostgreSQL
 │   ├── identity-platform/        # Identity Platform (authentication)
 │   ├── nat/                      # NAT VM for outbound internet access

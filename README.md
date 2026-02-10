@@ -14,7 +14,7 @@ A purpose-built platform for programming courses covering the full assignment li
 - **Backend:** Go 1.24 (Chi v5)
 - **Database:** PostgreSQL 15 (Cloud SQL) with Row-Level Security
 - **Real-time:** Centrifugo v5 (WebSocket, Redis-backed)
-- **Infrastructure:** GKE Autopilot, Terraform
+- **Infrastructure:** GKE Standard, Terraform
 - **CI/CD:** GitHub Actions + Google Cloud Build
 - **Auth:** Google Identity Platform (SAML federation)
 
