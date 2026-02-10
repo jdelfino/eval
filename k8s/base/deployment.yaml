@@ -15,6 +15,7 @@ spec:
         app: go-api
     spec:
       serviceAccountName: go-api
+      enableServiceLinks: false
       containers:
         - name: go-api
           image: go-api
