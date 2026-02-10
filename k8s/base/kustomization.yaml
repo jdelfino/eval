@@ -15,6 +15,11 @@ resources:
   - frontend-deployment.yaml
   - frontend-service.yaml
   - frontend-configmap.yaml
+  - serviceaccount.yaml
+  - ingress.yaml
+  - centrifugo-deployment.yaml
+  - centrifugo-service.yaml
+  - centrifugo-backend-config.yaml
 
 images:
   - name: go-api
@@ -23,3 +28,5 @@ images:
     newName: executor
   - name: frontend
     newName: frontend
+  - name: centrifugo/centrifugo
+    newName: centrifugo/centrifugo

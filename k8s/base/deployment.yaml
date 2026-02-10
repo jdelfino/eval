@@ -14,6 +14,7 @@ spec:
       labels:
         app: go-api
     spec:
+      serviceAccountName: go-api
       containers:
         - name: go-api
           image: go-api
@@ -29,6 +30,9 @@ spec:
             requests:
               memory: 256Mi
               cpu: 250m
+            limits:
+              cpu: 500m
+              memory: 512Mi
           livenessProbe:
             httpGet:
               path: /healthz
@@ -41,3 +45,11 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
