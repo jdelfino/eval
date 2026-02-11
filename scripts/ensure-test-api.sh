@@ -36,7 +36,11 @@ export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
 export GCP_PROJECT_ID=test-project
 export PORT="$API_PORT"
-(cd go-backend && go run ./cmd/server) >&2 &
+if [ -x go-backend/tmp/server ]; then
+  go-backend/tmp/server >&2 &
+else
+  (cd go-backend && go run ./cmd/server) >&2 &
+fi
 SERVER_PID=$!
 
 # Wait for healthy
