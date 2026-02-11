@@ -89,6 +89,21 @@ func TestMigrateDatabaseURL(t *testing.T) {
 			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
 		}
 	})
+
+	t.Run("PoolConfig preferred over DATABASE_URL when both set", func(t *testing.T) {
+		cfg := PoolConfig{
+			Host:     "10.0.0.1",
+			Port:     5432,
+			Database: "eval",
+			User:     "eval",
+			Password: "p#ss?w:rd",
+		}
+		got := MigrateDatabaseURL("postgresql://eval:p#ss?w:rd@10.0.0.1:5432/eval", cfg)
+		want := "pgx5://eval:p%23ss%3Fw%3Ard@10.0.0.1:5432/eval"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
 }
 
 // createTestDatabase creates a temporary database for migration testing and

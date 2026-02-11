@@ -48,19 +48,23 @@ func RunMigrations(migrationsPath, databaseURL string) error {
 }
 
 // MigrateDatabaseURL returns a pgx5:// URL suitable for golang-migrate.
-// If databaseURL is set (e.g. from DATABASE_URL env var), it swaps the scheme
-// to pgx5. Otherwise it constructs the URL from individual PoolConfig fields.
+// It prefers constructing from PoolConfig fields (which are properly
+// URL-encoded) over DATABASE_URL (which may contain unescaped special
+// characters in the password).
 func MigrateDatabaseURL(databaseURL string, cfg PoolConfig) string {
+	if cfg.Host != "" {
+		u := &url.URL{
+			Scheme: "pgx5",
+			User:   url.UserPassword(cfg.User, cfg.Password),
+			Host:   fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+			Path:   cfg.Database,
+		}
+		return u.String()
+	}
 	if databaseURL != "" {
 		return toPgx5Scheme(databaseURL)
 	}
-	u := &url.URL{
-		Scheme: "pgx5",
-		User:   url.UserPassword(cfg.User, cfg.Password),
-		Host:   fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		Path:   cfg.Database,
-	}
-	return u.String()
+	return ""
 }
 
 // toPgx5Scheme replaces the postgres(ql):// scheme prefix with pgx5://.
