@@ -90,7 +90,7 @@ function PublicViewContent() {
       );
     }
     return () => setHeaderSlot(null);
-  }, [session_id, state, connectionState, setHeaderSlot]);
+  }, [session_id, state?.join_code, connectionState, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger(session_id);
