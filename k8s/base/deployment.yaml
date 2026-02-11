@@ -24,6 +24,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          env:
+            - name: MIGRATIONS_PATH
+              value: /migrations
           envFrom:
             - configMapRef:
                 name: app-config
