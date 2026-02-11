@@ -99,6 +99,9 @@ export function useRealtimeSession({
   // Track if initial state has been loaded
   const initialLoadRef = useRef(false);
 
+  // Track the last session_id to detect navigation
+  const lastSessionIdRef = useRef<string | undefined>(undefined);
+
   // Store pending code updates that arrive before student_joined events
   const pendingCodeUpdatesRef = useRef<Map<string, {
     code: string;
@@ -121,6 +124,18 @@ export function useRealtimeSession({
    * Load initial session state from API
    */
   useEffect(() => {
+    if (session_id !== lastSessionIdRef.current) {
+      initialLoadRef.current = false;
+      lastSessionIdRef.current = session_id;
+      pendingCodeUpdatesRef.current.clear();
+      setSession(null);
+      setStudents(new Map());
+      setFeaturedStudent({});
+      setReplacementInfo(null);
+      setLoading(true);
+      setError(null);
+    }
+
     if (!session_id || !user_id || initialLoadRef.current) {
       return;
     }
@@ -184,11 +199,6 @@ export function useRealtimeSession({
       setError(e instanceof Error ? e.message : 'Failed to fetch session state');
     }
   }, [session_id, mapStudent]);
-
-  // Reset initialLoadRef when sessionId changes so new session data is fetched
-  useEffect(() => {
-    initialLoadRef.current = false;
-  }, [session_id]);
 
   /**
    * Subscribe to Centrifugo channel for real-time updates

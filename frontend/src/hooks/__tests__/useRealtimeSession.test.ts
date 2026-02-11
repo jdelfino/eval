@@ -873,6 +873,92 @@ describe('useRealtimeSession', () => {
     });
   });
 
+  describe('Session navigation', () => {
+    it('should clear all state when session_id changes', async () => {
+      // Set up initial session with populated state
+      mockGetSessionState.mockResolvedValueOnce({
+        session: { id: 'session-1', status: 'active' },
+        students: [
+          { user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: new Date().toISOString() },
+        ],
+        join_code: 'ABC123',
+      });
+
+      const { result, rerender } = renderHook(
+        ({ session_id }: { session_id: string }) =>
+          useRealtimeSession({
+            session_id,
+            user_id: 'user-1',
+          }),
+        { initialProps: { session_id: 'session-1' } }
+      );
+
+      // Wait for initial load to complete
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Verify initial state is populated
+      expect(result.current.session).toBeTruthy();
+      expect(result.current.students).toHaveLength(1);
+
+      // Simulate featured student and replacement info via publications
+      act(() => {
+        simulatePublication('featured_student_changed', {
+          user_id: 'student-1',
+          code: 'print("featured")',
+        });
+      });
+
+      expect(result.current.featuredStudent.studentId).toBe('student-1');
+
+      act(() => {
+        simulatePublication('session_replaced', {
+          newSessionId: 'session-3',
+        });
+      });
+
+      expect(result.current.replacementInfo).toEqual({ newSessionId: 'session-3' });
+
+      // Set up mock for the new session (use a never-resolving promise to
+      // capture the intermediate cleared state before the new load completes)
+      let resolveSession2: (value: any) => void;
+      mockGetSessionState.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSession2 = resolve;
+        })
+      );
+
+      // Navigate to a new session
+      rerender({ session_id: 'session-2' });
+
+      // All stale state should be cleared immediately
+      await waitFor(() => {
+        expect(result.current.session).toBeNull();
+      });
+      expect(result.current.students).toHaveLength(0);
+      expect(result.current.featuredStudent).toEqual({});
+      expect(result.current.replacementInfo).toBeNull();
+      expect(result.current.loading).toBe(true);
+      expect(result.current.error).toBeNull();
+
+      // Resolve the second session to clean up
+      await act(async () => {
+        resolveSession2!({
+          session: { id: 'session-2', status: 'active' },
+          students: [],
+          join_code: 'DEF456',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.session).toEqual({ id: 'session-2', status: 'active' });
+    });
+  });
+
   describe('Polling fallback', () => {
     beforeEach(() => {
       jest.useFakeTimers();
