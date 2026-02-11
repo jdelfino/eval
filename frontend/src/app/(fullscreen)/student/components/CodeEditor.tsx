@@ -10,7 +10,7 @@ import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hoo
 import type { Problem } from '@/types/problem';
 import { executeStandaloneCode } from '@/lib/api/execute';
 import type * as Monaco from 'monaco-editor';
-import { Undo2, Redo2 } from 'lucide-react';
+import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ExecutionResult } from '@/types/api';
 
 interface CodeEditorProps {
@@ -37,6 +37,7 @@ interface CodeEditorProps {
   editableProblem?: boolean;
   forceDesktop?: boolean;
   outputPosition?: 'bottom' | 'right';
+  outputCollapsible?: boolean;
   fontSize?: number;
 }
 
@@ -64,6 +65,7 @@ export default function CodeEditor({
   editableProblem = false,
   forceDesktop = false,
   outputPosition = 'bottom',
+  outputCollapsible = false,
   fontSize,
 }: CodeEditorProps) {
   const largeOutput = fontSize && fontSize >= 20;
@@ -94,6 +96,10 @@ export default function CodeEditor({
 
   // Mobile view toggle: 'code' | 'output'
   const [mobileView, setMobileView] = useState<'code' | 'output'>('code');
+
+  // Output collapse state
+  const [outputCollapsed, setOutputCollapsed] = useState(false);
+  const showOutputCollapseToggle = outputCollapsible && outputPosition === 'right' && isDesktop;
 
   // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(320); // 320px = w-80
@@ -962,9 +968,10 @@ export default function CodeEditor({
                   : undefined,
                 // Only show glyph margin when debugging (used for debugger line indicator)
                 glyphMargin: !!debuggerHook?.hasTrace && !mobileViewport.isVerySmall,
-                // Disable folding gutter and line decoration width to remove extra gutter space when not debugging
+                // Disable folding gutter and reduce gutter width; add small right padding after line numbers
                 folding: false,
-                lineDecorationsWidth: debuggerHook?.hasTrace ? 10 : 0,
+                lineNumbersMinChars: 2,
+                lineDecorationsWidth: debuggerHook?.hasTrace ? 10 : 8,
                 // Enable word wrap on mobile for better readability
                 wordWrap: mobileViewport.isMobile || mobileViewport.isTablet ? 'on' : 'off',
                 // Improve touch scrolling
@@ -983,6 +990,19 @@ export default function CodeEditor({
             />
           </div>
 
+          {/* Output collapse toggle button (desktop, right position only) */}
+          {showOutputCollapseToggle && (
+            <button
+              type="button"
+              data-testid="output-collapse-toggle"
+              onClick={() => setOutputCollapsed(prev => !prev)}
+              className="flex items-center justify-center w-5 h-full bg-gray-100 hover:bg-gray-200 border-x border-gray-300 cursor-pointer flex-shrink-0"
+              aria-label={outputCollapsed ? 'Expand output panel' : 'Collapse output panel'}
+            >
+              {outputCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+            </button>
+          )}
+
           {/* Execution Results or Debugger - Always Visible - Resizable (on desktop) */}
           {/* On mobile, show based on mobileView toggle; on desktop, always show */}
           <div
@@ -996,7 +1016,9 @@ export default function CodeEditor({
                     : { flex: 1, minHeight: '200px' } // Fill space when showing output on mobile
                   )
                 : outputPosition === 'right'
-                  ? { width: `${outputWidthFraction * 100}%` }
+                  ? (outputCollapsed && outputCollapsible
+                    ? { width: 0, overflow: 'hidden' }
+                    : { width: `${outputWidthFraction * 100}%` })
                   : { height: `${outputHeight}px` }
             }
           >
