@@ -35,6 +35,7 @@ export CENTRIFUGO_URL=http://localhost:8000
 export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
 export GCP_PROJECT_ID=test-project
+export MIGRATIONS_PATH="${MIGRATIONS_PATH:-migrations}"
 export PORT="$API_PORT"
 if [ -x go-backend/tmp/server ]; then
   go-backend/tmp/server >&2 &
