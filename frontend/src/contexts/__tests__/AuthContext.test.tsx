@@ -172,6 +172,34 @@ describe('AuthContext', () => {
         'password123'
       );
     });
+
+    it('does not call fetchUserProfile directly — onAuthStateChanged handles it (PLAT-wft)', async () => {
+      mockSignInWithEmailAndPassword.mockImplementation(async () => {
+        // Simulate Firebase: signIn resolves, then onAuthStateChanged fires
+        // Do NOT trigger authStateCallback here — we want to verify signIn
+        // itself doesn't call apiGet
+        return { user: { getIdToken: jest.fn() } };
+      });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      // Trigger initial auth state (no user)
+      await act(async () => {
+        authStateCallback!(null);
+      });
+
+      // Clear any calls from initial state setup
+      mockApiGet.mockClear();
+
+      await act(async () => {
+        await result.current.signIn('test@example.com', 'password123');
+      });
+
+      // signIn itself should NOT have called apiGet — only onAuthStateChanged does
+      expect(mockApiGet).not.toHaveBeenCalled();
+    });
   });
 
   describe('signOut', () => {

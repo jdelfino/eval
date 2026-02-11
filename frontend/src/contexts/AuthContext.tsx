@@ -161,9 +161,8 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     const { signInWithEmailAndPassword } = await import('firebase/auth');
     const { firebaseAuth } = await import('@/lib/firebase');
     await signInWithEmailAndPassword(firebaseAuth, email, password);
-    const profile = await fetchUserProfile();
-    setUser(profile);
-  }, [fetchUserProfile]);
+    // onAuthStateChanged listener handles fetchUserProfile() and setUser()
+  }, []);
 
   const signOut = useCallback(async () => {
     const { signOut: firebaseSignOut } = await import('firebase/auth');
