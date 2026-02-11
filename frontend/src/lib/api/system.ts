@@ -100,7 +100,7 @@ export async function createSystemInvitation(
   return apiPost<SerializedInvitation>('/system/invitations', {
     email,
     namespace_id: namespaceId,
-    targetRole,
+    target_role: targetRole,
   });
 }
 

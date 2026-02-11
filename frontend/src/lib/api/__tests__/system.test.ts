@@ -167,7 +167,7 @@ describe('system API client', () => {
   });
 
   describe('createSystemInvitation', () => {
-    it('calls POST /system/invitations with email, namespace, and role', async () => {
+    it('calls POST /system/invitations with snake_case target_role field', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
       const result = await createSystemInvitation('new@example.com', 'ns-1', 'namespace-admin');
@@ -175,12 +175,12 @@ describe('system API client', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'new@example.com',
         namespace_id: 'ns-1',
-        targetRole: 'namespace-admin',
+        target_role: 'namespace-admin',
       });
       expect(result).toEqual(fakeInvitation);
     });
 
-    it('supports instructor role', async () => {
+    it('supports instructor role with snake_case target_role field', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
       await createSystemInvitation('new@example.com', 'ns-2', 'instructor');
@@ -188,7 +188,7 @@ describe('system API client', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'new@example.com',
         namespace_id: 'ns-2',
-        targetRole: 'instructor',
+        target_role: 'instructor',
       });
     });
   });

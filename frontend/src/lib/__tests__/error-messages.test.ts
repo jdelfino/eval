@@ -92,6 +92,8 @@ describe('error-messages', () => {
         ['Password too short'],
         ['Description too long'],
         ['400 Bad Request'],
+        ['422 Unprocessable Entity'],
+        ['Request failed: 422'],
         ['Please enter your email'],
         ['Username is required'],
       ])('should classify "%s" as validation error with preserved message', (message) => {

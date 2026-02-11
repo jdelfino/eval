@@ -122,7 +122,7 @@ describe('invitations API client', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
         namespace_id: 'ns-1',
-        targetRole: 'instructor',
+        target_role: 'instructor',
       });
       expect(result).toEqual(mockInvitation);
     });

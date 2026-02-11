@@ -145,6 +145,7 @@ const errorPatterns: Array<{
       /no.*account.*found/i,
       /check.*email/i,
       /\b400\b/,
+      /\b422\b/,
     ],
     category: 'validation',
     userMessage: 'PRESERVE_ORIGINAL', // Special marker to preserve original message
