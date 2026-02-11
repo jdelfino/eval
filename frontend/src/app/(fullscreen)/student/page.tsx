@@ -83,6 +83,9 @@ function StudentPage() {
   // Track if we've already initiated a join for this session_id to prevent loops
   const joinAttemptedRef = useRef<string | null>(null);
 
+  // Track previous session ID to detect navigation to a new session
+  const prevSessionIdRef = useRef<string | undefined>(sessionIdFromUrl ?? undefined);
+
   // Handle joining the session
   useEffect(() => {
     if (!sessionIdFromUrl || !user?.id) {
@@ -165,6 +168,16 @@ function StudentPage() {
       setSessionEnded(true);
     }
   }, [session?.status]);
+
+  // Reset stale state when navigating to a different session (e.g., "Join New Session")
+  useEffect(() => {
+    if (sessionIdFromUrl !== prevSessionIdRef.current) {
+      setSessionEnded(false);
+      setJoined(false);
+      joinAttemptedRef.current = null;
+      prevSessionIdRef.current = sessionIdFromUrl ?? undefined;
+    }
+  }, [sessionIdFromUrl]);
 
   // Debounced code update (keeping 500ms to match original behavior)
   // Skip saving when session has ended (API would reject it anyway)

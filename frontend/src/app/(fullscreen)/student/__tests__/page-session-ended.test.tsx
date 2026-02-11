@@ -18,6 +18,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockPush = jest.fn();
+let mockSessionId = 'session-123';
 
 // Mock the hooks and components used by the student page
 jest.mock('@/hooks/useRealtimeSession');
@@ -41,7 +42,7 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 jest.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: (key: string) => key === 'session_id' ? 'session-123' : null,
+    get: (key: string) => key === 'session_id' ? mockSessionId : null,
   }),
   useRouter: () => ({
     push: mockPush,
@@ -98,6 +99,7 @@ describe('Student Page - Session Ended Detection', () => {
     jest.clearAllMocks();
     mockCodeEditorProps.mockClear();
     mockPush.mockClear();
+    mockSessionId = 'session-123';
     sessionStorage.clear();
   });
 
@@ -326,6 +328,48 @@ describe('Student Page - Session Ended Detection', () => {
       // Both the banner and the editor should be visible
       expect(screen.getByTestId('session-ended-notification')).toBeInTheDocument();
       expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    });
+  });
+
+  it('should reset sessionEnded state when session_id URL parameter changes (Join New Session)', async () => {
+    // Step 1: Render with a completed session so sessionEnded=true
+    mockSessionId = 'session-123';
+    mockUseRealtimeSession.mockReturnValue({
+      ...baseSessionState,
+      session: {
+        ...baseSessionState.session,
+        id: 'session-123',
+        status: 'completed',
+        ended_at: '2026-01-09T12:00:00Z',
+      },
+    });
+
+    const { rerender } = render(<StudentPage />);
+
+    // Step 2: Verify the session ended notification is showing
+    await waitFor(() => {
+      expect(screen.getByTestId('session-ended-notification')).toBeInTheDocument();
+    });
+
+    // Step 3: Simulate navigating to a new session (URL parameter changes)
+    mockSessionId = 'session-456';
+    mockUseRealtimeSession.mockReturnValue({
+      ...baseSessionState,
+      session: {
+        ...baseSessionState.session,
+        id: 'session-456',
+        status: 'active',
+      },
+      joinSession: jest.fn().mockResolvedValue({}),
+    });
+
+    // Step 4: Rerender to pick up the new session_id
+    rerender(<StudentPage />);
+
+    // Step 5: The sessionEnded notification should no longer be showing
+    // because state was reset when session_id changed
+    await waitFor(() => {
+      expect(screen.queryByTestId('session-ended-notification')).not.toBeInTheDocument();
     });
   });
 });
