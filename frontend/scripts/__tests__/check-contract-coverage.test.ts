@@ -296,8 +296,8 @@ describe('formatReport', () => {
     const report = formatReport(coverage);
 
     // Covered function gets a checkmark
-    expect(report).toMatch(/.*getCurrentUser/);
+    expect(report).toContain('\u2713 getCurrentUser');
     // Uncovered function gets an X
-    expect(report).toMatch(/.*bootstrapUser/);
+    expect(report).toContain('\u2717 bootstrapUser');
   });
 });
