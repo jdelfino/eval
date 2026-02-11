@@ -86,12 +86,12 @@ output "database_password" {
 
 output "connection_string" {
   description = "PostgreSQL connection string (without password)"
-  value       = "postgresql://${google_sql_user.main.name}@${var.private_network_enabled ? google_sql_database_instance.main.private_ip_address : google_sql_database_instance.main.public_ip_address}:5432/${google_sql_database.main.name}"
+  value       = "postgresql://${urlencode(google_sql_user.main.name)}@${var.private_network_enabled ? google_sql_database_instance.main.private_ip_address : google_sql_database_instance.main.public_ip_address}:5432/${google_sql_database.main.name}"
 }
 
 output "connection_string_full" {
-  description = "Full PostgreSQL connection string (with password)"
-  value       = "postgresql://${google_sql_user.main.name}:${random_password.database_password.result}@${var.private_network_enabled ? google_sql_database_instance.main.private_ip_address : google_sql_database_instance.main.public_ip_address}:5432/${google_sql_database.main.name}"
+  description = "Full PostgreSQL connection string (with password, URL-encoded)"
+  value       = "postgresql://${urlencode(google_sql_user.main.name)}:${urlencode(random_password.database_password.result)}@${var.private_network_enabled ? google_sql_database_instance.main.private_ip_address : google_sql_database_instance.main.public_ip_address}:5432/${google_sql_database.main.name}"
   sensitive   = true
 }
 
