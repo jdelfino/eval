@@ -105,7 +105,7 @@ smoke-test:
 # ──────────────────────────────────────────────
 # Local development
 # ──────────────────────────────────────────────
-.PHONY: dev deps-up deps-down wait-deps seed migrate reset-db status logs
+.PHONY: dev deps-up deps-down wait-deps seed reset-db status logs
 
 dev: deps-up wait-deps
 	cd go-backend && MIGRATIONS_PATH=../migrations air
@@ -128,15 +128,11 @@ wait-deps:
 seed:
 	psql "postgresql://eval:eval_local_password@localhost:5432/eval" -f scripts/seed.sql
 
-migrate:
-	@for f in migrations/*.up.sql; do psql "postgresql://eval:eval_local_password@localhost:5432/eval" -f "$$f"; done
-
 reset-db:
 	docker compose down -v postgres
 	docker compose up -d postgres
 	@until pg_isready -h localhost -p 5432 -q; do sleep 0.5; done
-	$(MAKE) migrate
-	$(MAKE) seed
+	@echo "Database reset. Run 'make dev' to apply migrations, then 'make seed' for test data."
 
 bootstrap:
 	cd go-backend && go run ./cmd/bootstrap $(ARGS)

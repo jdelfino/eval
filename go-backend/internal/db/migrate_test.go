@@ -28,55 +28,67 @@ func TestRunMigrations_InvalidPath(t *testing.T) {
 	}
 }
 
-func TestMigrationDatabaseURL(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  PoolConfig
-		want string
-	}{
-		{
-			name: "basic config",
-			cfg: PoolConfig{
-				Host:     "localhost",
-				Port:     5432,
-				Database: "testdb",
-				User:     "testuser",
-				Password: "testpass",
-			},
-			want: "pgx5://testuser:testpass@localhost:5432/testdb?sslmode=disable",
-		},
-		{
-			name: "special chars in password",
-			cfg: PoolConfig{
-				Host:     "db.example.com",
-				Port:     5433,
-				Database: "proddb",
-				User:     "admin",
-				Password: "p@ss:word/special",
-			},
-			want: "pgx5://admin:p%40ss%3Aword%2Fspecial@db.example.com:5433/proddb?sslmode=disable",
-		},
-		{
-			name: "special chars in user",
-			cfg: PoolConfig{
-				Host:     "localhost",
-				Port:     5432,
-				Database: "mydb",
-				User:     "user@domain",
-				Password: "simple",
-			},
-			want: "pgx5://user%40domain:simple@localhost:5432/mydb?sslmode=disable",
-		},
-	}
+func TestMigrateDatabaseURL(t *testing.T) {
+	t.Run("from DATABASE_URL with postgresql scheme", func(t *testing.T) {
+		got := MigrateDatabaseURL("postgresql://user:pass@host:5432/db?sslmode=prefer", PoolConfig{})
+		want := "pgx5://user:pass@host:5432/db?sslmode=prefer"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := MigrationDatabaseURL(tt.cfg)
-			if got != tt.want {
-				t.Errorf("MigrationDatabaseURL() = %q, want %q", got, tt.want)
-			}
-		})
-	}
+	t.Run("from DATABASE_URL with postgres scheme", func(t *testing.T) {
+		got := MigrateDatabaseURL("postgres://user:p%40ss@host:5432/db", PoolConfig{})
+		want := "pgx5://user:p%40ss@host:5432/db"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("from PoolConfig when DATABASE_URL empty", func(t *testing.T) {
+		cfg := PoolConfig{
+			Host:     "localhost",
+			Port:     5432,
+			Database: "testdb",
+			User:     "testuser",
+			Password: "testpass",
+		}
+		got := MigrateDatabaseURL("", cfg)
+		want := "pgx5://testuser:testpass@localhost:5432/testdb"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("from PoolConfig with special chars in password", func(t *testing.T) {
+		cfg := PoolConfig{
+			Host:     "db.example.com",
+			Port:     5433,
+			Database: "proddb",
+			User:     "admin",
+			Password: "p@ss:word/special",
+		}
+		got := MigrateDatabaseURL("", cfg)
+		want := "pgx5://admin:p%40ss%3Aword%2Fspecial@db.example.com:5433/proddb"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("from PoolConfig with special chars in user", func(t *testing.T) {
+		cfg := PoolConfig{
+			Host:     "localhost",
+			Port:     5432,
+			Database: "mydb",
+			User:     "user@domain",
+			Password: "simple",
+		}
+		got := MigrateDatabaseURL("", cfg)
+		want := "pgx5://user%40domain:simple@localhost:5432/mydb"
+		if got != want {
+			t.Errorf("MigrateDatabaseURL() = %q, want %q", got, want)
+		}
+	})
 }
 
 // createTestDatabase creates a temporary database for migration testing and
@@ -128,7 +140,7 @@ func createTestDatabase(t *testing.T, baseURL string) string {
 		t.Fatalf("failed to parse base URL: %v", err)
 	}
 
-	return MigrationDatabaseURL(PoolConfig{
+	return MigrateDatabaseURL("", PoolConfig{
 		Host:     cfg.Host,
 		Port:     int(cfg.Port),
 		Database: testDBName,

@@ -1,0 +1,16 @@
+# Ignore everything by default
+*
+
+# Allow only what Docker builds need
+!go-backend/
+!pkg/
+!migrations/
+!executor/
+!frontend/
+
+# Exclude build artifacts and dev files from allowed dirs
+**/.git
+**/.env*
+**/node_modules
+**/tmp
+**/*_test.go

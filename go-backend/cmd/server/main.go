@@ -44,7 +44,8 @@ func main() {
 
 	// Run database migrations if configured
 	if cfg.MigrationsPath != "" {
-		if err := db.RunMigrations(cfg.MigrationsPath, db.MigrationDatabaseURL(cfg.DatabasePoolConfig())); err != nil {
+		migrateURL := db.MigrateDatabaseURL(cfg.DatabaseURL, cfg.DatabasePoolConfig())
+		if err := db.RunMigrations(cfg.MigrationsPath, migrateURL); err != nil {
 			logger.Error("failed to run migrations", "error", err)
 			os.Exit(1)
 		}
