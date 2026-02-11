@@ -47,6 +47,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: frontend
 
+      - name: Build Go API
+        run: go build -o ./tmp/server ./cmd/server
+        working-directory: go-backend
+
       - name: Run E2E tests
         run: make test-e2e
 

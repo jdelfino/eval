@@ -30,6 +30,9 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Copy binary
 COPY --from=builder /app/server /server
 
+# Copy database migrations
+COPY migrations/ /migrations/
+
 # Non-root user
 USER 65534:65534
 

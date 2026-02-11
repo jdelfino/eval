@@ -19,6 +19,9 @@ type Config struct {
 	GCPProjectID string `env:"GCP_PROJECT_ID"`
 	GCPRegion    string `env:"GCP_REGION"`
 
+	// Migration Configuration
+	MigrationsPath string `env:"MIGRATIONS_PATH"`
+
 	// Database Configuration
 	DatabaseHost            string        `env:"DATABASE_HOST"`
 	DatabasePort            int           `env:"DATABASE_PORT" envDefault:"5432"`

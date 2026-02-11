@@ -42,6 +42,15 @@ func main() {
 		"min_conns", cfg.DatabaseMinConns,
 	)
 
+	// Run database migrations if configured
+	if cfg.MigrationsPath != "" {
+		migrateURL := db.MigrateDatabaseURL(cfg.DatabaseURL, cfg.DatabasePoolConfig())
+		if err := db.RunMigrations(cfg.MigrationsPath, migrateURL); err != nil {
+			logger.Error("failed to run migrations", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	// Create store for user lookups (uses pool directly, no RLS)
 	userStore := store.New(pool.PgxPool())
 
