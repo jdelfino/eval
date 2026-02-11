@@ -320,6 +320,61 @@ func TestPracticeLimiter_CleansUpIdleUsers(t *testing.T) {
 	limiter.mu.Unlock()
 }
 
+func TestPractice_HappyPathCreator(t *testing.T) {
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return completedSession(), nil
+		},
+	}
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	handler := setupPracticeHandler(sessRepo, execClient)
+	body := newPracticeReq("code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/practice", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Creator (instructor) should also be allowed
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPractice_500ExecutorError(t *testing.T) {
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return completedSession(), nil
+		},
+	}
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return nil, fmt.Errorf("executor: connection refused")
+		},
+	}
+
+	handler := setupPracticeHandler(sessRepo, execClient)
+	body := newPracticeReq("code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/practice", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPractice_400InvalidJSON(t *testing.T) {
 	sessRepo := &mockSessionRepo{}
 	execClient := &mockExecutorClient{}
