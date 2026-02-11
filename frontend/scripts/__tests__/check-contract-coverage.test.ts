@@ -173,6 +173,7 @@ describe('computeCoverage', () => {
     expect(result.modules[0].uncovered).toEqual(['bootstrapUser']);
     expect(result.totalFunctions).toBe(2);
     expect(result.coveredFunctions).toBe(1);
+    expect(result.percentage).toBe(50);
   });
 
   it('computes correct coverage for fully covered module', () => {
@@ -192,6 +193,7 @@ describe('computeCoverage', () => {
     expect(result.modules[0].uncovered).toEqual([]);
     expect(result.totalFunctions).toBe(2);
     expect(result.coveredFunctions).toBe(2);
+    expect(result.percentage).toBe(100);
   });
 
   it('computes correct coverage for uncovered module', () => {
@@ -209,6 +211,7 @@ describe('computeCoverage', () => {
     ]);
     expect(result.totalFunctions).toBe(2);
     expect(result.coveredFunctions).toBe(0);
+    expect(result.percentage).toBe(0);
   });
 
   it('computes correct totals across multiple modules', () => {
@@ -225,6 +228,18 @@ describe('computeCoverage', () => {
 
     expect(result.totalFunctions).toBe(5);
     expect(result.coveredFunctions).toBe(2);
+    expect(result.percentage).toBe(40);
+  });
+
+  it('returns 100% when no functions exist', () => {
+    const apiModules = new Map<string, string[]>();
+    const coveredImports = new Map<string, string[]>();
+
+    const result = computeCoverage(apiModules, coveredImports);
+
+    expect(result.totalFunctions).toBe(0);
+    expect(result.coveredFunctions).toBe(0);
+    expect(result.percentage).toBe(100);
   });
 
   it('sorts modules alphabetically', () => {

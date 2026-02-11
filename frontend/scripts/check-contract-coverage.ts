@@ -27,6 +27,8 @@ export interface CoverageResult {
   modules: ModuleCoverage[];
   totalFunctions: number;
   coveredFunctions: number;
+  /** Coverage percentage (0-100). 100 if no functions exist. */
+  percentage: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +140,9 @@ export function computeCoverage(
     coveredFunctions += covered.length;
   }
 
-  return { modules, totalFunctions, coveredFunctions };
+  const percentage = totalFunctions === 0 ? 100 : (coveredFunctions / totalFunctions) * 100;
+
+  return { modules, totalFunctions, coveredFunctions, percentage };
 }
 
 /**
@@ -165,16 +169,11 @@ export function formatReport(coverage: CoverageResult): string {
     lines.push('');
   }
 
-  const pct =
-    coverage.totalFunctions === 0
-      ? 100
-      : (coverage.coveredFunctions / coverage.totalFunctions) * 100;
-
   lines.push(
-    `Summary: ${coverage.coveredFunctions}/${coverage.totalFunctions} functions covered (${pct.toFixed(1)}%)`
+    `Summary: ${coverage.coveredFunctions}/${coverage.totalFunctions} functions covered (${coverage.percentage.toFixed(1)}%)`
   );
 
-  if (pct === 100) {
+  if (coverage.percentage === 100) {
     lines.push('PASS: All API functions have contract test coverage');
   } else {
     lines.push('FAIL: Contract coverage is not 100%');
@@ -267,12 +266,7 @@ function main(): void {
 
   console.log(report);
 
-  const pct =
-    coverage.totalFunctions === 0
-      ? 100
-      : (coverage.coveredFunctions / coverage.totalFunctions) * 100;
-
-  process.exit(pct === 100 ? 0 : 1);
+  process.exit(coverage.percentage === 100 ? 0 : 1);
 }
 
 // Only run main when executed directly (not when imported for testing)

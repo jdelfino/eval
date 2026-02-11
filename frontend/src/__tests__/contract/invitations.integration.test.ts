@@ -110,7 +110,7 @@ describe('revokeSystemInvitation()', () => {
     resetAuthProvider();
   });
 
-  it('revokes an invitation without error', async () => {
+  it('revokes an invitation and verifies revocation took effect', async () => {
     const email = `contract-revoke-test-${Date.now()}@test.local`;
     const namespaceId = state.namespaceId;
     expect(namespaceId).toBeTruthy();
@@ -121,5 +121,11 @@ describe('revokeSystemInvitation()', () => {
 
     // Revoke should complete without throwing
     await expect(revokeSystemInvitation(inv.id)).resolves.toBeUndefined();
+
+    // Verify the invitation now shows as revoked
+    const invitations = await listSystemInvitations({ status: 'revoked' });
+    const revoked = invitations.find(i => i.id === inv.id);
+    expect(revoked).toBeDefined();
+    expect(revoked!.revoked_at).not.toBeNull();
   });
 });
