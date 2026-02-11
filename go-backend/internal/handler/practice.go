@@ -48,6 +48,11 @@ func (l *PracticeLimiter) Allow(userID uuid.UUID) bool {
 	}
 	times = times[start:]
 
+	// Clean up empty entries to prevent unbounded map growth
+	if len(times) == 0 {
+		delete(l.windows, userID)
+	}
+
 	if len(times) >= l.maxPerMin {
 		l.windows[userID] = times
 		return false
@@ -115,20 +120,20 @@ func (h *ExecuteHandler) PracticeExecute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 8. Build executor request
+	// 8. Build executor request — merge problem-level settings (e.g. stdin, files)
+	// with request overrides. No student record in practice mode (ephemeral).
+	merged := mergeExecutionSettings(session.Problem, nil, req.ExecutionSettings)
 	execReq := executor.ExecuteRequest{
 		Code: req.Code,
 	}
-	if req.ExecutionSettings != nil {
-		if req.ExecutionSettings.Stdin != nil {
-			execReq.Stdin = *req.ExecutionSettings.Stdin
-		}
-		if req.ExecutionSettings.RandomSeed != nil {
-			execReq.RandomSeed = req.ExecutionSettings.RandomSeed
-		}
-		if len(req.ExecutionSettings.Files) > 0 {
-			execReq.Files = req.ExecutionSettings.Files
-		}
+	if merged.Stdin != nil {
+		execReq.Stdin = *merged.Stdin
+	}
+	if merged.RandomSeed != nil {
+		execReq.RandomSeed = merged.RandomSeed
+	}
+	if len(merged.Files) > 0 {
+		execReq.Files = merged.Files
 	}
 
 	// 9. Call executor
