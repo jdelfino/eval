@@ -14,11 +14,16 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockPush = jest.fn();
 let mockSessionId = 'session-123';
+
+// Mock auth provider to avoid Firebase dependency in tests
+jest.mock('@/lib/auth-provider', () => ({
+  getAuthToken: jest.fn().mockResolvedValue('test-token'),
+}));
 
 // Mock the hooks and components used by the student page
 jest.mock('@/hooks/useRealtimeSession');
@@ -161,7 +166,7 @@ describe('Student Page - Session Ended Detection', () => {
     });
   });
 
-  it('should make editor read-only when session is completed', async () => {
+  it('should keep editor editable when session is completed (practice mode)', async () => {
     mockUseRealtimeSession.mockReturnValue({
       ...baseSessionState,
       session: {
@@ -176,11 +181,11 @@ describe('Student Page - Session Ended Detection', () => {
     await waitFor(() => {
       expect(mockCodeEditorProps).toHaveBeenCalled();
       const lastCall = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
-      expect(lastCall.readOnly).toBe(true);
+      expect(lastCall.readOnly).toBe(false);
     });
   });
 
-  it('should hide run button when session is completed', async () => {
+  it('should show run button when session is completed (practice mode)', async () => {
     mockUseRealtimeSession.mockReturnValue({
       ...baseSessionState,
       session: {
@@ -195,11 +200,11 @@ describe('Student Page - Session Ended Detection', () => {
     await waitFor(() => {
       expect(mockCodeEditorProps).toHaveBeenCalled();
       const lastCall = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
-      expect(lastCall.showRunButton).toBe(false);
+      expect(lastCall.showRunButton).toBe(true);
     });
   });
 
-  it('should not allow running code when session is completed', async () => {
+  it('should provide practice run handler when session is completed', async () => {
     mockUseRealtimeSession.mockReturnValue({
       ...baseSessionState,
       session: {
@@ -214,7 +219,60 @@ describe('Student Page - Session Ended Detection', () => {
     await waitFor(() => {
       expect(mockCodeEditorProps).toHaveBeenCalled();
       const lastCall = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
-      expect(lastCall.onRun).toBeUndefined();
+      expect(lastCall.onRun).toBeDefined();
+    });
+  });
+
+  it('should call practice API when running code in ended session', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, output: 'hello', error: '', execution_time: 10 }),
+    });
+    global.fetch = mockFetch;
+
+    mockUseRealtimeSession.mockReturnValue({
+      ...baseSessionState,
+      session: {
+        ...baseSessionState.session,
+        status: 'completed',
+        ended_at: '2026-01-09T12:00:00Z',
+      },
+    });
+
+    render(<StudentPage />);
+
+    await waitFor(() => {
+      expect(mockCodeEditorProps).toHaveBeenCalled();
+      const lastCall = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
+      expect(lastCall.onRun).toBeDefined();
+      expect(lastCall.onChange).toBeDefined();
+    });
+
+    // Set some code via the onChange handler so the practice handler does not bail out
+    const onChangeCall = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
+    await act(async () => {
+      onChangeCall.onChange('print("hello")');
+    });
+
+    // Wait for the re-render with code set
+    await waitFor(() => {
+      expect(mockCodeEditorProps).toHaveBeenCalled();
+    });
+
+    // Get the onRun handler (practice handler) and call it
+    const lastCallAfterCode = mockCodeEditorProps.mock.calls[mockCodeEditorProps.mock.calls.length - 1][0];
+    await act(async () => {
+      await lastCallAfterCode.onRun({});
+    });
+
+    // Verify that fetch was called with the practice endpoint
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/sessions/session-123/practice'),
+        expect.objectContaining({
+          method: 'POST',
+        })
+      );
     });
   });
 
