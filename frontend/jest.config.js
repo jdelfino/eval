@@ -101,5 +101,17 @@ module.exports = {
         }]
       },
     },
+    {
+      displayName: 'scripts',
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/scripts/**/__tests__/**/*.test.ts'],
+      roots: ['<rootDir>/scripts'],
+      transform: {
+        '^.+\\.tsx?$': ['ts-jest', {
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }
+        }]
+      },
+    },
   ],
 };

@@ -80,7 +80,7 @@ test-integration-store:
 # ──────────────────────────────────────────────
 # Frontend
 # ──────────────────────────────────────────────
-.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend
+.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend check-contract-coverage
 
 build-frontend:
 	cd frontend && npm run build
@@ -93,6 +93,9 @@ lint-frontend:
 
 typecheck-frontend:
 	cd frontend && npx tsc --noEmit
+
+check-contract-coverage:
+	cd frontend && npx tsx scripts/check-contract-coverage.ts
 
 # ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
