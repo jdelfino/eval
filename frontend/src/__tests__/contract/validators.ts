@@ -49,6 +49,12 @@ export function expectArray(obj: object, field: string) {
   expect(Array.isArray((obj as Indexable)[field])).toBe(true);
 }
 
+/** Assert a field is a number. */
+export function expectNumber(obj: object, field: string) {
+  expect(obj).toHaveProperty(field);
+  expect(typeof (obj as Indexable)[field]).toBe('number');
+}
+
 /** Assert a field is a number or null. */
 export function expectNullableNumber(obj: object, field: string) {
   expect(obj).toHaveProperty(field);
