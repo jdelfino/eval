@@ -8,6 +8,7 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
 import { Problem, ExecutionSettings } from '@/types/problem';
+import { practiceExecute } from '@/lib/api/realtime';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import CodeEditor from './components/CodeEditor';
@@ -82,6 +83,9 @@ function StudentPage() {
 
   // Track if we've already initiated a join for this session_id to prevent loops
   const joinAttemptedRef = useRef<string | null>(null);
+
+  // Track previous session ID to detect navigation to a new session
+  const prevSessionIdRef = useRef<string | undefined>(sessionIdFromUrl ?? undefined);
 
   // Handle joining the session
   useEffect(() => {
@@ -165,6 +169,16 @@ function StudentPage() {
       setSessionEnded(true);
     }
   }, [session?.status]);
+
+  // Reset stale state when navigating to a different session (e.g., "Join New Session")
+  useEffect(() => {
+    if (sessionIdFromUrl !== prevSessionIdRef.current) {
+      setSessionEnded(false);
+      setJoined(false);
+      joinAttemptedRef.current = null;
+      prevSessionIdRef.current = sessionIdFromUrl ?? undefined;
+    }
+  }, [sessionIdFromUrl]);
 
   // Debounced code update (keeping 500ms to match original behavior)
   // Skip saving when session has ended (API would reject it anyway)
@@ -269,6 +283,30 @@ function StudentPage() {
     }
   };
 
+  const handlePracticeRun = async (execution_settings: ExecutionSettings) => {
+    if (!code || code.trim().length === 0) {
+      setError('Please write some code before running');
+      return;
+    }
+    if (!sessionIdFromUrl) {
+      setError('Session ID not available');
+      return;
+    }
+
+    setError(null);
+    setIsRunning(true);
+    setExecutionResult(null);
+
+    try {
+      const result = await practiceExecute(sessionIdFromUrl, code, execution_settings);
+      setExecutionResult(result);
+      setIsRunning(false);
+    } catch (err: any) {
+      setError(err.message || 'Practice execution failed');
+      setIsRunning(false);
+    }
+  };
+
   // No session_id in URL - show error message (check before loading to avoid infinite loading)
   if (!sessionIdFromUrl) {
     return (
@@ -354,7 +392,7 @@ function StudentPage() {
         <CodeEditor
           code={code}
           onChange={setCode}
-          onRun={sessionEnded ? undefined : handleRunCode}
+          onRun={sessionEnded ? handlePracticeRun : handleRunCode}
           isRunning={isRunning}
           exampleInput={sessionExecutionSettings.stdin}
           random_seed={studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed}
@@ -363,11 +401,11 @@ function StudentPage() {
           onAttachedFilesChange={(files) => setStudentExecutionSettings(prev => ({ ...prev, attached_files: files }))}
           execution_result={execution_result}
           problem={problem}
-          onLoadStarterCode={sessionEnded ? undefined : handleLoadStarterCode}
+          onLoadStarterCode={handleLoadStarterCode}
           externalEditorRef={editorRef}
           debugger={debuggerHook}
-          readOnly={sessionEnded}
-          showRunButton={!sessionEnded}
+          readOnly={false}
+          showRunButton={true}
         />
       </EditorContainer>
 

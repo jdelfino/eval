@@ -7,10 +7,8 @@ import { getSessionPublicState } from '@/lib/api/sessions';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import MarkdownContent from '@/components/MarkdownContent';
 import { ConnectionStatus, ConnectionState } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 
 // Minimal problem shape needed for public view
 interface PublicProblem {
@@ -37,9 +35,6 @@ function PublicViewContent() {
   const [state, setState] = useState<PublicSessionState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Header collapse state - starts collapsed to maximize code space
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   // Local code state for editing (changes don't propagate back to student)
   const [localCode, setLocalCode] = useState<string>('');
@@ -74,7 +69,19 @@ function PublicViewContent() {
   // Show connection status in the global header
   const connectionState: ConnectionState = isConnected ? 'connected' : 'connecting';
   useEffect(() => {
-    if (session_id) {
+    if (session_id && state) {
+      setHeaderSlot(
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-bold font-mono text-blue-600">
+            {state.join_code || '------'}
+          </span>
+          <ConnectionStatus
+            status={connectionState}
+            variant="badge"
+          />
+        </div>
+      );
+    } else if (session_id) {
       setHeaderSlot(
         <ConnectionStatus
           status={connectionState}
@@ -83,7 +90,7 @@ function PublicViewContent() {
       );
     }
     return () => setHeaderSlot(null);
-  }, [session_id, connectionState, setHeaderSlot]);
+  }, [session_id, state?.join_code, connectionState, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger(session_id);
@@ -147,45 +154,8 @@ function PublicViewContent() {
     );
   }
 
-  const problemText = state?.problem?.description || '';
-
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
-      {/* Collapsible Header with Problem and Join Code */}
-      <div className="flex-shrink-0 border-b border-gray-200 mb-2">
-        <button
-          onClick={() => setHeaderCollapsed(prev => !prev)}
-          className="w-full flex justify-between items-center gap-4 pb-2 text-left bg-transparent border-none cursor-pointer p-0"
-          aria-expanded={!headerCollapsed}
-          aria-label={headerCollapsed ? 'Expand problem header' : 'Collapse problem header'}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {headerCollapsed ? (
-              <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            ) : (
-              <ChevronUp className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            )}
-            <h2 className="mt-0 mb-0 text-2xl font-semibold truncate">
-              {state?.problem?.title || 'Problem'}
-            </h2>
-          </div>
-          <div className="flex-shrink-0 text-right">
-            <span className="text-4xl font-bold text-blue-500 font-mono">
-              {state?.join_code || '------'}
-            </span>
-          </div>
-        </button>
-        {!headerCollapsed && (
-          <div className="pl-6 pb-2 pt-1">
-            {problemText ? (
-              <MarkdownContent content={problemText} className="text-lg" />
-            ) : (
-              <p className="text-gray-400 italic m-0 text-lg">No problem set yet</p>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Featured Submission or Solution */}
       {state?.hasFeaturedSubmission ? (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -199,6 +169,7 @@ function PublicViewContent() {
             forceDesktop={true}
             outputPosition="right"
             fontSize={24}
+            outputCollapsible={true}
           />
         </div>
       ) : (
@@ -213,6 +184,7 @@ function PublicViewContent() {
             forceDesktop={true}
             outputPosition="right"
             fontSize={24}
+            outputCollapsible={true}
           />
         </div>
       )}

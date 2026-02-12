@@ -262,6 +262,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
 			executeHandler := handler.NewExecuteHandler(execClient)
 			r.Post("/sessions/{id}/execute", executeHandler.Execute)
+			r.Post("/sessions/{id}/practice", executeHandler.PracticeExecute)
 
 			// Standalone code execution (instructor+) — no session context
 			r.Group(func(r chi.Router) {

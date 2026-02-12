@@ -98,4 +98,32 @@ export async function registerStudent(
   return res.json();
 }
 
+export async function createProblem(token: string, classId: string, opts: {
+  title: string; starterCode?: string; description?: string;
+}): Promise<any> {
+  const res = await apiFetch('/api/v1/problems', token, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: opts.title,
+      class_id: classId,
+      starter_code: opts.starterCode || '# Write your solution\n',
+      description: opts.description || '',
+    }),
+  });
+  if (res.status !== 201) throw new Error('Failed to create problem: ' + res.status);
+  return res.json();
+}
+
+export async function startSessionFromProblem(token: string, sectionId: string, problemId: string): Promise<any> {
+  const res = await apiFetch('/api/v1/sessions', token, {
+    method: 'POST',
+    body: JSON.stringify({
+      section_id: sectionId,
+      problem_id: problemId,
+    }),
+  });
+  if (res.status !== 201) throw new Error(`Failed to start session: ${res.status}`);
+  return res.json();
+}
+
 export { ADMIN_TOKEN };
