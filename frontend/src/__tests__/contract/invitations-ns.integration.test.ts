@@ -11,24 +11,9 @@
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
 import { listInvitations, createInvitation, revokeInvitation, resendInvitation } from '@/lib/api/invitations';
-import { expectSnakeCaseKeys, expectString, expectNullableString } from './validators';
+import { validateInvitationShape } from './validators';
 
-/** Validate the shape of a SerializedInvitation object. */
-function validateInvitationShape(inv: object) {
-  expectSnakeCaseKeys(inv, 'SerializedInvitation');
-  expectString(inv, 'id');
-  expectString(inv, 'email');
-  expectString(inv, 'target_role');
-  expectString(inv, 'namespace_id');
-  expectString(inv, 'created_by');
-  expectString(inv, 'created_at');
-  expectString(inv, 'expires_at');
-  expectNullableString(inv, 'consumed_at');
-  expectNullableString(inv, 'consumed_by');
-  expectNullableString(inv, 'revoked_at');
-}
-
-describe('Namespace Invitations API', () => {
+describe('Invitations API (namespace-scoped)', () => {
   // Track the invitation created during tests so we can clean up
   let createdInvitationId: string | null = null;
 
@@ -93,12 +78,9 @@ describe('Namespace Invitations API', () => {
   // -----------------------------------------------------------------------
   describe('resendInvitation()', () => {
     it('resends the invitation and returns SerializedInvitation with correct shape', async () => {
-      if (!createdInvitationId) {
-        console.warn('Skipping resendInvitation: no invitation was created');
-        return;
-      }
+      expect(createdInvitationId).toBeTruthy();
 
-      const inv = await resendInvitation(state.namespaceId, createdInvitationId);
+      const inv = await resendInvitation(state.namespaceId, createdInvitationId!);
 
       validateInvitationShape(inv);
       expect(inv.id).toBe(createdInvitationId);
@@ -110,14 +92,11 @@ describe('Namespace Invitations API', () => {
   // -----------------------------------------------------------------------
   describe('revokeInvitation()', () => {
     it('revokes an invitation without throwing (void return)', async () => {
-      if (!createdInvitationId) {
-        console.warn('Skipping revokeInvitation: no invitation was created');
-        return;
-      }
+      expect(createdInvitationId).toBeTruthy();
 
       // revokeInvitation returns void; if it does not throw, the contract is satisfied.
       await expect(
-        revokeInvitation(state.namespaceId, createdInvitationId)
+        revokeInvitation(state.namespaceId, createdInvitationId!)
       ).resolves.toBeUndefined();
 
       // Mark as cleaned up so afterAll does not attempt double-revoke

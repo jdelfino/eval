@@ -120,17 +120,12 @@ describe('System API — full coverage', () => {
         await resendSystemInvitation(inv.id);
         // If it succeeds, the contract is satisfied (void return)
       } catch (err: unknown) {
-        // Email sending may not be configured in the test environment.
-        // Accept 502/503 (service unavailable) or 500 (internal error from email failure)
-        // but re-throw truly unexpected errors.
         const status = (err as { status?: number }).status;
-        if (status && status >= 400 && status < 600) {
-          console.warn(
-            `resendSystemInvitation() returned status ${status} — email service likely not configured in test env`
-          );
-        } else {
-          throw err;
+        if (status === 500 || status === 502 || status === 503) {
+          console.warn(`resendSystemInvitation() returned status ${status} — email service likely not configured`);
+          return;
         }
+        throw err;
       }
     });
   });

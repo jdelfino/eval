@@ -61,3 +61,53 @@ export function expectNullableNumber(obj: object, field: string) {
   const value = (obj as Indexable)[field];
   expect(value === null || typeof value === 'number').toBe(true);
 }
+
+// ---------------------------------------------------------------------------
+// Composite shape validators
+// ---------------------------------------------------------------------------
+
+/** Validate the shape of a User object from the backend. */
+export function validateUserShape(user: object) {
+  expectString(user, 'id');
+  expectNullableString(user, 'external_id');
+  expectString(user, 'email');
+  expectString(user, 'role');
+  expectNullableString(user, 'namespace_id');
+  expectNullableString(user, 'display_name');
+  expectString(user, 'created_at');
+  expectString(user, 'updated_at');
+  expectSnakeCaseKeys(user, 'User');
+}
+
+/** Validate the shape of a SerializedInvitation object from the backend. */
+export function validateInvitationShape(inv: object) {
+  expectSnakeCaseKeys(inv, 'SerializedInvitation');
+  expectString(inv, 'id');
+  expectString(inv, 'email');
+  expectString(inv, 'target_role');
+  expectString(inv, 'namespace_id');
+  expectString(inv, 'created_by');
+  expectString(inv, 'created_at');
+  expectString(inv, 'expires_at');
+  expectNullableString(inv, 'consumed_at');
+  expectNullableString(inv, 'consumed_by');
+  expectNullableString(inv, 'revoked_at');
+}
+
+/** Validate the shape of a Session object from the backend. */
+export function validateSessionShape(session: object) {
+  expectString(session, 'id');
+  expectString(session, 'namespace_id');
+  expectString(session, 'section_id');
+  expectString(session, 'section_name');
+  expect(session).toHaveProperty('problem');
+  expectNullableString(session, 'featured_student_id');
+  expectNullableString(session, 'featured_code');
+  expectString(session, 'creator_id');
+  expectArray(session, 'participants');
+  expectString(session, 'status');
+  expectString(session, 'created_at');
+  expectString(session, 'last_activity');
+  expectNullableString(session, 'ended_at');
+  expectSnakeCaseKeys(session, 'Session');
+}

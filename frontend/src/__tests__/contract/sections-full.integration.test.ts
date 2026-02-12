@@ -27,6 +27,8 @@ import {
   expectNullableString,
   expectBoolean,
   expectArray,
+  validateUserShape,
+  validateSessionShape,
 } from './validators';
 
 describe('Sections API (full coverage)', () => {
@@ -44,10 +46,7 @@ describe('Sections API (full coverage)', () => {
   describe('getClassSections()', () => {
     it('returns Section[] with correct snake_case shape', async () => {
       const classId = state.classId;
-      if (!classId) {
-        console.warn('Skipping getClassSections: no classId from setup');
-        return;
-      }
+      expect(classId).toBeTruthy();
 
       const sections = await getClassSections(classId);
 
@@ -78,10 +77,7 @@ describe('Sections API (full coverage)', () => {
   describe('getActiveSessions()', () => {
     it('returns Session[] with correct snake_case shape', async () => {
       const sectionId = state.sectionId;
-      if (!sectionId) {
-        console.warn('Skipping getActiveSessions: no sectionId from setup');
-        return;
-      }
+      expect(sectionId).toBeTruthy();
 
       const sessions = await getActiveSessions(sectionId);
 
@@ -89,23 +85,7 @@ describe('Sections API (full coverage)', () => {
 
       // Global setup creates a session in the test section, so we expect at least one.
       if (sessions.length > 0) {
-        const session = sessions[0];
-
-        expectString(session, 'id');
-        expectString(session, 'namespace_id');
-        expectString(session, 'section_id');
-        expectString(session, 'section_name');
-        expect(session).toHaveProperty('problem');
-        expectNullableString(session, 'featured_student_id');
-        expectNullableString(session, 'featured_code');
-        expectString(session, 'creator_id');
-        expectArray(session, 'participants');
-        expectString(session, 'status');
-        expectString(session, 'created_at');
-        expectString(session, 'last_activity');
-        expectNullableString(session, 'ended_at');
-
-        expectSnakeCaseKeys(session, 'Session');
+        validateSessionShape(sessions[0]);
       }
     });
   });
@@ -116,10 +96,7 @@ describe('Sections API (full coverage)', () => {
   describe('getSectionInstructors()', () => {
     it('returns User[] with correct snake_case shape', async () => {
       const sectionId = state.sectionId;
-      if (!sectionId) {
-        console.warn('Skipping getSectionInstructors: no sectionId from setup');
-        return;
-      }
+      expect(sectionId).toBeTruthy();
 
       const instructors = await getSectionInstructors(sectionId);
 
@@ -127,18 +104,7 @@ describe('Sections API (full coverage)', () => {
       // The section creator is automatically an instructor, so we expect at least one.
       expect(instructors.length).toBeGreaterThan(0);
 
-      const user = instructors[0];
-
-      expectString(user, 'id');
-      expectNullableString(user, 'external_id');
-      expectString(user, 'email');
-      expectString(user, 'role');
-      expectNullableString(user, 'namespace_id');
-      expectNullableString(user, 'display_name');
-      expectString(user, 'created_at');
-      expectString(user, 'updated_at');
-
-      expectSnakeCaseKeys(user, 'User');
+      validateUserShape(instructors[0]);
     });
   });
 
@@ -148,10 +114,7 @@ describe('Sections API (full coverage)', () => {
   describe('joinSection() and leaveSection()', () => {
     it('joinSection returns SectionMembership with correct snake_case shape', async () => {
       const joinCode = state.joinCode;
-      if (!joinCode) {
-        console.warn('Skipping joinSection: no joinCode from setup');
-        return;
-      }
+      expect(joinCode).toBeTruthy();
 
       // Create a student-like user token. The backend test auth validator will
       // auto-create the user on first request. However, the user needs to be
@@ -190,14 +153,13 @@ describe('Sections API (full coverage)', () => {
             leaveErr instanceof Error ? leaveErr.message : leaveErr,
           );
         }
-      } catch (err) {
-        // joinSection may fail if the student user is not properly set up
-        // (e.g., not invited to the namespace). This is expected in some
-        // test environments. Log a warning rather than failing the test.
-        console.warn(
-          'joinSection call failed (student may not be set up in namespace):',
-          err instanceof Error ? err.message : err,
-        );
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status === 403 || status === 404) {
+          console.warn(`joinSession failed with status ${status} (student not set up); subsequent tests will fail`);
+          return;
+        }
+        throw error;
       } finally {
         // Restore instructor auth for subsequent tests
         configureTestAuth(INSTRUCTOR_TOKEN);
@@ -233,39 +195,30 @@ describe('Sections API (full coverage)', () => {
     it('deletes a section without error', async () => {
       // Create a throwaway class and section to safely delete without affecting
       // other tests that depend on the shared state.
-      try {
-        const tempClass = await createClass(
-          `Temp Class for Delete ${Date.now()}`,
-          'Temporary class for deleteSection contract test',
-        );
-        tempClassId = tempClass.id;
+      const tempClass = await createClass(
+        `Temp Class for Delete ${Date.now()}`,
+        'Temporary class for deleteSection contract test',
+      );
+      tempClassId = tempClass.id;
 
-        const tempSection = await createSection(tempClass.id, {
-          name: `Temp Section for Delete ${Date.now()}`,
-          semester: 'Delete Test',
-        });
-        tempSectionId = tempSection.id;
+      const tempSection = await createSection(tempClass.id, {
+        name: `Temp Section for Delete ${Date.now()}`,
+        semester: 'Delete Test',
+      });
+      tempSectionId = tempSection.id;
 
-        // Validate the section was created with the right shape before deleting
-        expectString(tempSection, 'id');
-        expectString(tempSection, 'name');
+      // Validate the section was created with the right shape before deleting
+      expectString(tempSection, 'id');
+      expectString(tempSection, 'name');
 
-        // Now delete it -- should return void (no error)
-        await deleteSection(tempSection.id);
-        tempSectionId = null; // Mark as deleted so afterAll doesn't try again
+      // Now delete it -- should return void (no error)
+      await deleteSection(tempSection.id);
+      tempSectionId = null; // Mark as deleted so afterAll doesn't try again
 
-        // Verify deletion by checking the class sections no longer include it
-        const remaining = await getClassSections(tempClass.id);
-        const found = remaining.find((s) => s.id === tempSection.id);
-        expect(found).toBeUndefined();
-      } catch (err) {
-        // If class/section creation fails, we cannot test deletion.
-        // This could happen if the instructor lacks permissions or setup is incomplete.
-        console.warn(
-          'deleteSection test skipped (could not create temp class/section):',
-          err instanceof Error ? err.message : err,
-        );
-      }
+      // Verify deletion by checking the class sections no longer include it
+      const remaining = await getClassSections(tempClass.id);
+      const found = remaining.find((s) => s.id === tempSection.id);
+      expect(found).toBeUndefined();
     });
   });
 });

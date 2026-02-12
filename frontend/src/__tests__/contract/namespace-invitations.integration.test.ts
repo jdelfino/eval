@@ -13,28 +13,9 @@ import {
   revokeNamespaceInvitation,
   resendNamespaceInvitation,
 } from '@/lib/api/namespace-invitations';
-import {
-  expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-} from './validators';
+import { validateInvitationShape } from './validators';
 
-/** Validate the shape of a SerializedInvitation object. */
-function validateInvitation(obj: object, label: string) {
-  expectSnakeCaseKeys(obj, label);
-  expectString(obj, 'id');
-  expectString(obj, 'email');
-  expectString(obj, 'target_role');
-  expectString(obj, 'namespace_id');
-  expectString(obj, 'created_by');
-  expectString(obj, 'created_at');
-  expectString(obj, 'expires_at');
-  expectNullableString(obj, 'consumed_at');
-  expectNullableString(obj, 'consumed_by');
-  expectNullableString(obj, 'revoked_at');
-}
-
-describe('Namespace Invitations API', () => {
+describe('Namespace Invitations API (current user)', () => {
   // Track created invitation for cleanup and cross-test usage
   let createdInvitationId: string | null = null;
 
@@ -62,7 +43,7 @@ describe('Namespace Invitations API', () => {
       createdInvitationId = inv.id;
 
       // Validate full shape
-      validateInvitation(inv, 'SerializedInvitation (create)');
+      validateInvitationShape(inv);
 
       // Verify returned values match what we sent
       expect(inv.email).toBe(email);
@@ -86,7 +67,7 @@ describe('Namespace Invitations API', () => {
       // We just created one, so there should be at least one
       if (invitations.length > 0) {
         const inv = invitations[0];
-        validateInvitation(inv, 'SerializedInvitation (list)');
+        validateInvitationShape(inv);
       }
     });
 
@@ -106,25 +87,19 @@ describe('Namespace Invitations API', () => {
 
   describe('resendNamespaceInvitation()', () => {
     it('resends an invitation without throwing (void response)', async () => {
-      if (!createdInvitationId) {
-        console.warn('Skipping resendNamespaceInvitation: no invitation was created');
-        return;
-      }
+      expect(createdInvitationId).toBeTruthy();
 
       // resend returns void — if it doesn't throw, the contract is satisfied
-      await expect(resendNamespaceInvitation(createdInvitationId)).resolves.toBeUndefined();
+      await expect(resendNamespaceInvitation(createdInvitationId!)).resolves.toBeUndefined();
     });
   });
 
   describe('revokeNamespaceInvitation()', () => {
     it('revokes an invitation without throwing (void response)', async () => {
-      if (!createdInvitationId) {
-        console.warn('Skipping revokeNamespaceInvitation: no invitation was created');
-        return;
-      }
+      expect(createdInvitationId).toBeTruthy();
 
       // revoke returns void — if it doesn't throw, the contract is satisfied
-      await expect(revokeNamespaceInvitation(createdInvitationId)).resolves.toBeUndefined();
+      await expect(revokeNamespaceInvitation(createdInvitationId!)).resolves.toBeUndefined();
 
       // Mark as already revoked so afterAll cleanup doesn't attempt it again
       createdInvitationId = null;

@@ -23,24 +23,9 @@ import {
   deleteNamespace,
 } from '@/lib/api/namespaces';
 import {
-  expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
   expectNumber,
+  validateUserShape,
 } from './validators';
-
-/** Validate the shape of a User object from the backend. */
-function validateUserShape(user: object) {
-  expectString(user, 'id');
-  expectNullableString(user, 'external_id');
-  expectString(user, 'email');
-  expectString(user, 'role');
-  expectNullableString(user, 'namespace_id');
-  expectNullableString(user, 'display_name');
-  expectString(user, 'created_at');
-  expectString(user, 'updated_at');
-  expectSnakeCaseKeys(user, 'User');
-}
 
 describe('Admin API — full coverage', () => {
   // Temporary namespace and user for mutating tests (changeUserRole, deleteAdminUser)
@@ -176,13 +161,10 @@ describe('Admin API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('changeUserRole(userId, newRole)', () => {
     it('changes a user role and returns User with correct snake_case shape', async () => {
-      if (!tempUserId) {
-        console.warn('Skipping changeUserRole: no temp user was created');
-        return;
-      }
+      expect(tempUserId).toBeTruthy();
 
       // Change the temp user from student to instructor
-      const user = await changeUserRole(tempUserId, 'instructor');
+      const user = await changeUserRole(tempUserId!, 'instructor');
 
       validateUserShape(user);
       expect(user.id).toBe(tempUserId);
@@ -195,12 +177,9 @@ describe('Admin API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('deleteAdminUser(userId)', () => {
     it('deletes a user without throwing (void return)', async () => {
-      if (!tempUserId) {
-        console.warn('Skipping deleteAdminUser: no temp user was created');
-        return;
-      }
+      expect(tempUserId).toBeTruthy();
 
-      await expect(deleteAdminUser(tempUserId)).resolves.toBeUndefined();
+      await expect(deleteAdminUser(tempUserId!)).resolves.toBeUndefined();
 
       // Mark as cleaned up so afterAll does not attempt double-delete
       tempUserId = null;

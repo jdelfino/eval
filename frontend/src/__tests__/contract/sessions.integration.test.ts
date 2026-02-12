@@ -14,6 +14,7 @@ import {
   expectString,
   expectNullableString,
   expectArray,
+  validateSessionShape,
 } from './validators';
 
 describe('Sessions API', () => {
@@ -28,10 +29,7 @@ describe('Sessions API', () => {
   describe('getSessionState()', () => {
     it('returns SessionState with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping: no session ID from setup');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
 
       const body = await getSessionState(sessionId);
 
@@ -42,21 +40,7 @@ describe('Sessions API', () => {
       expectSnakeCaseKeys(body, 'SessionState');
 
       // Session sub-object
-      const session = body.session;
-      expectString(session, 'id');
-      expectString(session, 'namespace_id');
-      expectString(session, 'section_id');
-      expectString(session, 'section_name');
-      expect(session).toHaveProperty('problem');
-      expectNullableString(session, 'featured_student_id');
-      expectNullableString(session, 'featured_code');
-      expectString(session, 'creator_id');
-      expectArray(session, 'participants');
-      expectString(session, 'status');
-      expectString(session, 'created_at');
-      expectString(session, 'last_activity');
-      expectNullableString(session, 'ended_at');
-      expectSnakeCaseKeys(session, 'Session');
+      validateSessionShape(body.session);
 
       // Students sub-array
       expect(Array.isArray(body.students)).toBe(true);
@@ -77,10 +61,7 @@ describe('Sessions API', () => {
   describe('getRevisions()', () => {
     it('returns Revision[] (not wrapped)', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping: no session ID from setup');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
 
       const revisions = await getRevisions(sessionId);
 

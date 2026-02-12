@@ -8,7 +8,7 @@
  */
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
 import { bootstrapUser } from '@/lib/api/auth';
-import { expectSnakeCaseKeys, expectString, expectNullableString } from './validators';
+import { validateUserShape } from './validators';
 
 describe('bootstrapUser()', () => {
   beforeAll(() => {
@@ -24,25 +24,14 @@ describe('bootstrapUser()', () => {
       const user = await bootstrapUser();
 
       // If the call succeeds, validate the User shape
-      expectString(user, 'id');
-      expectNullableString(user, 'external_id');
-      expectString(user, 'email');
-      expectString(user, 'role');
-      expectNullableString(user, 'namespace_id');
-      expectNullableString(user, 'display_name');
-      expectString(user, 'created_at');
-      expectString(user, 'updated_at');
-
-      // No PascalCase leaks
-      expectSnakeCaseKeys(user, 'User');
+      validateUserShape(user);
 
       // The bootstrapped user should be a system-admin
       expect(user.role).toBe('system-admin');
     } catch (err: unknown) {
-      // If the admin already exists the backend may return 409 Conflict
-      // or another 4xx status. This is expected in test environments.
+      // If the admin already exists the backend may return 409 Conflict.
       const status = (err as { status?: number }).status;
-      if (status === 409 || status === 400 || status === 422) {
+      if (status === 409) {
         // Expected: user already bootstrapped. Contract is satisfied.
         return;
       }

@@ -87,10 +87,7 @@ describe('Classes API — full coverage', () => {
   describe('getClass(id)', () => {
     it('returns ClassDetailsResponse with correct snake_case shape', async () => {
       const classId = state.classId;
-      if (!classId) {
-        console.warn('Skipping getClass: no classId from setup');
-        return;
-      }
+      expect(classId).toBeTruthy();
 
       const result = await getClass(classId);
 
@@ -157,13 +154,10 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('updateClass(id, updates)', () => {
     it('updates a class and returns the updated Class', async () => {
-      if (!createdClassId) {
-        console.warn('Skipping updateClass: no class was created');
-        return;
-      }
+      expect(createdClassId).toBeTruthy();
 
       const updatedName = `updated-contract-${Date.now()}`;
-      const cls = await updateClass(createdClassId, { name: updatedName });
+      const cls = await updateClass(createdClassId!, { name: updatedName });
 
       validateClassShape(cls);
       expect(cls.id).toBe(createdClassId);
@@ -176,12 +170,9 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('createSection(classId, options)', () => {
     it('creates a section and returns Section with correct shape', async () => {
-      if (!createdClassId) {
-        console.warn('Skipping createSection: no class was created');
-        return;
-      }
+      expect(createdClassId).toBeTruthy();
 
-      const section = await createSection(createdClassId, {
+      const section = await createSection(createdClassId!, {
         name: `contract-section-${Date.now()}`,
         semester: 'Spring 2026',
       });
@@ -201,13 +192,10 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('updateSection(sectionId, updates)', () => {
     it('updates a section and returns the updated Section', async () => {
-      if (!createdSectionId) {
-        console.warn('Skipping updateSection: no section was created');
-        return;
-      }
+      expect(createdSectionId).toBeTruthy();
 
       const updatedName = `updated-section-${Date.now()}`;
-      const section = await updateSection(createdSectionId, { name: updatedName });
+      const section = await updateSection(createdSectionId!, { name: updatedName });
 
       validateSectionShape(section);
       expect(section.id).toBe(createdSectionId);
@@ -220,12 +208,9 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('regenerateJoinCode(sectionId)', () => {
     it('regenerates the join code and returns Section with new code', async () => {
-      if (!createdSectionId) {
-        console.warn('Skipping regenerateJoinCode: no section was created');
-        return;
-      }
+      expect(createdSectionId).toBeTruthy();
 
-      const section = await regenerateJoinCode(createdSectionId);
+      const section = await regenerateJoinCode(createdSectionId!);
 
       validateSectionShape(section);
       expect(section.id).toBe(createdSectionId);
@@ -240,15 +225,12 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('addCoInstructor(sectionId, email)', () => {
     it('calls addCoInstructor without throwing (void return)', async () => {
-      if (!createdSectionId) {
-        console.warn('Skipping addCoInstructor: no section was created');
-        return;
-      }
+      expect(createdSectionId).toBeTruthy();
 
       try {
         // Use a plausible email; the backend may reject if user does not exist (404/422).
         // The contract test validates the call shape, not business logic.
-        await addCoInstructor(createdSectionId, 'co-instructor-contract@test.local');
+        await addCoInstructor(createdSectionId!, 'co-instructor-contract@test.local');
         // If it succeeds, the return is void — nothing further to validate.
       } catch (err: unknown) {
         // 404 or 422 is acceptable — user may not exist in the test DB.
@@ -268,14 +250,11 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('removeCoInstructor(sectionId, userId)', () => {
     it('calls removeCoInstructor without throwing (void return)', async () => {
-      if (!createdSectionId) {
-        console.warn('Skipping removeCoInstructor: no section was created');
-        return;
-      }
+      expect(createdSectionId).toBeTruthy();
 
       try {
         // Use a dummy userId; the backend may reject with 404 if not found.
-        await removeCoInstructor(createdSectionId, '00000000-0000-0000-0000-000000000000');
+        await removeCoInstructor(createdSectionId!, '00000000-0000-0000-0000-000000000000');
       } catch (err: unknown) {
         const status = (err as { status?: number }).status;
         if (status === 404 || status === 422) {
@@ -292,13 +271,10 @@ describe('Classes API — full coverage', () => {
   // ──────────────────────────────────────────────
   describe('deleteClass(id)', () => {
     it('deletes a class without throwing (void return)', async () => {
-      if (!createdClassId) {
-        console.warn('Skipping deleteClass: no class was created');
-        return;
-      }
+      expect(createdClassId).toBeTruthy();
 
       // deleteClass returns void; if it does not throw, the contract is satisfied.
-      await deleteClass(createdClassId);
+      await deleteClass(createdClassId!);
 
       // Mark as cleaned up so afterAll does not attempt double-delete
       createdClassId = null;

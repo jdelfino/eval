@@ -26,6 +26,7 @@ import {
   expectNullableString,
   expectBoolean,
   expectNullableNumber,
+  validateUserShape,
 } from './validators';
 
 /** Validate the shape of a Namespace object from the backend. */
@@ -39,19 +40,6 @@ function validateNamespaceShape(ns: object) {
   expectNullableString(ns, 'created_by');
   expectString(ns, 'updated_at');
   expectSnakeCaseKeys(ns, 'Namespace');
-}
-
-/** Validate the shape of a User object from the backend. */
-function validateUserShape(user: object) {
-  expectString(user, 'id');
-  expectNullableString(user, 'external_id');
-  expectString(user, 'email');
-  expectString(user, 'role');
-  expectNullableString(user, 'namespace_id');
-  expectNullableString(user, 'display_name');
-  expectString(user, 'created_at');
-  expectString(user, 'updated_at');
-  expectSnakeCaseKeys(user, 'User');
 }
 
 describe('Namespaces API — full coverage', () => {
@@ -103,10 +91,7 @@ describe('Namespaces API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('updateNamespace(id, updates)', () => {
     it('updates a namespace and returns the updated Namespace', async () => {
-      if (!namespaceCreated) {
-        console.warn('Skipping updateNamespace: namespace was not created');
-        return;
-      }
+      expect(namespaceCreated).toBeTruthy();
 
       const updatedDisplayName = `Updated Contract NS ${Date.now()}`;
       const ns = await updateNamespace(testNsId, {
@@ -124,10 +109,7 @@ describe('Namespaces API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('createUser(namespaceId, email, username, password, role)', () => {
     it('creates a user in the namespace and returns User with correct snake_case shape', async () => {
-      if (!namespaceCreated) {
-        console.warn('Skipping createUser: namespace was not created');
-        return;
-      }
+      expect(namespaceCreated).toBeTruthy();
 
       const email = `contract-user-${Date.now()}@test.local`;
       const username = `contract-user-${Date.now()}`;
@@ -149,12 +131,9 @@ describe('Namespaces API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('updateUserRole(userId, role)', () => {
     it('updates a user role and returns the updated User', async () => {
-      if (!createdUserId) {
-        console.warn('Skipping updateUserRole: no user was created');
-        return;
-      }
+      expect(createdUserId).toBeTruthy();
 
-      const user = await updateUserRole(createdUserId, 'instructor');
+      const user = await updateUserRole(createdUserId!, 'instructor');
 
       validateUserShape(user);
       expect(user.id).toBe(createdUserId);
@@ -167,12 +146,9 @@ describe('Namespaces API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('deleteUser(userId)', () => {
     it('deletes a user without throwing (void return)', async () => {
-      if (!createdUserId) {
-        console.warn('Skipping deleteUser: no user was created');
-        return;
-      }
+      expect(createdUserId).toBeTruthy();
 
-      await expect(deleteUser(createdUserId)).resolves.toBeUndefined();
+      await expect(deleteUser(createdUserId!)).resolves.toBeUndefined();
 
       // Mark as cleaned up so afterAll does not attempt double-delete
       createdUserId = null;
@@ -184,10 +160,7 @@ describe('Namespaces API — full coverage', () => {
   // -----------------------------------------------------------------------
   describe('deleteNamespace(id)', () => {
     it('deletes a namespace without throwing (void return)', async () => {
-      if (!namespaceCreated) {
-        console.warn('Skipping deleteNamespace: namespace was not created');
-        return;
-      }
+      expect(namespaceCreated).toBeTruthy();
 
       await expect(deleteNamespace(testNsId)).resolves.toBeUndefined();
 

@@ -62,10 +62,7 @@ describe('Realtime Session API', () => {
 
     it('joins a session and returns SessionStudent with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping joinSession: no session ID from setup');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
 
       // joinSession is called by the student, so authenticate as the student
       configureTestAuth(STUDENT_TOKEN);
@@ -82,9 +79,12 @@ describe('Realtime Session API', () => {
         // Store for subsequent tests
         joinedStudentId = student.user_id;
       } catch (error) {
-        // If joining fails (e.g. student identity not recognized), log and continue
         const status = (error as { status?: number }).status;
-        console.warn(`joinSession failed with status ${status}; subsequent tests may be skipped`);
+        if (status === 403 || status === 404) {
+          console.warn(`joinSession failed with status ${status} (student not set up); subsequent tests will fail`);
+          return;
+        }
+        throw error;
       }
     });
   });
@@ -100,17 +100,11 @@ describe('Realtime Session API', () => {
 
     it('updates student code and returns SessionStudent with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping updateCode: no session ID from setup');
-        return;
-      }
-      if (!joinedStudentId) {
-        console.warn('Skipping updateCode: no student joined the session');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
+      expect(joinedStudentId).toBeTruthy();
 
       try {
-        const student = await updateCode(sessionId, joinedStudentId, 'print("hello")');
+        const student = await updateCode(sessionId, joinedStudentId!, 'print("hello")');
 
         validateSessionStudent(student, 'SessionStudent (updateCode)');
         expect(student.session_id).toBe(sessionId);
@@ -133,17 +127,11 @@ describe('Realtime Session API', () => {
 
     it('executes code and returns ExecutionResult with correct snake_case shape (or skips if executor unavailable)', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping executeCode: no session ID from setup');
-        return;
-      }
-      if (!joinedStudentId) {
-        console.warn('Skipping executeCode: no student joined the session');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
+      expect(joinedStudentId).toBeTruthy();
 
       try {
-        const result = await executeCode(sessionId, joinedStudentId, 'print("hello")');
+        const result = await executeCode(sessionId, joinedStudentId!, 'print("hello")');
 
         validateExecutionResult(result, 'ExecutionResult (executeCode)');
       } catch (error) {
@@ -169,17 +157,11 @@ describe('Realtime Session API', () => {
 
     it('features a student without throwing (void response)', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping featureStudent: no session ID from setup');
-        return;
-      }
-      if (!joinedStudentId) {
-        console.warn('Skipping featureStudent: no student joined the session');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
+      expect(joinedStudentId).toBeTruthy();
 
       try {
-        await featureStudent(sessionId, joinedStudentId, 'print("featured")');
+        await featureStudent(sessionId, joinedStudentId!, 'print("featured")');
         // void return — if it didn't throw, the contract is satisfied
       } catch (error) {
         const status = (error as { status?: number }).status;
@@ -200,10 +182,7 @@ describe('Realtime Session API', () => {
 
     it('clears featured student without throwing (void response)', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping clearFeatured: no session ID from setup');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
 
       try {
         await clearFeatured(sessionId);
@@ -231,10 +210,7 @@ describe('Realtime Session API', () => {
 
     it('executes code in practice mode and returns ExecutionResult (or skips if session not completed / executor unavailable)', async () => {
       const sessionId = state.sessionId;
-      if (!sessionId) {
-        console.warn('Skipping practiceExecute: no session ID from setup');
-        return;
-      }
+      expect(sessionId).toBeTruthy();
 
       try {
         const result = await practiceExecute(sessionId, 'print("practice")');

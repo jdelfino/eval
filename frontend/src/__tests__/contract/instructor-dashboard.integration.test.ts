@@ -3,14 +3,14 @@
  * Validates that the typed API function works correctly against the real backend.
  *
  * The InstructorDashboard response contains classes with nested sections.
- * DashboardSection may have camelCase fields (studentCount, activeSessionId)
- * or snake_case equivalents (student_count, active_session_id) depending on
- * the backend serialisation. This test validates whichever shape the API
- * actually returns, which is the point of contract testing.
+ * The DashboardSection interface declares camelCase fields (studentCount,
+ * activeSessionId). Since apiGet() passes JSON through without transformation,
+ * the backend must be sending camelCase for these fields. The contract test
+ * asserts the camelCase convention that matches the TypeScript interface.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getInstructorDashboard } from '@/lib/api/instructor';
-import { expectString, expectArray } from './validators';
+import { expectString, expectArray, expectNumber } from './validators';
 
 describe('getInstructorDashboard()', () => {
   beforeAll(() => {
@@ -58,33 +58,22 @@ describe('getInstructorDashboard()', () => {
 
     const section = classWithSections.sections[0];
 
-    // Fields that are always present regardless of naming convention
+    // Fields that match the DashboardSection interface (camelCase convention)
     expectString(section, 'id');
     expectString(section, 'name');
     expectString(section, 'join_code');
 
-    // semester is optional
+    // semester is optional per the interface
     if ('semester' in section && section.semester !== undefined) {
       expect(typeof section.semester).toBe('string');
     }
 
-    // Student count may come as camelCase (studentCount) or snake_case (student_count)
-    const hasStudentCount = 'studentCount' in section || 'student_count' in section;
-    expect(hasStudentCount).toBe(true);
+    // studentCount is declared as number in DashboardSection
+    expectNumber(section, 'studentCount');
 
-    if ('studentCount' in section) {
-      expect(typeof section.studentCount).toBe('number');
-    }
-    if ('student_count' in section) {
-      expect(typeof (section as Record<string, unknown>).student_count).toBe('number');
-    }
-
-    // Active session ID may come as camelCase or snake_case; it is optional
+    // activeSessionId is optional per the interface
     if ('activeSessionId' in section && section.activeSessionId !== undefined) {
       expect(typeof section.activeSessionId).toBe('string');
-    }
-    if ('active_session_id' in section && (section as Record<string, unknown>).active_session_id !== undefined) {
-      expect(typeof (section as Record<string, unknown>).active_session_id).toBe('string');
     }
   });
 });

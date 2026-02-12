@@ -27,6 +27,7 @@ import {
   expectNullableString,
   expectArray,
   expectNumber,
+  validateSessionShape,
 } from './validators';
 
 describe('Sessions Full API', () => {
@@ -75,20 +76,7 @@ describe('Sessions Full API', () => {
       const session = await createSession(state.sectionId);
 
       try {
-        expectString(session, 'id');
-        expectString(session, 'namespace_id');
-        expectString(session, 'section_id');
-        expectString(session, 'section_name');
-        expect(session).toHaveProperty('problem');
-        expectNullableString(session, 'featured_student_id');
-        expectNullableString(session, 'featured_code');
-        expectString(session, 'creator_id');
-        expectArray(session, 'participants');
-        expectString(session, 'status');
-        expectString(session, 'created_at');
-        expectString(session, 'last_activity');
-        expectNullableString(session, 'ended_at');
-        expectSnakeCaseKeys(session, 'Session');
+        validateSessionShape(session);
 
         expect(session.status).toBe('active');
         expect(session.section_id).toBe(state.sectionId);
@@ -215,11 +203,12 @@ describe('Sessions Full API', () => {
         expect(analysis).toHaveProperty('script');
         expectSnakeCaseKeys(analysis, 'AnalysisResponse');
       } catch (err: unknown) {
-        // AI service may not be configured in test environment — this is acceptable
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(
-          `analyzeSession() failed (AI service likely not configured): ${message}`
-        );
+        const status = (err as { status?: number }).status;
+        if (status === 500 || status === 502 || status === 503) {
+          console.warn(`analyzeSession() failed with status ${status} — AI service likely not configured`);
+          return;
+        }
+        throw err;
       }
     });
   });
@@ -264,20 +253,7 @@ describe('Sessions Full API', () => {
       if (sessions.length > 0) {
         const session = sessions[0];
 
-        expectString(session, 'id');
-        expectString(session, 'namespace_id');
-        expectString(session, 'section_id');
-        expectString(session, 'section_name');
-        expect(session).toHaveProperty('problem');
-        expectNullableString(session, 'featured_student_id');
-        expectNullableString(session, 'featured_code');
-        expectString(session, 'creator_id');
-        expectArray(session, 'participants');
-        expectString(session, 'status');
-        expectString(session, 'created_at');
-        expectString(session, 'last_activity');
-        expectNullableString(session, 'ended_at');
-        expectSnakeCaseKeys(session, 'Session');
+        validateSessionShape(session);
 
         expect(['active', 'completed']).toContain(session.status);
       }
