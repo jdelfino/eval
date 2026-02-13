@@ -34,22 +34,36 @@ export async function listNamespaceInvitations(
 }
 
 /**
- * Create an instructor invitation in the current namespace.
+ * Options for creating a namespace invitation.
+ */
+export interface CreateNamespaceInvitationOptions {
+  /** Role for the invited user (default: 'instructor') */
+  target_role?: 'instructor' | 'namespace-admin';
+  /** Namespace ID (required by the backend) */
+  namespace_id?: string;
+  /** Expiry in days */
+  expires_in_days?: number;
+}
+
+/**
+ * Create an invitation via the system endpoint.
  * @param email - The email to invite
- * @param expiresInDays - Optional expiry in days
+ * @param options - Optional invitation parameters
  * @returns The created invitation
  */
 export async function createNamespaceInvitation(
   email: string,
-  expiresInDays?: number
+  options?: CreateNamespaceInvitationOptions
 ): Promise<SerializedInvitation> {
-  interface CreateBody {
-    email: string;
-    expiresInDays?: number;
+  const body: Record<string, unknown> = {
+    email,
+    target_role: options?.target_role || 'instructor',
+  };
+  if (options?.namespace_id !== undefined) {
+    body.namespace_id = options.namespace_id;
   }
-  const body: CreateBody = { email };
-  if (expiresInDays !== undefined) {
-    body.expiresInDays = expiresInDays;
+  if (options?.expires_in_days !== undefined) {
+    body.expires_in_days = options.expires_in_days;
   }
   return apiPost<SerializedInvitation>('/system/invitations', body);
 }

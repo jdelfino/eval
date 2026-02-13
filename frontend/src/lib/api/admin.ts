@@ -83,13 +83,13 @@ export interface ListAdminUsersOptions {
 export async function listAdminUsers(options?: ListAdminUsersOptions): Promise<User[]> {
   const params = new URLSearchParams();
   if (options?.namespaceId) {
-    params.set('namespace', options.namespaceId);
+    params.set('namespace_id', options.namespaceId);
   }
   if (options?.role) {
     params.set('role', options.role);
   }
   const query = params.toString();
-  const path = query ? `/admin/users?${query}` : '/admin/users';
+  const path = query ? `/system/users?${query}` : '/system/users';
 
   return apiGet<User[]>(path);
 }
@@ -101,7 +101,7 @@ export async function listAdminUsers(options?: ListAdminUsersOptions): Promise<U
  * @returns The updated User object
  */
 export async function changeUserRole(userId: string, newRole: UserRole): Promise<User> {
-  return apiPut<User>(`/admin/users/${userId}/role`, { role: newRole });
+  return apiPut<User>(`/system/users/${userId}`, { role: newRole });
 }
 
 /**
@@ -109,5 +109,5 @@ export async function changeUserRole(userId: string, newRole: UserRole): Promise
  * @param userId - The user ID to delete
  */
 export async function deleteAdminUser(userId: string): Promise<void> {
-  await apiDelete(`/admin/users/${userId}`);
+  await apiDelete(`/system/users/${userId}`);
 }

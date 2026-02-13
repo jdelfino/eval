@@ -94,7 +94,7 @@ function InvitationsPageContent() {
 
     setIsSubmitting(true);
     try {
-      await createNamespaceInvitation(trimmedEmail, expiresInDays);
+      await createNamespaceInvitation(trimmedEmail, { expires_in_days: expiresInDays });
 
       setEmail('');
       setSuccessMessage(`Invitation sent to ${trimmedEmail}`);

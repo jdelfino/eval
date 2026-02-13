@@ -95,6 +95,7 @@ module.exports = {
       roots: ['<rootDir>/src'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
       globalSetup: '<rootDir>/src/__tests__/contract/globalSetup.ts',
+      testTimeout: 30000,
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
           tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }

@@ -107,12 +107,43 @@ export interface SessionDetails {
 }
 
 /**
+ * Raw backend response for GET /sessions/{id}/details.
+ * The backend returns a composite state response, not the flat SessionDetails.
+ */
+interface SessionStateResponse {
+  session: Session;
+  students: Array<{ id: string; user_id: string; name: string; code: string; last_update: string }>;
+  join_code: string;
+}
+
+/**
  * Get detailed session information including student submissions.
+ * Unwraps the backend's composite state response into flat SessionDetails.
  * @param sessionId - The session ID
  * @returns SessionDetails object
  */
 export async function getSessionDetails(sessionId: string): Promise<SessionDetails> {
-  return apiGet<SessionDetails>(`/sessions/${sessionId}/details`);
+  const raw = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/details`);
+  const problem = raw.session.problem as Record<string, unknown> | null;
+
+  return {
+    id: raw.session.id,
+    join_code: raw.join_code,
+    problem_title: (problem?.title as string) || '',
+    problem_description: problem?.description as string | undefined,
+    starter_code: problem?.starter_code as string | undefined,
+    created_at: raw.session.created_at,
+    ended_at: raw.session.ended_at || undefined,
+    status: raw.session.status as 'active' | 'completed',
+    section_name: raw.session.section_name,
+    students: raw.students.map(s => ({
+      id: s.user_id || s.id,
+      name: s.name,
+      code: s.code,
+      last_update: s.last_update,
+    })),
+    participant_count: raw.students.length,
+  };
 }
 
 /**
@@ -132,12 +163,24 @@ export interface AnalysisResponse {
 }
 
 /**
- * Analyze student submissions in a session.
+ * Analyze a student's code in a session.
  * @param sessionId - The session ID
+ * @param studentId - The student's user ID
+ * @param code - The student's code to analyze
+ * @param problemDescription - Optional problem description for context
  * @returns AnalysisResponse with walkthrough script
  */
-export async function analyzeSession(sessionId: string): Promise<AnalysisResponse> {
-  return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`);
+export async function analyzeSession(
+  sessionId: string,
+  studentId: string,
+  code: string,
+  problemDescription?: string,
+): Promise<AnalysisResponse> {
+  return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`, {
+    student_id: studentId,
+    code,
+    problem_description: problemDescription,
+  });
 }
 
 /**

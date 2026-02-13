@@ -10,7 +10,6 @@ const mockCreateNamespace = jest.fn();
 const mockUpdateNamespace = jest.fn();
 const mockDeleteNamespace = jest.fn();
 const mockGetNamespaceUsers = jest.fn();
-const mockCreateUser = jest.fn();
 const mockUpdateUserRole = jest.fn();
 const mockDeleteUser = jest.fn();
 
@@ -20,7 +19,6 @@ jest.mock('@/lib/api/namespaces', () => ({
   updateNamespace: (...args: unknown[]) => mockUpdateNamespace(...args),
   deleteNamespace: (...args: unknown[]) => mockDeleteNamespace(...args),
   getNamespaceUsers: (...args: unknown[]) => mockGetNamespaceUsers(...args),
-  createUser: (...args: unknown[]) => mockCreateUser(...args),
   updateUserRole: (...args: unknown[]) => mockUpdateUserRole(...args),
   deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
 }));
@@ -146,20 +144,6 @@ describe('useNamespaces', () => {
 
     expect(users).toEqual([fakeUser]);
     expect(mockGetNamespaceUsers).toHaveBeenCalledWith('ns-1');
-  });
-
-  it('createUser posts to namespace users endpoint', async () => {
-    // Typed API returns plain object (not wrapped)
-    mockCreateUser.mockResolvedValue(fakeUser);
-    const { result } = renderHook(() => useNamespaces());
-
-    let user: unknown;
-    await act(async () => {
-      user = await result.current.createUser('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
-    });
-
-    expect(user).toEqual(fakeUser);
-    expect(mockCreateUser).toHaveBeenCalledWith('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
   });
 
   it('updateUserRole patches user role', async () => {

@@ -6,7 +6,7 @@
  * (not wrapped), so these functions return the response directly.
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '@/lib/api-client';
 import type { Namespace, User } from '@/types/api';
 
 /**
@@ -73,32 +73,13 @@ export async function getNamespaceUsers(namespaceId: string): Promise<User[]> {
 }
 
 /**
- * Create a new user in a namespace (system-admin only).
- * @param namespaceId - The namespace ID
- * @param email - User email
- * @param username - User username
- * @param password - User password
- * @param role - User role (namespace-admin, instructor, or student)
- * @returns The created User object (backend returns plain object)
- */
-export async function createUser(
-  namespaceId: string,
-  email: string,
-  username: string,
-  password: string,
-  role: NamespaceUserRole
-): Promise<User> {
-  return apiPost<User>(`/namespaces/${namespaceId}/users`, { email, username, password, role });
-}
-
-/**
  * Update a user's role.
  * @param userId - The user ID to update
  * @param role - New role for the user
  * @returns The updated User object (backend returns plain object)
  */
 export async function updateUserRole(userId: string, role: NamespaceUserRole): Promise<User> {
-  return apiPatch<User>(`/users/${userId}`, { role });
+  return apiPut<User>(`/system/users/${userId}`, { role });
 }
 
 /**
@@ -106,5 +87,5 @@ export async function updateUserRole(userId: string, role: NamespaceUserRole): P
  * @param userId - The user ID to delete
  */
 export async function deleteUser(userId: string): Promise<void> {
-  await apiDelete(`/users/${userId}`);
+  await apiDelete(`/system/users/${userId}`);
 }

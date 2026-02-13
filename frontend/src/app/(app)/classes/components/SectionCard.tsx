@@ -45,7 +45,9 @@ export default function SectionCard({
     const fetchInstructors = async () => {
       try {
         const instructorsData = await getSectionInstructors(section.id);
-        setInstructors(instructorsData.map((u) => ({ id: u.id, display_name: u.display_name, email: u.email })));
+        // Backend returns SectionMembership[] (no display_name/email).
+        // Map to local Instructor shape; user_id is the best identifier available.
+        setInstructors(instructorsData.map((m) => ({ id: m.user_id, display_name: m.role, email: '' })));
       } catch (err) {
         console.error('Failed to fetch instructors:', err);
       } finally {
@@ -57,7 +59,7 @@ export default function SectionCard({
 
   const handleRegenerateCode = async () => {
     if (!onRegenerateCode) return;
-    
+
     setRegenerating(true);
     setError(null);
     try {
@@ -73,7 +75,7 @@ export default function SectionCard({
   const refreshInstructors = async () => {
     try {
       const instructorsData = await getSectionInstructors(section.id);
-      setInstructors(instructorsData.map((u) => ({ id: u.id, display_name: u.display_name, email: u.email })));
+      setInstructors(instructorsData.map((m) => ({ id: m.user_id, display_name: m.role, email: '' })));
     } catch (err) {
       console.error('Failed to refresh instructors:', err);
     }

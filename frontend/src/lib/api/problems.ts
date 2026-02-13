@@ -21,7 +21,6 @@ export interface ProblemSummary {
   tags: string[];
   created_at: string;
   updated_at?: string;
-  test_case_count: number | null;
 }
 
 /**

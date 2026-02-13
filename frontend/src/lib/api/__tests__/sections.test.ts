@@ -22,7 +22,7 @@ import {
   getSectionInstructors,
   deleteSection,
 } from '../sections';
-import type { MySectionInfo, SectionMembership, Session, Section, User } from '@/types/api';
+import type { MySectionInfo, SectionMembership, Session, Section } from '@/types/api';
 
 describe('sections API client', () => {
   beforeEach(() => {
@@ -75,12 +75,12 @@ describe('sections API client', () => {
   });
 
   describe('leaveSection', () => {
-    it('calls DELETE /sections/{id}/leave and returns void', async () => {
+    it('calls DELETE /sections/{id}/membership and returns void', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
       await leaveSection('s1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1/leave');
+      expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1/membership');
     });
   });
 
@@ -137,29 +137,26 @@ describe('sections API client', () => {
   });
 
   describe('getSectionInstructors', () => {
-    it('calls GET /sections/{id}/instructors and unwraps instructors array', async () => {
-      const mockInstructors: User[] = [
+    it('calls GET /sections/{id}/instructors and returns SectionMembership[]', async () => {
+      const mockMemberships = [
         {
-          id: 'u1',
-          external_id: 'ext-1',
-          email: 'instructor@example.com',
+          id: 'm1',
+          user_id: 'u1',
+          section_id: 's1',
           role: 'instructor',
-          namespace_id: 'ns-1',
-          display_name: 'Dr. Smith',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
+          joined_at: '2024-01-01T00:00:00Z',
         },
       ];
-      mockApiGet.mockResolvedValue({ instructors: mockInstructors });
+      mockApiGet.mockResolvedValue(mockMemberships);
 
       const result = await getSectionInstructors('s1');
 
       expect(mockApiGet).toHaveBeenCalledWith('/sections/s1/instructors');
-      expect(result).toEqual(mockInstructors);
+      expect(result).toEqual(mockMemberships);
     });
 
     it('returns empty array when no instructors', async () => {
-      mockApiGet.mockResolvedValue({ instructors: [] });
+      mockApiGet.mockResolvedValue([]);
 
       const result = await getSectionInstructors('s1');
 

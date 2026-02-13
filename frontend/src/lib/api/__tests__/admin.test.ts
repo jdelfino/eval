@@ -57,7 +57,7 @@ describe('admin API client', () => {
   });
 
   describe('listAdminUsers', () => {
-    it('calls GET /admin/users and returns users array', async () => {
+    it('calls GET /system/users and returns users array', async () => {
       const mockUsers: User[] = [
         {
           id: 'u1',
@@ -74,21 +74,21 @@ describe('admin API client', () => {
 
       const result = await listAdminUsers();
 
-      expect(mockApiGet).toHaveBeenCalledWith('/admin/users');
+      expect(mockApiGet).toHaveBeenCalledWith('/system/users');
       expect(result).toEqual(mockUsers);
     });
 
-    it('includes namespace and role query params when provided', async () => {
+    it('includes namespace_id and role query params when provided', async () => {
       mockApiGet.mockResolvedValue([]);
 
       await listAdminUsers({ namespaceId: 'ns-1', role: 'student' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/admin/users?namespace=ns-1&role=student');
+      expect(mockApiGet).toHaveBeenCalledWith('/system/users?namespace_id=ns-1&role=student');
     });
   });
 
   describe('changeUserRole', () => {
-    it('calls PUT /admin/users/{userId}/role with role body and returns updated user', async () => {
+    it('calls PUT /system/users/{userId} with role body and returns updated user', async () => {
       const mockUser: User = {
         id: 'u1',
         external_id: 'ext-1',
@@ -103,18 +103,18 @@ describe('admin API client', () => {
 
       const result = await changeUserRole('u1', 'instructor');
 
-      expect(mockApiPut).toHaveBeenCalledWith('/admin/users/u1/role', { role: 'instructor' });
+      expect(mockApiPut).toHaveBeenCalledWith('/system/users/u1', { role: 'instructor' });
       expect(result).toEqual(mockUser);
     });
   });
 
   describe('deleteAdminUser', () => {
-    it('calls DELETE /admin/users/{userId}', async () => {
+    it('calls DELETE /system/users/{userId}', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
       await deleteAdminUser('u1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/admin/users/u1');
+      expect(mockApiDelete).toHaveBeenCalledWith('/system/users/u1');
     });
   });
 });

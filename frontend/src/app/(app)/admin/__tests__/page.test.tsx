@@ -85,7 +85,7 @@ beforeEach(() => {
     if (url.includes('/admin/stats')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
     }
-    if (url.includes('/admin/users')) {
+    if (url.includes('/system/users') || url.includes('/admin/users')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockUsers) });
     }
     if (url.includes('/system/invitations')) {
@@ -145,7 +145,7 @@ describe('Admin Page - Namespace Admins tab', () => {
       if (url.includes('/admin/stats')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
       }
-      if (url.includes('/admin/users')) {
+      if (url.includes('/system/users') || url.includes('/admin/users')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(usersWithNsAdmin) });
       }
       if (url.includes('/system/invitations')) {

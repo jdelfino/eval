@@ -279,7 +279,7 @@ describe('InvitationsPage', () => {
           '/system/invitations',
           expect.objectContaining({
             method: 'POST',
-            body: JSON.stringify({ email: 'new@example.com', expiresInDays: 7 }),
+            body: JSON.stringify({ email: 'new@example.com', target_role: 'instructor', expires_in_days: 7 }),
           })
         );
       });
