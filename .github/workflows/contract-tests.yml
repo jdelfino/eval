@@ -85,7 +85,7 @@ jobs:
         run: psql -f scripts/contract-test-seed.sql
 
       - name: Build executor Docker image
-        run: docker build -t executor:local executor/
+        run: docker build -f executor/Dockerfile -t executor:local .
 
       - name: Start executor
         run: |

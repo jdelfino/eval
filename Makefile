@@ -50,7 +50,7 @@ test-integration-executor:
 	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
 
 docker-build-executor:
-	docker build -t executor:local executor/
+	docker build -f executor/Dockerfile -t executor:local .
 
 # ──────────────────────────────────────────────
 # Contract tests (frontend ↔ API)
