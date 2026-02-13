@@ -227,10 +227,13 @@ describe('SessionStudentPane', () => {
       expect(btn).toBeDisabled();
     });
 
-    it('calls analyze with session_id when clicked', () => {
+    it('calls analyze with session_id, student_id, code, and problem description when clicked', () => {
       render(<SessionStudentPane {...defaultProps} />);
+      // Select a student first so analyze has the required params
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]);
       fireEvent.click(screen.getByTestId('analyze-button'));
-      expect(mockAnalyze).toHaveBeenCalledWith('session-123');
+      expect(mockAnalyze).toHaveBeenCalledWith('session-123', 'student-1', 'print("Hello from Alice")', undefined);
     });
 
     it('shows spinner and "Analyzing..." when loading', () => {
@@ -251,9 +254,12 @@ describe('SessionStudentPane', () => {
       mockError = 'Something went wrong';
       render(<SessionStudentPane {...defaultProps} />);
       expect(screen.getByTestId('analysis-error')).toHaveTextContent('Something went wrong');
+      // Select a student first so analyze has the required params
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]);
       const tryAgain = screen.getByText('Try Again');
       fireEvent.click(tryAgain);
-      expect(mockAnalyze).toHaveBeenCalledWith('session-123');
+      expect(mockAnalyze).toHaveBeenCalledWith('session-123', 'student-1', 'print("Hello from Alice")', undefined);
     });
   });
 

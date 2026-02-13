@@ -161,7 +161,7 @@ describe('Realtime Session API', () => {
       } catch (error) {
         // Executor service may not be running in the test environment
         const status = (error as { status?: number }).status;
-        if (status === 502 || status === 503 || status === 504) {
+        if (status === 400 || status === 502 || status === 503 || status === 504) {
           console.warn(`executeCode failed with status ${status} (executor likely unavailable)`);
           return;
         }

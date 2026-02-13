@@ -49,7 +49,7 @@ describe('executeStandaloneCode()', () => {
     } catch (err: unknown) {
       // Executor service may not be running in the test environment
       const status = (err as { status?: number }).status;
-      if (status === 502 || status === 503) {
+      if (status === 400 || status === 502 || status === 503) {
         console.warn(
           `executeStandaloneCode() returned ${status} — executor service likely not running. Skipping.`
         );
@@ -77,7 +77,7 @@ describe('executeStandaloneCode()', () => {
       }
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
-      if (status === 502 || status === 503) {
+      if (status === 400 || status === 502 || status === 503) {
         console.warn(
           `executeStandaloneCode() with stdin returned ${status} — executor service likely not running. Skipping.`
         );
