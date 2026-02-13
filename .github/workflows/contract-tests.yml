@@ -84,8 +84,22 @@ jobs:
           PGDATABASE: eval
         run: psql -f scripts/contract-test-seed.sql
 
+      - name: Cache executor Docker image
+        id: executor-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/executor-image.tar
+          key: executor-image-${{ hashFiles('executor/**', 'pkg/**') }}
+
+      - name: Load cached executor image
+        if: steps.executor-cache.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/executor-image.tar
+
       - name: Build executor Docker image
-        run: docker build -f executor/Dockerfile -t executor:local .
+        if: steps.executor-cache.outputs.cache-hit != 'true'
+        run: |
+          docker build -f executor/Dockerfile -t executor:local .
+          docker save executor:local -o /tmp/executor-image.tar
 
       - name: Start executor
         run: |
