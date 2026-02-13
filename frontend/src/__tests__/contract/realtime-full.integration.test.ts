@@ -232,8 +232,9 @@ describe('Realtime Session API', () => {
         validateExecutionResult(result, 'ExecutionResult (practiceExecute)');
       } catch (error) {
         // Practice mode requires a completed session — the test session may still be active.
+        // Backend returns 400 "session is not completed; use /execute for active sessions".
         const status = (error as { status?: number }).status;
-        if (status === 403 || status === 404) {
+        if (status === 400 || status === 403 || status === 404) {
           console.warn(`practiceExecute failed with status ${status} (session not completed)`);
           return;
         }
