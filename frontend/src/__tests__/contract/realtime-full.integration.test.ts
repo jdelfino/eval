@@ -149,24 +149,14 @@ describe('Realtime Session API', () => {
       resetAuthProvider();
     });
 
-    it('executes code and returns ExecutionResult with correct snake_case shape (or skips if executor unavailable)', async () => {
+    it('executes code and returns ExecutionResult with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
       expect(sessionId).toBeTruthy();
       expect(joinedStudentId).toBeTruthy();
 
-      try {
-        const result = await executeCode(sessionId, joinedStudentId!, 'print("hello")');
+      const result = await executeCode(sessionId, joinedStudentId!, 'print("hello")');
 
-        validateExecutionResult(result, 'ExecutionResult (executeCode)');
-      } catch (error) {
-        // Executor service may not be running in the test environment
-        const status = (error as { status?: number }).status;
-        if (status === 400 || status === 502 || status === 503 || status === 504) {
-          console.warn(`executeCode failed with status ${status} (executor likely unavailable)`);
-          return;
-        }
-        throw error;
-      }
+      validateExecutionResult(result, 'ExecutionResult (executeCode)');
     });
   });
 
@@ -232,7 +222,7 @@ describe('Realtime Session API', () => {
       resetAuthProvider();
     });
 
-    it('executes code in practice mode and returns ExecutionResult (or skips if session not completed / executor unavailable)', async () => {
+    it('executes code in practice mode and returns ExecutionResult (or skips if session not completed)', async () => {
       const sessionId = state.sessionId;
       expect(sessionId).toBeTruthy();
 
@@ -241,11 +231,10 @@ describe('Realtime Session API', () => {
 
         validateExecutionResult(result, 'ExecutionResult (practiceExecute)');
       } catch (error) {
-        // Practice mode requires a completed session and a running executor.
-        // Both conditions may not be met in the test environment.
+        // Practice mode requires a completed session — the test session may still be active.
         const status = (error as { status?: number }).status;
-        if (status === 400 || status === 403 || status === 404 || status === 502 || status === 503 || status === 504) {
-          console.warn(`practiceExecute failed with status ${status} (session not completed or executor unavailable)`);
+        if (status === 403 || status === 404) {
+          console.warn(`practiceExecute failed with status ${status} (session not completed)`);
           return;
         }
         throw error;

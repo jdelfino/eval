@@ -9,8 +9,9 @@ DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 PSQL_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
-# --- 1. Ensure Postgres is running + admin seeded ---
+# --- 1. Ensure Postgres and executor are running ---
 ./scripts/ensure-test-postgres.sh
+docker compose up -d executor --wait
 
 # --- 2. Start Go API on random port ---
 API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
