@@ -66,35 +66,53 @@ describe('namespace-invitations API client', () => {
   });
 
   describe('createNamespaceInvitation', () => {
-    it('calls POST /system/invitations with email', async () => {
+    it('calls POST /system/invitations with email and default target_role', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
       const result = await createNamespaceInvitation('instructor@example.com');
 
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
+        target_role: 'instructor',
       });
       expect(result).toEqual(fakeInvitation);
     });
 
-    it('includes expiresInDays when provided', async () => {
+    it('includes expires_in_days when provided', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
-      await createNamespaceInvitation('instructor@example.com', 14);
+      await createNamespaceInvitation('instructor@example.com', { expires_in_days: 14 });
 
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
         email: 'instructor@example.com',
-        expiresInDays: 14,
+        target_role: 'instructor',
+        expires_in_days: 14,
       });
     });
 
-    it('omits expiresInDays when undefined', async () => {
+    it('includes namespace_id and target_role when provided', async () => {
+      mockApiPost.mockResolvedValue(fakeInvitation);
+
+      await createNamespaceInvitation('instructor@example.com', {
+        target_role: 'namespace-admin',
+        namespace_id: 'ns-1',
+      });
+
+      expect(mockApiPost).toHaveBeenCalledWith('/system/invitations', {
+        email: 'instructor@example.com',
+        target_role: 'namespace-admin',
+        namespace_id: 'ns-1',
+      });
+    });
+
+    it('omits optional fields when undefined', async () => {
       mockApiPost.mockResolvedValue(fakeInvitation);
 
       await createNamespaceInvitation('instructor@example.com');
 
       const body = mockApiPost.mock.calls[0][1];
-      expect(body).not.toHaveProperty('expiresInDays');
+      expect(body).not.toHaveProperty('expires_in_days');
+      expect(body).not.toHaveProperty('namespace_id');
     });
   });
 

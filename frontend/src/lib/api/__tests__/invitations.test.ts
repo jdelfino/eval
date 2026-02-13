@@ -59,20 +59,12 @@ describe('invitations API client', () => {
       expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?status=pending');
     });
 
-    it('includes email filter in query params', async () => {
+    it('includes status filter in query params', async () => {
       mockApiGet.mockResolvedValue([mockInvitation]);
 
-      await listInvitations('ns-1', { email: 'test@example.com' });
+      await listInvitations('ns-1', { status: 'pending' });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?email=test%40example.com');
-    });
-
-    it('includes both filters in query params', async () => {
-      mockApiGet.mockResolvedValue([mockInvitation]);
-
-      await listInvitations('ns-1', { status: 'pending', email: 'test@' });
-
-      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?status=pending&email=test%40');
+      expect(mockApiGet).toHaveBeenCalledWith('/namespaces/ns-1/invitations?status=pending');
     });
   });
 

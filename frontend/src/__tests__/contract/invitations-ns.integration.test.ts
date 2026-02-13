@@ -139,17 +139,5 @@ describe('Invitations API (namespace-scoped)', () => {
       }
     });
 
-    it('accepts optional email filter', async () => {
-      const namespaceId = state.namespaceId;
-      expect(namespaceId).toBeTruthy();
-
-      const invitations = await listInvitations(namespaceId, {
-        email: 'nonexistent-filter-test@test.local',
-      });
-
-      expect(Array.isArray(invitations)).toBe(true);
-      // With a nonexistent email filter we expect no results
-      expect(invitations.length).toBe(0);
-    });
   });
 });

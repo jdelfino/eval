@@ -36,7 +36,6 @@ export interface SerializedInvitation {
  */
 export interface InvitationFilters {
   status?: InvitationStatus;
-  email?: string;
 }
 
 /**
@@ -49,9 +48,6 @@ export async function listInvitations(namespaceId: string, filters?: InvitationF
   const params = new URLSearchParams();
   if (filters?.status) {
     params.set('status', filters.status);
-  }
-  if (filters?.email) {
-    params.set('email', filters.email);
   }
   const query = params.toString();
   const path = query

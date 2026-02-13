@@ -6,7 +6,7 @@
  * (not wrapped), so these functions return the response directly.
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '@/lib/api-client';
 import type { Namespace, User } from '@/types/api';
 
 /**
@@ -98,7 +98,7 @@ export async function createUser(
  * @returns The updated User object (backend returns plain object)
  */
 export async function updateUserRole(userId: string, role: NamespaceUserRole): Promise<User> {
-  return apiPatch<User>(`/users/${userId}`, { role });
+  return apiPut<User>(`/system/users/${userId}`, { role });
 }
 
 /**
@@ -106,5 +106,5 @@ export async function updateUserRole(userId: string, role: NamespaceUserRole): P
  * @param userId - The user ID to delete
  */
 export async function deleteUser(userId: string): Promise<void> {
-  await apiDelete(`/users/${userId}`);
+  await apiDelete(`/system/users/${userId}`);
 }

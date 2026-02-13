@@ -26,12 +26,16 @@ export interface RetryOptions {
 }
 
 /**
- * Default retry options
+ * Default retry options.
+ * In test environments, use minimal delays to avoid slow backoffs hitting Jest timeouts.
  */
+const isTestEnv = typeof process !== 'undefined' &&
+  (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined);
+
 const defaultRetryOptions: Required<Omit<RetryOptions, 'onRetry' | 'shouldRetry'>> = {
   maxRetries: 3,
-  initialDelay: 1000,
-  maxDelay: 10000,
+  initialDelay: isTestEnv ? 10 : 1000,
+  maxDelay: isTestEnv ? 50 : 10000,
   backoffMultiplier: 2,
 };
 

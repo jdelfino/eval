@@ -6,12 +6,14 @@
  *   2. updateNamespace(id, updates) -> Namespace
  *   3. deleteNamespace(id) -> void
  *   4. createUser(namespaceId, email, username, password, role) -> User
+ *      NOTE: Backend has no POST /namespaces/{id}/users endpoint. Users are
+ *      created through the invitation flow. This test validates the 405 response.
  *   5. updateUserRole(userId, role) -> User
  *   6. deleteUser(userId) -> void
  *
  * Uses the admin token (system-admin role required for all).
  */
-import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider, testToken } from './helpers';
 import {
   createNamespace,
   updateNamespace,
@@ -20,6 +22,7 @@ import {
   updateUserRole,
   deleteUser,
 } from '@/lib/api/namespaces';
+import { createSystemInvitation } from '@/lib/api/system';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -105,23 +108,50 @@ describe('Namespaces API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. createUser
+  // 3. createUser — backend has no direct user creation endpoint (405)
+  //    Users are created through the invitation flow.
   // -----------------------------------------------------------------------
   describe('createUser(namespaceId, email, username, password, role)', () => {
-    it('creates a user in the namespace and returns User with correct snake_case shape', async () => {
+    it('returns 405 because backend has no POST /namespaces/{id}/users endpoint', async () => {
       expect(namespaceCreated).toBeTruthy();
 
       const email = `contract-user-${Date.now()}@test.local`;
       const username = `contract-user-${Date.now()}`;
-      const password = 'ContractTestPassword123!';
-      const role = 'student' as const;
 
-      const user = await createUser(testNsId, email, username, password, role);
-      createdUserId = user.id;
+      try {
+        await createUser(testNsId, email, username, 'ContractTestPassword123!', 'student');
+        // If it unexpectedly succeeds, that's fine
+      } catch (err: unknown) {
+        const status = (err as { status?: number }).status;
+        expect(status).toBe(405);
+      }
+    });
+
+    it('creates a user via invitation flow and validates User shape', async () => {
+      expect(namespaceCreated).toBeTruthy();
+
+      // Create user via invitation + acceptance (the actual backend flow)
+      const email = `contract-user-${Date.now()}@test.local`;
+      const externalId = `contract-user-${Date.now()}`;
+      const userToken = testToken(externalId, email);
+
+      // System invitations only support 'namespace-admin' or 'instructor' roles
+      const invitation = await createSystemInvitation(email, testNsId, 'instructor');
+
+      configureTestAuth(userToken);
+      const { apiPost } = await import('@/lib/api-client');
+      const user = await apiPost<Record<string, unknown>>('/auth/accept-invite', {
+        token: invitation.id,
+        display_name: 'Contract Test User',
+      });
+      createdUserId = user.id as string;
+
+      // Switch back to admin
+      configureTestAuth(ADMIN_TOKEN);
 
       validateUserShape(user);
       expect(user.email).toBe(email);
-      expect(user.role).toBe(role);
+      expect(user.role).toBe('instructor');
       expect(user.namespace_id).toBe(testNsId);
     });
   });

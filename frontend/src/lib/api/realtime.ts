@@ -37,7 +37,7 @@ export async function updateCode(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      studentId,
+      student_id: studentId,
       code,
       execution_settings: executionSettings,
     }),
@@ -60,7 +60,7 @@ export async function executeCode(
   executionSettings?: ExecutionSettings
 ): Promise<ExecutionResult> {
   return apiPost<ExecutionResult>(`/sessions/${sessionId}/execute`, {
-    studentId,
+    student_id: studentId,
     code,
     execution_settings: executionSettings,
   });
@@ -115,7 +115,7 @@ export async function joinSession(
   name: string
 ): Promise<SessionStudent> {
   return apiPost<SessionStudent>(`/sessions/${sessionId}/join`, {
-    studentId,
+    student_id: studentId,
     name,
   });
 }

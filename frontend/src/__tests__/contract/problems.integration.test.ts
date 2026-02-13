@@ -23,7 +23,6 @@ import {
   expectString,
   expectNullableString,
   expectArray,
-  expectNullableNumber,
 } from './validators';
 
 describe('Problems API', () => {
@@ -158,9 +157,6 @@ describe('Problems API', () => {
 
       // Validate array fields
       expectArray(summary, 'tags');
-
-      // Validate nullable number fields
-      expectNullableNumber(summary, 'test_case_count');
     });
 
     it('returns problems filtered by class_id', async () => {

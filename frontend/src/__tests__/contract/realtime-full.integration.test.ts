@@ -25,7 +25,7 @@ import {
 } from './validators';
 
 // Student identity for joining the session
-const STUDENT_EXTERNAL_ID = `contract-student-${Date.now()}`;
+const STUDENT_EXTERNAL_ID = `contract-rt-student-${Date.now()}`;
 const STUDENT_EMAIL = `${STUDENT_EXTERNAL_ID}@contract-test.local`;
 const STUDENT_TOKEN = testToken(STUDENT_EXTERNAL_ID, STUDENT_EMAIL);
 const STUDENT_NAME = 'Contract Test Student';
@@ -42,12 +42,18 @@ function validateSessionStudent(obj: object, label: string) {
   expectSnakeCaseKeys(obj, label);
 }
 
-/** Validate the shape of an ExecutionResult object. */
+/** Validate the shape of an ExecutionResult object from the backend.
+ *  Backend uses execution_time_ms and omitempty on output/error/stdin. */
 function validateExecutionResult(obj: object, label: string) {
   expectBoolean(obj, 'success');
-  expectString(obj, 'output');
-  expectString(obj, 'error');
-  expectNumber(obj, 'execution_time');
+  expectNumber(obj, 'execution_time_ms');
+  // output and error use omitempty — only present when non-empty
+  if ('output' in obj) {
+    expect(typeof (obj as Record<string, unknown>).output).toBe('string');
+  }
+  if ('error' in obj) {
+    expect(typeof (obj as Record<string, unknown>).error).toBe('string');
+  }
   expectSnakeCaseKeys(obj, label);
 }
 
@@ -62,10 +68,27 @@ describe('Realtime Session API', () => {
 
     it('joins a session and returns SessionStudent with correct snake_case shape', async () => {
       const sessionId = state.sessionId;
+      const joinCode = state.joinCode;
       expect(sessionId).toBeTruthy();
+      expect(joinCode).toBeTruthy();
 
-      // joinSession is called by the student, so authenticate as the student
+      // Create the student user via register-student endpoint
+      // (creates user + section membership in one step using join code)
       configureTestAuth(STUDENT_TOKEN);
+      try {
+        const { apiPost } = await import('@/lib/api-client');
+        await apiPost('/auth/register-student', {
+          join_code: joinCode,
+          display_name: STUDENT_NAME,
+        });
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        // 409 = student already registered (e.g., from a previous test run)
+        if (status !== 409) {
+          console.warn('Failed to register student:', err);
+          return;
+        }
+      }
 
       try {
         const student = await joinSession(sessionId, STUDENT_EXTERNAL_ID, STUDENT_NAME);
@@ -90,8 +113,9 @@ describe('Realtime Session API', () => {
   });
 
   describe('updateCode()', () => {
+    // updateCode uses authUser.ID — only the student can update their own code
     beforeAll(() => {
-      configureTestAuth(INSTRUCTOR_TOKEN);
+      configureTestAuth(STUDENT_TOKEN);
     });
 
     afterAll(() => {

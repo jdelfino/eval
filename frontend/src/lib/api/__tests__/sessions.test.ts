@@ -175,54 +175,67 @@ describe('lib/api/sessions', () => {
   });
 
   describe('getSessionDetails', () => {
-    const fakeStudentSummary: SessionStudentSummary = {
-      id: 'student-1',
-      name: 'Alice',
-      code: 'print("hello")',
-      last_update: '2024-01-01T00:00:00Z',
-    };
-
-    const fakeSessionDetails: SessionDetails = {
-      id: 'sess-1',
+    // The backend returns a composite state response that getSessionDetails unwraps
+    const fakeBackendResponse = {
+      session: {
+        ...fakeSession,
+        problem: { title: 'Test Problem', description: 'A test problem', starter_code: 'print("starter")' },
+      },
+      students: [
+        { id: 'rec-1', user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: '2024-01-01T00:00:00Z' },
+      ],
       join_code: 'ABC123',
-      problem_title: 'Test Problem',
-      problem_description: 'A test problem',
-      starter_code: 'print("starter")',
-      created_at: '2024-01-01T00:00:00Z',
-      status: 'active',
-      section_name: 'Section A',
-      students: [fakeStudentSummary],
-      participant_count: 1,
     };
 
-    it('calls GET /sessions/{id}/details and returns SessionDetails with SessionStudentSummary array', async () => {
-      mockApiGet.mockResolvedValue(fakeSessionDetails);
+    it('calls GET /sessions/{id}/details and unwraps to SessionDetails', async () => {
+      mockApiGet.mockResolvedValue(fakeBackendResponse);
 
       const result = await getSessionDetails('sess-1');
 
       expect(mockApiGet).toHaveBeenCalledWith('/sessions/sess-1/details');
-      expect(result).toEqual(fakeSessionDetails);
-      // Verify the students array conforms to SessionStudentSummary type
+      expect(result.id).toBe('sess-1');
+      expect(result.join_code).toBe('ABC123');
+      expect(result.problem_title).toBe('Test Problem');
+      expect(result.problem_description).toBe('A test problem');
+      expect(result.starter_code).toBe('print("starter")');
+      expect(result.section_name).toBe('Section A');
+      expect(result.status).toBe('active');
       expect(result.students).toHaveLength(1);
-      expect(result.students[0]).toEqual(fakeStudentSummary);
+      expect(result.students[0]).toEqual({
+        id: 'student-1',
+        name: 'Alice',
+        code: 'print("hello")',
+        last_update: '2024-01-01T00:00:00Z',
+      });
+      expect(result.participant_count).toBe(1);
     });
 
     it('returns SessionDetails with empty students array', async () => {
-      const emptyDetails: SessionDetails = {
-        ...fakeSessionDetails,
+      mockApiGet.mockResolvedValue({
+        ...fakeBackendResponse,
         students: [],
-        participant_count: 0,
-      };
-      mockApiGet.mockResolvedValue(emptyDetails);
+      });
 
       const result = await getSessionDetails('sess-1');
 
       expect(result.students).toEqual([]);
+      expect(result.participant_count).toBe(0);
+    });
+
+    it('handles null problem gracefully', async () => {
+      mockApiGet.mockResolvedValue({
+        ...fakeBackendResponse,
+        session: { ...fakeSession, problem: null },
+      });
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(result.problem_title).toBe('');
+      expect(result.problem_description).toBeUndefined();
+      expect(result.starter_code).toBeUndefined();
     });
 
     it('SessionStudentSummary has only summary fields (id, name, code, last_update)', () => {
-      // This is a compile-time type check - if SessionStudentSummary had additional
-      // required fields like session_id or user_id, this would fail to compile
       const summary: SessionStudentSummary = {
         id: 'test',
         name: 'Test',

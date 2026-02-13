@@ -8,12 +8,14 @@
 
 const mockApiGet = jest.fn();
 const mockApiPost = jest.fn();
+const mockApiPut = jest.fn();
 const mockApiPatch = jest.fn();
 const mockApiDelete = jest.fn();
 
 jest.mock('@/lib/api-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
+  apiPut: (...args: unknown[]) => mockApiPut(...args),
   apiPatch: (...args: unknown[]) => mockApiPatch(...args),
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
 }));
@@ -186,25 +188,25 @@ describe('lib/api/namespaces', () => {
   });
 
   describe('updateUserRole', () => {
-    it('calls PATCH /users/{id} and returns plain User', async () => {
+    it('calls PUT /system/users/{id} and returns plain User', async () => {
       const updated = { ...fakeUser, role: 'student' as const };
       // Backend returns plain object (not wrapped in { user: ... })
-      mockApiPatch.mockResolvedValue(updated);
+      mockApiPut.mockResolvedValue(updated);
 
       const result = await updateUserRole('u1', 'student');
 
-      expect(mockApiPatch).toHaveBeenCalledWith('/users/u1', { role: 'student' });
+      expect(mockApiPut).toHaveBeenCalledWith('/system/users/u1', { role: 'student' });
       expect(result).toEqual(updated);
     });
   });
 
   describe('deleteUser', () => {
-    it('calls DELETE /users/{id} and returns void', async () => {
+    it('calls DELETE /system/users/{id} and returns void', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
       const result = await deleteUser('u1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/users/u1');
+      expect(mockApiDelete).toHaveBeenCalledWith('/system/users/u1');
       expect(result).toBeUndefined();
     });
   });

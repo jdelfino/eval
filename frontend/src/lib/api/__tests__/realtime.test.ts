@@ -90,7 +90,7 @@ describe('lib/api/realtime', () => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentId: 'student-1',
+          student_id: 'student-1',
           code: 'print("hello")',
           execution_settings: undefined,
         }),
@@ -109,7 +109,7 @@ describe('lib/api/realtime', () => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentId: 'student-1',
+          student_id: 'student-1',
           code: 'code',
           execution_settings: execSettings,
         }),
@@ -124,7 +124,7 @@ describe('lib/api/realtime', () => {
       const result = await executeCode('sess-1', 'student-1', 'print("hello")');
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/execute', {
-        studentId: 'student-1',
+        student_id: 'student-1',
         code: 'print("hello")',
         execution_settings: undefined,
       });
@@ -138,7 +138,7 @@ describe('lib/api/realtime', () => {
       await executeCode('sess-1', 'student-1', 'code', execSettings);
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/execute', {
-        studentId: 'student-1',
+        student_id: 'student-1',
         code: 'code',
         execution_settings: execSettings,
       });
@@ -174,7 +174,7 @@ describe('lib/api/realtime', () => {
       const result = await joinSession('sess-1', 'student-1', 'Alice');
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/join', {
-        studentId: 'student-1',
+        student_id: 'student-1',
         name: 'Alice',
       });
       expect(result).toEqual(fakeSessionStudent);

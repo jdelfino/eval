@@ -7,6 +7,7 @@
  * namespace-admin or system-admin role. We use ADMIN_TOKEN for access.
  */
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { state } from './shared-state';
 import {
   listNamespaceInvitations,
   createNamespaceInvitation,
@@ -39,7 +40,10 @@ describe('Namespace Invitations API (current user)', () => {
     it('creates an invitation and returns SerializedInvitation with correct snake_case shape', async () => {
       const email = `contract-ns-inv-${Date.now()}@test.local`;
 
-      const inv = await createNamespaceInvitation(email);
+      const inv = await createNamespaceInvitation(email, {
+        target_role: 'instructor',
+        namespace_id: state.namespaceId,
+      });
       createdInvitationId = inv.id;
 
       // Validate full shape

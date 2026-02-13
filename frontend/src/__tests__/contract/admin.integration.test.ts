@@ -9,7 +9,7 @@
  *
  * Uses the admin token (system-admin role required).
  */
-import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider, testToken } from './helpers';
 import { state } from './shared-state';
 import {
   getAdminStats,
@@ -18,51 +18,49 @@ import {
   deleteAdminUser,
 } from '@/lib/api/admin';
 import {
-  createNamespace,
-  createUser,
-  deleteNamespace,
-} from '@/lib/api/namespaces';
-import {
   expectNumber,
   validateUserShape,
 } from './validators';
 
 describe('Admin API — full coverage', () => {
-  // Temporary namespace and user for mutating tests (changeUserRole, deleteAdminUser)
-  const tempNsId = `contract-admin-${Date.now()}`;
+  // Temporary user for mutating tests (changeUserRole, deleteAdminUser).
+  // Created via invitation flow since the backend has no direct createUser endpoint.
   let tempUserId: string | null = null;
-  let tempNsCreated = false;
 
   beforeAll(async () => {
     configureTestAuth(ADMIN_TOKEN);
 
-    // Create a temporary namespace and user for changeUserRole and deleteAdminUser tests
-    try {
-      await createNamespace(tempNsId, 'Contract Admin Test NS');
-      tempNsCreated = true;
+    // Create a temporary user via register-student endpoint
+    const joinCode = state.joinCode;
+    if (!joinCode) return;
 
-      const email = `contract-admin-user-${Date.now()}@test.local`;
-      const username = `contract-admin-user-${Date.now()}`;
-      const user = await createUser(tempNsId, email, username, 'TestPassword123!', 'student');
+    try {
+      const externalId = `contract-admin-user-${Date.now()}`;
+      const email = `${externalId}@test.local`;
+      const token = testToken(externalId, email);
+
+      // Register as student (creates user + section membership)
+      configureTestAuth(token);
+      const { apiPost } = await import('@/lib/api-client');
+      const user = await apiPost<{ id: string }>('/auth/register-student', {
+        join_code: joinCode,
+        display_name: 'Contract Admin Test User',
+      });
       tempUserId = user.id;
+
+      // Switch back to admin
+      configureTestAuth(ADMIN_TOKEN);
     } catch (err) {
-      console.warn('Failed to create temp namespace/user for admin tests:', err);
+      console.warn('Failed to create temp user for admin tests:', err);
+      configureTestAuth(ADMIN_TOKEN);
     }
   });
 
   afterAll(async () => {
-    // Best-effort cleanup: delete temp user and namespace
+    // Best-effort cleanup
     if (tempUserId) {
       try {
-        const { deleteUser } = await import('@/lib/api/namespaces');
-        await deleteUser(tempUserId);
-      } catch {
-        // Best-effort cleanup
-      }
-    }
-    if (tempNsCreated) {
-      try {
-        await deleteNamespace(tempNsId);
+        await deleteAdminUser(tempUserId);
       } catch {
         // Best-effort cleanup
       }
