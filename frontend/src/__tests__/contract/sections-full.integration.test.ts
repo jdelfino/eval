@@ -190,8 +190,7 @@ describe('Sections API (full coverage)', () => {
           await leaveSection(membership.section_id);
           // If we get here, the call succeeded (returned void)
         } catch (leaveErr) {
-          // leaveSection may fail if the backend enforces additional constraints
-          // (e.g., path mismatch: frontend uses /leave but backend expects /membership).
+          // leaveSection may fail if the backend enforces additional constraints.
           // Log and continue since we already validated joinSection's shape.
           console.warn(
             'leaveSection call failed (may require specific role/state):',

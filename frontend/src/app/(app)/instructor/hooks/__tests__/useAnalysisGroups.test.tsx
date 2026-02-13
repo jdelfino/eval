@@ -77,7 +77,7 @@ describe('useAnalysisGroups', () => {
 
     let analyzePromise: Promise<void>;
     act(() => {
-      analyzePromise = result.current.analyze('session-1');
+      analyzePromise = result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.analysisState).toBe('loading');
@@ -89,7 +89,7 @@ describe('useAnalysisGroups', () => {
     expect(result.current.analysisState).toBe('ready');
     expect(result.current.script).toEqual(script);
     expect(result.current.groups.length).toBeGreaterThan(0);
-    expect(mockAnalyzeSession).toHaveBeenCalledWith('session-1');
+    expect(mockAnalyzeSession).toHaveBeenCalledWith('session-1', 'student-1', 'print("hello")', undefined);
   });
 
   it('groups are ordered: "All Submissions" first, then issues by index', async () => {
@@ -99,7 +99,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     const groupIds = result.current.groups.map(g => g.id);
@@ -117,7 +117,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.groups[0].issue).toBeUndefined(); // "all" group
@@ -132,7 +132,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.overall_note).toBe('Most students did well overall');
@@ -146,7 +146,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.activeGroupIndex).toBe(0);
@@ -180,7 +180,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     const initialGroupCount = result.current.groups.length;
@@ -214,7 +214,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     // Dismiss a group and navigate
@@ -226,7 +226,7 @@ describe('useAnalysisGroups', () => {
     // Re-analyze
     mockSuccessResponse(script);
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.activeGroupIndex).toBe(0);
@@ -240,7 +240,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     const allGroup = result.current.groups.find(g => g.id === 'all')!;
@@ -261,7 +261,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.analysisState).toBe('error');
@@ -276,7 +276,7 @@ describe('useAnalysisGroups', () => {
     const { result } = renderHook(() => useAnalysisGroups());
 
     await act(async () => {
-      await result.current.analyze('session-1');
+      await result.current.analyze('session-1', 'student-1', 'print("hello")');
     });
 
     expect(result.current.activeGroup).toBe(result.current.groups[0]);

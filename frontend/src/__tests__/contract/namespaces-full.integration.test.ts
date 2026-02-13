@@ -1,15 +1,12 @@
 /**
  * Contract tests for namespace and user management API functions in namespaces.ts.
  *
- * Covers the 6 functions not tested by namespaces.integration.test.ts:
+ * Covers the 5 functions not tested by namespaces.integration.test.ts:
  *   1. createNamespace(id, displayName) -> Namespace
  *   2. updateNamespace(id, updates) -> Namespace
  *   3. deleteNamespace(id) -> void
- *   4. createUser(namespaceId, email, username, password, role) -> User
- *      NOTE: Backend has no POST /namespaces/{id}/users endpoint. Users are
- *      created through the invitation flow. This test validates the 405 response.
- *   5. updateUserRole(userId, role) -> User
- *   6. deleteUser(userId) -> void
+ *   4. updateUserRole(userId, role) -> User
+ *   5. deleteUser(userId) -> void
  *
  * Uses the admin token (system-admin role required for all).
  */
@@ -18,7 +15,6 @@ import {
   createNamespace,
   updateNamespace,
   deleteNamespace,
-  createUser,
   updateUserRole,
   deleteUser,
 } from '@/lib/api/namespaces';
@@ -108,25 +104,9 @@ describe('Namespaces API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. createUser — backend has no direct user creation endpoint (405)
-  //    Users are created through the invitation flow.
+  // 3. User creation via invitation flow
   // -----------------------------------------------------------------------
-  describe('createUser(namespaceId, email, username, password, role)', () => {
-    it('returns 405 because backend has no POST /namespaces/{id}/users endpoint', async () => {
-      expect(namespaceCreated).toBeTruthy();
-
-      const email = `contract-user-${Date.now()}@test.local`;
-      const username = `contract-user-${Date.now()}`;
-
-      try {
-        await createUser(testNsId, email, username, 'ContractTestPassword123!', 'student');
-        // If it unexpectedly succeeds, that's fine
-      } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        expect(status).toBe(405);
-      }
-    });
-
+  describe('user creation via invitation flow', () => {
     it('creates a user via invitation flow and validates User shape', async () => {
       expect(namespaceCreated).toBeTruthy();
 
@@ -157,7 +137,7 @@ describe('Namespaces API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 4. updateUserRole
+  // 4. updateUserRole (renumbered from original)
   // -----------------------------------------------------------------------
   describe('updateUserRole(userId, role)', () => {
     it('updates a user role and returns the updated User', async () => {

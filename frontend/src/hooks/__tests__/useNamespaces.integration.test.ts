@@ -30,7 +30,6 @@ jest.mock('@/lib/api/namespaces', () => ({
   updateNamespace: jest.fn(),
   deleteNamespace: jest.fn(),
   getNamespaceUsers: jest.fn(),
-  createUser: jest.fn(),
   updateUserRole: jest.fn(),
   deleteUser: jest.fn(),
 }));
@@ -230,18 +229,5 @@ describe('useNamespaces integration (hook -> typed API)', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    it('createUser calls API with correct payload', async () => {
-      // Mock API returns plain object
-      mockApiOk(mockApi.createUser, fakeUser);
-      const { result } = renderHook(() => useNamespaces());
-
-      let user: unknown;
-      await act(async () => {
-        user = await result.current.createUser('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
-      });
-
-      expect(user).toEqual(fakeUser);
-      expect(mockApi.createUser).toHaveBeenCalledWith('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
-    });
   });
 });

@@ -73,25 +73,6 @@ export async function getNamespaceUsers(namespaceId: string): Promise<User[]> {
 }
 
 /**
- * Create a new user in a namespace (system-admin only).
- * @param namespaceId - The namespace ID
- * @param email - User email
- * @param username - User username
- * @param password - User password
- * @param role - User role (namespace-admin, instructor, or student)
- * @returns The created User object (backend returns plain object)
- */
-export async function createUser(
-  namespaceId: string,
-  email: string,
-  username: string,
-  password: string,
-  role: NamespaceUserRole
-): Promise<User> {
-  return apiPost<User>(`/namespaces/${namespaceId}/users`, { email, username, password, role });
-}
-
-/**
  * Update a user's role.
  * @param userId - The user ID to update
  * @param role - New role for the user

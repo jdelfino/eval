@@ -127,7 +127,8 @@ export function SessionStudentPane({
   };
 
   const handleAnalyze = () => {
-    analyze(session_id);
+    if (!selectedStudentId) return;
+    analyze(session_id, selectedStudentId, selectedStudentCode, sessionProblem?.description ?? undefined);
   };
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);

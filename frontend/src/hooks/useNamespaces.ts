@@ -7,7 +7,6 @@ import {
   updateNamespace as apiUpdateNamespace,
   deleteNamespace as apiDeleteNamespace,
   getNamespaceUsers as apiGetNamespaceUsers,
-  createUser as apiCreateUser,
   updateUserRole as apiUpdateUserRole,
   deleteUser as apiDeleteUser,
   type NamespaceWithStats,
@@ -23,7 +22,6 @@ export interface UseNamespacesResult {
   updateNamespace: (id: string, updates: { display_name?: string; active?: boolean }) => Promise<Namespace>;
   deleteNamespace: (id: string) => Promise<void>;
   getNamespaceUsers: (namespace_id: string) => Promise<User[]>;
-  createUser: (namespace_id: string, email: string, username: string, password: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
   updateUserRole: (user_id: string, role: 'namespace-admin' | 'instructor' | 'student') => Promise<User>;
   deleteUser: (user_id: string) => Promise<void>;
 }
@@ -116,27 +114,6 @@ export function useNamespaces(): UseNamespacesResult {
     }
   }, []);
 
-  const createUser = useCallback(async (
-    namespace_id: string,
-    email: string,
-    username: string,
-    password: string,
-    role: 'namespace-admin' | 'instructor' | 'student'
-  ): Promise<User> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const user = await apiCreateUser(namespace_id, email, username, password, role);
-      return user;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create user';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const updateUserRole = useCallback(async (
     user_id: string,
     role: 'namespace-admin' | 'instructor' | 'student'
@@ -178,7 +155,6 @@ export function useNamespaces(): UseNamespacesResult {
     updateNamespace,
     deleteNamespace,
     getNamespaceUsers,
-    createUser,
     updateUserRole,
     deleteUser,
   };

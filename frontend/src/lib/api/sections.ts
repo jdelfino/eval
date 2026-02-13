@@ -31,7 +31,7 @@ export async function joinSection(joinCode: string): Promise<SectionMembership> 
  * @param sectionId - The section ID to leave
  */
 export async function leaveSection(sectionId: string): Promise<void> {
-  await apiDelete(`/sections/${sectionId}/leave`);
+  await apiDelete(`/sections/${sectionId}/membership`);
 }
 
 /**

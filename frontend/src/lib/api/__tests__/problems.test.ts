@@ -33,7 +33,6 @@ const fakeProblemSummary: ProblemSummary = {
   class_id: 'c1',
   tags: ['arrays', 'easy'],
   created_at: '2024-01-01T00:00:00Z',
-  test_case_count: 5,
 };
 
 const fakeProblem: Problem = {

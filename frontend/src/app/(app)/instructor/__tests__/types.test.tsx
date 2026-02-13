@@ -31,7 +31,6 @@ describe('Instructor shared types', () => {
       tags: ['arrays'],
       class_id: 'class-1',
       description: null,
-      test_case_count: null,
     };
     expect(problem.id).toBe('p-1');
     expect(problem.title).toBe('Two Sum');
@@ -39,7 +38,7 @@ describe('Instructor shared types', () => {
     expect(problem.class_id).toBe('class-1');
   });
 
-  it('ProblemSummary accepts optional description and test_case_count', () => {
+  it('ProblemSummary accepts optional description', () => {
     const problem: ProblemSummary = {
       id: 'p-2',
       title: 'Three Sum',
@@ -48,10 +47,8 @@ describe('Instructor shared types', () => {
       tags: [],
       class_id: 'class-2',
       description: 'Find three numbers',
-      test_case_count: 5,
     };
     expect(problem.description).toBe('Find three numbers');
-    expect(problem.test_case_count).toBe(5);
   });
 
   it('ClassWithSections extends ClassInfo with section_count', () => {

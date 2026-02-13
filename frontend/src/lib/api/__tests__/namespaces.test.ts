@@ -26,7 +26,6 @@ import {
   updateNamespace,
   deleteNamespace,
   getNamespaceUsers,
-  createUser,
   updateUserRole,
   deleteUser,
   type NamespaceWithStats,
@@ -157,33 +156,6 @@ describe('lib/api/namespaces', () => {
       const result = await getNamespaceUsers('ns-1');
 
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('createUser', () => {
-    it('calls POST /namespaces/{id}/users and returns plain User', async () => {
-      // Backend returns plain object (not wrapped in { user: ... })
-      mockApiPost.mockResolvedValue(fakeUser);
-
-      const result = await createUser('ns-1', 'a@b.com', 'auser', 'pass', 'instructor');
-
-      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/users', {
-        email: 'a@b.com',
-        username: 'auser',
-        password: 'pass',
-        role: 'instructor',
-      });
-      expect(result).toEqual(fakeUser);
-    });
-
-    it('supports all role types', async () => {
-      mockApiPost.mockResolvedValue(fakeUser);
-
-      await createUser('ns-1', 'a@b.com', 'auser', 'pass', 'namespace-admin');
-      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/users', expect.objectContaining({ role: 'namespace-admin' }));
-
-      await createUser('ns-1', 'a@b.com', 'auser', 'pass', 'student');
-      expect(mockApiPost).toHaveBeenCalledWith('/namespaces/ns-1/users', expect.objectContaining({ role: 'student' }));
     });
   });
 

@@ -265,7 +265,7 @@ describe('lib/api/sessions', () => {
   });
 
   describe('analyzeSession', () => {
-    it('calls POST /sessions/{id}/analyze and returns AnalysisResponse', async () => {
+    it('calls POST /sessions/{id}/analyze with student_id, code, and optional problemDescription', async () => {
       const fakeAnalysis: AnalysisResponse = {
         script: {
           session_id: 'sess-1',
@@ -282,9 +282,13 @@ describe('lib/api/sessions', () => {
       };
       mockApiPost.mockResolvedValue(fakeAnalysis);
 
-      const result = await analyzeSession('sess-1');
+      const result = await analyzeSession('sess-1', 'student-1', 'print("hello")', 'Write a hello world program');
 
-      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze');
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze', {
+        student_id: 'student-1',
+        code: 'print("hello")',
+        problem_description: 'Write a hello world program',
+      });
       expect(result).toEqual(fakeAnalysis);
     });
   });

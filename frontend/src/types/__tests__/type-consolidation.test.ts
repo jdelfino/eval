@@ -62,7 +62,6 @@ describe('Instructor types consolidation (PLAT-uum.49)', () => {
       tags: [],
       class_id: 'c-1',
       description: null,
-      test_case_count: null,
     };
     expect(p.id).toBe('p-1');
   });
@@ -79,7 +78,6 @@ describe('Instructor types consolidation (PLAT-uum.49)', () => {
       tags: ['test'],
       class_id: 'c-1',
       description: 'A problem with updated_at',
-      test_case_count: 3,
     };
     expect(problemWithUpdatedAt.updated_at).toBe('2025-06-15T12:30:00Z');
   });

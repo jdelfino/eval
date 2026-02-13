@@ -163,12 +163,24 @@ export interface AnalysisResponse {
 }
 
 /**
- * Analyze student submissions in a session.
+ * Analyze a student's code in a session.
  * @param sessionId - The session ID
+ * @param studentId - The student's user ID
+ * @param code - The student's code to analyze
+ * @param problemDescription - Optional problem description for context
  * @returns AnalysisResponse with walkthrough script
  */
-export async function analyzeSession(sessionId: string): Promise<AnalysisResponse> {
-  return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`);
+export async function analyzeSession(
+  sessionId: string,
+  studentId: string,
+  code: string,
+  problemDescription?: string,
+): Promise<AnalysisResponse> {
+  return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`, {
+    student_id: studentId,
+    code,
+    problem_description: problemDescription,
+  });
 }
 
 /**

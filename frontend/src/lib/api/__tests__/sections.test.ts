@@ -75,12 +75,12 @@ describe('sections API client', () => {
   });
 
   describe('leaveSection', () => {
-    it('calls DELETE /sections/{id}/leave and returns void', async () => {
+    it('calls DELETE /sections/{id}/membership and returns void', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
       await leaveSection('s1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1/leave');
+      expect(mockApiDelete).toHaveBeenCalledWith('/sections/s1/membership');
     });
   });
 

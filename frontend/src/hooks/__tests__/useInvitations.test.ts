@@ -83,18 +83,6 @@ describe('useInvitations', () => {
       expect(mockListInvitations).toHaveBeenCalledWith(TEST_NAMESPACE, { status: 'pending' });
     });
 
-    it('fetches invitations with email filter', async () => {
-      mockListInvitations.mockResolvedValueOnce([mockInvitation]);
-
-      const { result } = renderHook(() => useInvitations(TEST_NAMESPACE));
-
-      await act(async () => {
-        await result.current.fetchInvitations({ email: 'test@' });
-      });
-
-      expect(mockListInvitations).toHaveBeenCalledWith(TEST_NAMESPACE, { email: 'test@' });
-    });
-
     it('sets error when fetch fails', async () => {
       mockListInvitations.mockRejectedValueOnce(new Error('Failed to load invitations'));
 
