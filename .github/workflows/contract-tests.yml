@@ -84,18 +84,8 @@ jobs:
           PGDATABASE: eval
         run: psql -f scripts/contract-test-seed.sql
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build executor Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: executor/Dockerfile
-          tags: executor:local
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: docker build -f executor/Dockerfile -t executor:local .
 
       - name: Start executor
         run: |
