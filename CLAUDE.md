@@ -37,9 +37,21 @@ make test-integration    # Run all integration tests
 make lint                # Lint all projects
 make docker-build        # Build all Docker images
 
-# Per-project: build-<project>, test-<project>, lint-<project>
-# Projects: api (go-backend), executor
 ```
+
+## Quality Gates
+
+Run these before committing. Pick the targets matching the code you changed.
+
+| Area | Tests | Lint | Typecheck |
+|------|-------|------|-----------|
+| Go backend | `make test-api` | `make lint-api` | — |
+| Executor | `make test-executor` | `make lint-executor` | — |
+| Frontend | `make test-frontend` | `make lint-frontend` | `make typecheck-frontend` |
+| Store integration | `make test-integration-store` | — | — |
+| Contract tests | `make test-integration-contract` | — | — |
+| **All unit tests** | `make test` | `make lint` | — |
+| **All integration** | `make test-integration` | — | — |
 
 ## Development Guidelines
 

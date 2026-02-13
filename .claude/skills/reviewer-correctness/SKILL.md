@@ -33,7 +33,7 @@ git diff <base-branch>...HEAD
 
 ### 2. Run Quality Gates
 
-Run all quality gates for the project. If any fail, note the specific failures.
+Run quality gates per the **Quality Gates** table in CLAUDE.md. If any fail, note the specific failures.
 
 ### 3. Review Every Changed File
 

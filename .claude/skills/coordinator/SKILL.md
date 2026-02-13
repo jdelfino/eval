@@ -235,11 +235,11 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, re-run quality gates.
+After all issues resolved, re-run quality gates per the **Quality Gates** table in CLAUDE.md.
 
 ### 5. Create PR and Hand Off
 
-Run quality gates in the worktree before creating the PR.
+Run quality gates per the **Quality Gates** table in CLAUDE.md in the worktree before creating the PR.
 
 **Do NOT create PR if any checks fail.** Fix locally first.
 

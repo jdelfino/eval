@@ -29,7 +29,7 @@ Write tests for the behavior you are about to change or add. Do this **before** 
 
 1. Read the relevant production code to understand current behavior
 2. Write new test cases that describe the desired behavior after your change
-3. Run the tests
+3. Run the tests using the appropriate `make test-*` target (see **Quality Gates** in CLAUDE.md)
 
 **Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
@@ -39,7 +39,25 @@ Make the production code changes. Keep changes minimal and focused on the task.
 
 ## Phase 3: Verify
 
-Run all quality gates for the project (tests, type checking, linting).
+Run quality gates matching the code you changed. See the **Quality Gates** table in CLAUDE.md for all targets.
+
+At minimum, for any Go backend change:
+```bash
+make test-api
+make lint-api
+```
+
+For frontend changes:
+```bash
+make test-frontend
+make lint-frontend
+make typecheck-frontend
+```
+
+For store/persistence changes, also run:
+```bash
+make test-integration-store
+```
 
 **Gate:** All quality gate commands pass with zero errors. If any fails, fix the issues before proceeding.
 
