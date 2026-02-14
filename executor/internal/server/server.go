@@ -65,9 +65,22 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 
 	r.Get("/readyz", readyzHandler(cfg, m))
 
+	// Select sandbox runner. DISABLE_SANDBOX skips nsjail for environments
+	// where it can't run (CI, devcontainers). Never allowed in production.
+	runner := handler.SandboxRunner(sandbox.Run)
+	if cfg.DisableSandbox {
+		if cfg.Environment == "production" || cfg.Environment == "prod" {
+			logger.Error("DISABLE_SANDBOX is set in production — refusing to start without sandboxing")
+			fmt.Fprintln(os.Stderr, "FATAL: DISABLE_SANDBOX=true is not allowed in production")
+			os.Exit(1)
+		}
+		logger.Warn("sandbox disabled — executing code without nsjail isolation")
+		runner = sandbox.RunUnsafe
+	}
+
 	// Execute endpoint
 	execHandler := handler.NewExecuteHandler(
-		logger, sandbox.Run, m,
+		logger, runner, m,
 		handler.ExecuteHandlerConfig{
 			NsjailPath:       cfg.NsjailPath,
 			PythonPath:       cfg.PythonPath,
@@ -90,7 +103,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 
 	// Trace endpoint (shares rate limiter and concurrency pool concept with /execute).
 	traceHandler := handler.NewTraceHandler(
-		logger, sandbox.Run, m,
+		logger, runner, m,
 		handler.TraceHandlerConfig{
 			NsjailPath:              cfg.NsjailPath,
 			PythonPath:              cfg.PythonPath,

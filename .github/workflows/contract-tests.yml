@@ -108,6 +108,7 @@ jobs:
             -e PORT=8081 \
             -e ENVIRONMENT=test \
             -e LOG_LEVEL=info \
+            -e DISABLE_SANDBOX=true \
             executor:local
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8081/healthz > /dev/null 2>&1; then
@@ -158,6 +159,10 @@ jobs:
           API_BASE_URL: http://localhost:${{ env.PORT }}
         run: npx jest --selectProjects contract --no-coverage --runInBand
         working-directory: frontend
+
+      - name: Dump executor logs
+        if: always()
+        run: docker logs executor 2>&1 || true
 
       - name: Cleanup
         if: always()

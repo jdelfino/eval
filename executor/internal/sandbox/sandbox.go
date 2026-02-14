@@ -58,6 +58,95 @@ type Result struct {
 	DurationMs int64
 }
 
+// RunUnsafe executes Python code directly without nsjail sandboxing.
+// Use only in environments where nsjail cannot run (CI, devcontainers).
+// Provides timeout enforcement and output capture but no isolation.
+func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	tempDir, err := os.MkdirTemp("", "sandbox-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	code := req.Code
+	if req.RandomSeed != nil {
+		code = fmt.Sprintf("import random\nrandom.seed(%d)\n", *req.RandomSeed) + code
+	}
+
+	mainPath := filepath.Join(tempDir, "main.py")
+	if err := os.WriteFile(mainPath, []byte(code), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write main.py: %w", err)
+	}
+
+	for _, f := range req.Files {
+		name := sanitizeFilename(f.Name)
+		if name == "main.py" {
+			return nil, fmt.Errorf("file name %q is reserved", f.Name)
+		}
+		p := filepath.Join(tempDir, name)
+		if err := os.WriteFile(p, []byte(f.Content), 0644); err != nil {
+			return nil, fmt.Errorf("failed to write attached file %q: %w", name, err)
+		}
+	}
+
+	timeoutSec := int(math.Ceil(float64(req.TimeoutMs) / 1000.0))
+	if timeoutSec < 1 {
+		timeoutSec = 1
+	}
+
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+	defer execCancel()
+
+	args := []string{mainPath}
+	args = append(args, req.Args...)
+
+	cmd := exec.CommandContext(execCtx, cfg.PythonPath, args...)
+	cmd.Dir = tempDir
+
+	if req.Stdin != "" {
+		cmd.Stdin = strings.NewReader(req.Stdin)
+	}
+
+	maxOut := cfg.MaxOutputBytes
+	if maxOut <= 0 {
+		maxOut = MaxOutputBytes
+	}
+	var stdoutBuf, stderrBuf limitedBuffer
+	stdoutBuf.maxBytes = maxOut
+	stderrBuf.maxBytes = maxOut
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	start := time.Now()
+	err = cmd.Run()
+	duration := time.Since(start)
+
+	exitCode := 0
+	timedOut := false
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() != nil {
+			timedOut = true
+			exitCode = -1
+		}
+	}
+
+	// Detect timeout via context deadline (Go killed the process).
+	if execCtx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+
+	return &Result{
+		Stdout:     stdoutBuf.String(),
+		Stderr:     stderrBuf.String(),
+		ExitCode:   exitCode,
+		TimedOut:   timedOut,
+		DurationMs: duration.Milliseconds(),
+	}, nil
+}
+
 // Run executes Python code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// Validate attached filenames before doing any work.
@@ -114,6 +203,11 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 
 	// Build nsjail arguments.
 	// Use an empty chroot so only explicitly bind-mounted paths are visible.
+	//
+	// NOTE: nsjail requires host-level kernel namespace support and fails in
+	// nested container environments (Docker-in-Docker, CI runners, devcontainers).
+	// For those environments, use DISABLE_SANDBOX=true to run with RunUnsafe instead.
+	// See: https://github.com/google/nsjail/issues/238
 	args := []string{
 		"--mode", "once",
 		"--chroot", chrootDir,

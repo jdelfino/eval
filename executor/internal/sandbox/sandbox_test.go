@@ -362,6 +362,87 @@ func TestTruncationSuffix(t *testing.T) {
 
 // TestTimeoutDetectionNoFalsePositive verifies that a fast non-zero exit
 // is NOT misclassified as a timeout (regression test for wall-clock heuristic).
+func TestRunUnsafeExecutesPython(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+	req := Request{Code: "print('hello')", TimeoutMs: 5000}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+	if strings.TrimSpace(result.Stdout) != "hello" {
+		t.Errorf("stdout = %q, want %q", result.Stdout, "hello\n")
+	}
+}
+
+func TestRunUnsafeWithArgs(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+	req := Request{
+		Code:      "import sys, json; print(json.dumps({'arg': sys.argv[1]}))",
+		TimeoutMs: 5000,
+		Args:      []string{"test-value"},
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, "test-value") {
+		t.Errorf("stdout = %q, want it to contain 'test-value'", result.Stdout)
+	}
+}
+
+func TestRunUnsafeTimeout(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+	req := Request{Code: "import time; time.sleep(10)", TimeoutMs: 100}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if !result.TimedOut {
+		t.Error("expected timeout")
+	}
+}
+
+func TestRunUnsafeRejectsMainPy(t *testing.T) {
+	cfg := Config{PythonPath: "/usr/bin/python3", MaxOutputBytes: MaxOutputBytes}
+	req := Request{
+		Code:      "print('hello')",
+		Files:     []File{{Name: "main.py", Content: "bad"}},
+		TimeoutMs: 5000,
+	}
+
+	_, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for reserved filename")
+	}
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestTimeoutDetectionNoFalsePositive(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("test requires linux")
