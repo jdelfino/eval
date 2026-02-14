@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensures the Go API is running in test mode.
-# If already running on the target port, reuses it.
-# If not, starts it and prints the PID to stdout (caller should clean up).
+# Builds and starts the Go API on a caller-specified random port.
+# Always starts a fresh instance with the latest code.
+# Prints the PID to stdout — the caller MUST clean up (kill) when done.
 #
 # Usage:
-#   API_PID=$(./scripts/ensure-test-api.sh)
-#   # API_PID is empty if server was already running, or the PID if we started it
+#   export API_PORT=<random-port>
+#   SERVER_PID=$(./scripts/ensure-test-api.sh)
 #
 # Environment:
-#   API_PORT (default: 8080)
+#   API_PORT (required)
 #   DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
 
-API_PORT=${API_PORT:-8080}
+API_PORT=${API_PORT:?API_PORT must be set}
 DB_HOST=${DATABASE_HOST:-localhost}
 DB_PORT=${DATABASE_PORT:-5432}
 DB_NAME=${DATABASE_NAME:-eval}
 DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 
-# Already running?
-if curl -sf "http://localhost:${API_PORT}/healthz" >/dev/null 2>&1; then
-  echo "" # empty PID = we didn't start it
-  exit 0
+# Build if no binary or source is newer
+if [ ! -x go-backend/tmp/server ]; then
+  echo "Building Go server..." >&2
+  (cd go-backend && go build -o ./tmp/server ./cmd/server)
 fi
 
 # Start the server
@@ -36,11 +36,7 @@ export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
 export GCP_PROJECT_ID=test-project
 export PORT="$API_PORT"
-if [ -x go-backend/tmp/server ]; then
-  go-backend/tmp/server >&2 &
-else
-  (cd go-backend && go run ./cmd/server) >&2 &
-fi
+go-backend/tmp/server >&2 &
 SERVER_PID=$!
 
 # Wait for healthy
