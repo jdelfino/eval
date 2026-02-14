@@ -223,7 +223,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			} else {
 				emailCli = emailpkg.NoOpClient{}
 			}
-			invitationHandler := handler.NewInvitationHandler(emailCli, cfg.InviteBaseURL)
+			invitationHandler := handler.NewInvitationHandler(emailCli, cfg.InviteBaseURL, logger)
 			r.Mount("/namespaces/{id}/invitations", invitationHandler.Routes())
 			r.Mount("/system/invitations", invitationHandler.SystemRoutes())
 

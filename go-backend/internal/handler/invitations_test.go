@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -96,7 +97,7 @@ func invitationHandler(repo *mockInvitationRepo, emailClient email.Client) *Invi
 	if emailClient == nil {
 		emailClient = email.NoOpClient{}
 	}
-	return NewInvitationHandler(emailClient, "http://localhost:3000/invite/accept")
+	return NewInvitationHandler(emailClient, "http://localhost:3000/invite/accept", slog.Default())
 }
 
 func invitationRepos(repo *mockInvitationRepo) *invitationTestRepos {
@@ -274,6 +275,83 @@ func TestCreateInvitation_Success(t *testing.T) {
 	}
 	if !emailCli.sendCalled {
 		t.Error("expected email to be sent")
+	}
+}
+
+func TestCreateInvitation_EmailSentTrue(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":       "alice@example.com",
+		"target_role": "instructor",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	emailSent, ok := resp["email_sent"]
+	if !ok {
+		t.Fatal("expected email_sent field in response")
+	}
+	if emailSent != true {
+		t.Errorf("expected email_sent=true, got %v", emailSent)
+	}
+}
+
+func TestCreateInvitation_EmailSentFalse(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{sendErr: errors.New("email service down")}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":       "alice@example.com",
+		"target_role": "instructor",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	// Should still return 201 (best-effort email)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	emailSent, ok := resp["email_sent"]
+	if !ok {
+		t.Fatal("expected email_sent field in response")
+	}
+	if emailSent != false {
+		t.Errorf("expected email_sent=false, got %v", emailSent)
 	}
 }
 
@@ -674,6 +752,89 @@ func TestSystemCreateInvitation_Success(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSystemCreateInvitation_EmailSentTrue(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":        "alice@example.com",
+		"target_role":  "instructor",
+		"namespace_id": "test-ns",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.SystemCreate(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	emailSent, ok := resp["email_sent"]
+	if !ok {
+		t.Fatal("expected email_sent field in response")
+	}
+	if emailSent != true {
+		t.Errorf("expected email_sent=true, got %v", emailSent)
+	}
+}
+
+func TestSystemCreateInvitation_EmailSentFalse(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{sendErr: errors.New("email service down")}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := invitationHandler(repo, emailCli)
+	body, _ := json.Marshal(map[string]any{
+		"email":        "alice@example.com",
+		"target_role":  "instructor",
+		"namespace_id": "test-ns",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.SystemCreate(rec, req)
+
+	// Should still return 201 (best-effort email)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	emailSent, ok := resp["email_sent"]
+	if !ok {
+		t.Fatal("expected email_sent field in response")
+	}
+	if emailSent != false {
+		t.Errorf("expected email_sent=false, got %v", emailSent)
 	}
 }
 
