@@ -13,8 +13,9 @@ type Config struct {
 	LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
 
 	// Sandbox Configuration
-	NsjailPath string `env:"NSJAIL_PATH" envDefault:"/usr/bin/nsjail"`
-	PythonPath string `env:"PYTHON_PATH" envDefault:"/usr/bin/python3"`
+	NsjailPath     string `env:"NSJAIL_PATH" envDefault:"/usr/bin/nsjail"`
+	PythonPath     string `env:"PYTHON_PATH" envDefault:"/usr/bin/python3"`
+	DisableSandbox bool   `env:"DISABLE_SANDBOX" envDefault:"false"`
 
 	// Execution Limits
 	MaxConcurrentExecutions int `env:"MAX_CONCURRENT_EXECUTIONS" envDefault:"10"`

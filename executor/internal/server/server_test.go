@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -135,6 +136,20 @@ func TestExecuteRoute(t *testing.T) {
 	}
 }
 
+func TestTraceRoute(t *testing.T) {
+	srv := newTestServer(t)
+
+	// POST with no body should get 400 (invalid JSON), proving the route is wired.
+	req := httptest.NewRequest(http.MethodPost, "/trace", nil)
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestMetrics(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -210,12 +225,12 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 
-	var resp map[string]string
-	if err := json.NewDecoder(rec2.Body).Decode(&resp); err != nil {
+	var errResp map[string]string
+	if err := json.NewDecoder(rec2.Body).Decode(&errResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["error"] != "rate limit exceeded" {
-		t.Errorf("error = %q, want %q", resp["error"], "rate limit exceeded")
+	if errResp["error"] != "rate limit exceeded" {
+		t.Errorf("error = %q, want %q", errResp["error"], "rate limit exceeded")
 	}
 
 	if called != 1 {
@@ -279,4 +294,45 @@ func TestRateLimitEnabled_IntegrationWithServer(t *testing.T) {
 	if rec2.Code != http.StatusTooManyRequests {
 		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
+}
+
+func TestDisableSandboxInLocalEnv(t *testing.T) {
+	cfg := &config.Config{
+		Port:           8081,
+		Environment:    "local",
+		DisableSandbox: true,
+		NsjailPath:     "/usr/bin/nsjail",
+		PythonPath:     "/usr/bin/python3",
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+	if srv == nil {
+		t.Fatal("expected non-nil server")
+	}
+}
+
+func TestDisableSandboxInProdExits(t *testing.T) {
+	// Use subprocess pattern to test os.Exit behavior.
+	if os.Getenv("TEST_SANDBOX_PROD_GUARD") == "1" {
+		cfg := &config.Config{
+			Port:           8081,
+			Environment:    "production",
+			DisableSandbox: true,
+			NsjailPath:     "/usr/bin/nsjail",
+			PythonPath:     "/usr/bin/python3",
+		}
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+		reg := prometheus.NewRegistry()
+		NewWithRegistry(cfg, logger, reg)
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestDisableSandboxInProdExits")
+	cmd.Env = append(os.Environ(), "TEST_SANDBOX_PROD_GUARD=1")
+	err := cmd.Run()
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		return // expected: process exited with non-zero status
+	}
+	t.Fatal("expected process to exit with non-zero status when DISABLE_SANDBOX is set in production")
 }

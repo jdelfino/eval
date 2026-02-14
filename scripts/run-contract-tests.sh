@@ -9,13 +9,18 @@ DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 PSQL_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
-# --- 1. Ensure Postgres and executor are running ---
+# --- 1. Ensure infrastructure is running ---
 ./scripts/ensure-test-postgres.sh
-docker compose up -d executor --wait
 
-# --- 2. Start Go API on random port ---
-API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-export API_PORT
+# Executor: reuse if already healthy (may be from another compose project / make dev).
+# Contract tests don't exercise executor code — use make test-integration-executor for that.
+if ! curl -sf http://localhost:8081/healthz >/dev/null 2>&1; then
+  echo "Starting executor..."
+  docker compose up -d executor --build --wait
+fi
+
+# --- 2. Start Go API on random port (builds binary if needed) ---
+export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 SERVER_PID=$(./scripts/ensure-test-api.sh)
 
 # --- 3. Generate random namespace ---

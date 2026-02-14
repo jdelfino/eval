@@ -29,6 +29,10 @@ describe('executeStandaloneCode()', () => {
     expectBoolean(result, 'success');
     expectNumber(result, 'execution_time_ms');
 
+    // Verify code actually executed successfully (not just shape validation)
+    expect(result.success).toBe(true);
+    expect(result.output).toBe('hello\n');
+
     // output and error use omitempty — only present when non-empty
     const raw = result as unknown as Record<string, unknown>;
     if ('output' in raw) {

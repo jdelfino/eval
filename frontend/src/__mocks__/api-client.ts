@@ -4,6 +4,8 @@
  * so tests can mock global.fetch directly.
  */
 
+import { ApiError } from '@/lib/api-error';
+
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   return { Authorization: 'Bearer mock-firebase-token' };
 }
@@ -13,9 +15,11 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<Res
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.error || `Request failed: ${response.status}`);
-    (error as any).status = response.status;
-    throw error;
+    throw new ApiError(
+      errorData.error || `Request failed: ${response.status}`,
+      response.status,
+      errorData.code,
+    );
   }
 
   return response;

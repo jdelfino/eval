@@ -21,8 +21,10 @@ type TracerClient interface {
 
 // traceHTTPRequest is the request body for POST /sessions/{id}/trace.
 type traceHTTPRequest struct {
-	StudentID uuid.UUID `json:"student_id" validate:"required"`
-	Code      string    `json:"code" validate:"required"`
+	StudentID *uuid.UUID `json:"student_id"` // optional; defaults to caller's own ID
+	Code      string     `json:"code" validate:"required"`
+	Stdin     string     `json:"stdin"`
+	MaxSteps  *int       `json:"max_steps,omitempty"`
 }
 
 // TraceHandler handles debugger trace requests for sessions.
@@ -45,12 +47,6 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Instructor+ only
-	if authUser.Role == auth.RoleStudent {
-		httputil.WriteError(w, http.StatusForbidden, "instructor or higher role required")
-		return
-	}
-
 	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
@@ -59,6 +55,12 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 	req, err := httpbind.BindJSON[traceHTTPRequest](w, r)
 	if err != nil {
 		return
+	}
+
+	// Default student_id to caller's own ID (students tracing their own code).
+	studentID := authUser.ID
+	if req.StudentID != nil {
+		studentID = *req.StudentID
 	}
 
 	repos := store.ReposFromContext(r.Context())
@@ -80,13 +82,17 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate student_id is a participant
-	if !isCreatorOrParticipant(req.StudentID, session) {
+	if !isCreatorOrParticipant(studentID, session) {
 		httputil.WriteError(w, http.StatusBadRequest, "student_id is not a participant in this session")
 		return
 	}
 
 	// Call executor trace
-	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{Code: req.Code})
+	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{
+		Code:     req.Code,
+		Stdin:    req.Stdin,
+		MaxSteps: req.MaxSteps,
+	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "trace execution failed")
 		return

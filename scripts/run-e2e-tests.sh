@@ -3,10 +3,12 @@ set -euo pipefail
 
 # E2E test runner.
 #
-# Ensures Postgres and Go API are running (reuses if already up),
-# starts Next.js if needed, then runs Playwright.
+# Infrastructure (postgres, redis, centrifugo, executor) is shared on fixed
+# ports — started only if not already healthy.
+#
+# Go API is per-run on a random port (different branches may have different
+# code). Next.js proxies to the Go API via API_PROXY_URL.
 
-API_PORT=${API_PORT:-8080}
 NEXT_PORT=3000
 
 PIDS_TO_KILL=()
@@ -18,16 +20,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# --- 1. Postgres + migrations + seed ---
+# --- 1. Shared infrastructure ---
 ./scripts/ensure-test-postgres.sh
 
-# --- 2. Go API (reuse if running) ---
-API_PID=$(./scripts/ensure-test-api.sh)
-if [ -n "$API_PID" ]; then
-  PIDS_TO_KILL+=("$API_PID")
+if ! curl -sf http://localhost:8081/healthz >/dev/null 2>&1; then
+  echo "Starting executor..."
+  docker compose up -d executor --build --wait
 fi
 
-# --- 3. Next.js (reuse if running) ---
+# --- 2. Go API on random port (builds binary if needed) ---
+export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+SERVER_PID=$(./scripts/ensure-test-api.sh)
+PIDS_TO_KILL+=("$SERVER_PID")
+
+# --- 3. Next.js ---
 if curl -sf "http://localhost:${NEXT_PORT}" >/dev/null 2>&1; then
   echo "Next.js already running on port ${NEXT_PORT}"
 else

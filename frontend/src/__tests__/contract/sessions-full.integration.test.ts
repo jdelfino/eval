@@ -1,10 +1,10 @@
 /**
  * Contract tests for ALL session management API functions in sessions.ts.
  *
- * Covers the 9 functions not tested by sessions.integration.test.ts:
+ * Covers the 10 functions not tested by sessions.integration.test.ts:
  *   createSession, endSession, updateSessionProblem, getSessionDetails,
- *   getSessionPublicState, analyzeSession, featureCode, reopenSession,
- *   listSessionHistoryWithFilters
+ *   getSessionPublicState, traceSession, analyzeSession, featureCode,
+ *   reopenSession, listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
  */
@@ -16,6 +16,7 @@ import {
   updateSessionProblem,
   getSessionDetails,
   getSessionPublicState,
+  traceSession,
   analyzeSession,
   featureCode,
   reopenSession,
@@ -192,7 +193,18 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 6. analyzeSession (may fail if AI service is not configured)
+  // 6. traceSession
+  // -----------------------------------------------------------------------
+  describe('traceSession()', () => {
+    it('returns ExecutionTrace with steps array', async () => {
+      const trace = await traceSession(testSessionId, 'x = 1\nprint(x)');
+      expect(trace).toHaveProperty('steps');
+      expect(Array.isArray(trace.steps)).toBe(true);
+      expect(trace.steps.length).toBeGreaterThan(0);
+    });
+  });
+
+  // 7. analyzeSession (may fail if AI service is not configured)
   // -----------------------------------------------------------------------
   describe('analyzeSession()', () => {
     it('returns AnalysisResponse or gracefully fails if AI not configured', async () => {
@@ -216,7 +228,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. featureCode
+  // 8. featureCode
   // -----------------------------------------------------------------------
   describe('featureCode()', () => {
     it('resolves without throwing', async () => {
@@ -227,7 +239,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. reopenSession (end first, then reopen)
+  // 9. reopenSession (end first, then reopen)
   // -----------------------------------------------------------------------
   describe('reopenSession()', () => {
     it('resolves without throwing after ending a session', async () => {

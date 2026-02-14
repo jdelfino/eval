@@ -17,12 +17,10 @@ export type SessionStatus = 'active' | 'completed';
 export type MembershipRole = 'instructor' | 'student';
 
 // ---------------------------------------------------------------------------
-// API error
+// API error — re-exported from lib/api-error for convenience
 // ---------------------------------------------------------------------------
 
-export interface ApiError {
-  error: string;
-}
+export { ApiError } from '@/lib/api-error';
 
 // ---------------------------------------------------------------------------
 // Domain types — field names match JSON keys from the Go backend
@@ -161,6 +159,43 @@ export interface SessionPublicState {
   featured_code: string | null;
   join_code: string;
   status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Registration / invitation types
+// ---------------------------------------------------------------------------
+
+/** Invitation details returned by GET /auth/accept-invite. Matches store.SerializedInvitation. */
+export interface InvitationDetails {
+  id: string;
+  email: string;
+  target_role: 'namespace-admin' | 'instructor';
+  namespace_id: string;
+  status: string;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  consumed_at: string | null;
+  consumed_by: string | null;
+  revoked_at: string | null;
+}
+
+/** Response from GET /auth/register-student. */
+export interface RegisterStudentInfo {
+  section: Section;
+  class: Class;
+}
+
+/** Public problem data returned by GET /public/problems/:id. */
+export interface PublicProblem {
+  id: string;
+  title: string;
+  description: string | null;
+  solution: string | null;
+  starter_code: string | null;
+  class_id: string;
+  class_name: string | null;
+  tags: string[];
 }
 
 // ---------------------------------------------------------------------------

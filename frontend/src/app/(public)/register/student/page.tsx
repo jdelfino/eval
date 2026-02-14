@@ -20,14 +20,15 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { firebaseAuth } from '@/lib/firebase';
-import { publicFetchRaw } from '@/lib/public-api-client';
-import { apiFetchRaw } from '@/lib/api-client';
+import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
+import type { RegisterStudentInfo } from '@/types/api';
 
 // Page state types
 type PageState =
   | { status: 'code-entry' }
   | { status: 'validating-code' }
-  | { status: 'code-valid'; section: SectionInfo }
+  | { status: 'code-valid'; info: RegisterStudentInfo }
   | { status: 'submitting' }
   | { status: 'success' }
   | { status: 'error'; error: ErrorType; step: 'code' | 'registration' };
@@ -39,22 +40,6 @@ type ErrorType =
   | 'email_exists'
   | 'weak_password'
   | 'network_error';
-
-interface SectionInfo {
-  id: string;
-  name: string;
-  semester?: string;
-  class: {
-    id: string;
-    name: string;
-    description?: string;
-  } | null;
-  namespace: {
-    id: string;
-    displayName: string;
-  };
-  instructors: Array<{ id: string; displayName: string }>;
-}
 
 // Error messages
 const ERROR_MESSAGES: Record<ErrorType, string> = {
@@ -94,7 +79,7 @@ function StudentRegistrationContent() {
 
   // Page state
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
-  const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
+  const [registrationInfo, setRegistrationInfo] = useState<RegisterStudentInfo | null>(null);
 
   // Form fields
   const [join_code, setJoinCode] = useState('');
@@ -190,36 +175,21 @@ function StudentRegistrationContent() {
     setPageState({ status: 'validating-code' });
 
     try {
-      const response = await publicFetchRaw(`/auth/register-student?code=${encodeURIComponent(cleaned)}`);
-
-      if (!response.ok) {
-        const data = await response.json();
-
-        if (data.code === 'INVALID_CODE' || data.code === 'MISSING_CODE') {
+      const data = await getStudentRegistrationInfo(cleaned);
+      setRegistrationInfo(data);
+      setPageState({ status: 'code-valid', info: data });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.code === 'INVALID_CODE' || error.code === 'MISSING_CODE') {
           setCodeError(ERROR_MESSAGES.invalid_code);
-        } else if (data.code === 'SECTION_INACTIVE') {
+        } else if (error.code === 'SECTION_INACTIVE') {
           setCodeError(ERROR_MESSAGES.section_inactive);
         } else {
-          setCodeError(data.error || 'Failed to validate code');
+          setCodeError(error.message);
         }
-
-        setPageState({ status: 'code-entry' });
-        return;
+      } else {
+        setCodeError('Failed to validate code');
       }
-
-      const data = await response.json();
-      setSectionInfo({
-        id: data.section.id,
-        name: data.section.name,
-        semester: data.section.semester,
-        class: data.class,
-        namespace: data.namespace,
-        instructors: data.instructors || [],
-      });
-      setPageState({ status: 'code-valid', section: data.section });
-    } catch (error) {
-      console.error('[StudentRegistration] Validate code error:', error);
-      setCodeError(ERROR_MESSAGES.network_error);
       setPageState({ status: 'code-entry' });
     }
   };
@@ -253,35 +223,7 @@ function StudentRegistrationContent() {
       // The backend extracts external_id and email from JWT claims (not request body)
       // Wrap in try/catch to clean up Firebase account on failure
       try {
-        const response = await apiFetchRaw('/auth/register-student', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            join_code: join_code.replace(/-/g, ''),
-          }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-
-          // Delete Firebase account so user can retry with same email
-          await firebaseAuth.currentUser?.delete();
-
-          // Map error codes to messages
-          if (data.code === 'NAMESPACE_AT_CAPACITY') {
-            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
-          } else if (data.code === 'INVALID_CODE' || data.code === 'SECTION_INACTIVE') {
-            // Code became invalid, go back to code entry
-            setPageState({ status: 'code-entry' });
-            setCodeError(data.code === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
-            return;
-          } else {
-            setSubmitError(data.error || 'Registration failed');
-          }
-
-          setPageState({ status: 'code-valid', section: sectionInfo! });
-          return;
-        }
+        await registerStudent(join_code.replace(/-/g, ''));
 
         // Success! User is already logged in via Firebase
         setPageState({ status: 'success' });
@@ -292,7 +234,23 @@ function StudentRegistrationContent() {
       } catch (backendError) {
         // Backend call failed (network error, etc.) - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
-        throw backendError;
+
+        if (backendError instanceof ApiError) {
+          if (backendError.code === 'NAMESPACE_AT_CAPACITY') {
+            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
+          } else if (backendError.code === 'INVALID_CODE' || backendError.code === 'SECTION_INACTIVE') {
+            // Code became invalid, go back to code entry
+            setPageState({ status: 'code-entry' });
+            setCodeError(backendError.code === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
+            return;
+          } else {
+            setSubmitError(backendError.message);
+          }
+        } else {
+          setSubmitError('Registration failed');
+        }
+
+        setPageState({ status: 'code-valid', info: registrationInfo! });
       }
     } catch (error) {
       console.error('[StudentRegistration] Register error:', error);
@@ -307,14 +265,14 @@ function StudentRegistrationContent() {
         setSubmitError(ERROR_MESSAGES.network_error);
       }
 
-      setPageState({ status: 'code-valid', section: sectionInfo! });
+      setPageState({ status: 'code-valid', info: registrationInfo! });
     }
   };
 
   // Go back to code entry
   const handleBackToCode = () => {
     setPageState({ status: 'code-entry' });
-    setSectionInfo(null);
+    setRegistrationInfo(null);
     setEmail('');
     setPassword('');
     setConfirmPassword('');
@@ -435,25 +393,19 @@ function StudentRegistrationContent() {
         )}
 
         {/* Section Preview + Registration Form */}
-        {(pageState.status === 'code-valid' || pageState.status === 'submitting') && sectionInfo && (
+        {(pageState.status === 'code-valid' || pageState.status === 'submitting') && registrationInfo && (
           <>
             {/* Section Preview */}
             <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
               <p className="text-xs text-indigo-600 font-medium mb-2">You're joining:</p>
               <div className="bg-white rounded-lg p-4 border border-indigo-100">
                 <h3 className="font-semibold text-gray-900">
-                  {sectionInfo.class?.name || 'Unknown Class'}
+                  {registrationInfo.class.name}
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Section: {sectionInfo.name}
-                  {sectionInfo.semester && ` (${sectionInfo.semester})`}
+                  Section: {registrationInfo.section.name}
+                  {registrationInfo.section.semester && ` (${registrationInfo.section.semester})`}
                 </p>
-                {sectionInfo.instructors.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Instructor{sectionInfo.instructors.length > 1 ? 's' : ''}:{' '}
-                    {sectionInfo.instructors.map((i) => i.displayName).join(', ')}
-                  </p>
-                )}
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 /**
  * Tests for api-client (Firebase/production mode)
  */
+import { ApiError } from '@/lib/api-error';
 export {};
 
 // Mock firebase before importing api-client
@@ -260,7 +261,7 @@ describe('api-client', () => {
   });
 
   describe('apiFetch error handling', () => {
-    it('throws on non-ok response', async () => {
+    it('throws ApiError on non-ok response', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,
@@ -269,10 +270,26 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('../api-client');
-      const err: any = await apiGet('/v1/missing').catch((e: any) => e);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Not found');
-      expect(err.status).toBe(404);
+      const err = await apiGet('/v1/missing').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).message).toBe('Not found');
+      expect((err as ApiError).status).toBe(404);
+    });
+
+    it('includes code from error body on thrown ApiError', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Bad request', code: 'INVALID_CODE' }),
+      });
+
+      const { apiGet } = require('../api-client');
+      const err = await apiGet('/v1/items').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).message).toBe('Bad request');
+      expect((err as ApiError).status).toBe(400);
+      expect((err as ApiError).code).toBe('INVALID_CODE');
     });
 
     it('uses status code as message when error JSON has no error field', async () => {
@@ -284,10 +301,10 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('../api-client');
-      const err: any = await apiGet('/v1/broken').catch((e: any) => e);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Request failed: 500');
-      expect(err.status).toBe(500);
+      const err = await apiGet('/v1/broken').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).message).toBe('Request failed: 500');
+      expect((err as ApiError).status).toBe(500);
     });
 
     it('handles non-JSON error response body', async () => {
@@ -299,10 +316,10 @@ describe('api-client', () => {
       });
 
       const { apiGet } = require('../api-client');
-      const err: any = await apiGet('/v1/bad-gateway').catch((e: any) => e);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Request failed: 502');
-      expect(err.status).toBe(502);
+      const err = await apiGet('/v1/bad-gateway').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).message).toBe('Request failed: 502');
+      expect((err as ApiError).status).toBe(502);
     });
   });
 

@@ -3,7 +3,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -66,9 +65,22 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 
 	r.Get("/readyz", readyzHandler(cfg, m))
 
+	// Select sandbox runner. DISABLE_SANDBOX skips nsjail for environments
+	// where it can't run (CI, devcontainers). Never allowed in production.
+	runner := handler.SandboxRunner(sandbox.Run)
+	if cfg.DisableSandbox {
+		if cfg.Environment == "production" || cfg.Environment == "prod" {
+			logger.Error("DISABLE_SANDBOX is set in production — refusing to start without sandboxing")
+			fmt.Fprintln(os.Stderr, "FATAL: DISABLE_SANDBOX=true is not allowed in production")
+			os.Exit(1)
+		}
+		logger.Warn("sandbox disabled — executing code without nsjail isolation")
+		runner = sandbox.RunUnsafe
+	}
+
 	// Execute endpoint
 	execHandler := handler.NewExecuteHandler(
-		logger, sandbox.Run, m,
+		logger, runner, m,
 		handler.ExecuteHandlerConfig{
 			NsjailPath:       cfg.NsjailPath,
 			PythonPath:       cfg.PythonPath,
@@ -89,6 +101,25 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	}
 	r.Post("/execute", executeHandler)
 
+	// Trace endpoint (shares rate limiter and concurrency pool concept with /execute).
+	traceHandler := handler.NewTraceHandler(
+		logger, runner, m,
+		handler.TraceHandlerConfig{
+			NsjailPath:              cfg.NsjailPath,
+			PythonPath:              cfg.PythonPath,
+			MaxOutputBytes:          cfg.MaxOutputBytes,
+			MaxCodeBytes:            cfg.MaxCodeBytes,
+			MaxStdinBytes:           cfg.MaxStdinBytes,
+			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
+		},
+	)
+	var traceHandlerFunc http.HandlerFunc = traceHandler.ServeHTTP
+	if cfg.RateLimitRPS > 0 {
+		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
+		traceHandlerFunc = rateLimitMiddleware(limiter, traceHandlerFunc)
+	}
+	r.Post("/trace", traceHandlerFunc)
+
 	return &Server{
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
@@ -102,9 +133,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 
 // readyzHandler returns an HTTP handler that checks if nsjail and python3 binaries are accessible.
 func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
+	return func(w http.ResponseWriter, _ *http.Request) {
 		components := map[string]string{}
 		healthy := true
 
@@ -123,16 +152,16 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 		}
 
 		status := "ok"
+		code := http.StatusOK
 		if !healthy {
 			status = "unhealthy"
+			code = http.StatusServiceUnavailable
 			m.Ready.Set(0)
-			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			m.Ready.Set(1)
-			w.WriteHeader(http.StatusOK)
 		}
 
-		_ = json.NewEncoder(w).Encode(readyResponse{
+		httputil.WriteJSON(w, code, readyResponse{
 			Status:     status,
 			Components: components,
 		})

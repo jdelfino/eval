@@ -31,10 +31,10 @@ require (
 
 replace github.com/jdelfino/eval/pkg/executorapi => ../pkg/executorapi
 
+replace github.com/jdelfino/eval/pkg/httputil => ../pkg/httputil
+
 replace github.com/jdelfino/eval/pkg/httplog => ../pkg/httplog
 
 replace github.com/jdelfino/eval/pkg/slogutil => ../pkg/slogutil
 
 replace github.com/jdelfino/eval/pkg/httpmiddleware => ../pkg/httpmiddleware
-
-replace github.com/jdelfino/eval/pkg/httputil => ../pkg/httputil
