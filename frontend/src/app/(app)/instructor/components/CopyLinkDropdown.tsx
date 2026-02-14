@@ -59,7 +59,7 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
       setFetchError(false);
       try {
         const fetchedSections = await getClassSections(class_id);
-        setSections(fetchedSections ?? []);
+        setSections(fetchedSections);
       } catch {
         setFetchError(true);
       } finally {

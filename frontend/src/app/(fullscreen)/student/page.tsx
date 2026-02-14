@@ -85,7 +85,7 @@ function StudentPage() {
   const joinAttemptedRef = useRef<string | null>(null);
 
   // Track previous session ID to detect navigation to a new session
-  const prevSessionIdRef = useRef<string | undefined>(sessionIdFromUrl ?? undefined);
+  const prevSessionIdRef = useRef<string | null>(sessionIdFromUrl);
 
   // Handle joining the session
   useEffect(() => {
@@ -176,7 +176,7 @@ function StudentPage() {
       setSessionEnded(false);
       setJoined(false);
       joinAttemptedRef.current = null;
-      prevSessionIdRef.current = sessionIdFromUrl ?? undefined;
+      prevSessionIdRef.current = sessionIdFromUrl;
     }
   }, [sessionIdFromUrl]);
 

@@ -174,7 +174,7 @@ export async function analyzeSession(
   sessionId: string,
   studentId: string,
   code: string,
-  problemDescription?: string,
+  problemDescription?: string | null,
 ): Promise<AnalysisResponse> {
   return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`, {
     student_id: studentId,

@@ -11,7 +11,7 @@ interface SessionControlsProps {
   onEndSession: () => void;
   onClearPublicView?: () => void;
   featured_student_id?: string | null;
-  problemSolution?: string;
+  problemSolution?: string | null;
   onShowSolution?: () => void;
 }
 

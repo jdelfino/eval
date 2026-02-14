@@ -128,7 +128,7 @@ export function SessionStudentPane({
 
   const handleAnalyze = () => {
     if (!selectedStudentId) return;
-    analyze(session_id, selectedStudentId, selectedStudentCode, sessionProblem?.description ?? undefined);
+    analyze(session_id, selectedStudentId, selectedStudentCode, sessionProblem?.description);
   };
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);

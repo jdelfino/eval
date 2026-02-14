@@ -44,7 +44,7 @@ export default function useAnalysisGroups() {
   const completion_estimate = script?.summary?.completion_estimate ?? null;
   const finished_student_ids = useMemo(() => new Set(script?.finished_student_ids ?? []), [script]);
 
-  const analyze = useCallback(async (session_id: string, student_id: string, code: string, problemDescription?: string) => {
+  const analyze = useCallback(async (session_id: string, student_id: string, code: string, problemDescription?: string | null) => {
     setAnalysisState('loading');
     setError(null);
 

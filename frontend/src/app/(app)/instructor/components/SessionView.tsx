@@ -142,7 +142,7 @@ export function SessionView({
         onEndSession={onEndSession}
         onClearPublicView={onClearPublicView}
         featured_student_id={featured_student_id}
-        problemSolution={sessionProblem?.solution ?? undefined}
+        problemSolution={sessionProblem?.solution}
         onShowSolution={handleShowSolution}
       />
 
