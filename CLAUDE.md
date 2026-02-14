@@ -48,6 +48,8 @@ Run these before committing. Pick the targets matching the code you changed.
 | Go backend | `make test-api` | `make lint-api` | — |
 | Executor | `make test-executor` | `make lint-executor` | — |
 | Frontend | `make test-frontend` | `make lint-frontend` | `make typecheck-frontend` |
+| Frontend API boundaries | `make check-api-imports` | — | — |
+| Contract coverage | `make check-contract-coverage` | — | — |
 | Store integration | `make test-integration-store` | — | — |
 | Contract tests | `make test-integration-contract` | — | — |
 | **All unit tests** | `make test` | `make lint` | — |
