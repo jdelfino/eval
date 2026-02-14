@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,11 +95,25 @@ func (r *invitationTestRepos) ConsumeInvitation(ctx context.Context, id uuid.UUI
 	return r.inv.ConsumeInvitation(ctx, id, userID)
 }
 
-func invitationHandler(repo *mockInvitationRepo, emailClient email.Client) *InvitationHandler {
+func invitationHandler(repo *mockInvitationRepo, emailClient email.Client, opts ...func(*invitationHandlerOpts)) *InvitationHandler {
 	if emailClient == nil {
 		emailClient = email.NoOpClient{}
 	}
-	return NewInvitationHandler(emailClient, "http://localhost:3000/invite/accept", slog.Default())
+	o := invitationHandlerOpts{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	for _, fn := range opts {
+		fn(&o)
+	}
+	return NewInvitationHandler(emailClient, "http://localhost:3000/invite/accept", o.logger)
+}
+
+type invitationHandlerOpts struct {
+	logger *slog.Logger
+}
+
+func withLogger(l *slog.Logger) func(*invitationHandlerOpts) {
+	return func(o *invitationHandlerOpts) {
+		o.logger = l
+	}
 }
 
 func invitationRepos(repo *mockInvitationRepo) *invitationTestRepos {
@@ -276,6 +292,14 @@ func TestCreateInvitation_Success(t *testing.T) {
 	if !emailCli.sendCalled {
 		t.Error("expected email to be sent")
 	}
+
+	var resp createInvitationResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.EmailSent {
+		t.Errorf("expected email_sent=true, got false")
+	}
 }
 
 func TestCreateInvitation_EmailSentTrue(t *testing.T) {
@@ -352,6 +376,46 @@ func TestCreateInvitation_EmailSentFalse(t *testing.T) {
 	}
 	if emailSent != false {
 		t.Errorf("expected email_sent=false, got %v", emailSent)
+	}
+}
+
+func TestCreateInvitation_EmailFailureLogsWarning(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{sendErr: errors.New("smtp timeout")}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	h := invitationHandler(repo, emailCli, withLogger(logger))
+
+	body, _ := json.Marshal(map[string]any{
+		"email":       "alice@example.com",
+		"target_role": "instructor",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withNsCtx(req, "test-ns", nsAdmin("test-ns"), invitationRepos(repo))
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "failed to send invitation email") {
+		t.Errorf("expected WARN log with 'failed to send invitation email', got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, inv.ID.String()) {
+		t.Errorf("expected log to contain invitation ID %s, got: %s", inv.ID.String(), logOutput)
+	}
+	if !strings.Contains(logOutput, "WARN") {
+		t.Errorf("expected WARN level log, got: %s", logOutput)
 	}
 }
 
@@ -835,6 +899,49 @@ func TestSystemCreateInvitation_EmailSentFalse(t *testing.T) {
 	}
 	if emailSent != false {
 		t.Errorf("expected email_sent=false, got %v", emailSent)
+	}
+}
+
+func TestSystemCreateInvitation_EmailFailureLogsWarning(t *testing.T) {
+	inv := testInvitation("test-ns")
+	emailCli := &mockEmailClient{sendErr: errors.New("smtp timeout")}
+	repo := &mockInvitationRepo{
+		createInvitationFn: func(_ context.Context, _ store.CreateInvitationParams) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	h := invitationHandler(repo, emailCli, withLogger(logger))
+
+	body, _ := json.Marshal(map[string]any{
+		"email":        "alice@example.com",
+		"target_role":  "instructor",
+		"namespace_id": "test-ns",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), sysAdmin())
+	ctx = store.WithRepos(ctx, invitationRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.SystemCreate(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "failed to send invitation email") {
+		t.Errorf("expected WARN log with 'failed to send invitation email', got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, inv.ID.String()) {
+		t.Errorf("expected log to contain invitation ID %s, got: %s", inv.ID.String(), logOutput)
+	}
+	if !strings.Contains(logOutput, "WARN") {
+		t.Errorf("expected WARN level log, got: %s", logOutput)
 	}
 }
 
