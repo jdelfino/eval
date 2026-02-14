@@ -219,7 +219,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Invitation routes
 			var emailCli emailpkg.Client
 			if cfg.ResendAPIKey != "" {
-				emailCli = emailpkg.NewResendClient(cfg.ResendAPIKey)
+				emailCli = emailpkg.NewResendClient(cfg.ResendAPIKey, cfg.ResendFromEmail)
 			} else {
 				emailCli = emailpkg.NoOpClient{}
 			}

@@ -22,12 +22,12 @@ type ResendClient struct {
 	fromEmail  string
 }
 
-// NewResendClient creates a new ResendClient with the given API key.
-func NewResendClient(apiKey string) *ResendClient {
+// NewResendClient creates a new ResendClient with the given API key and sender address.
+func NewResendClient(apiKey, fromEmail string) *ResendClient {
 	return &ResendClient{
 		apiKey:     apiKey,
 		httpClient: http.DefaultClient,
-		fromEmail:  "noreply@eval.dev",
+		fromEmail:  fromEmail,
 	}
 }
 

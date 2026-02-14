@@ -82,7 +82,8 @@ oauth_client_id = "580381260766-g0a0lism1p3kt6an595di291cebmv5fl.apps.googleuser
 # OAuth client secret and Resend API key are in GCP Secret Manager.
 # See module "secrets" in main.tf for the list of managed secrets.
 
-invite_base_url = "https://eval.delquillan.com"
+invite_base_url    = "https://eval.delquillan.com"
+resend_from_email  = "noreply@delquillan.com"
 
 # -----------------------------------------------------------------------------
 # Workload Identity Federation Configuration

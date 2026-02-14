@@ -258,8 +258,9 @@ resource "kubernetes_config_map" "app_config" {
     # Centrifugo Configuration
     CENTRIFUGO_URL = "http://centrifugo:8000"
 
-    # Invitation Configuration
-    INVITE_BASE_URL = var.invite_base_url
+    # Invitation / Email Configuration
+    INVITE_BASE_URL    = var.invite_base_url
+    RESEND_FROM_EMAIL  = var.resend_from_email
   }
 
   depends_on = [module.gke]

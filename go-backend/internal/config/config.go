@@ -59,8 +59,9 @@ type Config struct {
 	AuthMode string `env:"AUTH_MODE" envDefault:""`
 
 	// Invitation / Email Configuration
-	ResendAPIKey  string `env:"RESEND_API_KEY"`
-	InviteBaseURL string `env:"INVITE_BASE_URL" envDefault:"http://localhost:3000/invite/accept"`
+	ResendAPIKey   string `env:"RESEND_API_KEY"`
+	ResendFromEmail string `env:"RESEND_FROM_EMAIL" envDefault:"noreply@localhost"`
+	InviteBaseURL  string `env:"INVITE_BASE_URL" envDefault:"http://localhost:3000/invite/accept"`
 }
 
 // Load parses environment variables and returns a Config struct.

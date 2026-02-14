@@ -208,6 +208,11 @@ variable "invite_base_url" {
   type        = string
 }
 
+variable "resend_from_email" {
+  description = "Sender email address for Resend (must match verified domain)"
+  type        = string
+}
+
 # -----------------------------------------------------------------------------
 # Workload Identity Federation Variables
 # -----------------------------------------------------------------------------
