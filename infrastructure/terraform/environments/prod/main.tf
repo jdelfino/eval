@@ -149,7 +149,7 @@ module "identity_platform" {
   region       = var.region
 
   authorized_domains  = var.authorized_domains
-  oauth_client_id     = module.secrets.secret_values["oauth-client-id"]
+  oauth_client_id     = var.oauth_client_id
   oauth_client_secret = module.secrets.secret_values["oauth-client-secret"]
 }
 
@@ -161,7 +161,7 @@ module "secrets" {
   project_id   = var.project_id
   region       = var.region
 
-  secret_ids = ["resend-api-key", "oauth-client-id", "oauth-client-secret"]
+  secret_ids = ["resend-api-key", "oauth-client-secret"]
 }
 
 module "artifact_registry" {
@@ -242,7 +242,7 @@ resource "kubernetes_config_map" "app_config" {
     # Identity Platform Configuration
     IDENTITY_PLATFORM_API_KEY     = module.identity_platform.api_key
     IDENTITY_PLATFORM_AUTH_DOMAIN = module.identity_platform.auth_domain
-    OAUTH_CLIENT_ID               = module.secrets.secret_values["oauth-client-id"]
+    OAUTH_CLIENT_ID               = module.identity_platform.oauth_client_id
 
     # Database Configuration (non-secret)
     DATABASE_HOST = module.cloudsql.database_host
@@ -269,7 +269,7 @@ resource "kubernetes_secret" "app_secrets" {
   }
 
   data = {
-    OAUTH_CLIENT_SECRET = module.secrets.secret_values["oauth-client-secret"]
+    OAUTH_CLIENT_SECRET = module.identity_platform.oauth_client_secret
     RESEND_API_KEY      = module.secrets.secret_values["resend-api-key"]
     DATABASE_USER       = module.cloudsql.database_user
     DATABASE_PASSWORD   = module.cloudsql.database_password

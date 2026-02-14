@@ -75,7 +75,11 @@ authorized_domains = [
   "localhost"
 ]
 
-# OAuth credentials and other secrets are managed in GCP Secret Manager.
+# OAuth client ID is public (appears in frontend config).
+# Created manually in GCP Console > APIs & Services > Credentials.
+oauth_client_id = ""
+
+# OAuth client secret and Resend API key are in GCP Secret Manager.
 # See module "secrets" in main.tf for the list of managed secrets.
 
 invite_base_url = "https://eval.delquillan.com"
