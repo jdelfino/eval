@@ -20,11 +20,16 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import {
   getAdminStats,
-  listAdminUsers,
-  changeUserRole,
-  deleteAdminUser,
+  listNamespaceUsers,
+  changeNamespaceUserRole,
+  deleteNamespaceUser,
   type AdminStats,
 } from '@/lib/api/admin';
+import {
+  listSystemUsersFiltered,
+  updateSystemUser,
+  deleteSystemUser,
+} from '@/lib/api/system';
 import {
   listNamespaceInvitations,
   createNamespaceInvitation,
@@ -34,8 +39,6 @@ import {
 import type { UserRole, User } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 
-type SystemStats = AdminStats;
-
 function AdminPage() {
   const { user } = useAuth();
   const selectedNamespace = useSelectedNamespace();
@@ -44,7 +47,7 @@ function AdminPage() {
   const [namespaceAdmins, setNamespaceAdmins] = useState<User[]>([]);
   const [instructors, setInstructors] = useState<User[]>([]);
   const [students, setStudents] = useState<User[]>([]);
-  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [roleChangeLoading, setRoleChangeLoading] = useState<string | null>(null);
@@ -52,14 +55,16 @@ function AdminPage() {
   const [invitationsLoading, setInvitationsLoading] = useState(false);
 
   const isAdmin = user ? hasRolePermission(user.role, 'user.changeRole') : false;
+  const isSystemAdmin = user?.role === 'system-admin';
 
   // Get namespaceId for API calls (system-admin can filter by namespace)
   const getNamespaceId = () => {
-    return user?.role === 'system-admin' && selectedNamespace ? selectedNamespace : undefined;
+    return isSystemAdmin && selectedNamespace ? selectedNamespace : undefined;
   };
 
   const loadStats = async () => {
-    if (!isAdmin) return;
+    // Stats endpoint requires system-admin permission
+    if (!isSystemAdmin) return;
 
     try {
       const data = await getAdminStats(getNamespaceId());
@@ -108,27 +113,28 @@ function AdminPage() {
     setIsLoading(true);
     setError('');
     try {
-      const namespaceId = getNamespaceId();
       if (isAdmin) {
         // Admins can see all users including other admins
-        const users = await listAdminUsers({ namespaceId });
+        let users: User[];
+        if (isSystemAdmin) {
+          // System admin: use system-level endpoint with optional namespace filter
+          users = await listSystemUsersFiltered({ namespaceId: getNamespaceId() });
+        } else {
+          // Namespace admin: use namespace-scoped endpoint (auto-scoped by backend)
+          users = await listNamespaceUsers();
+        }
         setAllUsers(users);
         setNamespaceAdmins(users.filter((u: User) => u.role === 'namespace-admin'));
         setInstructors(users.filter((u: User) => u.role === 'instructor'));
         setStudents(users.filter((u: User) => u.role === 'student'));
       } else {
-        // Instructors can only see instructors and students
-        const [instructorsData, studentsData] = await Promise.all([
-          listAdminUsers({ namespaceId, role: 'instructor' }),
-          listAdminUsers({ namespaceId, role: 'student' })
-        ]);
-
-        setInstructors(instructorsData || []);
-        setStudents(studentsData || []);
+        // Non-admin view: use namespace-scoped endpoint and filter client-side
+        const users = await listNamespaceUsers();
+        setInstructors((users || []).filter((u: User) => u.role === 'instructor'));
+        setStudents((users || []).filter((u: User) => u.role === 'student'));
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to load users';
-      // Add more context for common errors
       if (errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch')) {
         setError('Connection error. Unable to load users. Please check your internet connection.');
       } else {
@@ -159,7 +165,11 @@ function AdminPage() {
     setError('');
 
     try {
-      await changeUserRole(user_id, newRole);
+      if (isSystemAdmin) {
+        await updateSystemUser(user_id, { role: newRole });
+      } else {
+        await changeNamespaceUserRole(user_id, newRole);
+      }
 
       // Reload users and stats
       await loadUsers();
@@ -172,7 +182,11 @@ function AdminPage() {
   };
 
   const handleDeleteUser = async (user_id: string, _username: string) => {
-    await deleteAdminUser(user_id);
+    if (isSystemAdmin) {
+      await deleteSystemUser(user_id);
+    } else {
+      await deleteNamespaceUser(user_id);
+    }
 
     // Reload users
     await loadUsers();
@@ -214,8 +228,8 @@ function AdminPage() {
         </div>
       )}
 
-      {/* Overview Stats Panel (Admin Only, always visible) */}
-      {isAdmin && stats && (
+      {/* Overview Stats Panel (System Admin Only) */}
+      {isSystemAdmin && stats && (
         <div className="mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card variant="outlined" className="p-6">

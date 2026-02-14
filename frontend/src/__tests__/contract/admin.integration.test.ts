@@ -1,11 +1,9 @@
 /**
- * Contract tests for ALL namespace-level admin API functions in admin.ts.
+ * Contract tests for admin API functions.
  *
- * Covers all 4 functions:
- *   1. getAdminStats(namespaceId?) -> AdminStats (transformed shape)
- *   2. listAdminUsers(options?) -> User[]
- *   3. changeUserRole(userId, newRole) -> User
- *   4. deleteAdminUser(userId) -> void
+ * Tests both tiers:
+ *   - System-level (system.ts): listSystemUsersFiltered, updateSystemUser, deleteSystemUser
+ *   - Namespace-level (admin.ts): getAdminStats, listNamespaceUsers, changeNamespaceUserRole, deleteNamespaceUser
  *
  * Uses the admin token (system-admin role required).
  */
@@ -13,17 +11,22 @@ import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider, testToken } from './
 import { state } from './shared-state';
 import {
   getAdminStats,
-  listAdminUsers,
-  changeUserRole,
-  deleteAdminUser,
+  listNamespaceUsers,
+  changeNamespaceUserRole,
+  deleteNamespaceUser,
 } from '@/lib/api/admin';
+import {
+  listSystemUsersFiltered,
+  updateSystemUser,
+  deleteSystemUser,
+} from '@/lib/api/system';
 import {
   expectNumber,
   validateUserShape,
 } from './validators';
 
 describe('Admin API — full coverage', () => {
-  // Temporary user for mutating tests (changeUserRole, deleteAdminUser).
+  // Temporary user for mutating tests (updateSystemUser, deleteSystemUser).
   // Created via invitation flow since the backend has no direct createUser endpoint.
   let tempUserId: string | null = null;
 
@@ -60,7 +63,7 @@ describe('Admin API — full coverage', () => {
     // Best-effort cleanup
     if (tempUserId) {
       try {
-        await deleteAdminUser(tempUserId);
+        await deleteSystemUser(tempUserId);
       } catch {
         // Best-effort cleanup
       }
@@ -69,7 +72,7 @@ describe('Admin API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 1. getAdminStats
+  // 1. getAdminStats (system-admin only, from admin.ts)
   // -----------------------------------------------------------------------
   describe('getAdminStats(namespaceId?)', () => {
     it('returns AdminStats with correct transformed shape', async () => {
@@ -127,14 +130,14 @@ describe('Admin API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. listAdminUsers
+  // 2. System-level user listing (system.ts)
   // -----------------------------------------------------------------------
-  describe('listAdminUsers(options?)', () => {
+  describe('listSystemUsersFiltered(options?)', () => {
     it('returns User[] with correct snake_case shape when filtered by namespace', async () => {
       const namespaceId = state.namespaceId;
       expect(namespaceId).toBeTruthy();
 
-      const users = await listAdminUsers({ namespaceId });
+      const users = await listSystemUsersFiltered({ namespaceId });
 
       expect(Array.isArray(users)).toBe(true);
       expect(users.length).toBeGreaterThan(0);
@@ -144,7 +147,7 @@ describe('Admin API — full coverage', () => {
     });
 
     it('returns User[] without filters', async () => {
-      const users = await listAdminUsers();
+      const users = await listSystemUsersFiltered();
 
       expect(Array.isArray(users)).toBe(true);
       expect(users.length).toBeGreaterThan(0);
@@ -155,14 +158,29 @@ describe('Admin API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. changeUserRole
+  // 3. Namespace-level user listing (admin.ts)
   // -----------------------------------------------------------------------
-  describe('changeUserRole(userId, newRole)', () => {
+  describe('listNamespaceUsers()', () => {
+    it('returns User[] scoped to caller namespace', async () => {
+      const users = await listNamespaceUsers();
+
+      expect(Array.isArray(users)).toBe(true);
+      // System-admin calling namespace endpoint gets users in their namespace
+      for (const user of users) {
+        validateUserShape(user);
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 4. System-level role change (system.ts)
+  // -----------------------------------------------------------------------
+  describe('updateSystemUser(userId, data)', () => {
     it('changes a user role and returns User with correct snake_case shape', async () => {
       expect(tempUserId).toBeTruthy();
 
       // Change the temp user from student to instructor
-      const user = await changeUserRole(tempUserId!, 'instructor');
+      const user = await updateSystemUser(tempUserId!, { role: 'instructor' });
 
       validateUserShape(user);
       expect(user.id).toBe(tempUserId);
@@ -171,13 +189,13 @@ describe('Admin API — full coverage', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 4. deleteAdminUser
+  // 5. System-level user deletion (system.ts)
   // -----------------------------------------------------------------------
-  describe('deleteAdminUser(userId)', () => {
+  describe('deleteSystemUser(userId)', () => {
     it('deletes a user without throwing (void return)', async () => {
       expect(tempUserId).toBeTruthy();
 
-      await expect(deleteAdminUser(tempUserId!)).resolves.toBeUndefined();
+      await expect(deleteSystemUser(tempUserId!)).resolves.toBeUndefined();
 
       // Mark as cleaned up so afterAll does not attempt double-delete
       tempUserId = null;

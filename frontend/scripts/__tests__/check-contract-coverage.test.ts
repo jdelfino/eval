@@ -198,7 +198,7 @@ describe('computeCoverage', () => {
 
   it('computes correct coverage for uncovered module', () => {
     const apiModules = new Map<string, string[]>([
-      ['admin', ['getAdminStats', 'listAdminUsers']],
+      ['admin', ['getAdminStats', 'listNamespaceUsers']],
     ]);
     const coveredImports = new Map<string, string[]>();
 
@@ -207,7 +207,7 @@ describe('computeCoverage', () => {
     expect(result.modules[0].covered).toEqual([]);
     expect(result.modules[0].uncovered).toEqual([
       'getAdminStats',
-      'listAdminUsers',
+      'listNamespaceUsers',
     ]);
     expect(result.totalFunctions).toBe(2);
     expect(result.coveredFunctions).toBe(0);

@@ -1,9 +1,10 @@
 /**
  * Typed API client functions for namespace-level admin operations.
  *
- * These functions wrap the generic api-client methods and provide
- * clean, typed interfaces. The backend returns objects/arrays
- * (some wrapped, some not), so these functions return the appropriate shapes.
+ * These functions call /admin/* endpoints that require user.manage permission
+ * (namespace-admin+). They are scoped to the caller's namespace by the backend.
+ *
+ * For system-wide operations (system-admin only), use system.ts instead.
  */
 
 import { apiGet, apiPut, apiDelete } from '@/lib/api-client';
@@ -37,7 +38,7 @@ interface ApiAdminStats {
 }
 
 /**
- * Get admin statistics for the namespace.
+ * Get admin statistics (system-admin only).
  * @param namespaceId - Optional namespace ID for system-admin filtering
  * @returns AdminStats object (transformed from API shape)
  */
@@ -68,46 +69,27 @@ export async function getAdminStats(namespaceId?: string): Promise<AdminStats> {
 }
 
 /**
- * Options for listing admin users.
+ * List users in the caller's namespace (namespace-admin+).
+ * @returns Array of User objects scoped to the caller's namespace
  */
-export interface ListAdminUsersOptions {
-  namespaceId?: string;
-  role?: UserRole;
+export async function listNamespaceUsers(): Promise<User[]> {
+  return apiGet<User[]>('/admin/users');
 }
 
 /**
- * List users in the namespace (admin view).
- * @param options - Optional filters for namespace and role
- * @returns Array of User objects
- */
-export async function listAdminUsers(options?: ListAdminUsersOptions): Promise<User[]> {
-  const params = new URLSearchParams();
-  if (options?.namespaceId) {
-    params.set('namespace_id', options.namespaceId);
-  }
-  if (options?.role) {
-    params.set('role', options.role);
-  }
-  const query = params.toString();
-  const path = query ? `/system/users?${query}` : '/system/users';
-
-  return apiGet<User[]>(path);
-}
-
-/**
- * Change a user's role.
+ * Change a user's role within the caller's namespace (namespace-admin+).
  * @param userId - The user ID to update
  * @param newRole - The new role for the user
  * @returns The updated User object
  */
-export async function changeUserRole(userId: string, newRole: UserRole): Promise<User> {
-  return apiPut<User>(`/system/users/${userId}`, { role: newRole });
+export async function changeNamespaceUserRole(userId: string, newRole: UserRole): Promise<User> {
+  return apiPut<User>(`/admin/users/${userId}/role`, { role: newRole });
 }
 
 /**
- * Delete a user from the namespace.
+ * Delete a user within the caller's namespace (namespace-admin+).
  * @param userId - The user ID to delete
  */
-export async function deleteAdminUser(userId: string): Promise<void> {
-  await apiDelete(`/system/users/${userId}`);
+export async function deleteNamespaceUser(userId: string): Promise<void> {
+  await apiDelete(`/admin/users/${userId}`);
 }

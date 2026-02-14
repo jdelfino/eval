@@ -15,9 +15,9 @@ jest.mock('@/lib/api-client', () => ({
 
 import {
   getAdminStats,
-  listAdminUsers,
-  changeUserRole,
-  deleteAdminUser,
+  listNamespaceUsers,
+  changeNamespaceUserRole,
+  deleteNamespaceUser,
 } from '../admin';
 import type { User } from '@/types/api';
 
@@ -56,8 +56,8 @@ describe('admin API client', () => {
     });
   });
 
-  describe('listAdminUsers', () => {
-    it('calls GET /system/users and returns users array', async () => {
+  describe('listNamespaceUsers', () => {
+    it('calls GET /admin/users (namespace-scoped endpoint)', async () => {
       const mockUsers: User[] = [
         {
           id: 'u1',
@@ -72,23 +72,15 @@ describe('admin API client', () => {
       ];
       mockApiGet.mockResolvedValue(mockUsers);
 
-      const result = await listAdminUsers();
+      const result = await listNamespaceUsers();
 
-      expect(mockApiGet).toHaveBeenCalledWith('/system/users');
+      expect(mockApiGet).toHaveBeenCalledWith('/admin/users');
       expect(result).toEqual(mockUsers);
-    });
-
-    it('includes namespace_id and role query params when provided', async () => {
-      mockApiGet.mockResolvedValue([]);
-
-      await listAdminUsers({ namespaceId: 'ns-1', role: 'student' });
-
-      expect(mockApiGet).toHaveBeenCalledWith('/system/users?namespace_id=ns-1&role=student');
     });
   });
 
-  describe('changeUserRole', () => {
-    it('calls PUT /system/users/{userId} with role body and returns updated user', async () => {
+  describe('changeNamespaceUserRole', () => {
+    it('calls PUT /admin/users/{id}/role with role body', async () => {
       const mockUser: User = {
         id: 'u1',
         external_id: 'ext-1',
@@ -101,20 +93,20 @@ describe('admin API client', () => {
       };
       mockApiPut.mockResolvedValue(mockUser);
 
-      const result = await changeUserRole('u1', 'instructor');
+      const result = await changeNamespaceUserRole('u1', 'instructor');
 
-      expect(mockApiPut).toHaveBeenCalledWith('/system/users/u1', { role: 'instructor' });
+      expect(mockApiPut).toHaveBeenCalledWith('/admin/users/u1/role', { role: 'instructor' });
       expect(result).toEqual(mockUser);
     });
   });
 
-  describe('deleteAdminUser', () => {
-    it('calls DELETE /system/users/{userId}', async () => {
+  describe('deleteNamespaceUser', () => {
+    it('calls DELETE /admin/users/{id} (namespace-scoped endpoint)', async () => {
       mockApiDelete.mockResolvedValue(undefined);
 
-      await deleteAdminUser('u1');
+      await deleteNamespaceUser('u1');
 
-      expect(mockApiDelete).toHaveBeenCalledWith('/system/users/u1');
+      expect(mockApiDelete).toHaveBeenCalledWith('/admin/users/u1');
     });
   });
 });

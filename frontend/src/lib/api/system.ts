@@ -3,7 +3,7 @@
  * These endpoints require system-admin role.
  */
 
-import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-client';
 import type { User, Namespace } from '@/types/api';
 import type { SerializedInvitation } from './invitations';
 
@@ -50,6 +50,54 @@ export async function getSystemNamespace(namespaceId: string): Promise<Namespace
     displayName: ns.display_name,
     active: ns.active,
   };
+}
+
+/**
+ * Options for listing system users.
+ */
+export interface ListSystemUsersOptions {
+  namespaceId?: string;
+  role?: string;
+}
+
+/**
+ * List all users in the system with optional filters (system-admin only).
+ * @param options - Optional filters for namespace and role
+ * @returns Array of User objects
+ */
+export async function listSystemUsersFiltered(options?: ListSystemUsersOptions): Promise<User[]> {
+  const params = new URLSearchParams();
+  if (options?.namespaceId) {
+    params.set('namespace_id', options.namespaceId);
+  }
+  if (options?.role) {
+    params.set('role', options.role);
+  }
+  const query = params.toString();
+  const path = query ? `/system/users?${query}` : '/system/users';
+
+  return apiGet<User[]>(path);
+}
+
+/**
+ * Update a user (system-admin only).
+ * @param userId - The user ID to update
+ * @param data - Fields to update (email, display_name, role, namespace_id)
+ * @returns The updated User object
+ */
+export async function updateSystemUser(
+  userId: string,
+  data: { email?: string; display_name?: string; role?: string; namespace_id?: string }
+): Promise<User> {
+  return apiPut<User>(`/system/users/${userId}`, data);
+}
+
+/**
+ * Delete a user (system-admin only).
+ * @param userId - The user ID to delete
+ */
+export async function deleteSystemUser(userId: string): Promise<void> {
+  await apiDelete(`/system/users/${userId}`);
 }
 
 /**

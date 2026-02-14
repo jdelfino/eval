@@ -5,22 +5,27 @@
 
 const mockApiGet = jest.fn();
 const mockApiPost = jest.fn();
+const mockApiPut = jest.fn();
 const mockApiDelete = jest.fn();
 
 jest.mock('@/lib/api-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
+  apiPut: (...args: unknown[]) => mockApiPut(...args),
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
 }));
 
 import {
   listSystemUsers,
+  listSystemUsersFiltered,
   listSystemNamespaces,
   getSystemNamespace,
   listSystemInvitations,
   createSystemInvitation,
   revokeSystemInvitation,
   resendSystemInvitation,
+  updateSystemUser,
+  deleteSystemUser,
 } from '../system';
 import type { User } from '@/types/api';
 import type { SerializedInvitation } from '../invitations';
@@ -210,6 +215,47 @@ describe('system API client', () => {
       await resendSystemInvitation('inv-1');
 
       expect(mockApiPost).toHaveBeenCalledWith('/system/invitations/inv-1/resend', {});
+    });
+  });
+
+  describe('listSystemUsersFiltered', () => {
+    it('calls GET /system/users without filters', async () => {
+      mockApiGet.mockResolvedValue([fakeUser]);
+
+      const result = await listSystemUsersFiltered();
+
+      expect(mockApiGet).toHaveBeenCalledWith('/system/users');
+      expect(result).toEqual([fakeUser]);
+    });
+
+    it('includes namespace_id and role query params when provided', async () => {
+      mockApiGet.mockResolvedValue([]);
+
+      await listSystemUsersFiltered({ namespaceId: 'ns-1', role: 'student' });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/system/users?namespace_id=ns-1&role=student');
+    });
+  });
+
+  describe('updateSystemUser', () => {
+    it('calls PUT /system/users/{id} with update data', async () => {
+      const updatedUser = { ...fakeUser, role: 'instructor' as const };
+      mockApiPut.mockResolvedValue(updatedUser);
+
+      const result = await updateSystemUser('u1', { role: 'instructor' });
+
+      expect(mockApiPut).toHaveBeenCalledWith('/system/users/u1', { role: 'instructor' });
+      expect(result).toEqual(updatedUser);
+    });
+  });
+
+  describe('deleteSystemUser', () => {
+    it('calls DELETE /system/users/{id}', async () => {
+      mockApiDelete.mockResolvedValue(undefined);
+
+      await deleteSystemUser('u1');
+
+      expect(mockApiDelete).toHaveBeenCalledWith('/system/users/u1');
     });
   });
 });
