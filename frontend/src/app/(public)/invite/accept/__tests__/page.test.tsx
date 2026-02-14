@@ -423,6 +423,38 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('Already Used')).toBeInTheDocument();
       });
     });
+
+    it('shows expired error when acceptInvite returns INVITATION_EXPIRED', async () => {
+      const user = userEvent.setup();
+      mockAcceptInvite.mockRejectedValue(makeApiError('Invitation expired', 410, 'INVITATION_EXPIRED'));
+
+      render(<AcceptInvitePage />);
+      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Invitation Expired')).toBeInTheDocument();
+      });
+    });
+
+    it('deletes Firebase account when acceptInvite returns INVITATION_EXPIRED', async () => {
+      const user = userEvent.setup();
+      mockAcceptInvite.mockRejectedValue(makeApiError('Invitation expired', 410, 'INVITATION_EXPIRED'));
+
+      render(<AcceptInvitePage />);
+      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
+
+      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
+      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
+      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
   });
 
   // ---------------------------------------------------------------------------
