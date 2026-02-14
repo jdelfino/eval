@@ -8,6 +8,7 @@
 
 import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
 import type { Session, Revision, SessionPublicState } from '@/types/api';
+import type { ExecutionTrace } from '@/types/session';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -153,6 +154,25 @@ export async function getSessionDetails(sessionId: string): Promise<SessionDetai
  */
 export async function getSessionPublicState(sessionId: string): Promise<SessionPublicState> {
   return apiGet<SessionPublicState>(`/sessions/${sessionId}/public-state`);
+}
+
+/**
+ * Request a step-by-step execution trace for code in a session.
+ * @param sessionId - The session ID
+ * @param code - The code to trace
+ * @param studentId - Optional student ID (instructors tracing a student's code; omit for self)
+ * @returns ExecutionTrace with step-by-step state
+ */
+export async function traceSession(
+  sessionId: string,
+  code: string,
+  studentId?: string,
+): Promise<ExecutionTrace> {
+  const body: Record<string, string> = { code };
+  if (studentId) {
+    body.student_id = studentId;
+  }
+  return apiPost<ExecutionTrace>(`/sessions/${sessionId}/trace`, body);
 }
 
 /**

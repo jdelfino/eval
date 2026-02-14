@@ -99,16 +99,24 @@ func TestTrace_HappyPath(t *testing.T) {
 	}
 }
 
-func TestTrace_403StudentForbidden(t *testing.T) {
+func TestTrace_200StudentParticipant(t *testing.T) {
 	sessRepo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
 			return activeSession(), nil
 		},
 	}
-	tracer := &mockTracerClient{}
+	tracer := &mockTracerClient{
+		traceFn: func(_ context.Context, req executor.TraceRequest) (*executor.TraceResponse, error) {
+			return &executor.TraceResponse{
+				Steps: []executor.TraceStep{
+					{Line: 1, Variables: map[string]string{"x": "1"}, Output: "1"},
+				},
+			}, nil
+		},
+	}
 
 	handler := setupTraceHandler(sessRepo, tracer)
-	body := newTraceReq(testStudentID, "code")
+	body := newTraceReq(testStudentID, "x = 1; print(x)")
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/trace", testSessionID), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
@@ -117,8 +125,8 @@ func TestTrace_403StudentForbidden(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

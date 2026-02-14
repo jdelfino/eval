@@ -6,14 +6,14 @@
 import { renderHook, act } from '@testing-library/react';
 import { useApiDebugger } from '../useApiDebugger';
 
-// Mock api-client
-jest.mock('@/lib/api-client', () => ({
-  apiFetch: jest.fn(),
+// Mock the typed API function
+jest.mock('@/lib/api/sessions', () => ({
+  traceSession: jest.fn(),
 }));
 
-import { apiFetch } from '@/lib/api-client';
+import { traceSession } from '@/lib/api/sessions';
 
-const mockApiFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
+const mockTraceSession = traceSession as jest.MockedFunction<typeof traceSession>;
 
 const mockTrace = {
   steps: [
@@ -29,33 +29,26 @@ describe('useApiDebugger', () => {
   });
 
   describe('requestTrace', () => {
-    it('calls apiFetch with auth headers instead of raw fetch', async () => {
-      mockApiFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockTrace,
-      } as Response);
+    it('calls traceSession with session ID and code', async () => {
+      mockTraceSession.mockResolvedValueOnce(mockTrace as never);
 
       const { result } = renderHook(() => useApiDebugger('session-123'));
 
       await act(async () => {
-        await result.current.requestTrace('print("hello")', 'input', 100);
+        await result.current.requestTrace('print("hello")');
       });
 
-      expect(mockApiFetch).toHaveBeenCalledWith(
-        '/api/sessions/session-123/trace',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: 'print("hello")', stdin: 'input', maxSteps: 100 }),
-        }
+      expect(mockTraceSession).toHaveBeenCalledWith(
+        'session-123',
+        'print("hello")',
       );
       expect(result.current.trace).toEqual(mockTrace);
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
-    it('handles error from apiFetch', async () => {
-      mockApiFetch.mockRejectedValueOnce(new Error('Unauthorized'));
+    it('handles error from traceSession', async () => {
+      mockTraceSession.mockRejectedValueOnce(new Error('Unauthorized'));
 
       const { result } = renderHook(() => useApiDebugger('session-123'));
 
@@ -75,7 +68,7 @@ describe('useApiDebugger', () => {
       });
 
       expect(result.current.error).toBe('No session ID available for trace request');
-      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockTraceSession).not.toHaveBeenCalled();
     });
   });
 });
