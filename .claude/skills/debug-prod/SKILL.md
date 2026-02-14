@@ -142,37 +142,32 @@ Or from the Kubernetes secret:
 export PGPASSWORD=$(kubectl get secret app-secrets -o jsonpath='{.data.DATABASE_PASSWORD}' | base64 -d)
 ```
 
-**Connecting (read-only user preferred):**
+**Connecting:**
 
-> **Note:** A dedicated read-only database user does not exist yet (see beads issue).
-> Until it is created, use the `app` user but **treat the session as read-only**.
-> Do not run INSERT, UPDATE, DELETE, or DDL statements without explicit user approval.
+Always use the read-only `reader` user for debugging. Only use `app` if you need write access (which requires user approval).
 
 ```bash
-# With db-proxy.sh running:
-psql "host=127.0.0.1 port=5433 dbname=eval user=app sslmode=require"
-```
-
-Once a read-only user is provisioned, prefer it for all debugging:
-
-```bash
+# Read-only (preferred for debugging)
+export PGPASSWORD=$(kubectl get secret app-secrets -o jsonpath='{.data.READER_DATABASE_PASSWORD}' | base64 -d)
 psql "host=127.0.0.1 port=5433 dbname=eval user=reader sslmode=require"
+
+# Read-write (only with user approval)
+export PGPASSWORD=$(kubectl get secret app-secrets -o jsonpath='{.data.DATABASE_PASSWORD}' | base64 -d)
+psql "host=127.0.0.1 port=5433 dbname=eval user=app sslmode=require"
 ```
 
 **Quick one-off queries (no tunnel needed):**
 
-For simple queries, use a temporary pod instead of the full tunnel:
+For simple queries, use a temporary pod with the reader user:
 
 ```bash
+# Get reader password
+READER_PW=$(kubectl get secret app-secrets -o jsonpath='{.data.READER_DATABASE_PASSWORD}' | base64 -d)
+
 kubectl run psql-tmp --image=postgres:15 --restart=Never --rm -i \
-  --command -- psql "<DATABASE_URL from k8s secret>?sslmode=require" \
+  --env="PGPASSWORD=${READER_PW}" \
+  --command -- psql -h 10.100.0.3 -U reader -d eval --set=sslmode=require \
   -c "SELECT ..."
-```
-
-Retrieve the URL-encoded connection string:
-
-```bash
-kubectl get secret app-secrets -o jsonpath='{.data.DATABASE_URL}' | base64 -d
 ```
 
 **Common diagnostic queries:**

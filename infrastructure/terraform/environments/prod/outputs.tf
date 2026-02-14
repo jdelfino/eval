@@ -85,6 +85,12 @@ output "cloudsql_database_password" {
   sensitive   = true
 }
 
+output "cloudsql_reader_password" {
+  description = "Cloud SQL reader password (for read-only debugging connections)"
+  value       = module.cloudsql.reader_password
+  sensitive   = true
+}
+
 # -----------------------------------------------------------------------------
 # Identity Platform Outputs
 # -----------------------------------------------------------------------------

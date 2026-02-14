@@ -7,11 +7,16 @@
 # Binds to localhost:5433 so you can connect any GUI or CLI tool:
 #   psql "host=127.0.0.1 port=5433 dbname=eval user=app sslmode=require"
 #
+# For debugging, prefer the read-only 'reader' user:
+#   psql "host=127.0.0.1 port=5433 dbname=eval user=reader sslmode=require"
+#
 # Prerequisites:
 #   - kubectl configured for the prod GKE cluster
 #   - Database password — set PGPASSWORD or retrieve from Terraform:
 #       cd infrastructure/terraform/environments/prod
 #       export PGPASSWORD=$(terraform output -raw cloudsql_database_password)
+#       # Or for the reader user:
+#       export PGPASSWORD=$(terraform output -raw cloudsql_reader_password)
 #
 # Usage:
 #   ./scripts/db-proxy.sh          # default port 5433
@@ -52,11 +57,15 @@ echo ""
 echo "Tunnel active:"
 echo "  Cloud SQL: ${CLOUDSQL_IP}:5432  ->  localhost:${PORT}"
 echo ""
-echo "Connect with:"
+echo "Connect with (read-only, preferred for debugging):"
+echo "  psql \"host=127.0.0.1 port=${PORT} dbname=eval user=reader sslmode=require\""
+echo ""
+echo "Connect with (read-write):"
 echo "  psql \"host=127.0.0.1 port=${PORT} dbname=eval user=app sslmode=require\""
 echo ""
 echo "Set password:"
-echo "  export PGPASSWORD=\$(cd infrastructure/terraform/environments/prod && terraform output -raw cloudsql_database_password)"
+echo "  export PGPASSWORD=\$(cd infrastructure/terraform/environments/prod && terraform output -raw cloudsql_reader_password)   # reader"
+echo "  export PGPASSWORD=\$(cd infrastructure/terraform/environments/prod && terraform output -raw cloudsql_database_password)  # app"
 echo ""
 echo "Press Ctrl+C to stop."
 echo ""

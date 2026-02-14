@@ -26,10 +26,16 @@ locals {
 }
 
 # -----------------------------------------------------------------------------
-# Random Password for Database User
+# Random Passwords for Database Users
 # -----------------------------------------------------------------------------
 
 resource "random_password" "database_password" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+resource "random_password" "reader_password" {
   length           = 32
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
@@ -139,5 +145,19 @@ resource "google_sql_user" "main" {
   password = random_password.database_password.result
 
   # Deletion policy - allow deletion without breaking terraform
+  deletion_policy = "ABANDON"
+}
+
+# -----------------------------------------------------------------------------
+# Read-Only Database User
+# -----------------------------------------------------------------------------
+# Used for production debugging. Privileges granted via SQL migration.
+
+resource "google_sql_user" "reader" {
+  name     = "reader"
+  project  = var.project_id
+  instance = google_sql_database_instance.main.name
+  password = random_password.reader_password.result
+
   deletion_policy = "ABANDON"
 }

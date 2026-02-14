@@ -80,6 +80,17 @@ output "database_password" {
   sensitive   = true
 }
 
+output "reader_user" {
+  description = "The name of the read-only database user"
+  value       = google_sql_user.reader.name
+}
+
+output "reader_password" {
+  description = "The password for the read-only database user"
+  value       = random_password.reader_password.result
+  sensitive   = true
+}
+
 # -----------------------------------------------------------------------------
 # Connection String Outputs
 # -----------------------------------------------------------------------------
