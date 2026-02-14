@@ -5,7 +5,7 @@
  * with syntax highlighting. Includes a self-link for copy/paste into slides.
  * Server-rendered with OG meta tags for link previews.
  *
- * Fetches data from the Go backend public API.
+ * Fetches data from the Go backend public API via typed client.
  */
 
 import { cache, Suspense } from 'react';
@@ -15,33 +15,15 @@ import { codeToHtml } from 'shiki';
 import MarkdownContent from '@/components/MarkdownContent';
 import SolutionBlock from './SolutionBlock';
 import InstructorActions from './InstructorActions';
-import { publicFetchRaw } from '@/lib/public-api-client';
+import { getPublicProblem } from '@/lib/api/problems';
+import type { PublicProblem } from '@/types/api';
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
-interface PublicProblem {
-  id: string;
-  title: string;
-  description?: string;
-  solution?: string;
-  starter_code?: string;
-  class_id: string;
-  class_name?: string;
-  tags: string[];
-}
-
 const getProblem = cache(async function getProblem(id: string): Promise<PublicProblem | null> {
-  try {
-    const res = await publicFetchRaw(`/public/problems/${id}`, {
-      next: { revalidate: 60 },
-    } as RequestInit);
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
+  return getPublicProblem(id, { next: { revalidate: 60 } } as RequestInit);
 });
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {

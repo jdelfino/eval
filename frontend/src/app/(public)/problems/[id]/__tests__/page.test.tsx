@@ -14,9 +14,11 @@ import { render, screen } from '@testing-library/react';
 import PublicProblemPage, { generateMetadata } from '../page';
 import { notFound } from 'next/navigation';
 
-// Mock global fetch for the Go API
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+// Mock typed API client
+const mockGetPublicProblem = jest.fn();
+jest.mock('@/lib/api/problems', () => ({
+  getPublicProblem: (...args: unknown[]) => mockGetPublicProblem(...args),
+}));
 
 jest.mock('next/navigation', () => ({
   notFound: jest.fn(() => {
@@ -62,11 +64,8 @@ const mockProblem = {
   tags: ['arrays'],
 };
 
-function mockApiResponse(data: unknown, ok = true) {
-  mockFetch.mockResolvedValue({
-    ok,
-    json: () => Promise.resolve(data),
-  });
+function mockApiResponse(data: unknown) {
+  mockGetPublicProblem.mockResolvedValue(data);
 }
 
 describe('Public Problem Page', () => {
@@ -140,7 +139,7 @@ describe('Public Problem Page', () => {
     });
 
     it('calls notFound for missing problem', async () => {
-      mockApiResponse(null, false);
+      mockApiResponse(null);
 
       await expect(
         PublicProblemPage({ params: Promise.resolve({ id: 'nonexistent' }) })
@@ -163,7 +162,7 @@ describe('Public Problem Page', () => {
     });
 
     it('returns fallback metadata for missing problem', async () => {
-      mockApiResponse(null, false);
+      mockApiResponse(null);
 
       const metadata = await generateMetadata({ params: Promise.resolve({ id: 'nonexistent' }) });
 

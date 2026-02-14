@@ -6,6 +6,7 @@
  */
 
 import { withRetry } from '@/lib/api-utils';
+import { ApiError } from '@/lib/api-error';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -19,9 +20,11 @@ export async function publicFetch(path: string, options: RequestInit = {}): Prom
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const error = new Error(errorData.error || `Request failed: ${response.status}`);
-      (error as any).status = response.status;
-      throw error;
+      throw new ApiError(
+        errorData.error || `Request failed: ${response.status}`,
+        response.status,
+        errorData.code,
+      );
     }
 
     return response;
@@ -40,16 +43,17 @@ export async function publicFetchRaw(path: string, options: RequestInit = {}): P
     // Only retry on network errors (fetch throws), not on HTTP error responses
     shouldRetry: (error: Error) => {
       // Network errors from fetch() — no status means it never reached the server
-      return !(error as any).status;
+      return !(error instanceof ApiError);
     },
   });
 }
 
 /**
  * Public GET request that returns parsed JSON.
+ * Accepts optional RequestInit for Next.js cache directives (e.g., { next: { revalidate: 60 } }).
  */
-export async function publicGet<T>(path: string): Promise<T> {
-  const response = await publicFetch(path);
+export async function publicGet<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await publicFetch(path, options ?? {});
   return response.json();
 }
 
