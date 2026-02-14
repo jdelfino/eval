@@ -1,6 +1,15 @@
 -- Add read-only privileges for the 'reader' database user.
 -- Used for production debugging via scripts/db-proxy.sh.
 -- The Cloud SQL user is created by Terraform; this migration grants privileges.
+-- In CI/test environments the role may not exist, so create it conditionally.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'reader') THEN
+    CREATE ROLE reader LOGIN;
+  END IF;
+END
+$$;
 
 GRANT CONNECT ON DATABASE eval TO reader;
 GRANT USAGE ON SCHEMA public TO reader;
