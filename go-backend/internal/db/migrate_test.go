@@ -118,7 +118,7 @@ func createTestDatabase(t *testing.T, baseURL string) string {
 	if err != nil {
 		t.Fatalf("failed to connect to base database: %v", err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	testDBName := fmt.Sprintf("eval_migrate_test_%d", time.Now().UnixNano())
 
@@ -135,7 +135,7 @@ func createTestDatabase(t *testing.T, baseURL string) string {
 			t.Logf("warning: failed to connect for cleanup: %v", err)
 			return
 		}
-		defer cleanupConn.Close(cleanupCtx)
+		defer func() { _ = cleanupConn.Close(cleanupCtx) }()
 
 		// Terminate all connections to the test database before dropping
 		if _, err := cleanupConn.Exec(cleanupCtx, fmt.Sprintf(
@@ -198,7 +198,7 @@ func TestRunMigrations_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to test database: %v", err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	var version int
 	var dirty bool

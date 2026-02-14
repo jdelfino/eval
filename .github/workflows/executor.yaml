@@ -43,8 +43,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: executor/go.sum
-      - uses: golangci/golangci-lint-action@v4
+      - uses: golangci/golangci-lint-action@v7
         with:
+          version: v2.8.0
           working-directory: executor
           args: --timeout=3m
 
