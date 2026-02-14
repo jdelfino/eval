@@ -23,8 +23,9 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
 import { firebaseAuth } from '@/lib/firebase';
+import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
+// TODO: Remove publicFetchRaw import when legacy hash-based flow is dropped
 import { publicFetchRaw } from '@/lib/public-api-client';
-import { apiFetchRaw } from '@/lib/api-client';
 
 // Page state types
 type PageState =
@@ -97,6 +98,34 @@ const ERROR_MESSAGES: Record<ErrorType, { title: string; message: string }> = {
   },
 };
 
+/**
+ * Map an error code string to an ErrorType for the page state.
+ */
+function mapErrorCode(code: string | undefined, status?: number): ErrorType {
+  switch (code) {
+    case 'OTP_EXPIRED':
+    case 'TOKEN_EXPIRED':
+      return 'otp_expired';
+    case 'OTP_INVALID':
+    case 'TOKEN_INVALID':
+    case 'INVALID_TOKEN':
+      return 'otp_invalid';
+    case 'USER_ALREADY_EXISTS':
+      return 'user_already_exists';
+    case 'INVITATION_CONSUMED':
+      return 'invitation_consumed';
+    case 'INVITATION_REVOKED':
+      return 'invitation_revoked';
+    case 'INVITATION_NOT_FOUND':
+      return 'invitation_not_found';
+    case 'INVITATION_EXPIRED':
+      return 'invitation_expired';
+    default:
+      if (status === 401 || status === 400) return 'otp_invalid';
+      return 'unknown';
+  }
+}
+
 // Loading fallback for Suspense boundary
 function LoadingFallback() {
   return (
@@ -138,52 +167,30 @@ function AcceptInviteContent() {
         const queryToken = searchParams.get('token');
 
         if (queryToken) {
-          // New format: simple token query parameter
+          // New format: simple token query parameter — uses typed client
           setPageState({ status: 'loading-invitation' });
 
-          const response = await publicFetchRaw(`/auth/accept-invite?token=${encodeURIComponent(queryToken)}`);
-
-          if (!response.ok) {
-            const data = await response.json();
-            console.error('[AcceptInvite] Verify/fetch error:', data);
-
-            // Map API error codes to our error types
-            const errorCode = data.code as string;
-            if (errorCode === 'OTP_EXPIRED' || errorCode === 'TOKEN_EXPIRED') {
-              setPageState({ status: 'error', error: 'otp_expired' });
-            } else if (errorCode === 'OTP_INVALID' || errorCode === 'TOKEN_INVALID' || errorCode === 'INVALID_TOKEN') {
-              setPageState({ status: 'error', error: 'otp_invalid' });
-            } else if (errorCode === 'USER_ALREADY_EXISTS') {
-              setPageState({ status: 'error', error: 'user_already_exists' });
-            } else if (errorCode === 'INVITATION_CONSUMED') {
-              setPageState({ status: 'error', error: 'invitation_consumed' });
-            } else if (errorCode === 'INVITATION_REVOKED') {
-              setPageState({ status: 'error', error: 'invitation_revoked' });
-            } else if (errorCode === 'INVITATION_NOT_FOUND') {
-              setPageState({ status: 'error', error: 'invitation_not_found' });
-            } else if (errorCode === 'INVITATION_EXPIRED') {
-              setPageState({ status: 'error', error: 'invitation_expired' });
-            } else if (response.status === 401 || response.status === 400) {
-              setPageState({ status: 'error', error: 'otp_invalid' });
-            } else {
-              setPageState({ status: 'error', error: 'unknown' });
-            }
-            return;
+          try {
+            const data = await getInvitationDetails(queryToken);
+            const invitationInfo: InvitationInfo = {
+              id: data.id,
+              email: data.email,
+              targetRole: data.target_role,
+              namespace: null, // Backend returns flat invitation object
+            };
+            setInvitation(invitationInfo);
+            setPageState({ status: 'ready', invitation: invitationInfo });
+          } catch (error) {
+            console.error('[AcceptInvite] Verify/fetch error:', error);
+            const code = (error as any).code as string;
+            const status = (error as any).status as number;
+            setPageState({ status: 'error', error: mapErrorCode(code, status) });
           }
-
-          const data = await response.json();
-          const invitationInfo: InvitationInfo = {
-            id: data.id,
-            email: data.email,
-            targetRole: data.target_role,
-            namespace: null, // Backend returns flat invitation object
-          };
-          setInvitation(invitationInfo);
-          setPageState({ status: 'ready', invitation: invitationInfo });
           return;
         }
 
         // Legacy format: hash-based tokens (#token_hash=...&type=invite)
+        // TODO: Remove this legacy flow when hash-based invitations are fully deprecated
         const hash = locationHash.substring(1);
         const params = new URLSearchParams(hash);
         const tokenHash = params.get('token_hash');
@@ -290,47 +297,33 @@ function AcceptInviteContent() {
       // The backend extracts external_id from JWT claims (not request body)
       // Wrap in try/catch to clean up Firebase account on failure
       try {
-        const response = await apiFetchRaw('/auth/accept-invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: invitation.id,
-            display_name: displayName.trim() || undefined,
-          }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-
-          // Delete Firebase account so user can retry with same email
-          await firebaseAuth.currentUser?.delete();
-
-          // Map error codes
-          if (data.code === 'INVITATION_CONSUMED') {
-            setPageState({ status: 'error', error: 'invitation_consumed' });
-            return;
-          } else if (data.code === 'INVITATION_EXPIRED') {
-            setPageState({ status: 'error', error: 'invitation_expired' });
-            return;
-          } else {
-            setSubmitError(data.error || 'Failed to complete registration');
-          }
-
-          // Restore ready state for retry
-          if (invitation) {
-            setPageState({ status: 'ready', invitation });
-          }
-          return;
-        }
-
-        const data = await response.json();
+        const data = await acceptInvite(invitation.id, displayName.trim() || undefined);
 
         setPageState({ status: 'success' });
         redirectBasedOnRole(data.role);
       } catch (backendError) {
-        // Backend call failed (network error, etc.) - clean up Firebase account
+        // Backend call failed - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
-        throw backendError;
+
+        const code = (backendError as any).code as string;
+
+        // Map error codes
+        if (code === 'INVITATION_CONSUMED') {
+          setPageState({ status: 'error', error: 'invitation_consumed' });
+          return;
+        } else if (code === 'INVITATION_EXPIRED') {
+          setPageState({ status: 'error', error: 'invitation_expired' });
+          return;
+        }
+
+        // Check if it's a typed API error (has .status) or a network error
+        const errorMessage = (backendError as any).message || 'Failed to complete registration';
+        setSubmitError(errorMessage);
+
+        // Restore ready state for retry
+        if (invitation) {
+          setPageState({ status: 'ready', invitation });
+        }
       }
     } catch (error) {
       console.error('[AcceptInvite] Submit error:', error);

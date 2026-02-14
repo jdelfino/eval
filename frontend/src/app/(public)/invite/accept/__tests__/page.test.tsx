@@ -1,8 +1,8 @@
 /**
  * Tests for Accept Invitation Page
  *
- * Verifies that the invite accept flow uses only the Go backend API
- * and has no Supabase dependencies.
+ * Verifies that the invite accept flow uses typed API clients for the new token format
+ * and publicFetchRaw for the legacy hash-based flow.
  */
 
 import React from 'react';
@@ -18,7 +18,7 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock fetch — used for unauthenticated requests (GET)
+// Mock fetch — used for legacy hash-based requests (via publicFetchRaw)
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
@@ -48,15 +48,17 @@ jest.mock('@/lib/firebase', () => ({
   },
 }));
 
-// Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
-jest.mock('@/lib/public-api-client', () => ({
-  publicFetchRaw: (...args: Parameters<typeof fetch>) => global.fetch(...args),
+// Mock typed registration API client functions (for new token format)
+const mockGetInvitationDetails = jest.fn();
+const mockAcceptInvite = jest.fn();
+jest.mock('@/lib/api/registration', () => ({
+  getInvitationDetails: (...args: unknown[]) => mockGetInvitationDetails(...args),
+  acceptInvite: (...args: unknown[]) => mockAcceptInvite(...args),
 }));
 
-// Mock api-client for authenticated requests
-const mockApiFetchRaw = jest.fn();
-jest.mock('@/lib/api-client', () => ({
-  apiFetchRaw: (...args: unknown[]) => mockApiFetchRaw(...args),
+// Mock public-api-client for legacy hash-based flow
+jest.mock('@/lib/public-api-client', () => ({
+  publicFetchRaw: (...args: Parameters<typeof fetch>) => global.fetch(...args),
 }));
 
 // Mock the location hash hook
@@ -98,7 +100,8 @@ describe('AcceptInvitePage', () => {
     mockCreateUserWithEmailAndPassword.mockClear();
     mockDeleteUser.mockClear();
     mockGetIdToken.mockClear();
-    mockApiFetchRaw.mockClear();
+    mockGetInvitationDetails.mockClear();
+    mockAcceptInvite.mockClear();
     mockCurrentUser = null;
     // Default: Firebase account creation succeeds and sets currentUser
     mockCreateUserWithEmailAndPassword.mockImplementation(() => {
@@ -116,32 +119,29 @@ describe('AcceptInvitePage', () => {
     expect(true).toBe(true);
   });
 
-  describe('Query Parameter Token Support', () => {
-    it('sends token from query params to API for verification', async () => {
+  describe('Query Parameter Token Support (typed client)', () => {
+    it('calls getInvitationDetails with token from query params', async () => {
       setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockGetInvitationDetails.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/auth/accept-invite?token=11111111-1111-1111-1111-111111111111')
+        expect(mockGetInvitationDetails).toHaveBeenCalledWith(
+          '11111111-1111-1111-1111-111111111111'
         );
       });
     });
 
     it('displays invitation info when token query param is valid', async () => {
       setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
-      // Backend returns flat Invitation struct with snake_case JSON
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          id: '11111111-1111-1111-1111-111111111111',
-          email: 'test@example.com',
-          target_role: 'instructor',
-          namespace_id: 'test-ns',
-          status: 'pending',
-        }),
+      // Typed client returns InvitationDetails directly
+      mockGetInvitationDetails.mockResolvedValue({
+        id: '11111111-1111-1111-1111-111111111111',
+        email: 'test@example.com',
+        target_role: 'instructor',
+        namespace_id: 'test-ns',
+        status: 'pending',
       });
 
       render(<AcceptInvitePage />);
@@ -155,11 +155,10 @@ describe('AcceptInvitePage', () => {
 
     it('shows error for invalid token format in query params', async () => {
       setSearchParams({ token: 'not-a-uuid' });
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: () => Promise.resolve({ code: 'INVALID_TOKEN', error: 'Invalid token format' }),
-      });
+      const error = new Error('Invalid token format');
+      (error as any).status = 400;
+      (error as any).code = 'INVALID_TOKEN';
+      mockGetInvitationDetails.mockRejectedValue(error);
 
       render(<AcceptInvitePage />);
 
@@ -170,11 +169,10 @@ describe('AcceptInvitePage', () => {
 
     it('shows error for invitation not found from query param token', async () => {
       setSearchParams({ token: '11111111-1111-1111-1111-111111111111' });
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 404,
-        json: () => Promise.resolve({ error: 'Not found', code: 'INVITATION_NOT_FOUND' }),
-      });
+      const error = new Error('Not found');
+      (error as any).status = 404;
+      (error as any).code = 'INVITATION_NOT_FOUND';
+      mockGetInvitationDetails.mockRejectedValue(error);
 
       render(<AcceptInvitePage />);
 
@@ -187,23 +185,21 @@ describe('AcceptInvitePage', () => {
       // Both are set, query param should take precedence
       setSearchParams({ token: '22222222-2222-2222-2222-222222222222' });
       setLocationHash('#token_hash=hash-token&type=invite');
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockGetInvitationDetails.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/auth/accept-invite?token=22222222-2222-2222-2222-222222222222')
+        expect(mockGetInvitationDetails).toHaveBeenCalledWith(
+          '22222222-2222-2222-2222-222222222222'
         );
       });
-      // Should NOT include hash-based params
-      expect(mockFetch).not.toHaveBeenCalledWith(
-        expect.stringContaining('token_hash')
-      );
+      // Should NOT call fetch for hash-based params
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
-  describe('Token Verification', () => {
+  describe('Token Verification (legacy hash-based)', () => {
     it('sends token_hash to API for verification', async () => {
       setLocationHash('#token_hash=test-token&type=invite');
       mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
@@ -464,8 +460,8 @@ describe('AcceptInvitePage', () => {
     });
   });
 
-  describe('Form Submission', () => {
-    it('creates Firebase account before calling backend API', async () => {
+  describe('Form Submission (typed client)', () => {
+    it('creates Firebase account before calling acceptInvite', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -477,11 +473,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'instructor',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'instructor', email: 'test@example.com',
+        external_id: 'ext-1', namespace_id: 'ns-1', display_name: null,
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       render(<AcceptInvitePage />);
@@ -504,7 +499,7 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('uses authenticated API call for accept invite POST', async () => {
+    it('uses typed acceptInvite for POST', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -516,11 +511,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'instructor',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'instructor', email: 'test@example.com',
+        external_id: 'ext-1', namespace_id: 'ns-1', display_name: null,
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       render(<AcceptInvitePage />);
@@ -533,22 +527,13 @@ describe('AcceptInvitePage', () => {
       await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
       await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
-      // Verify authenticated API was called (not publicFetchRaw)
+      // Verify typed acceptInvite was called
       await waitFor(() => {
-        expect(mockApiFetchRaw).toHaveBeenCalledWith(
-          '/auth/accept-invite',
-          expect.objectContaining({
-            method: 'POST',
-            body: JSON.stringify({
-              token: 'inv-1',
-              display_name: undefined,
-            }),
-          })
-        );
+        expect(mockAcceptInvite).toHaveBeenCalledWith('inv-1', undefined);
       });
     });
 
-    it('submits password to API and redirects on success', async () => {
+    it('submits password and redirects on success', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -560,11 +545,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'instructor',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'instructor', email: 'test@example.com',
+        external_id: 'ext-1', namespace_id: 'ns-1', display_name: null,
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       render(<AcceptInvitePage />);
@@ -594,11 +578,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'namespace-admin',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'namespace-admin', email: 'admin@example.com',
+        external_id: 'ext-1', namespace_id: null, display_name: null,
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       render(<AcceptInvitePage />);
@@ -660,12 +643,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Something went wrong',
-        }),
-      });
+      // Typed client throws an error
+      const apiError = new Error('Something went wrong');
+      (apiError as any).status = 500;
+      mockAcceptInvite.mockRejectedValueOnce(apiError);
 
       render(<AcceptInvitePage />);
 
@@ -694,7 +675,7 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockImplementationOnce(() => new Promise(() => {}));
+      mockAcceptInvite.mockImplementationOnce(() => new Promise(() => {}));
 
       render(<AcceptInvitePage />);
 
@@ -723,11 +704,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'instructor',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'instructor', email: 'test@example.com',
+        external_id: 'ext-1', namespace_id: 'ns-1', display_name: 'John Doe',
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       render(<AcceptInvitePage />);
@@ -742,10 +722,7 @@ describe('AcceptInvitePage', () => {
       await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(mockApiFetchRaw).toHaveBeenCalledWith('/auth/accept-invite', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ token: 'inv-1', display_name: 'John Doe' }),
-        }));
+        expect(mockAcceptInvite).toHaveBeenCalledWith('inv-1', 'John Doe');
       });
     });
   });
@@ -780,7 +757,7 @@ describe('AcceptInvitePage', () => {
   });
 
   describe('Firebase Account Cleanup on Backend Failure', () => {
-    it('deletes Firebase account when backend API returns error', async () => {
+    it('deletes Firebase account when acceptInvite throws error', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -792,13 +769,10 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      // Backend API fails with 500 error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Internal server error',
-        }),
-      });
+      // Typed acceptInvite throws error
+      const apiError = new Error('Internal server error');
+      (apiError as any).status = 500;
+      mockAcceptInvite.mockRejectedValueOnce(apiError);
 
       render(<AcceptInvitePage />);
 
@@ -821,7 +795,7 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('deletes Firebase account when backend returns INVITATION_CONSUMED error', async () => {
+    it('deletes Firebase account when acceptInvite throws INVITATION_CONSUMED', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -833,14 +807,11 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      // Backend returns invitation consumed error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Invitation already used',
-          code: 'INVITATION_CONSUMED',
-        }),
-      });
+      // Typed client throws with code
+      const apiError = new Error('Invitation already used');
+      (apiError as any).status = 409;
+      (apiError as any).code = 'INVITATION_CONSUMED';
+      mockAcceptInvite.mockRejectedValueOnce(apiError);
 
       render(<AcceptInvitePage />);
 
@@ -862,7 +833,7 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('deletes Firebase account when backend returns INVITATION_EXPIRED error', async () => {
+    it('deletes Firebase account when acceptInvite throws INVITATION_EXPIRED', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -874,14 +845,11 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      // Backend returns invitation expired error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Invitation expired',
-          code: 'INVITATION_EXPIRED',
-        }),
-      });
+      // Typed client throws with code
+      const apiError = new Error('Invitation expired');
+      (apiError as any).status = 410;
+      (apiError as any).code = 'INVITATION_EXPIRED';
+      mockAcceptInvite.mockRejectedValueOnce(apiError);
 
       render(<AcceptInvitePage />);
 
@@ -902,7 +870,7 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('deletes Firebase account when backend call throws network error', async () => {
+    it('deletes Firebase account when acceptInvite throws network error', async () => {
       const user = userEvent.setup();
       setLocationHash('#token_hash=test-token&type=invite');
 
@@ -914,8 +882,8 @@ describe('AcceptInvitePage', () => {
         }),
       });
 
-      // Backend call throws network error
-      mockApiFetchRaw.mockRejectedValueOnce(new Error('Network error'));
+      // Typed client throws a network error
+      mockAcceptInvite.mockRejectedValueOnce(new Error('Network error'));
 
       render(<AcceptInvitePage />);
 
@@ -945,12 +913,9 @@ describe('AcceptInvitePage', () => {
       });
 
       // First attempt: backend fails
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Temporary error',
-        }),
-      });
+      const apiError = new Error('Temporary error');
+      (apiError as any).status = 500;
+      mockAcceptInvite.mockRejectedValueOnce(apiError);
 
       render(<AcceptInvitePage />);
 
@@ -983,11 +948,10 @@ describe('AcceptInvitePage', () => {
       });
 
       // Second attempt: backend succeeds
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          id: 'user-1', role: 'instructor',
-        }),
+      mockAcceptInvite.mockResolvedValueOnce({
+        id: 'user-1', role: 'instructor', email: 'test@example.com',
+        external_id: 'ext-1', namespace_id: 'ns-1', display_name: null,
+        created_at: '2024-01-01', updated_at: '2024-01-01',
       });
 
       await user.click(screen.getByRole('button', { name: 'Complete Registration' }));

@@ -2,9 +2,10 @@
  * Contract tests for the Problems API functions.
  * Validates that the typed API functions work correctly against the real backend.
  *
- * Covers all 5 functions from problems.ts:
+ * Covers all 6 functions from problems.ts:
  *   - createProblem()
  *   - getProblem()
+ *   - getPublicProblem()
  *   - listProblems()
  *   - updateProblem()
  *   - deleteProblem()
@@ -14,6 +15,7 @@ import { state } from './shared-state';
 import {
   listProblems,
   getProblem,
+  getPublicProblem,
   createProblem,
   updateProblem,
   deleteProblem,
@@ -127,6 +129,44 @@ describe('Problems API', () => {
 
       // Verify it matches the created problem
       expect(problem.id).toBe(createdProblemId);
+    });
+  });
+
+  describe('getPublicProblem()', () => {
+    it('returns PublicProblem with correct snake_case shape for existing problem', async () => {
+      expect(createdProblemId).toBeTruthy();
+
+      const problem = await getPublicProblem(createdProblemId!);
+
+      // getPublicProblem returns null on error, non-null on success
+      expect(problem).not.toBeNull();
+
+      if (problem) {
+        // Validate snake_case shape
+        expectSnakeCaseKeys(problem, 'PublicProblem');
+
+        // Validate required string fields
+        expectString(problem, 'id');
+        expectString(problem, 'title');
+
+        // Validate nullable string fields
+        expectNullableString(problem, 'description');
+        expectNullableString(problem, 'solution');
+        expectNullableString(problem, 'starter_code');
+        expectNullableString(problem, 'class_id');
+        expectNullableString(problem, 'class_name');
+
+        // Validate array fields
+        expectArray(problem, 'tags');
+
+        // Verify it matches the created problem
+        expect(problem.id).toBe(createdProblemId);
+      }
+    });
+
+    it('returns null for nonexistent problem', async () => {
+      const problem = await getPublicProblem('nonexistent-id');
+      expect(problem).toBeNull();
     });
   });
 

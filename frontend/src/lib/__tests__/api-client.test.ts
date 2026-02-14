@@ -275,6 +275,22 @@ describe('api-client', () => {
       expect(err.status).toBe(404);
     });
 
+    it('includes code from error body on thrown error', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Bad request', code: 'INVALID_CODE' }),
+      });
+
+      const { apiGet } = require('../api-client');
+      const err: any = await apiGet('/v1/items').catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Bad request');
+      expect(err.status).toBe(400);
+      expect(err.code).toBe('INVALID_CODE');
+    });
+
     it('uses status code as message when error JSON has no error field', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
       (global.fetch as jest.Mock).mockResolvedValue({

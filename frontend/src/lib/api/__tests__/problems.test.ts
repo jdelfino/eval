@@ -7,6 +7,7 @@ const mockApiGet = jest.fn();
 const mockApiPost = jest.fn();
 const mockApiPatch = jest.fn();
 const mockApiDelete = jest.fn();
+const mockPublicGet = jest.fn();
 
 jest.mock('@/lib/api-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
@@ -15,15 +16,20 @@ jest.mock('@/lib/api-client', () => ({
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
 }));
 
+jest.mock('@/lib/public-api-client', () => ({
+  publicGet: (...args: unknown[]) => mockPublicGet(...args),
+}));
+
 import {
   listProblems,
   getProblem,
   createProblem,
   updateProblem,
   deleteProblem,
+  getPublicProblem,
 } from '../problems';
 import type { ProblemSummary } from '../problems';
-import type { Problem } from '@/types/api';
+import type { Problem, PublicProblem } from '@/types/api';
 
 const fakeProblemSummary: ProblemSummary = {
   id: 'p1',
@@ -187,6 +193,52 @@ describe('problems API client', () => {
       await deleteProblem('p1');
 
       expect(mockApiDelete).toHaveBeenCalledWith('/problems/p1');
+    });
+  });
+
+  describe('getPublicProblem', () => {
+    const fakePublicProblem: PublicProblem = {
+      id: 'p1',
+      title: 'Two Sum',
+      description: 'Find two numbers that add up to target',
+      solution: 'def solve(): return [0, 1]',
+      starter_code: 'def solve():',
+      class_id: 'c1',
+      class_name: 'CS 101',
+      tags: ['arrays'],
+    };
+
+    it('calls publicGet with correct path and returns PublicProblem', async () => {
+      mockPublicGet.mockResolvedValue(fakePublicProblem);
+
+      const result = await getPublicProblem('p1');
+
+      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/p1');
+      expect(result).toEqual(fakePublicProblem);
+    });
+
+    it('encodes the problem ID in the URL', async () => {
+      mockPublicGet.mockResolvedValue(fakePublicProblem);
+
+      await getPublicProblem('id with spaces');
+
+      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/id%20with%20spaces');
+    });
+
+    it('returns null when problem is not found', async () => {
+      mockPublicGet.mockRejectedValue(new Error('Not found'));
+
+      const result = await getPublicProblem('nonexistent');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null on any error', async () => {
+      mockPublicGet.mockRejectedValue(new Error('Network error'));
+
+      const result = await getPublicProblem('p1');
+
+      expect(result).toBeNull();
     });
   });
 });

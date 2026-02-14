@@ -25,10 +25,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
-// Mock fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
-
 // Mock Firebase createUserWithEmailAndPassword and deleteUser
 const mockCreateUserWithEmailAndPassword = jest.fn();
 const mockDeleteUser = jest.fn();
@@ -55,30 +51,26 @@ jest.mock('@/lib/firebase', () => ({
   },
 }));
 
-// Mock public-api-client to delegate to global.fetch (bypass retry/BASE_URL)
-jest.mock('@/lib/public-api-client', () => ({
-  publicFetchRaw: (path: string, options?: RequestInit) =>
-    global.fetch(path, options),
-}));
-
-// Mock api-client for authenticated requests
-const mockApiFetchRaw = jest.fn();
-jest.mock('@/lib/api-client', () => ({
-  apiFetchRaw: (...args: unknown[]) => mockApiFetchRaw(...args),
+// Mock typed registration API client functions
+const mockGetStudentRegistrationInfo = jest.fn();
+const mockRegisterStudent = jest.fn();
+jest.mock('@/lib/api/registration', () => ({
+  getStudentRegistrationInfo: (...args: unknown[]) => mockGetStudentRegistrationInfo(...args),
+  registerStudent: (...args: unknown[]) => mockRegisterStudent(...args),
 }));
 
 describe('StudentRegistrationPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPush.mockClear();
-    mockFetch.mockClear();
     mockRefreshUser.mockClear();
     mockRefreshUser.mockResolvedValue(undefined);
     mockSearchParams.delete('code');
     mockCreateUserWithEmailAndPassword.mockClear();
     mockDeleteUser.mockClear();
     mockGetIdToken.mockClear();
-    mockApiFetchRaw.mockClear();
+    mockGetStudentRegistrationInfo.mockClear();
+    mockRegisterStudent.mockClear();
     mockCurrentUser = null;
     // Default: Firebase account creation succeeds and sets currentUser
     mockCreateUserWithEmailAndPassword.mockImplementation(() => {
@@ -152,12 +144,12 @@ describe('StudentRegistrationPage', () => {
       await user.click(button);
 
       expect(screen.getByText('Please enter a valid join code (e.g., ABC-123)')).toBeInTheDocument();
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockGetStudentRegistrationInfo).not.toHaveBeenCalled();
     });
 
     it('shows loading state during validation', async () => {
       const user = userEvent.setup();
-      mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockGetStudentRegistrationInfo.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       render(<StudentRegistrationPage />);
 
@@ -172,10 +164,10 @@ describe('StudentRegistrationPage', () => {
 
     it('shows error for invalid code', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Invalid code', code: 'INVALID_CODE' }),
-      });
+      const error = new Error('Invalid code');
+      (error as any).code = 'INVALID_CODE';
+      (error as any).status = 400;
+      mockGetStudentRegistrationInfo.mockRejectedValue(error);
 
       render(<StudentRegistrationPage />);
 
@@ -192,10 +184,10 @@ describe('StudentRegistrationPage', () => {
 
     it('shows error for inactive section', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Section inactive', code: 'SECTION_INACTIVE' }),
-      });
+      const error = new Error('Section inactive');
+      (error as any).code = 'SECTION_INACTIVE';
+      (error as any).status = 400;
+      mockGetStudentRegistrationInfo.mockRejectedValue(error);
 
       render(<StudentRegistrationPage />);
 
@@ -212,14 +204,9 @@ describe('StudentRegistrationPage', () => {
 
     it('shows section preview after valid code', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Monday 2pm' },
-          class: { id: 'cls-1', name: 'CS 101 - Intro to Python' },
-          namespace: { id: 'ns-1', displayName: 'Test University' },
-          instructors: [{ id: 'inst-1', displayName: 'Prof. Smith' }],
-        }),
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Monday 2pm' },
+        class: { id: 'cls-1', name: 'CS 101 - Intro to Python' },
       });
 
       render(<StudentRegistrationPage />);
@@ -234,21 +221,15 @@ describe('StudentRegistrationPage', () => {
         expect(screen.getByText('Create Your Account')).toBeInTheDocument();
         expect(screen.getByText('CS 101 - Intro to Python')).toBeInTheDocument();
         expect(screen.getByText('Section: Monday 2pm')).toBeInTheDocument();
-        expect(screen.getByText('Instructor: Prof. Smith')).toBeInTheDocument();
       });
     });
   });
 
   describe('Registration Form Validation', () => {
     beforeEach(async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Test Section' },
-          class: { id: 'cls-1', name: 'Test Class' },
-          namespace: { id: 'ns-1', displayName: 'Test Org' },
-          instructors: [],
-        }),
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
       });
     });
 
@@ -285,8 +266,6 @@ describe('StudentRegistrationPage', () => {
       await user.type(screen.getByPlaceholderText('At least 8 characters'), 'weak');
       await user.type(screen.getByPlaceholderText('Re-enter your password'), 'weak');
 
-      // Reset mock for registration call
-      mockFetch.mockClear();
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -300,8 +279,6 @@ describe('StudentRegistrationPage', () => {
       await user.type(screen.getByPlaceholderText('At least 8 characters'), 'abcdefgh');
       await user.type(screen.getByPlaceholderText('Re-enter your password'), 'abcdefgh');
 
-      mockFetch.mockClear();
-
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
       expect(screen.getByText('Password must contain at least one letter and one number')).toBeInTheDocument();
@@ -313,8 +290,6 @@ describe('StudentRegistrationPage', () => {
       await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
       await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
       await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Different123');
-
-      mockFetch.mockClear();
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -335,15 +310,10 @@ describe('StudentRegistrationPage', () => {
     const setupAndFillForm = async () => {
       const user = userEvent.setup();
 
-      // First call: validate code (unauthenticated)
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Test Section' },
-          class: { id: 'cls-1', name: 'Test Class' },
-          namespace: { id: 'ns-1', displayName: 'Test Org' },
-          instructors: [],
-        }),
+      // Code validation via typed client
+      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
       });
 
       render(<StudentRegistrationPage />);
@@ -367,13 +337,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend registration succeeds
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-        }),
-      });
+      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -387,44 +351,24 @@ describe('StudentRegistrationPage', () => {
       });
     });
 
-    it('uses authenticated API call for registration POST', async () => {
+    it('calls typed registerStudent client for registration', async () => {
       const user = await setupAndFillForm();
 
       // Backend registration succeeds
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-        }),
-      });
+      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
-      // Verify authenticated API was called (not publicFetchRaw)
+      // Verify typed client was called with the join code (dashes stripped)
       await waitFor(() => {
-        expect(mockApiFetchRaw).toHaveBeenCalledWith(
-          '/auth/register-student',
-          expect.objectContaining({
-            method: 'POST',
-            body: JSON.stringify({
-              join_code: 'ABC123',
-            }),
-          })
-        );
+        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC123');
       });
     });
 
     it('submits form and redirects on success', async () => {
       const user = await setupAndFillForm();
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-        }),
-      });
+      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -440,7 +384,7 @@ describe('StudentRegistrationPage', () => {
     it('shows loading state during submission', async () => {
       const user = await setupAndFillForm();
 
-      mockApiFetchRaw.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
+      mockRegisterStudent.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -481,13 +425,10 @@ describe('StudentRegistrationPage', () => {
     it('shows error when namespace at capacity from backend', async () => {
       const user = await setupAndFillForm();
 
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'At capacity',
-          code: 'NAMESPACE_AT_CAPACITY',
-        }),
-      });
+      const error = new Error('At capacity');
+      (error as any).code = 'NAMESPACE_AT_CAPACITY';
+      (error as any).status = 400;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -501,14 +442,9 @@ describe('StudentRegistrationPage', () => {
     it('returns to code entry on back button', async () => {
       const user = userEvent.setup();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Test Section' },
-          class: { id: 'cls-1', name: 'Test Class' },
-          namespace: { id: 'ns-1', displayName: 'Test Org' },
-          instructors: [],
-        }),
+      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
       });
 
       render(<StudentRegistrationPage />);
@@ -548,15 +484,10 @@ describe('StudentRegistrationPage', () => {
     const setupAndFillForm = async () => {
       const user = userEvent.setup();
 
-      // First call: validate code (unauthenticated)
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Test Section' },
-          class: { id: 'cls-1', name: 'Test Class' },
-          namespace: { id: 'ns-1', displayName: 'Test Org' },
-          instructors: [],
-        }),
+      // Code validation via typed client
+      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
       });
 
       render(<StudentRegistrationPage />);
@@ -579,14 +510,8 @@ describe('StudentRegistrationPage', () => {
     it('refreshes user and redirects to /sections on successful registration', async () => {
       const user = await setupAndFillForm();
 
-      // Backend registration succeeds
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-        }),
-      });
+      // Backend registration succeeds via typed client
+      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -605,15 +530,10 @@ describe('StudentRegistrationPage', () => {
     const setupAndFillForm = async () => {
       const user = userEvent.setup();
 
-      // First call: validate code (unauthenticated)
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          section: { id: 'sec-1', name: 'Test Section' },
-          class: { id: 'cls-1', name: 'Test Class' },
-          namespace: { id: 'ns-1', displayName: 'Test Org' },
-          instructors: [],
-        }),
+      // Code validation via typed client
+      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
       });
 
       render(<StudentRegistrationPage />);
@@ -636,13 +556,10 @@ describe('StudentRegistrationPage', () => {
     it('deletes Firebase account when backend API returns error', async () => {
       const user = await setupAndFillForm();
 
-      // Backend API fails with 500 error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Internal server error',
-        }),
-      });
+      // Backend API fails with 500 error (typed client throws)
+      const error = new Error('Internal server error');
+      (error as any).status = 500;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -660,14 +577,11 @@ describe('StudentRegistrationPage', () => {
     it('deletes Firebase account when backend returns NAMESPACE_AT_CAPACITY error', async () => {
       const user = await setupAndFillForm();
 
-      // Backend returns namespace at capacity error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'At capacity',
-          code: 'NAMESPACE_AT_CAPACITY',
-        }),
-      });
+      // Backend returns namespace at capacity error (typed client throws)
+      const error = new Error('At capacity');
+      (error as any).code = 'NAMESPACE_AT_CAPACITY';
+      (error as any).status = 400;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -685,13 +599,10 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend returns invalid code error (code became invalid between validation and registration)
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Invalid code',
-          code: 'INVALID_CODE',
-        }),
-      });
+      const error = new Error('Invalid code');
+      (error as any).code = 'INVALID_CODE';
+      (error as any).status = 400;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -708,14 +619,11 @@ describe('StudentRegistrationPage', () => {
     it('deletes Firebase account when backend returns SECTION_INACTIVE error', async () => {
       const user = await setupAndFillForm();
 
-      // Backend returns section inactive error
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Section inactive',
-          code: 'SECTION_INACTIVE',
-        }),
-      });
+      // Backend returns section inactive error (typed client throws)
+      const error = new Error('Section inactive');
+      (error as any).code = 'SECTION_INACTIVE';
+      (error as any).status = 400;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -727,8 +635,8 @@ describe('StudentRegistrationPage', () => {
     it('deletes Firebase account when backend call throws network error', async () => {
       const user = await setupAndFillForm();
 
-      // Backend call throws network error
-      mockApiFetchRaw.mockRejectedValueOnce(new Error('Network error'));
+      // Backend call throws network error (typed client throws)
+      mockRegisterStudent.mockRejectedValueOnce(new Error('Network error'));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -740,13 +648,10 @@ describe('StudentRegistrationPage', () => {
     it('allows retry after Firebase account cleanup on backend failure', async () => {
       const user = await setupAndFillForm();
 
-      // First attempt: backend fails
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: 'Temporary error',
-        }),
-      });
+      // First attempt: backend fails (typed client throws)
+      const error = new Error('Temporary error');
+      (error as any).status = 500;
+      mockRegisterStudent.mockRejectedValueOnce(error);
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -770,14 +675,8 @@ describe('StudentRegistrationPage', () => {
         return Promise.resolve({ user: mockFirebaseUser });
       });
 
-      // Second attempt: backend succeeds
-      mockApiFetchRaw.mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'student' },
-        }),
-      });
+      // Second attempt: backend succeeds (typed client returns user)
+      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 

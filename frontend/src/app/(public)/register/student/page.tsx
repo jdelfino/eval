@@ -20,8 +20,7 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { firebaseAuth } from '@/lib/firebase';
-import { publicFetchRaw } from '@/lib/public-api-client';
-import { apiFetchRaw } from '@/lib/api-client';
+import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
 
 // Page state types
 type PageState =
@@ -190,36 +189,25 @@ function StudentRegistrationContent() {
     setPageState({ status: 'validating-code' });
 
     try {
-      const response = await publicFetchRaw(`/auth/register-student?code=${encodeURIComponent(cleaned)}`);
-
-      if (!response.ok) {
-        const data = await response.json();
-
-        if (data.code === 'INVALID_CODE' || data.code === 'MISSING_CODE') {
-          setCodeError(ERROR_MESSAGES.invalid_code);
-        } else if (data.code === 'SECTION_INACTIVE') {
-          setCodeError(ERROR_MESSAGES.section_inactive);
-        } else {
-          setCodeError(data.error || 'Failed to validate code');
-        }
-
-        setPageState({ status: 'code-entry' });
-        return;
-      }
-
-      const data = await response.json();
+      const data = await getStudentRegistrationInfo(cleaned);
       setSectionInfo({
         id: data.section.id,
         name: data.section.name,
-        semester: data.section.semester,
-        class: data.class,
-        namespace: data.namespace,
-        instructors: data.instructors || [],
+        semester: data.section.semester ?? undefined,
+        class: data.class ? { ...data.class, description: data.class.description ?? undefined } : null,
+        namespace: { id: '', displayName: '' }, // Not returned by typed client; use defaults
+        instructors: [], // Not returned by typed client; use defaults
       });
-      setPageState({ status: 'code-valid', section: data.section });
+      setPageState({ status: 'code-valid', section: data.section as unknown as SectionInfo });
     } catch (error) {
-      console.error('[StudentRegistration] Validate code error:', error);
-      setCodeError(ERROR_MESSAGES.network_error);
+      const code = (error as any).code as string;
+      if (code === 'INVALID_CODE' || code === 'MISSING_CODE') {
+        setCodeError(ERROR_MESSAGES.invalid_code);
+      } else if (code === 'SECTION_INACTIVE') {
+        setCodeError(ERROR_MESSAGES.section_inactive);
+      } else {
+        setCodeError((error as any).message || 'Failed to validate code');
+      }
       setPageState({ status: 'code-entry' });
     }
   };
@@ -253,35 +241,7 @@ function StudentRegistrationContent() {
       // The backend extracts external_id and email from JWT claims (not request body)
       // Wrap in try/catch to clean up Firebase account on failure
       try {
-        const response = await apiFetchRaw('/auth/register-student', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            join_code: join_code.replace(/-/g, ''),
-          }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-
-          // Delete Firebase account so user can retry with same email
-          await firebaseAuth.currentUser?.delete();
-
-          // Map error codes to messages
-          if (data.code === 'NAMESPACE_AT_CAPACITY') {
-            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
-          } else if (data.code === 'INVALID_CODE' || data.code === 'SECTION_INACTIVE') {
-            // Code became invalid, go back to code entry
-            setPageState({ status: 'code-entry' });
-            setCodeError(data.code === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
-            return;
-          } else {
-            setSubmitError(data.error || 'Registration failed');
-          }
-
-          setPageState({ status: 'code-valid', section: sectionInfo! });
-          return;
-        }
+        await registerStudent(join_code.replace(/-/g, ''));
 
         // Success! User is already logged in via Firebase
         setPageState({ status: 'success' });
@@ -292,7 +252,22 @@ function StudentRegistrationContent() {
       } catch (backendError) {
         // Backend call failed (network error, etc.) - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
-        throw backendError;
+
+        const errorCode = (backendError as any).code as string;
+
+        // Map error codes to messages
+        if (errorCode === 'NAMESPACE_AT_CAPACITY') {
+          setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
+        } else if (errorCode === 'INVALID_CODE' || errorCode === 'SECTION_INACTIVE') {
+          // Code became invalid, go back to code entry
+          setPageState({ status: 'code-entry' });
+          setCodeError(errorCode === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
+          return;
+        } else {
+          setSubmitError((backendError as any).message || 'Registration failed');
+        }
+
+        setPageState({ status: 'code-valid', section: sectionInfo! });
       }
     } catch (error) {
       console.error('[StudentRegistration] Register error:', error);

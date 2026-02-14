@@ -13,6 +13,7 @@ export * from './invitations';
 export * from './namespace-invitations';
 export * from './namespaces';
 export * from './problems';
+export * from './registration';
 export * from './realtime';
 export * from './realtime-token';
 export * from './sections';

@@ -78,6 +78,21 @@ describe('public-api-client', () => {
       expect(err.status).toBe(400);
     });
 
+    it('includes code from error body on thrown error', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: 'Section inactive', code: 'SECTION_INACTIVE' }),
+      });
+
+      const { publicFetch } = require('../public-api-client');
+      const err: any = await publicFetch('/auth/register-student').catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('Section inactive');
+      expect(err.status).toBe(400);
+      expect(err.code).toBe('SECTION_INACTIVE');
+    });
+
     it('throws with status code when error body has no error field', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,

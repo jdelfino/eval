@@ -7,7 +7,8 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Problem } from '@/types/api';
+import { publicGet } from '@/lib/public-api-client';
+import type { Problem, PublicProblem } from '@/types/api';
 
 /**
  * Summary version of a problem for list views.
@@ -114,4 +115,17 @@ export async function updateProblem(id: string, data: Partial<{
  */
 export async function deleteProblem(id: string): Promise<void> {
   await apiDelete(`/problems/${id}`);
+}
+
+/**
+ * Fetch a public problem by ID (no auth required).
+ * Used for server-rendered public problem pages.
+ * Returns null if the problem is not found.
+ */
+export async function getPublicProblem(id: string): Promise<PublicProblem | null> {
+  try {
+    return await publicGet<PublicProblem>(`/public/problems/${encodeURIComponent(id)}`);
+  } catch {
+    return null;
+  }
 }
