@@ -75,11 +75,14 @@ authorized_domains = [
   "localhost"
 ]
 
-# OAuth credentials are created in GCP Console > APIs & Services > Credentials
-# Provide via environment variables (don't commit secrets):
-#   export TF_VAR_oauth_client_id="xxx.apps.googleusercontent.com"
-#   export TF_VAR_oauth_client_secret="xxx"
-# Or via: terraform apply -var-file="secrets.tfvars" (gitignored)
+# OAuth client ID is public (appears in frontend config).
+# Created manually in GCP Console > APIs & Services > Credentials.
+oauth_client_id = ""
+
+# OAuth client secret and Resend API key are in GCP Secret Manager.
+# See module "secrets" in main.tf for the list of managed secrets.
+
+invite_base_url = "https://eval.delquillan.com"
 
 # -----------------------------------------------------------------------------
 # Workload Identity Federation Configuration

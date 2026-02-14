@@ -203,11 +203,9 @@ variable "oauth_client_id" {
   default     = ""
 }
 
-variable "oauth_client_secret" {
-  description = "OAuth 2.0 client secret (created manually in GCP Console)"
+variable "invite_base_url" {
+  description = "Base URL for invitation accept links (frontend route)"
   type        = string
-  default     = ""
-  sensitive   = true
 }
 
 # -----------------------------------------------------------------------------

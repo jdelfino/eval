@@ -150,7 +150,18 @@ module "identity_platform" {
 
   authorized_domains  = var.authorized_domains
   oauth_client_id     = var.oauth_client_id
-  oauth_client_secret = var.oauth_client_secret
+  oauth_client_secret = module.secrets.secret_values["oauth-client-secret"]
+}
+
+module "secrets" {
+  source = "../../modules/secrets"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  secret_ids = ["resend-api-key", "oauth-client-secret"]
 }
 
 module "artifact_registry" {
@@ -243,6 +254,9 @@ resource "kubernetes_config_map" "app_config" {
 
     # Centrifugo Configuration
     CENTRIFUGO_URL = "http://centrifugo:8000"
+
+    # Invitation Configuration
+    INVITE_BASE_URL = var.invite_base_url
   }
 
   depends_on = [module.gke]
@@ -256,6 +270,7 @@ resource "kubernetes_secret" "app_secrets" {
 
   data = {
     OAUTH_CLIENT_SECRET = module.identity_platform.oauth_client_secret
+    RESEND_API_KEY      = module.secrets.secret_values["resend-api-key"]
     DATABASE_USER       = module.cloudsql.database_user
     DATABASE_PASSWORD   = module.cloudsql.database_password
     DATABASE_URL        = module.cloudsql.connection_string_full

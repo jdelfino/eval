@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -21,14 +22,22 @@ import (
 type InvitationHandler struct {
 	emailClient email.Client
 	baseURL     string
+	logger      *slog.Logger
 }
 
 // NewInvitationHandler creates a new InvitationHandler.
-func NewInvitationHandler(emailClient email.Client, baseURL string) *InvitationHandler {
+func NewInvitationHandler(emailClient email.Client, baseURL string, logger *slog.Logger) *InvitationHandler {
 	return &InvitationHandler{
 		emailClient: emailClient,
 		baseURL:     baseURL,
+		logger:      logger,
 	}
+}
+
+// createInvitationResponse wraps an invitation with email delivery status.
+type createInvitationResponse struct {
+	*store.Invitation
+	EmailSent bool `json:"email_sent"`
 }
 
 // Routes returns a chi.Router with namespace-scoped invitation routes.
@@ -124,9 +133,20 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Send email (best-effort, don't fail the request)
 	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	_ = h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL)
+	emailSent := true
+	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL); err != nil {
+		emailSent = false
+		h.logger.Warn("failed to send invitation email",
+			"invitation_id", inv.ID,
+			"recipient", inv.Email,
+			"error", err,
+		)
+	}
 
-	httputil.WriteJSON(w, http.StatusCreated, inv)
+	httputil.WriteJSON(w, http.StatusCreated, createInvitationResponse{
+		Invitation: inv,
+		EmailSent:  emailSent,
+	})
 }
 
 // Get handles GET /api/v1/namespaces/{nsID}/invitations/{invID}
@@ -310,9 +330,20 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 	}
 
 	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	_ = h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, req.NamespaceID, acceptURL)
+	emailSent := true
+	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, req.NamespaceID, acceptURL); err != nil {
+		emailSent = false
+		h.logger.Warn("failed to send invitation email",
+			"invitation_id", inv.ID,
+			"recipient", inv.Email,
+			"error", err,
+		)
+	}
 
-	httputil.WriteJSON(w, http.StatusCreated, inv)
+	httputil.WriteJSON(w, http.StatusCreated, createInvitationResponse{
+		Invitation: inv,
+		EmailSent:  emailSent,
+	})
 }
 
 // SystemGet handles GET /api/v1/system/invitations/{invID}
