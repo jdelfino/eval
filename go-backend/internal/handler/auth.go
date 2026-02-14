@@ -31,15 +31,17 @@ func (h *AuthHandler) Routes() chi.Router {
 }
 
 // RegistrationRoutes returns a chi.Router with registration routes.
-// These routes do NOT require auth middleware; they use RegistrationStoreMiddleware
-// which sets app.role = 'registration' for limited RLS access.
-func (h *AuthHandler) RegistrationRoutes() chi.Router {
+// GET routes are public (no JWT) — users hit these before creating an account.
+// POST routes require JWT via the provided authMiddleware — users hit these
+// after creating a Firebase account but before having a DB profile.
+// Both use RegistrationStoreMiddleware (applied by the caller) for limited RLS access.
+func (h *AuthHandler) RegistrationRoutes(authMiddleware func(http.Handler) http.Handler) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/accept-invite", h.GetAcceptInvite)
-	r.Post("/accept-invite", h.PostAcceptInvite)
 	r.Get("/register-student", h.GetRegisterStudent)
-	r.Post("/register-student", h.PostRegisterStudent)
-	r.Post("/bootstrap", h.PostBootstrap)
+	r.With(authMiddleware).Post("/accept-invite", h.PostAcceptInvite)
+	r.With(authMiddleware).Post("/register-student", h.PostRegisterStudent)
+	r.With(authMiddleware).Post("/bootstrap", h.PostBootstrap)
 	return r
 }
 

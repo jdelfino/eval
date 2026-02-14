@@ -122,27 +122,25 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			jwtValidator = custommw.NewJWTValidator(validator, logger)
 			userLoader = custommw.NewUserLoader(adapter, logger)
 
-			// JWT validation for all authenticated routes
-			r.Use(jwtValidator.Validate)
-		}
+			}
 
-		// Registration routes - JWT validated but no user lookup required
-		// (these are for new users who don't have a profile yet)
-		// Uses RegistrationStoreMiddleware for limited RLS access instead of bypassing RLS.
+		// Registration routes — GET is public, POST requires JWT (via inline middleware).
+		// No user lookup needed (new users don't have a DB profile yet).
 		if userStore != nil {
 			r.Group(func(r chi.Router) {
 				if pgxPool := pool.PgxPool(); pgxPool != nil {
 					r.Use(custommw.RegistrationStoreMiddleware(pgxPool))
 				}
 				authHandler := handler.NewAuthHandler()
-				r.Mount("/auth", authHandler.RegistrationRoutes())
+				r.Mount("/auth", authHandler.RegistrationRoutes(jwtValidator.Validate))
 			})
 		}
 
 		// Routes requiring existing user profile
 		r.Group(func(r chi.Router) {
-			// User loader - requires user to exist in database
+			// JWT validation + user loader
 			if userStore != nil {
+				r.Use(jwtValidator.Validate)
 				r.Use(userLoader.Load)
 			}
 
