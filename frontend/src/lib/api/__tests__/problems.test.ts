@@ -213,7 +213,7 @@ describe('problems API client', () => {
 
       const result = await getPublicProblem('p1');
 
-      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/p1');
+      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/p1', undefined);
       expect(result).toEqual(fakePublicProblem);
     });
 
@@ -222,7 +222,18 @@ describe('problems API client', () => {
 
       await getPublicProblem('id with spaces');
 
-      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/id%20with%20spaces');
+      expect(mockPublicGet).toHaveBeenCalledWith('/public/problems/id%20with%20spaces', undefined);
+    });
+
+    it('forwards RequestInit options to publicGet', async () => {
+      mockPublicGet.mockResolvedValue(fakePublicProblem);
+
+      await getPublicProblem('p1', { next: { revalidate: 60 } } as RequestInit);
+
+      expect(mockPublicGet).toHaveBeenCalledWith(
+        '/public/problems/p1',
+        expect.objectContaining({ next: { revalidate: 60 } })
+      );
     });
 
     it('returns null when problem is not found', async () => {

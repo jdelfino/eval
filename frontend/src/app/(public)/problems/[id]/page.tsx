@@ -23,7 +23,7 @@ type Params = {
 };
 
 const getProblem = cache(async function getProblem(id: string): Promise<PublicProblem | null> {
-  return getPublicProblem(id);
+  return getPublicProblem(id, { next: { revalidate: 60 } } as RequestInit);
 });
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {

@@ -148,6 +148,21 @@ describe('public-api-client', () => {
       );
       expect(result).toEqual({ id: '1', name: 'test' });
     });
+
+    it('forwards RequestInit options (e.g., Next.js revalidate)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1' }),
+      });
+
+      const { publicGet } = require('../public-api-client');
+      await publicGet('/public/problems/1', { next: { revalidate: 60 } } as RequestInit);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8080/public/problems/1',
+        expect.objectContaining({ next: { revalidate: 60 } })
+      );
+    });
   });
 
   describe('publicPost', () => {

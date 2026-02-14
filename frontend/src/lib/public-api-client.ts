@@ -48,9 +48,10 @@ export async function publicFetchRaw(path: string, options: RequestInit = {}): P
 
 /**
  * Public GET request that returns parsed JSON.
+ * Accepts optional RequestInit for Next.js cache directives (e.g., { next: { revalidate: 60 } }).
  */
-export async function publicGet<T>(path: string): Promise<T> {
-  const response = await publicFetch(path);
+export async function publicGet<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await publicFetch(path, options ?? {});
   return response.json();
 }
 

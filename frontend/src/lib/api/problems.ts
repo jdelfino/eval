@@ -122,9 +122,9 @@ export async function deleteProblem(id: string): Promise<void> {
  * Used for server-rendered public problem pages.
  * Returns null if the problem is not found.
  */
-export async function getPublicProblem(id: string): Promise<PublicProblem | null> {
+export async function getPublicProblem(id: string, options?: RequestInit): Promise<PublicProblem | null> {
   try {
-    return await publicGet<PublicProblem>(`/public/problems/${encodeURIComponent(id)}`);
+    return await publicGet<PublicProblem>(`/public/problems/${encodeURIComponent(id)}`, options);
   } catch {
     return null;
   }
