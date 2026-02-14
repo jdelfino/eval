@@ -17,12 +17,10 @@ export type SessionStatus = 'active' | 'completed';
 export type MembershipRole = 'instructor' | 'student';
 
 // ---------------------------------------------------------------------------
-// API error
+// API error — re-exported from lib/api-error for convenience
 // ---------------------------------------------------------------------------
 
-export interface ApiError {
-  error: string;
-}
+export { ApiError } from '@/lib/api-error';
 
 // ---------------------------------------------------------------------------
 // Domain types — field names match JSON keys from the Go backend

@@ -21,12 +21,14 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { firebaseAuth } from '@/lib/firebase';
 import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
+import type { RegisterStudentInfo } from '@/types/api';
 
 // Page state types
 type PageState =
   | { status: 'code-entry' }
   | { status: 'validating-code' }
-  | { status: 'code-valid'; section: SectionInfo }
+  | { status: 'code-valid'; info: RegisterStudentInfo }
   | { status: 'submitting' }
   | { status: 'success' }
   | { status: 'error'; error: ErrorType; step: 'code' | 'registration' };
@@ -38,22 +40,6 @@ type ErrorType =
   | 'email_exists'
   | 'weak_password'
   | 'network_error';
-
-interface SectionInfo {
-  id: string;
-  name: string;
-  semester?: string;
-  class: {
-    id: string;
-    name: string;
-    description?: string;
-  } | null;
-  namespace: {
-    id: string;
-    displayName: string;
-  };
-  instructors: Array<{ id: string; displayName: string }>;
-}
 
 // Error messages
 const ERROR_MESSAGES: Record<ErrorType, string> = {
@@ -93,7 +79,7 @@ function StudentRegistrationContent() {
 
   // Page state
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
-  const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
+  const [registrationInfo, setRegistrationInfo] = useState<RegisterStudentInfo | null>(null);
 
   // Form fields
   const [join_code, setJoinCode] = useState('');
@@ -190,23 +176,19 @@ function StudentRegistrationContent() {
 
     try {
       const data = await getStudentRegistrationInfo(cleaned);
-      setSectionInfo({
-        id: data.section.id,
-        name: data.section.name,
-        semester: data.section.semester ?? undefined,
-        class: data.class ? { ...data.class, description: data.class.description ?? undefined } : null,
-        namespace: { id: '', displayName: '' }, // Not returned by typed client; use defaults
-        instructors: [], // Not returned by typed client; use defaults
-      });
-      setPageState({ status: 'code-valid', section: data.section as unknown as SectionInfo });
+      setRegistrationInfo(data);
+      setPageState({ status: 'code-valid', info: data });
     } catch (error) {
-      const code = (error as any).code as string;
-      if (code === 'INVALID_CODE' || code === 'MISSING_CODE') {
-        setCodeError(ERROR_MESSAGES.invalid_code);
-      } else if (code === 'SECTION_INACTIVE') {
-        setCodeError(ERROR_MESSAGES.section_inactive);
+      if (error instanceof ApiError) {
+        if (error.code === 'INVALID_CODE' || error.code === 'MISSING_CODE') {
+          setCodeError(ERROR_MESSAGES.invalid_code);
+        } else if (error.code === 'SECTION_INACTIVE') {
+          setCodeError(ERROR_MESSAGES.section_inactive);
+        } else {
+          setCodeError(error.message);
+        }
       } else {
-        setCodeError((error as any).message || 'Failed to validate code');
+        setCodeError('Failed to validate code');
       }
       setPageState({ status: 'code-entry' });
     }
@@ -253,21 +235,22 @@ function StudentRegistrationContent() {
         // Backend call failed (network error, etc.) - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
 
-        const errorCode = (backendError as any).code as string;
-
-        // Map error codes to messages
-        if (errorCode === 'NAMESPACE_AT_CAPACITY') {
-          setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
-        } else if (errorCode === 'INVALID_CODE' || errorCode === 'SECTION_INACTIVE') {
-          // Code became invalid, go back to code entry
-          setPageState({ status: 'code-entry' });
-          setCodeError(errorCode === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
-          return;
+        if (backendError instanceof ApiError) {
+          if (backendError.code === 'NAMESPACE_AT_CAPACITY') {
+            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
+          } else if (backendError.code === 'INVALID_CODE' || backendError.code === 'SECTION_INACTIVE') {
+            // Code became invalid, go back to code entry
+            setPageState({ status: 'code-entry' });
+            setCodeError(backendError.code === 'SECTION_INACTIVE' ? ERROR_MESSAGES.section_inactive : ERROR_MESSAGES.invalid_code);
+            return;
+          } else {
+            setSubmitError(backendError.message);
+          }
         } else {
-          setSubmitError((backendError as any).message || 'Registration failed');
+          setSubmitError('Registration failed');
         }
 
-        setPageState({ status: 'code-valid', section: sectionInfo! });
+        setPageState({ status: 'code-valid', info: registrationInfo! });
       }
     } catch (error) {
       console.error('[StudentRegistration] Register error:', error);
@@ -282,14 +265,14 @@ function StudentRegistrationContent() {
         setSubmitError(ERROR_MESSAGES.network_error);
       }
 
-      setPageState({ status: 'code-valid', section: sectionInfo! });
+      setPageState({ status: 'code-valid', info: registrationInfo! });
     }
   };
 
   // Go back to code entry
   const handleBackToCode = () => {
     setPageState({ status: 'code-entry' });
-    setSectionInfo(null);
+    setRegistrationInfo(null);
     setEmail('');
     setPassword('');
     setConfirmPassword('');
@@ -410,25 +393,19 @@ function StudentRegistrationContent() {
         )}
 
         {/* Section Preview + Registration Form */}
-        {(pageState.status === 'code-valid' || pageState.status === 'submitting') && sectionInfo && (
+        {(pageState.status === 'code-valid' || pageState.status === 'submitting') && registrationInfo && (
           <>
             {/* Section Preview */}
             <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
               <p className="text-xs text-indigo-600 font-medium mb-2">You're joining:</p>
               <div className="bg-white rounded-lg p-4 border border-indigo-100">
                 <h3 className="font-semibold text-gray-900">
-                  {sectionInfo.class?.name || 'Unknown Class'}
+                  {registrationInfo.class.name}
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Section: {sectionInfo.name}
-                  {sectionInfo.semester && ` (${sectionInfo.semester})`}
+                  Section: {registrationInfo.section.name}
+                  {registrationInfo.section.semester && ` (${registrationInfo.section.semester})`}
                 </p>
-                {sectionInfo.instructors.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Instructor{sectionInfo.instructors.length > 1 ? 's' : ''}:{' '}
-                    {sectionInfo.instructors.map((i) => i.displayName).join(', ')}
-                  </p>
-                )}
               </div>
             </div>
 

@@ -10,6 +10,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AcceptInvitePage from '../page';
+import { ApiError } from '@/lib/api-error';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -72,10 +73,7 @@ const mockUser = {
 };
 
 function makeApiError(message: string, status: number, code?: string) {
-  const error = new Error(message);
-  (error as any).status = status;
-  if (code) (error as any).code = code;
-  return error;
+  return new ApiError(message, status, code);
 }
 
 describe('AcceptInvitePage', () => {

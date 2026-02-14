@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebase';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
 
 // Page state types
 type PageState =
@@ -176,12 +177,10 @@ function AcceptInviteContent() {
         setPageState({ status: 'ready', invitation: invitationInfo });
       } catch (error) {
         console.error('[AcceptInvite] Verify/fetch error:', error);
-        const code = (error as any).code as string;
-        const status = (error as any).status as number;
-        if (!code && !status) {
-          setPageState({ status: 'error', error: 'network_error' });
+        if (error instanceof ApiError) {
+          setPageState({ status: 'error', error: mapErrorCode(error.code, error.status) });
         } else {
-          setPageState({ status: 'error', error: mapErrorCode(code, status) });
+          setPageState({ status: 'error', error: 'network_error' });
         }
       }
     };
@@ -229,20 +228,18 @@ function AcceptInviteContent() {
         // Backend call failed - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
 
-        const code = (backendError as any).code as string;
-
-        // Map error codes
-        if (code === 'INVITATION_CONSUMED') {
-          setPageState({ status: 'error', error: 'invitation_consumed' });
-          return;
-        } else if (code === 'INVITATION_EXPIRED') {
-          setPageState({ status: 'error', error: 'invitation_expired' });
-          return;
+        if (backendError instanceof ApiError) {
+          if (backendError.code === 'INVITATION_CONSUMED') {
+            setPageState({ status: 'error', error: 'invitation_consumed' });
+            return;
+          } else if (backendError.code === 'INVITATION_EXPIRED') {
+            setPageState({ status: 'error', error: 'invitation_expired' });
+            return;
+          }
+          setSubmitError(backendError.message);
+        } else {
+          setSubmitError('Failed to complete registration');
         }
-
-        // Check if it's a typed API error (has .status) or a network error
-        const errorMessage = (backendError as any).message || 'Failed to complete registration';
-        setSubmitError(errorMessage);
 
         // Restore ready state for retry
         if (invitation) {

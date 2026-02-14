@@ -21,6 +21,7 @@ import {
   getStudentRegistrationInfo,
   registerStudent,
 } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
 import {
   expectSnakeCaseKeys,
   expectString,
@@ -44,8 +45,8 @@ describe('Registration API', () => {
           await getInvitationDetails('00000000-0000-0000-0000-000000000000');
           throw new Error('Expected getInvitationDetails to throw');
         } catch (error) {
-          expect(error).toBeInstanceOf(Error);
-          expect((error as any).status).toBeGreaterThanOrEqual(400);
+          expect(error).toBeInstanceOf(ApiError);
+          expect((error as ApiError).status).toBeGreaterThanOrEqual(400);
         }
         return;
       }
@@ -56,18 +57,18 @@ describe('Registration API', () => {
         // If it succeeds (invitation still pending), validate shape
       } catch (error) {
         // 410 Gone is expected for consumed invitations
-        expect(error).toBeInstanceOf(Error);
-        expect((error as any).status).toBe(410);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(410);
       }
     });
 
-    it('throws with status for invalid token', async () => {
+    it('throws ApiError with status for invalid token', async () => {
       try {
         await getInvitationDetails('invalid-token');
         throw new Error('Expected getInvitationDetails to throw');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as any).status).toBeGreaterThanOrEqual(400);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBeGreaterThanOrEqual(400);
       }
     });
   });
@@ -81,13 +82,13 @@ describe('Registration API', () => {
       resetAuthProvider();
     });
 
-    it('throws with status for invalid token', async () => {
+    it('throws ApiError with status for invalid token', async () => {
       try {
         await acceptInvite('invalid-token');
         throw new Error('Expected acceptInvite to throw');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as any).status).toBeGreaterThanOrEqual(400);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBeGreaterThanOrEqual(400);
       }
     });
   });
@@ -127,13 +128,13 @@ describe('Registration API', () => {
       expectString(data.class, 'updated_at');
     });
 
-    it('throws with status for invalid join code', async () => {
+    it('throws ApiError with status for invalid join code', async () => {
       try {
         await getStudentRegistrationInfo('ZZZZZZ');
         throw new Error('Expected getStudentRegistrationInfo to throw');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as any).status).toBeGreaterThanOrEqual(400);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBeGreaterThanOrEqual(400);
       }
     });
   });
@@ -147,13 +148,13 @@ describe('Registration API', () => {
       resetAuthProvider();
     });
 
-    it('throws with status for invalid join code', async () => {
+    it('throws ApiError with status for invalid join code', async () => {
       try {
         await registerStudent('ZZZZZZ');
         throw new Error('Expected registerStudent to throw');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as any).status).toBeGreaterThanOrEqual(400);
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBeGreaterThanOrEqual(400);
       }
     });
   });

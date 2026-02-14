@@ -6,6 +6,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StudentRegistrationPage from '../page';
+import { ApiError } from '@/lib/api-error';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -164,10 +165,7 @@ describe('StudentRegistrationPage', () => {
 
     it('shows error for invalid code', async () => {
       const user = userEvent.setup();
-      const error = new Error('Invalid code');
-      (error as any).code = 'INVALID_CODE';
-      (error as any).status = 400;
-      mockGetStudentRegistrationInfo.mockRejectedValue(error);
+      mockGetStudentRegistrationInfo.mockRejectedValue(new ApiError('Invalid code', 400, 'INVALID_CODE'));
 
       render(<StudentRegistrationPage />);
 
@@ -184,10 +182,7 @@ describe('StudentRegistrationPage', () => {
 
     it('shows error for inactive section', async () => {
       const user = userEvent.setup();
-      const error = new Error('Section inactive');
-      (error as any).code = 'SECTION_INACTIVE';
-      (error as any).status = 400;
-      mockGetStudentRegistrationInfo.mockRejectedValue(error);
+      mockGetStudentRegistrationInfo.mockRejectedValue(new ApiError('Section inactive', 400, 'SECTION_INACTIVE'));
 
       render(<StudentRegistrationPage />);
 
@@ -425,10 +420,7 @@ describe('StudentRegistrationPage', () => {
     it('shows error when namespace at capacity from backend', async () => {
       const user = await setupAndFillForm();
 
-      const error = new Error('At capacity');
-      (error as any).code = 'NAMESPACE_AT_CAPACITY';
-      (error as any).status = 400;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -557,9 +549,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend API fails with 500 error (typed client throws)
-      const error = new Error('Internal server error');
-      (error as any).status = 500;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Internal server error', 500));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -578,10 +568,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend returns namespace at capacity error (typed client throws)
-      const error = new Error('At capacity');
-      (error as any).code = 'NAMESPACE_AT_CAPACITY';
-      (error as any).status = 400;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -599,10 +586,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend returns invalid code error (code became invalid between validation and registration)
-      const error = new Error('Invalid code');
-      (error as any).code = 'INVALID_CODE';
-      (error as any).status = 400;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Invalid code', 400, 'INVALID_CODE'));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -620,10 +604,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // Backend returns section inactive error (typed client throws)
-      const error = new Error('Section inactive');
-      (error as any).code = 'SECTION_INACTIVE';
-      (error as any).status = 400;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Section inactive', 400, 'SECTION_INACTIVE'));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
@@ -649,9 +630,7 @@ describe('StudentRegistrationPage', () => {
       const user = await setupAndFillForm();
 
       // First attempt: backend fails (typed client throws)
-      const error = new Error('Temporary error');
-      (error as any).status = 500;
-      mockRegisterStudent.mockRejectedValueOnce(error);
+      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Temporary error', 500));
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 

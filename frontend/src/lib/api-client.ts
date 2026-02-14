@@ -7,6 +7,7 @@
 
 import { getAuthToken } from '@/lib/auth-provider';
 import { withRetry } from '@/lib/api-utils';
+import { ApiError } from '@/lib/api-error';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -34,10 +35,11 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const error = new Error(errorData.error || `Request failed: ${response.status}`);
-      (error as any).status = response.status;
-      (error as any).code = errorData.code;
-      throw error;
+      throw new ApiError(
+        errorData.error || `Request failed: ${response.status}`,
+        response.status,
+        errorData.code,
+      );
     }
 
     return response;
@@ -63,7 +65,7 @@ export async function apiFetchRaw(path: string, options: RequestInit = {}): Prom
     // Only retry on network errors (fetch throws), not on HTTP error responses
     shouldRetry: (error: Error) => {
       // Network errors from fetch() — no status means it never reached the server
-      return !(error as { status?: number }).status;
+      return !(error instanceof ApiError);
     },
   });
 }

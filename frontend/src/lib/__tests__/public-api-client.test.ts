@@ -2,6 +2,11 @@
  * Tests for public-api-client
  */
 
+// NOTE: ApiError is required dynamically (not statically imported) because
+// jest.resetModules() in beforeEach causes require() to load fresh module
+// instances, making the static import's class identity differ from the one
+// used by the freshly-required public-api-client.
+
 // Mock withRetry to just call the function directly
 jest.mock('@/lib/api-utils', () => ({
   ...jest.requireActual('@/lib/api-utils'),
@@ -64,45 +69,49 @@ describe('public-api-client', () => {
       );
     });
 
-    it('throws on non-ok response with error from body', async () => {
+    it('throws ApiError on non-ok response with error from body', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,
         status: 400,
         json: () => Promise.resolve({ error: 'Bad request' }),
       });
 
+      const { ApiError } = require('@/lib/api-error');
       const { publicFetch } = require('../public-api-client');
-      const err: any = await publicFetch('/auth/register').catch((e: any) => e);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Bad request');
-      expect(err.status).toBe(400);
+      const err = await publicFetch('/auth/register').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as any).message).toBe('Bad request');
+      expect((err as any).status).toBe(400);
     });
 
-    it('includes code from error body on thrown error', async () => {
+    it('includes code from error body on thrown ApiError', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,
         status: 400,
         json: () => Promise.resolve({ error: 'Section inactive', code: 'SECTION_INACTIVE' }),
       });
 
+      const { ApiError } = require('@/lib/api-error');
       const { publicFetch } = require('../public-api-client');
-      const err: any = await publicFetch('/auth/register-student').catch((e: any) => e);
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toBe('Section inactive');
-      expect(err.status).toBe(400);
-      expect(err.code).toBe('SECTION_INACTIVE');
+      const err = await publicFetch('/auth/register-student').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as any).message).toBe('Section inactive');
+      expect((err as any).status).toBe(400);
+      expect((err as any).code).toBe('SECTION_INACTIVE');
     });
 
-    it('throws with status code when error body has no error field', async () => {
+    it('throws ApiError with status code when error body has no error field', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: false,
         status: 500,
         json: () => Promise.resolve({}),
       });
 
+      const { ApiError } = require('@/lib/api-error');
       const { publicFetch } = require('../public-api-client');
-      const err: any = await publicFetch('/test').catch((e: any) => e);
-      expect(err.message).toBe('Request failed: 500');
+      const err = await publicFetch('/test').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as any).message).toBe('Request failed: 500');
     });
 
     it('handles non-JSON error response', async () => {
@@ -112,10 +121,12 @@ describe('public-api-client', () => {
         json: () => Promise.reject(new Error('invalid json')),
       });
 
+      const { ApiError } = require('@/lib/api-error');
       const { publicFetch } = require('../public-api-client');
-      const err: any = await publicFetch('/test').catch((e: any) => e);
-      expect(err.message).toBe('Request failed: 502');
-      expect(err.status).toBe(502);
+      const err = await publicFetch('/test').catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as any).message).toBe('Request failed: 502');
+      expect((err as any).status).toBe(502);
     });
 
     it('uses withRetry for retry logic', async () => {
