@@ -8,17 +8,14 @@ See [README.md](README.md) for full project description and [docs/](docs/) for a
 
 **Quick context:** Coding assignment platform for programming courses. Go backend (Chi v5) + PostgreSQL (Cloud SQL) + Centrifugo (WebSocket). Deployed on GKE Autopilot via Cloud Build. Infrastructure managed with Terraform.
 
-## Key Files for Navigation
+## Package Documentation
 
-- `go-backend/cmd/server/main.go` - Application entry point
-- `go-backend/internal/server/` - Server setup and routing
-- `go-backend/internal/handler/` - HTTP handlers
-- `go-backend/internal/store/` - Data access layer (repository pattern, pgx)
-- `go-backend/internal/auth/` - Identity Platform JWT validation, RBAC
-- `go-backend/internal/middleware/` - Logging, RLS context, auth
-- `go-backend/internal/config/` - Environment config loading
-- `migrations/` - SQL migrations with RLS helpers
-- `infrastructure/terraform/` - GCP infrastructure (modules + environments)
+Each package has its own `CLAUDE.md` with structure, patterns, and conventions:
+
+- **[go-backend/CLAUDE.md](go-backend/CLAUDE.md)** - API server (handlers, store, auth, RLS, testing)
+- **[executor/CLAUDE.md](executor/CLAUDE.md)** - Python sandbox execution service
+- **[frontend/CLAUDE.md](frontend/CLAUDE.md)** - Next.js app (components, API client, testing)
+- **[infrastructure/terraform/README.md](infrastructure/terraform/README.md)** - Terraform patterns
 
 ## Commands
 
@@ -36,7 +33,6 @@ make test                # Run all unit tests (with race detector)
 make test-integration    # Run all integration tests
 make lint                # Lint all projects
 make docker-build        # Build all Docker images
-
 ```
 
 ## Quality Gates
@@ -57,17 +53,11 @@ Run these before committing. Pick the targets matching the code you changed.
 
 ## Development Guidelines
 
-**Language:** Go 1.24. Follow standard Go idioms (`internal/` for unexported packages, `cmd/` for entry points).
-
-**Database:** PostgreSQL with Row-Level Security. Session variables (`app.user_id`, `app.namespace_id`, `app.role`) enforce access. Use the `Querier` interface to abstract `pgxpool.Pool` and `pgx.Tx`.
-
-**Auth:** Google Identity Platform (JWT). Use middleware for auth validation and RLS context injection.
-
-**Config:** Environment variables via `caarlos0/env`. See `.env.example` for required variables.
-
 **Testing:** All production code changes MUST include tests. Integration tests use Docker Postgres with migrations. When E2E tests uncover non-test production bugs, add regression tests at the narrowest feasible scope (unit > integration > contract > E2E) before merging. These tests must fail against the buggy code and pass against the fix.
 
-**Infrastructure:** Terraform modules are environment-agnostic. Environment configs in `infrastructure/terraform/environments/` provide all values. See `infrastructure/terraform/README.md` for patterns.
+**Infrastructure:** Terraform modules are environment-agnostic. Environment configs in `infrastructure/terraform/environments/` provide all values.
+
+**Migrations:** SQL migrations in `migrations/` with RLS helpers. See [docs/MIGRATION.md](docs/MIGRATION.md).
 
 ## Issue Tracking (beads)
 
@@ -90,4 +80,3 @@ See AGENTS.md for full beads documentation.
 - **[README.md](README.md)** - Project overview
 - **[AGENTS.md](AGENTS.md)** - AI workflows, beads issue tracking
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
-- **[infrastructure/terraform/README.md](infrastructure/terraform/README.md)** - Terraform patterns
