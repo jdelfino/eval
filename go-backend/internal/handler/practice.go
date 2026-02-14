@@ -139,7 +139,7 @@ func (h *ExecuteHandler) PracticeExecute(w http.ResponseWriter, r *http.Request)
 	// 9. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "execution failed")
+		httputil.WriteInternalError(w, r, err, "execution failed")
 		return
 	}
 

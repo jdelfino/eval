@@ -94,7 +94,7 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 		MaxSteps: req.MaxSteps,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "trace execution failed")
+		httputil.WriteInternalError(w, r, err, "trace execution failed")
 		return
 	}
 

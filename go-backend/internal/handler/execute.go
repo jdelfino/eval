@@ -133,7 +133,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	// 7. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "execution failed")
+		httputil.WriteInternalError(w, r, err, "execution failed")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "execution failed")
+		httputil.WriteInternalError(w, r, err, "execution failed")
 		return
 	}
 

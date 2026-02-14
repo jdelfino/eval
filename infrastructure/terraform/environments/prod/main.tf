@@ -255,8 +255,9 @@ resource "kubernetes_config_map" "app_config" {
     # Cloud SQL Connection Name (for Cloud SQL Proxy)
     CLOUDSQL_CONNECTION_NAME = module.cloudsql.instance_connection_name
 
-    # Centrifugo Configuration
+    # Internal Service URLs
     CENTRIFUGO_URL = "http://centrifugo:8000"
+    EXECUTOR_URL   = "http://executor:8081"
 
     # Invitation / Email Configuration
     INVITE_BASE_URL   = var.invite_base_url
