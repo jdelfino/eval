@@ -77,7 +77,7 @@ authorized_domains = [
 
 # OAuth client ID is public (appears in frontend config).
 # Created manually in GCP Console > APIs & Services > Credentials.
-oauth_client_id = ""
+oauth_client_id = "580381260766-g0a0lism1p3kt6an595di291cebmv5fl.apps.googleusercontent.com"
 
 # OAuth client secret and Resend API key are in GCP Secret Manager.
 # See module "secrets" in main.tf for the list of managed secrets.
