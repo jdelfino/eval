@@ -40,6 +40,7 @@ type Request struct {
 	Files      []File
 	RandomSeed *int
 	TimeoutMs  int
+	Args       []string // Additional arguments passed to the Python script.
 }
 
 // File is an attached file available to the executed program.
@@ -135,6 +136,11 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--env", "PYTHONUNBUFFERED=1",
 		"--really_quiet",
 		"--", cfg.PythonPath, "/tmp/work/main.py",
+	}
+
+	// Append extra arguments after main.py (used by the tracer script).
+	if len(req.Args) > 0 {
+		args = append(args, req.Args...)
 	}
 
 	// Add /usr/lib64 bind mount if it exists (needed on some distros).

@@ -23,6 +23,8 @@ type TracerClient interface {
 type traceHTTPRequest struct {
 	StudentID *uuid.UUID `json:"student_id"` // optional; defaults to caller's own ID
 	Code      string     `json:"code" validate:"required"`
+	Stdin     string     `json:"stdin"`
+	MaxSteps  *int       `json:"max_steps,omitempty"`
 }
 
 // TraceHandler handles debugger trace requests for sessions.
@@ -86,7 +88,11 @@ func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call executor trace
-	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{Code: req.Code})
+	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{
+		Code:     req.Code,
+		Stdin:    req.Stdin,
+		MaxSteps: req.MaxSteps,
+	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "trace execution failed")
 		return
