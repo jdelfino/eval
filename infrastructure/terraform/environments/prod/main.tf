@@ -235,6 +235,9 @@ resource "kubernetes_config_map" "app_config" {
   }
 
   data = {
+    # Application Configuration
+    ENVIRONMENT = "production"
+
     # GCP Configuration
     GCP_PROJECT_ID = var.project_id
     GCP_REGION     = var.region

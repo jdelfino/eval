@@ -77,6 +77,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("IDENTITY_PLATFORM_AUTH_DOMAIN", "auth.example.com")
 	t.Setenv("OAUTH_CLIENT_ID", "test-client-id")
 	t.Setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
+	t.Setenv("RESEND_API_KEY", "re_test_key")
 
 	cfg, err := Load()
 	if err != nil {
@@ -146,6 +147,26 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.OAuthClientSecret != "test-client-secret" {
 		t.Errorf("OAuthClientSecret = %q, want %q", cfg.OAuthClientSecret, "test-client-secret")
+	}
+}
+
+func TestLoad_ProductionRequiresResendAPIKey(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("RESEND_API_KEY", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("Load() should return error when RESEND_API_KEY is empty in production")
+	}
+}
+
+func TestLoad_LocalDoesNotRequireResendAPIKey(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "local")
+	t.Setenv("RESEND_API_KEY", "")
+
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("Load() should not return error for local without RESEND_API_KEY: %v", err)
 	}
 }
 

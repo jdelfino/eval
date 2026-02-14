@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -68,7 +69,17 @@ func Load() (*Config, error) {
 	if err := env.Parse(cfg); err != nil {
 		return nil, err
 	}
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+func (c *Config) validate() error {
+	if c.Environment == "production" && c.ResendAPIKey == "" {
+		return fmt.Errorf("RESEND_API_KEY is required in production")
+	}
+	return nil
 }
 
 // DatabasePoolConfig returns a db.PoolConfig populated from this Config.
