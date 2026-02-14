@@ -480,7 +480,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'instructor' },
+          id: 'user-1', role: 'instructor',
         }),
       });
 
@@ -519,7 +519,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'instructor' },
+          id: 'user-1', role: 'instructor',
         }),
       });
 
@@ -563,7 +563,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'instructor' },
+          id: 'user-1', role: 'instructor',
         }),
       });
 
@@ -597,7 +597,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'namespace-admin' },
+          id: 'user-1', role: 'namespace-admin',
         }),
       });
 
@@ -726,7 +726,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'instructor' },
+          id: 'user-1', role: 'instructor',
         }),
       });
 
@@ -986,7 +986,7 @@ describe('AcceptInvitePage', () => {
       mockApiFetchRaw.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          user: { id: 'user-1', role: 'instructor' },
+          id: 'user-1', role: 'instructor',
         }),
       });
 

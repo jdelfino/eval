@@ -326,7 +326,7 @@ function AcceptInviteContent() {
         const data = await response.json();
 
         setPageState({ status: 'success' });
-        redirectBasedOnRole(data.user.role);
+        redirectBasedOnRole(data.role);
       } catch (backendError) {
         // Backend call failed (network error, etc.) - clean up Firebase account
         await firebaseAuth.currentUser?.delete();
