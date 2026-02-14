@@ -396,12 +396,12 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// generateJoinCode generates a join code in the format ABC-123-XYZ.
+// generateJoinCode generates a 6-character join code in the format ABC-123.
 func generateJoinCode() (string, error) {
 	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	const digits = "0123456789"
 
-	b := make([]byte, 9)
+	b := make([]byte, 6)
 	for i := 0; i < 3; i++ {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
@@ -416,12 +416,5 @@ func generateJoinCode() (string, error) {
 		}
 		b[i] = digits[n.Int64()]
 	}
-	for i := 6; i < 9; i++ {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
-		if err != nil {
-			return "", fmt.Errorf("crypto/rand failed: %w", err)
-		}
-		b[i] = letters[n.Int64()]
-	}
-	return string(b[:3]) + "-" + string(b[3:6]) + "-" + string(b[6:9]), nil
+	return string(b[:3]) + "-" + string(b[3:6]), nil
 }

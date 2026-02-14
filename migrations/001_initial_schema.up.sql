@@ -146,14 +146,14 @@ CREATE TABLE sections (
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   semester TEXT,  -- e.g., 'Fall 2025', 'Spring 2026'
-  join_code TEXT NOT NULL UNIQUE,  -- Format: ABC-123-XYZ
+  join_code TEXT NOT NULL UNIQUE,  -- Format: ABC-123
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE sections IS 'Class sections - specific offerings with join codes';
-COMMENT ON COLUMN sections.join_code IS 'Unique join code for students (format: ABC-123-XYZ)';
+COMMENT ON COLUMN sections.join_code IS 'Unique join code for students (format: ABC-123)';
 
 CREATE INDEX idx_sections_namespace ON sections(namespace_id);
 CREATE INDEX idx_sections_class ON sections(class_id);

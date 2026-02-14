@@ -81,7 +81,7 @@ VALUES
     '00000000-0000-0000-0000-000000000101',
     'Section A',
     'Spring 2026',
-    'ABC-123-XYZ',
+    'ABC-123',
     true
   )
 ON CONFLICT (id) DO NOTHING;
@@ -192,5 +192,5 @@ ON CONFLICT (id) DO NOTHING;
 -- student1@test.local      | test-student-001      | student
 -- student2@test.local      | test-student-002      | student
 --
--- Join Code: ABC-123-XYZ (for Section A of CS 101)
+-- Join Code: ABC-123 (for Section A of CS 101)
 -- ============================================================================

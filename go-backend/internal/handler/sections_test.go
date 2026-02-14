@@ -74,7 +74,7 @@ func testSection() *store.Section {
 		ClassID:     uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
 		Name:        "Section A",
 		Semester:    &semester,
-		JoinCode:    "ABC-123-XYZ",
+		JoinCode:    "ABC-123",
 		Active:      true,
 		CreatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		UpdatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -845,9 +845,9 @@ func TestGenerateJoinCode_Format(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	pattern := regexp.MustCompile(`^[A-Z]{3}-[0-9]{3}-[A-Z]{3}$`)
+	pattern := regexp.MustCompile(`^[A-Z]{3}-[0-9]{3}$`)
 	if !pattern.MatchString(code) {
-		t.Errorf("join code %q does not match expected format ABC-123-XYZ", code)
+		t.Errorf("join code %q does not match expected format ABC-123", code)
 	}
 }
 
@@ -860,7 +860,7 @@ func TestGenerateJoinCode_Unique(t *testing.T) {
 		}
 		codes[code] = true
 	}
-	// With 26^6 * 10^3 possible codes, 100 should all be unique
+	// With 26^3 * 10^3 possible codes, 100 should all be unique
 	if len(codes) < 90 {
 		t.Errorf("expected mostly unique codes, got only %d unique out of 100", len(codes))
 	}

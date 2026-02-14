@@ -73,7 +73,7 @@ func TestState_Success(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.JoinCode != "ABC-123-XYZ" {
+	if resp.JoinCode != "ABC-123" {
 		t.Errorf("expected join_code ABC123, got %s", resp.JoinCode)
 	}
 	if len(resp.Students) != 1 {
@@ -129,7 +129,7 @@ func TestPublicState_Success(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.JoinCode != "ABC-123-XYZ" {
+	if resp.JoinCode != "ABC-123" {
 		t.Errorf("expected join_code ABC123, got %s", resp.JoinCode)
 	}
 	if resp.Status != "active" {
@@ -171,7 +171,7 @@ func TestDetails_RoutesToState(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.JoinCode != "ABC-123-XYZ" {
+	if resp.JoinCode != "ABC-123" {
 		t.Errorf("expected join_code ABC123, got %s", resp.JoinCode)
 	}
 }

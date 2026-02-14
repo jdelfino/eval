@@ -65,7 +65,7 @@ func testMembershipSection() *store.Section {
 		ClassID:     uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
 		Name:        "Section A",
 		Semester:    &sem,
-		JoinCode:    "ABC-123-XYZ",
+		JoinCode:    "ABC-123",
 		Active:      true,
 		CreatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		UpdatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -122,7 +122,7 @@ func TestJoin_Success(t *testing.T) {
 
 	repo := &mockMembershipRepo{
 		getSectionByJoinCodeFn: func(_ context.Context, code string) (*store.Section, error) {
-			if code != "ABC-123-XYZ" {
+			if code != "ABC-123" {
 				t.Fatalf("unexpected code: %v", code)
 			}
 			return sec, nil
@@ -141,7 +141,7 @@ func TestJoin_Success(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -171,7 +171,7 @@ func TestJoin_Success(t *testing.T) {
 
 func TestJoin_Unauthorized(t *testing.T) {
 	h := NewMembershipHandler()
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestJoin_SectionNotFound(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "BAD-CODE-123"})
+	body, _ := json.Marshal(map[string]any{"join_code": "BAD-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -216,7 +216,7 @@ func TestJoin_SectionNotActive(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -254,7 +254,7 @@ func TestJoin_InternalError(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -281,7 +281,7 @@ func TestJoin_Duplicate(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -308,7 +308,7 @@ func TestJoin_CreateError(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123-XYZ"})
+	body, _ := json.Marshal(map[string]any{"join_code": "ABC-123"})
 	h := NewMembershipHandler()
 	req := httptest.NewRequest(http.MethodPost, "/sections/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
