@@ -6,12 +6,14 @@ on:
     paths:
       - 'go-backend/**'
       - 'k8s/**'
+      - 'migrations/**'
       - '.github/workflows/go-api.yaml'
   pull_request:
     branches: [main]
     paths:
       - 'go-backend/**'
       - 'k8s/**'
+      - 'migrations/**'
   workflow_dispatch:
 
 env:
