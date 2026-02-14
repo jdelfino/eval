@@ -135,6 +135,20 @@ func TestExecuteRoute(t *testing.T) {
 	}
 }
 
+func TestTraceRoute(t *testing.T) {
+	srv := newTestServer(t)
+
+	// POST with no body should get 400 (invalid JSON), proving the route is wired.
+	req := httptest.NewRequest(http.MethodPost, "/trace", nil)
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func TestMetrics(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -210,12 +224,12 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 
-	var resp map[string]string
-	if err := json.NewDecoder(rec2.Body).Decode(&resp); err != nil {
+	var errResp map[string]string
+	if err := json.NewDecoder(rec2.Body).Decode(&errResp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["error"] != "rate limit exceeded" {
-		t.Errorf("error = %q, want %q", resp["error"], "rate limit exceeded")
+	if errResp["error"] != "rate limit exceeded" {
+		t.Errorf("error = %q, want %q", errResp["error"], "rate limit exceeded")
 	}
 
 	if called != 1 {

@@ -69,9 +69,11 @@ func TestTrace_HappyPath(t *testing.T) {
 		traceFn: func(_ context.Context, req executor.TraceRequest) (*executor.TraceResponse, error) {
 			return &executor.TraceResponse{
 				Steps: []executor.TraceStep{
-					{Line: 1, Variables: map[string]string{"x": "5"}, Output: ""},
-					{Line: 2, Variables: map[string]string{"x": "5", "y": "10"}, Output: "15"},
+					{Line: 1, Event: "line", Locals: map[string]interface{}{"x": 5}, Globals: map[string]interface{}{}, Stdout: ""},
+					{Line: 2, Event: "line", Locals: map[string]interface{}{"x": 5, "y": 10}, Globals: map[string]interface{}{}, Stdout: "15"},
 				},
+				TotalSteps: 2,
+				ExitCode:   0,
 			}, nil
 		},
 	}
@@ -109,8 +111,10 @@ func TestTrace_200StudentParticipant(t *testing.T) {
 		traceFn: func(_ context.Context, req executor.TraceRequest) (*executor.TraceResponse, error) {
 			return &executor.TraceResponse{
 				Steps: []executor.TraceStep{
-					{Line: 1, Variables: map[string]string{"x": "1"}, Output: "1"},
+					{Line: 1, Event: "line", Locals: map[string]interface{}{"x": 1}, Globals: map[string]interface{}{}, Stdout: "1"},
 				},
+				TotalSteps: 1,
+				ExitCode:   0,
 			}, nil
 		},
 	}

@@ -83,22 +83,17 @@ func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteRespo
 	return &resp, nil
 }
 
-// TraceStep represents a single step in a debugger trace.
-type TraceStep struct {
-	Line      int               `json:"line"`
-	Variables map[string]string `json:"variables"`
-	Output    string            `json:"output,omitempty"`
-}
+// TraceRequest is an alias for the shared trace request type.
+type TraceRequest = executorapi.TraceRequest
 
-// TraceRequest is the request for a debugger trace.
-type TraceRequest struct {
-	Code string `json:"code"`
-}
+// TraceResponse is an alias for the shared trace response type.
+type TraceResponse = executorapi.TraceResponse
 
-// TraceResponse is the response from the executor trace endpoint.
-type TraceResponse struct {
-	Steps []TraceStep `json:"steps"`
-}
+// TraceStep is an alias for the shared trace step type.
+type TraceStep = executorapi.TraceStep
+
+// CallFrame is an alias for the shared call frame type.
+type CallFrame = executorapi.CallFrame
 
 // Trace sends code to the executor service for step-through debugger tracing.
 func (c *Client) Trace(ctx context.Context, req TraceRequest) (*TraceResponse, error) {
