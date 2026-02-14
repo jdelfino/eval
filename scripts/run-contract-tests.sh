@@ -19,12 +19,8 @@ if ! curl -sf http://localhost:8081/healthz >/dev/null 2>&1; then
   docker compose up -d executor --build --wait
 fi
 
-# --- 2. Build + start Go API on random port ---
-echo "Building Go server..."
-(cd go-backend && go build -o ./tmp/server ./cmd/server)
-
-API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-export API_PORT
+# --- 2. Start Go API on random port (builds binary if needed) ---
+export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 SERVER_PID=$(./scripts/ensure-test-api.sh)
 
 # --- 3. Generate random namespace ---
