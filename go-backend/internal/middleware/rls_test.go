@@ -210,6 +210,91 @@ func TestRLSContextMiddleware_WithUser(t *testing.T) {
 	}
 }
 
+// TestRLSContextMiddleware_SetsRoleBeforeConfig verifies that SET ROLE eval_app
+// is issued before any set_config calls. Without SET ROLE, the table-owning
+// connection user bypasses all RLS policies, making tenant isolation a no-op.
+func TestRLSContextMiddleware_SetsRoleBeforeConfig(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	testUser := &auth.User{
+		ID:          uuid.New(),
+		Email:       "test@example.com",
+		NamespaceID: "test-namespace",
+		Role:        auth.RoleStudent,
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := rlsMiddlewareWithAcquirer(acquirer)
+	wrapped := middleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	ctx := auth.WithUser(req.Context(), testUser)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	queries := mock.getExecQueries()
+
+	// First query must be SET ROLE eval_app — this is the critical invariant.
+	if len(queries) == 0 {
+		t.Fatal("Expected at least one Exec call, got none")
+	}
+	if queries[0] != "SET ROLE eval_app" {
+		t.Errorf("First Exec query should be SET ROLE eval_app, got %q", queries[0])
+	}
+
+	// Remaining queries (before cleanup) should be set_config calls.
+	// Total: SET ROLE + 3 set_config + RESET ROLE + resetVarsQuery = 6 queries
+	if len(queries) < 6 {
+		t.Errorf("Expected at least 6 Exec calls (SET ROLE + 3 set_config + RESET ROLE + clear vars), got %d: %v", len(queries), queries)
+	}
+}
+
+// TestRegistrationStoreMiddleware_SetsRoleBeforeConfig verifies that SET ROLE
+// eval_app is issued before set_config in the registration middleware path.
+func TestRegistrationStoreMiddleware_SetsRoleBeforeConfig(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	queries := mock.getExecQueries()
+
+	if len(queries) == 0 {
+		t.Fatal("Expected at least one Exec call, got none")
+	}
+	if queries[0] != "SET ROLE eval_app" {
+		t.Errorf("First Exec query should be SET ROLE eval_app, got %q", queries[0])
+	}
+
+	// Total: SET ROLE + 1 set_config + RESET ROLE + resetVarsQuery = 4 queries
+	if len(queries) < 4 {
+		t.Errorf("Expected at least 4 Exec calls (SET ROLE + set_config + RESET ROLE + clear vars), got %d: %v", len(queries), queries)
+	}
+}
+
 func TestRLSContextMiddleware_AcquireError(t *testing.T) {
 	acquirer := &testAcquirer{
 		acquireErr: errors.New("connection pool exhausted"),
@@ -414,7 +499,13 @@ func TestRegistrationStoreMiddleware_Success(t *testing.T) {
 		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	// Verify only app.role was set, and set to 'registration'
+	// Verify SET ROLE was called first
+	queries := mock.getExecQueries()
+	if len(queries) == 0 || queries[0] != "SET ROLE eval_app" {
+		t.Errorf("First exec should be SET ROLE eval_app, got queries: %v", queries)
+	}
+
+	// Verify only app.role was set via set_config, and set to 'registration'
 	calls := mock.getSetConfigArgs()
 	if len(calls) != 1 {
 		t.Fatalf("Expected 1 set_config call, got %d", len(calls))
@@ -575,14 +666,16 @@ func TestRLSContextMiddleware_ResetsSessionOnRelease(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	// The last Exec call should be the reset query
+	// The last two Exec calls should be RESET ROLE then the vars reset query.
 	queries := mock.getExecQueries()
-	if len(queries) < 4 {
-		t.Fatalf("Expected at least 4 exec calls (3 set + 1 reset), got %d", len(queries))
+	if len(queries) < 6 {
+		t.Fatalf("Expected at least 6 exec calls (SET ROLE + 3 set_config + RESET ROLE + clear vars), got %d", len(queries))
 	}
-	lastQuery := queries[len(queries)-1]
-	if lastQuery != resetQuery {
-		t.Errorf("Last exec query should be resetQuery, got %q", lastQuery)
+	if queries[len(queries)-2] != "RESET ROLE" {
+		t.Errorf("Second-to-last exec should be RESET ROLE, got %q", queries[len(queries)-2])
+	}
+	if queries[len(queries)-1] != resetVarsQuery {
+		t.Errorf("Last exec should be resetVarsQuery, got %q", queries[len(queries)-1])
 	}
 }
 
@@ -601,14 +694,16 @@ func TestRegistrationStoreMiddleware_ResetsSessionOnRelease(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	// The last Exec call should be the reset query
+	// The last two Exec calls should be RESET ROLE then the vars reset query.
 	queries := mock.getExecQueries()
-	if len(queries) < 2 {
-		t.Fatalf("Expected at least 2 exec calls (1 set + 1 reset), got %d", len(queries))
+	if len(queries) < 4 {
+		t.Fatalf("Expected at least 4 exec calls (SET ROLE + 1 set_config + RESET ROLE + clear vars), got %d", len(queries))
 	}
-	lastQuery := queries[len(queries)-1]
-	if lastQuery != resetQuery {
-		t.Errorf("Last exec query should be resetQuery, got %q", lastQuery)
+	if queries[len(queries)-2] != "RESET ROLE" {
+		t.Errorf("Second-to-last exec should be RESET ROLE, got %q", queries[len(queries)-2])
+	}
+	if queries[len(queries)-1] != resetVarsQuery {
+		t.Errorf("Last exec should be resetVarsQuery, got %q", queries[len(queries)-1])
 	}
 }
 

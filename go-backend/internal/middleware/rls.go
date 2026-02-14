@@ -123,8 +123,15 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 			}
 			defer releaseClean(conn)
 
-			// Set only app.role = 'registration'; no user_id or namespace_id
-			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, true)", "registration"); err != nil {
+			// Drop to non-owner role so RLS policies are enforced.
+			if _, err := conn.Exec(ctx, "SET ROLE eval_app"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
+			// Set only app.role = 'registration'; no user_id or namespace_id.
+			// is_local=false so the setting persists across statements on this connection.
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "registration"); err != nil {
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}
@@ -138,36 +145,45 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 	}
 }
 
-// resetQuery clears all app.* session variables in a single round-trip.
-// This is called before returning connections to the pool to prevent
-// session state from leaking between requests.
-const resetQuery = "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false), set_config('app.role', '', false)"
+// resetVarsQuery clears all app.* session variables in a single round-trip.
+const resetVarsQuery = "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false), set_config('app.role', '', false)"
 
-// releaseClean resets RLS session variables and returns the connection to the pool.
-// This prevents stale session state from leaking to the next request that
-// acquires the same connection.
+// releaseClean restores the connection's original role, clears RLS session
+// variables, and returns the connection to the pool. RESET ROLE undoes the
+// SET ROLE eval_app that was issued at the start of the request.
 func releaseClean(conn RLSConn) {
-	// Use a background context — the request context may already be cancelled.
-	_, _ = conn.Exec(context.Background(), resetQuery)
+	ctx := context.Background()
+	// Restore the connection's login role (undo SET ROLE eval_app).
+	_, _ = conn.Exec(ctx, "RESET ROLE")
+	// Clear session variables so they don't leak to the next request.
+	_, _ = conn.Exec(ctx, resetVarsQuery)
 	conn.Release()
 }
 
-// setRLSVariables sets the PostgreSQL session variables for RLS policies.
+// setRLSVariables drops to the eval_app role and sets the PostgreSQL session
+// variables for RLS policies. SET ROLE is required because the connection's
+// login role typically owns the tables and would bypass RLS.
 func setRLSVariables(ctx context.Context, conn store.Querier, user *auth.User) error {
-	// Set user ID
-	_, err := conn.Exec(ctx, "SELECT set_config('app.user_id', $1, true)", user.ID.String())
+	// Drop to non-owner role so RLS policies are enforced.
+	_, err := conn.Exec(ctx, "SET ROLE eval_app")
 	if err != nil {
 		return err
 	}
 
-	// Set namespace ID (empty string for system-admin)
-	_, err = conn.Exec(ctx, "SELECT set_config('app.namespace_id', $1, true)", user.NamespaceID)
+	// Set session variables with is_local=false so they persist across
+	// statements on this connection. The releaseClean function resets them
+	// before the connection returns to the pool.
+	_, err = conn.Exec(ctx, "SELECT set_config('app.user_id', $1, false)", user.ID.String())
 	if err != nil {
 		return err
 	}
 
-	// Set role
-	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, true)", string(user.Role))
+	_, err = conn.Exec(ctx, "SELECT set_config('app.namespace_id', $1, false)", user.NamespaceID)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", string(user.Role))
 	if err != nil {
 		return err
 	}

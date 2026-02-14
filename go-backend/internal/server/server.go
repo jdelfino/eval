@@ -303,6 +303,12 @@ func (s *Server) Start() error {
 	return s.httpServer.ListenAndServe()
 }
 
+// Handler returns the HTTP handler for the server. This is useful for
+// integration tests that use httptest.NewServer.
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
 // Shutdown gracefully shuts down the server without interrupting active connections.
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.revBuffer != nil {
