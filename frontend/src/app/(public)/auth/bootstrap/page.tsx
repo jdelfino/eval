@@ -3,7 +3,7 @@
 import React, { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { publicFetchRaw } from '@/lib/public-api-client';
+import { publicPost } from '@/lib/public-api-client';
 
 export default function BootstrapPage() {
   const [email, setEmail] = useState('');
@@ -46,16 +46,9 @@ export default function BootstrapPage() {
     const username = email.trim().split('@')[0];
 
     try {
-      const response = await publicFetchRaw('/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password, username }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
+      // NOTE: POST /auth/register does not exist in the backend yet.
+      // This page is placeholder for a future bootstrap-via-web flow.
+      await publicPost('/auth/register', { email: email.trim(), password, username });
 
       // Redirect to signin with success message
       router.push('/auth/signin?registered=true');

@@ -13,19 +13,14 @@
  * 5. Create Firebase Auth account with invitation email and password
  * 6. Call authenticated POST /auth/accept-invite to create user profile
  * 7. Redirect based on role
- *
- * Note: Also supports legacy hash-based tokens (#token_hash=...&type=invite) for backward compatibility.
  */
 
 import React, { useState, useEffect, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { useLocationHash, useLocationReload } from '@/hooks/useLocationHash';
 import { firebaseAuth } from '@/lib/firebase';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
-// TODO: Remove publicFetchRaw import when legacy hash-based flow is dropped
-import { publicFetchRaw } from '@/lib/public-api-client';
 
 // Page state types
 type PageState =
@@ -150,8 +145,6 @@ export default function AcceptInvitePage() {
 function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const locationHash = useLocationHash();
-  const reload = useLocationReload();
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -162,108 +155,39 @@ function AcceptInviteContent() {
   // Verify token and load invitation on mount
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
+      const queryToken = searchParams.get('token');
+
+      if (!queryToken) {
+        setPageState({ status: 'error', error: 'otp_invalid' });
+        return;
+      }
+
+      setPageState({ status: 'loading-invitation' });
+
       try {
-        // Check for token in query params first (new format: ?token=<uuid>)
-        const queryToken = searchParams.get('token');
-
-        if (queryToken) {
-          // New format: simple token query parameter — uses typed client
-          setPageState({ status: 'loading-invitation' });
-
-          try {
-            const data = await getInvitationDetails(queryToken);
-            const invitationInfo: InvitationInfo = {
-              id: data.id,
-              email: data.email,
-              targetRole: data.target_role,
-              namespace: null, // Backend returns flat invitation object
-            };
-            setInvitation(invitationInfo);
-            setPageState({ status: 'ready', invitation: invitationInfo });
-          } catch (error) {
-            console.error('[AcceptInvite] Verify/fetch error:', error);
-            const code = (error as any).code as string;
-            const status = (error as any).status as number;
-            setPageState({ status: 'error', error: mapErrorCode(code, status) });
-          }
-          return;
-        }
-
-        // Legacy format: hash-based tokens (#token_hash=...&type=invite)
-        // TODO: Remove this legacy flow when hash-based invitations are fully deprecated
-        const hash = locationHash.substring(1);
-        const params = new URLSearchParams(hash);
-        const tokenHash = params.get('token_hash');
-        const accessToken = params.get('access_token');
-        const type = params.get('type');
-
-        // Accept both invite and magiclink types
-        if (type !== 'invite' && type !== 'magiclink') {
-          setPageState({ status: 'error', error: 'otp_invalid' });
-          return;
-        }
-
-        // Must have either token_hash or access_token
-        if (!tokenHash && !accessToken) {
-          setPageState({ status: 'error', error: 'otp_invalid' });
-          return;
-        }
-
-        // Send token to backend for verification and invitation lookup
-        setPageState({ status: 'loading-invitation' });
-
-        const queryParams = new URLSearchParams();
-        if (tokenHash) queryParams.set('token_hash', tokenHash);
-        if (accessToken) queryParams.set('access_token', accessToken);
-        queryParams.set('type', type);
-
-        const response = await publicFetchRaw(`/auth/accept-invite?${queryParams.toString()}`);
-
-        if (!response.ok) {
-          const data = await response.json();
-          console.error('[AcceptInvite] Verify/fetch error:', data);
-
-          // Map API error codes to our error types
-          const errorCode = data.code as string;
-          if (errorCode === 'OTP_EXPIRED' || errorCode === 'TOKEN_EXPIRED') {
-            setPageState({ status: 'error', error: 'otp_expired' });
-          } else if (errorCode === 'OTP_INVALID' || errorCode === 'TOKEN_INVALID') {
-            setPageState({ status: 'error', error: 'otp_invalid' });
-          } else if (errorCode === 'USER_ALREADY_EXISTS') {
-            setPageState({ status: 'error', error: 'user_already_exists' });
-          } else if (errorCode === 'INVITATION_CONSUMED') {
-            setPageState({ status: 'error', error: 'invitation_consumed' });
-          } else if (errorCode === 'INVITATION_REVOKED') {
-            setPageState({ status: 'error', error: 'invitation_revoked' });
-          } else if (errorCode === 'INVITATION_NOT_FOUND') {
-            setPageState({ status: 'error', error: 'invitation_not_found' });
-          } else if (errorCode === 'INVITATION_EXPIRED') {
-            setPageState({ status: 'error', error: 'invitation_expired' });
-          } else if (response.status === 401) {
-            setPageState({ status: 'error', error: 'otp_invalid' });
-          } else {
-            setPageState({ status: 'error', error: 'unknown' });
-          }
-          return;
-        }
-
-        const data = await response.json();
+        const data = await getInvitationDetails(queryToken);
         const invitationInfo: InvitationInfo = {
-          id: data.invitation.id,
-          email: data.invitation.email,
-          targetRole: data.invitation.targetRole,
-          namespace: data.namespace,
+          id: data.id,
+          email: data.email,
+          targetRole: data.target_role,
+          namespace: null,
         };
         setInvitation(invitationInfo);
         setPageState({ status: 'ready', invitation: invitationInfo });
       } catch (error) {
-        console.error('[AcceptInvite] Unexpected error:', error);
-        setPageState({ status: 'error', error: 'network_error' });
+        console.error('[AcceptInvite] Verify/fetch error:', error);
+        const code = (error as any).code as string;
+        const status = (error as any).status as number;
+        if (!code && !status) {
+          setPageState({ status: 'error', error: 'network_error' });
+        } else {
+          setPageState({ status: 'error', error: mapErrorCode(code, status) });
+        }
       }
     };
 
     verifyAndLoadInvitation();
-  }, [locationHash, searchParams]);
+  }, [searchParams]);
 
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
@@ -358,7 +282,7 @@ function AcceptInviteContent() {
   // Handle retry for network errors
   const handleRetry = () => {
     setPageState({ status: 'verifying' });
-    reload();
+    window.location.reload();
   };
 
   // Format role for display
