@@ -50,13 +50,6 @@ const ALLOWED_PATTERNS: RegExp[] = [
   /^lib\/centrifugo\.ts$/,
   /^contexts\/AuthContext\.tsx$/,
 
-  // Pre-existing violations (tracked for cleanup separately)
-  /^hooks\/useApiDebugger\.ts$/,
-  /^app\/\(public\)\/invite\/accept\/page\.tsx$/,
-  /^app\/\(public\)\/register\/student\/page\.tsx$/,
-  /^app\/\(public\)\/auth\/bootstrap\/page\.tsx$/,
-  /^app\/\(public\)\/problems\/\[id\]\/page\.tsx$/,
-
   // Test files
   /__tests__\//,
   /__mocks__\//,
