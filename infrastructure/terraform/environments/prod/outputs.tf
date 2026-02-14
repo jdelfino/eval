@@ -79,6 +79,12 @@ output "cloudsql_private_ip" {
   value       = module.cloudsql.private_ip_address
 }
 
+output "cloudsql_database_password" {
+  description = "Cloud SQL database password (for proxy connections)"
+  value       = module.cloudsql.database_password
+  sensitive   = true
+}
+
 # -----------------------------------------------------------------------------
 # Identity Platform Outputs
 # -----------------------------------------------------------------------------

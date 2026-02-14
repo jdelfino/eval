@@ -148,3 +148,13 @@ status:
 
 logs:
 	docker compose logs -f
+
+# ──────────────────────────────────────────────
+# Production database access
+# ──────────────────────────────────────────────
+.PHONY: db-proxy db-prod
+
+db-proxy:
+	./scripts/db-proxy.sh
+
+db-prod: db-proxy
