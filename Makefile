@@ -5,7 +5,7 @@
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
-test-integration: test-integration-store test-integration-realtime test-integration-executor test-integration-contract
+test-integration: test-integration-store test-integration-realtime test-integration-api test-integration-executor test-integration-contract
 lint: lint-api lint-executor lint-frontend
 
 docker-build: docker-build-api docker-build-executor
@@ -80,7 +80,11 @@ test-integration-realtime:
 # ──────────────────────────────────────────────
 # Store integration tests
 # ──────────────────────────────────────────────
-.PHONY: test-integration-store
+.PHONY: test-integration-api test-integration-store
+
+test-integration-api:
+	./scripts/ensure-test-postgres.sh
+	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 ./internal/integration/...
 
 test-integration-store:
 	./scripts/ensure-test-postgres.sh

@@ -296,6 +296,26 @@ func TestCreateSection_Success(t *testing.T) {
 			return sec, nil
 		},
 	}
+	membRepo := &mockMembershipRepo{
+		createMembershipFn: func(_ context.Context, params store.CreateMembershipParams) (*store.SectionMembership, error) {
+			if params.UserID != userID {
+				t.Fatalf("expected membership userID %v, got %v", userID, params.UserID)
+			}
+			if params.SectionID != sec.ID {
+				t.Fatalf("expected membership sectionID %v, got %v", sec.ID, params.SectionID)
+			}
+			if params.Role != "instructor" {
+				t.Fatalf("expected membership role 'instructor', got %q", params.Role)
+			}
+			return &store.SectionMembership{
+				ID:        uuid.New(),
+				UserID:    params.UserID,
+				SectionID: params.SectionID,
+				Role:      params.Role,
+				JoinedAt:  time.Now(),
+			}, nil
+		},
+	}
 
 	body, _ := json.Marshal(map[string]any{
 		"name":     "Section A",
@@ -312,7 +332,7 @@ func TestCreateSection_Success(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -328,6 +348,45 @@ func TestCreateSection_Success(t *testing.T) {
 	}
 	if got.ID != sec.ID {
 		t.Errorf("expected id %q, got %q", sec.ID, got.ID)
+	}
+}
+
+func TestCreateSection_MembershipCreationFails(t *testing.T) {
+	userID := uuid.New()
+	classID := uuid.New()
+	sec := testSection()
+
+	repo := &mockSectionRepo{
+		createSectionFn: func(_ context.Context, _ store.CreateSectionParams) (*store.Section, error) {
+			return sec, nil
+		},
+	}
+	membRepo := &mockMembershipRepo{
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "Section A"})
+	h := NewSectionHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("classID", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, membRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -739,6 +798,17 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 			return sec, nil
 		},
 	}
+	membRepo := &mockMembershipRepo{
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return &store.SectionMembership{
+				ID:        uuid.New(),
+				UserID:    uuid.New(),
+				SectionID: sec.ID,
+				Role:      "instructor",
+				JoinedAt:  time.Now(),
+			}, nil
+		},
+	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
 	h := NewSectionHandler()
@@ -752,7 +822,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, membRepo, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

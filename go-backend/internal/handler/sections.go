@@ -151,6 +151,18 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add the creating instructor as a section instructor so that RLS
+	// policies (which check is_section_instructor) allow them to manage
+	// the section they just created.
+	if _, err := repos.CreateMembership(r.Context(), store.CreateMembershipParams{
+		UserID:    authUser.ID,
+		SectionID: section.ID,
+		Role:      "instructor",
+	}); err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
 	httputil.WriteJSON(w, http.StatusCreated, section)
 }
 

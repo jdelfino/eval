@@ -48,6 +48,7 @@ Run these before committing. Pick the targets matching the code you changed.
 | Contract coverage | `make check-contract-coverage` | — | — |
 | Store integration | `make test-integration-store` | — | — |
 | Realtime integration | `make test-integration-realtime` | — | — |
+| API integration | `make test-integration-api` | — | — |
 | Contract tests | `make test-integration-contract` | — | — |
 | **All unit tests** | `make test` | `make lint` | — |
 | **All integration** | `make test-integration` | — | — |
