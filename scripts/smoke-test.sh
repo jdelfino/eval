@@ -154,7 +154,8 @@ check_no_placeholders() {
 
 executor_curl() {
   local code="$1"
-  local resp
+  local resp stderr_file
+  stderr_file=$(mktemp)
   resp=$(kubectl exec deployment/executor -- python3 -c "
 import urllib.request, json, sys
 req = urllib.request.Request('http://localhost:8081/execute',
@@ -162,10 +163,12 @@ req = urllib.request.Request('http://localhost:8081/execute',
     headers={'Content-Type': 'application/json'})
 with urllib.request.urlopen(req) as r:
     sys.stdout.write(r.read().decode())
-" "$code" 2>/dev/null) || {
-    echo "  ERROR: kubectl exec failed"
+" "$code" 2>"$stderr_file") || {
+    echo "  ERROR: kubectl exec failed (stderr: $(cat "$stderr_file"))" >&2
+    rm -f "$stderr_file"
     return 1
   }
+  rm -f "$stderr_file"
   echo "$resp"
 }
 
@@ -217,14 +220,19 @@ check_executor_filesystem_isolation() {
 
 check_executor_memory_limit() {
   local resp
-  resp=$(executor_curl '{"code":"x = \"A\" * (512 * 1024 * 1024); print(\"allocated\")"}') || return 1
-  local success output
+  resp=$(executor_curl '{"code":"x = \"A\" * (512 * 1024 * 1024); print(\"allocated\")"}') || {
+    echo "  ERROR: executor_curl failed for memory limit test"
+    return 1
+  }
+  local success output error_field
   success=$(echo "$resp" | jq -r '.success')
   output=$(echo "$resp" | jq -r '.output')
+  error_field=$(echo "$resp" | jq -r '.error')
   if [[ "$success" == "true" && "$output" == *"allocated"* ]]; then
     echo "  ERROR: 512MB allocation should be blocked by memory limit"
     return 1
   fi
+  echo "    memory limit enforced (success=${success}, error=${error_field})"
 }
 
 check_executor_sandbox() {
