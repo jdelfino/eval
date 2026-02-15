@@ -20,10 +20,14 @@ on:
 env:
   GO_VERSION: '1.24'
   NODE_VERSION: '20'
+  EXECUTOR_REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +65,32 @@ jobs:
       - name: Build Go API
         run: go build -o ./tmp/server ./cmd/server
         working-directory: go-backend
+
+      # Pull pre-built executor image so run-e2e-tests.sh skips the ~90s
+      # Docker build (nsjail from source). Falls back to building locally
+      # if the pull fails (e.g., first run before executor workflow has pushed).
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - name: Pre-pull executor image
+        run: |
+          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet 2>/dev/null || true
+          if docker pull $EXECUTOR_REGISTRY/executor:latest 2>/dev/null; then
+            docker run -d --name eval-executor-1 \
+              -p 8081:8081 --privileged \
+              -e PORT=8081 -e ENVIRONMENT=local -e LOG_LEVEL=debug \
+              -e NSJAIL_PATH=/usr/bin/nsjail -e PYTHON_PATH=/usr/bin/python3 \
+              -e DEFAULT_TIMEOUT_MS=10000 \
+              $EXECUTOR_REGISTRY/executor:latest
+            for i in $(seq 1 30); do
+              curl -sf http://localhost:8081/healthz >/dev/null 2>&1 && break
+              sleep 1
+            done
+            echo "Executor running from pre-built image"
+          else
+            echo "Pre-built executor not available, will build from source"
+          fi
 
       - name: Run E2E tests
         run: make test-e2e
