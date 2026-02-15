@@ -70,6 +70,10 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      # setup-gcloud@v2 downloads a full ~500MB SDK even though gcloud is
+      # pre-installed on the runner. The runner's apt-managed gcloud disables
+      # the component manager and the Google Cloud apt source is removed, so
+      # we re-add the source and install the plugin directly (~8s vs ~58s).
       - name: Install gke-gcloud-auth-plugin
         run: |
           curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
