@@ -13,6 +13,7 @@ import {
 } from './helpers';
 import { state } from './shared-state';
 import {
+  getSection,
   joinSection,
   leaveSection,
   getActiveSessions,
@@ -37,6 +38,31 @@ describe('Sections API (full coverage)', () => {
 
   afterAll(() => {
     resetAuthProvider();
+  });
+
+  // -------------------------------------------------------------------------
+  // getSection
+  // -------------------------------------------------------------------------
+  describe('getSection()', () => {
+    it('returns a Section with correct snake_case shape', async () => {
+      const sectionId = state.sectionId;
+      expect(sectionId).toBeTruthy();
+
+      const sec = await getSection(sectionId);
+
+      expectString(sec, 'id');
+      expectString(sec, 'namespace_id');
+      expectString(sec, 'class_id');
+      expectString(sec, 'name');
+      expectNullableString(sec, 'semester');
+      expectString(sec, 'join_code');
+      expectBoolean(sec, 'active');
+      expectString(sec, 'created_at');
+      expectString(sec, 'updated_at');
+
+      expectSnakeCaseKeys(sec, 'Section');
+      expect(sec.id).toBe(sectionId);
+    });
   });
 
   // -------------------------------------------------------------------------
