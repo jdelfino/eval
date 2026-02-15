@@ -22,13 +22,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
 
 // integrationDB wraps a pool for integration tests and provides helper methods.
 // Each instance owns a random namespace for test isolation.
 type integrationDB struct {
-	pool *pgxpool.Pool
-	nsID string // random namespace scoped to this test run
+	pool    *pgxpool.Pool // superuser pool for scaffolding (inserts, cleanup)
+	appPool *pgxpool.Pool // non-superuser pool mirroring production
+	nsID    string        // random namespace scoped to this test run
 }
 
 func setupIntegrationDB(t *testing.T) *integrationDB {
@@ -50,10 +52,17 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 		t.Fatalf("failed to ping database: %v", err)
 	}
 
-	// Ensure eval_app role exists for RLS testing
-	if err := ensureEvalAppRole(ctx, pool); err != nil {
+	// Ensure eval_app and app roles exist for RLS testing.
+	if err := testutil.EnsureAppRole(ctx, pool); err != nil {
 		pool.Close()
-		t.Fatalf("failed to ensure eval_app role: %v", err)
+		t.Fatalf("failed to ensure app roles: %v", err)
+	}
+
+	// Create non-superuser pool mirroring production.
+	appPool, err := testutil.NewAppPool(ctx, dbURL)
+	if err != nil {
+		pool.Close()
+		t.Fatalf("failed to create app pool: %v", err)
 	}
 
 	nsID := "ns-" + uuid.New().String()
@@ -61,11 +70,12 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 		`INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`,
 		nsID, "Test NS "+nsID)
 	if err != nil {
+		appPool.Close()
 		pool.Close()
 		t.Fatalf("failed to create test namespace: %v", err)
 	}
 
-	idb := &integrationDB{pool: pool, nsID: nsID}
+	idb := &integrationDB{pool: pool, appPool: appPool, nsID: nsID}
 	t.Cleanup(func() {
 		idb.cleanup(context.Background(), t)
 		idb.close()
@@ -73,52 +83,15 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 	return idb
 }
 
-// ensureEvalAppRole creates the eval_app role if it doesn't exist.
-// This role is used for RLS testing because superusers bypass RLS policies.
-func ensureEvalAppRole(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-		DO $$
-		BEGIN
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'eval_app') THEN
-				CREATE ROLE eval_app WITH LOGIN PASSWORD 'eval_app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-			END IF;
-		END $$
-	`)
-	if err != nil {
-		return fmt.Errorf("create role: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT CONNECT ON DATABASE eval TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant connect: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT USAGE ON SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant usage: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant table privileges: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant sequence privileges: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant function privileges: %w", err)
-	}
-
-	return nil
-}
 
 func (db *integrationDB) close() {
-	if db != nil && db.pool != nil {
-		db.pool.Close()
+	if db != nil {
+		if db.appPool != nil {
+			db.appPool.Close()
+		}
+		if db.pool != nil {
+			db.pool.Close()
+		}
 	}
 }
 
@@ -163,7 +136,7 @@ func (db *integrationDB) setRLSContext(ctx context.Context, conn *pgxpool.Conn, 
 // The caller must release the connection.
 func (db *integrationDB) storeWithRLS(ctx context.Context, t *testing.T, user *auth.User) (*Store, *pgxpool.Conn) {
 	t.Helper()
-	conn, err := db.pool.Acquire(ctx)
+	conn, err := db.appPool.Acquire(ctx)
 	if err != nil {
 		t.Fatalf("acquire connection: %v", err)
 	}

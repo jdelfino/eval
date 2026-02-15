@@ -23,12 +23,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
 
 // testDB holds the test database connection pool and a random namespace for isolation.
 type testDB struct {
-	pool *pgxpool.Pool
-	nsID string // random namespace scoped to this test run
+	pool    *pgxpool.Pool // superuser pool for scaffolding (inserts, cleanup)
+	appPool *pgxpool.Pool // non-superuser pool mirroring production
+	nsID    string        // random namespace scoped to this test run
 }
 
 // setupTestDB creates a connection pool for integration tests and provisions
@@ -57,10 +59,17 @@ func setupTestDB(t *testing.T) *testDB {
 		t.Fatalf("failed to ping database: %v", err)
 	}
 
-	// Ensure eval_app role exists for RLS testing.
-	if err := ensureAppRole(ctx, pool); err != nil {
+	// Ensure eval_app and app roles exist for RLS testing.
+	if err := testutil.EnsureAppRole(ctx, pool); err != nil {
 		pool.Close()
-		t.Fatalf("failed to ensure eval_app role: %v", err)
+		t.Fatalf("failed to ensure app roles: %v", err)
+	}
+
+	// Create non-superuser pool mirroring production.
+	appPool, err := testutil.NewAppPool(ctx, dbURL)
+	if err != nil {
+		pool.Close()
+		t.Fatalf("failed to create app pool: %v", err)
 	}
 
 	nsID := "ns-" + uuid.New().String()
@@ -68,11 +77,12 @@ func setupTestDB(t *testing.T) *testDB {
 		`INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`,
 		nsID, "Test NS "+nsID)
 	if err != nil {
+		appPool.Close()
 		pool.Close()
 		t.Fatalf("failed to create test namespace: %v", err)
 	}
 
-	tdb := &testDB{pool: pool, nsID: nsID}
+	tdb := &testDB{pool: pool, appPool: appPool, nsID: nsID}
 	t.Cleanup(func() {
 		tdb.cleanup(context.Background(), t)
 		tdb.close()
@@ -80,55 +90,16 @@ func setupTestDB(t *testing.T) *testDB {
 	return tdb
 }
 
-// ensureAppRole creates the eval_app role if it doesn't exist.
-// This role is used for RLS testing because superusers bypass RLS policies.
-func ensureAppRole(ctx context.Context, pool *pgxpool.Pool) error {
-	// Create role if it doesn't exist
-	_, err := pool.Exec(ctx, `
-		DO $$
-		BEGIN
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'eval_app') THEN
-				CREATE ROLE eval_app WITH LOGIN PASSWORD 'eval_app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-			END IF;
-		END $$
-	`)
-	if err != nil {
-		return fmt.Errorf("create role: %w", err)
-	}
 
-	// Grant privileges on the database
-	_, err = pool.Exec(ctx, "GRANT CONNECT ON DATABASE eval TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant connect: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT USAGE ON SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant usage: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant table privileges: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant sequence privileges: %w", err)
-	}
-
-	_, err = pool.Exec(ctx, "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eval_app")
-	if err != nil {
-		return fmt.Errorf("grant function privileges: %w", err)
-	}
-
-	return nil
-}
-
-// close releases the test database connection pool.
+// close releases both database connection pools.
 func (tdb *testDB) close() {
-	if tdb != nil && tdb.pool != nil {
-		tdb.pool.Close()
+	if tdb != nil {
+		if tdb.appPool != nil {
+			tdb.appPool.Close()
+		}
+		if tdb.pool != nil {
+			tdb.pool.Close()
+		}
 	}
 }
 
@@ -228,7 +199,7 @@ func (tdb *testDB) createUser(ctx context.Context, user testUser) error {
 
 // queryUsersAsUser queries users using RLS with the given user's context.
 func (tdb *testDB) queryUsersAsUser(ctx context.Context, user *auth.User) ([]uuid.UUID, error) {
-	conn, err := tdb.pool.Acquire(ctx)
+	conn, err := tdb.appPool.Acquire(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acquire connection: %w", err)
 	}
@@ -258,7 +229,7 @@ func (tdb *testDB) queryUsersAsUser(ctx context.Context, user *auth.User) ([]uui
 
 // queryNamespacesAsUser queries namespaces using RLS with the given user's context.
 func (tdb *testDB) queryNamespacesAsUser(ctx context.Context, user *auth.User) ([]string, error) {
-	conn, err := tdb.pool.Acquire(ctx)
+	conn, err := tdb.appPool.Acquire(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("acquire connection: %w", err)
 	}
@@ -1122,7 +1093,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	// --- Tests ---
 
 	t.Run("SELECT filters by policy per table", func(t *testing.T) {
-		conn, err := tdb.pool.Acquire(ctx)
+		conn, err := tdb.appPool.Acquire(ctx)
 		if err != nil {
 			t.Fatalf("acquire: %v", err)
 		}
@@ -1178,7 +1149,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	})
 
 	t.Run("UPDATE consume flow works end-to-end", func(t *testing.T) {
-		conn, err := tdb.pool.Acquire(ctx)
+		conn, err := tdb.appPool.Acquire(ctx)
 		if err != nil {
 			t.Fatalf("acquire: %v", err)
 		}
@@ -1209,7 +1180,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	})
 
 	t.Run("INSERT user and student membership", func(t *testing.T) {
-		conn, err := tdb.pool.Acquire(ctx)
+		conn, err := tdb.appPool.Acquire(ctx)
 		if err != nil {
 			t.Fatalf("acquire: %v", err)
 		}
@@ -1240,7 +1211,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	})
 
 	t.Run("INSERT system-admin via bootstrap (no namespace)", func(t *testing.T) {
-		conn, err := tdb.pool.Acquire(ctx)
+		conn, err := tdb.appPool.Acquire(ctx)
 		if err != nil {
 			t.Fatalf("acquire: %v", err)
 		}
@@ -1280,7 +1251,7 @@ func TestRLSPolicies_RegistrationContext(t *testing.T) {
 	})
 
 	t.Run("DELETE denied", func(t *testing.T) {
-		conn, err := tdb.pool.Acquire(ctx)
+		conn, err := tdb.appPool.Acquire(ctx)
 		if err != nil {
 			t.Fatalf("acquire: %v", err)
 		}

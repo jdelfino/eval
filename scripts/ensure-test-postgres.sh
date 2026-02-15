@@ -29,11 +29,37 @@ DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 PSQL_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
+# Create app role before migrations — migration 008 needs it for
+# GRANT eval_app TO app. This mirrors the production setup where
+# Cloud SQL provisions the app user separately.
+echo "Creating app role..."
+psql "$PSQL_URL" -c "
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app') THEN
+    CREATE ROLE app WITH LOGIN PASSWORD 'app_test_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+  END IF;
+END
+\$\$;
+GRANT CONNECT ON DATABASE ${DB_NAME} TO app;
+GRANT USAGE ON SCHEMA public TO app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app;
+" 2>/dev/null || true
+
 # Run migrations (idempotent — applied in order)
 echo "Applying migrations..."
 for f in migrations/*.up.sql; do
   psql "$PSQL_URL" -f "$f" 2>/dev/null || true
 done
+
+# Re-grant DML to app on any tables created by migrations.
+psql "$PSQL_URL" -c "
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app;
+" 2>/dev/null || true
 
 # Seed well-known contract test admin (idempotent)
 psql "$PSQL_URL" -f scripts/contract-test-seed.sql

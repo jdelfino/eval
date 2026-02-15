@@ -29,13 +29,15 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/db"
 	"github.com/jdelfino/eval/go-backend/internal/server"
 	"github.com/jdelfino/eval/go-backend/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
 
 // testHarness holds a running test server backed by a real database.
 type testHarness struct {
-	Server *httptest.Server
-	Pool   *pgxpool.Pool
-	nsID   string // random namespace for test isolation
+	Server  *httptest.Server
+	Pool    *pgxpool.Pool // superuser pool for scaffolding (inserts, cleanup)
+	AppPool *pgxpool.Pool // non-superuser pool used by the server
+	nsID    string        // random namespace for test isolation
 }
 
 // setupHarness creates a real HTTP server with AUTH_MODE=test and a real
@@ -63,21 +65,30 @@ func setupHarness(t *testing.T) *testHarness {
 		t.Fatalf("ping database: %v", err)
 	}
 
-	// Ensure eval_app role exists (migration 008 creates it, but CI may
-	// apply migrations via psql before the role migration exists).
-	if err := ensureAppRole(ctx, pool); err != nil {
+	// Ensure eval_app and app roles exist for RLS testing.
+	if err := testutil.EnsureAppRole(ctx, pool); err != nil {
 		pool.Close()
-		t.Fatalf("ensure eval_app role: %v", err)
+		t.Fatalf("ensure app roles: %v", err)
+	}
+
+	// Create non-superuser pool mirroring production.
+	appPool, err := testutil.NewAppPool(ctx, dbURL)
+	if err != nil {
+		pool.Close()
+		t.Fatalf("create app pool: %v", err)
 	}
 
 	// Create an isolated namespace for this test run.
 	nsID := "ns-api-" + uuid.New().String()
 	if _, err := pool.Exec(ctx, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, $2, true)`, nsID, "API Test NS"); err != nil {
+		appPool.Close()
 		pool.Close()
 		t.Fatalf("create test namespace: %v", err)
 	}
 
 	// Create the real server with AUTH_MODE=test.
+	// Pass the non-superuser app pool so the RLS middleware runs under
+	// the same privilege level as production.
 	cfg := &config.Config{
 		Port:        0,
 		Environment: "test",
@@ -85,7 +96,10 @@ func setupHarness(t *testing.T) *testHarness {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	dbPool := &db.Pool{Pool: pool}
+	dbPool := &db.Pool{Pool: appPool}
+	// userStore uses the superuser pool because in production the app user
+	// owns the tables and bypasses RLS for user lookups. In tests, eval owns
+	// the tables so we use the superuser pool for the same bypass behavior.
 	userStore := store.New(pool)
 
 	// Use a dedicated Prometheus registry to avoid "already registered" panics
@@ -95,15 +109,17 @@ func setupHarness(t *testing.T) *testHarness {
 
 	ts := httptest.NewServer(srv.Handler())
 	h := &testHarness{
-		Server: ts,
-		Pool:   pool,
-		nsID:   nsID,
+		Server:  ts,
+		Pool:    pool,
+		AppPool: appPool,
+		nsID:    nsID,
 	}
 
 	t.Cleanup(func() {
 		ts.Close()
 		// Clean up: delete namespace (CASCADE removes all child rows).
 		_, _ = pool.Exec(context.Background(), "DELETE FROM namespaces WHERE id = $1", nsID)
+		appPool.Close()
 		pool.Close()
 	})
 
@@ -134,33 +150,6 @@ func (h *testHarness) createUser(ctx context.Context, t *testing.T, email string
 	return id, token
 }
 
-// ensureAppRole creates the eval_app role if it doesn't exist.
-func ensureAppRole(ctx context.Context, pool *pgxpool.Pool) error {
-	_, err := pool.Exec(ctx, `
-		DO $$
-		BEGIN
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'eval_app') THEN
-				CREATE ROLE eval_app WITH LOGIN PASSWORD 'eval_app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-			END IF;
-		END $$
-	`)
-	if err != nil {
-		return fmt.Errorf("create role: %w", err)
-	}
-
-	for _, stmt := range []string{
-		"GRANT CONNECT ON DATABASE eval TO eval_app",
-		"GRANT USAGE ON SCHEMA public TO eval_app",
-		"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO eval_app",
-		"GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO eval_app",
-		"GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eval_app",
-	} {
-		if _, err := pool.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("%s: %w", stmt, err)
-		}
-	}
-	return nil
-}
 
 // doRequest makes an authenticated HTTP request to the test server.
 func (h *testHarness) doRequest(t *testing.T, method, path, token string) *http.Response {
