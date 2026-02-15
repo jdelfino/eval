@@ -13,8 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // sessionTestRepos embeds stubRepos for session handler tests.

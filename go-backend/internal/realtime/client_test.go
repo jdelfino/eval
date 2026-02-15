@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/go-backend/internal/realtime"
 )
 
 var testLogger = slog.Default()

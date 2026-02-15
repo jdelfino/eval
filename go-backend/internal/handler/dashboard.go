@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 

@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // mockAuthRepos is a composite type that embeds stubRepos and delegates to specific mock repos.

@@ -1,4 +1,4 @@
-module github.com/jdelfino/eval
+module github.com/jdelfino/eval/go-backend
 
 go 1.24.0
 

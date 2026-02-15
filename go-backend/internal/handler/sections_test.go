@@ -16,9 +16,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/jdelfino/eval/internal/auth"
-	custommw "github.com/jdelfino/eval/internal/middleware"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // mockSectionRepo implements store.SectionRepository for testing.

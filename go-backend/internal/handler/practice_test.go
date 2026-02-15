@@ -13,9 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/executor"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/executor"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 func newPracticeReq(code string) []byte {

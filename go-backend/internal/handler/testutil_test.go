@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/internal/realtime"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/realtime"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // --- Shared mock repositories ---

@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jdelfino/eval/internal/config"
-	"github.com/jdelfino/eval/internal/db"
-	"github.com/jdelfino/eval/internal/server"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/config"
+	"github.com/jdelfino/eval/go-backend/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/server"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/slogutil"
 )
 

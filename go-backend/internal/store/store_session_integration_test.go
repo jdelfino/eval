@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
 )
 
 // seed helpers for sessions

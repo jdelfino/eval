@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jdelfino/eval/internal/middleware"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/middleware"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // mockUserRepo is a store.UserRepository stub that returns configured responses.
