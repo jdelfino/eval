@@ -58,9 +58,10 @@ func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
 // classDetailResponse is the enriched response for GET /classes/{id}.
 // Fields match frontend expectations in classes/[id]/page.tsx.
 type classDetailResponse struct {
-	Class           *store.Class       `json:"class"`
-	Sections        []store.Section    `json:"sections"`
-	InstructorNames map[string]string  `json:"instructorNames"`
+	Class                *store.Class          `json:"class"`
+	Sections             []store.Section       `json:"sections"`
+	InstructorNames      map[string]string     `json:"instructorNames"`
+	SectionInstructors   map[string][]string   `json:"sectionInstructors"`
 }
 
 // Get handles GET /api/v1/classes/{id} — returns a single class with sections and instructor names.
@@ -102,10 +103,20 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		instructorNames = make(map[string]string)
 	}
 
+	sectionInstructors, err := repos.ListClassSectionInstructors(r.Context(), id)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+	if sectionInstructors == nil {
+		sectionInstructors = make(map[string][]string)
+	}
+
 	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{
-		Class:           class,
-		Sections:        sections,
-		InstructorNames: instructorNames,
+		Class:              class,
+		Sections:           sections,
+		InstructorNames:    instructorNames,
+		SectionInstructors: sectionInstructors,
 	})
 }
 

@@ -16,6 +16,7 @@ export interface ClassDetailsResponse {
   class: Class;
   sections: Section[];
   instructorNames: Record<string, string>;
+  sectionInstructors: Record<string, string[]>;
 }
 
 /**

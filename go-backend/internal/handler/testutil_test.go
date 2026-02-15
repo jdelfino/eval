@@ -252,6 +252,9 @@ func (stubRepos) DeleteClass(context.Context, uuid.UUID) error {
 func (stubRepos) ListClassInstructorNames(context.Context, uuid.UUID) (map[string]string, error) {
 	panic("stubRepos: unexpected ListClassInstructorNames call")
 }
+func (stubRepos) ListClassSectionInstructors(context.Context, uuid.UUID) (map[string][]string, error) {
+	panic("stubRepos: unexpected ListClassSectionInstructors call")
+}
 func (stubRepos) ListSectionsByClass(context.Context, uuid.UUID) ([]store.Section, error) {
 	panic("stubRepos: unexpected ListSectionsByClass call")
 }

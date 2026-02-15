@@ -29,6 +29,7 @@ export default function ClassDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [instructorNames, setInstructorNames] = useState<Record<string, string>>({});
+  const [sectionInstructors, setSectionInstructors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -53,6 +54,7 @@ export default function ClassDetailsPage() {
       setClassData(data.class);
       setSections(data.sections || []);
       setInstructorNames(data.instructorNames || {});
+      setSectionInstructors(data.sectionInstructors || {});
     } catch (error) {
       console.error('Failed to load class:', error);
     } finally {
@@ -153,6 +155,7 @@ export default function ClassDetailsPage() {
               onAddInstructor={handleAddInstructor}
               onRemoveInstructor={handleRemoveInstructor}
               instructorNames={instructorNames}
+              instructorIds={sectionInstructors[section.id] || []}
             />
           ))}
         </div>

@@ -150,5 +150,33 @@ func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID)
 	return names, rows.Err()
 }
 
+// ListClassSectionInstructors returns a map of section_id -> []user_id
+// for all instructor memberships across sections of a class.
+func (s *Store) ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error) {
+	const query = `
+		SELECT sm.section_id, sm.user_id
+		FROM sections s
+		JOIN section_memberships sm ON sm.section_id = s.id
+		WHERE s.class_id = $1
+		  AND sm.role = 'instructor'
+		ORDER BY sm.section_id, sm.joined_at`
+
+	rows, err := s.q.Query(ctx, query, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]string)
+	for rows.Next() {
+		var sectionID, userID string
+		if err := rows.Scan(&sectionID, &userID); err != nil {
+			return nil, err
+		}
+		result[sectionID] = append(result[sectionID], userID)
+	}
+	return result, rows.Err()
+}
+
 // Compile-time check that Store implements ClassRepository.
 var _ ClassRepository = (*Store)(nil)

@@ -15,12 +15,6 @@ jest.mock('@/lib/join-code', () => ({
   formatJoinCodeForDisplay: (code: string) => code,
 }));
 
-// Mock fetch for instructor loading
-global.fetch = jest.fn().mockResolvedValue({
-  ok: true,
-  json: async () => ({ instructors: [] }),
-}) as jest.Mock;
-
 describe('SectionCard', () => {
   const mockSection: Section = {
     id: 'section-xyz',

@@ -1,17 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Section } from '@/types/api';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
-import { getSectionInstructors } from '@/lib/api/sections';
 
 interface Instructor {
   id: string;
-  display_name: string | null;
-  email: string;
+  display_name: string;
 }
 
 interface SectionCardProps {
@@ -19,7 +17,8 @@ interface SectionCardProps {
   onRegenerateCode?: (section_id: string) => Promise<string>;
   onAddInstructor?: (section_id: string, email: string) => Promise<void>;
   onRemoveInstructor?: (section_id: string, user_id: string) => Promise<void>;
-  instructorNames?: Record<string, string>; // user_id -> email mapping (kept for backwards compat)
+  instructorNames?: Record<string, string>; // user_id -> display name (class-wide)
+  instructorIds?: string[]; // instructor user_ids for this section
 }
 
 export default function SectionCard({
@@ -27,7 +26,8 @@ export default function SectionCard({
   onRegenerateCode,
   onAddInstructor,
   onRemoveInstructor,
-  instructorNames: _instructorNames = {}
+  instructorNames = {},
+  instructorIds = [],
 }: SectionCardProps) {
   const [showJoinCode, setShowJoinCode] = useState(true);
   const [join_code, setJoinCode] = useState(section.join_code);
@@ -37,25 +37,14 @@ export default function SectionCard({
   const [error, setError] = useState<string | null>(null);
   const [showRemoveInstructorConfirm, setShowRemoveInstructorConfirm] = useState(false);
   const [instructorToRemove, setInstructorToRemove] = useState<string | null>(null);
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [loadingInstructors, setLoadingInstructors] = useState(true);
 
-  // Fetch instructors from API
-  useEffect(() => {
-    const fetchInstructors = async () => {
-      try {
-        const instructorsData = await getSectionInstructors(section.id);
-        // Backend returns SectionMembership[] (no display_name/email).
-        // Map to local Instructor shape; user_id is the best identifier available.
-        setInstructors(instructorsData.map((m) => ({ id: m.user_id, display_name: m.role, email: '' })));
-      } catch (err) {
-        console.error('Failed to fetch instructors:', err);
-      } finally {
-        setLoadingInstructors(false);
-      }
-    };
-    fetchInstructors();
-  }, [section.id]);
+  // Derive instructor list from props (fetched by parent via getClass)
+  const instructors: Instructor[] = useMemo(() => {
+    return instructorIds.map((id) => ({
+      id,
+      display_name: instructorNames[id] || id,
+    }));
+  }, [instructorIds, instructorNames]);
 
   const handleRegenerateCode = async () => {
     if (!onRegenerateCode) return;
@@ -72,15 +61,6 @@ export default function SectionCard({
     }
   };
 
-  const refreshInstructors = async () => {
-    try {
-      const instructorsData = await getSectionInstructors(section.id);
-      setInstructors(instructorsData.map((m) => ({ id: m.user_id, display_name: m.role, email: '' })));
-    } catch (err) {
-      console.error('Failed to refresh instructors:', err);
-    }
-  };
-
   const handleAddInstructor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onAddInstructor || !newInstructorEmail.trim()) return;
@@ -90,7 +70,6 @@ export default function SectionCard({
       await onAddInstructor(section.id, newInstructorEmail.trim());
       setNewInstructorEmail('');
       setAddingInstructor(false);
-      await refreshInstructors();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add instructor');
     }
@@ -108,7 +87,6 @@ export default function SectionCard({
     setError(null);
     try {
       await onRemoveInstructor(section.id, instructorToRemove);
-      await refreshInstructors();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove instructor');
     } finally {
@@ -173,28 +151,24 @@ export default function SectionCard({
       {onAddInstructor && onRemoveInstructor && (
         <div className="border-t pt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-2">Instructors</h4>
-          {loadingInstructors ? (
-            <p className="text-sm text-gray-400 mb-3">Loading...</p>
-          ) : (
-            <ul className="space-y-2 mb-3">
-              {instructors.map((instructor) => (
-                <li key={instructor.id} className="flex items-center justify-between text-sm">
-                  <span>{instructor.display_name || instructor.email}</span>
-                  {instructors.length > 1 && (
-                    <button
-                      onClick={() => handleRemoveInstructorClick(instructor.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          
+          <ul className="space-y-2 mb-3">
+            {instructors.map((instructor) => (
+              <li key={instructor.id} className="flex items-center justify-between text-sm">
+                <span>{instructor.display_name}</span>
+                {instructors.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveInstructorClick(instructor.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+
           {addingInstructor ? (
             <form onSubmit={handleAddInstructor} className="flex gap-2">
               <input
