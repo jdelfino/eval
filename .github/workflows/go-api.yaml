@@ -79,10 +79,7 @@ jobs:
           CENTRIFUGO_URL: http://localhost:8000
           CENTRIFUGO_API_KEY: local-api-key
           CENTRIFUGO_TOKEN_SECRET: local-dev-secret-key-not-for-production
-        run: |
-          go test -v -race -tags integration ./internal/integration/...
-          go test -v -race ./internal/store/... -run TestIntegration
-          go test -v -race ./internal/realtime/...
+        run: go test -v -race ./...
         working-directory: go-backend
       - name: Stop dependencies
         if: always()

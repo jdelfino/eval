@@ -1,5 +1,3 @@
-//go:build integration
-
 // Package integration provides API-level integration tests that exercise the
 // full middleware chain (auth, user-load, RLS) against a real PostgreSQL
 // database. This catches bugs that unit tests and store-level integration
@@ -8,6 +6,9 @@
 // Requirements:
 //   - DATABASE_URL pointing at a PostgreSQL instance with migrations applied
 //   - Run via: make test-integration-api
+//
+// Tests skip automatically when DATABASE_URL is not set, so they are safe
+// to include in a plain `go test ./...` run.
 package integration
 
 import (

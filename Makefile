@@ -84,7 +84,7 @@ test-integration-realtime:
 
 test-integration-api:
 	./scripts/ensure-test-postgres.sh
-	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 -tags integration ./internal/integration/...
+	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 ./internal/integration/...
 
 test-integration-store:
 	./scripts/ensure-test-postgres.sh
