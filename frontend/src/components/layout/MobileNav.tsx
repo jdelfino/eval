@@ -121,23 +121,18 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
   const navItems = getNavItemsForRole(role);
   const navGroups = getNavGroupsForRole(role);
 
-  // Lock body scroll when open
+  // Lock body scroll while open; restore on unmount (close)
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
+    document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, []);
 
   // Close on Escape key
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && isOpen) {
+      if (event.key === 'Escape') {
         onClose();
       }
     }
@@ -146,24 +141,22 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [onClose]);
+
+  if (!isOpen) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-200 ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className="fixed inset-0 bg-black/50 z-40 lg:hidden opacity-100"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Drawer */}
       <div
-        className={`fixed inset-y-0 left-0 w-72 bg-white z-50 lg:hidden transform transition-transform duration-200 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className="fixed inset-y-0 left-0 w-72 bg-white z-50 lg:hidden translate-x-0"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
