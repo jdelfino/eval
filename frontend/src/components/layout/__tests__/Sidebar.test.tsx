@@ -64,7 +64,7 @@ describe('Sidebar', () => {
   });
 
   describe('role filtering', () => {
-    it('shows only student items for student role', () => {
+    it('shows no items for student role (sections list removed)', () => {
       mockUser.mockReturnValue({
         id: 'user1',
         email: 'student@example.com',
@@ -73,7 +73,7 @@ describe('Sidebar', () => {
 
       render(<Sidebar />);
 
-      expect(screen.getByText('My Sections')).toBeInTheDocument();
+      expect(screen.queryByText('My Sections')).not.toBeInTheDocument();
       expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
       expect(screen.queryByText('Classes')).not.toBeInTheDocument();
     });
@@ -111,8 +111,8 @@ describe('Sidebar', () => {
 
       render(<Sidebar />);
 
-      // Student role shows My Sections
-      expect(screen.getByText('My Sections')).toBeInTheDocument();
+      // Student role has no nav items after sections list removal
+      expect(screen.queryByText('My Sections')).not.toBeInTheDocument();
       expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     });
   });
@@ -256,7 +256,7 @@ describe('Sidebar', () => {
       expect(groupNames).toEqual(['Teaching', 'Admin', 'System']);
     });
 
-    it('renders only Main group for student', () => {
+    it('renders no groups for student (sections list removed)', () => {
       mockUser.mockReturnValue({
         id: 'user1',
         email: 'student@example.com',
@@ -265,7 +265,7 @@ describe('Sidebar', () => {
 
       render(<Sidebar collapsed={false} />);
 
-      expect(screen.getByText('Main')).toBeInTheDocument();
+      expect(screen.queryByText('Main')).not.toBeInTheDocument();
       expect(screen.queryByText('Teaching')).not.toBeInTheDocument();
     });
   });

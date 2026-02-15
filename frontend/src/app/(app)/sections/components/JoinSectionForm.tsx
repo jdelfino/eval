@@ -36,7 +36,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
       await onSubmit(codeToSubmit);
       setSuccess(true);
       setJoinCode('');
-      // Note: Parent component handles redirect to /sections
+      // Note: Parent component handles redirect to section detail page
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join section';
       // Provide more specific messages for common errors
@@ -119,7 +119,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
           </div>
 
           <div className="flex justify-center">
-            <BackButton href="/sections" size="sm">Back to My Sections</BackButton>
+            <BackButton href="/" size="sm">Back to Home</BackButton>
           </div>
         </form>
       </Card>

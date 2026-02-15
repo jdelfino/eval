@@ -297,7 +297,7 @@ describe('Student Page - Session Ended Detection', () => {
     expect(screen.queryByText(/Returning to sections/)).not.toBeInTheDocument();
   });
 
-  it('should navigate to /sections when Back to Sections is clicked', async () => {
+  it('should navigate to / when leaving session', async () => {
     mockUseRealtimeSession.mockReturnValue({
       ...baseSessionState,
       session: {
@@ -315,7 +315,7 @@ describe('Student Page - Session Ended Detection', () => {
 
     fireEvent.click(screen.getByTestId('go-to-dashboard-button'));
 
-    expect(mockPush).toHaveBeenCalledWith('/sections');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 
   it('should handle navigating to a completed session without errors', async () => {

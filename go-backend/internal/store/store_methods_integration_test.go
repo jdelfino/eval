@@ -1732,6 +1732,140 @@ func TestIntegration_UpsertUser_Update(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Test: ListMyClasses - scoped to classes user created or is co-instructor on
+// =============================================================================
+
+func TestIntegration_ListMyClasses(t *testing.T) {
+	db := setupIntegrationDB(t)
+	defer db.close()
+	ctx := context.Background()
+
+	nsID := db.nsID
+
+	// Create two instructors in the same namespace
+	instA := uuid.New()
+	instB := uuid.New()
+	db.createUser(ctx, t, instA, "instA@test.com", "instructor", nsID)
+	db.createUser(ctx, t, instB, "instB@test.com", "instructor", nsID)
+
+	// Instructor A creates classA, instructor B creates classB
+	classA := uuid.New()
+	classB := uuid.New()
+	db.createClass(ctx, t, classA, nsID, "Class A", instA)
+	db.createClass(ctx, t, classB, nsID, "Class B", instB)
+
+	// Each class gets a section
+	secA := uuid.New()
+	secB := uuid.New()
+	db.createSection(ctx, t, secA, nsID, classA, "Section A", "CODEA")
+	db.createSection(ctx, t, secB, nsID, classB, "Section B", "CODEB")
+
+	// Each instructor is a member of their own section
+	db.createMembership(ctx, t, instA, secA, "instructor")
+	db.createMembership(ctx, t, instB, secB, "instructor")
+
+	// Add instructor A as co-instructor on instructor B's section
+	db.createMembership(ctx, t, instA, secB, "instructor")
+
+	authUserA := &auth.User{
+		ID:          instA,
+		Email:       "instA@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	authUserB := &auth.User{
+		ID:          instB,
+		Email:       "instB@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("instructor A sees both classes (created one + co-instructor on other)", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		classes, err := s.ListMyClasses(ctx, instA)
+		if err != nil {
+			t.Fatalf("ListMyClasses: %v", err)
+		}
+		if len(classes) != 2 {
+			t.Fatalf("expected 2 classes, got %d", len(classes))
+		}
+		ids := map[uuid.UUID]bool{}
+		for _, c := range classes {
+			ids[c.ID] = true
+		}
+		if !ids[classA] {
+			t.Errorf("expected classA %s in results", classA)
+		}
+		if !ids[classB] {
+			t.Errorf("expected classB %s in results", classB)
+		}
+	})
+
+	t.Run("instructor B sees only own class", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUserB)
+		defer conn.Release()
+
+		classes, err := s.ListMyClasses(ctx, instB)
+		if err != nil {
+			t.Fatalf("ListMyClasses: %v", err)
+		}
+		if len(classes) != 1 {
+			t.Fatalf("expected 1 class, got %d", len(classes))
+		}
+		if classes[0].ID != classB {
+			t.Errorf("expected classB %s, got %s", classB, classes[0].ID)
+		}
+	})
+
+	t.Run("user with no classes gets empty result", func(t *testing.T) {
+		otherUser := uuid.New()
+		db.createUser(ctx, t, otherUser, "other@test.com", "instructor", nsID)
+		authOther := &auth.User{
+			ID:          otherUser,
+			Email:       "other@test.com",
+			NamespaceID: nsID,
+			Role:        auth.RoleInstructor,
+		}
+
+		s, conn := db.storeWithRLS(ctx, t, authOther)
+		defer conn.Release()
+
+		classes, err := s.ListMyClasses(ctx, otherUser)
+		if err != nil {
+			t.Fatalf("ListMyClasses: %v", err)
+		}
+		if len(classes) != 0 {
+			t.Errorf("expected 0 classes, got %d", len(classes))
+		}
+	})
+
+	t.Run("no duplicates when creator is also instructor member", func(t *testing.T) {
+		// instA created classA AND is a member of secA as instructor
+		// should still only see classA once (plus classB)
+		s, conn := db.storeWithRLS(ctx, t, authUserA)
+		defer conn.Release()
+
+		classes, err := s.ListMyClasses(ctx, instA)
+		if err != nil {
+			t.Fatalf("ListMyClasses: %v", err)
+		}
+		// Count occurrences of classA
+		count := 0
+		for _, c := range classes {
+			if c.ID == classA {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Errorf("classA should appear exactly once, got %d", count)
+		}
+	})
+}
+
 // Ensure json import is used (for Problem.TestCases scanning).
 var _ = json.RawMessage{}
 var _ = pgx.ErrNoRows

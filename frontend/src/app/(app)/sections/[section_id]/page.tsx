@@ -10,6 +10,7 @@ import { BackButton } from '@/components/ui/BackButton';
 
 interface SectionDetail {
   id: string;
+  classId: string;
   name: string;
   className: string;
   classDescription: string;
@@ -56,6 +57,7 @@ export default function SectionDetailPage() {
 
       const sectionDetail: SectionDetail = {
         id: sectionData.id,
+        classId: sectionData.class_id,
         name: sectionData.name,
         className: classData.class.name,
         classDescription: classData.class.description || '',
@@ -101,12 +103,16 @@ export default function SectionDetailPage() {
     );
   }
 
+  const isInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
+
   if (error || !section) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-red-600 mb-4">{error || 'Section not found'}</p>
-          <BackButton href="/sections">Back to Sections</BackButton>
+          <BackButton href={isInstructor ? '/classes' : '/'}>
+            {isInstructor ? 'Back to Classes' : 'Back to Home'}
+          </BackButton>
         </div>
       </div>
     );
@@ -117,7 +123,9 @@ export default function SectionDetailPage() {
       {/* Header */}
       <div>
         <div className="mb-4">
-          <BackButton href="/sections">Back to My Sections</BackButton>
+          <BackButton href={isInstructor ? `/classes/${section.classId}` : '/'}>
+            {isInstructor ? 'Back to Class' : 'Back to Home'}
+          </BackButton>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">

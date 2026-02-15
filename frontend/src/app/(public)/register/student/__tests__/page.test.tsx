@@ -372,7 +372,7 @@ describe('StudentRegistrationPage', () => {
       });
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/sections');
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
     });
 
@@ -499,7 +499,7 @@ describe('StudentRegistrationPage', () => {
       return user;
     };
 
-    it('refreshes user and redirects to /sections on successful registration', async () => {
+    it('refreshes user and redirects to section detail on successful registration', async () => {
       const user = await setupAndFillForm();
 
       // Backend registration succeeds via typed client
@@ -513,7 +513,7 @@ describe('StudentRegistrationPage', () => {
       });
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/sections');
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
     });
   });
@@ -666,7 +666,7 @@ describe('StudentRegistrationPage', () => {
 
       // Verify redirect on success
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/sections');
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
     });
   });

@@ -21,6 +21,7 @@ import (
 type classesTestRepos struct {
 	stubRepos
 	listClassesFn              func(ctx context.Context) ([]store.Class, error)
+	listMyClassesFn            func(ctx context.Context, userID uuid.UUID) ([]store.Class, error)
 	getClassFn                 func(ctx context.Context, id uuid.UUID) (*store.Class, error)
 	createClassFn              func(ctx context.Context, params store.CreateClassParams) (*store.Class, error)
 	updateClassFn              func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
@@ -34,6 +35,10 @@ var _ store.Repos = (*classesTestRepos)(nil)
 
 func (m *classesTestRepos) ListClasses(ctx context.Context) ([]store.Class, error) {
 	return m.listClassesFn(ctx)
+}
+
+func (m *classesTestRepos) ListMyClasses(ctx context.Context, userID uuid.UUID) ([]store.Class, error) {
+	return m.listMyClassesFn(ctx, userID)
 }
 
 func (m *classesTestRepos) GetClass(ctx context.Context, id uuid.UUID) (*store.Class, error) {
@@ -93,15 +98,19 @@ func withClassRepos(ctx context.Context, r *classesTestRepos) context.Context {
 
 func TestListClasses_Success(t *testing.T) {
 	c := testClass()
+	userID := uuid.New()
 	repos := &classesTestRepos{
-		listClassesFn: func(_ context.Context) ([]store.Class, error) {
+		listMyClassesFn: func(_ context.Context, uid uuid.UUID) ([]store.Class, error) {
+			if uid != userID {
+				t.Fatalf("expected userID %s, got %s", userID, uid)
+			}
 			return []store.Class{*c}, nil
 		},
 	}
 
 	h := NewClassHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
 	ctx = withClassRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -124,16 +133,36 @@ func TestListClasses_Success(t *testing.T) {
 	}
 }
 
+func TestListClasses_Unauthorized(t *testing.T) {
+	repos := &classesTestRepos{}
+	h := NewClassHandler()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	// No auth user in context
+	ctx := withClassRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
 func TestListClasses_Empty(t *testing.T) {
+	userID := uuid.New()
 	repos := &classesTestRepos{
-		listClassesFn: func(_ context.Context) ([]store.Class, error) {
+		listMyClassesFn: func(_ context.Context, uid uuid.UUID) ([]store.Class, error) {
+			if uid != userID {
+				t.Fatalf("expected userID %s, got %s", userID, uid)
+			}
 			return nil, nil
 		},
 	}
 
 	h := NewClassHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
 	ctx = withClassRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -151,15 +180,16 @@ func TestListClasses_Empty(t *testing.T) {
 }
 
 func TestListClasses_InternalError(t *testing.T) {
+	userID := uuid.New()
 	repos := &classesTestRepos{
-		listClassesFn: func(_ context.Context) ([]store.Class, error) {
+		listMyClassesFn: func(_ context.Context, uid uuid.UUID) ([]store.Class, error) {
 			return nil, errors.New("db error")
 		},
 	}
 
 	h := NewClassHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
 	ctx = withClassRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -816,6 +846,7 @@ func TestGetClassDetail_WithInstructorNames(t *testing.T) {
 // mockClassRepo is kept for use by other test files (e.g. auth_accept_invite_test.go).
 type mockClassRepo struct {
 	listClassesFn                 func(ctx context.Context) ([]store.Class, error)
+	listMyClassesFn               func(ctx context.Context, userID uuid.UUID) ([]store.Class, error)
 	getClassFn                    func(ctx context.Context, id uuid.UUID) (*store.Class, error)
 	createClassFn                 func(ctx context.Context, params store.CreateClassParams) (*store.Class, error)
 	updateClassFn                 func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
@@ -826,6 +857,13 @@ type mockClassRepo struct {
 
 func (m *mockClassRepo) ListClasses(ctx context.Context) ([]store.Class, error) {
 	return m.listClassesFn(ctx)
+}
+
+func (m *mockClassRepo) ListMyClasses(ctx context.Context, userID uuid.UUID) ([]store.Class, error) {
+	if m.listMyClassesFn != nil {
+		return m.listMyClassesFn(ctx, userID)
+	}
+	return nil, nil
 }
 
 func (m *mockClassRepo) GetClass(ctx context.Context, id uuid.UUID) (*store.Class, error) {

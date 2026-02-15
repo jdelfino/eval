@@ -8,7 +8,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { registerStudent } from './fixtures/api-setup';
+import { registerStudent, getSectionByJoinCode } from './fixtures/api-setup';
 
 test.describe('Public View Feature', () => {
   test('Public view updates when instructor features different students', async ({ page, browser, testNamespace, setupInstructor }) => {
@@ -112,9 +112,12 @@ test.describe('Public View Feature', () => {
       // Register the student via API (creates user + enrolls in section)
       await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
 
+      // Look up the section ID from the join code so we can navigate directly
+      const sectionInfo = await getSectionByJoinCode(joinCode);
+      const sectionId = sectionInfo.section.id;
+
       await signInAs(page, studentEmail);
-      await page.goto('/sections');
-      await expect(page.locator('h1:has-text("My Sections")')).toBeVisible({ timeout: 5_000 });
+      await page.goto(`/sections/${sectionId}`);
 
       // Join active session (student is already enrolled via registerStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');

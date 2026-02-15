@@ -37,16 +37,6 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
  * Roles array specifies which roles can access each item.
  */
 export const NAV_ITEMS: NavItem[] = [
-  // Main group - student only
-  {
-    id: 'my-sections',
-    label: 'My Sections',
-    href: '/sections',
-    icon: 'BookOpen',
-    roles: ['student'],
-    group: NavGroup.Main,
-  },
-
   // Teaching group - instructor and above
   {
     id: 'dashboard',
@@ -102,8 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const BREADCRUMB_HIERARCHY: Record<string, string | null> = {
   '/classes': null,
   '/classes/[id]': '/classes',
-  '/sections': null,
-  '/sections/[section_id]': '/sections',
+  '/sections/[section_id]': null,
   '/sections/[section_id]/session/[session_id]': '/sections/[section_id]',
   '/instructor': null,
   '/instructor/session/[id]': '/instructor',
