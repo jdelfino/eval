@@ -83,6 +83,7 @@ export function useRealtimeSession({
 }: UseRealtimeSessionOptions) {
   // Local state
   const [session, setSession] = useState<Partial<Session> | null>(null);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
   const [students, setStudents] = useState<Map<string, Student>>(new Map());
   const [featuredStudent, setFeaturedStudent] = useState<FeaturedStudent>({});
   const [replacementInfo, setReplacementInfo] = useState<{ newSessionId: string } | null>(null);
@@ -129,6 +130,7 @@ export function useRealtimeSession({
       lastSessionIdRef.current = session_id;
       pendingCodeUpdatesRef.current.clear();
       setSession(null);
+      setJoinCode(null);
       setStudents(new Map());
       setFeaturedStudent({});
       setReplacementInfo(null);
@@ -149,6 +151,7 @@ export function useRealtimeSession({
 
         // Set session data (cast to Partial<Session> for hook compatibility)
         setSession(data.session as unknown as Partial<Session>);
+        setJoinCode(data.join_code);
 
         // Convert students array to Map
         const studentsMap = new Map<string, Student>();
@@ -184,6 +187,7 @@ export function useRealtimeSession({
 
       // Set session data (cast to Partial<Session> for hook compatibility)
       setSession(data.session as unknown as Partial<Session>);
+      setJoinCode(data.join_code);
 
       // Convert students array to Map
       const studentsMap = new Map<string, Student>();
@@ -494,6 +498,7 @@ export function useRealtimeSession({
   return {
     // State
     session,
+    joinCode,
     students: Array.from(students.values()),
     featuredStudent,
     replacementInfo,

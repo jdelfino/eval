@@ -123,6 +123,7 @@ describe('InstructorSessionPage', () => {
 
   const defaultRealtimeSessionReturn = {
     session: mockSession,
+    joinCode: 'ABC123',
     students: mockStudents,
     loading: false,
     error: null,

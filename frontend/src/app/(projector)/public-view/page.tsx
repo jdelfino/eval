@@ -53,9 +53,11 @@ function PublicViewContent() {
         session_id,
         hasFeaturedSubmission: !!(data.featured_student_id && data.featured_code),
       });
+      setIsConnected(true);
       setError(null);
     } catch (e: any) {
       console.error('[PublicView] Failed to fetch state:', e);
+      setIsConnected(false);
       setError(e.message || 'Failed to load session');
     } finally {
       setLoading(false);

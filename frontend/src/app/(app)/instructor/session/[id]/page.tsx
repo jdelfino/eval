@@ -26,12 +26,11 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 
 /**
- * Extended session state from API that includes join_code from section
+ * Extended session state from API that includes section info
  */
 interface SessionStateFromAPI {
   section_id?: string;
   section_name?: string;
-  join_code?: string;
   problem?: Problem | null;
   status?: 'active' | 'completed';
   featured_student_id?: string | null;
@@ -57,6 +56,7 @@ export default function InstructorSessionPage() {
   // Realtime session hook
   const {
     session: realtimeSessionRaw,
+    joinCode: join_code,
     students: realtimeStudents,
     loading: sessionLoading,
     error: sessionError,
@@ -72,7 +72,7 @@ export default function InstructorSessionPage() {
     userName: user?.display_name || user?.email,
   });
 
-  // Cast session to include additional API fields like join_code
+  // Cast session to include additional API fields like section info
   const realtimeSession = realtimeSessionRaw as SessionStateFromAPI | null;
 
   // Session operations hook
@@ -115,9 +115,6 @@ export default function InstructorSessionPage() {
       section_name: realtimeSession.section_name || 'Session',
     };
   }, [realtimeSession]);
-
-  // Join code from session
-  const join_code = realtimeSession?.join_code || null;
 
   // Sync state from Realtime session
   useEffect(() => {

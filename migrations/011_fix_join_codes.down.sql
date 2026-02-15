@@ -1,0 +1,4 @@
+-- Migration: 011_fix_join_codes.down.sql
+--
+-- No-op: cannot restore old join codes after regeneration.
+-- The old codes were random values with no way to recover them.
