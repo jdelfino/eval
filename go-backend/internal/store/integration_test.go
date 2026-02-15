@@ -21,8 +21,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jdelfino/eval/internal/auth"
-	"github.com/jdelfino/eval/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/db"
 )
 
 // testDB holds the test database connection pool and a random namespace for isolation.

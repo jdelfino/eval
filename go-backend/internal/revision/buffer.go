@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"
 
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // RevisionBuffer tracks in-flight code changes and periodically flushes them

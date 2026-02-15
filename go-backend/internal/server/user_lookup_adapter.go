@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
-	custommw "github.com/jdelfino/eval/internal/middleware"
-	"github.com/jdelfino/eval/internal/store"
+	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // UserLookupAdapter bridges store.UserRepository to middleware.UserLookup.

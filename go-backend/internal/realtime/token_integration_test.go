@@ -5,7 +5,7 @@ import (
 	"time"
 
 	centrifuge "github.com/centrifugal/centrifuge-go"
-	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/go-backend/internal/realtime"
 )
 
 func TestConnectionToken_AcceptedByCentrifugo(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
-	"github.com/jdelfino/eval/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/db"
 )
 
 // Config holds all configuration values for the application.

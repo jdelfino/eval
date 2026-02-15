@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/pkg/httplog"
 )
 

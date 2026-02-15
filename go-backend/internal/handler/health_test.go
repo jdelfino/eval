@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jdelfino/eval/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/db"
 )
 
 // mockHealthChecker is a mock implementation of HealthChecker for testing.

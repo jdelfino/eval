@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jdelfino/eval/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/db"
 )
 
 // HealthChecker is an interface for checking database health.

@@ -25,10 +25,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/jdelfino/eval/internal/config"
-	"github.com/jdelfino/eval/internal/db"
-	"github.com/jdelfino/eval/internal/server"
-	"github.com/jdelfino/eval/internal/store"
+	"github.com/jdelfino/eval/go-backend/internal/config"
+	"github.com/jdelfino/eval/go-backend/internal/db"
+	"github.com/jdelfino/eval/go-backend/internal/server"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // testHarness holds a running test server backed by a real database.

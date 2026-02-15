@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
 )
 
 // UserRecord holds the user data returned by UserLookup.

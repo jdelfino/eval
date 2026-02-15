@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
 )
 
 // integrationDB wraps a pool for integration tests and provides helper methods.

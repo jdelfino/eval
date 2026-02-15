@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jdelfino/eval/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/auth"
 )
 
 // RequirePermission returns middleware that restricts access to users who have

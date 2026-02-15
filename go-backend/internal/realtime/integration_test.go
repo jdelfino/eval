@@ -12,7 +12,7 @@ import (
 
 	centrifuge "github.com/centrifugal/centrifuge-go"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jdelfino/eval/internal/realtime"
+	"github.com/jdelfino/eval/go-backend/internal/realtime"
 )
 
 var integTestLogger = slog.Default()
