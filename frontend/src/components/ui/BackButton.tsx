@@ -99,7 +99,7 @@ export function BackButton({
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link href={href} prefetch={false} className={classes}>
         {content}
       </Link>
     );
