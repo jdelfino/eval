@@ -68,7 +68,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
     if (onRejoinSession) {
       onRejoinSession(session_id);
     } else {
-      router.push(`/instructor?session_id=${session_id}`);
+      router.push(`/instructor/session/${session_id}`);
     }
   };
 
@@ -271,7 +271,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
                 
                 <div className="flex sm:flex-col sm:justify-center">
                   <button
-                    onClick={() => onViewDetails ? onViewDetails(session.id) : router.push(`/instructor?session_id=${session.id}`)}
+                    onClick={() => onViewDetails ? onViewDetails(session.id) : router.push(`/instructor/session/${session.id}`)}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
                   >
                     View Details

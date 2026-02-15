@@ -198,8 +198,8 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     setShowSessionModal(false);
     setSelectedProblemForSession(null);
     
-    // Navigate to instructor page - it will auto-join the session
-    router.push(`/instructor?session_id=${session_id}`);
+    // Navigate directly to the session dashboard
+    router.push(`/instructor/session/${session_id}`);
   };
 
   const handleCloseSessionModal = () => {
