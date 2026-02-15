@@ -12,8 +12,10 @@ export default defineConfig({
   /* Run tests in files in parallel — safe with per-test namespace isolation */
   fullyParallel: true,
 
-  /* CI auto-detects; dev uses 2 workers for speed */
-  workers: process.env.CI ? undefined : 2,
+  /* 2 workers — GHA runners have 2 vCPUs; Playwright's auto-detect
+     picks ½ CPUs which gives only 1. Each test gets its own namespace
+     so parallel execution is safe. */
+  workers: 2,
 
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
