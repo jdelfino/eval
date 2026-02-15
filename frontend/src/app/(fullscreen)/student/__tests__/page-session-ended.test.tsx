@@ -297,7 +297,7 @@ describe('Student Page - Session Ended Detection', () => {
     expect(screen.queryByText(/Returning to sections/)).not.toBeInTheDocument();
   });
 
-  it('should navigate to /sections when Back to Sections is clicked', async () => {
+  it('should navigate to / when leaving session', async () => {
     mockUseRealtimeSession.mockReturnValue({
       ...baseSessionState,
       session: {

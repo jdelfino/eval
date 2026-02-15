@@ -98,6 +98,14 @@ export async function registerStudent(
   return res.json();
 }
 
+export async function getSectionByJoinCode(joinCode: string): Promise<{ section: { id: string }; class: { id: string } }> {
+  const res = await apiFetch(`/api/v1/auth/register-student?code=${encodeURIComponent(joinCode)}`, ADMIN_TOKEN, {
+    method: 'GET',
+  });
+  if (res.status !== 200) throw new Error(`Failed to get section by join code: ${res.status}`);
+  return res.json();
+}
+
 export async function createProblem(token: string, classId: string, opts: {
   title: string; starterCode?: string; description?: string;
 }): Promise<any> {

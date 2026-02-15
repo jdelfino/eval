@@ -111,7 +111,7 @@ const SessionEndedNotification: React.FC<SessionEndedNotificationProps> = ({
             className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md transition-colors"
             data-testid="go-to-dashboard-button"
           >
-            Back to Sections
+            Leave Session
           </button>
         </div>
       </div>

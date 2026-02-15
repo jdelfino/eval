@@ -69,8 +69,8 @@ describe('SessionEndedNotification', () => {
     });
   });
 
-  describe('Back to Sections button', () => {
-    it('renders the Back to Sections button', () => {
+  describe('Leave Session button', () => {
+    it('renders the Leave Session button', () => {
       render(
         <SessionEndedNotification
           onLeaveToDashboard={mockOnLeaveToDashboard}
@@ -78,7 +78,7 @@ describe('SessionEndedNotification', () => {
       );
 
       expect(screen.getByTestId('go-to-dashboard-button')).toBeInTheDocument();
-      expect(screen.getByText('Back to Sections')).toBeInTheDocument();
+      expect(screen.getByText('Leave Session')).toBeInTheDocument();
     });
 
     it('calls onLeaveToDashboard when button is clicked', () => {
@@ -235,7 +235,7 @@ describe('SessionEndedNotification', () => {
       );
 
       const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBe(2); // Copy Code and Back to Sections
+      expect(buttons.length).toBe(2); // Copy Code and Leave Session
     });
   });
 
@@ -295,7 +295,7 @@ describe('SessionEndedNotification', () => {
       expect(onJoinNewSession).toHaveBeenCalledTimes(1);
     });
 
-    it('still shows Copy Code and Back to Sections as secondary actions with replacement', () => {
+    it('still shows Copy Code and Leave Session as secondary actions with replacement', () => {
       render(
         <SessionEndedNotification
           onLeaveToDashboard={mockOnLeaveToDashboard}

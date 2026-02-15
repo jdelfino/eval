@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { registerStudent } from './fixtures/api-setup';
+import { registerStudent, getSectionByJoinCode } from './fixtures/api-setup';
 
 /**
  * Critical Path E2E Tests
@@ -141,12 +141,15 @@ test.describe('Critical User Paths', () => {
       // Register the student via API (creates user + enrolls in section)
       await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
 
-      // Student signs in and sees the section they're enrolled in
-      await signInAs(page, studentEmail);
-      await page.goto('/sections');
-      await expect(page.locator('h1:has-text("My Sections")')).toBeVisible({ timeout: 5000 });
+      // Look up the section ID from the join code so we can navigate directly
+      const sectionInfo = await getSectionByJoinCode(joinCode);
+      const sectionId = sectionInfo.section.id;
 
-      // Wait for the section card with active session to load
+      // Student signs in and navigates to their section detail page
+      await signInAs(page, studentEmail);
+      await page.goto(`/sections/${sectionId}`);
+
+      // Wait for the active session with "Join Now" button to load
       const joinNowButton = page.locator('button:has-text("Join Now")');
       await expect(joinNowButton).toBeVisible({ timeout: 10000 });
 
@@ -261,9 +264,12 @@ test.describe('Critical User Paths', () => {
       // Register the student via API (creates user + enrolls in section)
       await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
 
+      // Look up the section ID from the join code so we can navigate directly
+      const sectionInfo = await getSectionByJoinCode(joinCode);
+      const sectionId = sectionInfo.section.id;
+
       await signInAs(page, studentEmail);
-      await page.goto('/sections');
-      await expect(page.locator('h1:has-text("My Sections")')).toBeVisible({ timeout: 5000 });
+      await page.goto(`/sections/${sectionId}`);
 
       // Join active session (student is already enrolled via registerStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
