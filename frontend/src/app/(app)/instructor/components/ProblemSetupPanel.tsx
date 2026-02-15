@@ -30,6 +30,8 @@ interface ProblemSetupPanelProps {
     random_seed?: number;
     attached_files?: Array<{ name: string; content: string }>;
   };
+  /** Session ID for debugger trace requests */
+  sessionId?: string;
   /** Whether the panel is loading */
   isLoading?: boolean;
   /** Whether to render in full-width mode (no panel wrapper) */
@@ -45,6 +47,7 @@ export function ProblemSetupPanel({
   onUpdateProblem,
   initialProblem,
   initialExecutionSettings,
+  sessionId,
   isLoading = false,
   isFullWidth = false,
 }: ProblemSetupPanelProps) {
@@ -55,6 +58,7 @@ export function ProblemSetupPanel({
         <Card variant="default" className="overflow-hidden">
           <SessionProblemEditor
             onUpdateProblem={onUpdateProblem}
+            sessionId={sessionId}
             initialProblem={initialProblem}
             initialExecutionSettings={initialExecutionSettings}
           />

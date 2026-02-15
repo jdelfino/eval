@@ -8,11 +8,11 @@
  * database persistence. Uses Monaco editor and supports execution settings.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Problem } from '@/types/problem';
-import { useDebugger } from '@/hooks/useDebugger';
+import { useApiDebugger } from '@/hooks/useApiDebugger';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (
@@ -23,6 +23,8 @@ interface SessionProblemEditorProps {
       attached_files?: Array<{ name: string; content: string }>;
     }
   ) => void;
+  /** Session ID for debugger trace requests */
+  sessionId?: string | null;
   initialProblem?: Problem | { title: string; description: string; starter_code: string } | null;
   initialExecutionSettings?: {
     stdin?: string;
@@ -33,6 +35,7 @@ interface SessionProblemEditorProps {
 
 export default function SessionProblemEditor({
   onUpdateProblem,
+  sessionId,
   initialProblem = null,
   initialExecutionSettings = {}
 }: SessionProblemEditorProps) {
@@ -83,9 +86,7 @@ export default function SessionProblemEditor({
     onUpdateProblem(problem, Object.keys(execution_settings).length > 0 ? execution_settings : undefined);
   };
 
-  // Setup debugger (trace feature not yet available via API)
-  const noopSendMessage = useCallback(() => {}, []);
-  const debuggerHook = useDebugger(noopSendMessage);
+  const debuggerHook = useApiDebugger(sessionId ?? null);
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
