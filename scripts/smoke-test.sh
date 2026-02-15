@@ -153,22 +153,59 @@ check_no_placeholders() {
 # cluster. This works through Connect Gateway (unlike port-forward).
 
 executor_curl() {
+  # Runs a code-execution request against the executor service from inside
+  # the cluster.  Uses an ephemeral pod + kubectl logs instead of kubectl exec,
+  # because Connect Gateway does not support the WebSocket upgrade that exec
+  # requires.
   local code="$1"
-  local resp stderr_file
-  stderr_file=$(mktemp)
-  resp=$(kubectl exec deployment/executor -- python3 -c "
+  local pod_name="smoke-exec-$$-${RANDOM}"
+
+  # The pod needs the go-api label so the executor NetworkPolicy allows ingress.
+  kubectl run "$pod_name" \
+    --image=python:3.12-slim \
+    --restart=Never \
+    --labels=app=go-api \
+    --override-type=merge \
+    --overrides='{"spec":{"tolerations":[{"operator":"Exists"}]}}' \
+    -- python3 -c "
 import urllib.request, json, sys
-req = urllib.request.Request('http://localhost:8081/execute',
-    data=json.dumps(json.loads(sys.argv[1])).encode(),
+payload = json.loads(sys.argv[1])
+req = urllib.request.Request('http://executor:8081/execute',
+    data=json.dumps(payload).encode(),
     headers={'Content-Type': 'application/json'})
-with urllib.request.urlopen(req) as r:
-    sys.stdout.write(r.read().decode())
-" "$code" 2>"$stderr_file") || {
-    echo "  ERROR: kubectl exec failed (stderr: $(cat "$stderr_file"))" >&2
-    rm -f "$stderr_file"
+try:
+    with urllib.request.urlopen(req, timeout=30) as r:
+        sys.stdout.write(r.read().decode())
+except Exception as e:
+    print(json.dumps({'error': str(e), 'success': False}))
+    sys.exit(1)
+" "$code" >/dev/null 2>&1 || {
+    echo "  ERROR: failed to create smoke-test pod" >&2
     return 1
   }
-  rm -f "$stderr_file"
+
+  # Wait for the pod to finish (Succeeded or Failed), then grab logs.
+  local phase=""
+  for i in $(seq 1 30); do
+    phase=$(kubectl get pod "$pod_name" -o jsonpath='{.status.phase}' 2>/dev/null)
+    if [[ "$phase" == "Succeeded" || "$phase" == "Failed" ]]; then
+      break
+    fi
+    sleep 2
+  done
+
+  local resp
+  resp=$(kubectl logs "$pod_name" 2>/dev/null)
+  kubectl delete pod "$pod_name" --ignore-not-found >/dev/null 2>&1 &
+
+  if [[ "$phase" != "Succeeded" && "$phase" != "Failed" ]]; then
+    echo "  ERROR: smoke-test pod did not complete (phase=${phase})" >&2
+    return 1
+  fi
+  if [[ -z "$resp" ]]; then
+    echo "  ERROR: empty response from executor" >&2
+    return 1
+  fi
   echo "$resp"
 }
 
