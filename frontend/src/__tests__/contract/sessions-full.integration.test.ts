@@ -7,9 +7,17 @@
  *   reopenSession, listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
+ *
+ * IMPORTANT: This file uses its own dedicated section to avoid the auto-end
+ * behavior (creating a session auto-ends other active sessions in the same
+ * section) from interfering with other test files that share state.sectionId.
+ *
+ * Tests that need testSessionId to be active are ordered BEFORE tests that
+ * call createSession() (which would auto-end testSessionId).
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
+import { createSection } from '@/lib/api/classes';
 import {
   createSession,
   endSession,
@@ -34,19 +42,22 @@ import {
 describe('Sessions Full API', () => {
   // Session created for mutating tests (update-problem, feature, details, public-state, analyze)
   let testSessionId: string;
-  // Separate session created solely so we can end + reopen it
-  let endReopenSessionId: string;
+  // Dedicated section so createSession calls don't auto-end sessions in state.sectionId
+  let ownSectionId: string;
 
   beforeAll(async () => {
     configureTestAuth(INSTRUCTOR_TOKEN);
 
-    // Create a session that will be used across most tests
-    const session = await createSession(state.sectionId);
-    testSessionId = session.id;
+    // Create a dedicated section for this test file to isolate from other tests
+    const section = await createSection(state.classId, {
+      name: 'Sessions Full Test Section',
+      semester: 'Contract Tests',
+    });
+    ownSectionId = section.id;
 
-    // Create a second session for end/reopen lifecycle tests
-    const session2 = await createSession(state.sectionId);
-    endReopenSessionId = session2.id;
+    // Create a session that will be used across most tests
+    const session = await createSession(ownSectionId);
+    testSessionId = session.id;
   });
 
   afterAll(async () => {
@@ -57,49 +68,17 @@ describe('Sessions Full API', () => {
       // Already ended or otherwise cleaned up — ignore
     }
 
-    // endReopenSessionId may be in any state after end/reopen tests — try to end it
-    try {
-      await endSession(endReopenSessionId);
-    } catch {
-      // Already ended — ignore
-    }
-
     resetAuthProvider();
   });
 
   // -----------------------------------------------------------------------
-  // 1. createSession
+  // Tests that need testSessionId to remain ACTIVE come first.
+  // createSession() / endSession() tests follow, since they create new
+  // sessions that auto-end testSessionId.
   // -----------------------------------------------------------------------
-  describe('createSession()', () => {
-    it('returns a Session with correct snake_case shape', async () => {
-      // We already created sessions in beforeAll; create one more to validate the shape,
-      // then immediately end it to avoid leaking sessions.
-      const session = await createSession(state.sectionId);
-
-      try {
-        validateSessionShape(session);
-
-        expect(session.status).toBe('active');
-        expect(session.section_id).toBe(state.sectionId);
-      } finally {
-        await endSession(session.id);
-      }
-    });
-  });
 
   // -----------------------------------------------------------------------
-  // 2. endSession
-  // -----------------------------------------------------------------------
-  describe('endSession()', () => {
-    it('resolves without throwing', async () => {
-      // Create a fresh session just for ending
-      const session = await createSession(state.sectionId);
-      await expect(endSession(session.id)).resolves.toBeUndefined();
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 3. updateSessionProblem
+  // 1. updateSessionProblem
   // -----------------------------------------------------------------------
   describe('updateSessionProblem()', () => {
     it('resolves without throwing when updating problem', async () => {
@@ -132,7 +111,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 4. getSessionDetails
+  // 2. getSessionDetails
   // -----------------------------------------------------------------------
   describe('getSessionDetails()', () => {
     it('returns SessionDetails with correct snake_case shape', async () => {
@@ -175,7 +154,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 5. getSessionPublicState
+  // 3. getSessionPublicState
   // -----------------------------------------------------------------------
   describe('getSessionPublicState()', () => {
     it('returns SessionPublicState with correct snake_case shape', async () => {
@@ -193,7 +172,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 6. traceSession
+  // 4. traceSession
   // -----------------------------------------------------------------------
   describe('traceSession()', () => {
     it('returns ExecutionTrace with steps array', async () => {
@@ -204,7 +183,8 @@ describe('Sessions Full API', () => {
     });
   });
 
-  // 7. analyzeSession (may fail if AI service is not configured)
+  // -----------------------------------------------------------------------
+  // 5. analyzeSession (may fail if AI service is not configured)
   // -----------------------------------------------------------------------
   describe('analyzeSession()', () => {
     it('returns AnalysisResponse or gracefully fails if AI not configured', async () => {
@@ -228,7 +208,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. featureCode
+  // 6. featureCode
   // -----------------------------------------------------------------------
   describe('featureCode()', () => {
     it('resolves without throwing', async () => {
@@ -239,10 +219,48 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Tests below create new sessions, which auto-end testSessionId.
+  // They are placed after all tests that need testSessionId to be active.
+  // -----------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
+  // 7. createSession
+  // -----------------------------------------------------------------------
+  describe('createSession()', () => {
+    it('returns a Session with correct snake_case shape', async () => {
+      const session = await createSession(ownSectionId);
+
+      try {
+        validateSessionShape(session);
+
+        expect(session.status).toBe('active');
+        expect(session.section_id).toBe(ownSectionId);
+      } finally {
+        await endSession(session.id);
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. endSession
+  // -----------------------------------------------------------------------
+  describe('endSession()', () => {
+    it('resolves without throwing', async () => {
+      // Create a fresh session just for ending
+      const session = await createSession(ownSectionId);
+      await expect(endSession(session.id)).resolves.toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // 9. reopenSession (end first, then reopen)
   // -----------------------------------------------------------------------
   describe('reopenSession()', () => {
     it('resolves without throwing after ending a session', async () => {
+      // Create a session specifically for end/reopen lifecycle
+      const session = await createSession(ownSectionId);
+      const endReopenSessionId = session.id;
+
       // End the session first
       await endSession(endReopenSessionId);
 
@@ -254,12 +272,12 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 9. listSessionHistoryWithFilters
+  // 10. listSessionHistoryWithFilters
   // -----------------------------------------------------------------------
   describe('listSessionHistoryWithFilters()', () => {
     it('returns Session[] with correct snake_case shape when filtered by section', async () => {
       const sessions = await listSessionHistoryWithFilters({
-        sectionId: state.sectionId,
+        sectionId: ownSectionId,
       });
 
       expect(Array.isArray(sessions)).toBe(true);
