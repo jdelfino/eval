@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Post-deploy smoke tests for production.
 # Verifies all services are responding through the ingress, frontend config
-# is properly injected, and authentication works end-to-end.
+# is properly injected, executor sandbox is working, and authentication
+# works end-to-end.
 #
 # Usage:
 #   ./scripts/smoke-test.sh [BASE_URL]
@@ -13,6 +14,8 @@ set -euo pipefail
 #   SMOKE_TEST_TIMEOUT  (default: 90)  — max seconds to wait per check
 #   SMOKE_TEST_INTERVAL (default: 5)   — seconds between retries
 #   GCP_PROJECT_ID      — required for auth test (skipped if absent)
+#
+# Requires: kubectl configured with cluster access (Connect Gateway or direct).
 
 BASE_URL="${1:-${SMOKE_TEST_URL:-https://eval.delquillan.com}}"
 TIMEOUT="${SMOKE_TEST_TIMEOUT:-90}"
@@ -149,44 +152,92 @@ check_no_placeholders() {
 # These checks can ONLY run in production — CI skips them because nsjail
 # requires privileged mode + proper kernel capabilities.
 #
-# Uses kubectl exec + python3 to reach the executor service from inside the
-# cluster. This works through Connect Gateway (unlike port-forward).
+# Runs a single ephemeral pod that executes all tests against the executor
+# service from inside the cluster, then reads results via kubectl logs.
+# Connect Gateway does not support the WebSocket upgrade that kubectl
+# exec/port-forward require, so we cannot use those.
 
-executor_curl() {
-  # Runs a code-execution request against the executor service from inside
-  # the cluster.  Uses an ephemeral pod + kubectl logs instead of kubectl exec,
-  # because Connect Gateway does not support the WebSocket upgrade that exec
-  # requires.
-  local code="$1"
+# Clean up any smoke-test pods on exit (covers interrupts, failures, etc.).
+cleanup_smoke_pods() {
+  kubectl delete pods -l smoke-test=executor --ignore-not-found >/dev/null 2>&1 || true
+}
+trap cleanup_smoke_pods EXIT
+
+# Python script that runs all executor sandbox tests from inside the cluster.
+# Outputs one JSON line per test: {"name": "...", "pass": bool, "detail": "..."}.
+read -r -d '' EXECUTOR_TEST_SCRIPT << 'PYEOF' || true
+import urllib.request, json, sys
+
+def execute(code, timeout_ms=10000):
+    req = urllib.request.Request("http://executor:8081/execute",
+        data=json.dumps({"code": code, "timeout_ms": timeout_ms}).encode(),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode())
+
+def result(name, ok, detail=""):
+    print(json.dumps({"name": name, "pass": ok, "detail": detail}), flush=True)
+
+# 1. Basic execution
+try:
+    r = execute('print("sandbox-ok")')
+    ok = r.get("success") and "sandbox-ok" in r.get("output", "")
+    result("Basic execution", ok, f"success={r.get('success')} output={r.get('output','')!r}")
+except Exception as e:
+    result("Basic execution", False, str(e))
+
+# 2. Timeout enforcement
+try:
+    r = execute("import time; time.sleep(60)", timeout_ms=1000)
+    ok = r.get("success") is False
+    result("Timeout enforcement", ok, f"success={r.get('success')}")
+except Exception as e:
+    result("Timeout enforcement", False, str(e))
+
+# 3. Network isolation
+try:
+    r = execute('import socket; s=socket.socket(); s.connect(("8.8.8.8",53)); print("CONNECTED")')
+    ok = not (r.get("success") and "CONNECTED" in r.get("output", ""))
+    result("Network isolation", ok, f"success={r.get('success')} output={r.get('output','')!r}")
+except Exception as e:
+    result("Network isolation", False, str(e))
+
+# 4. Filesystem isolation
+try:
+    r = execute('print(open("/etc/passwd").read())')
+    ok = r.get("success") is False
+    result("Filesystem isolation", ok, f"success={r.get('success')}")
+except Exception as e:
+    result("Filesystem isolation", False, str(e))
+
+# 5. Memory limit
+try:
+    r = execute('x = "A" * (512 * 1024 * 1024); print("allocated")')
+    ok = not (r.get("success") and "allocated" in r.get("output", ""))
+    result("Memory limit", ok, f"success={r.get('success')} error={r.get('error','')[:80]}")
+except Exception as e:
+    result("Memory limit", False, str(e))
+PYEOF
+
+check_executor_sandbox() {
   local pod_name="smoke-exec-$$-${RANDOM}"
 
-  # The pod needs the go-api label so the executor NetworkPolicy allows ingress.
+  # activeDeadlineSeconds: self-destruct after 120s even if nothing cleans up.
+  # The go-api label lets traffic through the executor NetworkPolicy.
   kubectl run "$pod_name" \
     --image=python:3.12-slim \
     --restart=Never \
-    --labels=app=go-api \
+    --labels=app=go-api,smoke-test=executor \
     --override-type=merge \
-    --overrides='{"spec":{"tolerations":[{"operator":"Exists"}]}}' \
-    -- python3 -c "
-import urllib.request, json, sys
-payload = json.loads(sys.argv[1])
-req = urllib.request.Request('http://executor:8081/execute',
-    data=json.dumps(payload).encode(),
-    headers={'Content-Type': 'application/json'})
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        sys.stdout.write(r.read().decode())
-except Exception as e:
-    print(json.dumps({'error': str(e), 'success': False}))
-    sys.exit(1)
-" "$code" >/dev/null 2>&1 || {
+    --overrides='{"spec":{"activeDeadlineSeconds":120,"tolerations":[{"operator":"Exists"}]}}' \
+    -- python3 -c "$EXECUTOR_TEST_SCRIPT" >/dev/null 2>&1 || {
     echo "  ERROR: failed to create smoke-test pod" >&2
     return 1
   }
 
-  # Wait for the pod to finish (Succeeded or Failed), then grab logs.
+  # Wait for the pod to finish.
   local phase=""
-  for i in $(seq 1 30); do
+  for i in $(seq 1 60); do
     phase=$(kubectl get pod "$pod_name" -o jsonpath='{.status.phase}' 2>/dev/null)
     if [[ "$phase" == "Succeeded" || "$phase" == "Failed" ]]; then
       break
@@ -194,121 +245,33 @@ except Exception as e:
     sleep 2
   done
 
-  local resp
-  resp=$(kubectl logs "$pod_name" 2>/dev/null)
-  kubectl delete pod "$pod_name" --ignore-not-found >/dev/null 2>&1 &
+  local logs
+  logs=$(kubectl logs "$pod_name" 2>/dev/null)
+  kubectl delete pod "$pod_name" --ignore-not-found >/dev/null 2>&1
 
-  if [[ "$phase" != "Succeeded" && "$phase" != "Failed" ]]; then
-    echo "  ERROR: smoke-test pod did not complete (phase=${phase})" >&2
+  if [[ -z "$logs" ]]; then
+    echo "  ERROR: no output from smoke-test pod (phase=${phase})" >&2
     return 1
   fi
-  if [[ -z "$resp" ]]; then
-    echo "  ERROR: empty response from executor" >&2
-    return 1
-  fi
-  echo "$resp"
-}
 
-check_executor_execution() {
-  local resp
-  resp=$(executor_curl '{"code":"print(\"sandbox-ok\")"}') || return 1
-  local success output
-  success=$(echo "$resp" | jq -r '.success')
-  output=$(echo "$resp" | jq -r '.output')
-  if [[ "$success" != "true" || "$output" != *"sandbox-ok"* ]]; then
-    echo "  ERROR: Expected successful execution, got success=${success} output=${output}"
-    return 1
-  fi
-}
+  # Parse JSON lines from the pod output.
+  local failed=0 idx=0 total
+  total=$(echo "$logs" | wc -l)
+  while IFS= read -r line; do
+    idx=$(( idx + 1 ))
+    local name pass detail
+    name=$(echo "$line" | jq -r '.name')
+    pass=$(echo "$line" | jq -r '.pass')
+    detail=$(echo "$line" | jq -r '.detail')
 
-check_executor_timeout() {
-  local resp
-  resp=$(executor_curl '{"code":"import time; time.sleep(60)","timeout_ms":1000}') || return 1
-  local success
-  success=$(echo "$resp" | jq -r '.success')
-  if [[ "$success" != "false" ]]; then
-    echo "  ERROR: Expected timeout (success=false), got success=${success}"
-    return 1
-  fi
-}
-
-check_executor_network_isolation() {
-  local resp
-  resp=$(executor_curl '{"code":"import socket; s=socket.socket(); s.connect((\"8.8.8.8\",53)); print(\"CONNECTED\")"}') || return 1
-  local success output
-  success=$(echo "$resp" | jq -r '.success')
-  output=$(echo "$resp" | jq -r '.output')
-  if [[ "$success" == "true" && "$output" == *"CONNECTED"* ]]; then
-    echo "  ERROR: Network should be blocked but code connected to external host"
-    return 1
-  fi
-}
-
-check_executor_filesystem_isolation() {
-  local resp
-  resp=$(executor_curl '{"code":"print(open(\"/etc/passwd\").read())"}') || return 1
-  local success
-  success=$(echo "$resp" | jq -r '.success')
-  if [[ "$success" != "false" ]]; then
-    echo "  ERROR: Should not be able to read /etc/passwd in sandbox"
-    return 1
-  fi
-}
-
-check_executor_memory_limit() {
-  local resp
-  resp=$(executor_curl '{"code":"x = \"A\" * (512 * 1024 * 1024); print(\"allocated\")"}') || {
-    echo "  ERROR: executor_curl failed for memory limit test"
-    return 1
-  }
-  local success output error_field
-  success=$(echo "$resp" | jq -r '.success')
-  output=$(echo "$resp" | jq -r '.output')
-  error_field=$(echo "$resp" | jq -r '.error')
-  if [[ "$success" == "true" && "$output" == *"allocated"* ]]; then
-    echo "  ERROR: 512MB allocation should be blocked by memory limit"
-    return 1
-  fi
-  echo "    memory limit enforced (success=${success}, error=${error_field})"
-}
-
-check_executor_sandbox() {
-  local failed=0
-
-  echo "  [1/5] Basic execution..."
-  if check_executor_execution; then
-    echo "    OK"
-  else
-    failed=1
-  fi
-
-  echo "  [2/5] Timeout enforcement..."
-  if check_executor_timeout; then
-    echo "    OK"
-  else
-    failed=1
-  fi
-
-  echo "  [3/5] Network isolation..."
-  if check_executor_network_isolation; then
-    echo "    OK"
-  else
-    failed=1
-  fi
-
-  echo "  [4/5] Filesystem isolation..."
-  if check_executor_filesystem_isolation; then
-    echo "    OK"
-  else
-    failed=1
-  fi
-
-  echo "  [5/5] Memory limit..."
-  if check_executor_memory_limit; then
-    echo "    OK"
-  else
-    failed=1
-  fi
+    echo "  [${idx}/${total}] ${name}..."
+    if [[ "$pass" == "true" ]]; then
+      echo "    OK"
+    else
+      echo "    FAILED: ${detail}"
+      failed=1
+    fi
+  done <<< "$logs"
 
   return "$failed"
 }
