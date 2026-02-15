@@ -8,7 +8,7 @@
  * Firebase entirely and uses localStorage-backed test tokens.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { apiGet } from '@/lib/api-client';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
 import { isTestMode, setTestUser, clearTestUser, getTestToken } from '@/lib/auth-provider';
@@ -84,14 +84,14 @@ function TestAuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  const value: AuthContextType = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
     signIn,
     signOut,
     refreshUser,
-  };
+  }), [user, isLoading, signIn, signOut, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -180,14 +180,14 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     }
   }, [fetchUserProfile]);
 
-  const value: AuthContextType = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
     signIn,
     signOut,
     refreshUser,
-  };
+  }), [user, isLoading, signIn, signOut, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -196,21 +196,13 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
  * AuthProvider — conditionally renders TestAuthProvider or FirebaseAuthProvider.
  */
 export function AuthProvider({ children }: AuthProviderProps) {
-  // Check at render time (client-side only)
-  const [isTest, setIsTest] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setIsTest(isTestMode());
-    setMounted(true);
-  }, []);
-
-  // Show loading state until we determine the mode
-  if (!mounted) {
-    return null;
-  }
-
-  if (isTest) {
+  // isTestMode() checks typeof window && NEXT_PUBLIC_AUTH_MODE === 'test'.
+  // In production the env var is never 'test', so both server and client
+  // render FirebaseAuthProvider — no hydration mismatch, no mount cascade.
+  // In E2E test mode, the server (no window) renders Firebase while the
+  // client renders Test — React handles the mismatch by re-rendering from
+  // scratch, which is fine for E2E tests.
+  if (isTestMode()) {
     return <TestAuthProvider>{children}</TestAuthProvider>;
   }
   return <FirebaseAuthProvider>{children}</FirebaseAuthProvider>;
