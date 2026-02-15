@@ -354,9 +354,9 @@ describe('StudentRegistrationPage', () => {
 
       await user.click(screen.getByRole('button', { name: 'Create Account' }));
 
-      // Verify typed client was called with the join code (dashes stripped)
+      // Verify typed client was called with the formatted join code
       await waitFor(() => {
-        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC123');
+        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC-123');
       });
     });
 

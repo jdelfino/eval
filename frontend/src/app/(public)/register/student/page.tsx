@@ -165,7 +165,6 @@ function StudentRegistrationContent() {
   const handleValidateCode = async (e: FormEvent) => {
     e.preventDefault();
 
-    const cleaned = join_code.replace(/-/g, '');
     if (!validateCodeFormat(join_code)) {
       setCodeError('Please enter a valid join code (e.g., ABC-123)');
       return;
@@ -175,7 +174,7 @@ function StudentRegistrationContent() {
     setPageState({ status: 'validating-code' });
 
     try {
-      const data = await getStudentRegistrationInfo(cleaned);
+      const data = await getStudentRegistrationInfo(join_code);
       setRegistrationInfo(data);
       setPageState({ status: 'code-valid', info: data });
     } catch (error) {
@@ -223,7 +222,7 @@ function StudentRegistrationContent() {
       // The backend extracts external_id and email from JWT claims (not request body)
       // Wrap in try/catch to clean up Firebase account on failure
       try {
-        await registerStudent(join_code.replace(/-/g, ''));
+        await registerStudent(join_code);
 
         // Success! User is already logged in via Firebase
         setPageState({ status: 'success' });
