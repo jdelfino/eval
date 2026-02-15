@@ -230,7 +230,7 @@ function StudentRegistrationContent() {
 
         // Refresh auth context to load user profile and redirect
         await refreshUser();
-        router.push('/sections');
+        router.push(`/sections/${registrationInfo?.section.id}`);
       } catch (backendError) {
         // Backend call failed (network error, etc.) - clean up Firebase account
         await firebaseAuth.currentUser?.delete();

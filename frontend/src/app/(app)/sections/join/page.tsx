@@ -11,8 +11,8 @@ export default function JoinSectionPage() {
   const { joinSection } = useSections();
 
   const handleJoinSection = async (join_code: string) => {
-    await joinSection(join_code);
-    router.push('/sections');
+    const membership = await joinSection(join_code);
+    router.push(`/sections/${membership.section_id}`);
   };
 
   return (

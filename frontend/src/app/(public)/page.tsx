@@ -52,7 +52,7 @@ export default function Home() {
       } else if (user.role === 'instructor') {
         path = '/instructor';
       } else {
-        path = '/sections';
+        path = '/sections/join';
       }
       router.push(path);
     }

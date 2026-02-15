@@ -198,10 +198,10 @@ function StudentPage() {
       sessionStorage.setItem(`left-session:${sessionIdFromUrl}`, 'true');
     }
 
-    // Navigate to sections page
+    // Navigate to section detail page
     refetchSessions();
-    router.push('/sections');
-  }, [sessionIdFromUrl, refetchSessions, router]);
+    router.push(session?.section_id ? `/sections/${session.section_id}` : '/');
+  }, [sessionIdFromUrl, refetchSessions, router, session]);
 
   const handleJoinNewSession = useCallback(() => {
     if (!replacementInfo) return;
@@ -312,9 +312,9 @@ function StudentPage() {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">No Session</h1>
-        <p className="text-gray-600 mb-4">Please navigate to a session from your sections page.</p>
-        <Link href="/sections" className="text-blue-600 hover:text-blue-700 underline">
-          Go to My Sections
+        <p className="text-gray-600 mb-4">Please navigate to a session from your section page.</p>
+        <Link href="/" className="text-blue-600 hover:text-blue-700 underline">
+          Go to Home
         </Link>
       </main>
     );

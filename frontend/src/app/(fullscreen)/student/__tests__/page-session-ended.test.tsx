@@ -315,7 +315,7 @@ describe('Student Page - Session Ended Detection', () => {
 
     fireEvent.click(screen.getByTestId('go-to-dashboard-button'));
 
-    expect(mockPush).toHaveBeenCalledWith('/sections');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 
   it('should handle navigating to a completed session without errors', async () => {
