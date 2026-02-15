@@ -117,7 +117,7 @@ describe('AuthContext', () => {
       await waitForAuthSetup();
 
       await act(async () => {
-        authStateCallback!({ getIdToken: jest.fn() });
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
       });
 
       await waitFor(() => {
@@ -127,6 +127,26 @@ describe('AuthContext', () => {
       });
 
       expect(mockApiGet).toHaveBeenCalledWith('/auth/me');
+    });
+
+    it('force-refreshes the Firebase token before fetching user profile', async () => {
+      mockApiGet.mockResolvedValue(mockUser);
+      const mockGetIdToken = jest.fn().mockResolvedValue('fresh-token');
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: mockGetIdToken });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      // getIdToken(true) forces a refresh to avoid stale cached tokens on page load
+      expect(mockGetIdToken).toHaveBeenCalledWith(true);
     });
 
     it('clears user when Firebase user is null', async () => {

@@ -131,17 +131,17 @@ function StudentPage() {
       setIsJoining(true);
 
       joinSession(user.id, user.display_name || user.email || 'Student')
-        .then((result: any) => {
+        .then((result) => {
           setJoined(true);
           setStudentId(user.id);
           setIsJoining(false);
           setError(null);
           // Restore saved code and execution settings from server
-          if (result?.student?.code) {
-            setCode(result.student.code);
+          if (result.code) {
+            setCode(result.code);
           }
-          if (result?.student?.execution_settings) {
-            setStudentExecutionSettings(result.student.execution_settings);
+          if (result.execution_settings) {
+            setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
           }
         })
         .catch((err) => {

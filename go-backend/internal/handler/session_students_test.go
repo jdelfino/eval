@@ -312,22 +312,70 @@ func TestUpdateCode_InternalError(t *testing.T) {
 	}
 }
 
-func TestUpdateCode_MissingCode(t *testing.T) {
+func TestUpdateCode_EmptyCode(t *testing.T) {
+	ss := testSessionStudent()
+	ss.Code = ""
+	userID := ss.UserID
+
+	repo := &mockSessionStudentRepo{
+		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID {
+				t.Fatalf("unexpected session_id: %v", sessID)
+			}
+			if uID != userID {
+				t.Fatalf("unexpected user_id: %v", uID)
+			}
+			if code != "" {
+				t.Fatalf("expected empty code, got %q", code)
+			}
+			return ss, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"code": ""})
 	h := NewSessionStudentHandler(noopPublisher())
-	body, _ := json.Marshal(map[string]any{})
-	sessionID := uuid.New()
-	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(&mockSessionStudentRepo{}))
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studRepos(repo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.UpdateCode(rec, req)
 
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateCode_OmittedCodeDefaultsToEmpty(t *testing.T) {
+	ss := testSessionStudent()
+	userID := ss.UserID
+
+	repo := &mockSessionStudentRepo{
+		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, code string) (*store.SessionStudent, error) {
+			if code != "" {
+				t.Fatalf("expected empty code when field omitted, got %q", code)
+			}
+			return ss, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

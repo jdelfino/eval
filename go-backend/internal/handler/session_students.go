@@ -68,8 +68,10 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateCodeRequest is the request body for PUT /sessions/{id}/code.
+// Code is not validated as required because empty code is valid
+// (e.g., student just joined and hasn't typed anything yet).
 type updateCodeRequest struct {
-	Code string `json:"code" validate:"required"`
+	Code string `json:"code"`
 }
 
 // UpdateCode handles PUT /api/v1/sessions/{id}/code — student updates their code.

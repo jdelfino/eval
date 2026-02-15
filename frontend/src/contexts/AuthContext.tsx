@@ -135,6 +135,10 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
       unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
         if (firebaseUser) {
           try {
+            // Force token refresh to avoid stale cached tokens on page load.
+            // When restoring from persistence, the cached token may be expired;
+            // getIdToken(true) ensures we have a fresh token before any API calls.
+            await firebaseUser.getIdToken(true);
             const profile = await fetchUserProfile();
             setUser(profile);
           } catch (error) {
