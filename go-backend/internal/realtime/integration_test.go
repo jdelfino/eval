@@ -1,11 +1,11 @@
-//go:build integration
-
 package realtime_test
 
 import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -17,44 +17,89 @@ import (
 
 var integTestLogger = slog.Default()
 
-const (
-	centrifugoURL    = "http://localhost:8000"
-	centrifugoWSURL  = "ws://localhost:8000/connection/websocket"
-	centrifugoAPIKey = "local-api-key"
-	centrifugoSecret = "local-dev-secret-key-not-for-production"
-)
+// centrifugoEnv reads Centrifugo connection details from the environment.
+// Returns the values and true if set, or skips the test if CENTRIFUGO_URL is unset.
+func centrifugoEnv(t *testing.T) (url, wsURL, apiKey, secret string) {
+	t.Helper()
 
-// generateSubscriberToken creates a JWT signed with the local dev HMAC secret.
-func generateSubscriberToken(t *testing.T, userID string) string {
+	url = os.Getenv("CENTRIFUGO_URL")
+	if url == "" {
+		t.Skip("CENTRIFUGO_URL not set, skipping Centrifugo integration test")
+	}
+
+	apiKey = os.Getenv("CENTRIFUGO_API_KEY")
+	if apiKey == "" {
+		t.Skip("CENTRIFUGO_API_KEY not set, skipping Centrifugo integration test")
+	}
+
+	secret = os.Getenv("CENTRIFUGO_TOKEN_SECRET")
+	if secret == "" {
+		t.Skip("CENTRIFUGO_TOKEN_SECRET not set, skipping Centrifugo integration test")
+	}
+
+	wsURL = os.Getenv("CENTRIFUGO_WS_URL")
+	if wsURL == "" {
+		wsURL = "ws://localhost:8000/connection/websocket"
+	}
+
+	// Quick health check so we fail fast with a useful message.
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(url + "/health")
+	if err != nil {
+		t.Skipf("Centrifugo not reachable at %s: %v", url, err)
+	}
+	_ = resp.Body.Close()
+
+	return url, wsURL, apiKey, secret
+}
+
+// generateSubscriberToken creates a JWT signed with the given HMAC secret.
+func generateSubscriberToken(t *testing.T, secret, userID string) string {
 	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": userID,
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
 	})
-	signed, err := token.SignedString([]byte(centrifugoSecret))
+	signed, err := token.SignedString([]byte(secret))
 	if err != nil {
 		t.Fatalf("signing JWT: %v", err)
 	}
 	return signed
 }
 
-// newSubscriber creates a centrifuge-go client connected to local Centrifugo.
-func newSubscriber(t *testing.T, userID string) *centrifuge.Client {
+// newSubscriber creates a centrifuge-go client connected to Centrifugo.
+func newSubscriber(t *testing.T, wsURL, secret, userID string) *centrifuge.Client {
 	t.Helper()
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
-		Token: generateSubscriberToken(t, userID),
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
+		Token: generateSubscriberToken(t, secret, userID),
 	})
 	return c
 }
 
+// generateSubscriptionToken creates a subscription JWT for the given channel.
+func generateSubscriptionToken(t *testing.T, secret, userID, channel string) string {
+	t.Helper()
+	gen, err := realtime.NewHMACTokenGenerator(secret)
+	if err != nil {
+		t.Fatalf("creating token generator: %v", err)
+	}
+	token, err := gen.SubscriptionToken(userID, channel, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("generating subscription token: %v", err)
+	}
+	return token
+}
+
 // subscribeAndCollect subscribes to a channel and blocks until the server confirms
 // the subscription is active. Returns received publications and a cleanup function.
-func subscribeAndCollect(t *testing.T, client *centrifuge.Client, channel string) (<-chan []byte, func()) {
+func subscribeAndCollect(t *testing.T, client *centrifuge.Client, channel string, subToken string) (<-chan []byte, func()) {
 	t.Helper()
 	ch := make(chan []byte, 10)
 	ready := make(chan struct{})
 
-	sub, err := client.NewSubscription(channel)
+	sub, err := client.NewSubscription(channel, centrifuge.SubscriptionConfig{
+		Token: subToken,
+	})
 	if err != nil {
 		t.Fatalf("creating subscription: %v", err)
 	}
@@ -118,14 +163,17 @@ type testEvent struct {
 }
 
 func TestPublish_IntegrationWithCentrifugo(t *testing.T) {
-	sub := newSubscriber(t, "user-1")
+	cfgURL, wsURL, apiKey, secret := centrifugoEnv(t)
+
+	sub := newSubscriber(t, wsURL, secret, "user-1")
 	connectClient(t, sub)
 	defer sub.Close()
 
-	pubCh, cleanup := subscribeAndCollect(t, sub, "session:test-session-1")
+	subToken := generateSubscriptionToken(t, secret, "user-1", "session:test-session-1")
+	pubCh, cleanup := subscribeAndCollect(t, sub, "session:test-session-1", subToken)
 	defer cleanup()
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
+	client := realtime.NewClient(cfgURL, apiKey, integTestLogger)
 	event := testEvent{Type: "student_joined", Data: "hello"}
 	ctx := context.Background()
 	if err := client.Publish(ctx, "session:test-session-1", event); err != nil {
@@ -150,20 +198,24 @@ func TestPublish_IntegrationWithCentrifugo(t *testing.T) {
 }
 
 func TestPublish_MultipleSubscribers(t *testing.T) {
-	sub1 := newSubscriber(t, "user-1")
+	cfgURL, wsURL, apiKey, secret := centrifugoEnv(t)
+
+	sub1 := newSubscriber(t, wsURL, secret, "user-1")
 	connectClient(t, sub1)
 	defer sub1.Close()
 
-	sub2 := newSubscriber(t, "user-2")
+	sub2 := newSubscriber(t, wsURL, secret, "user-2")
 	connectClient(t, sub2)
 	defer sub2.Close()
 
-	ch1, cleanup1 := subscribeAndCollect(t, sub1, "session:multi-test")
+	subToken1 := generateSubscriptionToken(t, secret, "user-1", "session:multi-test")
+	ch1, cleanup1 := subscribeAndCollect(t, sub1, "session:multi-test", subToken1)
 	defer cleanup1()
-	ch2, cleanup2 := subscribeAndCollect(t, sub2, "session:multi-test")
+	subToken2 := generateSubscriptionToken(t, secret, "user-2", "session:multi-test")
+	ch2, cleanup2 := subscribeAndCollect(t, sub2, "session:multi-test", subToken2)
 	defer cleanup2()
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
+	client := realtime.NewClient(cfgURL, apiKey, integTestLogger)
 	event := testEvent{Type: "code_update", Data: "payload"}
 	if err := client.Publish(context.Background(), "session:multi-test", event); err != nil {
 		t.Fatalf("publish failed: %v", err)
@@ -195,14 +247,17 @@ func TestPublish_MultipleSubscribers(t *testing.T) {
 }
 
 func TestPublish_DifferentChannels(t *testing.T) {
-	sub := newSubscriber(t, "user-1")
+	cfgURL, wsURL, apiKey, secret := centrifugoEnv(t)
+
+	sub := newSubscriber(t, wsURL, secret, "user-1")
 	connectClient(t, sub)
 	defer sub.Close()
 
-	chA, cleanup := subscribeAndCollect(t, sub, "session:channel-a")
+	subToken := generateSubscriptionToken(t, secret, "user-1", "session:channel-a")
+	chA, cleanup := subscribeAndCollect(t, sub, "session:channel-a", subToken)
 	defer cleanup()
 
-	client := realtime.NewClient(centrifugoURL, centrifugoAPIKey, integTestLogger)
+	client := realtime.NewClient(cfgURL, apiKey, integTestLogger)
 	event := testEvent{Type: "ping", Data: "wrong-channel"}
 	if err := client.Publish(context.Background(), "session:channel-b", event); err != nil {
 		t.Fatalf("publish failed: %v", err)
@@ -217,7 +272,9 @@ func TestPublish_DifferentChannels(t *testing.T) {
 }
 
 func TestPublish_InvalidAPIKey(t *testing.T) {
-	client := realtime.NewClient(centrifugoURL, "wrong-api-key", integTestLogger)
+	cfgURL, _, _, _ := centrifugoEnv(t)
+
+	client := realtime.NewClient(cfgURL, "wrong-api-key", integTestLogger)
 	event := testEvent{Type: "test", Data: "data"}
 	err := client.Publish(context.Background(), "session:test", event)
 	if err == nil {

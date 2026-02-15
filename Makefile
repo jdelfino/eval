@@ -5,7 +5,7 @@
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
-test-integration: test-integration-store test-integration-executor test-integration-contract
+test-integration: test-integration-store test-integration-realtime test-integration-executor test-integration-contract
 lint: lint-api lint-executor lint-frontend
 
 docker-build: docker-build-api docker-build-executor
@@ -67,6 +67,15 @@ test-integration-contract:
 
 test-e2e:
 	./scripts/run-e2e-tests.sh
+
+# ──────────────────────────────────────────────
+# Realtime integration tests (Centrifugo)
+# ──────────────────────────────────────────────
+.PHONY: test-integration-realtime
+
+test-integration-realtime:
+	./scripts/ensure-test-postgres.sh
+	cd go-backend && CENTRIFUGO_URL=http://localhost:8000 CENTRIFUGO_API_KEY=local-api-key CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production go test -v -race -count=1 ./internal/realtime/...
 
 # ──────────────────────────────────────────────
 # Store integration tests

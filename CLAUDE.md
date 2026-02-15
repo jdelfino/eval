@@ -47,6 +47,7 @@ Run these before committing. Pick the targets matching the code you changed.
 | Frontend API boundaries | `make check-api-imports` | — | — |
 | Contract coverage | `make check-contract-coverage` | — | — |
 | Store integration | `make test-integration-store` | — | — |
+| Realtime integration | `make test-integration-realtime` | — | — |
 | Contract tests | `make test-integration-contract` | — | — |
 | **All unit tests** | `make test` | `make lint` | — |
 | **All integration** | `make test-integration` | — | — |

@@ -1,5 +1,3 @@
-//go:build integration
-
 package realtime_test
 
 import (
@@ -11,7 +9,9 @@ import (
 )
 
 func TestConnectionToken_AcceptedByCentrifugo(t *testing.T) {
-	gen, err := realtime.NewHMACTokenGenerator(centrifugoSecret)
+	_, wsURL, _, secret := centrifugoEnv(t)
+
+	gen, err := realtime.NewHMACTokenGenerator(secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestConnectionToken_AcceptedByCentrifugo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
 		Token: token,
 	})
 	defer c.Close()
@@ -30,7 +30,9 @@ func TestConnectionToken_AcceptedByCentrifugo(t *testing.T) {
 }
 
 func TestSubscriptionToken_AcceptedByCentrifugo(t *testing.T) {
-	gen, err := realtime.NewHMACTokenGenerator(centrifugoSecret)
+	_, wsURL, _, secret := centrifugoEnv(t)
+
+	gen, err := realtime.NewHMACTokenGenerator(secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func TestSubscriptionToken_AcceptedByCentrifugo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
 		Token: connToken,
 	})
 	defer c.Close()
@@ -90,7 +92,9 @@ func TestSubscriptionToken_AcceptedByCentrifugo(t *testing.T) {
 }
 
 func TestSubscriptionToken_WrongChannel(t *testing.T) {
-	gen, err := realtime.NewHMACTokenGenerator(centrifugoSecret)
+	_, wsURL, _, secret := centrifugoEnv(t)
+
+	gen, err := realtime.NewHMACTokenGenerator(secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +110,7 @@ func TestSubscriptionToken_WrongChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
 		Token: connToken,
 	})
 	defer c.Close()
@@ -151,7 +155,9 @@ func TestSubscriptionToken_WrongChannel(t *testing.T) {
 }
 
 func TestConnectionToken_Expired(t *testing.T) {
-	gen, err := realtime.NewHMACTokenGenerator(centrifugoSecret)
+	_, wsURL, _, secret := centrifugoEnv(t)
+
+	gen, err := realtime.NewHMACTokenGenerator(secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +168,7 @@ func TestConnectionToken_Expired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
 		Token: token,
 	})
 	defer c.Close()
@@ -198,6 +204,8 @@ func TestConnectionToken_Expired(t *testing.T) {
 }
 
 func TestConnectionToken_InvalidSecret(t *testing.T) {
+	_, wsURL, _, _ := centrifugoEnv(t)
+
 	gen, err := realtime.NewHMACTokenGenerator("wrong-secret-not-matching-centrifugo")
 	if err != nil {
 		t.Fatal(err)
@@ -208,12 +216,12 @@ func TestConnectionToken_InvalidSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := centrifuge.NewJsonClient(centrifugoWSURL, centrifuge.Config{
+	c := centrifuge.NewJsonClient(wsURL, centrifuge.Config{
 		Token: token,
 	})
 	defer c.Close()
 
-	errCh := make(chan error, 1)
+	rejectedCh := make(chan struct{}, 1)
 	connectedCh := make(chan struct{}, 1)
 	c.OnConnected(func(_ centrifuge.ConnectedEvent) {
 		select {
@@ -221,9 +229,16 @@ func TestConnectionToken_InvalidSecret(t *testing.T) {
 		default:
 		}
 	})
-	c.OnError(func(e centrifuge.ErrorEvent) {
+	c.OnError(func(_ centrifuge.ErrorEvent) {
 		select {
-		case errCh <- e.Error:
+		case rejectedCh <- struct{}{}:
+		default:
+		}
+	})
+	// Centrifugo v5 may disconnect (rather than error) for invalid tokens.
+	c.OnDisconnected(func(_ centrifuge.DisconnectedEvent) {
+		select {
+		case rejectedCh <- struct{}{}:
 		default:
 		}
 	})
@@ -236,9 +251,9 @@ func TestConnectionToken_InvalidSecret(t *testing.T) {
 	select {
 	case <-connectedCh:
 		t.Fatal("expected connection to be rejected with invalid secret, but it succeeded")
-	case <-errCh:
+	case <-rejectedCh:
 		// Expected: connection rejected due to invalid token signature.
 	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for connection error")
+		t.Fatal("timeout waiting for connection rejection")
 	}
 }
