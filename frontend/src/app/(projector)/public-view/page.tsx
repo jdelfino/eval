@@ -53,23 +53,18 @@ function PublicViewContent() {
         session_id,
         hasFeaturedSubmission: !!(data.featured_student_id && data.featured_code),
       });
-      setIsConnected(true);
       setError(null);
     } catch (e: any) {
       console.error('[PublicView] Failed to fetch state:', e);
-      setIsConnected(false);
       setError(e.message || 'Failed to load session');
     } finally {
       setLoading(false);
     }
   }, [session_id]);
 
-  // Connection status for polling-based updates
+  // Connection status derived from polling state (no websocket yet)
   // TODO: Replace with Centrifugo realtime subscription
-  const [isConnected, setIsConnected] = useState(false);
-
-  // Show connection status in the global header
-  const connectionState: ConnectionState = isConnected ? 'connected' : 'connecting';
+  const connectionState: ConnectionState = state && !error ? 'connected' : 'connecting';
   useEffect(() => {
     if (session_id && state) {
       setHeaderSlot(
@@ -114,17 +109,17 @@ function PublicViewContent() {
     }
   }, [state?.featured_student_id, state?.featured_code, state?.problem?.starter_code]);
 
-  // Fallback: Poll for updates every 2 seconds ONLY when disconnected
-  // This compensates for Realtime connection issues
+  // Poll for updates every 2 seconds (no websocket connection yet)
+  // TODO: Replace with Centrifugo realtime subscription
   useEffect(() => {
-    if (!session_id || isConnected) return;
+    if (!session_id) return;
 
     const pollInterval = setInterval(() => {
       fetchState();
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [session_id, isConnected, fetchState]);
+  }, [session_id, fetchState]);
 
   if (!session_id) {
     return (
