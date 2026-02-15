@@ -98,3 +98,38 @@ If integration tests are needed, write them.
 Write any missing tests identified above. Then re-run quality gates.
 
 **Gate:** All tests pass, including your new coverage additions. If you identified no gaps in Steps 2-3, document your reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").
+
+## Phase 5: Summary
+
+**This must be the very last thing you output.** The coordinator reads your result — keep it concise to avoid polluting its context.
+
+Produce exactly this and nothing else after it:
+
+```
+IMPLEMENTATION RESULT: SUCCESS | FAILURE
+
+Task: <task-id or "N/A" if not provided>
+Commit: <full commit hash, or "N/A" on failure>
+
+## What changed
+- <1 bullet per logical change, max 5>
+
+## Files modified
+- <path> — <what changed in 1 phrase>
+
+## Test coverage
+- <1 bullet per test file added/modified, what it covers>
+
+## Concerns
+- <anything the coordinator should know, or "None">
+```
+
+If implementation failed, replace "What changed" with:
+
+```
+## Error
+<what went wrong — 1-3 sentences>
+
+## Attempted
+- <what you tried>
+```

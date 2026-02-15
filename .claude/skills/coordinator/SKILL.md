@@ -168,27 +168,18 @@ CONSTRAINTS:
 - Work ONLY in the worktree path above
 - Do NOT modify beads issues
 - Commit and push your work when implementer phases are complete
-- Report outcome in this format:
-
-IMPLEMENTATION RESULT: SUCCESS
-Task: <task-id>
-Commit: <full commit hash>
-Summary: <1-2 sentences>
-
-Or on failure:
-
-IMPLEMENTATION RESULT: FAILURE
-Task: <task-id>
-Error: <what went wrong>
-Details: <explanation or key error message>
+- Phase 5 of the implementer skill produces a structured summary — that is your final output
 ```
 
 #### c. Handle Result
+
+The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent.
 
 **On SUCCESS:**
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
+Check the "Concerns" section — file follow-up issues if needed.
 
 **On FAILURE:**
 - If recoverable: fix directly or spawn new subagent with clarification
