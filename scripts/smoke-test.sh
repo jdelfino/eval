@@ -144,6 +144,161 @@ check_no_placeholders() {
   return 0
 }
 
+# --- Executor sandbox tests ---
+# Validates the nsjail sandbox is correctly configured in production.
+# These checks can ONLY run in production — CI skips them because nsjail
+# requires privileged mode + proper kernel capabilities.
+#
+# Uses kubectl port-forward to reach the internal executor service.
+
+EXECUTOR_PORT=18081  # local port for port-forward (avoid conflicts)
+
+executor_curl() {
+  local code="$1"
+  local body_file
+  body_file=$(mktemp)
+  local http_code
+  http_code=$(curl -s -o "$body_file" -w '%{http_code}' -X POST \
+    -H "Content-Type: application/json" \
+    -d "$code" \
+    "http://localhost:${EXECUTOR_PORT}/execute" 2>/dev/null || echo "000")
+  if [[ "$http_code" != "200" ]]; then
+    echo "  ERROR: Executor returned HTTP ${http_code}"
+    rm -f "$body_file"
+    return 1
+  fi
+  cat "$body_file"
+  rm -f "$body_file"
+}
+
+check_executor_execution() {
+  local resp
+  resp=$(executor_curl '{"code":"print(\"sandbox-ok\")"}') || return 1
+  local success output
+  success=$(echo "$resp" | jq -r '.success')
+  output=$(echo "$resp" | jq -r '.output')
+  if [[ "$success" != "true" || "$output" != *"sandbox-ok"* ]]; then
+    echo "  ERROR: Expected successful execution, got success=${success} output=${output}"
+    return 1
+  fi
+}
+
+check_executor_timeout() {
+  local resp
+  resp=$(executor_curl '{"code":"import time; time.sleep(60)","timeout_ms":1000}') || return 1
+  local success
+  success=$(echo "$resp" | jq -r '.success')
+  if [[ "$success" != "false" ]]; then
+    echo "  ERROR: Expected timeout (success=false), got success=${success}"
+    return 1
+  fi
+}
+
+check_executor_network_isolation() {
+  local resp
+  resp=$(executor_curl '{"code":"import socket; s=socket.socket(); s.connect((\"8.8.8.8\",53)); print(\"CONNECTED\")"}') || return 1
+  local success output
+  success=$(echo "$resp" | jq -r '.success')
+  output=$(echo "$resp" | jq -r '.output')
+  if [[ "$success" == "true" && "$output" == *"CONNECTED"* ]]; then
+    echo "  ERROR: Network should be blocked but code connected to external host"
+    return 1
+  fi
+}
+
+check_executor_filesystem_isolation() {
+  local resp
+  resp=$(executor_curl '{"code":"print(open(\"/etc/passwd\").read())"}') || return 1
+  local success
+  success=$(echo "$resp" | jq -r '.success')
+  if [[ "$success" != "false" ]]; then
+    echo "  ERROR: Should not be able to read /etc/passwd in sandbox"
+    return 1
+  fi
+}
+
+check_executor_memory_limit() {
+  local resp
+  resp=$(executor_curl '{"code":"x = \"A\" * (512 * 1024 * 1024); print(\"allocated\")"}') || return 1
+  local success output
+  success=$(echo "$resp" | jq -r '.success')
+  output=$(echo "$resp" | jq -r '.output')
+  if [[ "$success" == "true" && "$output" == *"allocated"* ]]; then
+    echo "  ERROR: 512MB allocation should be blocked by memory limit"
+    return 1
+  fi
+}
+
+start_executor_port_forward() {
+  kubectl port-forward svc/executor "${EXECUTOR_PORT}:8081" &>/dev/null &
+  EXECUTOR_PF_PID=$!
+
+  # Wait for port-forward to be ready
+  for i in $(seq 1 15); do
+    if curl -sf "http://localhost:${EXECUTOR_PORT}/healthz" &>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "  ERROR: Executor port-forward not ready after 15s"
+  kill "$EXECUTOR_PF_PID" 2>/dev/null || true
+  return 1
+}
+
+stop_executor_port_forward() {
+  if [[ -n "${EXECUTOR_PF_PID:-}" ]]; then
+    kill "$EXECUTOR_PF_PID" 2>/dev/null || true
+    wait "$EXECUTOR_PF_PID" 2>/dev/null || true
+    unset EXECUTOR_PF_PID
+  fi
+}
+
+check_executor_sandbox() {
+  if ! start_executor_port_forward; then
+    return 1
+  fi
+  trap stop_executor_port_forward RETURN
+
+  local failed=0
+
+  echo "  [1/5] Basic execution..."
+  if check_executor_execution; then
+    echo "    OK"
+  else
+    failed=1
+  fi
+
+  echo "  [2/5] Timeout enforcement..."
+  if check_executor_timeout; then
+    echo "    OK"
+  else
+    failed=1
+  fi
+
+  echo "  [3/5] Network isolation..."
+  if check_executor_network_isolation; then
+    echo "    OK"
+  else
+    failed=1
+  fi
+
+  echo "  [4/5] Filesystem isolation..."
+  if check_executor_filesystem_isolation; then
+    echo "    OK"
+  else
+    failed=1
+  fi
+
+  echo "  [5/5] Memory limit..."
+  if check_executor_memory_limit; then
+    echo "    OK"
+  else
+    failed=1
+  fi
+
+  return "$failed"
+}
+
 # --- Auth round-trip test ---
 # Validates the full authentication pipeline: Firebase API key → Identity
 # Platform sign-in → JWT → Go API middleware.
@@ -244,11 +399,18 @@ run_check   "Frontend config (no placeholders)" check_no_placeholders
 retry_check "Go API" "${BASE_URL}/api/v1/auth/me" check_api
 retry_check "Centrifugo" "${BASE_URL}/connection/websocket" check_centrifugo
 
-# Auth round-trip requires gcloud + kubectl + GCP_PROJECT_ID
-if [[ -n "${GCP_PROJECT_ID:-}" ]] && command -v gcloud &>/dev/null && command -v kubectl &>/dev/null; then
-  run_check "Auth round-trip" check_auth_roundtrip
+# Executor sandbox and auth tests require kubectl
+if command -v kubectl &>/dev/null; then
+  run_check "Executor sandbox" check_executor_sandbox
+
+  if [[ -n "${GCP_PROJECT_ID:-}" ]] && command -v gcloud &>/dev/null; then
+    run_check "Auth round-trip" check_auth_roundtrip
+  else
+    skip_check "Auth round-trip" "requires GCP_PROJECT_ID and gcloud"
+  fi
 else
-  skip_check "Auth round-trip" "requires GCP_PROJECT_ID, gcloud, and kubectl (CI only)"
+  skip_check "Executor sandbox" "requires kubectl"
+  skip_check "Auth round-trip" "requires kubectl, GCP_PROJECT_ID, and gcloud"
 fi
 
 # --- Summary ---
