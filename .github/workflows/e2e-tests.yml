@@ -66,6 +66,32 @@ jobs:
         run: go build -o ./tmp/server ./cmd/server
         working-directory: go-backend
 
+      # If the Executor workflow is running for this same commit (e.g. a push
+      # touched both executor/ and frontend/), wait for it so we pull the
+      # freshly-built image instead of a stale :latest.
+      - name: Wait for executor workflow (if running)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            RUN_JSON=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
+              --json status,conclusion --jq '.[0] // empty' 2>/dev/null || true)
+            [ -z "$RUN_JSON" ] && { echo "No executor workflow for this commit"; exit 0; }
+            STATUS=$(echo "$RUN_JSON" | jq -r '.status')
+            [ "$STATUS" = "completed" ] && { echo "Executor workflow already completed"; exit 0; }
+            break
+          done
+          # Still running — poll until done (executor build-push takes ~3-4 min)
+          echo "Executor workflow in progress, waiting..."
+          for i in $(seq 1 40); do
+            sleep 15
+            STATUS=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
+              --json status --jq '.[0].status // "completed"' 2>/dev/null || echo "completed")
+            echo "  [$i] status: $STATUS"
+            [ "$STATUS" = "completed" ] && { echo "Executor workflow finished"; exit 0; }
+          done
+          echo "::warning::Timed out waiting for executor workflow — pulling whatever :latest is available"
+
       # Pull pre-built executor image so run-e2e-tests.sh skips the ~90s
       # Docker build (nsjail from source). Falls back to building locally
       # if the pull fails (e.g., first run before executor workflow has pushed).
