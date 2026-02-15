@@ -32,3 +32,8 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO eval_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO eval_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO eval_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO eval_app;
+
+-- Allow the app user to SET ROLE eval_app in the RLS middleware.
+-- Without this grant, SET ROLE eval_app fails and all authenticated
+-- requests return 503.
+GRANT eval_app TO app;
