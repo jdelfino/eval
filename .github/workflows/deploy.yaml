@@ -23,8 +23,49 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for integration tests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.workflow_run?.head_sha || context.sha;
+            const workflowFiles = ['e2e-tests.yml', 'contract-tests.yml'];
+
+            for (const file of workflowFiles) {
+              const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo,
+                workflow_id: file,
+                head_sha: sha,
+              });
+
+              if (runs.length === 0) {
+                core.info(`No ${file} run found for ${sha.slice(0, 7)} — skipping`);
+                continue;
+              }
+
+              const run = runs[0];
+              core.info(`Waiting for ${file} run #${run.run_number} (${run.html_url})`);
+
+              let { status, conclusion } = run;
+              while (status !== 'completed') {
+                await new Promise(r => setTimeout(r, 15000));
+                const { data } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo,
+                  run_id: run.id,
+                });
+                status = data.status;
+                conclusion = data.conclusion;
+                core.info(`  ${file}: ${status}${conclusion ? ` (${conclusion})` : ''}`);
+              }
+
+              if (conclusion !== 'success') {
+                core.setFailed(`${file} ${conclusion} for ${sha.slice(0, 7)}`);
+                return;
+              }
+              core.info(`${file} passed`);
+            }
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
