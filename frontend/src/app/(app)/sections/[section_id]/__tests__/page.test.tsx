@@ -26,6 +26,7 @@ jest.mock('@/components/ui/BackButton', () => ({
 }));
 
 jest.mock('@/lib/api/sections');
+jest.mock('@/lib/api/classes');
 
 const pastSession = {
   id: 'session-past-1',
@@ -44,24 +45,34 @@ const pastSession = {
 };
 
 function mockApiForRole(role: 'instructor' | 'student', sessions: object[] = [pastSession]) {
-  const { listMySections, getActiveSessions } = require('@/lib/api/sections');
+  const { getSection, getActiveSessions } = require('@/lib/api/sections');
+  const { getClass } = require('@/lib/api/classes');
 
-  listMySections.mockResolvedValue([
-    {
-      section: {
-        id: 'section-1',
-        namespace_id: 'namespace-1',
-        class_id: 'class-1',
-        name: 'Section A',
-        semester: 'Fall 2026',
-        join_code: 'ABC123',
-        active: true,
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      class_name: 'CS 101',
+  getSection.mockResolvedValue({
+    id: 'section-1',
+    namespace_id: 'namespace-1',
+    class_id: 'class-1',
+    name: 'Section A',
+    semester: 'Fall 2026',
+    join_code: 'ABC123',
+    active: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+
+  getClass.mockResolvedValue({
+    class: {
+      id: 'class-1',
+      namespace_id: 'namespace-1',
+      name: 'CS 101',
+      description: 'Intro to CS',
+      created_by: 'user-1',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     },
-  ]);
+    sections: [],
+    instructorNames: {},
+  });
 
   getActiveSessions.mockResolvedValue(sessions);
 }

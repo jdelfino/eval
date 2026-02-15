@@ -10,6 +10,15 @@ import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
 import type { MySectionInfo, SectionMembership, Session, Section } from '@/types/api';
 
 /**
+ * Get a single section by ID.
+ * @param sectionId - The section ID
+ * @returns The Section object
+ */
+export async function getSection(sectionId: string): Promise<Section> {
+  return apiGet<Section>(`/sections/${sectionId}`);
+}
+
+/**
  * List all sections the current user is enrolled in (as student or instructor).
  * @returns Array of MySectionInfo objects (backend returns plain array)
  */
