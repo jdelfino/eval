@@ -9,6 +9,7 @@ const (
 	EventStudentJoined          EventType = "student_joined"
 	EventStudentCodeUpdated     EventType = "student_code_updated"
 	EventSessionEnded           EventType = "session_ended"
+	EventSessionReplaced        EventType = "session_replaced"
 	EventFeaturedStudentChanged EventType = "featured_student_changed"
 	EventProblemUpdated         EventType = "problem_updated"
 )
@@ -36,6 +37,11 @@ type StudentCodeUpdatedData struct {
 type SessionEndedData struct {
 	SessionID string `json:"session_id"`
 	Reason    string `json:"reason"`
+}
+
+// SessionReplacedData is the payload for EventSessionReplaced.
+type SessionReplacedData struct {
+	NewSessionID string `json:"newSessionId"`
 }
 
 // FeaturedStudentChangedData is the payload for EventFeaturedStudentChanged.

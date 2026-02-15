@@ -36,6 +36,9 @@ func (r *sessionTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store
 func (r *sessionTestRepos) CreateSession(ctx context.Context, params store.CreateSessionParams) (*store.Session, error) {
 	return r.sess.CreateSession(ctx, params)
 }
+func (r *sessionTestRepos) EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error) {
+	return r.sess.EndActiveSessions(ctx, sectionID)
+}
 func (r *sessionTestRepos) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 	return r.sess.UpdateSession(ctx, id, params)
 }
@@ -362,6 +365,104 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 	if got.ID != sess.ID {
 		t.Errorf("expected id %q, got %q", sess.ID, got.ID)
+	}
+}
+
+func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	oldSessionID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+	newSess := testSession()
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+
+	repo := &mockSessionRepo{
+		endActiveSessionsFn: func(_ context.Context, sid uuid.UUID) ([]uuid.UUID, error) {
+			if sid != sectionID {
+				t.Fatalf("expected section_id %v, got %v", sectionID, sid)
+			}
+			return []uuid.UUID{oldSessionID}, nil
+		},
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return newSess, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionHandler(pub)
+
+	body, _ := json.Marshal(map[string]any{"section_id": sectionID.String()})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID: userID, Role: auth.RoleInstructor, NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionReplacedCalls) != 1 {
+		t.Fatalf("expected 1 SessionReplaced call, got %d", len(pub.sessionReplacedCalls))
+	}
+	call := pub.sessionReplacedCalls[0]
+	if call.oldSessionID != oldSessionID.String() {
+		t.Errorf("expected old session %q, got %q", oldSessionID, call.oldSessionID)
+	}
+	if call.newSessionID != newSess.ID.String() {
+		t.Errorf("expected new session %q, got %q", newSess.ID, call.newSessionID)
+	}
+}
+
+func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	newSess := testSession()
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+
+	repo := &mockSessionRepo{
+		endActiveSessionsFn: func(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+			return nil, nil // no active sessions
+		},
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return newSess, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionHandler(pub)
+
+	body, _ := json.Marshal(map[string]any{"section_id": sectionID.String()})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID: userID, Role: auth.RoleInstructor, NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Brief sleep to confirm no publish calls arrive.
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionReplacedCalls) != 0 {
+		t.Errorf("expected no SessionReplaced calls, got %d", len(pub.sessionReplacedCalls))
 	}
 }
 

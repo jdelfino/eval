@@ -106,6 +106,32 @@ func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (
 	))
 }
 
+// EndActiveSessions marks all active sessions in a section as completed
+// and returns their IDs.
+func (s *Store) EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error) {
+	query := `
+		UPDATE sessions
+		SET status = 'completed', ended_at = now(), last_activity = now()
+		WHERE section_id = $1 AND status = 'active'
+		RETURNING id`
+
+	rows, err := s.q.Query(ctx, query, sectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // UpdateSession updates a session's mutable fields and returns the updated record.
 // Returns ErrNotFound if the session does not exist.
 func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error) {

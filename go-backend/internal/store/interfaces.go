@@ -307,6 +307,9 @@ type SessionRepository interface {
 	GetSession(ctx context.Context, id uuid.UUID) (*Session, error)
 	// CreateSession creates a new session and returns it.
 	CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error)
+	// EndActiveSessions marks all active sessions in a section as completed
+	// and returns their IDs. Used to auto-end old sessions when a new one starts.
+	EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error)
 	// UpdateSession updates a session's mutable fields and returns the updated session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)

@@ -60,6 +60,13 @@ func (a *AsyncSessionPublisher) SessionEnded(ctx context.Context, sessionID, rea
 	return nil
 }
 
+func (a *AsyncSessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error {
+	a.runAsync(ctx, "SessionReplaced", func(ctx context.Context) error {
+		return a.inner.SessionReplaced(ctx, oldSessionID, newSessionID)
+	})
+	return nil
+}
+
 func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string) error {
 	a.runAsync(ctx, "FeaturedStudentChanged", func(ctx context.Context) error {
 		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code)

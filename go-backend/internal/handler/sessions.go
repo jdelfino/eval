@@ -166,6 +166,13 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		problemJSON = json.RawMessage(`{}`)
 	}
 
+	// End any active sessions in this section before creating the new one.
+	endedIDs, err := repos.EndActiveSessions(r.Context(), req.SectionID)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
 	session, err := repos.CreateSession(r.Context(), store.CreateSessionParams{
 		NamespaceID: authUser.NamespaceID,
 		SectionID:   req.SectionID,
@@ -176,6 +183,12 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return
+	}
+
+	// Notify students on ended sessions that a replacement is available.
+	newSessionID := session.ID.String()
+	for _, oldID := range endedIDs {
+		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
 	}
 
 	httputil.WriteJSON(w, http.StatusCreated, session)

@@ -11,6 +11,7 @@ type SessionPublisher interface {
 	StudentJoined(ctx context.Context, sessionID, userID, displayName string) error
 	CodeUpdated(ctx context.Context, sessionID, userID, code string) error
 	SessionEnded(ctx context.Context, sessionID, reason string) error
+	SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error
 	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
 }
@@ -59,6 +60,12 @@ func (s *sessionPublisher) SessionEnded(ctx context.Context, sessionID, reason s
 	return s.publish(ctx, sessionID, EventSessionEnded, SessionEndedData{
 		SessionID: sessionID,
 		Reason:    reason,
+	})
+}
+
+func (s *sessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error {
+	return s.publish(ctx, oldSessionID, EventSessionReplaced, SessionReplacedData{
+		NewSessionID: newSessionID,
 	})
 }
 

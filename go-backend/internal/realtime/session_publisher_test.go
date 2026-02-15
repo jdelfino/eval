@@ -98,6 +98,25 @@ func TestSessionEnded(t *testing.T) {
 	}
 }
 
+func TestSessionReplaced(t *testing.T) {
+	mock, sp := newTestPublisher()
+	err := sp.SessionReplaced(context.Background(), "old-sess", "new-sess")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mock.channel != "session:old-sess" {
+		t.Errorf("channel = %q, want %q", mock.channel, "session:old-sess")
+	}
+	event := mock.data.(Event)
+	if event.Type != EventSessionReplaced {
+		t.Errorf("type = %q, want %q", event.Type, EventSessionReplaced)
+	}
+	data := event.Data.(SessionReplacedData)
+	if data.NewSessionID != "new-sess" {
+		t.Errorf("payload = %+v", data)
+	}
+}
+
 func TestFeaturedStudentChanged(t *testing.T) {
 	mock, sp := newTestPublisher()
 	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1")

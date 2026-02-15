@@ -54,6 +54,9 @@ func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string) erro
 func (r *recordingPublisher) SessionEnded(_ context.Context, _, _ string) error {
 	return r.record("SessionEnded")
 }
+func (r *recordingPublisher) SessionReplaced(_ context.Context, _, _ string) error {
+	return r.record("SessionReplaced")
+}
 func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string) error {
 	return r.record("FeaturedStudentChanged")
 }
