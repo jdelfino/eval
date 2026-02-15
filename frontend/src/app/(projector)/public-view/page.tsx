@@ -55,7 +55,7 @@ function PublicViewContent() {
   }, [session_id, state?.join_code, connectionStatus, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
-  const debuggerHook = useApiDebugger(session_id);
+  const debuggerHook = useApiDebugger();
 
   // Reset local code when featured student or their code changes
   useEffect(() => {

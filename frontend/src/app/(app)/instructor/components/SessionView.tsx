@@ -178,7 +178,6 @@ export function SessionView({
         <Tabs.Panel tabId="problem" className="pt-4">
           <ProblemSetupPanel
             onUpdateProblem={onUpdateProblem}
-            sessionId={session_id}
             initialProblem={sessionProblem}
             initialExecutionSettings={sessionExecutionSettings}
             isFullWidth

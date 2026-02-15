@@ -16,8 +16,8 @@ jest.mock('@/hooks/useRealtimeSession');
 jest.mock('@/hooks/useSessionHistory', () => ({
   useSessionHistory: () => ({ refetch: jest.fn() }),
 }));
-jest.mock('@/hooks/useDebugger', () => ({
-  useDebugger: () => ({}),
+jest.mock('@/hooks/useApiDebugger', () => ({
+  useApiDebugger: () => ({}),
 }));
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({

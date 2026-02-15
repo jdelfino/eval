@@ -7,13 +7,13 @@ import { renderHook, act } from '@testing-library/react';
 import { useApiDebugger } from '../useApiDebugger';
 
 // Mock the typed API function
-jest.mock('@/lib/api/sessions', () => ({
-  traceSession: jest.fn(),
+jest.mock('@/lib/api/trace', () => ({
+  traceCode: jest.fn(),
 }));
 
-import { traceSession } from '@/lib/api/sessions';
+import { traceCode } from '@/lib/api/trace';
 
-const mockTraceSession = traceSession as jest.MockedFunction<typeof traceSession>;
+const mockTraceCode = traceCode as jest.MockedFunction<typeof traceCode>;
 
 const mockTrace = {
   steps: [
@@ -29,28 +29,25 @@ describe('useApiDebugger', () => {
   });
 
   describe('requestTrace', () => {
-    it('calls traceSession with session ID and code', async () => {
-      mockTraceSession.mockResolvedValueOnce(mockTrace as never);
+    it('calls traceCode with code', async () => {
+      mockTraceCode.mockResolvedValueOnce(mockTrace as never);
 
-      const { result } = renderHook(() => useApiDebugger('session-123'));
+      const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
         await result.current.requestTrace('print("hello")');
       });
 
-      expect(mockTraceSession).toHaveBeenCalledWith(
-        'session-123',
-        'print("hello")',
-      );
+      expect(mockTraceCode).toHaveBeenCalledWith('print("hello")');
       expect(result.current.trace).toEqual(mockTrace);
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
-    it('handles error from traceSession', async () => {
-      mockTraceSession.mockRejectedValueOnce(new Error('Unauthorized'));
+    it('handles error from traceCode', async () => {
+      mockTraceCode.mockRejectedValueOnce(new Error('Unauthorized'));
 
-      const { result } = renderHook(() => useApiDebugger('session-123'));
+      const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
         await result.current.requestTrace('code');
@@ -58,17 +55,6 @@ describe('useApiDebugger', () => {
 
       expect(result.current.error).toBe('Unauthorized');
       expect(result.current.isLoading).toBe(false);
-    });
-
-    it('sets error when no session_id', async () => {
-      const { result } = renderHook(() => useApiDebugger(null));
-
-      await act(async () => {
-        await result.current.requestTrace('code');
-      });
-
-      expect(result.current.error).toBe('No session ID available for trace request');
-      expect(mockTraceSession).not.toHaveBeenCalled();
     });
   });
 });

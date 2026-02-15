@@ -23,8 +23,6 @@ interface SessionProblemEditorProps {
       attached_files?: Array<{ name: string; content: string }>;
     }
   ) => void;
-  /** Session ID for debugger trace requests */
-  sessionId?: string | null;
   initialProblem?: Problem | { title: string; description: string; starter_code: string } | null;
   initialExecutionSettings?: {
     stdin?: string;
@@ -35,7 +33,6 @@ interface SessionProblemEditorProps {
 
 export default function SessionProblemEditor({
   onUpdateProblem,
-  sessionId,
   initialProblem = null,
   initialExecutionSettings = {}
 }: SessionProblemEditorProps) {
@@ -86,7 +83,7 @@ export default function SessionProblemEditor({
     onUpdateProblem(problem, Object.keys(execution_settings).length > 0 ? execution_settings : undefined);
   };
 
-  const debuggerHook = useApiDebugger(sessionId ?? null);
+  const debuggerHook = useApiDebugger();
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
