@@ -70,9 +70,12 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
-        with:
-          install_components: gke-gcloud-auth-plugin
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+          sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/google-cloud-sdk.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -qq
+          sudo apt-get install -y -qq google-cloud-cli-gke-gcloud-auth-plugin
       - name: Get GKE credentials via Connect Gateway
         run: |
           for i in 1 2 3; do
