@@ -996,7 +996,7 @@ export default function CodeEditor({
               type="button"
               data-testid="output-collapse-toggle"
               onClick={() => setOutputCollapsed(prev => !prev)}
-              className="flex items-center justify-center w-5 h-full bg-gray-100 hover:bg-gray-200 border-x border-gray-300 cursor-pointer flex-shrink-0"
+              className="flex items-center justify-center w-5 h-full bg-gray-800 hover:bg-gray-700 border-x border-gray-700 text-gray-400 hover:text-gray-200 cursor-pointer flex-shrink-0"
               aria-label={outputCollapsed ? 'Expand output panel' : 'Collapse output panel'}
             >
               {outputCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
