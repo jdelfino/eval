@@ -10,7 +10,6 @@ export * from './classes';
 export * from './execute';
 export * from './instructor';
 export * from './invitations';
-export * from './namespace-invitations';
 export * from './namespaces';
 export * from './problems';
 export * from './registration';

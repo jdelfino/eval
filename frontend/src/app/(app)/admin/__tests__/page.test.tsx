@@ -88,7 +88,7 @@ beforeEach(() => {
     if (url.includes('/system/users') || url.includes('/admin/users')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(mockUsers) });
     }
-    if (url.includes('/system/invitations')) {
+    if (url.includes('/invitations')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });

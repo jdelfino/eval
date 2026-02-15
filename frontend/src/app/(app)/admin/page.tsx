@@ -31,11 +31,17 @@ import {
   deleteSystemUser,
 } from '@/lib/api/system';
 import {
-  listNamespaceInvitations,
-  createNamespaceInvitation,
-  revokeNamespaceInvitation,
-  resendNamespaceInvitation,
-} from '@/lib/api/namespace-invitations';
+  listInvitations,
+  createInvitation,
+  revokeInvitation,
+  resendInvitation,
+} from '@/lib/api/invitations';
+import {
+  listSystemInvitations,
+  createSystemInvitation,
+  revokeSystemInvitation,
+  resendSystemInvitation,
+} from '@/lib/api/system';
 import type { UserRole, User } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 
@@ -79,7 +85,12 @@ function AdminPage() {
 
     setInvitationsLoading(true);
     try {
-      const data = await listNamespaceInvitations();
+      let data: SerializedInvitation[];
+      if (isSystemAdmin) {
+        data = await listSystemInvitations({ namespace_id: getNamespaceId() });
+      } else {
+        data = await listInvitations(user!.namespace_id!);
+      }
       setInvitations(data || []);
     } catch (err) {
       console.error('Failed to load invitations:', err);
@@ -89,21 +100,34 @@ function AdminPage() {
   };
 
   const handleInviteInstructor = async (email: string) => {
-    await createNamespaceInvitation(email);
+    if (isSystemAdmin) {
+      const nsId = getNamespaceId() || user!.namespace_id!;
+      await createSystemInvitation(email, nsId, 'instructor');
+    } else {
+      await createInvitation(user!.namespace_id!, email, 'instructor');
+    }
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleRevokeInvitation = async (invitationId: string) => {
-    await revokeNamespaceInvitation(invitationId);
+    if (isSystemAdmin) {
+      await revokeSystemInvitation(invitationId);
+    } else {
+      await revokeInvitation(user!.namespace_id!, invitationId);
+    }
 
     // Reload invitations
     await loadInvitations();
   };
 
   const handleResendInvitation = async (invitationId: string) => {
-    await resendNamespaceInvitation(invitationId);
+    if (isSystemAdmin) {
+      await resendSystemInvitation(invitationId);
+    } else {
+      await resendInvitation(user!.namespace_id!, invitationId);
+    }
 
     // Reload invitations
     await loadInvitations();

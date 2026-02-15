@@ -8,12 +8,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  listNamespaceInvitations,
-  createNamespaceInvitation,
-  revokeNamespaceInvitation,
-  resendNamespaceInvitation,
-  type NamespaceInvitationFilters,
-} from '@/lib/api/namespace-invitations';
+  listInvitations,
+  createInvitation,
+  revokeInvitation,
+  resendInvitation,
+  type InvitationFilters,
+} from '@/lib/api/invitations';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 import InvitationList from '@/components/InvitationList';
 import { Card } from '@/components/ui/Card';
@@ -26,7 +26,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type InvitationStatus = 'pending' | 'consumed' | 'revoked' | 'expired' | 'all';
 
 // Helper to convert UI status to API filter
-function toApiFilters(status: InvitationStatus): NamespaceInvitationFilters | undefined {
+function toApiFilters(status: InvitationStatus): InvitationFilters | undefined {
   if (status === 'all') {
     return undefined;
   }
@@ -54,10 +54,11 @@ function InvitationsPageContent() {
 
   // Fetch invitations
   const fetchInvitations = useCallback(async () => {
+    if (!user?.namespace_id) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await listNamespaceInvitations(toApiFilters(statusFilter));
+      const data = await listInvitations(user.namespace_id, toApiFilters(statusFilter));
       setInvitations(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch invitations';
@@ -65,7 +66,7 @@ function InvitationsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [user?.namespace_id, statusFilter]);
 
   // Load invitations on mount and when filter changes
   useEffect(() => {
@@ -94,7 +95,7 @@ function InvitationsPageContent() {
 
     setIsSubmitting(true);
     try {
-      await createNamespaceInvitation(trimmedEmail, { expires_in_days: expiresInDays });
+      await createInvitation(user!.namespace_id!, trimmedEmail, 'instructor', expiresInDays);
 
       setEmail('');
       setSuccessMessage(`Invitation sent to ${trimmedEmail}`);
@@ -112,13 +113,13 @@ function InvitationsPageContent() {
   };
 
   const handleRevoke = async (id: string) => {
-    await revokeNamespaceInvitation(id);
+    await revokeInvitation(user!.namespace_id!, id);
     // Refresh the list
     await fetchInvitations();
   };
 
   const handleResend = async (id: string) => {
-    await resendNamespaceInvitation(id);
+    await resendInvitation(user!.namespace_id!, id);
     // Refresh the list
     await fetchInvitations();
   };

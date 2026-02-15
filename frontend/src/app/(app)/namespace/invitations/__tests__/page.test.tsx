@@ -125,7 +125,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/system/invitations')
+          expect.stringContaining('/namespaces/test-namespace/invitations')
         );
       });
     });
@@ -276,7 +276,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/system/invitations',
+          '/namespaces/test-namespace/invitations',
           expect.objectContaining({
             method: 'POST',
             body: JSON.stringify({ email: 'new@example.com', target_role: 'instructor', expires_in_days: 7 }),
@@ -405,7 +405,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/system/invitations/inv-1',
+          '/namespaces/test-namespace/invitations/inv-1',
           expect.objectContaining({ method: 'DELETE' })
         );
       });
@@ -439,7 +439,7 @@ describe('InvitationsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/system/invitations/inv-1/resend',
+          '/namespaces/test-namespace/invitations/inv-1/resend',
           expect.objectContaining({ method: 'POST' })
         );
       });
