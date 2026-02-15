@@ -60,6 +60,7 @@ function MobileNavItem({ item, isActive, onClose }: MobileNavItemProps) {
   return (
     <Link
       href={item.href}
+      prefetch={false}
       onClick={onClose}
       className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
         isActive

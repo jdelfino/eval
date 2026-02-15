@@ -58,10 +58,10 @@ export function AppShell({
           </Suspense>
         </div>
 
-        {/* Mobile navigation drawer */}
-        <Suspense fallback={null}>
+        {/* Mobile navigation drawer — only mount when open to avoid running hooks on desktop */}
+        {mobileNavOpen && (
           <MobileNav isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-        </Suspense>
+        )}
 
         {/* Main content */}
         <main className={`flex-1 ${fullscreen ? 'overflow-hidden' : 'overflow-auto p-6'}`}>

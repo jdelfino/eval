@@ -43,6 +43,7 @@ function NavItemLink({ item, isActive, collapsed }: NavItemLinkProps) {
   return (
     <Link
       href={item.href}
+      prefetch={false}
       className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
         isActive
           ? 'bg-blue-100 text-blue-700'
