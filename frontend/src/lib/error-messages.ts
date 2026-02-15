@@ -255,12 +255,29 @@ export function getUserFriendlyError(error: Error | string): string {
 }
 
 /**
- * Checks if an error is likely retryable
+ * HTTP status codes that represent transient failures worth retrying.
+ * Notably excludes 500 (Internal Server Error) which indicates bugs, not transient issues.
+ */
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
+
+/**
+ * Checks if an error is likely retryable.
+ *
+ * For errors with an HTTP status code (ApiError), uses the status code directly:
+ * retries only transient infrastructure errors (408, 429, 502, 503, 504).
+ * 500 errors indicate server bugs and are NOT retried.
+ *
+ * For non-HTTP errors (network failures, etc.), falls back to message-based
+ * classification.
  *
  * @param error - The error to check
  * @returns true if the error is likely transient and retryable
  */
 export function isRetryableError(error: Error | string): boolean {
+  // Use status code for HTTP errors — more reliable than message regex
+  if (error instanceof Error && 'status' in error && typeof (error as { status: unknown }).status === 'number') {
+    return RETRYABLE_STATUS_CODES.has((error as { status: number }).status);
+  }
   return classifyError(error).isRetryable;
 }
 

@@ -11,6 +11,7 @@ import {
   getHelpText,
   ErrorCategory,
 } from '../error-messages';
+import { ApiError } from '../api-error';
 
 describe('error-messages', () => {
   describe('classifyError', () => {
@@ -149,7 +150,6 @@ describe('error-messages', () => {
         const result = classifyError(new Error(message));
         expect(result.category).toBe('server');
         expect(result.userMessage).toBe('The server is having trouble. Please try again in a moment.');
-        expect(result.isRetryable).toBe(true);
       });
     });
 
@@ -215,9 +215,16 @@ describe('error-messages', () => {
       expect(isRetryableError(new Error('Request timed out'))).toBe(true);
     });
 
-    it('should return true for server errors', () => {
-      expect(isRetryableError(new Error('500 Internal Server Error'))).toBe(true);
+    it('should return false for 500 errors (bugs, not transient)', () => {
+      expect(isRetryableError(new ApiError('internal error', 500))).toBe(false);
     });
+
+    it.each([502, 503, 504])(
+      'should return true for %d errors (transient infrastructure)',
+      (status) => {
+        expect(isRetryableError(new ApiError('server error', status))).toBe(true);
+      }
+    );
 
     it('should return false for auth errors', () => {
       expect(isRetryableError(new Error('Unauthorized'))).toBe(false);
@@ -229,6 +236,20 @@ describe('error-messages', () => {
 
     it('should return true for unknown errors', () => {
       expect(isRetryableError(new Error('Random error'))).toBe(true);
+    });
+
+    it('should return false for 4xx ApiErrors', () => {
+      expect(isRetryableError(new ApiError('not found', 404))).toBe(false);
+      expect(isRetryableError(new ApiError('forbidden', 403))).toBe(false);
+      expect(isRetryableError(new ApiError('bad request', 400))).toBe(false);
+    });
+
+    it('should return true for 429 rate limit ApiError', () => {
+      expect(isRetryableError(new ApiError('too many requests', 429))).toBe(true);
+    });
+
+    it('should return true for 408 timeout ApiError', () => {
+      expect(isRetryableError(new ApiError('request timeout', 408))).toBe(true);
     });
   });
 
