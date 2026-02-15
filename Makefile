@@ -80,20 +80,15 @@ test-integration-realtime:
 # ──────────────────────────────────────────────
 # Store integration tests
 # ──────────────────────────────────────────────
-.PHONY: test-integration-store
-
-test-integration-store:
-	./scripts/ensure-test-postgres.sh
-	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 ./internal/store/... -run TestIntegration
-
-# ──────────────────────────────────────────────
-# API integration tests (middleware + DB)
-# ──────────────────────────────────────────────
-.PHONY: test-integration-api
+.PHONY: test-integration-api test-integration-store
 
 test-integration-api:
 	./scripts/ensure-test-postgres.sh
 	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 -tags integration ./internal/integration/...
+
+test-integration-store:
+	./scripts/ensure-test-postgres.sh
+	cd go-backend && DATABASE_URL="postgresql://eval:eval_local_password@localhost:5432/eval?sslmode=disable" go test -v -race -count=1 ./internal/store/... -run TestIntegration
 
 # ──────────────────────────────────────────────
 # Frontend
