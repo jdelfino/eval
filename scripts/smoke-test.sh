@@ -149,26 +149,24 @@ check_no_placeholders() {
 # These checks can ONLY run in production — CI skips them because nsjail
 # requires privileged mode + proper kernel capabilities.
 #
-# Uses kubectl port-forward to reach the internal executor service.
-
-EXECUTOR_PORT=18081  # local port for port-forward (avoid conflicts)
+# Uses kubectl exec + python3 to reach the executor service from inside the
+# cluster. This works through Connect Gateway (unlike port-forward).
 
 executor_curl() {
   local code="$1"
-  local body_file
-  body_file=$(mktemp)
-  local http_code
-  http_code=$(curl -s -o "$body_file" -w '%{http_code}' -X POST \
-    -H "Content-Type: application/json" \
-    -d "$code" \
-    "http://localhost:${EXECUTOR_PORT}/execute" 2>/dev/null || echo "000")
-  if [[ "$http_code" != "200" ]]; then
-    echo "  ERROR: Executor returned HTTP ${http_code}"
-    rm -f "$body_file"
+  local resp
+  resp=$(kubectl exec deployment/executor -- python3 -c "
+import urllib.request, json, sys
+req = urllib.request.Request('http://localhost:8081/execute',
+    data=json.dumps(json.loads(sys.argv[1])).encode(),
+    headers={'Content-Type': 'application/json'})
+with urllib.request.urlopen(req) as r:
+    sys.stdout.write(r.read().decode())
+" "$code" 2>/dev/null) || {
+    echo "  ERROR: kubectl exec failed"
     return 1
-  fi
-  cat "$body_file"
-  rm -f "$body_file"
+  }
+  echo "$resp"
 }
 
 check_executor_execution() {
@@ -229,36 +227,7 @@ check_executor_memory_limit() {
   fi
 }
 
-start_executor_port_forward() {
-  kubectl port-forward svc/executor "${EXECUTOR_PORT}:8081" &>/dev/null &
-  EXECUTOR_PF_PID=$!
-
-  # Wait for port-forward to be ready
-  for i in $(seq 1 15); do
-    if curl -sf "http://localhost:${EXECUTOR_PORT}/healthz" &>/dev/null; then
-      return 0
-    fi
-    sleep 1
-  done
-  echo "  ERROR: Executor port-forward not ready after 15s"
-  kill "$EXECUTOR_PF_PID" 2>/dev/null || true
-  return 1
-}
-
-stop_executor_port_forward() {
-  if [[ -n "${EXECUTOR_PF_PID:-}" ]]; then
-    kill "$EXECUTOR_PF_PID" 2>/dev/null || true
-    wait "$EXECUTOR_PF_PID" 2>/dev/null || true
-    unset EXECUTOR_PF_PID
-  fi
-}
-
 check_executor_sandbox() {
-  if ! start_executor_port_forward; then
-    return 1
-  fi
-  trap stop_executor_port_forward RETURN
-
   local failed=0
 
   echo "  [1/5] Basic execution..."
