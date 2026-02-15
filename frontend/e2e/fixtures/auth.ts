@@ -15,7 +15,7 @@ export async function signInAs(
   await page.fill('input[name="password"]', password);
   await page.click('button[type="submit"]');
   // Wait for redirect away from signin
-  await page.waitForURL(/^(?!.*\/auth\/signin).*$/, { timeout: 10000 });
+  await page.waitForURL(/^(?!.*\/auth\/signin).*$/);
 }
 
 export async function loginAsInstructor(page: Page, email?: string): Promise<void> {
@@ -36,7 +36,7 @@ export async function signOut(page: Page): Promise<void> {
   if (await signOutButton.isVisible()) {
     await signOutButton.click();
   }
-  await page.waitForURL('/auth/signin', { timeout: 5000 });
+  await page.waitForURL('/auth/signin');
 }
 
 export async function navigateViaSidebar(page: Page, itemName: string, expectedUrl?: string | RegExp): Promise<void> {
@@ -44,7 +44,7 @@ export async function navigateViaSidebar(page: Page, itemName: string, expectedU
   const link = sidebar.locator(`a:has-text("${itemName}")`);
   await link.click();
   if (expectedUrl) {
-    await page.waitForURL(expectedUrl, { timeout: 10000 });
+    await page.waitForURL(expectedUrl);
   }
 }
 

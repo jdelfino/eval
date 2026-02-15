@@ -27,8 +27,8 @@ test.describe('System Admin Core Flows', () => {
     await loginAsSystemAdmin(page);
 
     // Wait for redirect to system admin dashboard
-    await expect(page).toHaveURL('/system', { timeout: 5000 });
-    await expect(page.locator('h1:has-text("System Administration")')).toBeVisible({ timeout: 5000 });
+    await expect(page).toHaveURL('/system', {});
+    await expect(page.locator('h1:has-text("System Administration")')).toBeVisible();
 
     // Verify we can see the namespace management UI
     await expect(page.locator('h2:has-text("Namespaces")')).toBeVisible();
@@ -37,7 +37,7 @@ test.describe('System Admin Core Flows', () => {
     await page.click('button:has-text("Create New Namespace")');
 
     // Wait for form to appear and fill it
-    await expect(page.locator('input#namespace-id')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('input#namespace-id')).toBeVisible();
     await page.fill('input#namespace-id', namespaceId);
     await page.fill('input#display-name', 'Test Organization');
 
@@ -45,7 +45,7 @@ test.describe('System Admin Core Flows', () => {
     await page.click('button:has-text("Create Namespace")');
 
     // Wait for success - namespace should appear in the list
-    await expect(page.locator(`text=${namespaceId}`)).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(`text=${namespaceId}`)).toBeVisible();
     await expect(page.locator('h3:has-text("Test Organization")').first()).toBeVisible();
 
     // Click "Manage Users" for the new namespace
@@ -62,7 +62,7 @@ test.describe('System Admin Core Flows', () => {
     await expect(page.locator('text=Test Organization')).toBeVisible();
 
     // Verify the users list heading is shown (will be empty for new namespace)
-    await expect(page.getByRole('heading', { name: /Users/ })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: /Users/ })).toBeVisible();
 
     // Navigate back to system dashboard via sidebar (tests sidebar navigation)
     await navigateToNamespaces(page);
@@ -74,14 +74,14 @@ test.describe('System Admin Core Flows', () => {
     // Navigate to User Management via sidebar
     await navigateToUserManagement(page);
     await expect(page).toHaveURL('/admin');
-    await expect(page.locator('h1:has-text("System Administration")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('h1:has-text("System Administration")')).toBeVisible();
 
     // Navigate back to Namespaces via sidebar
     await navigateToNamespaces(page);
 
     // Verify Invitations tab exists and is accessible
     await page.click('button:has-text("Invitations")');
-    await expect(page.locator('h2:has-text("Invitations")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('h2:has-text("Invitations")')).toBeVisible();
 
     // Verify Create Invitation button is available
     await expect(page.locator('button:has-text("Create Invitation")')).toBeVisible();

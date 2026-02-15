@@ -11,7 +11,7 @@ if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -q 2>/dev/null; then
 fi
 
 # Also ensure centrifugo is running (for E2E tests)
-if ! curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+if ! curl -sf --max-time 3 http://localhost:8000/health >/dev/null 2>&1; then
   echo "Starting Centrifugo..."
   docker compose up -d centrifugo --wait
 fi

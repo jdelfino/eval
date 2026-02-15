@@ -35,13 +35,13 @@ test.describe('Session Lifecycle', () => {
       await signInAs(instructorPage, instructor.email);
       // Navigate directly to session page
       await instructorPage.goto(`/instructor/session/${session1.id}`);
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible({ timeout: 10000 });
+      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== STUDENT JOINS =====
       await signInAs(page, studentEmail);
       await page.goto(`/student?session_id=${session1.id}`);
-      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15000 });
-      await expect(page.locator('text=Connected')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('.monaco-editor')).toBeVisible();
+      await expect(page.locator('text=Connected')).toBeVisible();
 
       // Wait for initial sync
       await page.waitForTimeout(1000);
@@ -60,7 +60,7 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(2000);
 
       // ===== INSTRUCTOR VERIFIES STUDENT CODE =====
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible({ timeout: 10000 });
+      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
 
       // ===== INSTRUCTOR STARTS REPLACEMENT SESSION =====
       // Start a new session via API (simulating "Replace Session")
@@ -75,7 +75,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT SEES SESSION ENDED + REPLACEMENT NOTIFICATION =====
       // Student should see the session ended notification
-      await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible();
 
       // Look for "Join New Session" button (appears when replacement is available)
       // Note: The replacement detection may come through realtime or polling
@@ -86,7 +86,7 @@ test.describe('Session Lifecycle', () => {
       // Try waiting for the join new button, but if it doesn't appear within a reasonable time,
       // navigate directly (the replacement broadcast might not work in test environment)
       try {
-        await expect(joinNewButton).toBeVisible({ timeout: 10000 });
+        await expect(joinNewButton).toBeVisible();
         await joinNewButton.click();
       } catch {
         // Fallback: navigate directly to the new session
@@ -94,7 +94,7 @@ test.describe('Session Lifecycle', () => {
       }
 
       // ===== STUDENT JOINS NEW SESSION =====
-      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('.monaco-editor')).toBeVisible();
 
       // Wait for editor to be ready
       await page.waitForTimeout(1000);
@@ -121,10 +121,10 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT SEES PRACTICE MODE =====
       // Student should see the session ended notification
-      await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible();
 
       // In practice mode, the run button should still be available
-      await expect(page.locator('button:has-text("Run Code")')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('button:has-text("Run Code")')).toBeVisible();
 
       // ===== STUDENT RUNS CODE IN PRACTICE MODE =====
       // Click Run Code — this uses the practice API endpoint
@@ -135,7 +135,7 @@ test.describe('Session Lifecycle', () => {
       // so we accept either a result or an error - the key test is that the button works
       // and the practice API endpoint is hit (not blocked by "session ended")
       const resultOrError = page.locator('.bg-gray-900, [data-testid="error-alert"]').first();
-      await expect(resultOrError).toBeVisible({ timeout: 10000 });
+      await expect(resultOrError).toBeVisible();
 
     } finally {
       await instructorContext.close();

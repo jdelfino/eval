@@ -62,27 +62,27 @@ test.describe('Critical User Paths', () => {
       // New dashboard shows "Dashboard" heading or empty state with "Create Your First Class"
       await expect(
         instructorPage.locator('h2:has-text("Dashboard"), button:has-text("Create Your First Class")').first()
-      ).toBeVisible({ timeout: 10000 });
+      ).toBeVisible();
 
       // Create class from dashboard
       const createClassButton = instructorPage
         .locator('button:has-text("New Class"), button:has-text("Create Your First Class")')
         .first();
       await createClassButton.click();
-      await expect(instructorPage.locator('h2:has-text("Create New Class")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h2:has-text("Create New Class")')).toBeVisible();
       await instructorPage.fill('input#class-name', 'Test Class');
       await instructorPage.click('button:has-text("Create Class")');
 
       // Wait for class to appear in dashboard table
       await expect(
         instructorPage.locator('td:has-text("Test Class"), div:has-text("Test Class")').first()
-      ).toBeVisible({ timeout: 5000 });
+      ).toBeVisible();
 
       // Click the class name link to go to class details page where we can create sections
       await instructorPage.locator('a:has-text("Test Class")').first().click();
 
       // Wait for class details page to load
-      await expect(instructorPage.locator('h1:has-text("Test Class")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h1:has-text("Test Class")')).toBeVisible();
 
       // Create section from class details page
       const createSectionButton = instructorPage
@@ -91,7 +91,7 @@ test.describe('Critical User Paths', () => {
       await createSectionButton.click();
 
       // Fill in section form
-      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible();
       await instructorPage.fill('input#section_name', 'Test Section');
       await instructorPage
         .locator('button[type="submit"]:has-text("Create"), button:has-text("Create Section")')
@@ -99,18 +99,18 @@ test.describe('Critical User Paths', () => {
         .click();
 
       // Wait for section to appear
-      await expect(instructorPage.locator('text=Test Section').first()).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('text=Test Section').first()).toBeVisible();
 
       // Navigate back to dashboard
       await navigateToDashboard(instructorPage);
-      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible();
 
       // The section should appear in the dashboard table with "Start Session" button
-      await expect(instructorPage.locator('text=Test Section')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('text=Test Section')).toBeVisible();
 
       // Get join code from dashboard table using data-testid
       const joinCodeElement = instructorPage.locator('[data-testid="join-code"]').first();
-      await expect(joinCodeElement).toBeVisible({ timeout: 5000 });
+      await expect(joinCodeElement).toBeVisible();
       const joinCode = await joinCodeElement.textContent();
       if (!joinCode) {
         throw new Error('Could not find join code on dashboard page');
@@ -120,7 +120,7 @@ test.describe('Critical User Paths', () => {
       await instructorPage.locator('button:has-text("Start Session")').first().click();
 
       // Wait for the Start Session modal
-      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible();
 
       // Click "Create blank session" option to enable the Start Session button
       await instructorPage.locator('button:has-text("Create blank session")').click();
@@ -128,14 +128,14 @@ test.describe('Critical User Paths', () => {
       // Wait for Start Session button to be enabled, then click it
       await expect(
         instructorPage.locator('button:has-text("Start Session"):not([disabled])').last()
-      ).toBeEnabled({ timeout: 5000 });
+      ).toBeEnabled();
       await instructorPage.locator('button:has-text("Start Session"):not([disabled])').last().click();
 
       // Wait for navigation to session page
-      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, { timeout: 10000 });
+      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, {});
 
       // Verify session view loaded
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible({ timeout: 10000 });
+      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== STUDENT FLOW =====
       // Register the student via API (creates user + enrolls in section)
@@ -151,19 +151,19 @@ test.describe('Critical User Paths', () => {
 
       // Wait for the active session with "Join Now" button to load
       const joinNowButton = page.locator('button:has-text("Join Now")');
-      await expect(joinNowButton).toBeVisible({ timeout: 10000 });
+      await expect(joinNowButton).toBeVisible();
 
       // Click "Join Now" to join the active session
       await joinNowButton.click();
 
       // Verify student entered session (editor loads directly)
-      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('.monaco-editor')).toBeVisible();
 
       // Verify connected status (shown in global header badge)
-      await expect(page.locator('text=Connected')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('text=Connected')).toBeVisible();
 
       // Verify the Run Code button is present (confirms editor loaded)
-      await expect(page.locator('button:has-text("Run Code")')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('button:has-text("Run Code")')).toBeVisible();
 
       // Success! The complete flow works:
       // - Instructor created class + section from dashboard
@@ -197,7 +197,7 @@ test.describe('Critical User Paths', () => {
       // Wait for dashboard to load
       await expect(
         instructorPage.locator('h2:has-text("Dashboard"), button:has-text("Create Your First Class")').first()
-      ).toBeVisible({ timeout: 10000 });
+      ).toBeVisible();
 
       // Create class
       const createClassButton = instructorPage
@@ -208,31 +208,31 @@ test.describe('Critical User Paths', () => {
       await instructorPage.click('button:has-text("Create Class")');
       await expect(
         instructorPage.locator('td:has-text("Sync Test Class"), div:has-text("Sync Test Class")').first()
-      ).toBeVisible({ timeout: 5000 });
+      ).toBeVisible();
 
       // Go to class and create section
       await instructorPage.locator('a:has-text("Sync Test Class")').first().click();
-      await expect(instructorPage.locator('h1:has-text("Sync Test Class")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h1:has-text("Sync Test Class")')).toBeVisible();
 
       const createSectionButton = instructorPage
         .locator('button:has-text("New Section"), button:has-text("Create First Section")')
         .first();
       await createSectionButton.click();
-      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible();
       await instructorPage.fill('input#section_name', 'Sync Test Section');
       await instructorPage
         .locator('button[type="submit"]:has-text("Create"), button:has-text("Create Section")')
         .first()
         .click();
-      await expect(instructorPage.locator('text=Sync Test Section').first()).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('text=Sync Test Section').first()).toBeVisible();
 
       // Go back to dashboard and start session
       await navigateToDashboard(instructorPage);
-      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible();
 
       // Get join code
       const joinCodeElement = instructorPage.locator('[data-testid="join-code"]').first();
-      await expect(joinCodeElement).toBeVisible({ timeout: 5000 });
+      await expect(joinCodeElement).toBeVisible();
       const joinCode = await joinCodeElement.textContent();
       if (!joinCode) {
         throw new Error('Could not find join code');
@@ -240,14 +240,14 @@ test.describe('Critical User Paths', () => {
 
       // Start session
       await instructorPage.locator('button:has-text("Start Session")').first().click();
-      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible();
       await instructorPage.locator('button:has-text("Create blank session")').click();
       await expect(
         instructorPage.locator('button:has-text("Start Session"):not([disabled])').last()
-      ).toBeEnabled({ timeout: 5000 });
+      ).toBeEnabled();
       await instructorPage.locator('button:has-text("Start Session"):not([disabled])').last().click();
-      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, { timeout: 10000 });
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible({ timeout: 10000 });
+      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, {});
+      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== OPEN PUBLIC VIEW =====
       // Open public view in a new tab
@@ -257,8 +257,8 @@ test.describe('Critical User Paths', () => {
       ]);
 
       // Verify public view loads with initial state
-      await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible({ timeout: 10000 });
-      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible({ timeout: 5000 });
+      await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible();
+      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
       // ===== STUDENT JOINS AND WRITES CODE =====
       // Register the student via API (creates user + enrolls in section)
@@ -273,10 +273,10 @@ test.describe('Critical User Paths', () => {
 
       // Join active session (student is already enrolled via registerStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
-      await expect(joinNowButton).toBeVisible({ timeout: 10000 });
+      await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
-      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
-      await expect(page.locator('text=Connected')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('.monaco-editor')).toBeVisible();
+      await expect(page.locator('text=Connected')).toBeVisible();
 
       // Wait for initial empty code sync to complete (500ms debounce + buffer)
       // This prevents the initial empty code update from racing with our typed code
@@ -300,11 +300,11 @@ test.describe('Critical User Paths', () => {
       // ===== VERIFY INSTRUCTOR SEES STUDENT WITH CODE =====
       // Student should appear in the connected students list
       const studentDisplayName = 'E2E Student';
-      await expect(instructorPage.locator(`text=${studentDisplayName}`)).toBeVisible({ timeout: 10000 });
+      await expect(instructorPage.locator(`text=${studentDisplayName}`)).toBeVisible();
 
       // Wait for the "In progress" badge to appear -- this confirms the code synced
       const studentRow = instructorPage.locator(`div.border:has-text("${studentDisplayName}")`).first();
-      await expect(studentRow.locator('text=In progress')).toBeVisible({ timeout: 15000 });
+      await expect(studentRow.locator('text=In progress')).toBeVisible();
 
       // ===== VERIFY INSTRUCTOR CAN VIEW STUDENT CODE =====
       // Click "View" button to see student's code
@@ -312,10 +312,10 @@ test.describe('Critical User Paths', () => {
       await viewButton.click();
 
       // Wait for code editor to load with student's code
-      await expect(instructorPage.locator(`text=${studentDisplayName}'s Code`)).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator(`text=${studentDisplayName}'s Code`)).toBeVisible();
 
       // Verify the actual code content is visible in the Monaco editor
-      await expect(instructorPage.locator('.monaco-editor')).toBeVisible({ timeout: 5000 });
+      await expect(instructorPage.locator('.monaco-editor')).toBeVisible();
 
       // Verify the Monaco editor is displaying student code
       // Monaco splits text across elements, so check normalized text content
@@ -335,10 +335,10 @@ test.describe('Critical User Paths', () => {
       // ===== VERIFY PUBLIC VIEW SHOWS STUDENT CODE =====
 
       // Verify "Featured Code" section is displayed
-      await expect(publicViewPage.locator('text=Featured Code')).toBeVisible({ timeout: 5000 });
+      await expect(publicViewPage.locator('text=Featured Code')).toBeVisible();
 
       // Verify Monaco editor is visible in public view
-      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible({ timeout: 5000 });
+      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
       // Verify the student's code content is visible on public view
       const publicViewHasCode = await publicViewPage.evaluate(() => {

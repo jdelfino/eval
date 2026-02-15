@@ -32,7 +32,7 @@ test.describe('Public View Feature', () => {
       // Wait for the instructor dashboard to load
       await expect(
         instructorPage.locator('h2:has-text("Dashboard"), button:has-text("Create Your First Class")').first()
-      ).toBeVisible({ timeout: 10_000 });
+      ).toBeVisible();
 
       // Create class from dashboard
       const createClassButton = instructorPage.locator(
@@ -45,32 +45,32 @@ test.describe('Public View Feature', () => {
       // Wait for class to appear in dashboard
       await expect(
         instructorPage.locator('td:has-text("Test Class"), div:has-text("Test Class")').first()
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeVisible();
 
       // Click the class name link to go to class details page
       await instructorPage.locator('a:has-text("Test Class")').first().click();
-      await expect(instructorPage.locator('h1:has-text("Test Class")')).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('h1:has-text("Test Class")')).toBeVisible();
 
       // Create section from class details page
       const createSectionButton = instructorPage.locator(
         'button:has-text("New Section"), button:has-text("Create First Section")'
       ).first();
       await createSectionButton.click();
-      await expect(instructorPage.locator('input#section_name').first()).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('input#section_name').first()).toBeVisible();
       await instructorPage.fill('input#section_name', 'Test Section');
       await instructorPage.locator(
         'button[type="submit"]:has-text("Create"), button:has-text("Create Section")'
       ).first().click();
-      await expect(instructorPage.locator('text=Test Section').first()).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('text=Test Section').first()).toBeVisible();
 
       // Navigate back to dashboard
       await navigateToDashboard(instructorPage);
-      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible({ timeout: 5_000 });
-      await expect(instructorPage.locator('text=Test Section')).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('h2:has-text("Dashboard")')).toBeVisible();
+      await expect(instructorPage.locator('text=Test Section')).toBeVisible();
 
       // Get join code from dashboard table
       const joinCodeElement = instructorPage.locator('[data-testid="join-code"]').first();
-      await expect(joinCodeElement).toBeVisible({ timeout: 5_000 });
+      await expect(joinCodeElement).toBeVisible();
       const joinCode = await joinCodeElement.textContent();
       if (!joinCode) {
         throw new Error('Could not find join code on dashboard page');
@@ -78,7 +78,7 @@ test.describe('Public View Feature', () => {
 
       // Click "Start Session" to open the modal
       await instructorPage.locator('button:has-text("Start Session")').first().click();
-      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible();
 
       // Click "Create blank session" option
       await instructorPage.locator('button:has-text("Create blank session")').click();
@@ -86,14 +86,14 @@ test.describe('Public View Feature', () => {
       // Wait for Start Session button to be enabled, then click it
       await expect(
         instructorPage.locator('button:has-text("Start Session"):not([disabled])').last()
-      ).toBeEnabled({ timeout: 5_000 });
+      ).toBeEnabled();
       await instructorPage.locator('button:has-text("Start Session"):not([disabled])').last().click();
 
       // Wait for navigation to session page
-      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, { timeout: 10_000 });
+      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, {});
 
       // Verify session view loaded
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible({ timeout: 10_000 });
+      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== OPEN PUBLIC VIEW =====
       [publicViewPage] = await Promise.all([
@@ -102,11 +102,11 @@ test.describe('Public View Feature', () => {
       ]);
 
       // Verify public view loaded with join code visible
-      await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible({ timeout: 10_000 });
-      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible({ timeout: 5_000 });
+      await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible();
+      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
       // Verify student list panel is visible on instructor page
-      await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible({ timeout: 5_000 });
+      await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible();
 
       // ===== STUDENT JOINS AND WRITES CODE =====
       // Register the student via API (creates user + enrolls in section)
@@ -121,10 +121,10 @@ test.describe('Public View Feature', () => {
 
       // Join active session (student is already enrolled via registerStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
-      await expect(joinNowButton).toBeVisible({ timeout: 10_000 });
+      await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
-      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('text=Connected')).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('.monaco-editor')).toBeVisible();
+      await expect(page.locator('text=Connected')).toBeVisible();
 
       // Student types code in the Monaco editor
       const studentCode = 'print("Hello from student!")';
@@ -137,7 +137,7 @@ test.describe('Public View Feature', () => {
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT =====
       // Wait for student to appear - via Realtime broadcast or polling fallback
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible({ timeout: 15_000 });
+      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
 
       // Click "Feature" button for this student
       const studentRow = instructorPage.locator('div:has-text("E2E Student")').first();
@@ -146,10 +146,10 @@ test.describe('Public View Feature', () => {
 
       // ===== VERIFY PUBLIC VIEW UPDATES =====
       // The public view should now show "Featured Code" title
-      await expect(publicViewPage.locator('text=Featured Code')).toBeVisible({ timeout: 10_000 });
+      await expect(publicViewPage.locator('text=Featured Code')).toBeVisible();
 
       // Verify there is a Monaco editor visible with student code
-      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible({ timeout: 5_000 });
+      await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
     } finally {
       try {
         await publicViewPage?.close();

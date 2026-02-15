@@ -12,10 +12,9 @@ export default defineConfig({
   /* Run tests in files in parallel — safe with per-test namespace isolation */
   fullyParallel: true,
 
-  /* 1 worker — tests have shared-state race conditions with 2 workers
-     despite per-test namespace isolation. Needs investigation before
-     enabling parallelism. */
-  workers: 1,
+  /* Tests are namespace-isolated so parallel execution is safe. Trace
+     recording is off to avoid artifact file races between workers. */
+  workers: 2,
 
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
@@ -34,8 +33,9 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: 'http://localhost:3000',
 
-    /* Collect trace on failure (retain-on-failure works with retries: 0) */
-    trace: 'retain-on-failure',
+    /* Traces disabled — retain-on-failure causes ENOENT races with parallel
+       workers writing to shared artifact dirs. Screenshots + video are enough. */
+    trace: 'off',
 
     /* Screenshot only on failure */
     screenshot: 'only-on-failure',
@@ -59,6 +59,6 @@ export default defineConfig({
    * before invoking Playwright.
    */
 
-  /* Test timeout */
+  /* Per-test timeout */
   timeout: 30 * 1000,
 });
