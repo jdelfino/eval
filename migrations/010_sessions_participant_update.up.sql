@@ -1,11 +1,30 @@
 -- Migration: 010_sessions_participant_update.up.sql
 --
--- Allows section members (students) to update sessions they participate in.
+-- Provides SECURITY DEFINER functions for student-initiated updates to the
+-- sessions table. Students need to:
+--   1. Append themselves to the participants array (JoinSession)
+--   2. Touch last_activity timestamp (UpdateCode)
 --
--- JoinSession appends to the participants array and UpdateCode touches
--- last_activity. Both run under the student's RLS context but the existing
--- sessions_update policy only allows creators/instructors/admins.
--- Without this, these updates silently affect 0 rows when RLS is enforced.
+-- The sessions_update RLS policy only allows creators/instructors/admins.
+-- Rather than granting students broad UPDATE access, these narrow functions
+-- run as the table owner and do exactly one thing each.
 
-CREATE POLICY "sessions_participant_update" ON sessions
-  FOR UPDATE USING (is_section_member(section_id));
+-- Append a user to a session's participants array (idempotent).
+CREATE FUNCTION add_session_participant(p_session_id uuid, p_user_id uuid)
+RETURNS void AS $$
+  UPDATE sessions
+  SET participants = array_append(participants, p_user_id)
+  WHERE id = p_session_id AND NOT (p_user_id = ANY(participants));
+$$ LANGUAGE sql SECURITY DEFINER;
+
+COMMENT ON FUNCTION add_session_participant IS
+  'Appends a user to session participants (bypasses RLS, called from JoinSession)';
+
+-- Touch a session's last_activity timestamp.
+CREATE FUNCTION touch_session_activity(p_session_id uuid)
+RETURNS void AS $$
+  UPDATE sessions SET last_activity = now() WHERE id = p_session_id;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+COMMENT ON FUNCTION touch_session_activity IS
+  'Updates session last_activity (bypasses RLS, called from UpdateCode)';

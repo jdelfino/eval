@@ -39,12 +39,9 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 		return nil, err
 	}
 
-	// Append user to session participants if not already present
-	const updateParticipants = `
-		UPDATE sessions SET participants = array_append(participants, $2)
-		WHERE id = $1 AND NOT ($2 = ANY(participants))`
-
-	_, err = tx.Exec(ctx, updateParticipants, params.SessionID, params.UserID)
+	// Append user to session participants via SECURITY DEFINER function
+	// (students can't UPDATE sessions directly under RLS)
+	_, err = tx.Exec(ctx, "SELECT add_session_participant($1, $2)", params.SessionID, params.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +71,9 @@ func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, cod
 		return nil, HandleNotFound(err)
 	}
 
-	// Update session last_activity
-	_, err = tx.Exec(ctx, "UPDATE sessions SET last_activity = now() WHERE id = $1", sessionID)
+	// Touch session last_activity via SECURITY DEFINER function
+	// (students can't UPDATE sessions directly under RLS)
+	_, err = tx.Exec(ctx, "SELECT touch_session_activity($1)", sessionID)
 	if err != nil {
 		return nil, err
 	}

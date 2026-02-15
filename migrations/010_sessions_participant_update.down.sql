@@ -1,3 +1,4 @@
 -- Rollback: 010_sessions_participant_update
 
-DROP POLICY IF EXISTS "sessions_participant_update" ON sessions;
+DROP FUNCTION IF EXISTS add_session_participant(uuid, uuid);
+DROP FUNCTION IF EXISTS touch_session_activity(uuid);
