@@ -237,6 +237,9 @@ func (stubRepos) CreateUser(context.Context, store.CreateUserParams) (*store.Use
 func (stubRepos) ListClasses(context.Context) ([]store.Class, error) {
 	panic("stubRepos: unexpected ListClasses call")
 }
+func (stubRepos) ListMyClasses(context.Context, uuid.UUID) ([]store.Class, error) {
+	panic("stubRepos: unexpected ListMyClasses call")
+}
 func (stubRepos) GetClass(context.Context, uuid.UUID) (*store.Class, error) {
 	panic("stubRepos: unexpected GetClass call")
 }

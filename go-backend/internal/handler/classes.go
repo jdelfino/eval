@@ -39,10 +39,16 @@ func (h *ClassHandler) Routes() chi.Router {
 	return r
 }
 
-// List handles GET /api/v1/classes — returns all classes visible to the user.
+// List handles GET /api/v1/classes — returns classes the user created or is an instructor for.
 func (h *ClassHandler) List(w http.ResponseWriter, r *http.Request) {
+	authUser := auth.UserFromContext(r.Context())
+	if authUser == nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	repos := store.ReposFromContext(r.Context())
-	classes, err := repos.ListClasses(r.Context())
+	classes, err := repos.ListMyClasses(r.Context(), authUser.ID)
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return

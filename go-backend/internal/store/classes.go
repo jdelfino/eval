@@ -57,6 +57,29 @@ func (s *Store) ListClasses(ctx context.Context) ([]Class, error) {
 	return scanClasses(rows)
 }
 
+// ListMyClasses retrieves classes the user created OR where they have an instructor
+// section membership.
+func (s *Store) ListMyClasses(ctx context.Context, userID uuid.UUID) ([]Class, error) {
+	const query = `
+		SELECT DISTINCT c.id, c.namespace_id, c.name, c.description, c.created_by, c.created_at, c.updated_at
+		FROM classes c
+		LEFT JOIN sections sec ON sec.class_id = c.id
+		WHERE c.created_by = $1
+		   OR sec.id IN (
+		       SELECT section_id FROM section_memberships
+		       WHERE user_id = $1 AND role = 'instructor'
+		   )
+		ORDER BY c.created_at`
+
+	rows, err := s.q.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanClasses(rows)
+}
+
 // GetClass retrieves a class by its ID.
 // Returns ErrNotFound if the class does not exist.
 func (s *Store) GetClass(ctx context.Context, id uuid.UUID) (*Class, error) {

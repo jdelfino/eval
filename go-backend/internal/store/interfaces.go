@@ -97,6 +97,9 @@ type UpdateClassParams struct {
 type ClassRepository interface {
 	// ListClasses retrieves all classes visible to the current user (RLS-filtered).
 	ListClasses(ctx context.Context) ([]Class, error)
+	// ListMyClasses retrieves classes the user created OR where the user
+	// has an instructor section membership.
+	ListMyClasses(ctx context.Context, userID uuid.UUID) ([]Class, error)
 	// GetClass retrieves a class by ID.
 	// Returns ErrNotFound if the class does not exist.
 	GetClass(ctx context.Context, id uuid.UUID) (*Class, error)
