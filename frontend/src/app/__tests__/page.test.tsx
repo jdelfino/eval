@@ -72,7 +72,7 @@ describe('Landing Page', () => {
       });
     });
 
-    it('redirects student to /sections/join', async () => {
+    it('redirects student to /sections', async () => {
       (useAuth as jest.Mock).mockReturnValue({
         user: { id: '3', username: 'student1', role: 'student' },
         isLoading: false,
@@ -81,7 +81,7 @@ describe('Landing Page', () => {
       render(<Home />);
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/sections/join');
+        expect(mockPush).toHaveBeenCalledWith('/sections');
       });
     });
   });

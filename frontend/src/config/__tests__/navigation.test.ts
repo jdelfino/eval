@@ -16,14 +16,13 @@ describe('Navigation Configuration', () => {
   describe('NAV_ITEMS', () => {
     it('contains all expected navigation items', () => {
       const itemIds = NAV_ITEMS.map(item => item.id);
-      expect(itemIds).not.toContain('my-sections');
+      expect(itemIds).toContain('my-sections');
       expect(itemIds).toContain('dashboard');
       expect(itemIds).toContain('classes');
       expect(itemIds).toContain('problems');
       expect(itemIds).toContain('user-management');
       expect(itemIds).toContain('namespaces');
       // Note: 'sessions' removed - sessions are now managed from the dashboard
-      // Note: 'my-sections' removed - student sections list page removed
     });
 
     it('has unique IDs for all items', () => {
@@ -51,7 +50,7 @@ describe('Navigation Configuration', () => {
       const routes = Object.keys(BREADCRUMB_HIERARCHY);
       expect(routes).toContain('/classes');
       expect(routes).toContain('/classes/[id]');
-      expect(routes).not.toContain('/sections');
+      expect(routes).toContain('/sections');
       expect(routes).toContain('/sections/[section_id]');
       expect(routes).toContain('/instructor');
     });
@@ -59,15 +58,18 @@ describe('Navigation Configuration', () => {
     it('has correct parent references', () => {
       expect(BREADCRUMB_HIERARCHY['/classes']).toBeNull();
       expect(BREADCRUMB_HIERARCHY['/classes/[id]']).toBe('/classes');
-      expect(BREADCRUMB_HIERARCHY['/sections/[section_id]']).toBeNull();
+      expect(BREADCRUMB_HIERARCHY['/sections']).toBeNull();
+      expect(BREADCRUMB_HIERARCHY['/sections/[section_id]']).toBe('/sections');
     });
   });
 
   describe('getNavItemsForRole', () => {
     describe('student role', () => {
-      it('returns no items (student sections list removed)', () => {
+      it('returns My Sections item', () => {
         const items = getNavItemsForRole('student');
-        expect(items).toHaveLength(0);
+        const ids = items.map(i => i.id);
+        expect(ids).toContain('my-sections');
+        expect(items).toHaveLength(1);
       });
 
       it('does not include instructor items', () => {
@@ -144,9 +146,9 @@ describe('Navigation Configuration', () => {
 
   describe('getNavGroupsForRole', () => {
     describe('student role', () => {
-      it('returns no groups (student sections list removed)', () => {
+      it('returns Main group', () => {
         const groups = getNavGroupsForRole('student');
-        expect(groups).toEqual([]);
+        expect(groups).toEqual([NavGroup.Main]);
       });
     });
 

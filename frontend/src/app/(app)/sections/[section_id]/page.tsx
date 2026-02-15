@@ -110,8 +110,8 @@ export default function SectionDetailPage() {
       <div className="space-y-6">
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-red-600 mb-4">{error || 'Section not found'}</p>
-          <BackButton href={isInstructor ? '/classes' : '/'}>
-            {isInstructor ? 'Back to Classes' : 'Back to Home'}
+          <BackButton href={isInstructor ? '/classes' : '/sections'}>
+            {isInstructor ? 'Back to Classes' : 'Back to My Sections'}
           </BackButton>
         </div>
       </div>
@@ -123,8 +123,8 @@ export default function SectionDetailPage() {
       {/* Header */}
       <div>
         <div className="mb-4">
-          <BackButton href={isInstructor ? `/classes/${section.classId}` : '/'}>
-            {isInstructor ? 'Back to Class' : 'Back to Home'}
+          <BackButton href={isInstructor ? `/classes/${section.classId}` : '/sections'}>
+            {isInstructor ? 'Back to Class' : 'Back to My Sections'}
           </BackButton>
         </div>
 

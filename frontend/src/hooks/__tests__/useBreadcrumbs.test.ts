@@ -28,12 +28,14 @@ describe('useBreadcrumbs', () => {
       ]);
     });
 
-    it('returns empty array for /sections (list page removed)', () => {
+    it('returns single breadcrumb for /sections', () => {
       mockPathname.mockReturnValue('/sections');
 
       const { result } = renderHook(() => useBreadcrumbs());
 
-      expect(result.current).toEqual([]);
+      expect(result.current).toEqual([
+        { label: 'My Sections', href: undefined },
+      ]);
     });
 
     it('returns single breadcrumb for /instructor', () => {
@@ -80,12 +82,13 @@ describe('useBreadcrumbs', () => {
       ]);
     });
 
-    it('returns single breadcrumb for /sections/abc (top-level, no parent)', () => {
+    it('returns breadcrumb chain for /sections/abc', () => {
       mockPathname.mockReturnValue('/sections/abc');
 
       const { result } = renderHook(() => useBreadcrumbs());
 
       expect(result.current).toEqual([
+        { label: 'My Sections', href: '/sections' },
         { label: 'abc', href: undefined },
       ]);
     });
@@ -114,12 +117,13 @@ describe('useBreadcrumbs', () => {
   });
 
   describe('deeply nested routes', () => {
-    it('returns chain for /sections/sec1/session/sess1 (no /sections parent)', () => {
+    it('returns chain for /sections/sec1/session/sess1', () => {
       mockPathname.mockReturnValue('/sections/sec1/session/sess1');
 
       const { result } = renderHook(() => useBreadcrumbs());
 
       expect(result.current).toEqual([
+        { label: 'My Sections', href: '/sections' },
         { label: 'sec1', href: '/sections/sec1' },
         { label: 'sess1', href: undefined },
       ]);

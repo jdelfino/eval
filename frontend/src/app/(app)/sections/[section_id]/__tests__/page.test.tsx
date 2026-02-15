@@ -144,7 +144,7 @@ describe('SectionDetailPage', () => {
       expect(backLink).toHaveAttribute('href', `/classes/${CLASS_ID}`);
     });
 
-    it('shows "Back to Home" linking to / for student role', async () => {
+    it('shows "Back to My Sections" linking to /sections for student role', async () => {
       mockUser('student');
       mockSectionData();
 
@@ -154,8 +154,8 @@ describe('SectionDetailPage', () => {
         expect(screen.getByText('Intro to CS')).toBeInTheDocument();
       });
 
-      const backLink = screen.getByText('Back to Home').closest('a');
-      expect(backLink).toHaveAttribute('href', '/');
+      const backLink = screen.getByText('Back to My Sections').closest('a');
+      expect(backLink).toHaveAttribute('href', '/sections');
     });
   });
 
@@ -178,7 +178,7 @@ describe('SectionDetailPage', () => {
       expect(backLink).toHaveAttribute('href', '/classes');
     });
 
-    it('shows "Back to Home" linking to / for student role on error', async () => {
+    it('shows "Back to My Sections" linking to /sections for student role on error', async () => {
       mockUser('student');
 
       render(<SectionDetailPage />);
@@ -187,8 +187,8 @@ describe('SectionDetailPage', () => {
         expect(screen.getByText('Not found')).toBeInTheDocument();
       });
 
-      const backLink = screen.getByText('Back to Home').closest('a');
-      expect(backLink).toHaveAttribute('href', '/');
+      const backLink = screen.getByText('Back to My Sections').closest('a');
+      expect(backLink).toHaveAttribute('href', '/sections');
     });
   });
 
