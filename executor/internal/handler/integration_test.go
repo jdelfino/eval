@@ -223,6 +223,7 @@ func TestIntegration_NetworkDisabled(t *testing.T) {
 }
 
 func TestIntegration_MemoryLimit(t *testing.T) {
+	skipSandboxTest(t)
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
