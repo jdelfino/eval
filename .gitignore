@@ -69,6 +69,9 @@ secrets.tfvars
 *.tmp
 .cache/
 
+# AI planning docs
+history/
+
 # Air hot reload build output
 go-backend/tmp/
 executor/tmp/
