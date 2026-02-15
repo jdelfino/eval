@@ -19,8 +19,12 @@ BEGIN
 END
 $$;
 
--- Database-level access
-GRANT CONNECT ON DATABASE eval TO eval_app;
+-- Database-level access (use current_database() so this works in any DB)
+DO $$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO eval_app', current_database());
+END
+$$;
 GRANT USAGE ON SCHEMA public TO eval_app;
 
 -- DML on all existing tables, sequences, and functions
@@ -36,4 +40,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO eval_app
 -- Allow the app user to SET ROLE eval_app in the RLS middleware.
 -- Without this grant, SET ROLE eval_app fails and all authenticated
 -- requests return 503.
-GRANT eval_app TO app;
+-- In CI/test environments the "app" role may not exist (the connecting
+-- user is "eval"), so the grant is conditional.
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'app') THEN
+    EXECUTE 'GRANT eval_app TO app';
+  END IF;
+END
+$$;

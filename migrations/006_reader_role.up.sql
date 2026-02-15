@@ -11,7 +11,11 @@ BEGIN
 END
 $$;
 
-GRANT CONNECT ON DATABASE eval TO reader;
+DO $$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO reader', current_database());
+END
+$$;
 GRANT USAGE ON SCHEMA public TO reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO reader;
