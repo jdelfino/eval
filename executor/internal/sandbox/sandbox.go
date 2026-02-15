@@ -168,11 +168,16 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 
 	// Create temp directory for code and attached files.
+	// MkdirTemp creates with 0700 but the sandboxed process runs as nobody
+	// (uid 65534), so we widen to 0755 for read/traverse access.
 	tempDir, err := os.MkdirTemp("", "sandbox-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
+	if err := os.Chmod(tempDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
+	}
 
 	// Prepare code with optional random seed injection.
 	code := req.Code
@@ -204,13 +209,20 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// Build nsjail arguments.
 	// Use an empty chroot so only explicitly bind-mounted paths are visible.
 	//
-	// NOTE: nsjail requires host-level kernel namespace support and fails in
-	// nested container environments (Docker-in-Docker, CI runners, devcontainers).
-	// For those environments, use DISABLE_SANDBOX=true to run with RunUnsafe instead.
-	// See: https://github.com/google/nsjail/issues/238
+	// --disable_clone_newuser: Skip user namespace creation to avoid
+	//   uid_map/gid_map write restrictions on GKE Ubuntu nodes
+	//   (kernel.apparmor_restrict_unprivileged_userns).
+	// --experimental_mnt old: Use legacy mount(2) syscall instead of
+	//   mount_setattr which fails on "locked" mounts in containers.
+	//
+	// These flags are required for running nsjail inside GKE containers.
+	// For environments where nsjail cannot run at all (CI, devcontainers),
+	// use DISABLE_SANDBOX=true to run with RunUnsafe instead.
 	args := []string{
 		"--mode", "once",
 		"--chroot", chrootDir,
+		"--disable_clone_newuser",
+		"--experimental_mnt", "old",
 		"--user", "65534",
 		"--group", "65534",
 		"--time_limit", fmt.Sprintf("%d", timeoutSec),
@@ -218,16 +230,19 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--rlimit_fsize", "10",
 		"--rlimit_nproc", "10",
 		"--cwd", "/tmp/work",
-		"--bindmount_ro", cfg.PythonPath,
+		"--bindmount_ro", "/usr/bin",
 		"--bindmount_ro", "/usr/lib",
 		"--bindmount_ro", "/lib",
+		"--bindmount_ro", "/lib64",
 		"--bindmount_ro", "/dev/null",
 		"--bindmount_ro", "/dev/urandom",
+		"--tmpfsmount", "/tmp",
 		"--bindmount", tempDir + ":/tmp/work",
 		"--env", "PATH=/usr/bin:/bin",
 		"--env", "HOME=/tmp",
 		"--env", "PYTHONDONTWRITEBYTECODE=1",
 		"--env", "PYTHONUNBUFFERED=1",
+		"--disable_proc",
 		"--really_quiet",
 		"--", cfg.PythonPath, "/tmp/work/main.py",
 	}

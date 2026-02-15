@@ -19,8 +19,8 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8081"
         prometheus.io/path: "/metrics"
+        container.apparmor.security.beta.kubernetes.io/executor: "unconfined"
     spec:
-      hostUsers: false
       tolerations:
         - key: "executor-only"
           operator: "Equal"
@@ -44,16 +44,10 @@ spec:
               memory: 1Gi
               cpu: "1"
           securityContext:
-            capabilities:
-              add:
-                - SYS_ADMIN
-                - SYS_CHROOT
-                - SETUID
-                - SETGID
-                - NET_ADMIN
-              drop:
-                - ALL
-            procMount: Unmasked
+            privileged: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /healthz
@@ -66,3 +60,8 @@ spec:
               port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi

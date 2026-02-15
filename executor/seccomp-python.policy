@@ -1,0 +1,135 @@
+// Kafel seccomp policy for Python 3 inside nsjail.
+// Allows syscalls needed by CPython and its stdlib on x86_64 Debian.
+// Unknown/dangerous syscalls are killed (SIGSYS).
+
+POLICY python {
+  ALLOW {
+    // --- Memory management ---
+    brk,
+    mmap,
+    munmap,
+    mprotect,
+    mremap,
+    madvise,
+
+    // --- File I/O ---
+    read,
+    write,
+    readv,
+    writev,
+    pread64,
+    pwrite64,
+    openat,
+    close,
+    lseek,
+    dup,
+    dup2,
+    dup3,
+    fcntl,
+    flock,
+    pipe,
+    pipe2,
+    ioctl,          // isatty checks
+
+    // --- File metadata ---
+    fstat,
+    newfstatat,
+    statx,
+    access,
+    faccessat,
+    faccessat2,
+    readlink,
+    readlinkat,
+    getcwd,
+    getdents64,
+    umask,
+
+    // --- File operations (temp files, student writes) ---
+    unlink,
+    unlinkat,
+    rename,
+    renameat2,
+    mkdirat,
+    ftruncate,
+    fchmod,
+    fchmodat,
+
+    // --- Process lifecycle ---
+    exit_group,
+    exit,
+    getpid,
+    getppid,
+    gettid,
+    getuid,
+    getgid,
+    geteuid,
+    getegid,
+    getgroups,
+
+    // --- Architecture / TLS ---
+    arch_prctl,
+    set_tid_address,
+    set_robust_list,
+    prctl,
+    prlimit64,
+
+    // --- Signals ---
+    rt_sigaction,
+    rt_sigprocmask,
+    rt_sigreturn,
+    rt_sigpending,
+    sigaltstack,
+    tgkill,
+
+    // --- Threading / subprocess ---
+    futex,
+    clone,
+    clone3,
+    wait4,
+    waitid,
+
+    // --- Time ---
+    clock_gettime,
+    clock_getres,
+    clock_nanosleep,
+    gettimeofday,
+    nanosleep,
+
+    // --- Randomness ---
+    getrandom,
+
+    // --- Polling (asyncio, selectors) ---
+    poll,
+    ppoll,
+    select,
+    pselect6,
+    epoll_create1,
+    epoll_ctl,
+    epoll_wait,
+    epoll_pwait,
+    eventfd2,
+
+    // --- System info ---
+    sysinfo,
+    uname,
+
+    // --- Sockets (will fail in network ns, but avoid SIGSYS crash) ---
+    socket,
+    connect,
+    bind,
+    listen,
+    accept4,
+    sendto,
+    recvfrom,
+    sendmsg,
+    recvmsg,
+    shutdown,
+    getsockname,
+    getpeername,
+    getsockopt,
+    setsockopt,
+    socketpair
+  }
+}
+
+USE python DEFAULT KILL

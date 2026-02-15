@@ -160,6 +160,7 @@ resource "google_container_node_pool" "executor" {
 
   node_config {
     machine_type = var.executor_pool_machine_type
+    image_type   = "COS_CONTAINERD"
     spot         = var.executor_pool_spot
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
