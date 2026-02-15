@@ -59,7 +59,7 @@ func TestRLSIsolation_CrossNamespaceClasses(t *testing.T) {
 
 	t.Run("instructor A sees only namespace A classes", func(t *testing.T) {
 		resp := h.doRequest(t, http.MethodGet, "/api/v1/classes", tokenA)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
@@ -97,7 +97,7 @@ func TestRLSIsolation_CrossNamespaceClasses(t *testing.T) {
 
 	t.Run("instructor B sees only namespace B classes", func(t *testing.T) {
 		resp := h.doRequest(t, http.MethodGet, "/api/v1/classes", tokenB)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
