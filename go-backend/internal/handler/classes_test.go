@@ -25,7 +25,7 @@ type classesTestRepos struct {
 	createClassFn              func(ctx context.Context, params store.CreateClassParams) (*store.Class, error)
 	updateClassFn              func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
 	deleteClassFn              func(ctx context.Context, id uuid.UUID) error
-	listClassInstructorNamesFn func(ctx context.Context, classID uuid.UUID) ([]string, error)
+	listClassInstructorNamesFn func(ctx context.Context, classID uuid.UUID) (map[string]string, error)
 	listSectionsByClassFn      func(ctx context.Context, classID uuid.UUID) ([]store.Section, error)
 }
 
@@ -51,7 +51,7 @@ func (m *classesTestRepos) DeleteClass(ctx context.Context, id uuid.UUID) error 
 	return m.deleteClassFn(ctx, id)
 }
 
-func (m *classesTestRepos) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error) {
+func (m *classesTestRepos) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error) {
 	if m.listClassInstructorNamesFn != nil {
 		return m.listClassInstructorNamesFn(ctx, classID)
 	}
@@ -747,6 +747,64 @@ func TestGetClassDetail_WithSections(t *testing.T) {
 	}
 }
 
+func TestGetClassDetail_WithInstructorNames(t *testing.T) {
+	c := testClass()
+	classID := c.ID
+	inst1ID := uuid.New()
+	inst2ID := uuid.New()
+
+	repos := &classesTestRepos{
+		getClassFn: func(_ context.Context, id uuid.UUID) (*store.Class, error) {
+			if id != classID {
+				t.Fatalf("unexpected id: %v", id)
+			}
+			return c, nil
+		},
+		listSectionsByClassFn: func(_ context.Context, _ uuid.UUID) ([]store.Section, error) {
+			return nil, nil
+		},
+		listClassInstructorNamesFn: func(_ context.Context, cid uuid.UUID) (map[string]string, error) {
+			if cid != classID {
+				t.Fatalf("unexpected class id: %v", cid)
+			}
+			return map[string]string{
+				inst1ID.String(): "Dr. Smith",
+				inst2ID.String(): "jane@example.com",
+			}, nil
+		},
+	}
+
+	h := NewClassHandler()
+	req := httptest.NewRequest(http.MethodGet, "/"+classID.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", classID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = withClassRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Get(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got classDetailResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.InstructorNames) != 2 {
+		t.Fatalf("expected 2 instructor names, got %d", len(got.InstructorNames))
+	}
+	if got.InstructorNames[inst1ID.String()] != "Dr. Smith" {
+		t.Errorf("expected 'Dr. Smith', got %q", got.InstructorNames[inst1ID.String()])
+	}
+	if got.InstructorNames[inst2ID.String()] != "jane@example.com" {
+		t.Errorf("expected 'jane@example.com', got %q", got.InstructorNames[inst2ID.String()])
+	}
+}
+
 // mockClassRepo is kept for use by other test files (e.g. auth_accept_invite_test.go).
 type mockClassRepo struct {
 	listClassesFn              func(ctx context.Context) ([]store.Class, error)
@@ -754,7 +812,7 @@ type mockClassRepo struct {
 	createClassFn              func(ctx context.Context, params store.CreateClassParams) (*store.Class, error)
 	updateClassFn              func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
 	deleteClassFn              func(ctx context.Context, id uuid.UUID) error
-	listClassInstructorNamesFn func(ctx context.Context, classID uuid.UUID) ([]string, error)
+	listClassInstructorNamesFn func(ctx context.Context, classID uuid.UUID) (map[string]string, error)
 }
 
 func (m *mockClassRepo) ListClasses(ctx context.Context) ([]store.Class, error) {
@@ -777,7 +835,7 @@ func (m *mockClassRepo) DeleteClass(ctx context.Context, id uuid.UUID) error {
 	return m.deleteClassFn(ctx, id)
 }
 
-func (m *mockClassRepo) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error) {
+func (m *mockClassRepo) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error) {
 	if m.listClassInstructorNamesFn != nil {
 		return m.listClassInstructorNamesFn(ctx, classID)
 	}

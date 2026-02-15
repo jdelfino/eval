@@ -93,14 +93,19 @@ func (h *ClassHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sections = secs
 	}
 
-	// Convert instructor names list to map (for now, use empty map since frontend expects user_id -> name)
-	// TODO: Update ListClassInstructorNames to return map[user_id]name
-	instructorNamesMap := make(map[string]string)
+	instructorNames, err := repos.ListClassInstructorNames(r.Context(), id)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+	if instructorNames == nil {
+		instructorNames = make(map[string]string)
+	}
 
 	httputil.WriteJSON(w, http.StatusOK, classDetailResponse{
 		Class:           class,
 		Sections:        sections,
-		InstructorNames: instructorNamesMap,
+		InstructorNames: instructorNames,
 	})
 }
 

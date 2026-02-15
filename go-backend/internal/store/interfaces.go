@@ -108,9 +108,9 @@ type ClassRepository interface {
 	// DeleteClass deletes a class by ID.
 	// Returns ErrNotFound if the class does not exist.
 	DeleteClass(ctx context.Context, id uuid.UUID) error
-	// ListClassInstructorNames returns distinct instructor display names (or emails)
-	// for all sections of a class, using a single joined query.
-	ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error)
+	// ListClassInstructorNames returns a map of user_id -> display name (or email)
+	// for all instructors across sections of a class.
+	ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error)
 }
 
 // Problem represents a coding exercise in the database.

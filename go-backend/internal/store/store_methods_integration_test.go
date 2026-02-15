@@ -1405,7 +1405,7 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 		Role:        auth.RoleInstructor,
 	}
 
-	t.Run("returns distinct instructor names", func(t *testing.T) {
+	t.Run("returns instructor id-name map", func(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, authUser)
 		defer conn.Release()
 
@@ -1416,12 +1416,11 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 		if len(names) != 2 {
 			t.Fatalf("expected 2 instructor names, got %d: %v", len(names), names)
 		}
-		// Should be sorted: "Dr. Smith" before "inst2@test.com"
-		if names[0] != "Dr. Smith" {
-			t.Errorf("expected first name 'Dr. Smith', got %q", names[0])
+		if names[inst1.String()] != "Dr. Smith" {
+			t.Errorf("expected inst1 name 'Dr. Smith', got %q", names[inst1.String()])
 		}
-		if names[1] != "inst2@test.com" {
-			t.Errorf("expected second name 'inst2@test.com', got %q", names[1])
+		if names[inst2.String()] != "inst2@test.com" {
+			t.Errorf("expected inst2 name 'inst2@test.com', got %q", names[inst2.String()])
 		}
 	})
 

@@ -121,17 +121,17 @@ func (s *Store) DeleteClass(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// ListClassInstructorNames returns distinct instructor display names (or emails)
-// for all sections of a class, using a single joined query.
-func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) ([]string, error) {
+// ListClassInstructorNames returns a map of user_id -> display name (or email)
+// for all instructors across sections of a class.
+func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error) {
 	const query = `
-		SELECT DISTINCT COALESCE(u.display_name, u.email)
+		SELECT DISTINCT u.id, COALESCE(u.display_name, u.email)
 		FROM sections s
 		JOIN section_memberships sm ON sm.section_id = s.id
 		JOIN users u ON u.id = sm.user_id
 		WHERE s.class_id = $1
 		  AND sm.role = 'instructor'
-		ORDER BY 1`
+		ORDER BY 2`
 
 	rows, err := s.q.Query(ctx, query, classID)
 	if err != nil {
@@ -139,13 +139,13 @@ func (s *Store) ListClassInstructorNames(ctx context.Context, classID uuid.UUID)
 	}
 	defer rows.Close()
 
-	var names []string
+	names := make(map[string]string)
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var userID, name string
+		if err := rows.Scan(&userID, &name); err != nil {
 			return nil, err
 		}
-		names = append(names, name)
+		names[userID] = name
 	}
 	return names, rows.Err()
 }
