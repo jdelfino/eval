@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { listSessionHistoryWithFilters } from '@/lib/api/sessions';
+import { listSessionHistoryWithFilters, endSession } from '@/lib/api/sessions';
 import type { Session } from '@/types/api';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -84,11 +84,9 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
     if (onEndSession) {
       onEndSession(sessionToEnd);
     } else {
-      // Call API to end session
       try {
-        // TODO: Implement end session API endpoint
-        console.warn('End session:', sessionToEnd);
-        fetchSessions(); // Refresh list
+        await endSession(sessionToEnd);
+        fetchSessions();
       } catch (err) {
         console.error('Error ending session:', err);
         alert('Failed to end session');
