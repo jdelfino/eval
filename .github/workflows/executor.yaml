@@ -49,8 +49,37 @@ jobs:
           working-directory: executor
           args: --timeout=3m
 
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: executor/go.sum
+      - name: Build executor
+        run: go build -o ./tmp/executor ./cmd/executor
+        working-directory: executor
+      - name: Start executor
+        run: |
+          executor/tmp/executor &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8081/healthz > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:8081/healthz || { echo "Executor not ready"; exit 1; }
+        env:
+          DISABLE_SANDBOX: "true"
+          PYTHON_PATH: /usr/bin/python3
+      - name: Run integration tests
+        env:
+          EXECUTOR_TEST_URL: http://localhost:8081
+          EXECUTOR_SKIP_SANDBOX_TESTS: "1"
+        run: go test -v -race -count=1 ./...
+        working-directory: executor
+
   build-push:
-    needs: [test, lint]
+    needs: [test, lint, integration-test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
