@@ -2,15 +2,11 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"net/http"
-
-	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
-	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
@@ -19,75 +15,46 @@ type TracerClient interface {
 	Trace(ctx context.Context, req executor.TraceRequest) (*executor.TraceResponse, error)
 }
 
-// traceHTTPRequest is the request body for POST /sessions/{id}/trace.
-type traceHTTPRequest struct {
-	StudentID *uuid.UUID `json:"student_id"` // optional; defaults to caller's own ID
-	Code      string     `json:"code" validate:"required"`
-	Stdin     string     `json:"stdin"`
-	MaxSteps  *int       `json:"max_steps,omitempty"`
+// standaloneTraceRequest is the request body for POST /trace.
+type standaloneTraceRequest struct {
+	Code     string `json:"code" validate:"required"`
+	Stdin    string `json:"stdin"`
+	MaxSteps *int   `json:"max_steps,omitempty"`
 }
 
-// TraceHandler handles debugger trace requests for sessions.
+// TraceHandler handles debugger trace requests.
 type TraceHandler struct {
-	tracer TracerClient
+	tracer       TracerClient
+	traceLimiter *PracticeLimiter
 }
 
-// NewTraceHandler creates a new TraceHandler.
+// NewTraceHandler creates a new TraceHandler with rate limiting.
 func NewTraceHandler(tracer TracerClient) *TraceHandler {
 	return &TraceHandler{
-		tracer: tracer,
+		tracer:       tracer,
+		traceLimiter: NewPracticeLimiter(15),
 	}
 }
 
-// Trace handles POST /api/v1/sessions/{id}/trace.
-func (h *TraceHandler) Trace(w http.ResponseWriter, r *http.Request) {
+// StandaloneTrace handles POST /api/v1/trace.
+// Any authenticated user can trace code — no session context needed.
+func (h *TraceHandler) StandaloneTrace(w http.ResponseWriter, r *http.Request) {
 	authUser := auth.UserFromContext(r.Context())
 	if authUser == nil {
 		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 
-	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-
-	req, err := httpbind.BindJSON[traceHTTPRequest](w, r)
+	req, err := httpbind.BindJSON[standaloneTraceRequest](w, r)
 	if err != nil {
 		return
 	}
 
-	// Default student_id to caller's own ID (students tracing their own code).
-	studentID := authUser.ID
-	if req.StudentID != nil {
-		studentID = *req.StudentID
-	}
-
-	repos := store.ReposFromContext(r.Context())
-	// Look up session
-	session, err := repos.GetSession(r.Context(), sessionID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "session not found")
-			return
-		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+	if !h.traceLimiter.Allow(authUser.ID) {
+		httputil.WriteError(w, http.StatusTooManyRequests, "trace rate limit exceeded (15 requests per minute)")
 		return
 	}
 
-	// Check user is creator or participant
-	if !isCreatorOrParticipant(authUser.ID, session) {
-		httputil.WriteError(w, http.StatusForbidden, "you are not a participant in this session")
-		return
-	}
-
-	// Validate student_id is a participant
-	if !isCreatorOrParticipant(studentID, session) {
-		httputil.WriteError(w, http.StatusBadRequest, "student_id is not a participant in this session")
-		return
-	}
-
-	// Call executor trace
 	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{
 		Code:     req.Code,
 		Stdin:    req.Stdin,

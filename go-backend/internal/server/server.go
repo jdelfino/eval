@@ -268,12 +268,14 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Post("/execute", executeHandler.StandaloneExecute)
 			})
 
-			// Advanced session features (instructor+): trace and AI analysis
+			// Standalone trace (any authenticated user) — no session context
 			traceHandler := handler.NewTraceHandler(execClient)
+			r.Post("/trace", traceHandler.StandaloneTrace)
+
+			// Advanced session features (instructor+): AI analysis
 			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.Post("/sessions/{id}/trace", traceHandler.Trace)
 				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
