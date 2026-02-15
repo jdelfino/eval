@@ -96,10 +96,11 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
       switch (event) {
         case 'featured_student_changed': {
           if (payload) {
+            const userId = payload.user_id || null;
             setState(prev => prev ? {
               ...prev,
-              featured_student_id: payload.user_id || null,
-              featured_code: payload.code || null,
+              featured_student_id: userId,
+              featured_code: userId ? (payload.code ?? '') : null,
             } : prev);
           }
           break;

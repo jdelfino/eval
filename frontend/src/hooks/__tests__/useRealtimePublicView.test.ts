@@ -244,6 +244,26 @@ describe('useRealtimePublicView', () => {
       expect(result.current.state?.featured_code).toBe('print("featured")');
     });
 
+    it('should handle featuring student with empty code', async () => {
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        simulatePublication('featured_student_changed', {
+          user_id: 'student-1',
+          code: '',
+        });
+      });
+
+      expect(result.current.state?.featured_student_id).toBe('student-1');
+      expect(result.current.state?.featured_code).toBe('');
+    });
+
     it('should handle clearing featured student', async () => {
       mockGetSessionPublicState.mockResolvedValue({
         ...mockPublicState,
@@ -266,8 +286,8 @@ describe('useRealtimePublicView', () => {
         });
       });
 
-      expect(result.current.state?.featured_student_id).toBeFalsy();
-      expect(result.current.state?.featured_code).toBeFalsy();
+      expect(result.current.state?.featured_student_id).toBeNull();
+      expect(result.current.state?.featured_code).toBeNull();
     });
 
     it('should handle session_ended event', async () => {

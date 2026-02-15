@@ -72,7 +72,7 @@ export async function executeCode(
  * @param studentId - The student's user ID to feature
  */
 export async function featureStudent(sessionId: string, studentId: string, code?: string): Promise<void> {
-  await apiPost(`/sessions/${sessionId}/feature`, { student_id: studentId, code });
+  await apiPost(`/sessions/${sessionId}/feature`, { student_id: studentId, code: code ?? '' });
 }
 
 /**

@@ -27,7 +27,7 @@ function PublicViewContent() {
   const lastFeaturedStudentId = useRef<string | null>(null);
   const lastFeaturedCode = useRef<string | null>(null);
 
-  const hasFeaturedSubmission = !!(state?.featured_student_id && state?.featured_code);
+  const hasFeaturedSubmission = !!state?.featured_student_id;
 
   // Show connection status and join code in the global header
   useEffect(() => {
@@ -64,8 +64,8 @@ function PublicViewContent() {
 
     if (studentChanged || codeChanged) {
       lastFeaturedStudentId.current = state?.featured_student_id || null;
-      lastFeaturedCode.current = state?.featured_code || null;
-      setLocalCode(state?.featured_code || (state?.problem as any)?.starter_code || '');
+      lastFeaturedCode.current = state?.featured_code ?? null;
+      setLocalCode(state?.featured_code ?? (state?.problem as any)?.starter_code ?? '');
     }
   }, [state?.featured_student_id, state?.featured_code, state?.problem]);
 
