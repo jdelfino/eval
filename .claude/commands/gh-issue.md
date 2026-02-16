@@ -20,7 +20,7 @@ Use priority 1 for bugs, 2 for features/tasks unless the issue indicates urgency
 
 ## 3. Implement
 
-Follow the coordinator workflow below. The coordinator will triage the work and decide whether to execute directly or create a branch/PR.
+Follow the coordinator workflow below. The coordinator will triage the work and create a branch/PR.
 
 ## 4. PR Must Reference the GitHub Issue
 
