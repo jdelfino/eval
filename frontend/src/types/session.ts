@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Session as ApiSession } from './api';
+import type { Session as ApiSession, Problem } from './api';
 
 export interface CallFrame {
   function_name: string;
@@ -86,7 +86,7 @@ export function mapApiSession(api: ApiSession): {
   namespace_id: string;
   section_id: string;
   section_name: string;
-  problem: unknown;
+  problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
   creator_id: string;

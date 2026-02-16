@@ -124,14 +124,14 @@ interface SessionStateResponse {
  */
 export async function getSessionDetails(sessionId: string): Promise<SessionDetails> {
   const raw = await apiGet<SessionStateResponse>(`/sessions/${sessionId}/details`);
-  const problem = raw.session.problem as Record<string, unknown> | null;
+  const problem = raw.session.problem;
 
   return {
     id: raw.session.id,
     join_code: raw.join_code,
-    problem_title: (problem?.title as string) || '',
-    problem_description: problem?.description as string | undefined,
-    starter_code: problem?.starter_code as string | undefined,
+    problem_title: problem?.title || '',
+    problem_description: problem?.description ?? undefined,
+    starter_code: problem?.starter_code ?? undefined,
     created_at: raw.session.created_at,
     ended_at: raw.session.ended_at || undefined,
     status: raw.session.status as 'active' | 'completed',

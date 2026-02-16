@@ -154,7 +154,7 @@ function StudentPage() {
   // Update problem when session loads
   useEffect(() => {
     if (session?.problem) {
-      setProblem(session.problem as Problem);
+      setProblem(session.problem);
       setSessionExecutionSettings({
         stdin: session.problem.execution_settings?.stdin,
         random_seed: session.problem.execution_settings?.random_seed,
