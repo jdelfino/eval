@@ -127,6 +127,8 @@ Check the "Concerns" section — file follow-up issues if needed.
 
 ### 4. Pre-PR Review
 
+Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
+
 After all tasks are complete, run 3 specialized reviews **in parallel** using the Task tool:
 
 **Correctness Reviewer:**
