@@ -17,7 +17,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
-	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
@@ -92,7 +91,7 @@ func TestListSectionsByClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", sec.ClassID.String())
@@ -128,7 +127,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -152,7 +151,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 
 func TestListSectionsByClass_InvalidClassID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -177,7 +176,7 @@ func TestListSectionsByClass_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -205,7 +204,7 @@ func TestGetSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/"+sec.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
@@ -238,7 +237,7 @@ func TestGetSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -257,7 +256,7 @@ func TestGetSection_NotFound(t *testing.T) {
 
 func TestGetSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -321,7 +320,7 @@ func TestCreateSection_Success(t *testing.T) {
 		"name":     "Section A",
 		"semester": "Fall 2025",
 	})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -368,7 +367,7 @@ func TestCreateSection_MembershipCreationFails(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -391,7 +390,7 @@ func TestCreateSection_MembershipCreationFails(t *testing.T) {
 }
 
 func TestCreateSection_Unauthorized(t *testing.T) {
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", uuid.New().String())
@@ -407,7 +406,7 @@ func TestCreateSection_Unauthorized(t *testing.T) {
 }
 
 func TestCreateSection_InvalidClassID(t *testing.T) {
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -425,7 +424,7 @@ func TestCreateSection_InvalidClassID(t *testing.T) {
 
 func TestCreateSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	router := h.ClassRoutes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -475,7 +474,7 @@ func TestUpdateSection_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"name": newName,
 	})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPatch, "/"+sec.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -510,7 +509,7 @@ func TestUpdateSection_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -539,7 +538,7 @@ func TestDeleteSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -564,7 +563,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -583,7 +582,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 
 func TestDeleteSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -602,7 +601,7 @@ func TestDeleteSection_InvalidID(t *testing.T) {
 
 func TestDeleteSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	router := h.Routes()
 
 	id := uuid.New()
@@ -624,7 +623,7 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 
 func TestCreateSection_MissingName(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"semester": "Fall 2025"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -648,7 +647,7 @@ func TestCreateSection_MissingName(t *testing.T) {
 
 func TestCreateSection_InvalidBody(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -670,7 +669,7 @@ func TestCreateSection_InvalidBody(t *testing.T) {
 }
 
 func TestUpdateSection_InvalidID(t *testing.T) {
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -690,7 +689,7 @@ func TestUpdateSection_InvalidID(t *testing.T) {
 
 func TestUpdateSection_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -716,7 +715,7 @@ func TestUpdateSection_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -742,7 +741,7 @@ func TestGetSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -767,7 +766,7 @@ func TestDeleteSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -811,7 +810,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -848,7 +847,7 @@ func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -885,7 +884,7 @@ func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -936,49 +935,13 @@ func TestGenerateJoinCode_Unique(t *testing.T) {
 	}
 }
 
-// sectionTestUserRepo implements store.UserRepository for section handler tests.
-type sectionTestUserRepo struct {
-	getUserByEmailFn func(ctx context.Context, email string) (*store.User, error)
-}
-
-func (m *sectionTestUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *sectionTestUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *sectionTestUserRepo) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
-	if m.getUserByEmailFn != nil {
-		return m.getUserByEmailFn(ctx, email)
-	}
-	return nil, store.ErrNotFound
-}
-func (m *sectionTestUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *sectionTestUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
-	return nil, nil
-}
-func (m *sectionTestUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *sectionTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
-	return store.ErrNotFound
-}
-func (m *sectionTestUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
-	return nil, nil
-}
-func (m *sectionTestUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
-	return nil, nil
-}
-
 // sectionTestRepos embeds stubRepos and overrides section-related methods.
 type sectionTestRepos struct {
 	stubRepos
 	sec   *mockSectionRepo
 	sess  *mockSessionRepo
 	memb  *mockMembershipRepo
-	users *sectionTestUserRepo
+	users *StubUserRepo
 }
 
 var _ store.Repos = (*sectionTestRepos)(nil)
@@ -1020,7 +983,7 @@ func (r *sectionTestRepos) GetUserByEmail(ctx context.Context, email string) (*s
 	return r.users.GetUserByEmail(ctx, email)
 }
 
-func secRepos(sec *mockSectionRepo, sess *mockSessionRepo, memb *mockMembershipRepo, users *sectionTestUserRepo) *sectionTestRepos {
+func secRepos(sec *mockSectionRepo, sess *mockSessionRepo, memb *mockMembershipRepo, users *StubUserRepo) *sectionTestRepos {
 	return &sectionTestRepos{sec: sec, sess: sess, memb: memb, users: users}
 }
 
@@ -1040,7 +1003,7 @@ func TestMySections_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1066,7 +1029,7 @@ func TestMySections_Success(t *testing.T) {
 }
 
 func TestMySections_Unauthorized(t *testing.T) {
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	rec := httptest.NewRecorder()
 
@@ -1084,7 +1047,7 @@ func TestMySections_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1116,7 +1079,7 @@ func TestSectionListSessions_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1142,7 +1105,7 @@ func TestSectionListSessions_Success(t *testing.T) {
 }
 
 func TestSectionListSessions_InvalidID(t *testing.T) {
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -1176,7 +1139,7 @@ func TestRegenerateCode_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
@@ -1208,7 +1171,7 @@ func TestRegenerateCode_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -1245,7 +1208,7 @@ func TestListInstructors_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1281,7 +1244,7 @@ func TestListInstructors_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1319,8 +1282,8 @@ func TestAddInstructor_Success(t *testing.T) {
 		JoinedAt:  time.Now(),
 	}
 
-	userRepo := &sectionTestUserRepo{
-		getUserByEmailFn: func(_ context.Context, email string) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, email string) (*store.User, error) {
 			if email != "prof@example.com" {
 				t.Fatalf("unexpected email: %v", email)
 			}
@@ -1339,7 +1302,7 @@ func TestAddInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1367,13 +1330,13 @@ func TestAddInstructor_Success(t *testing.T) {
 }
 
 func TestAddInstructor_UserNotFound(t *testing.T) {
-	userRepo := &sectionTestUserRepo{
-		getUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"email": "nobody@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1393,8 +1356,8 @@ func TestAddInstructor_UserNotFound(t *testing.T) {
 }
 
 func TestAddInstructor_NotInstructorRole(t *testing.T) {
-	userRepo := &sectionTestUserRepo{
-		getUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
 			return &store.User{
 				ID:    uuid.New(),
 				Email: "student@example.com",
@@ -1403,7 +1366,7 @@ func TestAddInstructor_NotInstructorRole(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"email": "student@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1436,8 +1399,8 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 		Email: "prof@example.com",
 		Role:  string(auth.RoleInstructor),
 	}
-	userRepo := &sectionTestUserRepo{
-		getUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
 			return instrUser, nil
 		},
 	}
@@ -1447,7 +1410,7 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1487,7 +1450,7 @@ func TestRemoveInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1515,7 +1478,7 @@ func TestRemoveInstructor_LastInstructor(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1551,7 +1514,7 @@ func TestRemoveInstructor_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1576,7 +1539,7 @@ func TestMySections_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1598,7 +1561,7 @@ func TestSectionListSessions_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1622,7 +1585,7 @@ func TestRegenerateCode_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -1645,8 +1608,8 @@ func TestAddInstructor_InternalError(t *testing.T) {
 		Email: "prof@example.com",
 		Role:  string(auth.RoleInstructor),
 	}
-	userRepo := &sectionTestUserRepo{
-		getUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
 			return instrUser, nil
 		},
 	}
@@ -1656,7 +1619,7 @@ func TestAddInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1700,7 +1663,7 @@ func TestRemoveInstructor_NotMemberButOtherInstructorExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1728,7 +1691,7 @@ func TestRemoveInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1754,7 +1717,7 @@ func TestListInstructors_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
+	h := NewSectionHandler(NewMembershipHandler())
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1771,28 +1734,12 @@ func TestListInstructors_InternalError(t *testing.T) {
 	}
 }
 
-// --- RBAC Forbidden tests (middleware-level, mimicking server.go routing) ---
+// --- RBAC tests exercising SectionHandler.Routes() directly ---
+// These tests verify that sub-resource routes are nested inside Routes(),
+// not flat-mounted in server.go. The Routes() router is the single source
+// of truth for section routing.
 
-// buildSectionRouterMatchingServerLayout creates a router matching the server.go
-// layout: ListSessions is outside the permission group (students need it to
-// discover active sessions; RLS enforces visibility), while instructor-only
-// endpoints are inside RequirePermission.
-func buildSectionRouterMatchingServerLayout(h *SectionHandler) chi.Router {
-	r := chi.NewRouter()
-	// Students need to list sessions (RLS enforces visibility)
-	r.Get("/sections/{id}/sessions", h.ListSessions)
-	// Instructor+ endpoints
-	r.Group(func(r chi.Router) {
-		r.Use(custommw.RequirePermission(auth.PermContentManage))
-		r.Post("/sections/{id}/regenerate-code", h.RegenerateCode)
-		r.Get("/sections/{id}/instructors", h.ListInstructors)
-		r.Post("/sections/{id}/instructors", h.AddInstructor)
-		r.Delete("/sections/{id}/instructors/{userID}", h.RemoveInstructor)
-	})
-	return r
-}
-
-func TestSectionListSessions_StudentAllowed(t *testing.T) {
+func TestSectionRoutes_ListSessions_StudentAllowed(t *testing.T) {
 	// Regression test: students must be able to list sessions to discover active
 	// ones. The route lives outside RequirePermission; RLS enforces visibility.
 	sectionID := uuid.New()
@@ -1806,10 +1753,11 @@ func TestSectionListSessions_StudentAllowed(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler()
-	router := buildSectionRouterMatchingServerLayout(h)
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/sections/"+sectionID.String()+"/sessions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/"+sectionID.String()+"/sessions", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
@@ -1821,7 +1769,7 @@ func TestSectionListSessions_StudentAllowed(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for student GET sessions, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 for student GET sessions via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	var got []store.Session
@@ -1833,11 +1781,70 @@ func TestSectionListSessions_StudentAllowed(t *testing.T) {
 	}
 }
 
-func TestRegenerateCode_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler()
-	router := buildSectionRouterMatchingServerLayout(h)
+func TestSectionRoutes_ListMembers_StudentAllowed(t *testing.T) {
+	sectionID := uuid.New()
+	mem := testMembership()
+	membRepo := &mockMembershipRepo{
+		listMembersFn: func(_ context.Context, sid uuid.UUID) ([]store.SectionMembership, error) {
+			return []store.SectionMembership{*mem}, nil
+		},
+	}
 
-	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/regenerate-code", nil)
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/"+sectionID.String()+"/members", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	ctx = store.WithRepos(ctx, membershipRepos(membRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for student GET members via Routes(), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSectionRoutes_LeaveMembership(t *testing.T) {
+	sectionID := uuid.New()
+	userID := uuid.New()
+	membRepo := &mockMembershipRepo{
+		deleteMembershipFn: func(_ context.Context, sid, uid uuid.UUID) error {
+			return nil
+		},
+	}
+
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String()+"/membership", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   userID,
+		Role: auth.RoleStudent,
+	})
+	ctx = store.WithRepos(ctx, membershipRepos(membRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for student DELETE membership via Routes(), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSectionRoutes_RegenerateCode_RBACForbidden(t *testing.T) {
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodPost, "/"+uuid.New().String()+"/regenerate-code", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
@@ -1848,15 +1855,16 @@ func TestRegenerateCode_RBACForbidden(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for student POST regenerate-code, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for student POST regenerate-code via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestListInstructors_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler()
-	router := buildSectionRouterMatchingServerLayout(h)
+func TestSectionRoutes_ListInstructors_RBACForbidden(t *testing.T) {
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/sections/"+uuid.New().String()+"/instructors", nil)
+	req := httptest.NewRequest(http.MethodGet, "/"+uuid.New().String()+"/instructors", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
@@ -1867,16 +1875,17 @@ func TestListInstructors_RBACForbidden(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for student GET instructors, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for student GET instructors via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestAddInstructor_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler()
-	router := buildSectionRouterMatchingServerLayout(h)
+func TestSectionRoutes_AddInstructor_RBACForbidden(t *testing.T) {
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
-	req := httptest.NewRequest(http.MethodPost, "/sections/"+uuid.New().String()+"/instructors", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/"+uuid.New().String()+"/instructors", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
@@ -1888,15 +1897,16 @@ func TestAddInstructor_RBACForbidden(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for student POST instructors, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for student POST instructors via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestRemoveInstructor_RBACForbidden(t *testing.T) {
-	h := NewSectionHandler()
-	router := buildSectionRouterMatchingServerLayout(h)
+func TestSectionRoutes_RemoveInstructor_RBACForbidden(t *testing.T) {
+	membershipHandler := NewMembershipHandler()
+	h := NewSectionHandler(membershipHandler)
+	router := h.Routes()
 
-	req := httptest.NewRequest(http.MethodDelete, "/sections/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID:   uuid.New(),
 		Role: auth.RoleStudent,
@@ -1907,6 +1917,6 @@ func TestRemoveInstructor_RBACForbidden(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for student DELETE instructor, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for student DELETE instructor via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 }

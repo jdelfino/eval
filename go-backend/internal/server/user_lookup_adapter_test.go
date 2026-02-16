@@ -11,6 +11,10 @@ import (
 )
 
 // mockUserRepo is a store.UserRepository stub that returns configured responses.
+// NOTE: This mock lives in the server package and cannot share the handler
+// package's StubUserRepo (test files are not importable across packages).
+// It uses a simpler design (user/err fields) since only GetUserByExternalID
+// is exercised by UserLookupAdapter.
 type mockUserRepo struct {
 	user *store.User
 	err  error

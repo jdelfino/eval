@@ -139,6 +139,42 @@ func TestWriteError_4xx_DoesNotSetErrorDetail(t *testing.T) {
 	}
 }
 
+func TestWriteErrorWithCode(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	WriteErrorWithCode(rr, http.StatusGone, "INVITATION_CONSUMED", "invitation is no longer pending")
+
+	if rr.Code != http.StatusGone {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusGone)
+	}
+
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if resp["error"] != "invitation is no longer pending" {
+		t.Errorf("error = %q, want %q", resp["error"], "invitation is no longer pending")
+	}
+	if resp["code"] != "INVITATION_CONSUMED" {
+		t.Errorf("code = %q, want %q", resp["code"], "INVITATION_CONSUMED")
+	}
+}
+
+func TestWriteErrorWithCode_5xx_SetsErrorDetail(t *testing.T) {
+	mock := &mockErrorDetailSetter{ResponseRecorder: *httptest.NewRecorder()}
+
+	WriteErrorWithCode(mock, http.StatusInternalServerError, "INTERNAL", "db connection lost")
+
+	if mock.detail != "db connection lost" {
+		t.Errorf("ErrorDetail = %q, want %q", mock.detail, "db connection lost")
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

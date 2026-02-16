@@ -17,74 +17,10 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
-// fullMockUserRepo implements store.UserRepository for user handler tests.
-type fullMockUserRepo struct {
-	listUsersFn          func(ctx context.Context, filters store.UserFilters) ([]store.User, error)
-	updateUserAdminFn    func(ctx context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error)
-	deleteUserFn         func(ctx context.Context, id uuid.UUID) error
-countByRoleFn        func(ctx context.Context, namespaceID string) (map[string]int, error)
-	getUserByIDFn        func(ctx context.Context, id uuid.UUID) (*store.User, error)
-	getUserByExternalIDFn func(ctx context.Context, externalID string) (*store.User, error)
-	getUserByEmailFn     func(ctx context.Context, email string) (*store.User, error)
-	updateUserFn         func(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error)
-}
-
-func (m *fullMockUserRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
-	if m.getUserByIDFn != nil {
-		return m.getUserByIDFn(ctx, id)
-	}
-	return nil, store.ErrNotFound
-}
-
-func (m *fullMockUserRepo) GetUserByExternalID(ctx context.Context, externalID string) (*store.User, error) {
-	if m.getUserByExternalIDFn != nil {
-		return m.getUserByExternalIDFn(ctx, externalID)
-	}
-	return nil, store.ErrNotFound
-}
-
-func (m *fullMockUserRepo) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
-	if m.getUserByEmailFn != nil {
-		return m.getUserByEmailFn(ctx, email)
-	}
-	return nil, store.ErrNotFound
-}
-
-func (m *fullMockUserRepo) UpdateUser(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
-	if m.updateUserFn != nil {
-		return m.updateUserFn(ctx, id, params)
-	}
-	return nil, nil
-}
-
-func (m *fullMockUserRepo) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
-	return m.listUsersFn(ctx, filters)
-}
-
-func (m *fullMockUserRepo) UpdateUserAdmin(ctx context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
-	return m.updateUserAdminFn(ctx, id, params)
-}
-
-func (m *fullMockUserRepo) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	return m.deleteUserFn(ctx, id)
-}
-
-
-func (m *fullMockUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
-	return nil, nil
-}
-
-func (m *fullMockUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
-	if m.countByRoleFn != nil {
-		return m.countByRoleFn(ctx, namespaceID)
-	}
-	return nil, nil
-}
-
 // userTestRepos embeds stubRepos and overrides user methods.
 type userTestRepos struct {
 	stubRepos
-	users *fullMockUserRepo
+	users *StubUserRepo
 }
 
 var _ store.Repos = (*userTestRepos)(nil)
@@ -105,7 +41,7 @@ func (r *userTestRepos) CountUsersByRole(ctx context.Context, namespaceID string
 	return r.users.CountUsersByRole(ctx, namespaceID)
 }
 
-func userReposMiddleware(repo *fullMockUserRepo) func(http.Handler) http.Handler {
+func userReposMiddleware(repo *StubUserRepo) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), &userTestRepos{users: repo})))
@@ -118,8 +54,8 @@ func TestListSystemUsers_Success(t *testing.T) {
 	users := []store.User{
 		{ID: uuid.New(), Email: "a@example.com", Role: "instructor", NamespaceID: &nsID, CreatedAt: time.Now(), UpdatedAt: time.Now()},
 	}
-	repo := &fullMockUserRepo{
-		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	repo := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
 			return users, nil
 		},
 	}
@@ -155,8 +91,8 @@ func TestListNamespaceUsers_Success(t *testing.T) {
 	users := []store.User{
 		{ID: uuid.New(), Email: "b@example.com", Role: "student", NamespaceID: &nsID, CreatedAt: time.Now(), UpdatedAt: time.Now()},
 	}
-	repo := &fullMockUserRepo{
-		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+	repo := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
 			if filters.NamespaceID == nil || *filters.NamespaceID != nsID {
 				t.Fatalf("expected namespace filter %q", nsID)
 			}
@@ -185,8 +121,8 @@ func TestListNamespaceUsers_Success(t *testing.T) {
 
 func TestDeleteUser_Success(t *testing.T) {
 	userID := uuid.New()
-	repo := &fullMockUserRepo{
-		deleteUserFn: func(_ context.Context, id uuid.UUID) error {
+	repo := &StubUserRepo{
+		DeleteUserFn: func(_ context.Context, id uuid.UUID) error {
 			if id != userID {
 				t.Fatalf("unexpected user id")
 			}
@@ -213,8 +149,8 @@ func TestDeleteUser_Success(t *testing.T) {
 }
 
 func TestDeleteUser_NotFound(t *testing.T) {
-	repo := &fullMockUserRepo{
-		deleteUserFn: func(_ context.Context, _ uuid.UUID) error {
+	repo := &StubUserRepo{
+		DeleteUserFn: func(_ context.Context, _ uuid.UUID) error {
 			return store.ErrNotFound
 		},
 	}
@@ -251,8 +187,8 @@ func TestUpdateAdmin_Success(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	repo := &fullMockUserRepo{
-		updateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
 			if id != userID {
 				t.Fatalf("unexpected id")
 			}
@@ -304,8 +240,8 @@ func TestUpdateAdmin_ClearNullableFields(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	repo := &fullMockUserRepo{
-		updateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
 			if id != userID {
 				t.Fatalf("unexpected id")
 			}
@@ -348,8 +284,8 @@ func TestUpdateAdmin_ClearNullableFields(t *testing.T) {
 }
 
 func TestUpdateAdmin_NotFound(t *testing.T) {
-	repo := &fullMockUserRepo{
-		updateUserAdminFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserAdminFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -375,8 +311,8 @@ func TestUpdateAdmin_NotFound(t *testing.T) {
 }
 
 func TestUpdateAdmin_InternalError(t *testing.T) {
-	repo := &fullMockUserRepo{
-		updateUserAdminFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserAdminFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
 			return nil, errors.New("db connection lost")
 		},
 	}
@@ -405,11 +341,11 @@ func TestDeleteNamespaceScoped_Success(t *testing.T) {
 	nsID := "ns1"
 	targetID := uuid.New()
 
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			return &store.User{ID: id, NamespaceID: &nsID, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 		},
-		deleteUserFn: func(_ context.Context, id uuid.UUID) error {
+		DeleteUserFn: func(_ context.Context, id uuid.UUID) error {
 			if id != targetID {
 				t.Fatalf("unexpected id")
 			}
@@ -440,8 +376,8 @@ func TestDeleteNamespaceScoped_CrossNamespaceForbidden(t *testing.T) {
 	otherNS := "other-ns"
 	targetID := uuid.New()
 
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			return &store.User{ID: id, NamespaceID: &otherNS, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 		},
 	}
@@ -474,8 +410,8 @@ func TestDeleteNamespaceScoped_CrossNamespaceForbidden(t *testing.T) {
 }
 
 func TestDeleteNamespaceScoped_UserNotFound(t *testing.T) {
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -512,11 +448,11 @@ func TestUpdateRole_Success(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			return &store.User{ID: id, NamespaceID: &nsID, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 		},
-		updateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
+		UpdateUserAdminFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserAdminParams) (*store.User, error) {
 			if id != targetID {
 				t.Fatalf("unexpected id")
 			}
@@ -560,8 +496,8 @@ func TestUpdateRole_CrossNamespaceForbidden(t *testing.T) {
 	otherNS := "other-ns"
 	targetID := uuid.New()
 
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			return &store.User{ID: id, NamespaceID: &otherNS, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 		},
 	}
@@ -588,8 +524,8 @@ func TestUpdateRole_CrossNamespaceForbidden(t *testing.T) {
 }
 
 func TestUpdateRole_UserNotFound(t *testing.T) {
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -617,8 +553,8 @@ func TestUpdateRole_UserNotFound(t *testing.T) {
 
 func TestListSystemUsers_WithFilters(t *testing.T) {
 	var capturedFilters store.UserFilters
-	repo := &fullMockUserRepo{
-		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+	repo := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
 			capturedFilters = filters
 			return []store.User{}, nil
 		},
@@ -650,8 +586,8 @@ func TestListSystemUsers_WithFilters(t *testing.T) {
 }
 
 func TestListSystemUsers_InternalError(t *testing.T) {
-	repo := &fullMockUserRepo{
-		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	repo := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
 			return nil, errors.New("db connection lost")
 		},
 	}
@@ -675,8 +611,8 @@ func TestListSystemUsers_InternalError(t *testing.T) {
 }
 
 func TestListNamespaceUsers_InternalError(t *testing.T) {
-	repo := &fullMockUserRepo{
-		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	repo := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
 			return nil, errors.New("db connection lost")
 		},
 	}
@@ -701,7 +637,7 @@ func TestListNamespaceUsers_InternalError(t *testing.T) {
 }
 
 func TestUpdateAdmin_InvalidUUID(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 
 	h := NewUserHandler()
 	r := chi.NewRouter()
@@ -724,7 +660,7 @@ func TestUpdateAdmin_InvalidUUID(t *testing.T) {
 }
 
 func TestDeleteUser_InvalidUUID(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 
 	h := NewUserHandler()
 	r := chi.NewRouter()
@@ -748,8 +684,8 @@ func TestUpdateRole_InvalidBody(t *testing.T) {
 	nsID := "ns1"
 	targetID := uuid.New()
 
-	repo := &fullMockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			return &store.User{ID: id, NamespaceID: &nsID, Email: "target@example.com", Role: "student", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 		},
 	}
@@ -778,7 +714,7 @@ func TestUpdateRole_InvalidBody(t *testing.T) {
 // --- RBAC Forbidden tests (middleware-level) ---
 
 func TestListSystemUsers_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))
@@ -798,7 +734,7 @@ func TestListSystemUsers_RBACForbidden(t *testing.T) {
 }
 
 func TestUpdateAdmin_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))
@@ -820,7 +756,7 @@ func TestUpdateAdmin_RBACForbidden(t *testing.T) {
 }
 
 func TestDeleteUser_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))
@@ -840,7 +776,7 @@ func TestDeleteUser_RBACForbidden(t *testing.T) {
 }
 
 func TestListNamespaceUsers_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))
@@ -860,7 +796,7 @@ func TestListNamespaceUsers_RBACForbidden(t *testing.T) {
 }
 
 func TestDeleteNamespaceScoped_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))
@@ -880,7 +816,7 @@ func TestDeleteNamespaceScoped_RBACForbidden(t *testing.T) {
 }
 
 func TestUpdateRole_RBACForbidden(t *testing.T) {
-	repo := &fullMockUserRepo{}
+	repo := &StubUserRepo{}
 	h := NewUserHandler()
 	r := chi.NewRouter()
 	r.Use(userReposMiddleware(repo))

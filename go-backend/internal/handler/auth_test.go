@@ -15,54 +15,6 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
-// mockUserRepo implements store.UserRepository for testing.
-type mockUserRepo struct {
-	getUserByIDFn         func(ctx context.Context, id uuid.UUID) (*store.User, error)
-	getUserByExternalIDFn func(ctx context.Context, externalID string) (*store.User, error)
-	updateUserFn          func(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error)
-	createUserFn          func(ctx context.Context, params store.CreateUserParams) (*store.User, error)
-}
-
-func (m *mockUserRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
-	return m.getUserByIDFn(ctx, id)
-}
-
-func (m *mockUserRepo) GetUserByExternalID(ctx context.Context, externalID string) (*store.User, error) {
-	return m.getUserByExternalIDFn(ctx, externalID)
-}
-
-func (m *mockUserRepo) UpdateUser(ctx context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
-	return m.updateUserFn(ctx, id, params)
-}
-
-func (m *mockUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-
-func (m *mockUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
-	return nil, nil
-}
-
-func (m *mockUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
-	return nil, nil
-}
-
-func (m *mockUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
-	return nil
-}
-
-
-func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
-	return nil, nil
-}
-
-func (m *mockUserRepo) CreateUser(ctx context.Context, params store.CreateUserParams) (*store.User, error) {
-	if m.createUserFn != nil {
-		return m.createUserFn(ctx, params)
-	}
-	return nil, nil
-}
-
 func testUser() *store.User {
 	return &store.User{
 		ID:          uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
@@ -76,10 +28,10 @@ func testUser() *store.User {
 
 func strPtr(s string) *string { return &s }
 
-// authTestRepos embeds stubRepos and delegates UserRepository methods to a mock.
+// authTestRepos embeds stubRepos and delegates UserRepository methods to a StubUserRepo.
 type authTestRepos struct {
 	stubRepos
-	userRepo *mockUserRepo
+	userRepo *StubUserRepo
 }
 
 var _ store.Repos = (*authTestRepos)(nil)
@@ -112,14 +64,14 @@ func (r *authTestRepos) CountUsersByRole(ctx context.Context, ns string) (map[st
 	return r.userRepo.CountUsersByRole(ctx, ns)
 }
 
-func withAuthRepos(ctx context.Context, repo *mockUserRepo) context.Context {
+func withAuthRepos(ctx context.Context, repo *StubUserRepo) context.Context {
 	return store.WithRepos(ctx, &authTestRepos{userRepo: repo})
 }
 
 func TestGetMe_Success(t *testing.T) {
 	user := testUser()
-	repo := &mockUserRepo{
-		getUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, id uuid.UUID) (*store.User, error) {
 			if id != user.ID {
 				t.Fatalf("unexpected id: %v", id)
 			}
@@ -162,8 +114,8 @@ func TestGetMe_Unauthorized(t *testing.T) {
 }
 
 func TestGetMe_NotFound(t *testing.T) {
-	repo := &mockUserRepo{
-		getUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
+	repo := &StubUserRepo{
+		GetUserByIDFn: func(_ context.Context, _ uuid.UUID) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -188,8 +140,8 @@ func TestUpdateMe_Success(t *testing.T) {
 	updatedUser := testUser()
 	updatedUser.DisplayName = &newName
 
-	repo := &mockUserRepo{
-		updateUserFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
 			if id != userID {
 				t.Fatalf("unexpected id: %v", id)
 			}
@@ -237,8 +189,8 @@ func TestUpdateMe_Unauthorized(t *testing.T) {
 }
 
 func TestUpdateMe_NotFound(t *testing.T) {
-	repo := &mockUserRepo{
-		updateUserFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
+	repo := &StubUserRepo{
+		UpdateUserFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
 			return nil, store.ErrNotFound
 		},
 	}

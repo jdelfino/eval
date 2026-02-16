@@ -26,8 +26,8 @@ func TestBootstrapPost_Success(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	userRepo := &mockUserRepo{
-		createUserFn: func(_ context.Context, params store.CreateUserParams) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, params store.CreateUserParams) (*store.User, error) {
 			if params.ExternalID != "firebase-uid-admin" {
 				t.Fatalf("unexpected external_id: %s", params.ExternalID)
 			}
@@ -121,8 +121,8 @@ func TestBootstrapPost_WrongRole(t *testing.T) {
 }
 
 func TestBootstrapPost_Duplicate(t *testing.T) {
-	userRepo := &mockUserRepo{
-		createUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
 			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "users_external_id_key"}
 		},
 	}
@@ -154,8 +154,8 @@ func TestBootstrapPost_Duplicate(t *testing.T) {
 }
 
 func TestBootstrapPost_CreateError(t *testing.T) {
-	userRepo := &mockUserRepo{
-		createUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
 			return nil, errors.New("db error")
 		},
 	}
