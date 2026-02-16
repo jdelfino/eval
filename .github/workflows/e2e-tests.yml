@@ -129,6 +129,7 @@ jobs:
           if docker pull $EXECUTOR_REGISTRY/executor:latest 2>/dev/null; then
             docker run -d --name eval-executor-1 \
               -p 8081:8081 --privileged \
+              --tmpfs /tmp:exec,size=256m \
               -e PORT=8081 -e ENVIRONMENT=local -e LOG_LEVEL=debug \
               -e NSJAIL_PATH=/usr/bin/nsjail -e PYTHON_PATH=/usr/bin/python3 \
               -e DEFAULT_TIMEOUT_MS=10000 \
