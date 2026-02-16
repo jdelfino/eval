@@ -127,7 +127,11 @@ func (h *AuthHandler) GetAcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inv.Status != "pending" {
-		httputil.WriteError(w, http.StatusGone, "invitation is no longer pending")
+		code := "INVITATION_EXPIRED"
+		if inv.Status == "consumed" {
+			code = "INVITATION_CONSUMED"
+		}
+		httputil.WriteErrorWithCode(w, http.StatusGone, code, "invitation is no longer pending")
 		return
 	}
 
@@ -168,7 +172,11 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inv.Status != "pending" {
-		httputil.WriteError(w, http.StatusGone, "invitation is no longer pending")
+		code := "INVITATION_EXPIRED"
+		if inv.Status == "consumed" {
+			code = "INVITATION_CONSUMED"
+		}
+		httputil.WriteErrorWithCode(w, http.StatusGone, code, "invitation is no longer pending")
 		return
 	}
 
@@ -211,7 +219,7 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 	section, err := repos.GetSectionByJoinCode(r.Context(), code)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "invalid join code")
+			httputil.WriteErrorWithCode(w, http.StatusNotFound, "INVALID_CODE", "invalid join code")
 			return
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -219,7 +227,7 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !section.Active {
-		httputil.WriteError(w, http.StatusGone, "section is no longer active")
+		httputil.WriteErrorWithCode(w, http.StatusGone, "SECTION_INACTIVE", "section is no longer active")
 		return
 	}
 
@@ -259,7 +267,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 	section, err := repos.GetSectionByJoinCode(r.Context(), req.JoinCode)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "invalid join code")
+			httputil.WriteErrorWithCode(w, http.StatusNotFound, "INVALID_CODE", "invalid join code")
 			return
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -267,7 +275,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 	}
 
 	if !section.Active {
-		httputil.WriteError(w, http.StatusGone, "section is no longer active")
+		httputil.WriteErrorWithCode(w, http.StatusGone, "SECTION_INACTIVE", "section is no longer active")
 		return
 	}
 

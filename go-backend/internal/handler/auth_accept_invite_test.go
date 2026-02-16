@@ -19,7 +19,7 @@ import (
 // mockAuthRepos is a composite type that embeds stubRepos and delegates to specific mock repos.
 type mockAuthRepos struct {
 	stubRepos
-	userRepo       *mockUserRepo
+	userRepo       *StubUserRepo
 	invRepo        *mockInvitationRepo
 	membershipRepo *mockMembershipRepo
 	classRepo      *mockClassRepo
@@ -72,7 +72,7 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -100,7 +100,7 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 func TestAcceptInviteGet_MissingToken(t *testing.T) {
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -120,7 +120,7 @@ func TestAcceptInviteGet_MissingToken(t *testing.T) {
 func TestAcceptInviteGet_InvalidUUID(t *testing.T) {
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -145,7 +145,7 @@ func TestAcceptInviteGet_NotFound(t *testing.T) {
 	}
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -172,7 +172,7 @@ func TestAcceptInviteGet_NotPending(t *testing.T) {
 	}
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -186,6 +186,74 @@ func TestAcceptInviteGet_NotPending(t *testing.T) {
 
 	if rec.Code != http.StatusGone {
 		t.Fatalf("expected 410, got %d", rec.Code)
+	}
+}
+
+func TestAcceptInviteGet_ConsumedReturnsCode(t *testing.T) {
+	inv := testInvitation("test-ns")
+	inv.Status = "consumed"
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token="+inv.ID.String(), nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected 410, got %d", rec.Code)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["code"] != "INVITATION_CONSUMED" {
+		t.Errorf("expected code INVITATION_CONSUMED, got %q", body["code"])
+	}
+}
+
+func TestAcceptInviteGet_ExpiredReturnsCode(t *testing.T) {
+	inv := testInvitation("test-ns")
+	inv.Status = "expired"
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/accept-invite?token="+inv.ID.String(), nil)
+	ctx := store.WithRepos(req.Context(), repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected 410, got %d", rec.Code)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["code"] != "INVITATION_EXPIRED" {
+		t.Errorf("expected code INVITATION_EXPIRED, got %q", body["code"])
 	}
 }
 
@@ -222,8 +290,8 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 		},
 	}
 
-	userRepo := &mockUserRepo{
-		createUserFn: func(_ context.Context, params store.CreateUserParams) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, params store.CreateUserParams) (*store.User, error) {
 			if params.Email != inv.Email {
 				t.Fatalf("unexpected email: %s", params.Email)
 			}
@@ -284,7 +352,7 @@ func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
 
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -307,6 +375,88 @@ func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
 	}
 }
 
+func TestAcceptInvitePost_ConsumedReturnsCode(t *testing.T) {
+	inv := testInvitation("test-ns")
+	inv.Status = "consumed"
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected 410, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var respBody map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&respBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if respBody["code"] != "INVITATION_CONSUMED" {
+		t.Errorf("expected code INVITATION_CONSUMED, got %q", respBody["code"])
+	}
+}
+
+func TestAcceptInvitePost_ExpiredReturnsCode(t *testing.T) {
+	inv := testInvitation("test-ns")
+	inv.Status = "expired"
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := NewAuthHandler()
+	repos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected 410, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var respBody map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&respBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if respBody["code"] != "INVITATION_EXPIRED" {
+		t.Errorf("expected code INVITATION_EXPIRED, got %q", respBody["code"])
+	}
+}
+
 func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 	invRepo := &mockInvitationRepo{
 		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
@@ -316,7 +466,7 @@ func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 
 	h := NewAuthHandler()
 	repos := &mockAuthRepos{
-		userRepo:       &mockUserRepo{},
+		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -346,8 +496,8 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 			return inv, nil
 		},
 	}
-	userRepo := &mockUserRepo{
-		createUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
 			return nil, errors.New("db error")
 		},
 	}

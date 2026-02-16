@@ -36,6 +36,18 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, map[string]string{"error": message})
 }
 
+// WriteErrorWithCode writes a JSON error response that includes both an error
+// message and a machine-readable code. The code is used by frontends to map
+// specific backend errors to localised UI states (e.g. "INVITATION_CONSUMED").
+func WriteErrorWithCode(w http.ResponseWriter, status int, code, message string) {
+	if status >= 500 {
+		if eds, ok := w.(errorDetailSetter); ok {
+			eds.SetErrorDetail(message)
+		}
+	}
+	WriteJSON(w, status, map[string]string{"error": message, "code": code})
+}
+
 // WriteInternalError logs the error and writes a 500 response.
 // The error is logged with request context (request_id if available).
 // The user-facing message hides internal details.

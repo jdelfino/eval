@@ -45,7 +45,7 @@ func (m *mockNamespaceRepo) UpdateNamespace(ctx context.Context, id string, para
 type namespaceTestRepos struct {
 	stubRepos
 	ns    *mockNamespaceRepo
-	users *nsTestUserRepo
+	users *StubUserRepo
 }
 
 var _ store.Repos = (*namespaceTestRepos)(nil)
@@ -75,7 +75,7 @@ func (r *namespaceTestRepos) CountUsersByRole(ctx context.Context, namespaceID s
 	panic("namespaceTestRepos: unexpected CountUsersByRole call")
 }
 
-func nsRepos(repo *mockNamespaceRepo, users *nsTestUserRepo) *namespaceTestRepos {
+func nsRepos(repo *mockNamespaceRepo, users *StubUserRepo) *namespaceTestRepos {
 	return &namespaceTestRepos{ns: repo, users: users}
 }
 
@@ -542,40 +542,6 @@ func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 	}
 }
 
-// nsTestUserRepo implements store.UserRepository for namespace handler tests.
-type nsTestUserRepo struct {
-	listUsersFn   func(ctx context.Context, filters store.UserFilters) ([]store.User, error)
-	countByRoleFn func(ctx context.Context, namespaceID string) (map[string]int, error)
-}
-
-func (m *nsTestUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *nsTestUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *nsTestUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *nsTestUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *nsTestUserRepo) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
-	return m.listUsersFn(ctx, filters)
-}
-func (m *nsTestUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
-	return nil, store.ErrNotFound
-}
-func (m *nsTestUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
-	return store.ErrNotFound
-}
-func (m *nsTestUserRepo) CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error) {
-	return m.countByRoleFn(ctx, namespaceID)
-}
-func (m *nsTestUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
-	return nil, nil
-}
-
 func TestDeleteNamespace_Success(t *testing.T) {
 	ns := testNamespace()
 	ns.Active = false
@@ -660,8 +626,8 @@ func TestDeleteNamespace_NotFound(t *testing.T) {
 func TestNSListUsers_Success(t *testing.T) {
 	nsID := "test-ns"
 	userID := uuid.New()
-	users := &nsTestUserRepo{
-		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+	users := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
 			if filters.NamespaceID == nil || *filters.NamespaceID != nsID {
 				t.Fatalf("expected namespace filter %q, got %v", nsID, filters.NamespaceID)
 			}
@@ -700,8 +666,8 @@ func TestNSListUsers_Success(t *testing.T) {
 }
 
 func TestNSListUsers_Empty(t *testing.T) {
-	users := &nsTestUserRepo{
-		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	users := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
 			return nil, nil
 		},
 	}
@@ -743,8 +709,8 @@ func TestGetCapacity_Success(t *testing.T) {
 			return ns, nil
 		},
 	}
-	users := &nsTestUserRepo{
-		countByRoleFn: func(_ context.Context, namespaceID string) (map[string]int, error) {
+	users := &StubUserRepo{
+		CountUsersByRoleFn: func(_ context.Context, namespaceID string) (map[string]int, error) {
 			if namespaceID != "test-ns" {
 				t.Fatalf("unexpected namespace id: %v", namespaceID)
 			}
@@ -817,8 +783,8 @@ func TestGetCapacity_CountError(t *testing.T) {
 			return ns, nil
 		},
 	}
-	users := &nsTestUserRepo{
-		countByRoleFn: func(_ context.Context, _ string) (map[string]int, error) {
+	users := &StubUserRepo{
+		CountUsersByRoleFn: func(_ context.Context, _ string) (map[string]int, error) {
 			return nil, errors.New("db error")
 		},
 	}
@@ -896,8 +862,8 @@ func TestUpdateCapacity_Success(t *testing.T) {
 }
 
 func TestListUsers_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
-	users := &nsTestUserRepo{
-		listUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
+	users := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, _ store.UserFilters) ([]store.User, error) {
 			t.Fatal("should not reach repo")
 			return nil, nil
 		},
@@ -921,8 +887,8 @@ func TestListUsers_NamespaceAdminCrossNamespace_Forbidden(t *testing.T) {
 }
 
 func TestListUsers_SystemAdmin_AllowsCrossNamespace(t *testing.T) {
-	users := &nsTestUserRepo{
-		listUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
+	users := &StubUserRepo{
+		ListUsersFn: func(_ context.Context, filters store.UserFilters) ([]store.User, error) {
 			return []store.User{}, nil
 		},
 	}
