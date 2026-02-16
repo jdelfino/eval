@@ -65,7 +65,7 @@ function StudentPage() {
   });
 
   // Debugger state - uses API-based trace requests
-  const debuggerHook = useApiDebugger(sessionIdFromUrl);
+  const debuggerHook = useApiDebugger();
 
   // Show connection status in the global header
   useEffect(() => {

@@ -6,9 +6,9 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SessionProblemEditor from '../SessionProblemEditor';
 
-// Mock useDebugger hook
-jest.mock('@/hooks/useDebugger', () => ({
-  useDebugger: jest.fn(() => ({
+// Mock useApiDebugger hook
+jest.mock('@/hooks/useApiDebugger', () => ({
+  useApiDebugger: jest.fn(() => ({
     isDebugging: false,
     currentStep: 0,
     total_steps: 0,

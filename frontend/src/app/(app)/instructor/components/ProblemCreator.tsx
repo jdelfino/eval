@@ -10,14 +10,14 @@
  * - Visibility settings (public/class-specific)
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ProblemInput } from '@/types/problem';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { useDebugger } from '@/hooks/useDebugger';
+import { useApiDebugger } from '@/hooks/useApiDebugger';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -194,9 +194,7 @@ export default function ProblemCreator({
     setTags(prev => prev.filter(t => t !== tag));
   };
 
-  // Setup debugger (trace feature not yet available via API)
-  const noopSendMessage = useCallback(() => {}, []);
-  const debuggerHook = useDebugger(noopSendMessage);
+  const debuggerHook = useApiDebugger();
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ExecutionTrace, TraceStep } from '@/types/session';
-import { traceSession } from '@/lib/api/sessions';
+import { traceCode } from '@/lib/api/trace';
 
 export interface DebuggerState {
   trace: ExecutionTrace | null;
@@ -10,10 +10,10 @@ export interface DebuggerState {
 }
 
 /**
- * API-based debugger hook for use outside of WebSocket contexts.
- * Provides the same interface as useDebugger but uses REST API calls for trace requests.
+ * API-based debugger hook for code tracing.
+ * No session context needed — any authenticated user can trace code.
  */
-export function useApiDebugger(session_id: string | null) {
+export function useApiDebugger() {
   const [state, setState] = useState<DebuggerState>({
     trace: null,
     currentStep: 0,
@@ -22,19 +22,10 @@ export function useApiDebugger(session_id: string | null) {
   });
 
   const requestTrace = useCallback(async (code: string) => {
-    if (!session_id) {
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: 'No session ID available for trace request'
-      }));
-      return;
-    }
-
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const trace = await traceSession(session_id, code);
+      const trace = await traceCode(code);
       setState({
         trace,
         currentStep: 0,
@@ -48,7 +39,7 @@ export function useApiDebugger(session_id: string | null) {
         error: error instanceof Error ? error.message : 'Failed to trace code execution'
       }));
     }
-  }, [session_id]);
+  }, []);
 
   const setTrace = useCallback((trace: ExecutionTrace) => {
     setState({

@@ -32,7 +32,7 @@ interface CodeEditorProps {
   problem?: Problem | { title: string; description?: string; starter_code?: string } | null;
   onLoadStarterCode?: (starter_code: string) => void;
   externalEditorRef?: React.MutableRefObject<any>;
-  debugger?: ReturnType<typeof import('@/hooks/useDebugger').useDebugger>;
+  debugger?: ReturnType<typeof import('@/hooks/useApiDebugger').useApiDebugger>;
   onProblemEdit?: (updates: { title?: string; description?: string }) => void;
   editableProblem?: boolean;
   forceDesktop?: boolean;

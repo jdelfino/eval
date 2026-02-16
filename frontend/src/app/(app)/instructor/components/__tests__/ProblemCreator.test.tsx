@@ -27,9 +27,9 @@ jest.mock('@/lib/api/problems', () => ({
   updateProblem: jest.fn(),
 }));
 
-// Mock useDebugger hook
-jest.mock('@/hooks/useDebugger', () => ({
-  useDebugger: () => ({
+// Mock useApiDebugger hook
+jest.mock('@/hooks/useApiDebugger', () => ({
+  useApiDebugger: () => ({
     trace: null,
     currentStep: 0,
     isLoading: false,
