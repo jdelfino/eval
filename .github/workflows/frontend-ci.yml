@@ -1,15 +1,11 @@
 name: Frontend
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'frontend/**'
+  workflow_call:
   workflow_dispatch:
 
 env:
@@ -82,7 +78,7 @@ jobs:
 
   build-push:
     needs: [typecheck, test, lint, contract-coverage]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_call' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: read
