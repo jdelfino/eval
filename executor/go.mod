@@ -11,8 +11,8 @@ require (
 	github.com/go-chi/chi/v5 v5.2.4
 	github.com/jdelfino/eval/pkg/httplog v0.0.0-00010101000000-000000000000
 	github.com/jdelfino/eval/pkg/httpmiddleware v0.0.0-00010101000000-000000000000
-	github.com/jdelfino/eval/pkg/httputil v0.0.0-00010101000000-000000000000
-	github.com/jdelfino/eval/pkg/ratelimit v0.0.0-00010101000000-000000000000
+	github.com/jdelfino/eval/pkg/httputil v0.0.0
+	github.com/jdelfino/eval/pkg/ratelimit v0.0.0
 	github.com/jdelfino/eval/pkg/slogutil v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2

@@ -254,7 +254,19 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			revBuffer.Start()
 
 			sessionHandler := handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer)
-			r.With(custommw.ForCategory(rl, "sessionCreate", custommw.UserKey)).Mount("/sessions", sessionHandler.Routes())
+			r.Route("/sessions", func(r chi.Router) {
+				r.With(readRL).Get("/", sessionHandler.List)
+				r.With(readRL).Get("/history", sessionHandler.History)
+				r.With(readRL).Get("/{id}", sessionHandler.Get)
+				r.Group(func(r chi.Router) {
+					r.Use(custommw.RequirePermission(auth.PermSessionManage))
+					r.With(custommw.ForCategory(rl, "sessionCreate", custommw.UserKey)).Post("/", sessionHandler.Create)
+					r.With(writeRL).Patch("/{id}", sessionHandler.Update)
+					r.With(writeRL).Delete("/{id}", sessionHandler.Delete)
+					r.With(writeRL).Post("/{id}/reopen", sessionHandler.Reopen)
+					r.With(writeRL).Post("/{id}/update-problem", sessionHandler.UpdateProblem)
+				})
+			})
 
 			sessionStateHandler := handler.NewSessionStateHandler(sessionPub)
 			r.With(readRL).Get("/sessions/{id}/state", sessionStateHandler.State)
@@ -285,10 +297,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(custommw.ForCategory(rl, "trace", custommw.UserKey)).Post("/trace", traceHandler.StandaloneTrace)
 
 			// Advanced session features (instructor+): AI analysis
-			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{}, rl)
+			// Rate limits stacked: per-user daily (most restrictive, checked first),
+			// global daily, then per-minute burst.
+			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.With(custommw.ForCategory(rl, "analyze", custommw.UserKey)).Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
+				r.With(
+					custommw.ForCategory(rl, "analyzeDaily", custommw.UserKey),
+					custommw.ForCategory(rl, "analyzeGlobal", httpmiddleware.GlobalKey),
+					custommw.ForCategory(rl, "analyze", custommw.UserKey),
+				).Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
 			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(sessionPub, revBuffer)

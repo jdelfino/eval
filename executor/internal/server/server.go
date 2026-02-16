@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -114,7 +113,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	r.Post("/execute", rateLimitHandler(rl, "execute", execHandler.ServeHTTP))
+	executeRL := httpmiddleware.ForCategory(rl, "execute", httpmiddleware.GlobalKey, logger)
+	r.With(executeRL).Post("/execute", execHandler.ServeHTTP)
 
 	// Trace endpoint (shares concurrency pool concept with /execute).
 	traceHandler := handler.NewTraceHandler(
@@ -128,7 +128,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	r.Post("/trace", rateLimitHandler(rl, "execute", traceHandler.ServeHTTP))
+	r.With(executeRL).Post("/trace", traceHandler.ServeHTTP)
 
 	return &Server{
 		httpServer: &http.Server{
@@ -176,22 +176,6 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 			Status:     status,
 			Components: components,
 		})
-	}
-}
-
-// rateLimitHandler wraps a handler and returns 429 when the limiter rejects.
-func rateLimitHandler(limiter ratelimit.Limiter, category string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		result, err := limiter.Allow(r.Context(), category, "global")
-		if err != nil {
-			// Log error but allow request through.
-			slog.Warn("rate limit check failed", "error", err)
-		} else if result != nil && !result.Allowed {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(result.ResetAt).Seconds())+1))
-			httputil.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
-			return
-		}
-		next(w, r)
 	}
 }
 

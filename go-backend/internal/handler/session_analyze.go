@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -12,7 +11,6 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
-	"github.com/jdelfino/eval/pkg/ratelimit"
 )
 
 // analyzeHTTPRequest is the request body for POST /sessions/{id}/analyze.
@@ -25,16 +23,13 @@ type analyzeHTTPRequest struct {
 // AnalyzeHandler handles AI analysis requests for session code.
 type AnalyzeHandler struct {
 	aiClient ai.Client
-	limiter  ratelimit.Limiter
 }
 
 // NewAnalyzeHandler creates a new AnalyzeHandler.
-// The limiter is used for daily rate limit checks (global and per-user).
-// If limiter is nil, daily rate limiting is skipped.
-func NewAnalyzeHandler(aiClient ai.Client, limiter ratelimit.Limiter) *AnalyzeHandler {
+// Rate limiting is applied at the middleware level via ForCategory.
+func NewAnalyzeHandler(aiClient ai.Client) *AnalyzeHandler {
 	return &AnalyzeHandler{
 		aiClient: aiClient,
-		limiter:  limiter,
 	}
 }
 
@@ -50,35 +45,6 @@ func (h *AnalyzeHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 	if authUser.Role == auth.RoleStudent {
 		httputil.WriteError(w, http.StatusForbidden, "instructor or higher role required")
 		return
-	}
-
-	// Daily rate limit checks (global and per-user)
-	if h.limiter != nil {
-		ctx := r.Context()
-		userID := authUser.ID.String()
-
-		// Check global daily limit first
-		result, err := h.limiter.Allow(ctx, "analyzeGlobal", "global")
-		if err != nil {
-			slog.Warn("analyze global rate limit check failed, allowing request",
-				"error", err,
-			)
-		} else if result != nil && !result.Allowed {
-			httputil.WriteError(w, http.StatusTooManyRequests, "Global daily analysis limit reached. Please try again tomorrow.")
-			return
-		}
-
-		// Check per-user daily limit
-		result, err = h.limiter.Allow(ctx, "analyzeDaily", userID)
-		if err != nil {
-			slog.Warn("analyze daily rate limit check failed, allowing request",
-				"error", err,
-				"user_id", userID,
-			)
-		} else if result != nil && !result.Allowed {
-			httputil.WriteError(w, http.StatusTooManyRequests, "Daily analysis limit reached (100 per day). Please try again tomorrow.")
-			return
-		}
 	}
 
 	sessionID, ok := httpbind.ParseUUIDParam(w, r, "id")

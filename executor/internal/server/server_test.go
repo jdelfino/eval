@@ -195,7 +195,7 @@ func TestRecovererCatchesPanic(t *testing.T) {
 	}
 }
 
-func TestRateLimitHandler_Rejects(t *testing.T) {
+func TestRateLimitMiddleware_Rejects(t *testing.T) {
 	// Use a memory limiter with a single-request category to test rejection.
 	cats := map[string]ratelimit.Category{
 		"execute": {Name: "execute", Algorithm: "sliding", Limit: 1, Window: 60_000_000_000}, // 1 per minute
@@ -210,12 +210,14 @@ func TestRateLimitHandler_Rejects(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := rateLimitHandler(limiter, "execute", inner)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mw := httpmiddleware.ForCategory(limiter, "execute", httpmiddleware.GlobalKey, logger)
+	handler := mw(inner)
 
 	// First request: allowed.
 	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec1 := httptest.NewRecorder()
-	handler(rec1, req1)
+	handler.ServeHTTP(rec1, req1)
 
 	if rec1.Code != http.StatusOK {
 		t.Errorf("first request: status = %d, want %d", rec1.Code, http.StatusOK)
@@ -224,7 +226,7 @@ func TestRateLimitHandler_Rejects(t *testing.T) {
 	// Second request: should be rate limited.
 	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec2 := httptest.NewRecorder()
-	handler(rec2, req2)
+	handler.ServeHTTP(rec2, req2)
 
 	if rec2.Code != http.StatusTooManyRequests {
 		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
@@ -243,7 +245,7 @@ func TestRateLimitHandler_Rejects(t *testing.T) {
 	}
 }
 
-func TestRateLimitHandler_SetsRetryAfterHeader(t *testing.T) {
+func TestRateLimitMiddleware_SetsRetryAfterHeader(t *testing.T) {
 	cats := map[string]ratelimit.Category{
 		"execute": {Name: "execute", Algorithm: "sliding", Limit: 1, Window: 60_000_000_000}, // 1 per minute
 	}
@@ -255,17 +257,19 @@ func TestRateLimitHandler_SetsRetryAfterHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := rateLimitHandler(limiter, "execute", inner)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mw := httpmiddleware.ForCategory(limiter, "execute", httpmiddleware.GlobalKey, logger)
+	handler := mw(inner)
 
 	// First request: consume the single token.
 	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec1 := httptest.NewRecorder()
-	handler(rec1, req1)
+	handler.ServeHTTP(rec1, req1)
 
 	// Second request: should be rate limited with Retry-After header.
 	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec2 := httptest.NewRecorder()
-	handler(rec2, req2)
+	handler.ServeHTTP(rec2, req2)
 
 	if rec2.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
@@ -277,7 +281,7 @@ func TestRateLimitHandler_SetsRetryAfterHeader(t *testing.T) {
 	}
 }
 
-func TestRateLimitHandler_AllowsOnError(t *testing.T) {
+func TestRateLimitMiddleware_AllowsOnError(t *testing.T) {
 	// When the limiter returns an error, the request should be allowed through
 	// (fail-open behavior).
 	cats := map[string]ratelimit.Category{} // empty categories => unknown category error
@@ -291,11 +295,13 @@ func TestRateLimitHandler_AllowsOnError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := rateLimitHandler(limiter, "nonexistent", inner)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mw := httpmiddleware.ForCategory(limiter, "nonexistent", httpmiddleware.GlobalKey, logger)
+	handler := mw(inner)
 
 	req := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec := httptest.NewRecorder()
-	handler(rec, req)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d (should allow on limiter error)", rec.Code, http.StatusOK)
