@@ -54,6 +54,8 @@ services:
       PYTHON_PATH: /usr/bin/python3
       DEFAULT_TIMEOUT_MS: "10000"
     privileged: true
+    tmpfs:
+      - /tmp:exec,size=256m
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/healthz\")'"]
       interval: 10s

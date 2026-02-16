@@ -245,6 +245,14 @@ func TestTrace_InternalError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
 	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if got := errResp["error"]; got != "sandbox setup failed: nsjail binary not found" {
+		t.Errorf("expected sandbox setup error detail, got %q", got)
+	}
 }
 
 func TestTrace_InvalidTracerOutput(t *testing.T) {
