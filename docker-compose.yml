@@ -53,6 +53,7 @@ services:
       NSJAIL_PATH: /usr/bin/nsjail
       PYTHON_PATH: /usr/bin/python3
       DEFAULT_TIMEOUT_MS: "10000"
+      REDIS_HOST: redis
     privileged: true
     tmpfs:
       - /tmp:exec,size=256m

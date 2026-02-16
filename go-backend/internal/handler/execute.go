@@ -23,15 +23,13 @@ type ExecutorClient interface {
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	executor        ExecutorClient
-	practiceLimiter *PracticeLimiter
+	executor ExecutorClient
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
 func NewExecuteHandler(exec ExecutorClient) *ExecuteHandler {
 	return &ExecuteHandler{
-		executor:        exec,
-		practiceLimiter: NewPracticeLimiter(15),
+		executor: exec,
 	}
 }
 
@@ -133,7 +131,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	// 7. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteInternalError(w, r, err, "execution failed")
+		writeExecutorError(w, r, err, "execution failed")
 		return
 	}
 
@@ -170,11 +168,23 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteInternalError(w, r, err, "execution failed")
+		writeExecutorError(w, r, err, "execution failed")
 		return
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, execResp)
+}
+
+// writeExecutorError writes the appropriate HTTP error for an executor client error.
+// If the executor returned 429 (rate limit / concurrency), it propagates 429 to the caller.
+// Otherwise it writes a 500.
+func writeExecutorError(w http.ResponseWriter, r *http.Request, err error, message string) {
+	var statusErr *executor.StatusError
+	if errors.As(err, &statusErr) && statusErr.Code == http.StatusTooManyRequests {
+		httputil.WriteError(w, http.StatusTooManyRequests, "execution service busy, try again later")
+		return
+	}
+	httputil.WriteInternalError(w, r, err, message)
 }
 
 // isCreatorOrParticipant checks if the user is the session creator or a participant.

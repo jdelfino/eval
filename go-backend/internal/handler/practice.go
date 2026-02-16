@@ -3,10 +3,6 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"sync"
-	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
@@ -14,53 +10,6 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
-
-// PracticeLimiter implements a sliding-window rate limiter keyed by user ID.
-type PracticeLimiter struct {
-	mu        sync.Mutex
-	maxPerMin int
-	windows   map[uuid.UUID][]time.Time
-}
-
-// NewPracticeLimiter creates a rate limiter allowing maxPerMin requests per
-// 60-second sliding window per user.
-func NewPracticeLimiter(maxPerMin int) *PracticeLimiter {
-	return &PracticeLimiter{
-		maxPerMin: maxPerMin,
-		windows:   make(map[uuid.UUID][]time.Time),
-	}
-}
-
-// Allow returns true if the user has not exceeded the rate limit.
-// It records the current timestamp on success.
-func (l *PracticeLimiter) Allow(userID uuid.UUID) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-time.Minute)
-
-	// Evict expired entries
-	times := l.windows[userID]
-	start := 0
-	for start < len(times) && times[start].Before(cutoff) {
-		start++
-	}
-	times = times[start:]
-
-	// Clean up empty entries to prevent unbounded map growth
-	if len(times) == 0 {
-		delete(l.windows, userID)
-	}
-
-	if len(times) >= l.maxPerMin {
-		l.windows[userID] = times
-		return false
-	}
-
-	l.windows[userID] = append(times, now)
-	return true
-}
 
 // practiceRequest is the JSON body for POST /sessions/{id}/practice.
 type practiceRequest struct {
@@ -114,13 +63,7 @@ func (h *ExecuteHandler) PracticeExecute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 7. Rate limit check
-	if !h.practiceLimiter.Allow(authUser.ID) {
-		httputil.WriteError(w, http.StatusTooManyRequests, "practice mode rate limit exceeded (15 requests per minute)")
-		return
-	}
-
-	// 8. Build executor request — merge problem-level settings (e.g. stdin, files)
+	// 7. Build executor request — merge problem-level settings (e.g. stdin, files)
 	// with request overrides. No student record in practice mode (ephemeral).
 	merged := mergeExecutionSettings(session.Problem, nil, req.ExecutionSettings)
 	execReq := executor.ExecuteRequest{
@@ -136,13 +79,13 @@ func (h *ExecuteHandler) PracticeExecute(w http.ResponseWriter, r *http.Request)
 		execReq.Files = merged.Files
 	}
 
-	// 9. Call executor
+	// 8. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
-		httputil.WriteInternalError(w, r, err, "execution failed")
+		writeExecutorError(w, r, err, "execution failed")
 		return
 	}
 
-	// 10. Return result
+	// 9. Return result
 	httputil.WriteJSON(w, http.StatusOK, execResp)
 }

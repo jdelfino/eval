@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/time/rate"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
@@ -21,6 +21,7 @@ import (
 	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 	"github.com/jdelfino/eval/pkg/httputil"
+	"github.com/jdelfino/eval/pkg/ratelimit"
 )
 
 // Server wraps the HTTP server with its configuration and logger.
@@ -29,6 +30,7 @@ type Server struct {
 	logger     *slog.Logger
 	cfg        *config.Config
 	metrics    *metrics.Metrics
+	memLimiter *ratelimit.MemoryLimiter
 }
 
 // readyResponse represents the JSON response for the readiness endpoint.
@@ -78,6 +80,24 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 		runner = sandbox.RunUnsafe
 	}
 
+	// Set up distributed rate limiter.
+	var rl ratelimit.Limiter
+	cats := ratelimit.Categories()
+	memLimiter := ratelimit.NewMemoryLimiter(cats)
+	memLimiter.Start()
+	if cfg.RedisHost != "" {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
+		})
+		rl = ratelimit.NewFallbackLimiter(
+			ratelimit.NewRedisLimiter(redisClient, cats),
+			memLimiter,
+			logger,
+		)
+	} else {
+		rl = memLimiter
+	}
+
 	// Execute endpoint
 	execHandler := handler.NewExecuteHandler(
 		logger, runner, m,
@@ -93,15 +113,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	// Wrap /execute with rate limiting if enabled (RPS > 0).
-	var executeHandler http.HandlerFunc = execHandler.ServeHTTP
-	if cfg.RateLimitRPS > 0 {
-		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
-		executeHandler = rateLimitMiddleware(limiter, executeHandler)
-	}
-	r.Post("/execute", executeHandler)
+	// Defense-in-depth global rate limit. Per-student limits are enforced
+	// at the go-backend; this only guards against bypass.
+	globalRL := httpmiddleware.ForCategory(rl, "executorGlobal", httpmiddleware.GlobalKey, logger)
+	r.With(globalRL).Post("/execute", execHandler.ServeHTTP)
 
-	// Trace endpoint (shares rate limiter and concurrency pool concept with /execute).
+	// Trace endpoint (shares concurrency pool concept with /execute).
 	traceHandler := handler.NewTraceHandler(
 		logger, runner, m,
 		handler.TraceHandlerConfig{
@@ -113,21 +130,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	var traceHandlerFunc http.HandlerFunc = traceHandler.ServeHTTP
-	if cfg.RateLimitRPS > 0 {
-		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
-		traceHandlerFunc = rateLimitMiddleware(limiter, traceHandlerFunc)
-	}
-	r.Post("/trace", traceHandlerFunc)
+	r.With(globalRL).Post("/trace", traceHandler.ServeHTTP)
 
 	return &Server{
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
 			Handler: r,
 		},
-		logger:  logger,
-		cfg:     cfg,
-		metrics: m,
+		logger:     logger,
+		cfg:        cfg,
+		metrics:    m,
+		memLimiter: memLimiter,
 	}
 }
 
@@ -168,17 +181,6 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	}
 }
 
-// rateLimitMiddleware wraps a handler and returns 429 when the limiter rejects.
-func rateLimitMiddleware(limiter *rate.Limiter, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
-			httputil.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
-			return
-		}
-		next(w, r)
-	}
-}
-
 // Start begins listening and serving HTTP requests.
 func (s *Server) Start() error {
 	s.logger.Info("starting server", "addr", s.httpServer.Addr)
@@ -187,5 +189,8 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server without interrupting active connections.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.memLimiter != nil {
+		s.memLimiter.Stop()
+	}
 	return s.httpServer.Shutdown(ctx)
 }

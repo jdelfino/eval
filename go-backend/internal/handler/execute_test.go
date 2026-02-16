@@ -643,6 +643,38 @@ func TestStandaloneExecute_500ExecutorError(t *testing.T) {
 	}
 }
 
+func TestExecute_429PropagatedFromExecutor(t *testing.T) {
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return activeSession(), nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return nil, &executor.StatusError{Code: http.StatusTooManyRequests, Body: "rate limit exceeded"}
+		},
+	}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	body := newExecuteReq(testStudentID, "code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
 	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)

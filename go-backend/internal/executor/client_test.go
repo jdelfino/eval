@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -95,6 +96,60 @@ func TestExecute_HTTPError(t *testing.T) {
 	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "x"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected StatusError")
+	}
+	if statusErr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", statusErr.Code)
+	}
+}
+
+func TestExecute_429ReturnsStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":"rate limit exceeded"}`)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "x"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected StatusError")
+	}
+	if statusErr.Code != http.StatusTooManyRequests {
+		t.Errorf("expected status 429, got %d", statusErr.Code)
+	}
+}
+
+func TestTrace_429ReturnsStatusError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":"rate limit exceeded"}`)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Trace(context.Background(), TraceRequest{Code: "x"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatal("expected StatusError")
+	}
+	if statusErr.Code != http.StatusTooManyRequests {
+		t.Errorf("expected status 429, got %d", statusErr.Code)
 	}
 }
 

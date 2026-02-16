@@ -26,6 +26,7 @@ type AnalyzeHandler struct {
 }
 
 // NewAnalyzeHandler creates a new AnalyzeHandler.
+// Rate limiting is applied at the middleware level via ForCategory.
 func NewAnalyzeHandler(aiClient ai.Client) *AnalyzeHandler {
 	return &AnalyzeHandler{
 		aiClient: aiClient,

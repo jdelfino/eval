@@ -13,6 +13,17 @@ import (
 	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
+// StatusError is returned when the executor responds with a non-200 status code.
+// Callers can use errors.As to inspect the status and propagate it (e.g. 429).
+type StatusError struct {
+	Code int
+	Body string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("executor: unexpected status %d: %s", e.Code, e.Body)
+}
+
 // Client communicates with the executor service over HTTP.
 type Client struct {
 	baseURL    string
@@ -68,7 +79,7 @@ func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteRespo
 		if len(snippet) > 200 {
 			snippet = snippet[:200]
 		}
-		return nil, fmt.Errorf("executor: unexpected status %d: %s", httpResp.StatusCode, snippet)
+		return nil, &StatusError{Code: httpResp.StatusCode, Body: snippet}
 	}
 
 	var resp ExecuteResponse
@@ -124,7 +135,7 @@ func (c *Client) Trace(ctx context.Context, req TraceRequest) (*TraceResponse, e
 		if len(snippet) > 200 {
 			snippet = snippet[:200]
 		}
-		return nil, fmt.Errorf("executor: trace unexpected status %d: %s", httpResp.StatusCode, snippet)
+		return nil, &StatusError{Code: httpResp.StatusCode, Body: snippet}
 	}
 
 	var resp TraceResponse

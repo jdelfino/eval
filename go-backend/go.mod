@@ -6,6 +6,8 @@ toolchain go1.24.12
 
 require github.com/jdelfino/eval/pkg/executorapi v0.0.0
 
+require github.com/jdelfino/eval/pkg/ratelimit v0.0.0
+
 require (
 	firebase.google.com/go/v4 v4.19.0
 	github.com/caarlos0/env/v11 v11.3.1
@@ -18,9 +20,10 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/jdelfino/eval/pkg/httplog v0.0.0-00010101000000-000000000000
 	github.com/jdelfino/eval/pkg/httpmiddleware v0.0.0-00010101000000-000000000000
-	github.com/jdelfino/eval/pkg/httputil v0.0.0-00010101000000-000000000000
+	github.com/jdelfino/eval/pkg/httputil v0.0.0
 	github.com/jdelfino/eval/pkg/slogutil v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sergi/go-diff v1.4.0
 	golang.org/x/term v0.38.0
 )
@@ -44,6 +47,7 @@ require (
 	github.com/centrifugal/protocol v0.16.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -114,3 +118,5 @@ replace github.com/jdelfino/eval/pkg/slogutil => ../pkg/slogutil
 replace github.com/jdelfino/eval/pkg/httpmiddleware => ../pkg/httpmiddleware
 
 replace github.com/jdelfino/eval/pkg/httputil => ../pkg/httputil
+
+replace github.com/jdelfino/eval/pkg/ratelimit => ../pkg/ratelimit

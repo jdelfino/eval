@@ -259,6 +259,10 @@ resource "kubernetes_config_map" "app_config" {
     CENTRIFUGO_URL = "http://centrifugo:8000"
     EXECUTOR_URL   = "http://executor:8081"
 
+    # Redis Configuration (for distributed rate limiting)
+    REDIS_HOST = "redis.default.svc.cluster.local"
+    REDIS_PORT = "6379"
+
     # Invitation / Email Configuration
     INVITE_BASE_URL   = var.invite_base_url
     RESEND_FROM_EMAIL = var.resend_from_email

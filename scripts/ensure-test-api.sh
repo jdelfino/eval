@@ -20,11 +20,10 @@ DB_NAME=${DATABASE_NAME:-eval}
 DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 
-# Build if no binary or source is newer
-if [ ! -x go-backend/tmp/server ]; then
-  echo "Building Go server..." >&2
-  (cd go-backend && go build -o ./tmp/server ./cmd/server)
-fi
+# Always rebuild — go build is fast when nothing changed (cached),
+# and skipping the build misses source changes in local modules.
+echo "Building Go server..." >&2
+(cd go-backend && mkdir -p tmp && go build -o ./tmp/server ./cmd/server)
 
 # Start the server
 export AUTH_MODE=test

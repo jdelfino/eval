@@ -19,6 +19,8 @@ import (
 // SectionHandler handles section management routes.
 type SectionHandler struct {
 	membershipHandler *MembershipHandler
+	readRL            func(http.Handler) http.Handler
+	writeRL           func(http.Handler) http.Handler
 }
 
 // NewSectionHandler creates a new SectionHandler.
@@ -30,45 +32,73 @@ func NewSectionHandler(membershipHandler *MembershipHandler) *SectionHandler {
 	}
 }
 
+// WithRateLimiting returns h after configuring read/write rate-limiting
+// middleware for use in Routes(). When nil, routes are registered without
+// rate limiting (safe for tests).
+func (h *SectionHandler) WithRateLimiting(readRL, writeRL func(http.Handler) http.Handler) *SectionHandler {
+	h.readRL = readRL
+	h.writeRL = writeRL
+	return h
+}
+
 // Routes returns a chi.Router with standalone section routes mounted.
 // Sub-resource routes (members, membership, sessions, instructors,
 // regenerate-code) are nested under /{id} so that server.go only
 // needs a single r.Mount("/sections", ...) call.
 func (h *SectionHandler) Routes() chi.Router {
 	r := chi.NewRouter()
+	readRL := noopMiddleware
+	writeRL := noopMiddleware
+	if h.readRL != nil {
+		readRL = h.readRL
+	}
+	if h.writeRL != nil {
+		writeRL = h.writeRL
+	}
 
 	r.Route("/{id}", func(r chi.Router) {
-		r.Get("/", h.Get)
+		r.With(readRL).Get("/", h.Get)
 
 		// Read-only sub-resources — no extra permission beyond parent auth.
 		// Students need these to discover sessions and view section info.
-		r.Get("/members", h.membershipHandler.ListMembers)
-		r.Delete("/membership", h.membershipHandler.Leave)
-		r.Get("/sessions", h.ListSessions)
+		r.With(readRL).Get("/members", h.membershipHandler.ListMembers)
+		r.With(writeRL).Delete("/membership", h.membershipHandler.Leave)
+		r.With(readRL).Get("/sessions", h.ListSessions)
 
 		// Write sub-resources — instructor+ (PermContentManage).
 		r.Group(func(r chi.Router) {
 			r.Use(custommw.RequirePermission(auth.PermContentManage))
-			r.Patch("/", h.Update)
-			r.Delete("/", h.Delete)
-			r.Post("/regenerate-code", h.RegenerateCode)
-			r.Get("/instructors", h.ListInstructors)
-			r.Post("/instructors", h.AddInstructor)
-			r.Delete("/instructors/{userID}", h.RemoveInstructor)
+			r.With(writeRL).Patch("/", h.Update)
+			r.With(writeRL).Delete("/", h.Delete)
+			r.With(writeRL).Post("/regenerate-code", h.RegenerateCode)
+			r.With(readRL).Get("/instructors", h.ListInstructors)
+			r.With(writeRL).Post("/instructors", h.AddInstructor)
+			r.With(writeRL).Delete("/instructors/{userID}", h.RemoveInstructor)
 		})
 	})
 
 	return r
 }
 
+// noopMiddleware is a no-op middleware used when rate limiting is not configured.
+func noopMiddleware(next http.Handler) http.Handler { return next }
+
 // ClassRoutes returns a chi.Router with class-scoped section routes.
 func (h *SectionHandler) ClassRoutes() chi.Router {
 	r := chi.NewRouter()
+	readRL := noopMiddleware
+	writeRL := noopMiddleware
+	if h.readRL != nil {
+		readRL = h.readRL
+	}
+	if h.writeRL != nil {
+		writeRL = h.writeRL
+	}
 
-	r.Get("/", h.ListByClass)
+	r.With(readRL).Get("/", h.ListByClass)
 	r.Group(func(r chi.Router) {
 		r.Use(custommw.RequirePermission(auth.PermContentManage))
-		r.Post("/", h.Create)
+		r.With(writeRL).Post("/", h.Create)
 	})
 
 	return r
