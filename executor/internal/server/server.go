@@ -31,6 +31,7 @@ type Server struct {
 	logger     *slog.Logger
 	cfg        *config.Config
 	metrics    *metrics.Metrics
+	memLimiter *ratelimit.MemoryLimiter
 }
 
 // readyResponse represents the JSON response for the readiness endpoint.
@@ -134,9 +135,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
 			Handler: r,
 		},
-		logger:  logger,
-		cfg:     cfg,
-		metrics: m,
+		logger:     logger,
+		cfg:        cfg,
+		metrics:    m,
+		memLimiter: memLimiter,
 	}
 }
 
@@ -201,5 +203,8 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully shuts down the server without interrupting active connections.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.memLimiter != nil {
+		s.memLimiter.Stop()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
