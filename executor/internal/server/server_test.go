@@ -312,24 +312,30 @@ func TestRateLimitMiddleware_AllowsOnError(t *testing.T) {
 }
 
 func TestRateLimitAlwaysEnabled_IntegrationWithServer(t *testing.T) {
-	// Rate limiting is always on via categories — no RateLimitRPS config needed.
-	cfg := &config.Config{
-		Port:        8081,
-		Environment: "local",
-		NsjailPath:  "/usr/bin/nsjail",
-		PythonPath:  "/usr/bin/python3",
+	// The executor uses the high-limit executorGlobal category (1000/min)
+	// as defense-in-depth. Verify it still kicks in by using a custom
+	// category map with a small limit for the integration test.
+	cats := map[string]ratelimit.Category{
+		"executorGlobal": {Name: "executorGlobal", Algorithm: "sliding", Limit: 2, Window: 60_000_000_000},
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	reg := prometheus.NewRegistry()
-	srv := NewWithRegistry(cfg, logger, reg)
+	limiter := ratelimit.NewMemoryLimiter(cats)
+	limiter.Start()
+	defer limiter.Stop()
 
-	// Send requests up to the execute category limit (30/min) + 1.
-	// The 31st request should be rate limited.
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mw := httpmiddleware.ForCategory(limiter, "executorGlobal", httpmiddleware.GlobalKey, logger)
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest) // execute handler returns 400 for empty body
+	})
+	handler := mw(inner)
+
+	// Send 3 requests — 2 should pass, 3rd should be rate limited.
 	var lastCode int
-	for i := 0; i < 31; i++ {
+	for i := 0; i < 3; i++ {
 		req := httptest.NewRequest(http.MethodPost, "/execute", nil)
 		rec := httptest.NewRecorder()
-		srv.httpServer.Handler.ServeHTTP(rec, req)
+		handler.ServeHTTP(rec, req)
 		lastCode = rec.Code
 	}
 

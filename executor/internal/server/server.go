@@ -113,8 +113,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	executeRL := httpmiddleware.ForCategory(rl, "execute", httpmiddleware.GlobalKey, logger)
-	r.With(executeRL).Post("/execute", execHandler.ServeHTTP)
+	// Defense-in-depth global rate limit. Per-student limits are enforced
+	// at the go-backend; this only guards against bypass.
+	globalRL := httpmiddleware.ForCategory(rl, "executorGlobal", httpmiddleware.GlobalKey, logger)
+	r.With(globalRL).Post("/execute", execHandler.ServeHTTP)
 
 	// Trace endpoint (shares concurrency pool concept with /execute).
 	traceHandler := handler.NewTraceHandler(
@@ -128,7 +130,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	r.With(executeRL).Post("/trace", traceHandler.ServeHTTP)
+	r.With(globalRL).Post("/trace", traceHandler.ServeHTTP)
 
 	return &Server{
 		httpServer: &http.Server{

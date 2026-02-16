@@ -70,6 +70,16 @@ var (
 		Limit:     100,
 		Window:    1 * time.Minute,
 	}
+
+	// Defense-in-depth global limit for the executor service.
+	// Per-student limits are enforced at the go-backend; this only
+	// guards against an attacker bypassing those limits.
+	CategoryExecutorGlobal = Category{
+		Name:      "executorGlobal",
+		Algorithm: "sliding",
+		Limit:     1000,
+		Window:    1 * time.Minute,
+	}
 )
 
 // Categories returns all predefined rate limit categories indexed by name.
@@ -84,7 +94,8 @@ func Categories() map[string]Category {
 		CategoryAnalyzeDaily.Name:  CategoryAnalyzeDaily,
 		CategoryAnalyzeGlobal.Name: CategoryAnalyzeGlobal,
 		CategorySessionCreate.Name: CategorySessionCreate,
-		CategoryWrite.Name:         CategoryWrite,
-		CategoryRead.Name:          CategoryRead,
+		CategoryWrite.Name:          CategoryWrite,
+		CategoryRead.Name:           CategoryRead,
+		CategoryExecutorGlobal.Name: CategoryExecutorGlobal,
 	}
 }
