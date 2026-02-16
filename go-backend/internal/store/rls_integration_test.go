@@ -1,4 +1,4 @@
-// Package store provides integration tests for RLS policy enforcement.
+// Package store provides RLS policy integration tests.
 //
 // These tests require a running PostgreSQL database with the schema applied.
 // They are skipped gracefully if DATABASE_URL is not set.
