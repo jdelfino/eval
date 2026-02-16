@@ -7,7 +7,7 @@ var (
 	CategoryAuth = Category{
 		Name:      "auth",
 		Algorithm: "fixed",
-		Limit:     5,
+		Limit:     20,
 		Window:    1 * time.Minute,
 	}
 	CategoryJoin = Category{
