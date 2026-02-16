@@ -79,3 +79,9 @@ executor/tmp/
 
 # Auto-generated Next.js type declarations
 frontend/next-env.d.ts
+
+# Root-level lock files (projects have their own; a stray root lock file
+# causes Next.js Turbopack to mis-infer the workspace root)
+/package-lock.json
+/yarn.lock
+/pnpm-lock.yaml
