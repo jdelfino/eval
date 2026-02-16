@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
@@ -26,10 +25,7 @@ func (m *mockTracerClient) Trace(ctx context.Context, req executor.TraceRequest)
 }
 
 func setupStandaloneTraceHandler(tracer TracerClient) *TraceHandler {
-	return &TraceHandler{
-		tracer:       tracer,
-		traceLimiter: NewPracticeLimiter(15),
-	}
+	return NewTraceHandler(tracer)
 }
 
 func newStandaloneTraceReq(code string) []byte {
@@ -141,47 +137,6 @@ func TestStandaloneTrace_422MissingCode(t *testing.T) {
 
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestStandaloneTrace_429RateLimited(t *testing.T) {
-	tracer := &mockTracerClient{
-		traceFn: func(_ context.Context, _ executor.TraceRequest) (*executor.TraceResponse, error) {
-			return &executor.TraceResponse{ExitCode: 0}, nil
-		},
-	}
-
-	h := &TraceHandler{
-		tracer:       tracer,
-		traceLimiter: NewPracticeLimiter(1), // allow only 1 per minute
-	}
-	router := traceRouter(h)
-	userID := uuid.New()
-
-	// First request should succeed
-	body := newStandaloneTraceReq("code")
-	req := httptest.NewRequest(http.MethodPost, "/trace", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("first request: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// Second request should be rate limited
-	body = newStandaloneTraceReq("code")
-	req = httptest.NewRequest(http.MethodPost, "/trace", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	ctx = auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleInstructor})
-	req = req.WithContext(ctx)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("second request: expected 429, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

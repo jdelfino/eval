@@ -24,15 +24,14 @@ type standaloneTraceRequest struct {
 
 // TraceHandler handles debugger trace requests.
 type TraceHandler struct {
-	tracer       TracerClient
-	traceLimiter *PracticeLimiter
+	tracer TracerClient
 }
 
-// NewTraceHandler creates a new TraceHandler with rate limiting.
+// NewTraceHandler creates a new TraceHandler.
+// Rate limiting is applied at the middleware level via ForCategory.
 func NewTraceHandler(tracer TracerClient) *TraceHandler {
 	return &TraceHandler{
-		tracer:       tracer,
-		traceLimiter: NewPracticeLimiter(15),
+		tracer: tracer,
 	}
 }
 
@@ -47,11 +46,6 @@ func (h *TraceHandler) StandaloneTrace(w http.ResponseWriter, r *http.Request) {
 
 	req, err := httpbind.BindJSON[standaloneTraceRequest](w, r)
 	if err != nil {
-		return
-	}
-
-	if !h.traceLimiter.Allow(authUser.ID) {
-		httputil.WriteError(w, http.StatusTooManyRequests, "trace rate limit exceeded (15 requests per minute)")
 		return
 	}
 
