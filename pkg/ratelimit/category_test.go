@@ -14,7 +14,7 @@ func TestCategories_AllPresent(t *testing.T) {
 		limit     int
 		window    time.Duration
 	}{
-		{"auth", "fixed", 5, time.Minute},
+		{"auth", "fixed", 20, time.Minute},
 		{"join", "sliding", 10, time.Minute},
 		{"execute", "sliding", 30, time.Minute},
 		{"practice", "sliding", 15, time.Minute},
@@ -25,6 +25,7 @@ func TestCategories_AllPresent(t *testing.T) {
 		{"sessionCreate", "sliding", 10, time.Hour},
 		{"write", "sliding", 30, time.Minute},
 		{"read", "sliding", 100, time.Minute},
+		{"executorGlobal", "sliding", 1000, time.Minute},
 	}
 
 	if len(cats) != len(expected) {
