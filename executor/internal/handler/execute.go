@@ -151,7 +151,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("sandbox execution failed", "error", err, "duration_ms", duration.Milliseconds())
 		h.metrics.ExecutionsTotal.WithLabelValues("error").Inc()
-		httputil.WriteError(w, http.StatusInternalServerError, "internal execution error")
+		httputil.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("sandbox setup failed: %v", err))
 		return
 	}
 
