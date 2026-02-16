@@ -75,7 +75,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         onRun={() => {}}
         isRunning={false}
         readOnly
-        problem={{ title: 'Test Problem' }}
+        problem={{ title: 'Test Problem', description: null, starter_code: null }}
         execution_result={execution_result}
       />
     );
@@ -100,7 +100,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         onChange={() => {}}
         onRun={() => {}}
         readOnly
-        problem={{ title: 'Test Problem' }}
+        problem={{ title: 'Test Problem', description: null, starter_code: null }}
         execution_result={execution_result}
       />
     );
@@ -116,7 +116,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
         onChange={() => {}}
         onRun={() => {}}
         readOnly
-        problem={{ title: 'Test Problem' }}
+        problem={{ title: 'Test Problem', description: null, starter_code: null }}
         execution_result={null}
       />
     );

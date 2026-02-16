@@ -65,7 +65,7 @@ function PublicViewContent() {
     if (studentChanged || codeChanged) {
       lastFeaturedStudentId.current = state?.featured_student_id || null;
       lastFeaturedCode.current = state?.featured_code ?? null;
-      setLocalCode(state?.featured_code ?? (state?.problem as any)?.starter_code ?? '');
+      setLocalCode(state?.featured_code ?? state?.problem?.starter_code ?? '');
     }
   }, [state?.featured_student_id, state?.featured_code, state?.problem]);
 
@@ -88,18 +88,18 @@ function PublicViewContent() {
     );
   }
 
-  if (error) {
+  if (error || !state) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-red-300 rounded">
           <h1 className="text-xl font-bold mb-4 text-red-600">Error</h1>
-          <p className="text-gray-500">{error}</p>
+          <p className="text-gray-500">{error || 'Failed to load session state'}</p>
         </div>
       </div>
     );
   }
 
-  const problem = state?.problem as { title: string; description?: string; starter_code?: string } | null;
+  const problem = state.problem;
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">

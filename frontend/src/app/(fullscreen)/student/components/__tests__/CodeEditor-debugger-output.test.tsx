@@ -351,7 +351,7 @@ describe('CodeEditor - Debugger Output Display', () => {
         <CodeEditor
           code="# Empty code"
           onChange={mockOnChange}
-          problem={{ title: 'Test Problem' }}
+          problem={{ title: 'Test Problem', description: null, starter_code: null }}
         />
       );
 

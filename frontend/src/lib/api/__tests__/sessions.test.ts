@@ -235,6 +235,40 @@ describe('lib/api/sessions', () => {
       expect(result.starter_code).toBeUndefined();
     });
 
+    it('accesses typed Problem fields without casts', async () => {
+      // Regression: getSessionDetails used to cast problem to Record<string, unknown>
+      // and then cast each field individually. Now it accesses typed fields directly.
+      const response = {
+        session: {
+          ...fakeSession,
+          problem: {
+            id: 'p-1',
+            namespace_id: 'ns-1',
+            title: 'Typed Problem',
+            description: 'Typed description',
+            starter_code: 'def solve(): pass',
+            test_cases: null,
+            execution_settings: null,
+            author_id: 'u1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        },
+        students: [],
+        join_code: 'XYZ',
+      };
+      mockApiGet.mockResolvedValue(response);
+
+      const result = await getSessionDetails('sess-1');
+
+      expect(result.problem_title).toBe('Typed Problem');
+      expect(result.problem_description).toBe('Typed description');
+      expect(result.starter_code).toBe('def solve(): pass');
+    });
+
     it('SessionStudentSummary has only summary fields (id, name, code, last_update)', () => {
       const summary: SessionStudentSummary = {
         id: 'test',
@@ -249,7 +283,7 @@ describe('lib/api/sessions', () => {
   describe('getSessionPublicState', () => {
     it('calls GET /sessions/{id}/public-state and returns SessionPublicState', async () => {
       const fakePublicState: SessionPublicState = {
-        problem: { title: 'Test Problem' },
+        problem: { title: 'Test Problem', description: null, starter_code: null },
         featured_student_id: null,
         featured_code: null,
         join_code: 'ABC123',

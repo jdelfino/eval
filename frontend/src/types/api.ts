@@ -92,7 +92,7 @@ export interface Session {
   namespace_id: string;
   section_id: string;
   section_name: string;
-  problem: unknown;
+  problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
   creator_id: string;
@@ -153,8 +153,15 @@ export interface SessionState {
   join_code: string;
 }
 
+/** Subset of Problem fields exposed by the public-state endpoint. */
+export interface SessionPublicProblem {
+  title: string;
+  description: string | null;
+  starter_code: string | null;
+}
+
 export interface SessionPublicState {
-  problem: unknown;
+  problem: SessionPublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
   join_code: string;

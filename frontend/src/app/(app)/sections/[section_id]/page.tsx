@@ -179,11 +179,11 @@ export default function SectionDetailPage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                            {(session.problem as {title?: string; description?: string} | null)?.title || 'Coding Session'}
+                            {session.problem?.title || 'Coding Session'}
                           </h3>
-                          {(session.problem as {title?: string; description?: string} | null)?.description && (
+                          {session.problem?.description && (
                             <p className="text-gray-600 mb-2 line-clamp-2">
-                              {(session.problem as {description?: string})?.description}
+                              {session.problem.description}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -227,7 +227,7 @@ export default function SectionDetailPage() {
         {/* Past Sessions */}
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Past Sessions</h2>
-          
+
           {pastSessions.length > 0 ? (
             <div className="space-y-3">
               {pastSessions.map((session) => (
@@ -247,11 +247,11 @@ export default function SectionDetailPage() {
                         </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                            {(session.problem as {title?: string; description?: string} | null)?.title || 'Coding Session'}
+                            {session.problem?.title || 'Coding Session'}
                           </h3>
-                          {(session.problem as {title?: string; description?: string} | null)?.description && (
+                          {session.problem?.description && (
                             <p className="text-gray-600 mb-2 line-clamp-1 text-sm">
-                              {(session.problem as {description?: string})?.description}
+                              {session.problem.description}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-gray-500">

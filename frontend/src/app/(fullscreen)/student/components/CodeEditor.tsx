@@ -11,7 +11,7 @@ import type { Problem } from '@/types/problem';
 import { executeStandaloneCode } from '@/lib/api/execute';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { ExecutionResult } from '@/types/api';
+import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
 
 interface CodeEditorProps {
   code: string;
@@ -29,7 +29,7 @@ interface CodeEditorProps {
   useApiExecution?: boolean;
   title?: string;
   showRunButton?: boolean;
-  problem?: Problem | { title: string; description?: string; starter_code?: string } | null;
+  problem?: Problem | SessionPublicProblem | null;
   onLoadStarterCode?: (starter_code: string) => void;
   externalEditorRef?: React.MutableRefObject<any>;
   debugger?: ReturnType<typeof import('@/hooks/useApiDebugger').useApiDebugger>;

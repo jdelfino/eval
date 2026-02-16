@@ -92,7 +92,7 @@ describe('sections API client', () => {
           namespace_id: 'ns-1',
           section_id: 's1',
           section_name: 'Section A',
-          problem: {},
+          problem: null,
           featured_student_id: null,
           featured_code: null,
           creator_id: 'u1',
