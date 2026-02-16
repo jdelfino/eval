@@ -282,11 +282,17 @@ export function useRealtimeSession({
         }
 
         case 'session_ended': {
-          setSession(prev => prev ? {
-            ...prev,
-            status: 'completed',
-            ended_at: new Date(),
-          } : prev);
+          setSession(prev => {
+            if (!prev) {
+              console.warn('[useRealtimeSession] Dropping session_ended event: state not yet initialized');
+              return prev;
+            }
+            return {
+              ...prev,
+              status: 'completed',
+              ended_at: new Date(),
+            };
+          });
           break;
         }
 
@@ -295,11 +301,17 @@ export function useRealtimeSession({
             // Backend sends FeaturedStudentChangedData{user_id, code}
             const studentId = payload.user_id;
             const code = payload.code;
-            setSession(prev => prev ? {
-              ...prev,
-              featured_student_id: studentId,
-              featured_code: code,
-            } : prev);
+            setSession(prev => {
+              if (!prev) {
+                console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
+                return prev;
+              }
+              return {
+                ...prev,
+                featured_student_id: studentId,
+                featured_code: code,
+              };
+            });
             setFeaturedStudent({
               studentId,
               code,
@@ -312,10 +324,16 @@ export function useRealtimeSession({
           if (payload) {
             const { newSessionId } = payload;
             setReplacementInfo({ newSessionId });
-            setSession(prev => prev ? {
-              ...prev,
-              status: 'completed',
-            } : prev);
+            setSession(prev => {
+              if (!prev) {
+                console.warn('[useRealtimeSession] Dropping session_replaced event: state not yet initialized');
+                return prev;
+              }
+              return {
+                ...prev,
+                status: 'completed',
+              };
+            });
           }
           break;
         }
@@ -324,10 +342,16 @@ export function useRealtimeSession({
           if (payload) {
             // Backend sends ProblemUpdatedData{problem_id}
             const { problem_id } = payload;
-            setSession(prev => prev ? {
-              ...prev,
-              problem: { ...prev.problem, id: problem_id } as Session['problem'],
-            } : prev);
+            setSession(prev => {
+              if (!prev) {
+                console.warn('[useRealtimeSession] Dropping problem_updated event: state not yet initialized');
+                return prev;
+              }
+              return {
+                ...prev,
+                problem: { ...prev.problem, id: problem_id } as Session['problem'],
+              };
+            });
           }
           break;
         }

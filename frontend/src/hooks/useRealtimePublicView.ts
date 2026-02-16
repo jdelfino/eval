@@ -97,17 +97,29 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
         case 'featured_student_changed': {
           if (payload) {
             const userId = payload.user_id || null;
-            setState(prev => prev ? {
-              ...prev,
-              featured_student_id: userId,
-              featured_code: userId ? (payload.code ?? '') : null,
-            } : prev);
+            setState(prev => {
+              if (!prev) {
+                console.warn('[useRealtimePublicView] Dropping featured_student_changed event: state not yet initialized');
+                return prev;
+              }
+              return {
+                ...prev,
+                featured_student_id: userId,
+                featured_code: userId ? (payload.code ?? '') : null,
+              };
+            });
           }
           break;
         }
 
         case 'session_ended': {
-          setState(prev => prev ? { ...prev, status: 'completed' } : prev);
+          setState(prev => {
+            if (!prev) {
+              console.warn('[useRealtimePublicView] Dropping session_ended event: state not yet initialized');
+              return prev;
+            }
+            return { ...prev, status: 'completed' };
+          });
           break;
         }
 
