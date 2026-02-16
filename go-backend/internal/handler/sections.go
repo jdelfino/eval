@@ -17,23 +17,44 @@ import (
 )
 
 // SectionHandler handles section management routes.
-type SectionHandler struct{}
+type SectionHandler struct {
+	membershipHandler *MembershipHandler
+}
 
 // NewSectionHandler creates a new SectionHandler.
-func NewSectionHandler() *SectionHandler {
-	return &SectionHandler{}
+// membershipHandler is used to mount membership sub-resource routes
+// (members, membership) under /sections/{id}.
+func NewSectionHandler(membershipHandler *MembershipHandler) *SectionHandler {
+	return &SectionHandler{
+		membershipHandler: membershipHandler,
+	}
 }
 
 // Routes returns a chi.Router with standalone section routes mounted.
+// Sub-resource routes (members, membership, sessions, instructors,
+// regenerate-code) are nested under /{id} so that server.go only
+// needs a single r.Mount("/sections", ...) call.
 func (h *SectionHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.Get)
+
+		// Read-only sub-resources — no extra permission beyond parent auth.
+		// Students need these to discover sessions and view section info.
+		r.Get("/members", h.membershipHandler.ListMembers)
+		r.Delete("/membership", h.membershipHandler.Leave)
+		r.Get("/sessions", h.ListSessions)
+
+		// Write sub-resources — instructor+ (PermContentManage).
 		r.Group(func(r chi.Router) {
 			r.Use(custommw.RequirePermission(auth.PermContentManage))
 			r.Patch("/", h.Update)
 			r.Delete("/", h.Delete)
+			r.Post("/regenerate-code", h.RegenerateCode)
+			r.Get("/instructors", h.ListInstructors)
+			r.Post("/instructors", h.AddInstructor)
+			r.Delete("/instructors/{userID}", h.RemoveInstructor)
 		})
 	})
 
