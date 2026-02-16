@@ -155,8 +155,10 @@ jobs:
           fi
 
           # --- Wait for background jobs ---
-          wait $GO_PID || { echo "::error::Go build failed"; exit 1; }
-          wait $EXEC_PID || { echo "::error::Executor setup failed"; exit 1; }
+          FAILED=false
+          wait $GO_PID || { echo "::error::Go build failed"; FAILED=true; }
+          wait $EXEC_PID || { echo "::error::Executor setup failed"; FAILED=true; }
+          if [ "$FAILED" = "true" ]; then exit 1; fi
 
       - name: Run E2E tests
         run: make test-e2e
