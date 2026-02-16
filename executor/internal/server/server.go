@@ -7,12 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/time/rate"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/handler"
@@ -21,6 +22,7 @@ import (
 	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 	"github.com/jdelfino/eval/pkg/httputil"
+	"github.com/jdelfino/eval/pkg/ratelimit"
 )
 
 // Server wraps the HTTP server with its configuration and logger.
@@ -78,6 +80,24 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 		runner = sandbox.RunUnsafe
 	}
 
+	// Set up distributed rate limiter.
+	var rl ratelimit.Limiter
+	cats := ratelimit.Categories()
+	memLimiter := ratelimit.NewMemoryLimiter(cats)
+	memLimiter.Start()
+	if cfg.RedisHost != "" {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
+		})
+		rl = ratelimit.NewFallbackLimiter(
+			ratelimit.NewRedisLimiter(redisClient, cats),
+			memLimiter,
+			logger,
+		)
+	} else {
+		rl = memLimiter
+	}
+
 	// Execute endpoint
 	execHandler := handler.NewExecuteHandler(
 		logger, runner, m,
@@ -93,15 +113,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	// Wrap /execute with rate limiting if enabled (RPS > 0).
-	var executeHandler http.HandlerFunc = execHandler.ServeHTTP
-	if cfg.RateLimitRPS > 0 {
-		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
-		executeHandler = rateLimitMiddleware(limiter, executeHandler)
-	}
-	r.Post("/execute", executeHandler)
+	r.Post("/execute", rateLimitHandler(rl, "execute", execHandler.ServeHTTP))
 
-	// Trace endpoint (shares rate limiter and concurrency pool concept with /execute).
+	// Trace endpoint (shares concurrency pool concept with /execute).
 	traceHandler := handler.NewTraceHandler(
 		logger, runner, m,
 		handler.TraceHandlerConfig{
@@ -113,12 +127,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)
-	var traceHandlerFunc http.HandlerFunc = traceHandler.ServeHTTP
-	if cfg.RateLimitRPS > 0 {
-		limiter := rate.NewLimiter(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst)
-		traceHandlerFunc = rateLimitMiddleware(limiter, traceHandlerFunc)
-	}
-	r.Post("/trace", traceHandlerFunc)
+	r.Post("/trace", rateLimitHandler(rl, "execute", traceHandler.ServeHTTP))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -168,10 +177,15 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	}
 }
 
-// rateLimitMiddleware wraps a handler and returns 429 when the limiter rejects.
-func rateLimitMiddleware(limiter *rate.Limiter, next http.HandlerFunc) http.HandlerFunc {
+// rateLimitHandler wraps a handler and returns 429 when the limiter rejects.
+func rateLimitHandler(limiter ratelimit.Limiter, category string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.Allow() {
+		result, err := limiter.Allow(r.Context(), category, "global")
+		if err != nil {
+			// Log error but allow request through.
+			slog.Warn("rate limit check failed", "error", err)
+		} else if result != nil && !result.Allowed {
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(result.ResetAt).Seconds())+1))
 			httputil.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}

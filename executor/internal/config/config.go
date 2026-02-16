@@ -29,6 +29,10 @@ type Config struct {
 	// Rate Limiting (per-instance, not distributed)
 	RateLimitRPS   float64 `env:"RATE_LIMIT_RPS" envDefault:"50"`
 	RateLimitBurst int     `env:"RATE_LIMIT_BURST" envDefault:"100"`
+
+	// Redis (for distributed rate limiting)
+	RedisHost string `env:"REDIS_HOST"`
+	RedisPort int    `env:"REDIS_PORT" envDefault:"6379"`
 }
 
 // Load parses environment variables and returns a Config struct.

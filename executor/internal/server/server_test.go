@@ -12,12 +12,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/time/rate"
 
 	"github.com/jdelfino/eval/executor/internal/config"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
+	"github.com/jdelfino/eval/pkg/ratelimit"
 )
 
 func newTestServer(t *testing.T) *Server {
@@ -195,9 +195,14 @@ func TestRecovererCatchesPanic(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddleware_Rejects(t *testing.T) {
-	// Limiter with burst=1, so the second request should be rejected.
-	limiter := rate.NewLimiter(rate.Limit(1), 1)
+func TestRateLimitHandler_Rejects(t *testing.T) {
+	// Use a memory limiter with a single-request category to test rejection.
+	cats := map[string]ratelimit.Category{
+		"execute": {Name: "execute", Algorithm: "sliding", Limit: 1, Window: 60_000_000_000}, // 1 per minute
+	}
+	limiter := ratelimit.NewMemoryLimiter(cats)
+	limiter.Start()
+	defer limiter.Stop()
 
 	called := 0
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,9 +210,9 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := rateLimitMiddleware(limiter, inner)
+	handler := rateLimitHandler(limiter, "execute", inner)
 
-	// First request: allowed (consumes the burst token).
+	// First request: allowed.
 	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec1 := httptest.NewRecorder()
 	handler(rec1, req1)
@@ -216,7 +221,7 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 		t.Errorf("first request: status = %d, want %d", rec1.Code, http.StatusOK)
 	}
 
-	// Second request: should be rate limited (no tokens left).
+	// Second request: should be rate limited.
 	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
 	rec2 := httptest.NewRecorder()
 	handler(rec2, req2)
@@ -238,61 +243,92 @@ func TestRateLimitMiddleware_Rejects(t *testing.T) {
 	}
 }
 
-func TestRateLimitDisabled_WhenRPSZero(t *testing.T) {
-	cfg := &config.Config{
-		Port:           8081,
-		Environment:    "local",
-		NsjailPath:     "/usr/bin/nsjail",
-		PythonPath:     "/usr/bin/python3",
-		RateLimitRPS:   0, // disabled
-		RateLimitBurst: 100,
+func TestRateLimitHandler_SetsRetryAfterHeader(t *testing.T) {
+	cats := map[string]ratelimit.Category{
+		"execute": {Name: "execute", Algorithm: "sliding", Limit: 1, Window: 60_000_000_000}, // 1 per minute
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	reg := prometheus.NewRegistry()
-	srv := NewWithRegistry(cfg, logger, reg)
+	limiter := ratelimit.NewMemoryLimiter(cats)
+	limiter.Start()
+	defer limiter.Stop()
 
-	// Should still reach the execute handler (400 due to no body), not 429.
-	for i := 0; i < 5; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/execute", nil)
-		rec := httptest.NewRecorder()
-		srv.httpServer.Handler.ServeHTTP(rec, req)
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
-		if rec.Code == http.StatusTooManyRequests {
-			t.Fatalf("request %d: got 429 but rate limiting should be disabled", i)
-		}
+	handler := rateLimitHandler(limiter, "execute", inner)
+
+	// First request: consume the single token.
+	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec1 := httptest.NewRecorder()
+	handler(rec1, req1)
+
+	// Second request: should be rate limited with Retry-After header.
+	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec2 := httptest.NewRecorder()
+	handler(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
+	}
+
+	retryAfter := rec2.Header().Get("Retry-After")
+	if retryAfter == "" {
+		t.Error("expected Retry-After header to be set on 429 response")
 	}
 }
 
-func TestRateLimitEnabled_IntegrationWithServer(t *testing.T) {
+func TestRateLimitHandler_AllowsOnError(t *testing.T) {
+	// When the limiter returns an error, the request should be allowed through
+	// (fail-open behavior).
+	cats := map[string]ratelimit.Category{} // empty categories => unknown category error
+	limiter := ratelimit.NewMemoryLimiter(cats)
+	limiter.Start()
+	defer limiter.Stop()
+
+	called := 0
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called++
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := rateLimitHandler(limiter, "nonexistent", inner)
+
+	req := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d (should allow on limiter error)", rec.Code, http.StatusOK)
+	}
+	if called != 1 {
+		t.Errorf("inner handler called %d times, want 1", called)
+	}
+}
+
+func TestRateLimitAlwaysEnabled_IntegrationWithServer(t *testing.T) {
+	// Rate limiting is always on via categories — no RateLimitRPS config needed.
 	cfg := &config.Config{
-		Port:           8081,
-		Environment:    "local",
-		NsjailPath:     "/usr/bin/nsjail",
-		PythonPath:     "/usr/bin/python3",
-		RateLimitRPS:   1,
-		RateLimitBurst: 1,
+		Port:        8081,
+		Environment: "local",
+		NsjailPath:  "/usr/bin/nsjail",
+		PythonPath:  "/usr/bin/python3",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()
 	srv := NewWithRegistry(cfg, logger, reg)
 
-	// First request consumes the burst token.
-	req1 := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	rec1 := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(rec1, req1)
-
-	// Could be 400 (bad request) since no body, but should NOT be 429.
-	if rec1.Code == http.StatusTooManyRequests {
-		t.Errorf("first request should not be rate limited, got 429")
+	// Send requests up to the execute category limit (30/min) + 1.
+	// The 31st request should be rate limited.
+	var lastCode int
+	for i := 0; i < 31; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/execute", nil)
+		rec := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(rec, req)
+		lastCode = rec.Code
 	}
 
-	// Second request should be rate limited.
-	req2 := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	rec2 := httptest.NewRecorder()
-	srv.httpServer.Handler.ServeHTTP(rec2, req2)
-
-	if rec2.Code != http.StatusTooManyRequests {
-		t.Errorf("second request: status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
+	if lastCode != http.StatusTooManyRequests {
+		t.Errorf("expected 429 after exceeding limit, got %d", lastCode)
 	}
 }
 
