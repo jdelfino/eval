@@ -14,11 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
-	emailpkg "github.com/jdelfino/eval/go-backend/internal/email"
 	"github.com/jdelfino/eval/go-backend/internal/config"
+	emailpkg "github.com/jdelfino/eval/go-backend/internal/email"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
 	"github.com/jdelfino/eval/go-backend/internal/handler"
 	"github.com/jdelfino/eval/go-backend/internal/metrics"
@@ -28,6 +29,7 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 	"github.com/jdelfino/eval/pkg/httputil"
+	"github.com/jdelfino/eval/pkg/ratelimit"
 )
 
 var registerDBPoolOnce sync.Once
@@ -43,10 +45,11 @@ type DatabasePool interface {
 
 // Server wraps the HTTP server with its configuration and logger.
 type Server struct {
-	httpServer *http.Server
-	logger     *slog.Logger
-	pool       DatabasePool
-	revBuffer  *revision.RevisionBuffer
+	httpServer  *http.Server
+	logger      *slog.Logger
+	pool        DatabasePool
+	revBuffer   *revision.RevisionBuffer
+	memLimiter  *ratelimit.MemoryLimiter
 }
 
 // New creates a new Server with the configured middleware chain and routes.
@@ -100,6 +103,24 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	r.Get("/healthz", httputil.Healthz)
 	r.Handle("/readyz", handler.NewReadyzHandler(pool))
 
+	// Create rate limiter
+	cats := ratelimit.Categories()
+	memLimiter := ratelimit.NewMemoryLimiter(cats)
+	memLimiter.Start()
+	var rl ratelimit.Limiter
+	if cfg.RedisHost != "" {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
+		})
+		rl = ratelimit.NewFallbackLimiter(
+			ratelimit.NewRedisLimiter(redisClient, cats),
+			memLimiter,
+			logger,
+		)
+	} else {
+		rl = memLimiter
+	}
+
 	var revBuffer *revision.RevisionBuffer
 
 	// API routes with auth and RLS middleware
@@ -132,7 +153,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 					r.Use(custommw.RegistrationStoreMiddleware(pgxPool))
 				}
 				authHandler := handler.NewAuthHandler()
-				r.Mount("/auth", authHandler.RegistrationRoutes(jwtValidator.Validate))
+				r.Mount("/auth", authHandler.RegistrationRoutes(jwtValidator.Validate, custommw.ForCategory(rl, "auth", custommw.IPKey)))
 			})
 		}
 
@@ -151,9 +172,14 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// Protected routes that require an existing user
 			if userStore != nil {
+				// Read rate limiting for GET endpoints
+				readRL := custommw.ForCategory(rl, "read", custommw.UserKey)
+				// Write rate limiting for POST/PUT/PATCH/DELETE endpoints
+				writeRL := custommw.ForCategory(rl, "write", custommw.UserKey)
+
 				// Auth routes for existing users (me endpoints)
-				r.Get("/auth/me", handler.NewAuthHandler().GetMe)
-				r.Put("/auth/me", handler.NewAuthHandler().UpdateMe)
+				r.With(readRL).Get("/auth/me", handler.NewAuthHandler().GetMe)
+				r.With(writeRL).Put("/auth/me", handler.NewAuthHandler().UpdateMe)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
@@ -169,20 +195,19 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Mount("/classes", handler.NewClassHandler().Routes())
 
 			membershipHandler := handler.NewMembershipHandler()
-			r.Post("/sections/join", membershipHandler.Join)
+			r.With(custommw.ForCategory(rl, "join", custommw.IPKey)).Post("/sections/join", membershipHandler.Join)
 
-			sectionHandler := handler.NewSectionHandler(membershipHandler)
-			r.Get("/sections/my", sectionHandler.MySections)
+			sectionHandler := handler.NewSectionHandler(membershipHandler).WithRateLimiting(readRL, writeRL)
+			r.With(readRL).Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
 				r.Mount("/", sectionHandler.ClassRoutes())
 			})
-
 			// Instructor dashboard (instructor+)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermDataViewAll))
 				dashboardHandler := handler.NewDashboardHandler()
-				r.Get("/instructor/dashboard", dashboardHandler.Dashboard)
+				r.With(readRL).Get("/instructor/dashboard", dashboardHandler.Dashboard)
 			})
 
 			r.Mount("/problems", handler.NewProblemHandler().Routes())
@@ -228,47 +253,48 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			revBuffer = revision.NewRevisionBuffer(poolStore, logger)
 			revBuffer.Start()
 
-			r.Mount("/sessions", handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer).Routes())
+			sessionHandler := handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer)
+			r.With(custommw.ForCategory(rl, "sessionCreate", custommw.UserKey)).Mount("/sessions", sessionHandler.Routes())
 
 			sessionStateHandler := handler.NewSessionStateHandler(sessionPub)
-			r.Get("/sessions/{id}/state", sessionStateHandler.State)
-			r.Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
+			r.With(readRL).Get("/sessions/{id}/state", sessionStateHandler.State)
+			r.With(readRL).Get("/sessions/{id}/public-state", sessionStateHandler.PublicState)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.Get("/sessions/{id}/details", sessionStateHandler.State)
-				r.Post("/sessions/{id}/feature", sessionStateHandler.Feature)
+				r.With(readRL).Get("/sessions/{id}/details", sessionStateHandler.State)
+				r.With(writeRL).Post("/sessions/{id}/feature", sessionStateHandler.Feature)
 			})
 
 			revisionHandler := handler.NewRevisionHandler()
-			r.Get("/sessions/{sessionID}/revisions", revisionHandler.List)
-			r.Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
+			r.With(readRL).Get("/sessions/{sessionID}/revisions", revisionHandler.List)
+			r.With(writeRL).Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
 
 			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
 			executeHandler := handler.NewExecuteHandler(execClient)
-			r.Post("/sessions/{id}/execute", executeHandler.Execute)
-			r.Post("/sessions/{id}/practice", executeHandler.PracticeExecute)
+			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/execute", executeHandler.Execute)
+			r.With(custommw.ForCategory(rl, "practice", custommw.UserKey)).Post("/sessions/{id}/practice", executeHandler.PracticeExecute)
 
 			// Standalone code execution (instructor+) — no session context
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.Post("/execute", executeHandler.StandaloneExecute)
+				r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/execute", executeHandler.StandaloneExecute)
 			})
 
 			// Standalone trace (any authenticated user) — no session context
 			traceHandler := handler.NewTraceHandler(execClient)
-			r.Post("/trace", traceHandler.StandaloneTrace)
+			r.With(custommw.ForCategory(rl, "trace", custommw.UserKey)).Post("/trace", traceHandler.StandaloneTrace)
 
 			// Advanced session features (instructor+): AI analysis
-			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
+			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{}, rl)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
+				r.With(custommw.ForCategory(rl, "analyze", custommw.UserKey)).Post("/sessions/{id}/analyze", analyzeHandler.Analyze)
 			})
 
 			sessionStudentHandler := handler.NewSessionStudentHandlerWithBuffer(sessionPub, revBuffer)
-			r.Post("/sessions/{id}/join", sessionStudentHandler.Join)
-			r.Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
-			r.Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
+			r.With(custommw.ForCategory(rl, "join", custommw.IPKey)).Post("/sessions/{id}/join", sessionStudentHandler.Join)
+			r.With(writeRL).Put("/sessions/{id}/code", sessionStudentHandler.UpdateCode)
+			r.With(readRL).Get("/sessions/{id}/students", sessionStudentHandler.ListStudents)
 			}
 		})
 	})
@@ -278,9 +304,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
 			Handler: r,
 		},
-		logger:    logger,
-		pool:      pool,
-		revBuffer: revBuffer,
+		logger:     logger,
+		pool:       pool,
+		revBuffer:  revBuffer,
+		memLimiter: memLimiter,
 	}
 }
 
@@ -301,6 +328,9 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.revBuffer != nil {
 		s.revBuffer.Stop()
+	}
+	if s.memLimiter != nil {
+		s.memLimiter.Stop()
 	}
 	return s.httpServer.Shutdown(ctx)
 }

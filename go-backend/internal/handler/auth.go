@@ -34,14 +34,20 @@ func (h *AuthHandler) Routes() chi.Router {
 // GET routes are public (no JWT) — users hit these before creating an account.
 // POST routes require JWT via the provided authMiddleware — users hit these
 // after creating a Firebase account but before having a DB profile.
+// The rateLimitMiddleware is applied to POST routes for IP-based rate limiting.
 // Both use RegistrationStoreMiddleware (applied by the caller) for limited RLS access.
-func (h *AuthHandler) RegistrationRoutes(authMiddleware func(http.Handler) http.Handler) chi.Router {
+func (h *AuthHandler) RegistrationRoutes(authMiddleware func(http.Handler) http.Handler, rateLimitMiddleware ...func(http.Handler) http.Handler) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/accept-invite", h.GetAcceptInvite)
 	r.Get("/register-student", h.GetRegisterStudent)
-	r.With(authMiddleware).Post("/accept-invite", h.PostAcceptInvite)
-	r.With(authMiddleware).Post("/register-student", h.PostRegisterStudent)
-	r.With(authMiddleware).Post("/bootstrap", h.PostBootstrap)
+
+	// Combine auth and optional rate limit middleware for POST routes
+	postMiddleware := []func(http.Handler) http.Handler{authMiddleware}
+	postMiddleware = append(postMiddleware, rateLimitMiddleware...)
+
+	r.With(postMiddleware...).Post("/accept-invite", h.PostAcceptInvite)
+	r.With(postMiddleware...).Post("/register-student", h.PostRegisterStudent)
+	r.With(postMiddleware...).Post("/bootstrap", h.PostBootstrap)
 	return r
 }
 

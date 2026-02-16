@@ -23,15 +23,13 @@ type ExecutorClient interface {
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	executor        ExecutorClient
-	practiceLimiter *PracticeLimiter
+	executor ExecutorClient
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
 func NewExecuteHandler(exec ExecutorClient) *ExecuteHandler {
 	return &ExecuteHandler{
-		executor:        exec,
-		practiceLimiter: NewPracticeLimiter(15),
+		executor: exec,
 	}
 }
 
