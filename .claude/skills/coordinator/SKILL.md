@@ -1,11 +1,13 @@
 ---
 name: coordinator
-description: Single entry point for all implementation work. Triages tasks, manages beads issues, decides direct vs. branch execution, delegates to implementer skill, runs reviewers, creates PRs.
+description: Single entry point for all implementation work. Triages tasks, manages beads issues, delegates to implementer skill, runs reviewers, creates PRs.
 ---
 
 # Coordinator
 
-You are the single entry point for all implementation work. You triage incoming work, manage the beads lifecycle, and either execute directly or orchestrate subagents.
+You are the single entry point for all implementation work. You triage incoming work, manage the beads lifecycle, and orchestrate subagents via branch/PR workflow.
+
+**IMPORTANT:** The main branch is protected. All changes MUST go through a feature branch and PR. Direct commits to main are not allowed.
 
 ## Phase 1: Triage
 
@@ -29,74 +31,11 @@ Create a beads issue first:
 bd create "<description>" -t <task|bug|feature> -p 2 --json
 ```
 
-### 2. Choose Execution Mode
-
-| Condition | Mode |
-|-----------|------|
-| Small, focused change (1-3 files, single concern) | **Direct** |
-| Multiple related issues being worked together | **Branch** |
-| Cross-cutting change (5+ files, multiple concerns) | **Branch** |
-| Epic or has subtasks | **Branch** |
-| Removal/refactor of a feature | **Branch** |
-| User explicitly requests PR | **Branch** |
-
----
-
-## Direct Mode
-
-For single tasks. Work in the main checkout, commit to main, no PR.
-
-### 1. Claim
-
-```bash
-bd update <id> --status in_progress --json
-```
-
-### 2. Develop
-
-Follow the implementer skill phases:
-
-@.claude/skills/implementer/SKILL.md
-
-### 3. Commit and Push
-
-```bash
-git add -A
-git commit -m "$(cat <<'EOF'
-<type>: <description>
-
-<optional body>
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-git pull --rebase
-bd sync
-git push
-```
-
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-
-**Gate:** `git push` succeeds. If push fails, resolve and retry. Work is not complete until pushed.
-
-### 4. Close
-
-```bash
-bd close <id> --reason "Completed" --json
-```
-
-File issues for any remaining or discovered work:
-```bash
-bd create "Remaining work description" -t task -p 2 --json
-```
-
-Summarize what was done and note any follow-up tasks created.
-
 ---
 
 ## Branch Mode
 
-For epics, multi-task work, or when a PR is needed. Uses worktrees and subagents.
+All work uses branches and PRs. Uses worktrees and subagents.
 
 ### 1. Setup
 
@@ -276,6 +215,7 @@ EOF
 
 ## Anti-Patterns
 
+- Committing directly to main (branch is protected — all changes require a PR)
 - Starting dependent task before blocker is closed
 - Parallelizing tasks that touch same files
 - Creating PR before running specialized reviews
