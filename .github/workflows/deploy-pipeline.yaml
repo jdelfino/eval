@@ -1,7 +1,8 @@
-name: Deploy (Manual)
+name: Deploy Pipeline
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 concurrency:
   group: deploy-prod
@@ -11,13 +12,76 @@ env:
   REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
 
 jobs:
+  go-api:
+    uses: ./.github/workflows/go-api.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
+  executor:
+    uses: ./.github/workflows/executor.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
+  frontend:
+    uses: ./.github/workflows/frontend-ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
   deploy:
+    needs: [go-api, executor, frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
+      - name: Wait for integration tests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha;
+            const workflowFiles = ['e2e-tests.yml', 'contract-tests.yml'];
+
+            for (const file of workflowFiles) {
+              const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo,
+                workflow_id: file,
+                head_sha: sha,
+              });
+
+              if (runs.length === 0) {
+                core.info(`No ${file} run found for ${sha.slice(0, 7)} — skipping`);
+                continue;
+              }
+
+              const run = runs[0];
+              core.info(`Waiting for ${file} run #${run.run_number} (${run.html_url})`);
+
+              let { status, conclusion } = run;
+              while (status !== 'completed') {
+                await new Promise(r => setTimeout(r, 15000));
+                const { data } = await github.rest.actions.getWorkflowRun({
+                  ...context.repo,
+                  run_id: run.id,
+                });
+                status = data.status;
+                conclusion = data.conclusion;
+                core.info(`  ${file}: ${status}${conclusion ? ` (${conclusion})` : ''}`);
+              }
+
+              if (conclusion !== 'success') {
+                core.setFailed(`${file} ${conclusion} for ${sha.slice(0, 7)}`);
+                return;
+              }
+              core.info(`${file} passed`);
+            }
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -43,16 +107,10 @@ jobs:
       - name: Deploy
         run: |
           cd k8s/base
-
-          # Manual dispatch — redeploy with current live images.
-          API_IMG=$(kubectl get deploy go-api -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
-          EXE_IMG=$(kubectl get deploy executor -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
-          FE_IMG=$(kubectl get deploy frontend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
-
-          [ -n "$API_IMG" ] && kustomize edit set image "go-api=$API_IMG"
-          [ -n "$EXE_IMG" ] && kustomize edit set image "executor=$EXE_IMG"
-          [ -n "$FE_IMG" ] && kustomize edit set image "frontend=$FE_IMG"
-
+          SHA="${{ github.sha }}"
+          kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
+          kustomize edit set image "executor=$REGISTRY/executor:$SHA"
+          kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
           kubectl apply -k .
       - name: Wait for rollout
         run: |
@@ -79,7 +137,7 @@ jobs:
             const title = 'Deploy to production failed';
             const sha = context.sha;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const body = `Manual deploy failed at commit \`${sha.slice(0, 7)}\`.\n\n[View run](${runUrl})`;
+            const body = `Deploy pipeline failed at commit \`${sha.slice(0, 7)}\`.\n\n[View run](${runUrl})`;
 
             // Update existing open issue or create a new one.
             const { data: issues } = await github.rest.issues.listForRepo({

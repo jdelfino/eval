@@ -1,19 +1,13 @@
 name: Go API
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'go-backend/**'
-      - 'k8s/**'
-      - 'migrations/**'
-      - '.github/workflows/go-api.yaml'
   pull_request:
     branches: [main]
     paths:
       - 'go-backend/**'
       - 'k8s/**'
       - 'migrations/**'
+  workflow_call:
   workflow_dispatch:
 
 env:
@@ -87,7 +81,7 @@ jobs:
 
   build-push:
     needs: [test, lint, integration-test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_call' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: read
