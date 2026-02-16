@@ -47,63 +47,13 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
-
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-        working-directory: frontend
-      - name: Install Playwright system deps
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-        working-directory: frontend
-
-      - name: Build Go API
-        run: go build -o ./tmp/server ./cmd/server
-        working-directory: go-backend
-
-      # If the Executor workflow is running for this same commit (e.g. a push
-      # touched both executor/ and frontend/), wait for it so we pull the
-      # freshly-built image instead of a stale :latest.
-      - name: Wait for executor workflow (if running)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for attempt in 1 2 3; do
-            RUN_JSON=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
-              --json status,conclusion --jq '.[0] // empty' 2>/dev/null || true)
-            [ -z "$RUN_JSON" ] && { echo "No executor workflow for this commit"; exit 0; }
-            STATUS=$(echo "$RUN_JSON" | jq -r '.status')
-            [ "$STATUS" = "completed" ] && { echo "Executor workflow already completed"; exit 0; }
-            break
-          done
-          # Still running — poll until done (executor build-push takes ~3-4 min)
-          echo "Executor workflow in progress, waiting..."
-          for i in $(seq 1 40); do
-            sleep 15
-            STATUS=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
-              --json status --jq '.[0].status // "completed"' 2>/dev/null || echo "completed")
-            echo "  [$i] status: $STATUS"
-            [ "$STATUS" = "completed" ] && { echo "Executor workflow finished"; exit 0; }
-          done
-          echo "::warning::Timed out waiting for executor workflow — pulling whatever :latest is available"
-
-      # Pull pre-built executor image so run-e2e-tests.sh skips the ~90s
-      # Docker build (nsjail from source). Falls back to building locally
-      # if the pull fails (e.g., first run before executor workflow has pushed).
+      # Moved earlier — only needs checkout
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      # On PRs, check if executor code changed so we build from source.
+
+      # Moved earlier — fast check, only needs GH_TOKEN
       - name: Check if executor code changed (PRs)
         id: executor-changed
         if: github.event_name == 'pull_request'
@@ -115,33 +65,98 @@ jobs:
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "Executor code changed: $CHANGED"
 
-      # Build executor from source when PR changes executor code.
-      - name: Build executor from source (PR, executor changed)
-        if: steps.executor-changed.outputs.changed == 'true'
-        run: docker compose up -d executor --build --wait
-        timeout-minutes: 5
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
 
-      # Otherwise, pull pre-built executor image.
-      - name: Pre-pull executor image
-        if: steps.executor-changed.outputs.changed != 'true'
+      # Run Go build and executor setup as background processes while npm ci
+      # and Playwright install run in the foreground (Playwright needs npm ci).
+      - name: "Parallel setup: npm ci + Playwright (fg), Go build + executor (bg)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          EXECUTOR_CHANGED: ${{ steps.executor-changed.outputs.changed }}
         run: |
-          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet 2>/dev/null || true
-          if docker pull $EXECUTOR_REGISTRY/executor:latest 2>/dev/null; then
-            docker run -d --name eval-executor-1 \
-              -p 8081:8081 --privileged \
-              --tmpfs /tmp:exec,size=256m \
-              -e PORT=8081 -e ENVIRONMENT=local -e LOG_LEVEL=debug \
-              -e NSJAIL_PATH=/usr/bin/nsjail -e PYTHON_PATH=/usr/bin/python3 \
-              -e DEFAULT_TIMEOUT_MS=10000 \
-              $EXECUTOR_REGISTRY/executor:latest
-            for i in $(seq 1 30); do
-              curl -sf http://localhost:8081/healthz >/dev/null 2>&1 && break
-              sleep 1
+          set -euo pipefail
+
+          # --- Go build (background) ---
+          (cd go-backend && go build -o ./tmp/server ./cmd/server) &
+          GO_PID=$!
+
+          # --- Executor setup (background) ---
+          (
+            # 1. Wait for executor workflow if running for this commit
+            for attempt in 1 2 3; do
+              RUN_JSON=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
+                --json status,conclusion --jq '.[0] // empty' 2>/dev/null || true)
+              if [ -z "$RUN_JSON" ]; then
+                echo "[executor] No executor workflow for this commit"
+                break
+              fi
+              STATUS=$(echo "$RUN_JSON" | jq -r '.status')
+              if [ "$STATUS" = "completed" ]; then
+                echo "[executor] Executor workflow already completed"
+                break
+              fi
+              # Still running — poll until done (executor build-push takes ~3-4 min)
+              echo "[executor] Executor workflow in progress, waiting..."
+              for i in $(seq 1 40); do
+                sleep 15
+                STATUS=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
+                  --json status --jq '.[0].status // "completed"' 2>/dev/null || echo "completed")
+                echo "  [$i] status: $STATUS"
+                if [ "$STATUS" = "completed" ]; then
+                  echo "[executor] Executor workflow finished"
+                  break 2
+                fi
+              done
+              echo "::warning::Timed out waiting for executor workflow — pulling whatever :latest is available"
+              break
             done
-            echo "Executor running from pre-built image"
+
+            # 2. Build from source or pull pre-built image
+            if [ "${EXECUTOR_CHANGED}" = "true" ]; then
+              echo "[executor] Building executor from source (PR changed executor code)..."
+              timeout 300 docker compose up -d executor --build --wait
+            else
+              echo "[executor] Pulling pre-built executor image..."
+              gcloud auth configure-docker us-east1-docker.pkg.dev --quiet 2>/dev/null || true
+              if docker pull $EXECUTOR_REGISTRY/executor:latest 2>/dev/null; then
+                docker run -d --name eval-executor-1 \
+                  -p 8081:8081 --privileged \
+                  --tmpfs /tmp:exec,size=256m \
+                  -e PORT=8081 -e ENVIRONMENT=local -e LOG_LEVEL=debug \
+                  -e NSJAIL_PATH=/usr/bin/nsjail -e PYTHON_PATH=/usr/bin/python3 \
+                  -e DEFAULT_TIMEOUT_MS=10000 \
+                  $EXECUTOR_REGISTRY/executor:latest
+                for i in $(seq 1 30); do
+                  curl -sf http://localhost:8081/healthz >/dev/null 2>&1 && break
+                  sleep 1
+                done
+                echo "[executor] Executor running from pre-built image"
+              else
+                echo "[executor] Pre-built executor not available, will build from source"
+              fi
+            fi
+          ) &
+          EXEC_PID=$!
+
+          # --- npm ci (foreground, needed before Playwright) ---
+          cd frontend && npm ci
+
+          # --- Playwright install (foreground, needs npm ci) ---
+          if [ "$PLAYWRIGHT_CACHE_HIT" = "true" ]; then
+            npx playwright install-deps chromium
           else
-            echo "Pre-built executor not available, will build from source"
+            npx playwright install --with-deps chromium
           fi
+
+          # --- Wait for background jobs ---
+          wait $GO_PID || { echo "::error::Go build failed"; exit 1; }
+          wait $EXEC_PID || { echo "::error::Executor setup failed"; exit 1; }
 
       - name: Run E2E tests
         run: make test-e2e
