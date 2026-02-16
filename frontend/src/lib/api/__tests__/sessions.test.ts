@@ -283,7 +283,7 @@ describe('lib/api/sessions', () => {
   describe('getSessionPublicState', () => {
     it('calls GET /sessions/{id}/public-state and returns SessionPublicState', async () => {
       const fakePublicState: SessionPublicState = {
-        problem: { title: 'Test Problem' },
+        problem: { title: 'Test Problem', description: null, starter_code: null },
         featured_student_id: null,
         featured_code: null,
         join_code: 'ABC123',

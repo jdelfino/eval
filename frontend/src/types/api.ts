@@ -153,10 +153,11 @@ export interface SessionState {
   join_code: string;
 }
 
+/** Subset of Problem fields exposed by the public-state endpoint. */
 export interface SessionPublicProblem {
   title: string;
-  description?: string;
-  starter_code?: string;
+  description: string | null;
+  starter_code: string | null;
 }
 
 export interface SessionPublicState {

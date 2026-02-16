@@ -74,7 +74,7 @@ describe('CodeEditor Empty States', () => {
         <CodeEditor
           code=""
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: 'A test problem' }}
+          problem={{ title: 'Test Problem', description: 'A test problem', starter_code: null }}
         />
       );
 
@@ -94,7 +94,7 @@ describe('CodeEditor Empty States', () => {
         <CodeEditor
           code="print('Hello, World!')"
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem' }}
+          problem={{ title: 'Test Problem', description: null, starter_code: null }}
           execution_result={execution_result}
         />
       );
@@ -136,7 +136,7 @@ describe('CodeEditor Empty States', () => {
         <CodeEditor
           code=""
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: 'Description here' }}
+          problem={{ title: 'Test Problem', description: 'Description here', starter_code: null }}
         />
       );
 
