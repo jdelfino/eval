@@ -29,7 +29,7 @@ func (m *mockExecutorClient) Execute(ctx context.Context, req executor.ExecuteRe
 // execMockSessionStudentRepo implements store.SessionStudentRepository for execute tests.
 type execMockSessionStudentRepo struct {
 	joinSessionFn          func(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error)
-	updateCodeFn           func(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error)
+	updateCodeFn           func(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error)
 	listSessionStudentsFn  func(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error)
 	getSessionStudentFn    func(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error)
 }
@@ -38,8 +38,8 @@ func (m *execMockSessionStudentRepo) JoinSession(ctx context.Context, params sto
 	return m.joinSessionFn(ctx, params)
 }
 
-func (m *execMockSessionStudentRepo) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error) {
-	return m.updateCodeFn(ctx, sessionID, userID, code)
+func (m *execMockSessionStudentRepo) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
+	return m.updateCodeFn(ctx, sessionID, userID, code, executionSettings)
 }
 
 func (m *execMockSessionStudentRepo) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
@@ -115,8 +115,8 @@ func (r *executeTestRepos) FindCompletedSessionByProblem(ctx context.Context, se
 func (r *executeTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return r.students.JoinSession(ctx, params)
 }
-func (r *executeTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error) {
-	return r.students.UpdateCode(ctx, sessionID, userID, code)
+func (r *executeTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
+	return r.students.UpdateCode(ctx, sessionID, userID, code, executionSettings)
 }
 func (r *executeTestRepos) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
 	return r.students.ListSessionStudents(ctx, sessionID)

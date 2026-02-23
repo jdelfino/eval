@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 )
@@ -53,20 +54,20 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 	return ss, nil
 }
 
-// UpdateCode updates a student's code in a session and refreshes the session's last_activity.
+// UpdateCode updates a student's code and execution settings in a session and refreshes the session's last_activity.
 // Returns ErrNotFound if the student is not in the session.
-func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*SessionStudent, error) {
+func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*SessionStudent, error) {
 	tx, err := s.beginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
-	updateQuery := `UPDATE session_students SET code = $3, last_update = now()
+	updateQuery := `UPDATE session_students SET code = $3, execution_settings = $4, last_update = now()
 		WHERE session_id = $1 AND user_id = $2
 		RETURNING ` + sessionStudentColumns
 
-	ss, err := scanSessionStudent(tx.QueryRow(ctx, updateQuery, sessionID, userID, code))
+	ss, err := scanSessionStudent(tx.QueryRow(ctx, updateQuery, sessionID, userID, code, executionSettings))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}

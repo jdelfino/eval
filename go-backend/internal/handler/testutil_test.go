@@ -82,7 +82,7 @@ func (m *mockSessionRepo) ReopenSessionReplacingActive(ctx context.Context, id u
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.
 type mockSessionStudentRepo struct {
 	joinSessionFn        func(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error)
-	updateCodeFn         func(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error)
+	updateCodeFn         func(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error)
 	listSessionStudentFn func(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error)
 	getSessionStudentFn  func(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error)
 }
@@ -91,8 +91,8 @@ func (m *mockSessionStudentRepo) JoinSession(ctx context.Context, params store.J
 	return m.joinSessionFn(ctx, params)
 }
 
-func (m *mockSessionStudentRepo) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error) {
-	return m.updateCodeFn(ctx, sessionID, userID, code)
+func (m *mockSessionStudentRepo) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
+	return m.updateCodeFn(ctx, sessionID, userID, code, executionSettings)
 }
 
 func (m *mockSessionStudentRepo) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
@@ -353,7 +353,7 @@ func (stubRepos) ReopenSessionReplacingActive(context.Context, uuid.UUID, uuid.U
 func (stubRepos) JoinSession(context.Context, store.JoinSessionParams) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected JoinSession call")
 }
-func (stubRepos) UpdateCode(context.Context, uuid.UUID, uuid.UUID, string) (*store.SessionStudent, error) {
+func (stubRepos) UpdateCode(context.Context, uuid.UUID, uuid.UUID, string, json.RawMessage) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected UpdateCode call")
 }
 func (stubRepos) ListSessionStudents(context.Context, uuid.UUID) ([]store.SessionStudent, error) {

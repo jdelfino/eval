@@ -377,9 +377,9 @@ type JoinSessionParams struct {
 type SessionStudentRepository interface {
 	// JoinSession adds a student to a session (idempotent via ON CONFLICT).
 	JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error)
-	// UpdateCode updates a student's code in a session.
+	// UpdateCode updates a student's code and execution settings in a session.
 	// Returns ErrNotFound if the student is not in the session.
-	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*SessionStudent, error)
+	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*SessionStudent, error)
 	// ListSessionStudents retrieves all students in a session.
 	ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error)
 	// GetSessionStudent retrieves a single student's record in a session.

@@ -13,7 +13,7 @@ func TestUpdateCode_RejectsNonTxQuerier(t *testing.T) {
 	s := New(&mockQuerier{})
 	ctx := context.Background()
 
-	_, err := s.UpdateCode(ctx, uuid.New(), uuid.New(), "print('hello')")
+	_, err := s.UpdateCode(ctx, uuid.New(), uuid.New(), "print('hello')", nil)
 	if err == nil {
 		t.Fatal("UpdateCode() should fail when Querier does not support transactions")
 	}

@@ -507,7 +507,7 @@ func TestIntegration_UpdateCode(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, authUser)
 		defer conn.Release()
 
-		ss, err := s.UpdateCode(ctx, sessionID, studentID, "x = 42")
+		ss, err := s.UpdateCode(ctx, sessionID, studentID, "x = 42", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -516,11 +516,51 @@ func TestIntegration_UpdateCode(t *testing.T) {
 		}
 	})
 
+	t.Run("update code with execution_settings", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		execSettings := json.RawMessage(`{"stdin":"test input","random_seed":123}`)
+		ss, err := s.UpdateCode(ctx, sessionID, studentID, "y = 99", execSettings)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ss.Code != "y = 99" {
+			t.Errorf("expected code 'y = 99', got %q", ss.Code)
+		}
+		if ss.ExecutionSettings == nil {
+			t.Fatal("expected execution_settings to be set, got nil")
+		}
+		var got map[string]any
+		if err := json.Unmarshal(ss.ExecutionSettings, &got); err != nil {
+			t.Fatalf("unmarshal execution_settings: %v", err)
+		}
+		if got["stdin"] != "test input" {
+			t.Errorf("expected stdin 'test input', got %v", got["stdin"])
+		}
+		if got["random_seed"] != float64(123) {
+			t.Errorf("expected random_seed 123, got %v", got["random_seed"])
+		}
+	})
+
+	t.Run("update code with nil execution_settings", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		ss, err := s.UpdateCode(ctx, sessionID, studentID, "z = 0", nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ss.Code != "z = 0" {
+			t.Errorf("expected code 'z = 0', got %q", ss.Code)
+		}
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, authUser)
 		defer conn.Release()
 
-		_, err := s.UpdateCode(ctx, sessionID, uuid.New(), "code")
+		_, err := s.UpdateCode(ctx, sessionID, uuid.New(), "code", nil)
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("expected ErrNotFound, got: %v", err)
 		}
