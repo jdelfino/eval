@@ -94,20 +94,38 @@ func (h *PracticeSessionHandler) StartPractice(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// 7. Validate section belongs to the same class as the problem
+	// 7. Verify the user is enrolled in this section
+	mySections, err := repos.ListMySections(r.Context(), authUser.ID)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+	enrolled := false
+	for _, s := range mySections {
+		if s.Section.ID == req.SectionID {
+			enrolled = true
+			break
+		}
+	}
+	if !enrolled {
+		httputil.WriteError(w, http.StatusForbidden, "not enrolled in this section")
+		return
+	}
+
+	// 8. Validate section belongs to the same class as the problem
 	if problem.ClassID != nil && *problem.ClassID != section.ClassID {
 		httputil.WriteError(w, http.StatusBadRequest, "section does not belong to the problem's class")
 		return
 	}
 
-	// 8. Find existing completed session (admin store, no RLS needed)
+	// 9. Find existing completed session (admin store, no RLS needed)
 	session, err := h.adminStore.FindCompletedSessionByProblem(r.Context(), req.SectionID, problemID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
-	// 9. If no existing session, create one and immediately complete it
+	// 10. If no existing session, create one and immediately complete it
 	if session == nil {
 		problemJSON, marshalErr := json.Marshal(problem)
 		if marshalErr != nil {
@@ -139,7 +157,7 @@ func (h *PracticeSessionHandler) StartPractice(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// 10. Return session ID
+	// 11. Return session ID
 	httputil.WriteJSON(w, http.StatusOK, startPracticeResponse{
 		SessionID: session.ID.String(),
 	})

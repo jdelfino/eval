@@ -55,8 +55,9 @@ func (m *mockPracticeSessionStore) UpdateSession(ctx context.Context, id uuid.UU
 
 type practiceSessionTestRepos struct {
 	stubRepos
-	getProblemFn func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
-	getSectionFn func(ctx context.Context, id uuid.UUID) (*store.Section, error)
+	getProblemFn    func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
+	getSectionFn    func(ctx context.Context, id uuid.UUID) (*store.Section, error)
+	listMySectionsFn func(ctx context.Context, userID uuid.UUID) ([]store.MySectionInfo, error)
 }
 
 func (r *practiceSessionTestRepos) GetProblem(ctx context.Context, id uuid.UUID) (*store.Problem, error) {
@@ -65,6 +66,14 @@ func (r *practiceSessionTestRepos) GetProblem(ctx context.Context, id uuid.UUID)
 
 func (r *practiceSessionTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
 	return r.getSectionFn(ctx, id)
+}
+
+func (r *practiceSessionTestRepos) ListMySections(ctx context.Context, userID uuid.UUID) ([]store.MySectionInfo, error) {
+	if r.listMySectionsFn != nil {
+		return r.listMySectionsFn(ctx, userID)
+	}
+	// Default: return the test section as enrolled
+	return []store.MySectionInfo{{Section: *psSectionFixture(), ClassName: "Test Class"}}, nil
 }
 
 // --- Test fixtures ---
@@ -215,6 +224,17 @@ func TestStartPractice_HappyPath_CreatesNewSession(t *testing.T) {
 			}
 			if params.CreatorID != psUserID {
 				t.Fatalf("expected creatorID %s, got %s", psUserID, params.CreatorID)
+			}
+			// Verify problem JSON contains the expected problem ID
+			var problemData map[string]interface{}
+			if err := json.Unmarshal(params.Problem, &problemData); err != nil {
+				t.Fatalf("problem JSON is not valid: %v", err)
+			}
+			if problemData["id"] != psProblemID.String() {
+				t.Fatalf("expected problem ID %s in JSON, got %v", psProblemID, problemData["id"])
+			}
+			if problemData["title"] != "Two Sum" {
+				t.Fatalf("expected title 'Two Sum' in JSON, got %v", problemData["title"])
 			}
 			return &store.Session{
 				ID:           psNewSessID,
@@ -517,6 +537,44 @@ func TestStartPractice_ProblemWithNilClassID(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStartPractice_403NotEnrolled(t *testing.T) {
+	repos := &practiceSessionTestRepos{
+		getProblemFn: func(_ context.Context, _ uuid.UUID) (*store.Problem, error) {
+			return psProblemFixture(), nil
+		},
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return psSectionFixture(), nil
+		},
+		listMySectionsFn: func(_ context.Context, _ uuid.UUID) ([]store.MySectionInfo, error) {
+			// Return empty list - user not enrolled in any sections
+			return []store.MySectionInfo{}, nil
+		},
+	}
+	adminStore := &mockPracticeSessionStore{}
+
+	handler := setupPracticeSessionHandler(repos, adminStore)
+	body := psReqBody(psSectionID)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/problems/%s/practice", psProblemID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: psUserID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp["error"] != "not enrolled in this section" {
+		t.Fatalf("unexpected error: %s", resp["error"])
 	}
 }
 
