@@ -318,14 +318,15 @@ test.describe('Critical User Paths', () => {
       await expect(instructorPage.locator('.monaco-editor')).toBeVisible();
 
       // Verify the Monaco editor is displaying student code
-      // Monaco splits text across elements, so check normalized text content
-      const codeInEditor = await instructorPage.evaluate(() => {
-        const editorArea = document.querySelector('.monaco-editor');
-        if (!editorArea) return false;
-        const text = editorArea.textContent?.replace(/\s/g, '') || '';
-        return text.includes('SYNC_TEST') || text.includes('print');
-      });
-      expect(codeInEditor).toBe(true);
+      // Use polling assertion — Monaco renders asynchronously
+      await expect.poll(async () => {
+        return instructorPage.evaluate(() => {
+          const editorArea = document.querySelector('.monaco-editor');
+          if (!editorArea) return false;
+          const text = editorArea.textContent?.replace(/\s/g, '') || '';
+          return text.includes('SYNC_TEST') || text.includes('print');
+        });
+      }, { timeout: 10000, message: 'Monaco editor on instructor view should contain student code' }).toBe(true);
 
       // ===== FEATURE STUDENT ON PUBLIC VIEW =====
       // Click "Feature" button to show student code on public view
