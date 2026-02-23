@@ -319,6 +319,9 @@ type SessionRepository interface {
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
+	// FindCompletedSessionByProblem finds a completed session in a section whose problem
+	// JSON contains the given problem ID. Returns ErrNotFound if none exists.
+	FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*Session, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.

@@ -253,6 +253,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			revBuffer = revision.NewRevisionBuffer(poolStore, logger)
 			revBuffer.Start()
 
+			practiceSessionHandler := handler.NewPracticeSessionHandler(poolStore)
+
 			sessionHandler := handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer)
 			r.Route("/sessions", func(r chi.Router) {
 				r.With(readRL).Get("/", sessionHandler.List)
@@ -285,6 +287,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			executeHandler := handler.NewExecuteHandler(execClient)
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/execute", executeHandler.Execute)
 			r.With(custommw.ForCategory(rl, "practice", custommw.UserKey)).Post("/sessions/{id}/practice", executeHandler.PracticeExecute)
+			r.With(custommw.ForCategory(rl, "practice", custommw.UserKey)).Post("/problems/{id}/practice", practiceSessionHandler.StartPractice)
 
 			// Standalone code execution (instructor+) — no session context
 			r.Group(func(r chi.Router) {
