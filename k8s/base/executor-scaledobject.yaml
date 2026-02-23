@@ -12,7 +12,12 @@ spec:
   triggers:
     - type: prometheus
       metadata:
-        serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+        # GKE Managed Prometheus (GMP) exposes a Prometheus-compatible query
+        # frontend in the gmp-system namespace. The previous address
+        # (prometheus-server.monitoring) pointed to a non-existent self-hosted
+        # Prometheus, causing KEDA to never receive metric data and leaving the
+        # executor deployment stuck at its initial replica count.
+        serverAddress: http://frontend.gmp-system.svc:9090
         metricName: executor_active_executions
         query: sum(executor_active_executions)
         threshold: "3"
