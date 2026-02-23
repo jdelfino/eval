@@ -119,15 +119,6 @@ function StudentPage() {
     if (session && (isConnected || session.status === 'completed')) {
       joinAttemptedRef.current = sessionIdFromUrl;
 
-      // If session is completed, skip joining and show read-only view
-      if (session.status === 'completed') {
-        setJoined(true);
-        setStudentId(user.id);
-        setSessionEnded(true);
-        setError(null);
-        return;
-      }
-
       setIsJoining(true);
 
       joinSession(user.id, user.display_name || user.email || 'Student')
@@ -136,6 +127,10 @@ function StudentPage() {
           setStudentId(user.id);
           setIsJoining(false);
           setError(null);
+          // Set sessionEnded after join for completed sessions
+          if (session.status === 'completed') {
+            setSessionEnded(true);
+          }
           // Restore saved code and execution settings from server
           if (result.code) {
             setCode(result.code);

@@ -38,6 +38,12 @@ jest.mock('../InstructorActions', () => {
   };
 });
 
+jest.mock('../StudentActions', () => {
+  return function MockStudentActions() {
+    return <div data-testid="student-actions" />;
+  };
+});
+
 jest.mock('../SolutionBlock', () => {
   return function MockSolutionBlock({ html }: { html: string }) {
     return <div data-testid="solution-block" dangerouslySetInnerHTML={{ __html: html }} />;

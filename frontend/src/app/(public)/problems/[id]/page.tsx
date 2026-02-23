@@ -15,6 +15,7 @@ import { codeToHtml } from 'shiki';
 import MarkdownContent from '@/components/MarkdownContent';
 import SolutionBlock from './SolutionBlock';
 import InstructorActions from './InstructorActions';
+import StudentActions from './StudentActions';
 import { getPublicProblem } from '@/lib/api/problems';
 import type { PublicProblem } from '@/types/api';
 
@@ -75,6 +76,10 @@ export default async function PublicProblemPage({ params }: Params) {
 
       <Suspense fallback={null}>
         <InstructorActions problem_id={problem.id} problem_title={problem.title} class_id={problem.class_id} className={className} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <StudentActions problem_id={problem.id} class_id={problem.class_id} />
       </Suspense>
 
       {problem.description && (
