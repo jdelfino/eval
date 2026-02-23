@@ -257,3 +257,99 @@ func TestFeature_PublishesFeaturedStudentChanged(t *testing.T) {
 		t.Errorf("expected code %q, got %q", code, call.code)
 	}
 }
+
+func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
+	sess := testSession()
+	studentID := uuid.New()
+	code := "x = 1"
+
+	updatedSess := *sess
+	updatedSess.FeaturedStudentID = &studentID
+	updatedSess.FeaturedCode = &code
+
+	pub := newMockPublisher()
+
+	var capturedParams store.UpdateSessionParams
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+			capturedParams = params
+			return &updatedSess, nil
+		},
+	}
+	h := NewSessionStateHandler(pub)
+
+	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `","execution_settings":{"stdin":"hello world"}}`
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.Feature(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify execution_settings was passed to store update params
+	if capturedParams.FeaturedExecutionSettings == nil {
+		t.Fatal("expected FeaturedExecutionSettings to be set in UpdateSessionParams")
+	}
+	if string(capturedParams.FeaturedExecutionSettings) != `{"stdin":"hello world"}` {
+		t.Errorf("expected FeaturedExecutionSettings %q, got %q", `{"stdin":"hello world"}`, string(capturedParams.FeaturedExecutionSettings))
+	}
+
+	pub.waitForCalls(t, 1)
+
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.featuredStudentChangedCalls) != 1 {
+		t.Fatalf("expected 1 featured_student_changed call, got %d", len(pub.featuredStudentChangedCalls))
+	}
+	call := pub.featuredStudentChangedCalls[0]
+	if string(call.executionSettings) != `{"stdin":"hello world"}` {
+		t.Errorf("expected execution_settings %q, got %q", `{"stdin":"hello world"}`, string(call.executionSettings))
+	}
+}
+
+func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
+	sess := testSession()
+	studentID := uuid.New()
+	code := "print('hi')"
+	sess.FeaturedStudentID = &studentID
+	sess.FeaturedCode = &code
+	sess.FeaturedExecutionSettings = json.RawMessage(`{"stdin":"test input"}`)
+	section := testSection()
+
+	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+		return sess, nil
+	}}
+	secRepo := &mockSectionRepo{getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+		return section, nil
+	}}
+	h := NewSessionStateHandler(noopPublisher())
+
+	req := httptest.NewRequest(http.MethodGet, "/sessions/"+sess.ID.String()+"/public-state", nil)
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, secRepo))
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.PublicState(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp sessionPublicStateResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.FeaturedExecutionSettings == nil {
+		t.Fatal("expected featured_execution_settings to be present in response")
+	}
+	if string(resp.FeaturedExecutionSettings) != `{"stdin":"test input"}` {
+		t.Errorf("expected featured_execution_settings %q, got %q", `{"stdin":"test input"}`, string(resp.FeaturedExecutionSettings))
+	}
+}

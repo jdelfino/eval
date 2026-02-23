@@ -1,6 +1,9 @@
 package realtime
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // Compile-time interface compliance check.
 var _ SessionPublisher = NoOpSessionPublisher{}
@@ -13,7 +16,7 @@ func (NoOpSessionPublisher) StudentJoined(_ context.Context, _, _, _ string) err
 func (NoOpSessionPublisher) CodeUpdated(_ context.Context, _, _, _ string) error      { return nil }
 func (NoOpSessionPublisher) SessionEnded(_ context.Context, _, _ string) error        { return nil }
 func (NoOpSessionPublisher) SessionReplaced(_ context.Context, _, _ string) error     { return nil }
-func (NoOpSessionPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string) error {
+func (NoOpSessionPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return nil
 }
 func (NoOpSessionPublisher) ProblemUpdated(_ context.Context, _, _ string) error { return nil }

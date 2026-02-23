@@ -10,7 +10,8 @@ import (
 
 // sessionColumns is the standard column list for session queries.
 const sessionColumns = `id, namespace_id, section_id, section_name, problem,
-		       featured_student_id, featured_code, creator_id, participants,
+		       featured_student_id, featured_code, featured_execution_settings,
+		       creator_id, participants,
 		       status, created_at, last_activity, ended_at`
 
 // scanSession scans a row into a Session struct.
@@ -25,6 +26,7 @@ func scanSession(row pgx.Row) (*Session, error) {
 		&sess.Problem,
 		&sess.FeaturedStudentID,
 		&sess.FeaturedCode,
+		&sess.FeaturedExecutionSettings,
 		&sess.CreatorID,
 		&sess.Participants,
 		&sess.Status,
@@ -149,6 +151,10 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		query += ",\n		    featured_code = " + ac.Next(*params.FeaturedCode)
 	}
 
+	if params.FeaturedExecutionSettings != nil {
+		query += ",\n		    featured_execution_settings = " + ac.Next(params.FeaturedExecutionSettings)
+	}
+
 	if params.Status != nil {
 		query += ",\n		    status = " + ac.Next(*params.Status)
 	}
@@ -164,6 +170,7 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 	if params.ClearFeatured {
 		query += ",\n		    featured_student_id = NULL"
 		query += ",\n		    featured_code = NULL"
+		query += ",\n		    featured_execution_settings = NULL"
 	}
 
 	query += `

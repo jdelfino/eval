@@ -63,6 +63,7 @@ export interface UseRealtimeSessionOptions {
 export interface FeaturedStudent {
   studentId?: string;
   code?: string;
+  executionSettings?: ExecutionSettings;
 }
 
 /**
@@ -478,13 +479,16 @@ export function useRealtimeSession({
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      const studentCode = students.get(studentId)?.code;
-      await apiFeatureStudent(session_id, studentId, studentCode);
+      const student = students.get(studentId);
+      const studentCode = student?.code;
+      const studentExecutionSettings = student?.execution_settings;
+      await apiFeatureStudent(session_id, studentId, studentCode, studentExecutionSettings);
 
       // Optimistically update local state
       setFeaturedStudent({
         studentId,
         code: studentCode,
+        executionSettings: studentExecutionSettings,
       });
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);

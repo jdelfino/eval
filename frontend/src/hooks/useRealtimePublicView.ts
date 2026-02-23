@@ -106,6 +106,7 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
                 ...prev,
                 featured_student_id: userId,
                 featured_code: userId ? (payload.code ?? '') : null,
+                featured_execution_settings: userId ? (payload.execution_settings ?? null) : null,
               };
             });
           }

@@ -80,11 +80,12 @@ func (h *SessionStateHandler) buildStateResponse(ctx context.Context, id uuid.UU
 }
 
 type sessionPublicStateResponse struct {
-	Problem           json.RawMessage `json:"problem"`
-	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
-	FeaturedCode      *string         `json:"featured_code"`
-	JoinCode          string          `json:"join_code"`
-	Status            string          `json:"status"`
+	Problem                   json.RawMessage `json:"problem"`
+	FeaturedStudentID         *uuid.UUID      `json:"featured_student_id"`
+	FeaturedCode              *string         `json:"featured_code"`
+	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings"`
+	JoinCode                  string          `json:"join_code"`
+	Status                    string          `json:"status"`
 }
 
 // PublicState handles GET /api/v1/sessions/{id}/public-state — public display data.
@@ -116,17 +117,19 @@ func (h *SessionStateHandler) PublicState(w http.ResponseWriter, r *http.Request
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, sessionPublicStateResponse{
-		Problem:           session.Problem,
-		FeaturedStudentID: session.FeaturedStudentID,
-		FeaturedCode:      session.FeaturedCode,
-		JoinCode:          section.JoinCode,
-		Status:            session.Status,
+		Problem:                   session.Problem,
+		FeaturedStudentID:         session.FeaturedStudentID,
+		FeaturedCode:              session.FeaturedCode,
+		FeaturedExecutionSettings: session.FeaturedExecutionSettings,
+		JoinCode:                  section.JoinCode,
+		Status:                    session.Status,
 	})
 }
 
 type featureRequest struct {
-	StudentID *uuid.UUID `json:"student_id"`
-	Code      *string    `json:"code"`
+	StudentID         *uuid.UUID      `json:"student_id"`
+	Code              *string         `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
 }
 
 // Feature handles POST /api/v1/sessions/{id}/feature — set/clear featured student.
@@ -145,6 +148,7 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 	if req.StudentID != nil {
 		params.FeaturedStudentID = req.StudentID
 		params.FeaturedCode = req.Code
+		params.FeaturedExecutionSettings = req.ExecutionSettings
 	} else {
 		params.ClearFeatured = true
 	}
@@ -169,7 +173,11 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 	if req.Code != nil {
 		code = *req.Code
 	}
-	_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), studentID, code)
+	var execSettings json.RawMessage
+	if req.ExecutionSettings != nil {
+		execSettings = req.ExecutionSettings
+	}
+	_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), studentID, code, execSettings)
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

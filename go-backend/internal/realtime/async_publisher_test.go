@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -57,7 +58,7 @@ func (r *recordingPublisher) SessionEnded(_ context.Context, _, _ string) error 
 func (r *recordingPublisher) SessionReplaced(_ context.Context, _, _ string) error {
 	return r.record("SessionReplaced")
 }
-func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string) error {
+func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return r.record("FeaturedStudentChanged")
 }
 func (r *recordingPublisher) ProblemUpdated(_ context.Context, _, _ string) error {
@@ -122,7 +123,7 @@ func TestAsyncSessionPublisher_FeaturedStudentChanged(t *testing.T) {
 	rec := newRecordingPublisher()
 	ap := NewAsyncSessionPublisher(rec, discardLogger())
 
-	err := ap.FeaturedStudentChanged(context.Background(), "sess-1", "user-1", "code")
+	err := ap.FeaturedStudentChanged(context.Background(), "sess-1", "user-1", "code", nil)
 	if err != nil {
 		t.Fatalf("expected nil error from async call, got %v", err)
 	}

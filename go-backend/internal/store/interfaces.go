@@ -257,8 +257,9 @@ type Session struct {
 	SectionName       string          `json:"section_name"`
 	Problem           json.RawMessage `json:"problem"`
 	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
-	FeaturedCode      *string         `json:"featured_code"`
-	CreatorID         uuid.UUID       `json:"creator_id"`
+	FeaturedCode              *string         `json:"featured_code"`
+	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings"`
+	CreatorID                 uuid.UUID       `json:"creator_id"`
 	Participants      []uuid.UUID     `json:"participants"`
 	Status            string          `json:"status"`
 	CreatedAt         time.Time       `json:"created_at"`
@@ -277,9 +278,10 @@ type CreateSessionParams struct {
 
 // UpdateSessionParams contains the fields that can be updated on a session.
 type UpdateSessionParams struct {
-	FeaturedStudentID *uuid.UUID
-	FeaturedCode      *string
-	Status            *string
+	FeaturedStudentID         *uuid.UUID
+	FeaturedCode              *string
+	FeaturedExecutionSettings json.RawMessage
+	Status                    *string
 	EndedAt           *time.Time
 	ClearEndedAt      bool
 	ClearFeatured     bool

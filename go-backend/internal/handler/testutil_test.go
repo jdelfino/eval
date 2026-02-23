@@ -117,6 +117,7 @@ type sessionReplacedCall struct {
 }
 type featuredStudentChangedCall struct {
 	sessionID, userID, code string
+	executionSettings       json.RawMessage
 }
 type problemUpdatedCall struct {
 	sessionID, problemID string
@@ -170,9 +171,9 @@ func (m *mockSessionPublisher) SessionReplaced(_ context.Context, oldSessionID, 
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string) error {
+func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
 	m.mu.Lock()
-	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code})
+	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code, executionSettings})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err

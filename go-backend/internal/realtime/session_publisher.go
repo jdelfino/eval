@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -12,7 +13,7 @@ type SessionPublisher interface {
 	CodeUpdated(ctx context.Context, sessionID, userID, code string) error
 	SessionEnded(ctx context.Context, sessionID, reason string) error
 	SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error
-	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string) error
+	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
 }
 
@@ -69,10 +70,11 @@ func (s *sessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, ne
 	})
 }
 
-func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string) error {
+func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
 	return s.publish(ctx, sessionID, EventFeaturedStudentChanged, FeaturedStudentChangedData{
-		UserID: userID,
-		Code:   code,
+		UserID:            userID,
+		Code:              code,
+		ExecutionSettings: executionSettings,
 	})
 }
 

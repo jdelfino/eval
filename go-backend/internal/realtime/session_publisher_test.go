@@ -119,7 +119,8 @@ func TestSessionReplaced(t *testing.T) {
 
 func TestFeaturedStudentChanged(t *testing.T) {
 	mock, sp := newTestPublisher()
-	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1")
+	execSettings := json.RawMessage(`{"stdin":"hello"}`)
+	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1", execSettings)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,6 +134,22 @@ func TestFeaturedStudentChanged(t *testing.T) {
 	data := event.Data.(FeaturedStudentChangedData)
 	if data.UserID != "user-4" || data.Code != "x := 1" {
 		t.Errorf("payload = %+v", data)
+	}
+	if string(data.ExecutionSettings) != `{"stdin":"hello"}` {
+		t.Errorf("execution_settings = %q, want %q", string(data.ExecutionSettings), `{"stdin":"hello"}`)
+	}
+}
+
+func TestFeaturedStudentChanged_NilExecutionSettings(t *testing.T) {
+	mock, sp := newTestPublisher()
+	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(FeaturedStudentChangedData)
+	if data.ExecutionSettings != nil {
+		t.Errorf("expected nil execution_settings, got %q", string(data.ExecutionSettings))
 	}
 }
 

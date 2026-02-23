@@ -401,7 +401,8 @@ describe('useRealtimeSession', () => {
       expect(mockFeatureStudent).toHaveBeenCalledWith(
         'session-1',
         'student-1',
-        'print("hello")'
+        'print("hello")',
+        undefined
       );
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
