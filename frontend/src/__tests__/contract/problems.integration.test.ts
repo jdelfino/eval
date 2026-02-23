@@ -2,15 +2,16 @@
  * Contract tests for the Problems API functions.
  * Validates that the typed API functions work correctly against the real backend.
  *
- * Covers all 6 functions from problems.ts:
+ * Covers all 7 functions from problems.ts:
  *   - createProblem()
  *   - getProblem()
  *   - getPublicProblem()
  *   - listProblems()
  *   - updateProblem()
  *   - deleteProblem()
+ *   - startPractice()
  */
-import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { configureTestAuth, testToken, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
 import {
   listProblems,
@@ -19,6 +20,7 @@ import {
   createProblem,
   updateProblem,
   deleteProblem,
+  startPractice,
 } from '@/lib/api/problems';
 import {
   expectSnakeCaseKeys,
@@ -279,6 +281,49 @@ describe('Problems API', () => {
 
       // Verify the problem is no longer retrievable
       await expect(getProblem(problem.id)).rejects.toThrow();
+    });
+  });
+
+  describe('startPractice()', () => {
+    it('returns { session_id } with correct shape', async () => {
+      const classId = state.classId;
+      const sectionId = state.sectionId;
+      const joinCode = state.joinCode;
+      expect(classId).toBeTruthy();
+      expect(sectionId).toBeTruthy();
+      expect(joinCode).toBeTruthy();
+      expect(createdProblemId).toBeTruthy();
+
+      // Register a student via join code
+      const studentExternalId = `contract-practice-student-${Date.now()}`;
+      const studentEmail = `${studentExternalId}@contract-test.local`;
+      const studentToken = testToken(studentExternalId, studentEmail);
+
+      configureTestAuth(studentToken);
+      try {
+        const { apiPost } = await import('@/lib/api-client');
+        await apiPost('/auth/register-student', {
+          join_code: joinCode,
+          display_name: 'Practice Test Student',
+        });
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status !== 409) throw err;
+      }
+
+      // Call startPractice as the enrolled student
+      const result = await startPractice(createdProblemId!, sectionId);
+
+      // Validate response shape
+      expectSnakeCaseKeys(result, 'startPractice response');
+      expectString(result, 'session_id');
+
+      // session_id should be a valid UUID-like string
+      expect(result.session_id).toBeTruthy();
+      expect(result.session_id.length).toBeGreaterThan(0);
+
+      // Restore instructor auth for any subsequent tests
+      configureTestAuth(INSTRUCTOR_TOKEN);
     });
   });
 });

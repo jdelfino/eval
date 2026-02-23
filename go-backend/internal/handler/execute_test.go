@@ -109,6 +109,9 @@ func (r *executeTestRepos) ListSessionHistory(ctx context.Context, userID uuid.U
 func (r *executeTestRepos) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
 	return r.sessions.UpdateSessionProblem(ctx, id, problem)
 }
+func (r *executeTestRepos) FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*store.Session, error) {
+	return r.sessions.FindCompletedSessionByProblem(ctx, sectionID, problemID)
+}
 func (r *executeTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return r.students.JoinSession(ctx, params)
 }

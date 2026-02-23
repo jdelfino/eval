@@ -117,25 +117,26 @@ function StudentPage() {
     // Join the session from the URL
     // For completed sessions, don't require broadcast connection - data is already loaded
     if (session && (isConnected || session.status === 'completed')) {
+      const targetSessionId = sessionIdFromUrl;
       joinAttemptedRef.current = sessionIdFromUrl;
-
-      // If session is completed, skip joining and show read-only view
-      if (session.status === 'completed') {
-        setJoined(true);
-        setStudentId(user.id);
-        setSessionEnded(true);
-        setError(null);
-        return;
-      }
 
       setIsJoining(true);
 
       joinSession(user.id, user.display_name || user.email || 'Student')
         .then((result) => {
+          // Discard if session changed during async join (e.g. "Join New Session")
+          if (joinAttemptedRef.current !== targetSessionId) {
+            setIsJoining(false);
+            return;
+          }
           setJoined(true);
           setStudentId(user.id);
           setIsJoining(false);
           setError(null);
+          // Set sessionEnded after join for completed sessions
+          if (session.status === 'completed') {
+            setSessionEnded(true);
+          }
           // Restore saved code and execution settings from server
           if (result.code) {
             setCode(result.code);
@@ -145,6 +146,10 @@ function StudentPage() {
           }
         })
         .catch((err) => {
+          if (joinAttemptedRef.current !== targetSessionId) {
+            setIsJoining(false);
+            return;
+          }
           setError(err.message || 'Failed to join session');
           setIsJoining(false);
         });
