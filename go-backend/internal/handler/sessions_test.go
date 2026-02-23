@@ -48,6 +48,12 @@ func (r *sessionTestRepos) UpdateSessionProblem(ctx context.Context, id uuid.UUI
 func (r *sessionTestRepos) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
 	return r.sess.ListSessionHistory(ctx, userID, isCreator, filters)
 }
+func (r *sessionTestRepos) CreateSessionReplacingActive(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+	return r.sess.CreateSessionReplacingActive(ctx, params)
+}
+func (r *sessionTestRepos) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
+	return r.sess.ReopenSessionReplacingActive(ctx, id, sectionID)
+}
 func (r *sessionTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
 	if r.getSectionFn != nil {
 		return r.getSectionFn(ctx, id)
@@ -324,7 +330,7 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 
 	repo := &mockSessionRepo{
-		createSessionFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, error) {
+		createSessionReplacingActiveFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
 			if params.SectionName != "Section A" {
 				t.Fatalf("unexpected section_name: %v", params.SectionName)
 			}
@@ -334,7 +340,7 @@ func TestCreateSession_Success(t *testing.T) {
 			if params.CreatorID != userID {
 				t.Fatalf("unexpected creator_id: %v", params.CreatorID)
 			}
-			return sess, nil
+			return sess, nil, nil
 		},
 	}
 
@@ -377,14 +383,11 @@ func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
 	repo := &mockSessionRepo{
-		endActiveSessionsFn: func(_ context.Context, sid uuid.UUID) ([]uuid.UUID, error) {
-			if sid != sectionID {
-				t.Fatalf("expected section_id %v, got %v", sectionID, sid)
+		createSessionReplacingActiveFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+			if params.SectionID != sectionID {
+				t.Fatalf("expected section_id %v, got %v", sectionID, params.SectionID)
 			}
-			return []uuid.UUID{oldSessionID}, nil
-		},
-		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
-			return newSess, nil
+			return newSess, []uuid.UUID{oldSessionID}, nil
 		},
 	}
 
@@ -430,11 +433,8 @@ func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
 	repo := &mockSessionRepo{
-		endActiveSessionsFn: func(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
-			return nil, nil // no active sessions
-		},
-		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
-			return newSess, nil
+		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+			return newSess, nil, nil // no active sessions
 		},
 	}
 
@@ -508,8 +508,8 @@ func TestCreateSession_InternalError(t *testing.T) {
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
 	repo := &mockSessionRepo{
-		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
-			return nil, errors.New("db error")
+		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+			return nil, nil, errors.New("db error")
 		},
 	}
 
@@ -1211,14 +1211,14 @@ func TestReopenSession_Success(t *testing.T) {
 			}
 			return sess, nil
 		},
-		updateSessionFn: func(_ context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
-			if params.Status == nil || *params.Status != "active" {
-				t.Fatalf("expected status 'active', got %v", params.Status)
+		reopenSessionReplacingActiveFn: func(_ context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
+			if id != sess.ID {
+				t.Fatalf("unexpected id: %v", id)
 			}
-			if !params.ClearEndedAt {
-				t.Fatalf("expected ClearEndedAt to be true")
+			if sectionID != sess.SectionID {
+				t.Fatalf("unexpected section_id: %v", sectionID)
 			}
-			return &reopenedSess, nil
+			return &reopenedSess, nil, nil
 		},
 	}
 	h := NewSessionHandler(noopPublisher())
@@ -1295,6 +1295,145 @@ func TestReopenSession_NotCompleted(t *testing.T) {
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	now := time.Now()
+	sess.EndedAt = &now
+
+	otherActiveID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+	reopenedSess := *sess
+	reopenedSess.Status = "active"
+	reopenedSess.EndedAt = nil
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		reopenSessionReplacingActiveFn: func(_ context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
+			return &reopenedSess, []uuid.UUID{otherActiveID}, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionHandler(pub)
+
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Should publish SessionReplaced for the ended session (matching Create handler behavior)
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionReplacedCalls) != 1 {
+		t.Fatalf("expected 1 SessionReplaced call, got %d", len(pub.sessionReplacedCalls))
+	}
+	call := pub.sessionReplacedCalls[0]
+	if call.oldSessionID != otherActiveID.String() {
+		t.Errorf("expected old session %q, got %q", otherActiveID, call.oldSessionID)
+	}
+	if call.newSessionID != sess.ID.String() {
+		t.Errorf("expected new session %q, got %q", sess.ID, call.newSessionID)
+	}
+	if len(pub.sessionEndedCalls) != 0 {
+		t.Errorf("expected no SessionEnded calls for replaced sessions, got %d", len(pub.sessionEndedCalls))
+	}
+}
+
+func TestReopenSession_NoActiveSessionsToEnd(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	now := time.Now()
+	sess.EndedAt = &now
+
+	reopenedSess := *sess
+	reopenedSess.Status = "active"
+	reopenedSess.EndedAt = nil
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
+			return &reopenedSess, nil, nil // no active sessions ended
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionHandler(pub)
+
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Brief sleep to confirm no publish calls arrive.
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sessionReplacedCalls) != 0 {
+		t.Errorf("expected no SessionReplaced calls, got %d", len(pub.sessionReplacedCalls))
+	}
+	if len(pub.sessionEndedCalls) != 0 {
+		t.Errorf("expected no SessionEnded calls, got %d", len(pub.sessionEndedCalls))
+	}
+}
+
+func TestReopenSession_InternalError(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	now := time.Now()
+	sess.EndedAt = &now
+
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
+			return nil, nil, errors.New("db error")
+		},
+	}
+	h := NewSessionHandler(noopPublisher())
+
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

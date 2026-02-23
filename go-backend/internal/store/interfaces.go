@@ -322,6 +322,14 @@ type SessionRepository interface {
 	// FindCompletedSessionByProblem finds a completed session in a section whose problem
 	// JSON contains the given problem ID. Returns ErrNotFound if none exists.
 	FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*Session, error)
+	// CreateSessionReplacingActive atomically ends any active sessions in the section
+	// and creates a new session, all within a single transaction.
+	// Returns the new session and the IDs of ended sessions.
+	CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error)
+	// ReopenSessionReplacingActive atomically ends any other active sessions in the section
+	// and reopens the given completed session, all within a single transaction.
+	// Returns the reopened session and the IDs of ended sessions.
+	ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*Session, []uuid.UUID, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.
