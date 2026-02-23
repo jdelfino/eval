@@ -130,12 +130,10 @@ test.describe('Session Lifecycle', () => {
       // Click Run Code — this uses the practice API endpoint
       await page.locator('button:has-text("Run Code")').click();
 
-      // Wait for execution result (either success or executor unavailable error in test env)
-      // In the E2E test environment, the executor service may not be running,
-      // so we accept either a result or an error - the key test is that the button works
-      // and the practice API endpoint is hit (not blocked by "session ended")
-      const resultOrError = page.locator('.bg-gray-900, [data-testid="error-alert"]').first();
-      await expect(resultOrError).toBeVisible();
+      // Wait for successful execution result — practice mode must actually work
+      const outputArea = page.locator('[data-testid="output-area"]');
+      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
+      await expect(outputArea.locator('text=LIFECYCLE_TEST_2')).toBeVisible();
 
     } finally {
       await instructorContext.close();
