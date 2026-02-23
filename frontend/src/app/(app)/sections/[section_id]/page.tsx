@@ -80,8 +80,14 @@ export default function SectionDetailPage() {
     }
   };
 
+  const isInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
+
   const handleJoinSession = (session_id: string) => {
-    router.push(`/student?session_id=${session_id}`);
+    if (isInstructor) {
+      router.push(`/instructor/session/${session_id}`);
+    } else {
+      router.push(`/student?session_id=${session_id}`);
+    }
   };
 
   const formatDate = (dateString: string | Date) => {
@@ -102,8 +108,6 @@ export default function SectionDetailPage() {
       </div>
     );
   }
-
-  const isInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
 
   if (error || !section) {
     return (
@@ -204,7 +208,7 @@ export default function SectionDetailPage() {
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
-                        Join Now
+                        {isInstructor ? 'View Dashboard' : 'Join Now'}
                       </button>
                     </div>
                   </div>
@@ -275,7 +279,7 @@ export default function SectionDetailPage() {
                       </div>
                       <button
                         onClick={() => router.push(
-                          section.role === 'instructor'
+                          isInstructor
                             ? `/instructor/session/${session.id}`
                             : `/student?session_id=${session.id}`
                         )}
