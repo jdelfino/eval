@@ -8,6 +8,7 @@ import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import type { ExecutionSettings } from '@/types/problem';
 
 function PublicViewContent() {
   const searchParams = useSearchParams();
@@ -57,6 +58,12 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
+  // Derive featured stdin for the CodeEditor
+  const featuredStdin = (() => {
+    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
+    return settings?.stdin;
+  })();
+
   // Reset local code when featured student or their code changes
   useEffect(() => {
     const studentChanged = state?.featured_student_id !== lastFeaturedStudentId.current;
@@ -67,7 +74,7 @@ function PublicViewContent() {
       lastFeaturedCode.current = state?.featured_code ?? null;
       setLocalCode(state?.featured_code ?? state?.problem?.starter_code ?? '');
     }
-  }, [state?.featured_student_id, state?.featured_code, state?.problem]);
+  }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
 
   if (!session_id) {
     return (
@@ -111,6 +118,7 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
+            exampleInput={featuredStdin}
             useApiExecution={true}
             debugger={debuggerHook}
             forceDesktop={true}

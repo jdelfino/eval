@@ -895,9 +895,11 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	prevSess := testSession() // no featured student
 	featuredID := uuid.New()
 	featuredCode := "print('featured')"
+	featuredExecSettings := json.RawMessage(`{"stdin":"test input"}`)
 	updatedSess := *prevSess
 	updatedSess.FeaturedStudentID = &featuredID
 	updatedSess.FeaturedCode = &featuredCode
+	updatedSess.FeaturedExecutionSettings = featuredExecSettings
 
 	repo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
@@ -911,8 +913,9 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	h := NewSessionHandler(pub)
 
 	body, _ := json.Marshal(map[string]any{
-		"featured_student_id": featuredID.String(),
-		"featured_code":       featuredCode,
+		"featured_student_id":          featuredID.String(),
+		"featured_code":                featuredCode,
+		"featured_execution_settings":  json.RawMessage(`{"stdin":"test input"}`),
 	})
 	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -944,6 +947,9 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	}
 	if call.code != featuredCode {
 		t.Errorf("expected code %q, got %q", featuredCode, call.code)
+	}
+	if string(call.executionSettings) != string(featuredExecSettings) {
+		t.Errorf("expected executionSettings %q, got %q", string(featuredExecSettings), string(call.executionSettings))
 	}
 }
 

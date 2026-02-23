@@ -63,6 +63,7 @@ export interface UseRealtimeSessionOptions {
 export interface FeaturedStudent {
   studentId?: string;
   code?: string;
+  executionSettings?: ExecutionSettings;
 }
 
 /**
@@ -298,9 +299,10 @@ export function useRealtimeSession({
 
         case 'featured_student_changed': {
           if (payload) {
-            // Backend sends FeaturedStudentChangedData{user_id, code}
+            // Backend sends FeaturedStudentChangedData{user_id, code, execution_settings}
             const studentId = payload.user_id;
             const code = payload.code;
+            const executionSettings = payload.execution_settings;
             setSession(prev => {
               if (!prev) {
                 console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
@@ -310,11 +312,13 @@ export function useRealtimeSession({
                 ...prev,
                 featured_student_id: studentId,
                 featured_code: code,
+                featured_execution_settings: executionSettings,
               };
             });
             setFeaturedStudent({
               studentId,
               code,
+              executionSettings,
             });
           }
           break;
@@ -478,13 +482,16 @@ export function useRealtimeSession({
    */
   const featureStudent = useCallback(async (studentId: string) => {
     try {
-      const studentCode = students.get(studentId)?.code;
-      await apiFeatureStudent(session_id, studentId, studentCode);
+      const student = students.get(studentId);
+      const studentCode = student?.code;
+      const studentExecutionSettings = student?.execution_settings;
+      await apiFeatureStudent(session_id, studentId, studentCode, studentExecutionSettings);
 
       // Optimistically update local state
       setFeaturedStudent({
         studentId,
         code: studentCode,
+        executionSettings: studentExecutionSettings,
       });
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);

@@ -1,6 +1,9 @@
 package realtime
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // EventType identifies the kind of real-time event.
 type EventType string
@@ -46,8 +49,9 @@ type SessionReplacedData struct {
 
 // FeaturedStudentChangedData is the payload for EventFeaturedStudentChanged.
 type FeaturedStudentChangedData struct {
-	UserID string `json:"user_id"`
-	Code   string `json:"code"`
+	UserID            string          `json:"user_id"`
+	Code              string          `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
 }
 
 // ProblemUpdatedData is the payload for EventProblemUpdated.

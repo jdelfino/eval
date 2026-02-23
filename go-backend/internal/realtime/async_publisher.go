@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 )
@@ -67,9 +68,9 @@ func (a *AsyncSessionPublisher) SessionReplaced(ctx context.Context, oldSessionI
 	return nil
 }
 
-func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string) error {
+func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
 	a.runAsync(ctx, "FeaturedStudentChanged", func(ctx context.Context) error {
-		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code)
+		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code, executionSettings)
 	})
 	return nil
 }

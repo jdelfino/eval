@@ -95,6 +95,7 @@ export interface Session {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
+  featured_execution_settings?: unknown;
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -164,6 +165,7 @@ export interface SessionPublicState {
   problem: SessionPublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
+  featured_execution_settings?: unknown;
   join_code: string;
   status: string;
 }
