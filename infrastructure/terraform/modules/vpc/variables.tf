@@ -86,22 +86,6 @@ variable "public_subnet_cidr" {
 }
 
 # -----------------------------------------------------------------------------
-# NAT Configuration
-# -----------------------------------------------------------------------------
-
-variable "nat_ip_allocate_option" {
-  description = "How external IPs are allocated for NAT. AUTO_ONLY or MANUAL_ONLY."
-  type        = string
-  default     = "AUTO_ONLY"
-}
-
-variable "source_subnetwork_ip_ranges_to_nat" {
-  description = "How NAT should be configured per subnetwork"
-  type        = string
-  default     = "ALL_SUBNETWORKS_ALL_IP_RANGES"
-}
-
-# -----------------------------------------------------------------------------
 # Firewall Configuration
 # -----------------------------------------------------------------------------
 

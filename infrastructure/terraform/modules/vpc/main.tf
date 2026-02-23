@@ -1,7 +1,8 @@
 # GCP VPC Module
 #
 # Creates a VPC network with subnets for GKE and Cloud SQL,
-# including Private Service Access for Cloud SQL and Cloud NAT for outbound traffic.
+# including Private Service Access for Cloud SQL.
+# Outbound internet access is provided by the NAT VM module (modules/nat).
 
 locals {
   vpc_name = coalesce(var.vpc_name, "${var.project_name}-${var.environment}-vpc")
@@ -101,39 +102,6 @@ resource "google_service_networking_connection" "private_service_access" {
   network                 = google_compute_network.vpc.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_service_access.name]
-}
-
-# -----------------------------------------------------------------------------
-# Cloud Router (for NAT)
-# -----------------------------------------------------------------------------
-
-resource "google_compute_router" "router" {
-  name    = "${local.vpc_name}-router"
-  project = var.project_id
-  region  = var.region
-  network = google_compute_network.vpc.id
-
-  bgp {
-    asn = 64514
-  }
-}
-
-# -----------------------------------------------------------------------------
-# Cloud NAT
-# -----------------------------------------------------------------------------
-
-resource "google_compute_router_nat" "nat" {
-  name                               = "${local.vpc_name}-nat"
-  project                            = var.project_id
-  router                             = google_compute_router.router.name
-  region                             = var.region
-  nat_ip_allocate_option             = var.nat_ip_allocate_option
-  source_subnetwork_ip_ranges_to_nat = var.source_subnetwork_ip_ranges_to_nat
-
-  log_config {
-    enable = true
-    filter = "ERRORS_ONLY"
-  }
 }
 
 # -----------------------------------------------------------------------------
