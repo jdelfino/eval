@@ -89,6 +89,10 @@ module "nat" {
   network_id          = module.vpc.vpc_id
   public_subnet_id    = module.vpc.public_subnet_id
   private_subnet_cidr = var.gke_subnet_cidr
+
+  # Apply NAT route to all instances (no tag filter). Cloud NAT previously
+  # covered all subnets; the NAT VM route must do the same for GKE private nodes.
+  route_tags = []
 }
 
 module "gke" {
