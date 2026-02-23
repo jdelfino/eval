@@ -265,7 +265,7 @@ describe('CodeEditor Responsive Layout', () => {
             success: true,
             output: 'Hello World',
             error: '',
-            execution_time: 100,
+            execution_time_ms: 100,
           }}
         />
       );
@@ -337,7 +337,7 @@ describe('CodeEditor Responsive Layout', () => {
       success: true,
       output: 'Test output',
       error: '',
-      execution_time: 100,
+      execution_time_ms: 100,
     };
 
     it('should render execution results below editor on desktop', () => {

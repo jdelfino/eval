@@ -137,7 +137,7 @@ describe('SessionView', () => {
     onEndSession: jest.fn().mockResolvedValue(undefined),
     onUpdateProblem: jest.fn().mockResolvedValue(undefined),
     onFeatureStudent: jest.fn().mockResolvedValue(undefined),
-    executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time: 100 }),
+    executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 100 }),
   };
 
   beforeEach(() => {

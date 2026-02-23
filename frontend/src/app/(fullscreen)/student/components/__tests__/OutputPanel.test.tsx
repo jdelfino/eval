@@ -46,7 +46,7 @@ describe('OutputPanel', () => {
       success: true,
       output: 'Hello, World!',
       error: '',
-      execution_time: 42,
+      execution_time_ms: 42,
     };
 
     it('should display output when result is successful', () => {
@@ -69,7 +69,7 @@ describe('OutputPanel', () => {
       success: false,
       output: '',
       error: 'SyntaxError: invalid syntax',
-      execution_time: 5,
+      execution_time_ms: 5,
     };
 
     it('should display error message when result has error', () => {
@@ -86,7 +86,7 @@ describe('OutputPanel', () => {
       success: true,
       output: '10',
       error: '',
-      execution_time: 15,
+      execution_time_ms: 15,
       stdin: '5\n5',
     };
 

@@ -60,7 +60,7 @@ const fakeExecutionResult: ExecutionResult = {
   success: true,
   output: 'hello',
   error: '',
-  execution_time: 100,
+  execution_time_ms: 100,
 };
 
 describe('lib/api/realtime', () => {

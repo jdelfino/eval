@@ -87,7 +87,7 @@ describe('CodeEditor Empty States', () => {
         success: true,
         output: 'Hello, World!',
         error: '',
-        execution_time: 10,
+        execution_time_ms: 10,
       };
 
       render(

@@ -10,7 +10,7 @@ interface CodeViewerProps {
     success: boolean;
     output: string;
     error: string;
-    execution_time: number;
+    execution_time_ms: number;
   };
   onRunCode: () => void;
 }

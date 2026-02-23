@@ -124,11 +124,20 @@ test.describe('Session Lifecycle', () => {
       await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible();
 
       // In practice mode, the run button should still be available
-      await expect(page.locator('button:has-text("Run Code")')).toBeVisible();
+      const runButton = page.locator('button:has-text("Run Code")');
+      await expect(runButton).toBeVisible();
+
+      // Verify Monaco still contains the student's code (guards against state loss)
+      await expect.poll(async () => {
+        return page.evaluate(() => {
+          const editor = document.querySelector('.monaco-editor');
+          return editor?.textContent?.replace(/\s/g, '') || '';
+        });
+      }, { timeout: 5000, message: 'Monaco should still contain student code after session end' }).toContain('LIFECYCLE_TEST_2');
 
       // ===== STUDENT RUNS CODE IN PRACTICE MODE =====
       // Click Run Code — this uses the practice API endpoint
-      await page.locator('button:has-text("Run Code")').click();
+      await runButton.click();
 
       // Wait for successful execution result — practice mode must actually work
       const outputArea = page.locator('[data-testid="output-area"]');

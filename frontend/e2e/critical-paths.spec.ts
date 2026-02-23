@@ -341,13 +341,16 @@ test.describe('Critical User Paths', () => {
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
       // Verify the student's code content is visible on public view
-      const publicViewHasCode = await publicViewPage.evaluate(() => {
-        const editorArea = document.querySelector('.monaco-editor');
-        if (!editorArea) return false;
-        const text = editorArea.textContent?.replace(/\s/g, '') || '';
-        return text.includes('SYNC_TEST') || text.includes('print');
-      });
-      expect(publicViewHasCode).toBe(true);
+      // Use polling assertion — Monaco renders asynchronously, so a one-shot
+      // evaluate() can race against the editor populating its DOM.
+      await expect.poll(async () => {
+        return publicViewPage!.evaluate(() => {
+          const editorArea = document.querySelector('.monaco-editor');
+          if (!editorArea) return false;
+          const text = editorArea.textContent?.replace(/\s/g, '') || '';
+          return text.includes('SYNC_TEST') || text.includes('print');
+        });
+      }, { timeout: 10000, message: 'Monaco editor on public view should contain student code' }).toBe(true);
     } finally {
       try {
         await publicViewPage?.close();
