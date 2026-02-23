@@ -251,20 +251,20 @@ type SectionRepository interface {
 
 // Session represents a coding session within a section.
 type Session struct {
-	ID                uuid.UUID       `json:"id"`
-	NamespaceID       string          `json:"namespace_id"`
-	SectionID         uuid.UUID       `json:"section_id"`
-	SectionName       string          `json:"section_name"`
-	Problem           json.RawMessage `json:"problem"`
-	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
+	ID                        uuid.UUID       `json:"id"`
+	NamespaceID               string          `json:"namespace_id"`
+	SectionID                 uuid.UUID       `json:"section_id"`
+	SectionName               string          `json:"section_name"`
+	Problem                   json.RawMessage `json:"problem"`
+	FeaturedStudentID         *uuid.UUID      `json:"featured_student_id"`
 	FeaturedCode              *string         `json:"featured_code"`
 	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings"`
 	CreatorID                 uuid.UUID       `json:"creator_id"`
-	Participants      []uuid.UUID     `json:"participants"`
-	Status            string          `json:"status"`
-	CreatedAt         time.Time       `json:"created_at"`
-	LastActivity      time.Time       `json:"last_activity"`
-	EndedAt           *time.Time      `json:"ended_at"`
+	Participants              []uuid.UUID     `json:"participants"`
+	Status                    string          `json:"status"`
+	CreatedAt                 time.Time       `json:"created_at"`
+	LastActivity              time.Time       `json:"last_activity"`
+	EndedAt                   *time.Time      `json:"ended_at"`
 }
 
 // CreateSessionParams contains the fields for creating a session.
@@ -282,9 +282,9 @@ type UpdateSessionParams struct {
 	FeaturedCode              *string
 	FeaturedExecutionSettings json.RawMessage
 	Status                    *string
-	EndedAt           *time.Time
-	ClearEndedAt      bool
-	ClearFeatured     bool
+	EndedAt                   *time.Time
+	ClearEndedAt              bool
+	ClearFeatured             bool
 }
 
 // SessionHistoryFilters contains optional filters for listing session history.

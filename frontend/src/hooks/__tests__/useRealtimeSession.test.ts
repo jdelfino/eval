@@ -701,17 +701,22 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.featuredStudent.studentId).toBeUndefined();
 
+      const execSettings = { stdin: 'hello world' };
+
       act(() => {
         simulatePublication('featured_student_changed', {
           user_id: 'student-1',
           code: 'print("featured code")',
+          execution_settings: execSettings,
         });
       });
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
       expect(result.current.featuredStudent.code).toBe('print("featured code")');
+      expect(result.current.featuredStudent.executionSettings).toEqual(execSettings);
       expect(result.current.session?.featured_student_id).toBe('student-1');
       expect(result.current.session?.featured_code).toBe('print("featured code")');
+      expect(result.current.session?.featured_execution_settings).toEqual(execSettings);
     });
 
     it('should handle featured_student_changed event to clear featured student', async () => {

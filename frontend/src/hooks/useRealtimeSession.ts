@@ -299,9 +299,10 @@ export function useRealtimeSession({
 
         case 'featured_student_changed': {
           if (payload) {
-            // Backend sends FeaturedStudentChangedData{user_id, code}
+            // Backend sends FeaturedStudentChangedData{user_id, code, execution_settings}
             const studentId = payload.user_id;
             const code = payload.code;
+            const executionSettings = payload.execution_settings;
             setSession(prev => {
               if (!prev) {
                 console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
@@ -311,11 +312,13 @@ export function useRealtimeSession({
                 ...prev,
                 featured_student_id: studentId,
                 featured_code: code,
+                featured_execution_settings: executionSettings,
               };
             });
             setFeaturedStudent({
               studentId,
               code,
+              executionSettings,
             });
           }
           break;

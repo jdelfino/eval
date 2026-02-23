@@ -8,6 +8,7 @@ import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import type { ExecutionSettings } from '@/types/problem';
 
 function PublicViewContent() {
   const searchParams = useSearchParams();
@@ -59,7 +60,7 @@ function PublicViewContent() {
 
   // Derive featured stdin for the CodeEditor
   const featuredStdin = (() => {
-    const settings = state?.featured_execution_settings as { stdin?: string } | null | undefined;
+    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
     return settings?.stdin;
   })();
 
