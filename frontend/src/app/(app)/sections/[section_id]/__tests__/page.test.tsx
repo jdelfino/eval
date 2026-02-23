@@ -4,7 +4,9 @@
  * Tests:
  * - Role-aware back button navigation (instructor vs student)
  * - Error-state back button fallbacks
- * - Past session view button routes by role
+ * - Active session button routes by role (instructor/admin -> instructor dashboard, student -> student workspace)
+ * - Active session button label by role ("View Dashboard" for instructors, "Join Now" for students)
+ * - Past session view button routes by role (including namespace-admin and system-admin)
  * - Past session metadata display
  */
 
@@ -41,6 +43,22 @@ jest.mock('@/lib/api/classes', () => ({
 const mockPush = jest.fn();
 const CLASS_ID = 'class-abc-123';
 const SECTION_ID = 'section-xyz-789';
+
+const activeSession = {
+  id: 'session-active-1',
+  namespace_id: 'ns-1',
+  section_id: SECTION_ID,
+  section_name: 'Section A',
+  status: 'active',
+  created_at: '2026-02-20T10:00:00Z',
+  last_activity: '2026-02-20T10:30:00Z',
+  ended_at: null,
+  problem: { title: 'Active Problem', description: 'An active problem' },
+  participants: ['student-1'],
+  featured_student_id: null,
+  featured_code: null,
+  creator_id: 'user-1',
+};
 
 const pastSession = {
   id: 'session-past-1',
@@ -192,9 +210,103 @@ describe('SectionDetailPage', () => {
     });
   });
 
+  describe('active session navigation', () => {
+    it('routes instructors to instructor dashboard when clicking active session button', async () => {
+      mockUser('instructor');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      await userEvent.click(btn);
+
+      expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
+    });
+
+    it('routes namespace-admins to instructor dashboard when clicking active session button', async () => {
+      mockUser('namespace-admin');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      await userEvent.click(btn);
+
+      expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
+    });
+
+    it('routes system-admins to instructor dashboard when clicking active session button', async () => {
+      mockUser('system-admin');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      await userEvent.click(btn);
+
+      expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
+    });
+
+    it('routes students to student workspace when clicking active session button', async () => {
+      mockUser('student');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      const btn = await screen.findByRole('button', { name: /Join Now/i });
+      await userEvent.click(btn);
+
+      expect(mockPush).toHaveBeenCalledWith('/student?session_id=session-active-1');
+    });
+
+    it('shows "View Dashboard" label for instructors on active sessions', async () => {
+      mockUser('instructor');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      expect(await screen.findByText('View Dashboard')).toBeInTheDocument();
+      expect(screen.queryByText('Join Now')).not.toBeInTheDocument();
+    });
+
+    it('shows "Join Now" label for students on active sessions', async () => {
+      mockUser('student');
+      mockSectionData([activeSession]);
+
+      render(<SectionDetailPage />);
+
+      expect(await screen.findByText('Join Now')).toBeInTheDocument();
+      expect(screen.queryByText('View Dashboard')).not.toBeInTheDocument();
+    });
+  });
+
   describe('past session navigation', () => {
     it('shows View button that navigates instructors to instructor session view', async () => {
       mockUser('instructor');
+      mockSectionData([pastSession]);
+
+      render(<SectionDetailPage />);
+
+      const viewBtn = await screen.findByText('View');
+      await userEvent.click(viewBtn);
+
+      expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
+    });
+
+    it('shows View button that navigates namespace-admins to instructor session view', async () => {
+      mockUser('namespace-admin');
+      mockSectionData([pastSession]);
+
+      render(<SectionDetailPage />);
+
+      const viewBtn = await screen.findByText('View');
+      await userEvent.click(viewBtn);
+
+      expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
+    });
+
+    it('shows View button that navigates system-admins to instructor session view', async () => {
+      mockUser('system-admin');
       mockSectionData([pastSession]);
 
       render(<SectionDetailPage />);
