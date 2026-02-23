@@ -130,6 +130,7 @@ resource "google_container_node_pool" "default" {
     machine_type = var.default_pool_machine_type
     spot         = var.default_pool_spot
     disk_size_gb = var.default_pool_disk_size_gb
+    tags         = var.node_network_tags
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
@@ -164,6 +165,7 @@ resource "google_container_node_pool" "executor" {
     image_type   = "COS_CONTAINERD"
     spot         = var.executor_pool_spot
     disk_size_gb = var.executor_pool_disk_size_gb
+    tags         = var.node_network_tags
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 

@@ -149,6 +149,16 @@ variable "cluster_resource_labels" {
 }
 
 # -----------------------------------------------------------------------------
+# Network Tags
+# -----------------------------------------------------------------------------
+
+variable "node_network_tags" {
+  description = "Network tags applied to all node pool instances (used for route targeting)"
+  type        = list(string)
+  default     = []
+}
+
+# -----------------------------------------------------------------------------
 # Default Node Pool
 # -----------------------------------------------------------------------------
 

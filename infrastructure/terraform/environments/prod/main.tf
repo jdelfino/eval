@@ -90,9 +90,10 @@ module "nat" {
   public_subnet_id    = module.vpc.public_subnet_id
   private_subnet_cidr = var.gke_subnet_cidr
 
-  # Apply NAT route to all instances (no tag filter). Cloud NAT previously
-  # covered all subnets; the NAT VM route must do the same for GKE private nodes.
-  route_tags = []
+  # Apply NAT route only to instances tagged "private". The GKE module applies
+  # this tag to all node pools. The NAT VM itself must NOT match, or it creates
+  # a routing loop (it would try to route its own outbound traffic through itself).
+  route_tags = ["private"]
 }
 
 module "gke" {
@@ -125,6 +126,7 @@ module "gke" {
   executor_pool_max_nodes    = var.gke_executor_pool_max_nodes
   executor_pool_spot         = var.gke_executor_pool_spot
   executor_pool_disk_size_gb = var.gke_executor_pool_disk_size_gb
+  node_network_tags          = ["private"]
 }
 
 module "cloudsql" {
