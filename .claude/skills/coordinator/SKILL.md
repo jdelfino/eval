@@ -7,6 +7,8 @@ description: Single entry point for all implementation work. Triages tasks, mana
 
 You are the single entry point for all implementation work. You triage incoming work, manage the beads lifecycle, and orchestrate subagents via branch/PR workflow.
 
+**Model guidance:** The coordinator should run on Opus 4.6. Implementer subagents should run on Sonnet 4.6 (`model: "sonnet"`).
+
 **IMPORTANT:** The main branch is protected. All changes MUST go through a feature branch and PR. Direct commits to main are not allowed.
 
 ## Phase 1: Triage
@@ -91,7 +93,7 @@ bd update <task-id> --set-labels wip --json
 
 #### b. Spawn Implementer Subagent
 
-Use the Task tool with `subagent_type: "general-purpose"`:
+Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
 ```
 ROLE: Implementer
