@@ -176,6 +176,12 @@ variable "default_pool_spot" {
   default     = true
 }
 
+variable "default_pool_disk_size_gb" {
+  description = "Boot disk size in GB for the default node pool"
+  type        = number
+  default     = 30
+}
+
 # -----------------------------------------------------------------------------
 # Executor Node Pool
 # -----------------------------------------------------------------------------
@@ -202,4 +208,10 @@ variable "executor_pool_spot" {
   description = "Use spot VMs for the executor node pool"
   type        = bool
   default     = true
+}
+
+variable "executor_pool_disk_size_gb" {
+  description = "Boot disk size in GB for the executor node pool"
+  type        = number
+  default     = 30
 }

@@ -86,19 +86,13 @@ variable "public_subnet_cidr" {
 }
 
 # -----------------------------------------------------------------------------
-# NAT Configuration
+# Flow Logs
 # -----------------------------------------------------------------------------
 
-variable "nat_ip_allocate_option" {
-  description = "How external IPs are allocated for NAT. AUTO_ONLY or MANUAL_ONLY."
-  type        = string
-  default     = "AUTO_ONLY"
-}
-
-variable "source_subnetwork_ip_ranges_to_nat" {
-  description = "How NAT should be configured per subnetwork"
-  type        = string
-  default     = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+variable "enable_flow_logs" {
+  description = "Enable VPC flow logs on all subnets. Defaults to false to save costs; set true for debugging."
+  type        = bool
+  default     = false
 }
 
 # -----------------------------------------------------------------------------

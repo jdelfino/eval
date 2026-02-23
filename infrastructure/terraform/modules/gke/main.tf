@@ -129,6 +129,7 @@ resource "google_container_node_pool" "default" {
   node_config {
     machine_type = var.default_pool_machine_type
     spot         = var.default_pool_spot
+    disk_size_gb = var.default_pool_disk_size_gb
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 
@@ -162,6 +163,7 @@ resource "google_container_node_pool" "executor" {
     machine_type = var.executor_pool_machine_type
     image_type   = "COS_CONTAINERD"
     spot         = var.executor_pool_spot
+    disk_size_gb = var.executor_pool_disk_size_gb
 
     oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
 

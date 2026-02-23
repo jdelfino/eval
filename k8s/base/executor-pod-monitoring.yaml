@@ -1,0 +1,14 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: executor
+  labels:
+    app: executor
+spec:
+  selector:
+    matchLabels:
+      app: executor
+  endpoints:
+    - port: 8081
+      interval: 60s
+      path: /metrics

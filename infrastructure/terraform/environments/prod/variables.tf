@@ -130,6 +130,12 @@ variable "gke_default_pool_spot" {
   default     = true
 }
 
+variable "gke_default_pool_disk_size_gb" {
+  description = "Boot disk size in GB for the default GKE node pool"
+  type        = number
+  default     = 30
+}
+
 variable "gke_executor_pool_machine_type" {
   description = "Machine type for the executor GKE node pool"
   type        = string
@@ -152,6 +158,12 @@ variable "gke_executor_pool_spot" {
   description = "Use spot VMs for the executor node pool"
   type        = bool
   default     = true
+}
+
+variable "gke_executor_pool_disk_size_gb" {
+  description = "Boot disk size in GB for the executor GKE node pool"
+  type        = number
+  default     = 30
 }
 
 # -----------------------------------------------------------------------------
