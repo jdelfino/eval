@@ -1337,8 +1337,8 @@ func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Should publish SessionReplaced + SessionEnded for the ended session
-	pub.waitForCalls(t, 2)
+	// Should publish SessionReplaced for the ended session (matching Create handler behavior)
+	pub.waitForCalls(t, 1)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionReplacedCalls) != 1 {
@@ -1351,11 +1351,8 @@ func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	if call.newSessionID != sess.ID.String() {
 		t.Errorf("expected new session %q, got %q", sess.ID, call.newSessionID)
 	}
-	if len(pub.sessionEndedCalls) != 1 {
-		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
-	}
-	if pub.sessionEndedCalls[0].sessionID != otherActiveID.String() {
-		t.Errorf("expected SessionEnded for %q, got %q", otherActiveID, pub.sessionEndedCalls[0].sessionID)
+	if len(pub.sessionEndedCalls) != 0 {
+		t.Errorf("expected no SessionEnded calls for replaced sessions, got %d", len(pub.sessionEndedCalls))
 	}
 }
 

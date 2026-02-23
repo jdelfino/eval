@@ -339,7 +339,6 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 	// Notify students on ended sessions that a replacement is available.
 	newSessionID := session.ID.String()
 	for _, oldID := range endedIDs {
-		_ = h.publisher.SessionEnded(r.Context(), oldID.String(), "completed")
 		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
 	}
 
