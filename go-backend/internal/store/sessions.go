@@ -143,13 +143,16 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	ac := newArgCounter(2, id)
 
-	// ClearFeatured NULLs all featured fields first; explicit FeaturedCode /
-	// FeaturedExecutionSettings may then override specific columns (used by
-	// the "Show Solution" code-only featuring path).
+	// ClearFeatured NULLs featured fields. Skip columns that will be
+	// explicitly set below to avoid duplicate assignments (PostgreSQL error).
 	if params.ClearFeatured {
 		query += ",\n		    featured_student_id = NULL"
-		query += ",\n		    featured_code = NULL"
-		query += ",\n		    featured_execution_settings = NULL"
+		if params.FeaturedCode == nil {
+			query += ",\n		    featured_code = NULL"
+		}
+		if params.FeaturedExecutionSettings == nil {
+			query += ",\n		    featured_execution_settings = NULL"
+		}
 	}
 
 	if params.FeaturedStudentID != nil {

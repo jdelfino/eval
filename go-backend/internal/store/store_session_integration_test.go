@@ -315,6 +315,37 @@ func TestIntegration_UpdateSession(t *testing.T) {
 		}
 	})
 
+	t.Run("code-only featuring clears student but sets code", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		// First feature a student so there's something to clear.
+		code := "student code"
+		_, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{
+			FeaturedStudentID: &studentID,
+			FeaturedCode:      &code,
+		})
+		if err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+
+		// Now do code-only featuring (the "Show Solution" path).
+		solution := "def solution(): pass"
+		sess, err := s.UpdateSession(ctx, sessionID, UpdateSessionParams{
+			ClearFeatured: true,
+			FeaturedCode:  &solution,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sess.FeaturedStudentID != nil {
+			t.Errorf("expected nil featured_student_id, got %v", sess.FeaturedStudentID)
+		}
+		if sess.FeaturedCode == nil || *sess.FeaturedCode != solution {
+			t.Errorf("expected featured_code %q, got %v", solution, sess.FeaturedCode)
+		}
+	})
+
 	t.Run("update status and ended_at", func(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, authUser)
 		defer conn.Release()
