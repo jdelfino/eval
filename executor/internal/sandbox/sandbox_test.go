@@ -383,6 +383,161 @@ func TestRunUnsafeExecutesPython(t *testing.T) {
 	}
 }
 
+func TestRunUnsafeInputEcho(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+
+	t.Run("with prompt", func(t *testing.T) {
+		req := Request{
+			Code:      "name = input('Enter name: ')\nage = input('Enter age: ')\nprint(f'{name} is {age}')",
+			Stdin:     "Alice\n25\n",
+			TimeoutMs: 5000,
+		}
+
+		result, err := RunUnsafe(context.Background(), cfg, req)
+		if err != nil {
+			t.Fatalf("RunUnsafe error: %v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Fatalf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+		}
+		// Verify output reads like a terminal session in correct order.
+		want := "Enter name: Alice\nEnter age: 25\nAlice is 25\n"
+		if result.Stdout != want {
+			t.Errorf("stdout = %q, want %q", result.Stdout, want)
+		}
+	})
+
+	t.Run("without prompt", func(t *testing.T) {
+		req := Request{
+			Code:      "x = input()\nprint(f'got {x}')",
+			Stdin:     "hello\n",
+			TimeoutMs: 5000,
+		}
+
+		result, err := RunUnsafe(context.Background(), cfg, req)
+		if err != nil {
+			t.Fatalf("RunUnsafe error: %v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Fatalf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+		}
+		want := "hello\ngot hello\n"
+		if result.Stdout != want {
+			t.Errorf("stdout = %q, want %q", result.Stdout, want)
+		}
+	})
+
+	t.Run("stdin exhausted raises EOFError", func(t *testing.T) {
+		req := Request{
+			Code:      "x = input()\ny = input()",
+			Stdin:     "one\n",
+			TimeoutMs: 5000,
+		}
+
+		result, err := RunUnsafe(context.Background(), cfg, req)
+		if err != nil {
+			t.Fatalf("RunUnsafe error: %v", err)
+		}
+		if result.ExitCode == 0 {
+			t.Error("expected non-zero exit code when stdin exhausted")
+		}
+		if !strings.Contains(result.Stderr, "EOFError") {
+			t.Errorf("expected EOFError in stderr, got %q", result.Stderr)
+		}
+	})
+}
+
+func TestRunUnsafeNoInputEchoWithoutStdin(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+	req := Request{
+		Code:      "print('hello')",
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if strings.TrimSpace(result.Stdout) != "hello" {
+		t.Errorf("stdout = %q, want %q", result.Stdout, "hello\n")
+	}
+}
+
+func TestPrepareCode(t *testing.T) {
+	seed := 42
+
+	tests := []struct {
+		name          string
+		code          string
+		stdin         string
+		randomSeed    *int
+		wantPreamble  bool
+		wantSeed      bool
+	}{
+		{
+			name: "no stdin no seed",
+			code: "print('hi')",
+		},
+		{
+			name:         "with stdin",
+			code:         "print('hi')",
+			stdin:        "input\n",
+			wantPreamble: true,
+		},
+		{
+			name:       "with seed",
+			code:       "print('hi')",
+			randomSeed: &seed,
+			wantSeed:   true,
+		},
+		{
+			name:         "with stdin and seed",
+			code:         "print('hi')",
+			stdin:        "input\n",
+			randomSeed:   &seed,
+			wantPreamble: true,
+			wantSeed:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := prepareCode(tt.code, tt.stdin, tt.randomSeed)
+
+			// Must always end with the original code.
+			if !strings.HasSuffix(got, tt.code) {
+				t.Errorf("prepareCode() = %q, want suffix %q", got, tt.code)
+			}
+
+			hasPreamble := strings.Contains(got, "_original_input = input")
+			if tt.wantPreamble && !hasPreamble {
+				t.Errorf("expected input echo preamble, got %q", got)
+			}
+			if !tt.wantPreamble && hasPreamble {
+				t.Errorf("did not expect input echo preamble, got %q", got)
+			}
+
+			hasSeed := strings.Contains(got, "random.seed(42)")
+			if tt.wantSeed && !hasSeed {
+				t.Errorf("expected random seed injection, got %q", got)
+			}
+			if !tt.wantSeed && hasSeed {
+				t.Errorf("did not expect random seed injection, got %q", got)
+			}
+		})
+	}
+}
+
 func TestRunUnsafeWithArgs(t *testing.T) {
 	pythonPath, err := exec.LookPath("python3")
 	if err != nil {
