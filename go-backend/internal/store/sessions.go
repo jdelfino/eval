@@ -243,5 +243,114 @@ func (s *Store) FindCompletedSessionByProblem(ctx context.Context, sectionID, pr
 	return sess, nil
 }
 
+// CreateSessionReplacingActive atomically ends active sessions and creates a new one.
+func (s *Store) CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error) {
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// End active sessions in the section
+	endQuery := `
+		UPDATE sessions
+		SET status = 'completed', ended_at = now(), last_activity = now()
+		WHERE section_id = $1 AND status = 'active'
+		RETURNING id`
+
+	rows, err := tx.Query(ctx, endQuery, params.SectionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	var endedIDs []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, nil, err
+		}
+		endedIDs = append(endedIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// Create the new session
+	createQuery := `
+		INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING ` + sessionColumns
+
+	sess, err := scanSession(tx.QueryRow(ctx, createQuery,
+		params.NamespaceID,
+		params.SectionID,
+		params.SectionName,
+		params.Problem,
+		params.CreatorID,
+	))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return sess, endedIDs, nil
+}
+
+// ReopenSessionReplacingActive atomically ends other active sessions and reopens the given one.
+func (s *Store) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*Session, []uuid.UUID, error) {
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// End active sessions in the section (excluding the one being reopened)
+	endQuery := `
+		UPDATE sessions
+		SET status = 'completed', ended_at = now(), last_activity = now()
+		WHERE section_id = $1 AND status = 'active' AND id != $2
+		RETURNING id`
+
+	rows, err := tx.Query(ctx, endQuery, sectionID, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	var endedIDs []uuid.UUID
+	for rows.Next() {
+		var endedID uuid.UUID
+		if err := rows.Scan(&endedID); err != nil {
+			return nil, nil, err
+		}
+		endedIDs = append(endedIDs, endedID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// Reopen the session
+	reopenQuery := `
+		UPDATE sessions
+		SET status = 'active', ended_at = NULL, last_activity = now()
+		WHERE id = $1
+		RETURNING ` + sessionColumns
+
+	sess, err := scanSession(tx.QueryRow(ctx, reopenQuery, id))
+	if err != nil {
+		return nil, nil, HandleNotFound(err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return sess, endedIDs, nil
+}
+
 // Compile-time check that Store implements SessionRepository.
 var _ SessionRepository = (*Store)(nil)

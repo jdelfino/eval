@@ -166,14 +166,8 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		problemJSON = json.RawMessage(`{}`)
 	}
 
-	// End any active sessions in this section before creating the new one.
-	endedIDs, err := repos.EndActiveSessions(r.Context(), req.SectionID)
-	if err != nil {
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-
-	session, err := repos.CreateSession(r.Context(), store.CreateSessionParams{
+	// Atomically end any active sessions and create the new one in a single transaction.
+	session, endedIDs, err := repos.CreateSessionReplacingActive(r.Context(), store.CreateSessionParams{
 		NamespaceID: authUser.NamespaceID,
 		SectionID:   req.SectionID,
 		SectionName: section.Name,
@@ -335,14 +329,18 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := "active"
-	session, err := repos.UpdateSession(r.Context(), id, store.UpdateSessionParams{
-		Status:       &status,
-		ClearEndedAt: true,
-	})
+	// Atomically end any other active sessions and reopen this one in a single transaction.
+	session, endedIDs, err := repos.ReopenSessionReplacingActive(r.Context(), id, existing.SectionID)
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Notify students on ended sessions that a replacement is available.
+	newSessionID := session.ID.String()
+	for _, oldID := range endedIDs {
+		_ = h.publisher.SessionEnded(r.Context(), oldID.String(), "completed")
+		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
