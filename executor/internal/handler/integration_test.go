@@ -100,8 +100,10 @@ func TestIntegration_Stdin(t *testing.T) {
 	if !resp.Success {
 		t.Fatalf("expected success, got error: %s", resp.Error)
 	}
-	if strings.TrimSpace(resp.Output) != "hi Alice" {
-		t.Errorf("expected 'hi Alice', got %q", resp.Output)
+	// Input echo preamble causes input() values to appear in stdout.
+	want := "Alice\nhi Alice"
+	if strings.TrimSpace(resp.Output) != want {
+		t.Errorf("expected %q, got %q", want, resp.Output)
 	}
 }
 
