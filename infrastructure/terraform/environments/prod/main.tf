@@ -115,10 +115,12 @@ module "gke" {
   default_pool_min_nodes     = var.gke_default_pool_min_nodes
   default_pool_max_nodes     = var.gke_default_pool_max_nodes
   default_pool_spot          = var.gke_default_pool_spot
+  default_pool_disk_size_gb  = var.gke_default_pool_disk_size_gb
   executor_pool_machine_type = var.gke_executor_pool_machine_type
   executor_pool_min_nodes    = var.gke_executor_pool_min_nodes
   executor_pool_max_nodes    = var.gke_executor_pool_max_nodes
   executor_pool_spot         = var.gke_executor_pool_spot
+  executor_pool_disk_size_gb = var.gke_executor_pool_disk_size_gb
 }
 
 module "cloudsql" {
