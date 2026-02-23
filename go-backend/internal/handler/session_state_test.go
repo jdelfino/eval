@@ -313,6 +313,135 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 	}
 }
 
+func TestFeature_CodeOnlySetsFeaturedCode(t *testing.T) {
+	sess := testSession()
+	code := "print('solution')"
+
+	updatedSess := *sess
+	updatedSess.FeaturedCode = &code
+
+	var capturedParams store.UpdateSessionParams
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+			capturedParams = params
+			return &updatedSess, nil
+		},
+	}
+	h := NewSessionStateHandler(noopPublisher())
+
+	body := `{"code":"` + code + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.Feature(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Code-only featuring uses ClearFeatured to NULL student_id, then overrides code.
+	if !capturedParams.ClearFeatured {
+		t.Error("expected ClearFeatured to be true for code-only feature request (clears student_id)")
+	}
+	// Must set the featured code (store applies this AFTER ClearFeatured)
+	if capturedParams.FeaturedCode == nil || *capturedParams.FeaturedCode != code {
+		t.Errorf("expected FeaturedCode %q, got %v", code, capturedParams.FeaturedCode)
+	}
+	// StudentID should be nil (no student associated)
+	if capturedParams.FeaturedStudentID != nil {
+		t.Errorf("expected FeaturedStudentID to be nil, got %v", capturedParams.FeaturedStudentID)
+	}
+}
+
+func TestFeature_CodeOnlyPublishesEvent(t *testing.T) {
+	sess := testSession()
+	code := "print('solution')"
+
+	updatedSess := *sess
+	updatedSess.FeaturedCode = &code
+
+	pub := newMockPublisher()
+
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return &updatedSess, nil
+		},
+	}
+	h := NewSessionStateHandler(pub)
+
+	body := `{"code":"` + code + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.Feature(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	pub.waitForCalls(t, 1)
+
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.featuredStudentChangedCalls) != 1 {
+		t.Fatalf("expected 1 featured_student_changed call, got %d", len(pub.featuredStudentChangedCalls))
+	}
+	call := pub.featuredStudentChangedCalls[0]
+	if call.sessionID != sess.ID.String() {
+		t.Errorf("expected session ID %s, got %s", sess.ID.String(), call.sessionID)
+	}
+	// No student ID for code-only featuring
+	if call.userID != "" {
+		t.Errorf("expected empty userID for code-only feature, got %q", call.userID)
+	}
+	if call.code != code {
+		t.Errorf("expected code %q, got %q", code, call.code)
+	}
+}
+
+func TestFeature_ClearRequiresNoStudentIDAndNoCode(t *testing.T) {
+	sess := testSession()
+
+	updatedSess := *sess
+
+	var capturedParams store.UpdateSessionParams
+	sessRepo := &mockSessionRepo{
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
+			capturedParams = params
+			return &updatedSess, nil
+		},
+	}
+	h := NewSessionStateHandler(noopPublisher())
+
+	// Empty body: no student_id, no code — should clear featured
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sess.ID.String())
+	ctx = store.WithRepos(ctx, stateRepos(sessRepo, &mockSessionStudentRepo{}, &mockSectionRepo{}))
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.Feature(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Empty body should still clear featured
+	if !capturedParams.ClearFeatured {
+		t.Error("expected ClearFeatured to be true when both student_id and code are absent")
+	}
+}
+
 func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
 	sess := testSession()
 	studentID := uuid.New()

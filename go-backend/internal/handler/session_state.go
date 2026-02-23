@@ -146,10 +146,18 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 
 	params := store.UpdateSessionParams{}
 	if req.StudentID != nil {
+		// Feature a specific student's code.
 		params.FeaturedStudentID = req.StudentID
 		params.FeaturedCode = req.Code
 		params.FeaturedExecutionSettings = req.ExecutionSettings
+	} else if req.Code != nil {
+		// Code-only featuring (e.g. "Show Solution") — display code without
+		// a student association. Clear the student ID but keep the code.
+		params.ClearFeatured = true
+		params.FeaturedCode = req.Code
+		params.FeaturedExecutionSettings = req.ExecutionSettings
 	} else {
+		// Neither student nor code — clear the projector.
 		params.ClearFeatured = true
 	}
 
