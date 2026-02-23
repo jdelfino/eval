@@ -43,10 +43,13 @@ resource "google_compute_subnetwork" "gke" {
     ip_cidr_range = var.gke_services_cidr
   }
 
-  log_config {
-    aggregation_interval = "INTERVAL_5_SEC"
-    flow_sampling        = 0.5
-    metadata             = "INCLUDE_ALL_METADATA"
+  dynamic "log_config" {
+    for_each = var.enable_flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = 0.5
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
   }
 }
 
@@ -59,10 +62,13 @@ resource "google_compute_subnetwork" "cloudsql" {
   ip_cidr_range            = var.cloudsql_subnet_cidr
   private_ip_google_access = true
 
-  log_config {
-    aggregation_interval = "INTERVAL_5_SEC"
-    flow_sampling        = 0.5
-    metadata             = "INCLUDE_ALL_METADATA"
+  dynamic "log_config" {
+    for_each = var.enable_flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = 0.5
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
   }
 }
 
@@ -75,10 +81,13 @@ resource "google_compute_subnetwork" "public" {
   ip_cidr_range            = var.public_subnet_cidr
   private_ip_google_access = false
 
-  log_config {
-    aggregation_interval = "INTERVAL_5_SEC"
-    flow_sampling        = 0.5
-    metadata             = "INCLUDE_ALL_METADATA"
+  dynamic "log_config" {
+    for_each = var.enable_flow_logs ? [1] : []
+    content {
+      aggregation_interval = "INTERVAL_5_SEC"
+      flow_sampling        = 0.5
+      metadata             = "INCLUDE_ALL_METADATA"
+    }
   }
 }
 

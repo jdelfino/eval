@@ -86,6 +86,16 @@ variable "public_subnet_cidr" {
 }
 
 # -----------------------------------------------------------------------------
+# Flow Logs
+# -----------------------------------------------------------------------------
+
+variable "enable_flow_logs" {
+  description = "Enable VPC flow logs on all subnets. Defaults to false to save costs; set true for debugging."
+  type        = bool
+  default     = false
+}
+
+# -----------------------------------------------------------------------------
 # Firewall Configuration
 # -----------------------------------------------------------------------------
 
