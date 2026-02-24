@@ -7,8 +7,10 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionHistory } from '@/hooks/useSessionHistory';
-import { Problem, ExecutionSettings } from '@/types/problem';
-import { practiceExecute } from '@/lib/api/realtime';
+import { ExecutionSettings } from '@/types/problem';
+import type { Problem } from '@/types/api';
+import { getStudentWork, updateStudentWork, executeStudentWork } from '@/lib/api/student-work';
+import { getActiveSessions } from '@/lib/api/sections';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import CodeEditor from './components/CodeEditor';
@@ -16,40 +18,50 @@ import { EditorContainer } from './components/EditorContainer';
 import SessionEndedNotification from './components/SessionEndedNotification';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import type { Session } from '@/types/api';
 
 function StudentPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
+  const workIdFromUrl = searchParams.get('work_id');
   const sessionIdFromUrl = searchParams.get('session_id');
   const { refetch: refetchSessions } = useSessionHistory();
 
-  const [joined, setJoined] = useState(false);
-  const [studentId, setStudentId] = useState<string | null>(null);
+  // Core state
+  const [workId] = useState<string | null>(workIdFromUrl);
+  const [sectionId, setSectionId] = useState<string | null>(null);
+  const [problemId, setProblemId] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  }>({});
+  const [code, setCode] = useState('');
   const [studentExecutionSettings, setStudentExecutionSettings] = useState<{
     random_seed?: number;
     attached_files?: Array<{ name: string; content: string }>;
   } | null>(null);
-  const [code, setCode] = useState('');
+
+  // Mode state
+  const [mode, setMode] = useState<'loading' | 'practice' | 'live' | 'error'>('loading');
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
+
+  // Execution state
   const [execution_result, setExecutionResult] = useState<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Join state
+  const [joined, setJoined] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const [sessionEnded, setSessionEnded] = useState(false);
+
+  // UI state
   const [showReplaceCodeConfirm, setShowReplaceCodeConfirm] = useState(false);
   const [pendingStarterCode, setPendingStarterCode] = useState<string | null>(null);
 
-  // Use Realtime session hook
+  // Realtime session hook (only used in live mode)
   const {
     session,
-    loading,
+    loading: realtimeLoading,
     error: realtimeError,
     isConnected,
     connectionStatus,
@@ -59,17 +71,17 @@ function StudentPage() {
     joinSession,
     replacementInfo,
   } = useRealtimeSession({
-    session_id: sessionIdFromUrl || '',
+    session_id: activeSessionId || '',
     user_id: user?.id,
     userName: user?.display_name || user?.email,
   });
 
-  // Debugger state - uses API-based trace requests
+  // Debugger state
   const debuggerHook = useApiDebugger();
 
-  // Show connection status in the global header
+  // Show connection status in header (only in live mode)
   useEffect(() => {
-    if (joined) {
+    if (mode === 'live' && joined) {
       setHeaderSlot(
         <ConnectionStatus
           status={connectionStatus}
@@ -77,140 +89,170 @@ function StudentPage() {
           variant="badge"
         />
       );
+    } else {
+      setHeaderSlot(null);
     }
     return () => setHeaderSlot(null);
-  }, [joined, connectionStatus, connectionError, setHeaderSlot]);
+  }, [mode, joined, connectionStatus, connectionError, setHeaderSlot]);
 
-  // Track if we've already initiated a join for this session_id to prevent loops
+  // Step 1: Load student_work data from work_id
+  useEffect(() => {
+    if (!workId || !user?.id) {
+      return;
+    }
+
+    const loadWork = async () => {
+      try {
+        const data = await getStudentWork(workId);
+        setSectionId(data.section_id);
+        setProblemId(data.problem_id);
+        setProblem(data.problem);
+        setCode(data.code);
+        if (data.execution_settings) {
+          setStudentExecutionSettings(data.execution_settings as typeof studentExecutionSettings);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to load student work');
+        setMode('error');
+      }
+    };
+
+    loadWork();
+  }, [workId, user?.id]);
+
+  // Step 2: Check for active session matching this problem
+  useEffect(() => {
+    if (!sectionId || !problemId || mode !== 'loading') {
+      return;
+    }
+
+    const checkActiveSession = async () => {
+      try {
+        const sessions = await getActiveSessions(sectionId);
+        const activeSession = sessions.find(
+          (s: Session) => s.status === 'active' && s.problem?.id === problemId
+        );
+
+        if (activeSession) {
+          // Active session found -> enter live mode
+          setActiveSessionId(activeSession.id);
+          setMode('live');
+        } else {
+          // No active session -> practice mode
+          setMode('practice');
+        }
+      } catch (err: any) {
+        console.error('Failed to check for active sessions:', err);
+        // Fall back to practice mode on error
+        setMode('practice');
+      }
+    };
+
+    checkActiveSession();
+  }, [sectionId, problemId, mode]);
+
+  // Step 3: Auto-join session in live mode
   const joinAttemptedRef = useRef<string | null>(null);
 
-  // Track previous session ID to detect navigation to a new session
-  const prevSessionIdRef = useRef<string | null>(sessionIdFromUrl);
-
-  // Handle joining the session
   useEffect(() => {
-    if (!sessionIdFromUrl || !user?.id) {
+    if (mode !== 'live' || !activeSessionId || !user?.id || joined || isJoining) {
       return;
     }
 
-    // If we're already joined to this session, clear the attempt flag
-    if (joined) {
-      joinAttemptedRef.current = null;
+    // Check if we've already attempted to join this session
+    if (joinAttemptedRef.current === activeSessionId) {
       return;
     }
 
-    // If we're currently joining, wait
-    if (isJoining) {
+    // Don't auto-join if student explicitly left
+    if (sessionStorage.getItem(`left-session:${activeSessionId}`)) {
       return;
     }
 
-    // Check if we've already attempted to join this specific session
-    if (joinAttemptedRef.current === sessionIdFromUrl) {
+    // Wait for broadcast connection for live sessions
+    if (!isConnected && session?.status !== 'completed') {
       return;
     }
 
-    // Check if the student explicitly left this session
-    if (sessionStorage.getItem(`left-session:${sessionIdFromUrl}`)) {
-      return;
-    }
-
-    // Join the session from the URL
-    // For completed sessions, don't require broadcast connection - data is already loaded
-    if (session && (isConnected || session.status === 'completed')) {
-      const targetSessionId = sessionIdFromUrl;
-      joinAttemptedRef.current = sessionIdFromUrl;
-
+    const performJoin = async () => {
+      joinAttemptedRef.current = activeSessionId;
       setIsJoining(true);
 
-      joinSession(user.id, user.display_name || user.email || 'Student')
-        .then((result) => {
-          // Discard if session changed during async join (e.g. "Join New Session")
-          if (joinAttemptedRef.current !== targetSessionId) {
-            setIsJoining(false);
-            return;
-          }
-          setJoined(true);
-          setStudentId(user.id);
-          setIsJoining(false);
-          setError(null);
-          // Set sessionEnded after join for completed sessions
-          if (session.status === 'completed') {
-            setSessionEnded(true);
-          }
-          // Restore saved code and execution settings from server
-          if (result.code) {
-            setCode(result.code);
-          }
-          if (result.execution_settings) {
-            setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
-          }
-        })
-        .catch((err) => {
-          if (joinAttemptedRef.current !== targetSessionId) {
-            setIsJoining(false);
-            return;
-          }
-          setError(err.message || 'Failed to join session');
-          setIsJoining(false);
-        });
-    }
-  }, [sessionIdFromUrl, user?.id, user?.email, user?.display_name, joined, isJoining, isConnected, session, joinSession]);
+      try {
+        const result = await joinSession(user.id, user.display_name || user.email || 'Student');
+        setJoined(true);
+        setIsJoining(false);
+        setError(null);
 
-  // Update problem when session loads
-  useEffect(() => {
-    if (session?.problem) {
-      setProblem(session.problem);
-      setSessionExecutionSettings({
-        stdin: session.problem.execution_settings?.stdin,
-        random_seed: session.problem.execution_settings?.random_seed,
-        attached_files: session.problem.execution_settings?.attached_files,
-      });
-    }
-  }, [session]);
+        // Restore saved code from server (student_work code via session_students join)
+        if (result.code) {
+          setCode(result.code);
+        }
+        if (result.execution_settings) {
+          setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
+        }
 
-  // Detect when session ends (status changes to 'completed')
+        // Check if session is already completed
+        if (session?.status === 'completed') {
+          setSessionEnded(true);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to join session');
+        setIsJoining(false);
+      }
+    };
+
+    performJoin();
+  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, isConnected, session, joinSession]);
+
+  // Detect session end in live mode
   useEffect(() => {
-    if (session?.status === 'completed') {
+    if (mode === 'live' && session?.status === 'completed') {
       setSessionEnded(true);
+      // Stay in live mode but disable live features
     }
-  }, [session?.status]);
+  }, [mode, session?.status]);
 
-  // Reset stale state when navigating to a different session (e.g., "Join New Session")
+  // Auto-save code in practice mode (debounced)
   useEffect(() => {
-    if (sessionIdFromUrl !== prevSessionIdRef.current) {
-      setSessionEnded(false);
-      setJoined(false);
-      joinAttemptedRef.current = null;
-      prevSessionIdRef.current = sessionIdFromUrl;
-    }
-  }, [sessionIdFromUrl]);
-
-  // Debounced code update (keeping 500ms to match original behavior)
-  // Skip saving when session has ended (API would reject it anyway)
-  useEffect(() => {
-    if (!joined || !studentId || !sessionIdFromUrl || sessionEnded) return;
+    if (mode !== 'practice' || !workId) return;
 
     const timeout = setTimeout(() => {
-      realtimeUpdateCode(studentId, code, studentExecutionSettings || undefined);
+      updateStudentWork(workId, {
+        code,
+        execution_settings: studentExecutionSettings || undefined,
+      }).catch((err) => {
+        console.error('Failed to save code:', err);
+      });
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [code, joined, studentId, sessionIdFromUrl, sessionEnded, studentExecutionSettings, realtimeUpdateCode]);
+  }, [mode, workId, code, studentExecutionSettings]);
 
+  // Auto-save code in live mode (via realtime)
+  useEffect(() => {
+    if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
+
+    const timeout = setTimeout(() => {
+      realtimeUpdateCode(user.id, code, studentExecutionSettings || undefined);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentExecutionSettings, realtimeUpdateCode]);
+
+  // Handlers
   const handleLeaveSession = useCallback(() => {
-    // Persist the "left" flag so auto-join doesn't re-join this session
-    if (sessionIdFromUrl) {
-      sessionStorage.setItem(`left-session:${sessionIdFromUrl}`, 'true');
+    if (activeSessionId) {
+      sessionStorage.setItem(`left-session:${activeSessionId}`, 'true');
     }
 
-    // Navigate to section detail page
     refetchSessions();
-    router.push(session?.section_id ? `/sections/${session.section_id}` : '/');
-  }, [sessionIdFromUrl, refetchSessions, router, session]);
+    router.push(sectionId ? `/sections/${sectionId}` : '/');
+  }, [activeSessionId, refetchSessions, router, sectionId]);
 
   const handleJoinNewSession = useCallback(() => {
     if (!replacementInfo) return;
-    const oldSessionId = sessionIdFromUrl;
+    const oldSessionId = activeSessionId;
     joinAttemptedRef.current = null;
     setJoined(false);
     setSessionEnded(false);
@@ -221,12 +263,11 @@ function StudentPage() {
       sessionStorage.removeItem(`left-session:${oldSessionId}`);
     }
     router.push(`/student?session_id=${replacementInfo.newSessionId}`);
-  }, [replacementInfo, sessionIdFromUrl, router]);
+  }, [replacementInfo, activeSessionId, router]);
 
   const editorRef = useRef<any>(null);
 
   const applyStarterCode = useCallback((starter_code: string) => {
-    // Use Monaco editor API to preserve undo history
     if (editorRef.current) {
       const editor = editorRef.current;
       const model = editor.getModel();
@@ -244,7 +285,6 @@ function StudentPage() {
 
   const handleLoadStarterCode = useCallback((starter_code: string) => {
     if (code.trim().length > 0) {
-      // Ask for confirmation if there's existing code
       setPendingStarterCode(starter_code);
       setShowReplaceCodeConfirm(true);
     } else {
@@ -260,7 +300,31 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  const handleRunCode = async (execution_settings: ExecutionSettings) => {
+  const handleRunCodePractice = async (execution_settings: ExecutionSettings) => {
+    if (!code || code.trim().length === 0) {
+      setError('Please write some code before running');
+      return;
+    }
+    if (!workId) {
+      setError('Student work ID not available');
+      return;
+    }
+
+    setError(null);
+    setIsRunning(true);
+    setExecutionResult(null);
+
+    try {
+      const result = await executeStudentWork(workId, code, execution_settings);
+      setExecutionResult(result);
+      setIsRunning(false);
+    } catch (err: any) {
+      setError(err.message || 'Code execution failed');
+      setIsRunning(false);
+    }
+  };
+
+  const handleRunCodeLive = async (execution_settings: ExecutionSettings) => {
     if (!isConnected) {
       setError('Not connected to server. Cannot run code.');
       return;
@@ -269,7 +333,7 @@ function StudentPage() {
       setError('Please write some code before running');
       return;
     }
-    if (!studentId) {
+    if (!user?.id) {
       setError('Student ID not available');
       return;
     }
@@ -279,7 +343,7 @@ function StudentPage() {
     setExecutionResult(null);
 
     try {
-      const result = await realtimeExecuteCode(studentId, code, execution_settings);
+      const result = await realtimeExecuteCode(user.id, code, execution_settings);
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
@@ -288,36 +352,20 @@ function StudentPage() {
     }
   };
 
-  const handlePracticeRun = async (execution_settings: ExecutionSettings) => {
-    if (!code || code.trim().length === 0) {
-      setError('Please write some code before running');
-      return;
+  // Backward compatibility: Handle session_id in URL
+  useEffect(() => {
+    if (sessionIdFromUrl && !workIdFromUrl && sectionId && problemId) {
+      // Redirect to work_id URL
+      router.replace(`/student?work_id=${workId}`);
     }
-    if (!sessionIdFromUrl) {
-      setError('Session ID not available');
-      return;
-    }
+  }, [sessionIdFromUrl, workIdFromUrl, sectionId, problemId, workId, router]);
 
-    setError(null);
-    setIsRunning(true);
-    setExecutionResult(null);
-
-    try {
-      const result = await practiceExecute(sessionIdFromUrl, code, execution_settings);
-      setExecutionResult(result);
-      setIsRunning(false);
-    } catch (err: any) {
-      setError(err.message || 'Practice execution failed');
-      setIsRunning(false);
-    }
-  };
-
-  // No session_id in URL - show error message (check before loading to avoid infinite loading)
-  if (!sessionIdFromUrl) {
+  // No work_id in URL
+  if (!workIdFromUrl && !sessionIdFromUrl) {
     return (
       <main className="p-8 text-center">
-        <h1 className="text-2xl font-bold mb-4">No Session</h1>
-        <p className="text-gray-600 mb-4">Please navigate to a session from your section page.</p>
+        <h1 className="text-2xl font-bold mb-4">No Student Work</h1>
+        <p className="text-gray-600 mb-4">Please navigate to a problem from your section page.</p>
         <Link href="/" className="text-blue-600 hover:text-blue-700 underline">
           Go to Home
         </Link>
@@ -325,14 +373,14 @@ function StudentPage() {
     );
   }
 
-  // Show loading state while connecting, loading, or joining
-  // For completed sessions, don't block on broadcast connection
-  const needsConnection = !isConnected && session?.status !== 'completed';
-  if (needsConnection || loading || isJoining) {
+  // Loading state
+  if (mode === 'loading' || (mode === 'live' && (realtimeLoading || isJoining))) {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">Live Coding Classroom</h1>
-        <p className="text-gray-600">{loading ? 'Loading session...' : 'Connecting...'}</p>
+        <p className="text-gray-600">
+          {realtimeLoading ? 'Loading session...' : isJoining ? 'Joining session...' : 'Loading...'}
+        </p>
         {(realtimeError || error) && (
           <div className="mt-4 max-w-md mx-auto">
             <ErrorAlert
@@ -345,12 +393,32 @@ function StudentPage() {
     );
   }
 
-  // Waiting to join or joining in progress
-  if (!joined) {
+  // Error state
+  if (mode === 'error') {
+    return (
+      <main className="p-8 text-center">
+        <h1 className="text-2xl font-bold mb-4">Error</h1>
+        <div className="mt-4 max-w-md mx-auto">
+          <ErrorAlert
+            error={error || 'Failed to load student work'}
+            onDismiss={() => setError(null)}
+          />
+        </div>
+        <Link href="/" className="text-blue-600 hover:text-blue-700 underline mt-4 inline-block">
+          Go to Home
+        </Link>
+      </main>
+    );
+  }
+
+  // Live mode but not yet joined
+  if (mode === 'live' && !joined) {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">Live Coding Classroom</h1>
-        <p className="text-gray-600">{isJoining ? 'Joining session...' : 'Loading...'}</p>
+        <p className="text-gray-600">
+          {isJoining ? 'Joining session...' : 'Loading...'}
+        </p>
         {error && (
           <div className="mt-4 max-w-md mx-auto">
             <ErrorAlert
@@ -363,11 +431,12 @@ function StudentPage() {
     );
   }
 
-  // Active session view
+  const sessionExecutionSettings = problem?.execution_settings || {};
+  const handleRunCode = mode === 'live' && !sessionEnded ? handleRunCodeLive : handleRunCodePractice;
+
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
-      {/* Errors - shown inline above editor */}
-      {connectionError && (
+      {connectionError && mode === 'live' && (
         <ErrorAlert
           error={connectionError}
           variant="warning"
@@ -382,8 +451,7 @@ function StudentPage() {
         />
       )}
 
-      {/* Session Ended Banner */}
-      {sessionEnded && (
+      {sessionEnded && mode === 'live' && (
         <SessionEndedNotification
           onLeaveToDashboard={handleLeaveSession}
           code={code}
@@ -397,7 +465,7 @@ function StudentPage() {
         <CodeEditor
           code={code}
           onChange={setCode}
-          onRun={sessionEnded ? handlePracticeRun : handleRunCode}
+          onRun={handleRunCode}
           isRunning={isRunning}
           exampleInput={sessionExecutionSettings.stdin}
           random_seed={studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed}
@@ -430,7 +498,6 @@ function StudentPage() {
   );
 }
 
-// Loading fallback for Suspense boundary
 function LoadingFallback() {
   return (
     <main className="p-8 text-center">
@@ -440,7 +507,6 @@ function LoadingFallback() {
   );
 }
 
-// Page wrapper with Suspense boundary for useSearchParams
 export default function StudentPageWrapper() {
   return (
     <Suspense fallback={<LoadingFallback />}>

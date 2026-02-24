@@ -1,6 +1,6 @@
 /**
  * Contract tests for real-time session API functions.
- * Covers: updateCode, executeCode, featureStudent, clearFeatured, practiceExecute, joinSession.
+ * Covers: updateCode, executeCode, featureStudent, clearFeatured, joinSession.
  *
  * Many of these operations require an active session with a joined student.
  * The test creates a student identity, joins the session, then exercises each function.
@@ -14,7 +14,6 @@ import {
   executeCode,
   featureStudent,
   clearFeatured,
-  practiceExecute,
   joinSession,
 } from '@/lib/api/realtime';
 import {
@@ -184,33 +183,5 @@ describe('Realtime Session API', () => {
     });
   });
 
-  describe('practiceExecute()', () => {
-    beforeAll(() => {
-      configureTestAuth(INSTRUCTOR_TOKEN);
-    });
-
-    afterAll(() => {
-      resetAuthProvider();
-    });
-
-    it('executes code in practice mode and returns ExecutionResult (or skips if session not completed)', async () => {
-      const sessionId = state.sessionId;
-      expect(sessionId).toBeTruthy();
-
-      try {
-        const result = await practiceExecute(sessionId, 'print("practice")');
-
-        validateExecutionResultShape(result, 'ExecutionResult (practiceExecute)');
-      } catch (error) {
-        // Practice mode requires a completed session — the test session may still be active.
-        // Backend returns 400 "session is not completed; use /execute for active sessions".
-        const status = (error as { status?: number }).status;
-        if (status === 400 || status === 403 || status === 404) {
-          console.warn(`practiceExecute failed with status ${status} (session not completed)`);
-          return;
-        }
-        throw error;
-      }
-    });
-  });
+  // practiceExecute() removed — practice execution now uses POST /student-work/{id}/execute
 });

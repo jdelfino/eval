@@ -208,6 +208,46 @@ export interface PublicProblem {
 }
 
 // ---------------------------------------------------------------------------
+// Student work
+// ---------------------------------------------------------------------------
+
+/** StudentWork — student's persistent work on a problem in a section. */
+export interface StudentWork {
+  id: string;
+  user_id: string;
+  section_id: string;
+  problem_id: string;
+  code: string;
+  execution_settings: unknown;
+  last_update: string;
+  created_at: string;
+}
+
+/** StudentWork with problem data (from GET /student-work/:id). */
+export interface StudentWorkWithProblem extends StudentWork {
+  problem: Problem;
+}
+
+/** SectionProblem — a problem published to a section. */
+export interface SectionProblem {
+  section_id: string;
+  problem_id: string;
+  show_solution: boolean;
+  published_at: string;
+}
+
+/** PublishedProblemWithStatus — problem published to a section with student's work status. */
+export interface PublishedProblemWithStatus {
+  problem_id: string;
+  title: string;
+  description: string | null;
+  tags: string[];
+  show_solution: boolean;
+  student_work_id: string | null;
+  last_worked: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
 
