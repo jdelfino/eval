@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { createClass, createSection, startSession, registerStudent } from './fixtures/api-setup';
+import { createClass, createSection, startSession, createProblem, publishProblem, startSessionFromProblem, getOrCreateStudentWork, registerStudent, testToken } from './fixtures/api-setup';
 
 /**
  * Debugger E2E Tests
@@ -101,14 +101,26 @@ test.describe('Debugger', () => {
 
     const cls = await createClass(instructor.token, 'Student Debug Class');
     const section = await createSection(instructor.token, cls.id, 'Student Debug Section');
-    const session = await startSession(instructor.token, section.id, section.name);
+    const problem = await createProblem(instructor.token, cls.id, {
+      title: 'Debug Problem',
+      description: 'A problem for debugging',
+      starterCode: '# Write your solution\n',
+    });
 
     // Register student
     await registerStudent(section.join_code, studentExternalId, studentEmail, 'Debug Student');
 
+    // Publish problem to section and start session from problem
+    await publishProblem(instructor.token, section.id, problem.id);
+    const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
+
+    // Get or create student work so we can navigate directly via work_id
+    const studentToken = testToken(studentExternalId, studentEmail);
+    const work = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+
     // ===== STUDENT JOINS SESSION =====
     await signInAs(page, studentEmail);
-    await page.goto(`/student?session_id=${session.id}`);
+    await page.goto(`/student?work_id=${work.id}`);
     await expect(page.locator('.monaco-editor')).toBeVisible();
     await expect(page.locator('text=Connected')).toBeVisible();
 

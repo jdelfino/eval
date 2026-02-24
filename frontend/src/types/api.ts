@@ -111,7 +111,7 @@ export interface SessionStudent {
   name: string;
   code: string;
   execution_settings: unknown;
-  last_update: string;
+  joined_at: string;
 }
 
 export interface SectionMembership {
@@ -205,6 +205,46 @@ export interface PublicProblem {
   class_id: string;
   class_name: string | null;
   tags: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Student work
+// ---------------------------------------------------------------------------
+
+/** StudentWork — student's persistent work on a problem in a section. */
+export interface StudentWork {
+  id: string;
+  user_id: string;
+  section_id: string;
+  problem_id: string;
+  code: string;
+  execution_settings: unknown;
+  last_update: string;
+  created_at: string;
+}
+
+/** StudentWork with problem data (from GET /student-work/:id). */
+export interface StudentWorkWithProblem extends StudentWork {
+  problem: Problem;
+}
+
+/** SectionProblem — a problem published to a section. */
+export interface SectionProblem {
+  id: string;
+  section_id: string;
+  problem_id: string;
+  published_by: string;
+  show_solution: boolean;
+  published_at: string;
+}
+
+/** PublishedProblemWithStatus — problem published to a section with student's work status.
+ *  Wire format matches Go's PublishedProblemWithStatus (embedded SectionProblem + nested Problem + optional StudentWork). */
+export interface PublishedProblemWithStatus extends SectionProblem {
+  id: string;
+  published_by: string;
+  problem: Problem;
+  student_work?: StudentWork;
 }
 
 // ---------------------------------------------------------------------------

@@ -93,25 +93,6 @@ export async function clearFeatured(sessionId: string): Promise<void> {
 }
 
 /**
- * Execute code in practice mode for a completed session.
- * Uses ephemeral execution (no persistent state) with rate limiting.
- * @param sessionId - The session ID
- * @param code - The code to execute
- * @param executionSettings - Optional execution settings
- * @returns The execution result
- */
-export async function practiceExecute(
-  sessionId: string,
-  code: string,
-  executionSettings?: ExecutionSettings
-): Promise<ExecutionResult> {
-  return apiPost<ExecutionResult>(`/sessions/${sessionId}/practice`, {
-    code,
-    execution_settings: executionSettings,
-  });
-}
-
-/**
  * Join a session as a student.
  * @param sessionId - The session ID
  * @param studentId - The student's user ID

@@ -134,4 +134,21 @@ export async function startSessionFromProblem(token: string, sectionId: string, 
   return res.json();
 }
 
+export async function publishProblem(token: string, sectionId: string, problemId: string, showSolution?: boolean): Promise<any> {
+  const res = await apiFetch(`/api/v1/sections/${sectionId}/problems`, token, {
+    method: 'POST',
+    body: JSON.stringify({ problem_id: problemId, show_solution: showSolution ?? false }),
+  });
+  if (res.status !== 201) throw new Error(`Failed to publish problem: ${res.status}`);
+  return res.json();
+}
+
+export async function getOrCreateStudentWork(token: string, sectionId: string, problemId: string): Promise<any> {
+  const res = await apiFetch(`/api/v1/sections/${sectionId}/problems/${problemId}/work`, token, {
+    method: 'POST',
+  });
+  if (res.status !== 200 && res.status !== 201) throw new Error(`Failed to get/create student work: ${res.status}`);
+  return res.json();
+}
+
 export { ADMIN_TOKEN };

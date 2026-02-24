@@ -5,7 +5,6 @@ package revision
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 // as revisions to the store.
 type RevisionBuffer struct {
 	mu      sync.Mutex
-	entries map[string]*bufferEntry // key: "sessionID:userID"
+	entries map[string]*bufferEntry // key: studentWorkID (unique per user+problem+section)
 	store   store.RevisionRepository
 	logger  *slog.Logger
 	stopCh  chan struct{}
@@ -36,13 +35,16 @@ type RevisionBuffer struct {
 }
 
 type bufferEntry struct {
-	previousCode string
-	currentCode  string
-	revisionNum  int
-	pendingCount int // number of Record calls since last flush
-	lastUpdate   time.Time
-	namespaceID  string
-	dirty        bool // true when currentCode != previousCode
+	previousCode  string
+	currentCode   string
+	revisionNum   int
+	pendingCount  int // number of Record calls since last flush
+	lastUpdate    time.Time
+	namespaceID   string
+	userID        uuid.UUID
+	sessionID     *uuid.UUID // optional (nil for practice mode)
+	studentWorkID uuid.UUID
+	dirty         bool // true when currentCode != previousCode
 }
 
 // NewRevisionBuffer creates a new RevisionBuffer.
@@ -61,33 +63,38 @@ func NewRevisionBuffer(s store.RevisionRepository, logger *slog.Logger) *Revisio
 	}
 }
 
-func bufferKey(sessionID, userID uuid.UUID) string {
-	return sessionID.String() + ":" + userID.String()
+func bufferKey(studentWorkID uuid.UUID) string {
+	return studentWorkID.String()
 }
 
 // Record records a code change. If conditions are met, it flushes a revision.
-func (b *RevisionBuffer) Record(ctx context.Context, namespaceID string, sessionID, userID uuid.UUID, code string) {
+// studentWorkID is required; sessionID is optional (set during live sessions, nil for practice).
+func (b *RevisionBuffer) Record(ctx context.Context, namespaceID string, studentWorkID uuid.UUID, sessionID *uuid.UUID, userID uuid.UUID, code string) {
 	b.mu.Lock()
-	key := bufferKey(sessionID, userID)
+	key := bufferKey(studentWorkID)
 	entry, exists := b.entries[key]
 
 	if !exists {
 		// First call: just store the entry, no revision yet.
 		b.entries[key] = &bufferEntry{
-			previousCode: code,
-			currentCode:  code,
-			revisionNum:  0,
-			lastUpdate:   b.nowFunc(),
-			namespaceID:  namespaceID,
-			dirty:        false,
+			previousCode:  code,
+			currentCode:   code,
+			revisionNum:   0,
+			lastUpdate:    b.nowFunc(),
+			namespaceID:   namespaceID,
+			userID:        userID,
+			sessionID:     sessionID,
+			studentWorkID: studentWorkID,
+			dirty:         false,
 		}
 		b.mu.Unlock()
 		return
 	}
 
-	// Update current code
+	// Update current code and session context
 	entry.currentCode = code
 	entry.namespaceID = namespaceID
+	entry.sessionID = sessionID // may change if student joins a session later
 
 	if entry.currentCode == entry.previousCode {
 		// No change
@@ -110,7 +117,7 @@ func (b *RevisionBuffer) Record(ctx context.Context, namespaceID string, session
 		entry.pendingCount = 0
 		revNum := entry.revisionNum
 		b.mu.Unlock()
-		b.createRevision(ctx, sessionID, userID, e.namespaceID, e.previousCode, e.currentCode, revNum)
+		b.createRevision(ctx, e.studentWorkID, e.sessionID, e.userID, e.namespaceID, e.previousCode, e.currentCode, revNum)
 		return
 	}
 
@@ -119,40 +126,31 @@ func (b *RevisionBuffer) Record(ctx context.Context, namespaceID string, session
 }
 
 // FlushSession flushes all pending revisions for a session.
+// This is called when a session ends to create final snapshot revisions for all participants.
 func (b *RevisionBuffer) FlushSession(ctx context.Context, sessionID uuid.UUID) {
-	prefix := sessionID.String() + ":"
 	b.mu.Lock()
-	var toFlush []struct {
-		key   string
-		entry bufferEntry
-		userID uuid.UUID
-	}
-	for key, entry := range b.entries {
-		if strings.HasPrefix(key, prefix) && entry.dirty {
+	var toFlush []bufferEntry
+	for _, entry := range b.entries {
+		// Match entries that belong to this session
+		if entry.sessionID != nil && *entry.sessionID == sessionID && entry.dirty {
 			e := *entry
 			entry.revisionNum++
-			userIDStr := key[len(prefix):]
-			uid, err := uuid.Parse(userIDStr)
-			if err != nil {
-				continue
-			}
-			toFlush = append(toFlush, struct {
-				key   string
-				entry bufferEntry
-				userID uuid.UUID
-			}{key, e, uid})
+			entry.previousCode = entry.currentCode
+			entry.dirty = false
+			toFlush = append(toFlush, e)
 		}
 	}
-	// Remove all entries for this session
-	for key := range b.entries {
-		if strings.HasPrefix(key, prefix) {
-			delete(b.entries, key)
+	// Clear session context for flushed entries (students may continue in practice mode)
+	for key, entry := range b.entries {
+		if entry.sessionID != nil && *entry.sessionID == sessionID {
+			entry.sessionID = nil
+			b.entries[key] = entry
 		}
 	}
 	b.mu.Unlock()
 
-	for _, f := range toFlush {
-		b.createRevision(ctx, sessionID, f.userID, f.entry.namespaceID, f.entry.previousCode, f.entry.currentCode, f.entry.revisionNum+1)
+	for _, e := range toFlush {
+		b.createRevision(ctx, e.studentWorkID, &sessionID, e.userID, e.namespaceID, e.previousCode, e.currentCode, e.revisionNum+1)
 	}
 }
 
@@ -189,49 +187,34 @@ func (b *RevisionBuffer) backgroundLoop() {
 func (b *RevisionBuffer) flushIdle(ctx context.Context) {
 	b.mu.Lock()
 	now := b.nowFunc()
-	var toFlush []struct {
-		sessionID uuid.UUID
-		userID    uuid.UUID
-		entry     bufferEntry
-		revNum    int
-	}
-	for key, entry := range b.entries {
+	var toFlush []bufferEntry
+	for _, entry := range b.entries {
 		if !entry.dirty {
 			continue
 		}
 		if now.Sub(entry.lastUpdate) >= b.idleTimeout {
-			parts := strings.SplitN(key, ":", 2)
-			sid, err1 := uuid.Parse(parts[0])
-			uid, err2 := uuid.Parse(parts[1])
-			if err1 != nil || err2 != nil {
-				continue
-			}
 			e := *entry
 			entry.revisionNum++
 			entry.previousCode = entry.currentCode
 			entry.dirty = false
-			toFlush = append(toFlush, struct {
-				sessionID uuid.UUID
-				userID    uuid.UUID
-				entry     bufferEntry
-				revNum    int
-			}{sid, uid, e, entry.revisionNum})
+			toFlush = append(toFlush, e)
 		}
 	}
 	b.mu.Unlock()
 
-	for _, f := range toFlush {
-		b.createRevision(ctx, f.sessionID, f.userID, f.entry.namespaceID, f.entry.previousCode, f.entry.currentCode, f.revNum)
+	for _, e := range toFlush {
+		b.createRevision(ctx, e.studentWorkID, e.sessionID, e.userID, e.namespaceID, e.previousCode, e.currentCode, e.revisionNum+1)
 	}
 }
 
-func (b *RevisionBuffer) createRevision(ctx context.Context, sessionID, userID uuid.UUID, namespaceID, oldCode, newCode string, revNum int) {
+func (b *RevisionBuffer) createRevision(ctx context.Context, studentWorkID uuid.UUID, sessionID *uuid.UUID, userID uuid.UUID, namespaceID, oldCode, newCode string, revNum int) {
 	isSnapshot := revNum%b.snapshotEvery == 0
 
 	params := store.CreateRevisionParams{
-		NamespaceID: namespaceID,
-		SessionID:   sessionID,
-		UserID:      userID,
+		NamespaceID:   namespaceID,
+		SessionID:     sessionID,
+		UserID:        userID,
+		StudentWorkID: &studentWorkID,
 	}
 
 	if isSnapshot {
@@ -253,6 +236,6 @@ func (b *RevisionBuffer) createRevision(ctx context.Context, sessionID, userID u
 	}
 
 	if _, err := b.store.CreateRevision(ctx, params); err != nil {
-		b.logger.Error("failed to create revision", "error", err, "session_id", sessionID, "user_id", userID)
+		b.logger.Error("failed to create revision", "error", err, "student_work_id", studentWorkID, "session_id", sessionID, "user_id", userID)
 	}
 }

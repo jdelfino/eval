@@ -110,13 +110,28 @@ export default async () => {
   }
   const sec = await sectionRes.json();
 
-  // Create session
+  // Create problem (required for session join to work — Join handler needs a real problem UUID)
+  const problemRes = await contractFetch('/api/v1/problems', INSTRUCTOR_TOKEN, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Contract Test Problem',
+      description: 'Print hello',
+      class_id: cls.id,
+      starter_code: 'print("hello")',
+      tags: ['contract-test'],
+    }),
+  });
+  if (problemRes.status !== 201) {
+    throw new Error(`Failed to create problem: ${problemRes.status}`);
+  }
+  const prob = await problemRes.json();
+
+  // Create session from problem
   const sessionRes = await contractFetch('/api/v1/sessions', INSTRUCTOR_TOKEN, {
     method: 'POST',
     body: JSON.stringify({
       section_id: sec.id,
-      section_name: 'Contract Test Section',
-      problem: { id: 'test-problem', title: 'Hello World', description: 'Print hello' },
+      problem_id: prob.id,
     }),
   });
   if (sessionRes.status !== 201) {

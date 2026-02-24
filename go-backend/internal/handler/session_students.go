@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	"github.com/jdelfino/eval/go-backend/internal/realtime"
@@ -53,15 +55,55 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repos := store.ReposFromContext(r.Context())
+
+	// Get session to extract problem_id from problem JSON
+	session, err := repos.GetSession(r.Context(), sessionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "session not found")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Parse problem JSON to extract problem ID
+	var problemData struct {
+		ID uuid.UUID `json:"id"`
+	}
+	if err := json.Unmarshal(session.Problem, &problemData); err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "invalid problem data")
+		return
+	}
+
+	// Reject system-admin users who have no namespace and would cause a FK violation.
+	if authUser.NamespaceID == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	// Get or create student_work
+	studentWork, err := repos.GetOrCreateStudentWork(r.Context(), authUser.NamespaceID, authUser.ID, problemData.ID, session.SectionID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Join session with student_work_id link
 	student, err := repos.JoinSession(r.Context(), store.JoinSessionParams{
-		SessionID: sessionID,
-		UserID:    authUser.ID,
-		Name:      req.Name,
+		SessionID:     sessionID,
+		UserID:        authUser.ID,
+		Name:          req.Name,
+		StudentWorkID: &studentWork.ID,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	// Return student's code from student_work
+	student.Code = studentWork.Code
+	student.ExecutionSettings = studentWork.ExecutionSettings
 
 	_ = h.publisher.StudentJoined(r.Context(), sessionID.String(), authUser.ID.String(), req.Name)
 
@@ -95,7 +137,9 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 	}
 
 	repos := store.ReposFromContext(r.Context())
-	student, err := repos.UpdateCode(r.Context(), sessionID, authUser.ID, req.Code, req.ExecutionSettings)
+
+	// Get session_student to find student_work_id
+	sessionStudent, err := repos.GetSessionStudent(r.Context(), sessionID, authUser.ID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session student not found")
@@ -105,15 +149,34 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if sessionStudent.StudentWorkID == nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "student work not linked")
+		return
+	}
+
+	// Update student_work instead of session_students
+	studentWork, err := repos.UpdateStudentWork(r.Context(), *sessionStudent.StudentWorkID, store.UpdateStudentWorkParams{
+		Code:              &req.Code,
+		ExecutionSettings: req.ExecutionSettings,
+	})
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	// Record code change in revision buffer (if configured).
 	if h.revBuffer != nil {
 		nsID := authUser.NamespaceID
-		h.revBuffer.Record(r.Context(), nsID, sessionID, authUser.ID, req.Code)
+		h.revBuffer.Record(r.Context(), nsID, *sessionStudent.StudentWorkID, &sessionID, authUser.ID, req.Code)
 	}
 
 	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code)
 
-	httputil.WriteJSON(w, http.StatusOK, student)
+	// Build response using student_work data
+	sessionStudent.Code = studentWork.Code
+	sessionStudent.ExecutionSettings = studentWork.ExecutionSettings
+
+	httputil.WriteJSON(w, http.StatusOK, sessionStudent)
 }
 
 // ListStudents handles GET /api/v1/sessions/{id}/students — list all students in a session.

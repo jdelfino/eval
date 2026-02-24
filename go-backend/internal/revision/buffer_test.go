@@ -32,9 +32,15 @@ func (m *mockRevisionRepo) CreateRevision(_ context.Context, params store.Create
 		return nil, m.err
 	}
 	m.revisions = append(m.revisions, params)
+	// SessionID is now *uuid.UUID in the Revision struct
+	var sessionIDPtr *uuid.UUID
+	if params.SessionID != nil {
+		sid := *params.SessionID
+		sessionIDPtr = &sid
+	}
 	return &store.Revision{
 		ID:        uuid.New(),
-		SessionID: params.SessionID,
+		SessionID: sessionIDPtr,
 		UserID:    params.UserID,
 		IsDiff:    params.IsDiff,
 		Diff:      params.Diff,
@@ -64,8 +70,9 @@ func TestRecord_FirstCallNoFlush(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
-	buf.Record(context.Background(), "ns", sessionID, userID, "print('hello')")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "print('hello')")
 
 	revs := repo.getRevisions()
 	if len(revs) != 0 {
@@ -81,21 +88,22 @@ func TestRecord_FlushOnIdleTimeout(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	// First call: sets previousCode
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
-	buf.Record(context.Background(), "ns", sessionID, userID, "v1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "v1")
 
 	// Second call with different code: should flush because idle timeout is 0
 	buf.nowFunc = func() time.Time { return fixedTime.Add(1 * time.Second) }
-	buf.Record(context.Background(), "ns", sessionID, userID, "v2")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "v2")
 
 	revs := repo.getRevisions()
 	if len(revs) != 1 {
 		t.Fatalf("expected 1 revision after idle flush, got %d", len(revs))
 	}
-	if revs[0].SessionID != sessionID {
+	if revs[0].SessionID == nil || *revs[0].SessionID != sessionID {
 		t.Errorf("wrong session_id")
 	}
 	if revs[0].UserID != userID {
@@ -110,9 +118,10 @@ func TestRecord_NoFlushWhenCodeUnchanged(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
-	buf.Record(context.Background(), "ns", sessionID, userID, "same")
-	buf.Record(context.Background(), "ns", sessionID, userID, "same")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "same")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "same")
 
 	revs := repo.getRevisions()
 	if len(revs) != 0 {
@@ -129,6 +138,7 @@ func TestRecord_FullSnapshotEvery10th(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -136,7 +146,7 @@ func TestRecord_FullSnapshotEvery10th(t *testing.T) {
 	for i := 0; i < 11; i++ {
 		buf.nowFunc = func() time.Time { return fixedTime.Add(time.Duration(i) * time.Second) }
 		code := string(rune('a' + i))
-		buf.Record(context.Background(), "ns", sessionID, userID, code)
+		buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, code)
 	}
 
 	revs := repo.getRevisions()
@@ -166,15 +176,16 @@ func TestRecord_LargeDiffStoresFullSnapshot(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
-	buf.Record(context.Background(), "ns", sessionID, userID, "short")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "short")
 
 	// Large change
 	buf.nowFunc = func() time.Time { return fixedTime.Add(time.Second) }
 	longCode := "this is a very long piece of code that exceeds the max diff length threshold"
-	buf.Record(context.Background(), "ns", sessionID, userID, longCode)
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, longCode)
 
 	revs := repo.getRevisions()
 	if len(revs) != 1 {
@@ -197,6 +208,7 @@ func TestRecord_FlushOnMaxBuffer(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -204,7 +216,7 @@ func TestRecord_FlushOnMaxBuffer(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		buf.nowFunc = func() time.Time { return fixedTime }
 		code := string(rune('a' + i))
-		buf.Record(context.Background(), "ns", sessionID, userID, code)
+		buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, code)
 	}
 
 	revs := repo.getRevisions()
@@ -222,15 +234,17 @@ func TestFlushSession_FlushesPendingRevisions(t *testing.T) {
 	sessionID := uuid.New()
 	userID := uuid.New()
 	userID2 := uuid.New()
+	studentWorkID := uuid.New()
+	studentWorkID2 := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
 
 	// Record some code changes (won't auto-flush due to high idle timeout)
-	buf.Record(context.Background(), "ns", sessionID, userID, "code1")
-	buf.Record(context.Background(), "ns", sessionID, userID, "code2")
-	buf.Record(context.Background(), "ns", sessionID, userID2, "other1")
-	buf.Record(context.Background(), "ns", sessionID, userID2, "other2")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code2")
+	buf.Record(context.Background(), "ns", studentWorkID2, &sessionID, userID2, "other1")
+	buf.Record(context.Background(), "ns", studentWorkID2, &sessionID, userID2, "other2")
 
 	// No revisions yet
 	if len(repo.getRevisions()) != 0 {
@@ -253,21 +267,23 @@ func TestFlushSession_RemovesEntries(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
 
-	buf.Record(context.Background(), "ns", sessionID, userID, "code1")
-	buf.Record(context.Background(), "ns", sessionID, userID, "code2")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code2")
 	buf.FlushSession(context.Background(), sessionID)
 
-	// After flush, entries should be removed
+	// After flush, entries should have sessionID cleared (for practice mode continuation)
 	buf.mu.Lock()
-	remaining := len(buf.entries)
-	buf.mu.Unlock()
-	if remaining != 0 {
-		t.Errorf("expected 0 entries after flush, got %d", remaining)
+	for _, entry := range buf.entries {
+		if entry.sessionID != nil {
+			t.Errorf("expected sessionID to be nil after flush, got %v", entry.sessionID)
+		}
 	}
+	buf.mu.Unlock()
 }
 
 func TestBackgroundFlush(t *testing.T) {
@@ -278,6 +294,7 @@ func TestBackgroundFlush(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	var clockMu sync.Mutex
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -291,10 +308,10 @@ func TestBackgroundFlush(t *testing.T) {
 	defer buf.Stop()
 
 	// First call: sets previous
-	buf.Record(context.Background(), "ns", sessionID, userID, "v1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "v1")
 
 	// Second call: code differs, but idleTimeout hasn't passed (same timestamp)
-	buf.Record(context.Background(), "ns", sessionID, userID, "v2")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "v2")
 
 	// Now advance the clock so background flush sees it as idle
 	clockMu.Lock()
@@ -317,13 +334,14 @@ func TestRecord_NamespaceIDPropagated(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
-	buf.Record(context.Background(), "test-ns", sessionID, userID, "v1")
+	buf.Record(context.Background(), "test-ns", studentWorkID, &sessionID, userID, "v1")
 
 	buf.nowFunc = func() time.Time { return fixedTime.Add(time.Second) }
-	buf.Record(context.Background(), "test-ns", sessionID, userID, "v2")
+	buf.Record(context.Background(), "test-ns", studentWorkID, &sessionID, userID, "v2")
 
 	revs := repo.getRevisions()
 	if len(revs) != 1 {
@@ -342,13 +360,14 @@ func TestRecord_DiffContent(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
-	buf.Record(context.Background(), "ns", sessionID, userID, "hello")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "hello")
 
 	buf.nowFunc = func() time.Time { return fixedTime.Add(time.Second) }
-	buf.Record(context.Background(), "ns", sessionID, userID, "hello world")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "hello world")
 
 	revs := repo.getRevisions()
 	if len(revs) != 1 {
@@ -383,11 +402,12 @@ func TestFlushSession_NoDirtyEntryNoRevision(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
 
-	buf.Record(context.Background(), "ns", sessionID, userID, "code1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code1")
 
 	buf.FlushSession(context.Background(), sessionID)
 
@@ -405,12 +425,13 @@ func TestFlushSession_DirtyEntryCreatesRevision(t *testing.T) {
 
 	sessionID := uuid.New()
 	userID := uuid.New()
+	studentWorkID := uuid.New()
 
 	fixedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	buf.nowFunc = func() time.Time { return fixedTime }
 
-	buf.Record(context.Background(), "ns", sessionID, userID, "code1")
-	buf.Record(context.Background(), "ns", sessionID, userID, "code2")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code1")
+	buf.Record(context.Background(), "ns", studentWorkID, &sessionID, userID, "code2")
 
 	buf.FlushSession(context.Background(), sessionID)
 

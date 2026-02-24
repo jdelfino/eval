@@ -24,8 +24,9 @@ import (
 // =============================================================================
 
 func TestIntegration_CreateNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Use system-admin for namespace operations (can see all namespaces)
@@ -106,8 +107,9 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 }
 
 func TestIntegration_GetNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	userID := uuid.New()
@@ -145,8 +147,9 @@ func TestIntegration_GetNamespace(t *testing.T) {
 }
 
 func TestIntegration_ListNamespaces(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// System admin can see all namespaces
@@ -197,8 +200,9 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 }
 
 func TestIntegration_UpdateNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// System admin is required to update namespaces per RLS policy
@@ -254,8 +258,9 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -305,8 +310,9 @@ func TestIntegration_CreateClass(t *testing.T) {
 }
 
 func TestIntegration_GetClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -353,8 +359,9 @@ func TestIntegration_GetClass(t *testing.T) {
 }
 
 func TestIntegration_ListClasses(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -405,8 +412,9 @@ func TestIntegration_ListClasses(t *testing.T) {
 }
 
 func TestIntegration_UpdateClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -449,8 +457,9 @@ func TestIntegration_UpdateClass(t *testing.T) {
 }
 
 func TestIntegration_DeleteClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -498,8 +507,9 @@ func TestIntegration_DeleteClass(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -556,8 +566,9 @@ func TestIntegration_CreateSection(t *testing.T) {
 }
 
 func TestIntegration_GetSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -607,8 +618,9 @@ func TestIntegration_GetSection(t *testing.T) {
 }
 
 func TestIntegration_ListSectionsByClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -661,8 +673,9 @@ func TestIntegration_ListSectionsByClass(t *testing.T) {
 }
 
 func TestIntegration_UpdateSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -712,8 +725,9 @@ func TestIntegration_UpdateSection(t *testing.T) {
 }
 
 func TestIntegration_DeleteSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -765,8 +779,9 @@ func TestIntegration_DeleteSection(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateMembership(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -824,8 +839,9 @@ func TestIntegration_CreateMembership(t *testing.T) {
 }
 
 func TestIntegration_GetSectionByJoinCode(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -872,8 +888,9 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 }
 
 func TestIntegration_DeleteMembership(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -925,8 +942,9 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 }
 
 func TestIntegration_ListMembers(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID

@@ -25,7 +25,6 @@ type mockSessionRepo struct {
 	updateSessionFn                   func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
 	listSessionHistoryFn              func(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error)
 	updateSessionProblemFn            func(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error)
-	findCompletedSessionByProblemFn   func(ctx context.Context, sectionID, problemID uuid.UUID) (*store.Session, error)
 	createSessionReplacingActiveFn    func(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error)
 	reopenSessionReplacingActiveFn    func(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error)
 }
@@ -61,10 +60,6 @@ func (m *mockSessionRepo) UpdateSessionProblem(ctx context.Context, id uuid.UUID
 	return m.updateSessionProblemFn(ctx, id, problem)
 }
 
-func (m *mockSessionRepo) FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*store.Session, error) {
-	return m.findCompletedSessionByProblemFn(ctx, sectionID, problemID)
-}
-
 func (m *mockSessionRepo) CreateSessionReplacingActive(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
 	if m.createSessionReplacingActiveFn != nil {
 		return m.createSessionReplacingActiveFn(ctx, params)
@@ -82,17 +77,12 @@ func (m *mockSessionRepo) ReopenSessionReplacingActive(ctx context.Context, id u
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.
 type mockSessionStudentRepo struct {
 	joinSessionFn        func(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error)
-	updateCodeFn         func(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error)
 	listSessionStudentFn func(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error)
 	getSessionStudentFn  func(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error)
 }
 
 func (m *mockSessionStudentRepo) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return m.joinSessionFn(ctx, params)
-}
-
-func (m *mockSessionStudentRepo) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
-	return m.updateCodeFn(ctx, sessionID, userID, code, executionSettings)
 }
 
 func (m *mockSessionStudentRepo) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
@@ -237,7 +227,7 @@ func testSessionStudent() *store.SessionStudent {
 		Name:              "Alice",
 		Code:              "",
 		ExecutionSettings: json.RawMessage(`null`),
-		LastUpdate:        time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		JoinedAt:          time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
 
@@ -341,9 +331,6 @@ func (stubRepos) ListSessionHistory(context.Context, uuid.UUID, bool, store.Sess
 func (stubRepos) UpdateSessionProblem(context.Context, uuid.UUID, json.RawMessage) (*store.Session, error) {
 	panic("stubRepos: unexpected UpdateSessionProblem call")
 }
-func (stubRepos) FindCompletedSessionByProblem(context.Context, uuid.UUID, uuid.UUID) (*store.Session, error) {
-	panic("stubRepos: unexpected FindCompletedSessionByProblem call")
-}
 func (stubRepos) CreateSessionReplacingActive(context.Context, store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
 	panic("stubRepos: unexpected CreateSessionReplacingActive call")
 }
@@ -352,9 +339,6 @@ func (stubRepos) ReopenSessionReplacingActive(context.Context, uuid.UUID, uuid.U
 }
 func (stubRepos) JoinSession(context.Context, store.JoinSessionParams) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected JoinSession call")
-}
-func (stubRepos) UpdateCode(context.Context, uuid.UUID, uuid.UUID, string, json.RawMessage) (*store.SessionStudent, error) {
-	panic("stubRepos: unexpected UpdateCode call")
 }
 func (stubRepos) ListSessionStudents(context.Context, uuid.UUID) ([]store.SessionStudent, error) {
 	panic("stubRepos: unexpected ListSessionStudents call")
@@ -445,6 +429,36 @@ func (stubRepos) RevokeInvitation(context.Context, uuid.UUID) (*store.Invitation
 }
 func (stubRepos) ConsumeInvitation(context.Context, uuid.UUID, uuid.UUID) (*store.Invitation, error) {
 	panic("stubRepos: unexpected ConsumeInvitation call")
+}
+func (stubRepos) ListSectionProblems(context.Context, uuid.UUID, uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
+	panic("stubRepos: unexpected ListSectionProblems call")
+}
+func (stubRepos) CreateSectionProblem(context.Context, store.CreateSectionProblemParams) (*store.SectionProblem, error) {
+	panic("stubRepos: unexpected CreateSectionProblem call")
+}
+func (stubRepos) UpdateSectionProblem(context.Context, uuid.UUID, uuid.UUID, store.UpdateSectionProblemParams) (*store.SectionProblem, error) {
+	panic("stubRepos: unexpected UpdateSectionProblem call")
+}
+func (stubRepos) DeleteSectionProblem(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteSectionProblem call")
+}
+func (stubRepos) ListSectionsForProblem(context.Context, uuid.UUID) ([]store.SectionProblem, error) {
+	panic("stubRepos: unexpected ListSectionsForProblem call")
+}
+func (stubRepos) GetOrCreateStudentWork(context.Context, string, uuid.UUID, uuid.UUID, uuid.UUID) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected GetOrCreateStudentWork call")
+}
+func (stubRepos) UpdateStudentWork(context.Context, uuid.UUID, store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected UpdateStudentWork call")
+}
+func (stubRepos) GetStudentWork(context.Context, uuid.UUID) (*store.StudentWorkWithProblem, error) {
+	panic("stubRepos: unexpected GetStudentWork call")
+}
+func (stubRepos) GetStudentWorkByProblem(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected GetStudentWorkByProblem call")
+}
+func (stubRepos) ListStudentWorkBySession(context.Context, uuid.UUID) ([]store.StudentWork, error) {
+	panic("stubRepos: unexpected ListStudentWorkBySession call")
 }
 
 // Compile-time check that stubRepos implements store.Repos.

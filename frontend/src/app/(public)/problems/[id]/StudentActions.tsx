@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listMySections } from '@/lib/api/sections';
-import { startPractice } from '@/lib/api/problems';
+import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import type { MySectionInfo } from '@/types/api';
 
 interface StudentActionsProps {
@@ -55,8 +55,8 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
         return;
       }
 
-      const result = await startPractice(problem_id, targetSectionId);
-      router.push(`/student?session_id=${result.session_id}`);
+      const work = await getOrCreateStudentWork(targetSectionId, problem_id);
+      router.push(`/student?work_id=${work.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start practice');
       setStarting(false);

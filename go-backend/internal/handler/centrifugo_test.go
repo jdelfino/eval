@@ -62,9 +62,6 @@ func studentRepoReturning(student *store.SessionStudent, err error) *mockSession
 		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
 			return nil, nil
 		},
-		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
-			return nil, nil
-		},
 		listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
 			return nil, nil
 		},

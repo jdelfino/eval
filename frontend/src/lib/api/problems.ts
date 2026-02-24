@@ -130,15 +130,3 @@ export async function getPublicProblem(id: string, options?: RequestInit): Promi
   }
 }
 
-/**
- * Start a practice session for a problem in a section.
- * Finds an existing completed session or creates one on the fly.
- * @param problemId - The problem ID
- * @param sectionId - The section ID
- * @returns Object with session_id
- */
-export async function startPractice(problemId: string, sectionId: string): Promise<{ session_id: string }> {
-  return apiPost<{ session_id: string }>(`/problems/${encodeURIComponent(problemId)}/practice`, {
-    section_id: sectionId,
-  });
-}

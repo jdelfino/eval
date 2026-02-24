@@ -25,6 +25,7 @@ describe('ProblemCard', () => {
     onEdit: jest.fn(),
     onDelete: jest.fn(),
     onCreateSession: jest.fn(),
+    onPublish: jest.fn(),
   };
 
   beforeEach(() => {
@@ -67,6 +68,23 @@ describe('ProblemCard', () => {
       render(<ProblemCard {...defaultProps} />);
       fireEvent.click(screen.getByText('Create Session'));
       expect(defaultProps.onCreateSession).toHaveBeenCalledWith('problem-123');
+    });
+
+    it('renders Publish button when onPublish is provided', () => {
+      render(<ProblemCard {...defaultProps} />);
+      expect(screen.getByText('Publish')).toBeInTheDocument();
+    });
+
+    it('does not render Publish button when onPublish is not provided', () => {
+      const { onPublish, ...propsWithoutPublish } = defaultProps;
+      render(<ProblemCard {...propsWithoutPublish} />);
+      expect(screen.queryByText('Publish')).not.toBeInTheDocument();
+    });
+
+    it('calls onPublish when Publish button is clicked', () => {
+      render(<ProblemCard {...defaultProps} />);
+      fireEvent.click(screen.getByText('Publish'));
+      expect(defaultProps.onPublish).toHaveBeenCalledWith('problem-123');
     });
 
     it('shows confirmation dialog when Delete button is clicked', async () => {
@@ -155,6 +173,7 @@ describe('ProblemCard', () => {
       render(<ProblemCard {...gridProps} />);
       expect(screen.getByText('Edit')).toBeInTheDocument();
       expect(screen.getByText('Create Session')).toBeInTheDocument();
+      expect(screen.getByText('Publish')).toBeInTheDocument();
       expect(screen.getByText('Delete')).toBeInTheDocument();
     });
 

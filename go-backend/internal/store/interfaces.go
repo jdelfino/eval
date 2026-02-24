@@ -321,9 +321,6 @@ type SessionRepository interface {
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
-	// FindCompletedSessionByProblem finds a completed session in a section whose problem
-	// JSON contains the given problem ID. Returns ErrNotFound if none exists.
-	FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*Session, error)
 	// CreateSessionReplacingActive atomically ends any active sessions in the section
 	// and creates a new session, all within a single transaction.
 	// Returns the new session and the IDs of ended sessions.
@@ -356,30 +353,30 @@ type MembershipRepository interface {
 }
 
 // SessionStudent represents a student's participation in a session.
+// Code and ExecutionSettings are populated from student_work via JOIN.
 type SessionStudent struct {
 	ID                uuid.UUID       `json:"id"`
 	SessionID         uuid.UUID       `json:"session_id"`
 	UserID            uuid.UUID       `json:"user_id"`
 	Name              string          `json:"name"`
-	Code              string          `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	LastUpdate        time.Time       `json:"last_update"`
+	Code              string          `json:"code"`                      // From student_work
+	ExecutionSettings json.RawMessage `json:"execution_settings"`       // From student_work
+	JoinedAt          time.Time       `json:"joined_at"`                // When student joined session
+	StudentWorkID     *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
 }
 
 // JoinSessionParams contains the fields for joining a session.
 type JoinSessionParams struct {
-	SessionID uuid.UUID
-	UserID    uuid.UUID
-	Name      string
+	SessionID     uuid.UUID
+	UserID        uuid.UUID
+	Name          string
+	StudentWorkID *uuid.UUID // Link to student_work (Task 4 addition)
 }
 
 // SessionStudentRepository defines the interface for session student data access.
 type SessionStudentRepository interface {
 	// JoinSession adds a student to a session (idempotent via ON CONFLICT).
 	JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error)
-	// UpdateCode updates a student's code and execution settings in a session.
-	// Returns ErrNotFound if the student is not in the session.
-	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*SessionStudent, error)
 	// ListSessionStudents retrieves all students in a session.
 	ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error)
 	// GetSessionStudent retrieves a single student's record in a session.
@@ -391,7 +388,7 @@ type SessionStudentRepository interface {
 type Revision struct {
 	ID              uuid.UUID       `json:"id"`
 	NamespaceID     string          `json:"namespace_id"`
-	SessionID       uuid.UUID       `json:"session_id"`
+	SessionID       *uuid.UUID      `json:"session_id"`           // Optional (nil for practice mode)
 	UserID          uuid.UUID       `json:"user_id"`
 	Timestamp       time.Time       `json:"timestamp"`
 	IsDiff          bool            `json:"is_diff"`
@@ -399,18 +396,20 @@ type Revision struct {
 	FullCode        *string         `json:"full_code"`
 	BaseRevisionID  *uuid.UUID      `json:"base_revision_id"`
 	ExecutionResult json.RawMessage `json:"execution_result"`
+	StudentWorkID   *uuid.UUID      `json:"student_work_id"`
 }
 
 // CreateRevisionParams contains the fields for creating a revision.
 type CreateRevisionParams struct {
 	NamespaceID     string
-	SessionID       uuid.UUID
+	SessionID       *uuid.UUID // Optional (nil for practice mode, Task 4 change)
 	UserID          uuid.UUID
 	IsDiff          bool
 	Diff            *string
 	FullCode        *string
 	BaseRevisionID  *uuid.UUID
 	ExecutionResult json.RawMessage
+	StudentWorkID   *uuid.UUID // Required for revisions (Task 4 change)
 }
 
 // RevisionRepository defines the interface for revision data access.
@@ -579,6 +578,94 @@ type CreateAuditLogParams struct {
 type AuditLogRepository interface {
 	ListAuditLogs(ctx context.Context, filters AuditLogFilters) ([]AuditLog, error)
 	CreateAuditLog(ctx context.Context, params CreateAuditLogParams) (*AuditLog, error)
+}
+
+// SectionProblem represents a problem published to a section.
+type SectionProblem struct {
+	ID           uuid.UUID `json:"id"`
+	SectionID    uuid.UUID `json:"section_id"`
+	ProblemID    uuid.UUID `json:"problem_id"`
+	PublishedBy  uuid.UUID `json:"published_by"`
+	ShowSolution bool      `json:"show_solution"`
+	PublishedAt  time.Time `json:"published_at"`
+}
+
+// CreateSectionProblemParams contains the fields for creating a section problem.
+type CreateSectionProblemParams struct {
+	SectionID    uuid.UUID
+	ProblemID    uuid.UUID
+	PublishedBy  uuid.UUID
+	ShowSolution bool
+}
+
+// UpdateSectionProblemParams contains the fields that can be updated on a section problem.
+type UpdateSectionProblemParams struct {
+	ShowSolution *bool
+}
+
+// PublishedProblemWithStatus represents a published problem with its details and student work status.
+type PublishedProblemWithStatus struct {
+	SectionProblem
+	Problem     Problem      `json:"problem"`
+	StudentWork *StudentWork `json:"student_work,omitempty"` // nil if student hasn't started
+}
+
+// SectionProblemRepository defines the interface for section problem data access.
+type SectionProblemRepository interface {
+	// ListSectionProblems retrieves all problems published to a section with student work status.
+	ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]PublishedProblemWithStatus, error)
+	// CreateSectionProblem publishes a problem to a section.
+	CreateSectionProblem(ctx context.Context, params CreateSectionProblemParams) (*SectionProblem, error)
+	// UpdateSectionProblem updates a section problem's mutable fields.
+	// Returns ErrNotFound if the section problem does not exist.
+	UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params UpdateSectionProblemParams) (*SectionProblem, error)
+	// DeleteSectionProblem removes a problem from a section.
+	// Returns ErrNotFound if the section problem does not exist.
+	DeleteSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) error
+	// ListSectionsForProblem retrieves all sections where a problem is published.
+	ListSectionsForProblem(ctx context.Context, problemID uuid.UUID) ([]SectionProblem, error)
+}
+
+// StudentWork represents persistent student work for a problem in a section.
+type StudentWork struct {
+	ID                uuid.UUID       `json:"id"`
+	NamespaceID       string          `json:"namespace_id"`
+	UserID            uuid.UUID       `json:"user_id"`
+	ProblemID         uuid.UUID       `json:"problem_id"`
+	SectionID         uuid.UUID       `json:"section_id"`
+	Code              string          `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	CreatedAt         time.Time       `json:"created_at"`
+	LastUpdate        time.Time       `json:"last_update"`
+}
+
+// StudentWorkWithProblem represents student work with its associated problem details.
+type StudentWorkWithProblem struct {
+	StudentWork
+	Problem Problem `json:"problem"`
+}
+
+// UpdateStudentWorkParams contains the fields that can be updated on student work.
+type UpdateStudentWorkParams struct {
+	Code              *string
+	ExecutionSettings json.RawMessage // nil means don't update
+}
+
+// StudentWorkRepository defines the interface for student work data access.
+type StudentWorkRepository interface {
+	// GetOrCreateStudentWork gets or creates student work for a (user, problem, section) triple.
+	GetOrCreateStudentWork(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*StudentWork, error)
+	// UpdateStudentWork updates a student work's mutable fields.
+	// Returns ErrNotFound if the student work does not exist.
+	UpdateStudentWork(ctx context.Context, id uuid.UUID, params UpdateStudentWorkParams) (*StudentWork, error)
+	// GetStudentWork retrieves student work by ID with problem details.
+	// Returns ErrNotFound if the student work does not exist.
+	GetStudentWork(ctx context.Context, id uuid.UUID) (*StudentWorkWithProblem, error)
+	// GetStudentWorkByProblem retrieves student work by (user, problem, section).
+	// Returns ErrNotFound if the student work does not exist.
+	GetStudentWorkByProblem(ctx context.Context, userID, problemID, sectionID uuid.UUID) (*StudentWork, error)
+	// ListStudentWorkBySession retrieves all student work linked to a session.
+	ListStudentWorkBySession(ctx context.Context, sessionID uuid.UUID) ([]StudentWork, error)
 }
 
 // AdminStats contains aggregate system statistics.

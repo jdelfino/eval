@@ -139,7 +139,7 @@ describe('useRealtimeSession', () => {
           problem: { title: 'Test Problem', description: 'Test' },
         },
         students: [
-          { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: '', joined_at: new Date().toISOString() },
         ],
         join_code: 'ABC123',
       };
@@ -267,7 +267,7 @@ describe('useRealtimeSession', () => {
       mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [
-          { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: '', joined_at: new Date().toISOString() },
         ],
         join_code: '',
       });
@@ -376,7 +376,7 @@ describe('useRealtimeSession', () => {
       mockGetSessionState.mockResolvedValueOnce({
         session: {},
         students: [
-          { user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: 'print("hello")', joined_at: new Date().toISOString() },
         ],
         join_code: '',
       });
@@ -428,7 +428,7 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const mockStudent = { id: 'student-1', user_id: 'student-1', session_id: 'session-1', name: 'Alice', code: '', last_update: new Date().toISOString() };
+      const mockStudent = { id: 'student-1', user_id: 'student-1', session_id: 'session-1', name: 'Alice', code: '', joined_at: new Date().toISOString() };
       mockJoinSession.mockResolvedValueOnce(mockStudent);
 
       let joinResult;
@@ -836,7 +836,7 @@ describe('useRealtimeSession', () => {
       mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1' },
         students: [
-          { user_id: 'student-1', name: 'Alice', code: '', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: '', joined_at: new Date().toISOString() },
         ],
         join_code: '',
       });
@@ -885,7 +885,7 @@ describe('useRealtimeSession', () => {
       mockGetSessionState.mockResolvedValueOnce({
         session: { id: 'session-1', status: 'active' },
         students: [
-          { user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: 'print("hello")', joined_at: new Date().toISOString() },
         ],
         join_code: 'ABC123',
       });
@@ -1007,7 +1007,7 @@ describe('useRealtimeSession', () => {
       mockGetSessionState.mockResolvedValue({
         session: { id: 'session-1' },
         students: [
-          { user_id: 'student-1', name: 'Alice', code: 'polled', last_update: new Date().toISOString() },
+          { user_id: 'student-1', name: 'Alice', code: 'polled', joined_at: new Date().toISOString() },
         ],
         join_code: '',
       });

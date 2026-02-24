@@ -21,9 +21,9 @@ jest.mock('@/lib/api/sections', () => ({
   listMySections: (...args: unknown[]) => mockListMySections(...args),
 }));
 
-const mockStartPractice = jest.fn();
-jest.mock('@/lib/api/problems', () => ({
-  startPractice: (...args: unknown[]) => mockStartPractice(...args),
+const mockGetOrCreateStudentWork = jest.fn();
+jest.mock('@/lib/api/student-work', () => ({
+  getOrCreateStudentWork: (...args: unknown[]) => mockGetOrCreateStudentWork(...args),
 }));
 
 const defaultProps = {
@@ -40,7 +40,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   authValue = { user: mockUser, isLoading: false };
   mockListMySections.mockReset();
-  mockStartPractice.mockReset();
+  mockGetOrCreateStudentWork.mockReset();
   mockPush.mockReset();
 });
 
@@ -101,11 +101,11 @@ describe('StudentActions', () => {
     });
   });
 
-  it('auto-starts practice when one section and calls startPractice with correct args', async () => {
+  it('auto-starts practice when one section and calls getOrCreateStudentWork with correct args', async () => {
     mockListMySections.mockResolvedValue([
       makeSectionInfo('sec-1', 'Section 1', 'class-1'),
     ]);
-    mockStartPractice.mockResolvedValue({ session_id: 'session-abc' });
+    mockGetOrCreateStudentWork.mockResolvedValue({ id: 'work-abc' });
 
     render(<StudentActions {...defaultProps} />);
 
@@ -116,11 +116,11 @@ describe('StudentActions', () => {
     fireEvent.click(screen.getByText('Practice'));
 
     await waitFor(() => {
-      expect(mockStartPractice).toHaveBeenCalledWith('prob-1', 'sec-1');
+      expect(mockGetOrCreateStudentWork).toHaveBeenCalledWith('sec-1', 'prob-1');
     });
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/student?session_id=session-abc');
+      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-abc');
     });
   });
 
@@ -150,7 +150,7 @@ describe('StudentActions', () => {
       makeSectionInfo('sec-1', 'Section A', 'class-1'),
       makeSectionInfo('sec-2', 'Section B', 'class-1'),
     ]);
-    mockStartPractice.mockResolvedValue({ session_id: 'session-xyz' });
+    mockGetOrCreateStudentWork.mockResolvedValue({ id: 'work-xyz' });
 
     render(<StudentActions {...defaultProps} />);
 
@@ -169,11 +169,11 @@ describe('StudentActions', () => {
     fireEvent.click(screen.getByText('Section B'));
 
     await waitFor(() => {
-      expect(mockStartPractice).toHaveBeenCalledWith('prob-1', 'sec-2');
+      expect(mockGetOrCreateStudentWork).toHaveBeenCalledWith('sec-2', 'prob-1');
     });
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/student?session_id=session-xyz');
+      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-xyz');
     });
   });
 
@@ -181,7 +181,7 @@ describe('StudentActions', () => {
     mockListMySections.mockResolvedValue([
       makeSectionInfo('sec-1', 'Section 1', 'class-1'),
     ]);
-    mockStartPractice.mockRejectedValue(new Error('Server error'));
+    mockGetOrCreateStudentWork.mockRejectedValue(new Error('Server error'));
 
     render(<StudentActions {...defaultProps} />);
 

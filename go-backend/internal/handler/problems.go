@@ -17,11 +17,15 @@ import (
 )
 
 // ProblemHandler handles problem management routes.
-type ProblemHandler struct{}
+type ProblemHandler struct {
+	sectionProblemHandler *SectionProblemHandler
+}
 
 // NewProblemHandler creates a new ProblemHandler.
-func NewProblemHandler() *ProblemHandler {
-	return &ProblemHandler{}
+func NewProblemHandler(sectionProblemHandler *SectionProblemHandler) *ProblemHandler {
+	return &ProblemHandler{
+		sectionProblemHandler: sectionProblemHandler,
+	}
 }
 
 // Routes returns a chi.Router with problem routes mounted.
@@ -37,6 +41,7 @@ func (h *ProblemHandler) Routes() chi.Router {
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
+		r.Get("/{id}/sections", h.sectionProblemHandler.ListSectionsForProblem)
 	})
 
 	return r

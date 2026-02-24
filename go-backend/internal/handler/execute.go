@@ -115,18 +115,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	merged := mergeExecutionSettings(session.Problem, studentRecord, req.ExecutionSettings)
 
 	// 6. Build executor request
-	execReq := executor.ExecuteRequest{
-		Code: req.Code,
-	}
-	if merged.Stdin != nil {
-		execReq.Stdin = *merged.Stdin
-	}
-	if merged.RandomSeed != nil {
-		execReq.RandomSeed = merged.RandomSeed
-	}
-	if len(merged.Files) > 0 {
-		execReq.Files = merged.Files
-	}
+	execReq := buildExecutorRequest(req.Code, merged)
 
 	// 7. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
@@ -204,6 +193,9 @@ func isCreatorOrParticipant(userID uuid.UUID, session *store.Session) bool {
 // 1. Request payload (highest)
 // 2. Session student record
 // 3. Session problem (lowest)
+//
+// The problemJSON is a full problem JSON blob whose "execution_settings" key
+// contains the problem-level defaults.
 func mergeExecutionSettings(
 	problemJSON json.RawMessage,
 	studentRecord *store.SessionStudent,
@@ -211,7 +203,8 @@ func mergeExecutionSettings(
 ) executionSettingsJSON {
 	var result executionSettingsJSON
 
-	// Layer 1: Problem-level settings (lowest priority)
+	// Layer 1: Problem-level settings (lowest priority).
+	// The problem JSON is the full problem object; execution_settings is nested inside.
 	if len(problemJSON) > 0 {
 		var problem struct {
 			ExecutionSettings *executionSettingsJSON `json:"execution_settings"`
@@ -221,33 +214,17 @@ func mergeExecutionSettings(
 		}
 	}
 
-	// Layer 2: Student record settings
+	// Layer 2: Student record settings.
 	if studentRecord != nil && len(studentRecord.ExecutionSettings) > 0 {
 		var studentSettings executionSettingsJSON
 		if err := json.Unmarshal(studentRecord.ExecutionSettings, &studentSettings); err == nil {
-			if studentSettings.Stdin != nil {
-				result.Stdin = studentSettings.Stdin
-			}
-			if studentSettings.RandomSeed != nil {
-				result.RandomSeed = studentSettings.RandomSeed
-			}
-			if len(studentSettings.Files) > 0 {
-				result.Files = studentSettings.Files
-			}
+			applySettingsLayer(&result, studentSettings)
 		}
 	}
 
-	// Layer 3: Request settings (highest priority)
+	// Layer 3: Request settings (highest priority).
 	if requestSettings != nil {
-		if requestSettings.Stdin != nil {
-			result.Stdin = requestSettings.Stdin
-		}
-		if requestSettings.RandomSeed != nil {
-			result.RandomSeed = requestSettings.RandomSeed
-		}
-		if len(requestSettings.Files) > 0 {
-			result.Files = requestSettings.Files
-		}
+		applySettingsLayer(&result, *requestSettings)
 	}
 
 	return result

@@ -7,17 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestUpdateCode_RejectsNonTxQuerier(t *testing.T) {
-	// A plain Querier (mockQuerier) does not implement TxQuerier,
-	// so beginTx should return an error.
-	s := New(&mockQuerier{})
-	ctx := context.Background()
-
-	_, err := s.UpdateCode(ctx, uuid.New(), uuid.New(), "print('hello')", nil)
-	if err == nil {
-		t.Fatal("UpdateCode() should fail when Querier does not support transactions")
-	}
-}
+// UpdateCode method was removed - this test is no longer needed
 
 func TestJoinSession_RejectsNonTxQuerier(t *testing.T) {
 	s := New(&mockQuerier{})

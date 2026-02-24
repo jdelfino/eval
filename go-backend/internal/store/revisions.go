@@ -7,13 +7,14 @@ import (
 )
 
 const revisionColumns = `id, namespace_id, session_id, user_id, timestamp,
-		       is_diff, diff, full_code, base_revision_id, execution_result`
+		       is_diff, diff, full_code, base_revision_id, execution_result, student_work_id`
 
 func scanRevision(row interface{ Scan(dest ...any) error }) (*Revision, error) {
 	var rev Revision
 	err := row.Scan(
 		&rev.ID, &rev.NamespaceID, &rev.SessionID, &rev.UserID, &rev.Timestamp,
 		&rev.IsDiff, &rev.Diff, &rev.FullCode, &rev.BaseRevisionID, &rev.ExecutionResult,
+		&rev.StudentWorkID,
 	)
 	if err != nil {
 		return nil, err
@@ -51,14 +52,15 @@ func (s *Store) ListRevisions(ctx context.Context, sessionID uuid.UUID, userID *
 
 // CreateRevision creates a new revision and returns the created record.
 func (s *Store) CreateRevision(ctx context.Context, params CreateRevisionParams) (*Revision, error) {
-	query := `INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, diff, full_code, base_revision_id, execution_result)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	query := `INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, diff, full_code, base_revision_id, execution_result, student_work_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING ` + revisionColumns
 
 	rev, err := scanRevision(s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.SessionID, params.UserID,
 		params.IsDiff, params.Diff, params.FullCode,
 		params.BaseRevisionID, params.ExecutionResult,
+		params.StudentWorkID,
 	))
 	if err != nil {
 		return nil, err

@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { registerStudent, getSectionByJoinCode } from './fixtures/api-setup';
+import { registerStudent, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
 
 /**
  * Critical Path E2E Tests
@@ -116,34 +116,30 @@ test.describe('Critical User Paths', () => {
         throw new Error('Could not find join code on dashboard page');
       }
 
-      // Click "Start Session" to open the modal
-      await instructorPage.locator('button:has-text("Start Session")').first().click();
-
-      // Wait for the Start Session modal
-      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible();
-
-      // Click "Create blank session" option to enable the Start Session button
-      await instructorPage.locator('button:has-text("Create blank session")').click();
-
-      // Wait for Start Session button to be enabled, then click it
-      await expect(
-        instructorPage.locator('button:has-text("Start Session"):not([disabled])').last()
-      ).toBeEnabled();
-      await instructorPage.locator('button:has-text("Start Session"):not([disabled])').last().click();
-
-      // Wait for navigation to session page
-      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, {});
-
-      // Verify session view loaded
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
-
       // ===== STUDENT FLOW =====
       // Register the student via API (creates user + enrolls in section)
       await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
 
-      // Look up the section ID from the join code so we can navigate directly
+      // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
       const sectionId = sectionInfo.section.id;
+      const classId = sectionInfo.class.id;
+
+      // Create problem, publish to section, and start session via API
+      // (sessions started from real problems allow students to join via the section page banner)
+      const problem = await createProblem(instructor.token, classId, {
+        title: 'Hello World',
+        description: 'Print hello world',
+        starterCode: '# Write your solution\n',
+      });
+      await publishProblem(instructor.token, sectionId, problem.id);
+      const session = await startSessionFromProblem(instructor.token, sectionId, problem.id);
+
+      // Navigate instructor to the session page
+      await instructorPage.goto(`/instructor/session/${session.id}`);
+
+      // Verify session view loaded
+      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // Student signs in and navigates to their section detail page
       await signInAs(page, studentEmail);
@@ -238,15 +234,26 @@ test.describe('Critical User Paths', () => {
         throw new Error('Could not find join code');
       }
 
-      // Start session
-      await instructorPage.locator('button:has-text("Start Session")').first().click();
-      await expect(instructorPage.locator('h2:has-text("Start Session")')).toBeVisible();
-      await instructorPage.locator('button:has-text("Create blank session")').click();
-      await expect(
-        instructorPage.locator('button:has-text("Start Session"):not([disabled])').last()
-      ).toBeEnabled();
-      await instructorPage.locator('button:has-text("Start Session"):not([disabled])').last().click();
-      await expect(instructorPage).toHaveURL(/\/instructor\/session\//, {});
+      // ===== STUDENT JOINS AND WRITES CODE =====
+      // Register the student via API (creates user + enrolls in section)
+      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
+
+      // Look up the section ID and class ID from the join code
+      const sectionInfo = await getSectionByJoinCode(joinCode);
+      const sectionId = sectionInfo.section.id;
+      const classId = sectionInfo.class.id;
+
+      // Create problem, publish to section, and start session via API
+      const problem = await createProblem(instructor.token, classId, {
+        title: 'Sync Test Problem',
+        description: 'A problem for sync testing',
+        starterCode: '# Write your solution\n',
+      });
+      await publishProblem(instructor.token, sectionId, problem.id);
+      const session = await startSessionFromProblem(instructor.token, sectionId, problem.id);
+
+      // Navigate instructor to the session page
+      await instructorPage.goto(`/instructor/session/${session.id}`);
       await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== OPEN PUBLIC VIEW =====
@@ -259,14 +266,6 @@ test.describe('Critical User Paths', () => {
       // Verify public view loads with initial state
       await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible();
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
-
-      // ===== STUDENT JOINS AND WRITES CODE =====
-      // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
-
-      // Look up the section ID from the join code so we can navigate directly
-      const sectionInfo = await getSectionByJoinCode(joinCode);
-      const sectionId = sectionInfo.section.id;
 
       await signInAs(page, studentEmail);
       await page.goto(`/sections/${sectionId}`);

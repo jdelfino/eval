@@ -142,7 +142,7 @@ describe('Sessions Full API', () => {
         expect(typeof student.id).toBe('string');
         expect(typeof student.name).toBe('string');
         expect('code' in student).toBe(true);
-        expect(typeof student.last_update).toBe('string');
+        expect(typeof student.joined_at).toBe('string');
         expectSnakeCaseKeys(student, 'SessionStudentSummary');
       }
     });
