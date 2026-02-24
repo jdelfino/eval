@@ -520,6 +520,39 @@ func TestUpdateCode_NotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateCode_NilStudentWorkID(t *testing.T) {
+	ss := testSessionStudent()
+	// StudentWorkID is nil — should return 500 "student work not linked"
+	ss.StudentWorkID = nil
+	userID := ss.UserID
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
+			}
+			return ss, nil
+		},
+	}
+
+	sessionID := ss.SessionID
+	body, _ := json.Marshal(map[string]any{"code": "x"})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestUpdateCode_InternalError(t *testing.T) {
 	ss := testSessionStudent()
 	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

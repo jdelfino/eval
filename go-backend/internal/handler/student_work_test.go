@@ -484,6 +484,77 @@ func TestStudentWorkHandler_Execute_WorkNotFound(t *testing.T) {
 	}
 }
 
+func TestStudentWorkHandler_GetOrCreate_EmptyNamespaceID(t *testing.T) {
+	sectionID := uuid.New()
+	problemID := uuid.New()
+	userID := uuid.New()
+
+	spRepo := &mockSectionProblemRepo{
+		listSectionProblemsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
+			return []store.PublishedProblemWithStatus{
+				{
+					SectionProblem: store.SectionProblem{
+						ProblemID: problemID,
+						SectionID: sectionID,
+					},
+				},
+			}, nil
+		},
+	}
+
+	h := NewStudentWorkHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("problemID", problemID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	// User has empty NamespaceID (system-admin user)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(spRepo, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GetOrCreate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStudentWorkHandler_Update_NotFound(t *testing.T) {
+	workID := uuid.New()
+	userID := uuid.New()
+	newCode := "print('updated')"
+
+	reqBody := updateStudentWorkRequest{
+		Code: &newCode,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	swRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(ctx context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	h := NewStudentWorkHandler()
+	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", workID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestStudentWorkHandler_Execute_ExecutorError(t *testing.T) {
 	workID := uuid.New()
 	userID := uuid.New()
@@ -536,3 +607,112 @@ func TestStudentWorkHandler_Execute_ExecutorError(t *testing.T) {
 	}
 }
 
+// --- mergeStudentWorkExecutionSettings unit tests ---
+
+func TestMergeStudentWorkExecutionSettings_AllNil(t *testing.T) {
+	result := mergeStudentWorkExecutionSettings(nil, nil, nil)
+
+	if result.Stdin != nil {
+		t.Errorf("expected nil Stdin, got %v", result.Stdin)
+	}
+	if result.RandomSeed != nil {
+		t.Errorf("expected nil RandomSeed, got %v", result.RandomSeed)
+	}
+	if len(result.Files) != 0 {
+		t.Errorf("expected empty Files, got %v", result.Files)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_OnlyProblemSettings(t *testing.T) {
+	stdin := "from problem"
+	seed := 42
+	problemJSON := json.RawMessage(`{"stdin":"from problem","random_seed":42}`)
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, nil, nil)
+
+	if result.Stdin == nil || *result.Stdin != stdin {
+		t.Errorf("expected Stdin %q, got %v", stdin, result.Stdin)
+	}
+	if result.RandomSeed == nil || *result.RandomSeed != seed {
+		t.Errorf("expected RandomSeed %d, got %v", seed, result.RandomSeed)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_StudentWorkOverridesProblem(t *testing.T) {
+	problemJSON := json.RawMessage(`{"stdin":"from problem","random_seed":1}`)
+	studentJSON := json.RawMessage(`{"stdin":"from student"}`)
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, studentJSON, nil)
+
+	// Student stdin overrides problem stdin
+	if result.Stdin == nil || *result.Stdin != "from student" {
+		t.Errorf("expected Stdin %q, got %v", "from student", result.Stdin)
+	}
+	// RandomSeed from problem is preserved (student didn't set it)
+	if result.RandomSeed == nil || *result.RandomSeed != 1 {
+		t.Errorf("expected RandomSeed 1 from problem, got %v", result.RandomSeed)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_RequestOverridesAll(t *testing.T) {
+	problemJSON := json.RawMessage(`{"stdin":"from problem","random_seed":1}`)
+	studentJSON := json.RawMessage(`{"stdin":"from student","random_seed":2}`)
+	reqSettings := &executionSettingsJSON{
+		Stdin:      strPtr("from request"),
+		RandomSeed: intPtr(99),
+	}
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, studentJSON, reqSettings)
+
+	if result.Stdin == nil || *result.Stdin != "from request" {
+		t.Errorf("expected Stdin %q from request, got %v", "from request", result.Stdin)
+	}
+	if result.RandomSeed == nil || *result.RandomSeed != 99 {
+		t.Errorf("expected RandomSeed 99 from request, got %v", result.RandomSeed)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_EmptyStudentWorkJSON(t *testing.T) {
+	problemJSON := json.RawMessage(`{"stdin":"from problem"}`)
+	// Empty JSON object — no fields set
+	studentJSON := json.RawMessage(`{}`)
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, studentJSON, nil)
+
+	// Problem-level stdin should still be present
+	if result.Stdin == nil || *result.Stdin != "from problem" {
+		t.Errorf("expected Stdin %q from problem, got %v", "from problem", result.Stdin)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_PartialOverlap(t *testing.T) {
+	// Problem sets stdin and random_seed; student overrides only random_seed; request overrides nothing
+	problemJSON := json.RawMessage(`{"stdin":"problem-stdin","random_seed":10}`)
+	studentJSON := json.RawMessage(`{"random_seed":20}`)
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, studentJSON, nil)
+
+	if result.Stdin == nil || *result.Stdin != "problem-stdin" {
+		t.Errorf("expected Stdin %q, got %v", "problem-stdin", result.Stdin)
+	}
+	if result.RandomSeed == nil || *result.RandomSeed != 20 {
+		t.Errorf("expected RandomSeed 20 from student, got %v", result.RandomSeed)
+	}
+}
+
+func TestMergeStudentWorkExecutionSettings_NilRequestSettingsPreservesLowerLayers(t *testing.T) {
+	problemJSON := json.RawMessage(`{"stdin":"problem-stdin"}`)
+	studentJSON := json.RawMessage(`{"random_seed":7}`)
+
+	result := mergeStudentWorkExecutionSettings(problemJSON, studentJSON, nil)
+
+	if result.Stdin == nil || *result.Stdin != "problem-stdin" {
+		t.Errorf("expected Stdin %q, got %v", "problem-stdin", result.Stdin)
+	}
+	if result.RandomSeed == nil || *result.RandomSeed != 7 {
+		t.Errorf("expected RandomSeed 7, got %v", result.RandomSeed)
+	}
+}
+
+// intPtr returns a pointer to an int value.
+func intPtr(v int) *int { return &v }

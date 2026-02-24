@@ -427,6 +427,41 @@ func TestSectionProblemHandler_List_Empty(t *testing.T) {
 	}
 }
 
+func TestSectionProblemHandler_Update_NotFound(t *testing.T) {
+	sectionID := uuid.New()
+	problemID := uuid.New()
+	showSolution := true
+
+	reqBody := updateSectionProblemRequest{
+		ShowSolution: &showSolution,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	repo := &mockSectionProblemRepo{
+		updateSectionProblemFn: func(ctx context.Context, sid, pid uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	h := NewSectionProblemHandler()
+	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("problemID", problemID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, spRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSectionProblemHandler_List_InternalError(t *testing.T) {
 	sectionID := uuid.New()
 	userID := uuid.New()

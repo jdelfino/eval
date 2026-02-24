@@ -4,7 +4,7 @@
  * Type-safe validators that use TypeScript interfaces to catch API mismatches at compile time.
  */
 
-import { User, Session, SessionStudent, ExecutionResult } from '@/types/api';
+import { User, Session, SessionStudent, ExecutionResult, SectionProblem, PublishedProblemWithStatus, StudentWork } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 
 const SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/;
@@ -100,4 +100,58 @@ export function validateExecutionResultShape(obj: ExecutionResult, label = 'Exec
     expect(typeof obj.error).toBe('string');
   }
   expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of a SectionProblem object from the backend. */
+export function validateSectionProblemShape(obj: SectionProblem, label = 'SectionProblem') {
+  expect(typeof obj.section_id).toBe('string');
+  expect(typeof obj.problem_id).toBe('string');
+  expect(typeof obj.show_solution).toBe('boolean');
+  expect(typeof obj.published_at).toBe('string');
+  expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of a PublishedProblemWithStatus object from the backend. */
+export function validatePublishedProblemWithStatusShape(
+  obj: PublishedProblemWithStatus,
+  label = 'PublishedProblemWithStatus'
+) {
+  // SectionProblem fields
+  expect(typeof obj.section_id).toBe('string');
+  expect(typeof obj.problem_id).toBe('string');
+  expect(typeof obj.show_solution).toBe('boolean');
+  expect(typeof obj.published_at).toBe('string');
+  // Additional fields
+  expect(typeof obj.id).toBe('string');
+  expect(typeof obj.published_by).toBe('string');
+  // Nested problem object
+  expect(typeof obj.problem).toBe('object');
+  expect(obj.problem).not.toBeNull();
+  // student_work is optional — null or object
+  expect(obj.student_work === null || obj.student_work === undefined || typeof obj.student_work === 'object').toBe(true);
+  expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of a StudentWork object from the backend. */
+export function validateStudentWorkShape(obj: StudentWork, label = 'StudentWork') {
+  expect(typeof obj.id).toBe('string');
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.section_id).toBe('string');
+  expect(typeof obj.problem_id).toBe('string');
+  expect(typeof obj.code).toBe('string');
+  // execution_settings is nullable (null or object)
+  expect(obj.execution_settings === null || typeof obj.execution_settings === 'object').toBe(true);
+  expect(typeof obj.last_update).toBe('string');
+  expect(typeof obj.created_at).toBe('string');
+  expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of a StudentWorkWithProblem object from the backend. */
+export function validateStudentWorkWithProblemShape(
+  obj: StudentWork & { problem: object },
+  label = 'StudentWorkWithProblem'
+) {
+  validateStudentWorkShape(obj, label);
+  expect(typeof obj.problem).toBe('object');
+  expect(obj.problem).not.toBeNull();
 }
