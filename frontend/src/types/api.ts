@@ -213,8 +213,8 @@ export interface PublicProblem {
 
 export interface ExecutionResult {
   success: boolean;
-  output: string;
-  error: string;
+  output?: string;
+  error?: string;
   execution_time_ms: number;
   stdin?: string;
 }
