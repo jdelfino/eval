@@ -12,6 +12,7 @@ import { getRevisions } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
   validateSessionShape,
+  validateSessionStudentShape,
 } from './validators';
 
 describe('Sessions API', () => {
@@ -42,15 +43,7 @@ describe('Sessions API', () => {
       // Students sub-array
       expect(Array.isArray(body.students)).toBe(true);
       if (body.students.length > 0) {
-        const student = body.students[0];
-        expect(typeof student.id).toBe('string');
-        expect(typeof student.session_id).toBe('string');
-        expect(typeof student.user_id).toBe('string');
-        expect(typeof student.name).toBe('string');
-        expect('code' in student).toBe(true);
-        expect('execution_settings' in student).toBe(true);
-        expect(typeof student.last_update).toBe('string');
-        expectSnakeCaseKeys(student, 'SessionStudent');
+        validateSessionStudentShape(body.students[0]);
       }
     });
   });

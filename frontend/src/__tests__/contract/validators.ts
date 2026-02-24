@@ -77,7 +77,7 @@ export function validateSessionShape(session: Session) {
 }
 
 /** Validate the shape of a SessionStudent object with type-safe field access. */
-export function validateSessionStudentShape(obj: SessionStudent) {
+export function validateSessionStudentShape(obj: SessionStudent, label = 'SessionStudent') {
   expect(typeof obj.id).toBe('string');
   expect(typeof obj.session_id).toBe('string');
   expect(typeof obj.user_id).toBe('string');
@@ -85,11 +85,11 @@ export function validateSessionStudentShape(obj: SessionStudent) {
   expect('code' in obj).toBe(true);
   expect('execution_settings' in obj).toBe(true);
   expect(typeof obj.last_update).toBe('string');
-  expectSnakeCaseKeys(obj, 'SessionStudent');
+  expectSnakeCaseKeys(obj, label);
 }
 
 /** Validate the shape of an ExecutionResult object from the backend. */
-export function validateExecutionResultShape(obj: ExecutionResult) {
+export function validateExecutionResultShape(obj: ExecutionResult, label = 'ExecutionResult') {
   expect(typeof obj.success).toBe('boolean');
   expect(typeof obj.execution_time_ms).toBe('number');
   // output and error use omitempty — only present when non-empty
@@ -99,5 +99,5 @@ export function validateExecutionResultShape(obj: ExecutionResult) {
   if ('error' in obj) {
     expect(typeof obj.error).toBe('string');
   }
-  expectSnakeCaseKeys(obj, 'ExecutionResult');
+  expectSnakeCaseKeys(obj, label);
 }

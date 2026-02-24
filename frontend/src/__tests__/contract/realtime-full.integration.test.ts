@@ -17,41 +17,16 @@ import {
   practiceExecute,
   joinSession,
 } from '@/lib/api/realtime';
-import { expectSnakeCaseKeys } from './validators';
-import { SessionStudent, ExecutionResult } from '@/types/api';
+import {
+  validateSessionStudentShape,
+  validateExecutionResultShape,
+} from './validators';
 
 // Student identity for joining the session
 const STUDENT_EXTERNAL_ID = `contract-rt-student-${Date.now()}`;
 const STUDENT_EMAIL = `${STUDENT_EXTERNAL_ID}@contract-test.local`;
 const STUDENT_TOKEN = testToken(STUDENT_EXTERNAL_ID, STUDENT_EMAIL);
 const STUDENT_NAME = 'Contract Test Student';
-
-/** Validate the shape of a SessionStudent object with type-safe field access. */
-function validateSessionStudent(obj: SessionStudent, label: string) {
-  expect(typeof obj.id).toBe('string');
-  expect(typeof obj.session_id).toBe('string');
-  expect(typeof obj.user_id).toBe('string');
-  expect(typeof obj.name).toBe('string');
-  expect('code' in obj).toBe(true);
-  expect('execution_settings' in obj).toBe(true);
-  expect(typeof obj.last_update).toBe('string');
-  expectSnakeCaseKeys(obj, label);
-}
-
-/** Validate the shape of an ExecutionResult object from the backend.
- *  Backend uses execution_time_ms and omitempty on output/error/stdin. */
-function validateExecutionResult(obj: ExecutionResult, label: string) {
-  expect(typeof obj.success).toBe('boolean');
-  expect(typeof obj.execution_time_ms).toBe('number');
-  // output and error use omitempty — only present when non-empty
-  if ('output' in obj) {
-    expect(typeof obj.output).toBe('string');
-  }
-  if ('error' in obj) {
-    expect(typeof obj.error).toBe('string');
-  }
-  expectSnakeCaseKeys(obj, label);
-}
 
 describe('Realtime Session API', () => {
   // Track the student ID returned by joinSession for subsequent calls
@@ -89,7 +64,7 @@ describe('Realtime Session API', () => {
       try {
         const student = await joinSession(sessionId, STUDENT_EXTERNAL_ID, STUDENT_NAME);
 
-        validateSessionStudent(student, 'SessionStudent (joinSession)');
+        validateSessionStudentShape(student, 'SessionStudent (joinSession)');
 
         // Verify returned values match what we sent
         expect(student.session_id).toBe(sessionId);
@@ -126,7 +101,7 @@ describe('Realtime Session API', () => {
       try {
         const student = await updateCode(sessionId, joinedStudentId!, 'print("hello")');
 
-        validateSessionStudent(student, 'SessionStudent (updateCode)');
+        validateSessionStudentShape(student, 'SessionStudent (updateCode)');
         expect(student.session_id).toBe(sessionId);
       } catch (error) {
         const status = (error as { status?: number }).status;
@@ -152,7 +127,7 @@ describe('Realtime Session API', () => {
 
       const result = await executeCode(sessionId, joinedStudentId!, 'print("hello")');
 
-      validateExecutionResult(result, 'ExecutionResult (executeCode)');
+      validateExecutionResultShape(result, 'ExecutionResult (executeCode)');
     });
   });
 
@@ -225,7 +200,7 @@ describe('Realtime Session API', () => {
       try {
         const result = await practiceExecute(sessionId, 'print("practice")');
 
-        validateExecutionResult(result, 'ExecutionResult (practiceExecute)');
+        validateExecutionResultShape(result, 'ExecutionResult (practiceExecute)');
       } catch (error) {
         // Practice mode requires a completed session — the test session may still be active.
         // Backend returns 400 "session is not completed; use /execute for active sessions".

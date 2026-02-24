@@ -49,6 +49,9 @@ const fakeInvitation: SerializedInvitation = {
   created_by: 'admin-1',
   created_at: '2024-01-01T00:00:00Z',
   expires_at: '2024-02-01T00:00:00Z',
+  consumed_at: null,
+  consumed_by: null,
+  revoked_at: null,
   status: 'pending',
 };
 
