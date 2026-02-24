@@ -436,6 +436,9 @@ func (stubRepos) ListSectionProblems(context.Context, uuid.UUID, uuid.UUID) ([]s
 func (stubRepos) CreateSectionProblem(context.Context, store.CreateSectionProblemParams) (*store.SectionProblem, error) {
 	panic("stubRepos: unexpected CreateSectionProblem call")
 }
+func (stubRepos) EnsureSectionProblem(context.Context, store.CreateSectionProblemParams) error {
+	panic("stubRepos: unexpected EnsureSectionProblem call")
+}
 func (stubRepos) UpdateSectionProblem(context.Context, uuid.UUID, uuid.UUID, store.UpdateSectionProblemParams) (*store.SectionProblem, error) {
 	panic("stubRepos: unexpected UpdateSectionProblem call")
 }

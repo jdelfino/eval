@@ -240,6 +240,123 @@ func TestIntegration_SectionProblemsCRUD(t *testing.T) {
 	})
 }
 
+func TestIntegration_EnsureSectionProblem(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+
+	instructorID := uuid.New()
+	classID := uuid.New()
+	sectionID := uuid.New()
+	problemID := uuid.New()
+
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'instr_ensure@test.com', 'instructor', $2)`,
+		instructorID, db.nsID)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, 'Ensure Class', $3)`,
+		classID, db.nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+
+	joinCode := "ENS-" + sectionID.String()[:8]
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, 'Ensure Section', $4)`,
+		sectionID, db.nsID, classID, joinCode)
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`,
+		instructorID, sectionID)
+	if err != nil {
+		t.Fatalf("create membership: %v", err)
+	}
+
+	testCases := json.RawMessage(`[]`)
+	executionSettings := json.RawMessage(`{"stdin": ""}`)
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
+		VALUES ($1, $2, 'Ensure Problem', $3, $4, $5)`,
+		problemID, db.nsID, testCases, executionSettings, instructorID)
+	if err != nil {
+		t.Fatalf("create problem: %v", err)
+	}
+
+	instructorUser := &auth.User{
+		ID:          instructorID,
+		Email:       "instr_ensure@test.com",
+		NamespaceID: db.nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("Creates record when not exists", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		err := s.EnsureSectionProblem(ctx, CreateSectionProblemParams{
+			SectionID:    sectionID,
+			ProblemID:    problemID,
+			PublishedBy:  instructorID,
+			ShowSolution: false,
+		})
+		if err != nil {
+			t.Fatalf("EnsureSectionProblem failed: %v", err)
+		}
+
+		// Verify the record was created
+		var count int
+		err = db.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM section_problems WHERE section_id = $1 AND problem_id = $2`,
+			sectionID, problemID).Scan(&count)
+		if err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected 1 record, got %d", count)
+		}
+	})
+
+	t.Run("No-ops when record already exists", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		// Call again - should not error and should not change show_solution
+		err := s.EnsureSectionProblem(ctx, CreateSectionProblemParams{
+			SectionID:    sectionID,
+			ProblemID:    problemID,
+			PublishedBy:  instructorID,
+			ShowSolution: true, // different from original
+		})
+		if err != nil {
+			t.Fatalf("EnsureSectionProblem (duplicate) failed: %v", err)
+		}
+
+		// Verify still only one record and show_solution was NOT changed
+		var count int
+		var showSolution bool
+		err = db.pool.QueryRow(ctx,
+			`SELECT COUNT(*), bool_or(show_solution) FROM section_problems WHERE section_id = $1 AND problem_id = $2`,
+			sectionID, problemID).Scan(&count, &showSolution)
+		if err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected 1 record, got %d", count)
+		}
+		if showSolution {
+			t.Error("expected show_solution unchanged (false), but it was changed to true")
+		}
+	})
+}
+
 func TestIntegration_ListSectionProblemsWithStudentWork(t *testing.T) {
 	t.Parallel()
 	db := setupIntegrationDB(t)

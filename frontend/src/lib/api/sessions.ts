@@ -14,15 +14,20 @@ import type { WalkthroughScript } from '@/types/analysis';
  * Create a new session for a section.
  * @param sectionId - The section ID
  * @param problemId - Optional problem ID to associate with the session
+ * @param showSolution - Optional flag to show solution to students when auto-publishing
  * @returns The created Session object (backend returns plain object)
  */
 export async function createSession(
   sectionId: string,
-  problemId?: string
+  problemId?: string,
+  showSolution?: boolean
 ): Promise<Session> {
-  const body: Record<string, string> = { section_id: sectionId };
+  const body: Record<string, unknown> = { section_id: sectionId };
   if (problemId) {
     body.problem_id = problemId;
+  }
+  if (showSolution !== undefined) {
+    body.show_solution = showSolution;
   }
   return apiPost<Session>('/sessions', body);
 }

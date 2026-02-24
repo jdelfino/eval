@@ -616,6 +616,9 @@ type SectionProblemRepository interface {
 	ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]PublishedProblemWithStatus, error)
 	// CreateSectionProblem publishes a problem to a section.
 	CreateSectionProblem(ctx context.Context, params CreateSectionProblemParams) (*SectionProblem, error)
+	// EnsureSectionProblem idempotently ensures a section_problems record exists for a given
+	// (section, problem) pair. Safe to call even when the problem is already published.
+	EnsureSectionProblem(ctx context.Context, params CreateSectionProblemParams) error
 	// UpdateSectionProblem updates a section problem's mutable fields.
 	// Returns ErrNotFound if the section problem does not exist.
 	UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params UpdateSectionProblemParams) (*SectionProblem, error)

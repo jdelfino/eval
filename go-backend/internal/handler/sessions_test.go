@@ -20,9 +20,10 @@ import (
 // sessionTestRepos embeds stubRepos for session handler tests.
 type sessionTestRepos struct {
 	stubRepos
-	sess         *mockSessionRepo
-	getSectionFn func(ctx context.Context, id uuid.UUID) (*store.Section, error)
-	getProblemFn func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
+	sess                  *mockSessionRepo
+	getSectionFn          func(ctx context.Context, id uuid.UUID) (*store.Section, error)
+	getProblemFn          func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
+	ensureSectionProblemFn func(ctx context.Context, params store.CreateSectionProblemParams) error
 }
 
 var _ store.Repos = (*sessionTestRepos)(nil)
@@ -65,6 +66,12 @@ func (r *sessionTestRepos) GetProblem(ctx context.Context, id uuid.UUID) (*store
 		return r.getProblemFn(ctx, id)
 	}
 	return r.stubRepos.GetProblem(ctx, id)
+}
+func (r *sessionTestRepos) EnsureSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) error {
+	if r.ensureSectionProblemFn != nil {
+		return r.ensureSectionProblemFn(ctx, params)
+	}
+	return r.stubRepos.EnsureSectionProblem(ctx, params)
 }
 func sessRepos(repo *mockSessionRepo) *sessionTestRepos {
 	return &sessionTestRepos{sess: repo}
@@ -532,6 +539,224 @@ func TestCreateSession_InternalError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestCreateSession_WithProblem_CallsEnsureSectionProblem(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	problemID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+	sess := testSession()
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+	problem := &store.Problem{ID: problemID, Title: "Two Sum"}
+
+	var ensureCalled bool
+	var ensureParams store.CreateSectionProblemParams
+
+	repos := &sessionTestRepos{
+		sess: &mockSessionRepo{
+			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+				return sess, nil, nil
+			},
+		},
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return section, nil
+		},
+		getProblemFn: func(_ context.Context, _ uuid.UUID) (*store.Problem, error) {
+			return problem, nil
+		},
+		ensureSectionProblemFn: func(_ context.Context, params store.CreateSectionProblemParams) error {
+			ensureCalled = true
+			ensureParams = params
+			return nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"section_id": sectionID.String(),
+		"problem_id": problemID.String(),
+	})
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !ensureCalled {
+		t.Error("expected EnsureSectionProblem to be called")
+	}
+	if ensureParams.SectionID != sectionID {
+		t.Errorf("expected section_id %v, got %v", sectionID, ensureParams.SectionID)
+	}
+	if ensureParams.ProblemID != problemID {
+		t.Errorf("expected problem_id %v, got %v", problemID, ensureParams.ProblemID)
+	}
+	if ensureParams.PublishedBy != userID {
+		t.Errorf("expected published_by %v, got %v", userID, ensureParams.PublishedBy)
+	}
+	if ensureParams.ShowSolution {
+		t.Error("expected show_solution=false by default")
+	}
+}
+
+func TestCreateSession_WithProblem_ShowSolutionPassedThrough(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	problemID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+	sess := testSession()
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+	problem := &store.Problem{ID: problemID, Title: "Two Sum"}
+
+	var ensureParams store.CreateSectionProblemParams
+
+	repos := &sessionTestRepos{
+		sess: &mockSessionRepo{
+			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+				return sess, nil, nil
+			},
+		},
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return section, nil
+		},
+		getProblemFn: func(_ context.Context, _ uuid.UUID) (*store.Problem, error) {
+			return problem, nil
+		},
+		ensureSectionProblemFn: func(_ context.Context, params store.CreateSectionProblemParams) error {
+			ensureParams = params
+			return nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"section_id":    sectionID.String(),
+		"problem_id":    problemID.String(),
+		"show_solution": true,
+	})
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !ensureParams.ShowSolution {
+		t.Error("expected show_solution=true to be passed through")
+	}
+}
+
+func TestCreateSession_BlankSession_DoesNotCallEnsureSectionProblem(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	sess := testSession()
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+
+	var ensureCalled bool
+	repos := &sessionTestRepos{
+		sess: &mockSessionRepo{
+			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+				return sess, nil, nil
+			},
+		},
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return section, nil
+		},
+		ensureSectionProblemFn: func(_ context.Context, _ store.CreateSectionProblemParams) error {
+			ensureCalled = true
+			return nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"section_id": sectionID.String(),
+		// no problem_id — blank session
+	})
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if ensureCalled {
+		t.Error("expected EnsureSectionProblem NOT to be called for blank session")
+	}
+}
+
+func TestCreateSession_EnsureSectionProblemError_Returns500(t *testing.T) {
+	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	problemID := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+
+	section := &store.Section{ID: sectionID, Name: "Section A"}
+	problem := &store.Problem{ID: problemID, Title: "Two Sum"}
+
+	repos := &sessionTestRepos{
+		sess: &mockSessionRepo{},
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return section, nil
+		},
+		getProblemFn: func(_ context.Context, _ uuid.UUID) (*store.Problem, error) {
+			return problem, nil
+		},
+		ensureSectionProblemFn: func(_ context.Context, _ store.CreateSectionProblemParams) error {
+			return errors.New("db error")
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"section_id": sectionID.String(),
+		"problem_id": problemID.String(),
+	})
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

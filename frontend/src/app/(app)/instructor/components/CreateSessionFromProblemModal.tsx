@@ -2,15 +2,21 @@
 
 /**
  * Create Session From Problem Modal
- * 
+ *
  * Modal that allows instructors to create a session from a problem.
  * The class is pre-filled from the problem (read-only). The instructor only selects a section.
+ *
+ * When a section is selected, the modal checks if the problem is already published to that section.
+ * If not published: shows a forced "Publish to section" checkbox (checked, disabled) and a
+ * "Show solution to students" toggle (unchecked by default).
+ * If already published: shows a small "Already published to this section" note.
  */
 
 import React, { useState, useEffect } from 'react';
 import { getLastUsedSection, setLastUsedSection } from '@/lib/last-used-section';
 import { getClassSections } from '@/lib/api/sections';
 import { createSession } from '@/lib/api/sessions';
+import { listProblemSections } from '@/lib/api/section-problems';
 
 interface SectionInfo {
   id: string;
@@ -41,10 +47,14 @@ export default function CreateSessionFromProblemModal({
   const [loading, setLoading] = useState(false);
   const [loadingSections, setLoadingSections] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishedSectionIds, setPublishedSectionIds] = useState<Set<string>>(new Set());
+  const [showSolution, setShowSolution] = useState(false);
 
   useEffect(() => {
     loadSections(class_id);
-  }, [class_id]);
+    loadPublishedSections();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [class_id, problem_id]);
 
   const loadSections = async (targetClassId: string) => {
     try {
@@ -70,6 +80,16 @@ export default function CreateSessionFromProblemModal({
     }
   };
 
+  const loadPublishedSections = async () => {
+    try {
+      const sectionProblems = await listProblemSections(problem_id);
+      setPublishedSectionIds(new Set(sectionProblems.map(sp => sp.section_id)));
+    } catch (err) {
+      console.error('Error loading published sections:', err);
+      // Non-fatal — publish UX will just show the publish box
+    }
+  };
+
   const handleCreateSession = async () => {
     if (!selectedSectionId) {
       setError('Please select a section');
@@ -80,7 +100,12 @@ export default function CreateSessionFromProblemModal({
       setLoading(true);
       setError(null);
 
-      const session = await createSession(selectedSectionId, problem_id);
+      const isAlreadyPublished = publishedSectionIds.has(selectedSectionId);
+      const session = await createSession(
+        selectedSectionId,
+        problem_id,
+        isAlreadyPublished ? undefined : showSolution
+      );
       setLastUsedSection(selectedSectionId, class_id);
       // Session type doesn't have join_code directly, get it from section
       const selectedSection = sections.find(s => s.id === selectedSectionId);
@@ -94,6 +119,7 @@ export default function CreateSessionFromProblemModal({
   };
 
   const selectedSection = sections.find(s => s.id === selectedSectionId);
+  const isAlreadyPublished = selectedSectionId ? publishedSectionIds.has(selectedSectionId) : false;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -159,6 +185,39 @@ export default function CreateSessionFromProblemModal({
                 </select>
               )}
             </div>
+
+          {/* Publish UX — shown only when a section is selected */}
+          {selectedSectionId && (
+            isAlreadyPublished ? (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+                Already published to this section
+              </div>
+            ) : (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                <label className="flex items-center gap-2 text-sm text-blue-900">
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    disabled={true}
+                    aria-label="Publish to section"
+                    className="rounded"
+                    readOnly
+                  />
+                  <span>Publish to section</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-blue-800 ml-5">
+                  <input
+                    type="checkbox"
+                    checked={showSolution}
+                    onChange={(e) => setShowSolution(e.target.checked)}
+                    aria-label="Show solution to students"
+                    className="rounded"
+                  />
+                  <span>Show solution to students</span>
+                </label>
+              </div>
+            )
+          )}
 
           {/* Summary */}
           {selectedSection && (

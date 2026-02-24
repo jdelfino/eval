@@ -84,6 +84,39 @@ describe('lib/api/sessions', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 's1', problem_id: 'prob-1' });
       expect(result).toEqual(fakeSession);
     });
+
+    it('includes show_solution=true when provided', async () => {
+      mockApiPost.mockResolvedValue(fakeSession);
+
+      await createSession('s1', 'prob-1', true);
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', {
+        section_id: 's1',
+        problem_id: 'prob-1',
+        show_solution: true,
+      });
+    });
+
+    it('includes show_solution=false when explicitly set to false', async () => {
+      mockApiPost.mockResolvedValue(fakeSession);
+
+      await createSession('s1', 'prob-1', false);
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions', {
+        section_id: 's1',
+        problem_id: 'prob-1',
+        show_solution: false,
+      });
+    });
+
+    it('omits show_solution when not provided', async () => {
+      mockApiPost.mockResolvedValue(fakeSession);
+
+      await createSession('s1', 'prob-1');
+
+      const callArgs = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+      expect('show_solution' in callArgs).toBe(false);
+    });
   });
 
   describe('endSession', () => {
