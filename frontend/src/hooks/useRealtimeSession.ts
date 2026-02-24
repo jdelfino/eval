@@ -118,7 +118,7 @@ export function useRealtimeSession({
     user_id: s.user_id,
     name: s.name,
     code: s.code || '',
-    last_update: new Date(s.last_update),
+    last_update: new Date(s.joined_at),
     execution_settings: s.execution_settings as ExecutionSettings | undefined,
   }), []);
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -85,6 +86,18 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repos := store.ReposFromContext(r.Context())
+
+	// Look up the session_student to get the StudentWorkID (required by NOT NULL constraint).
+	sessionStudent, err := repos.GetSessionStudent(r.Context(), sessionID, authUser.ID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "student not in session")
+			return
+		}
+		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	revision, err := repos.CreateRevision(r.Context(), store.CreateRevisionParams{
 		NamespaceID:     authUser.NamespaceID,
 		SessionID:       &sessionID,
@@ -94,6 +107,7 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		FullCode:        req.FullCode,
 		BaseRevisionID:  req.BaseRevisionID,
 		ExecutionResult: req.ExecutionResult,
+		StudentWorkID:   sessionStudent.StudentWorkID,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")

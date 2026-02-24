@@ -62,8 +62,10 @@ const fakePublishedProblem: PublishedProblemWithStatus = {
 };
 
 const fakeSectionProblem: SectionProblem = {
+  id: 'sp-1',
   section_id: 'section-1',
   problem_id: 'problem-1',
+  published_by: 'user-1',
   show_solution: false,
   published_at: '2024-01-01T00:00:00Z',
 };

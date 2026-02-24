@@ -11,7 +11,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import StudentSectionView from './components/StudentSectionView';
 import InstructorSectionView from './components/InstructorSectionView';
 
-interface SectionDetail {
+export interface SectionDetail {
   id: string;
   classId: string;
   name: string;

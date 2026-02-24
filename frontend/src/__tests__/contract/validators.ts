@@ -84,7 +84,7 @@ export function validateSessionStudentShape(obj: SessionStudent, label = 'Sessio
   expect(typeof obj.name).toBe('string');
   expect('code' in obj).toBe(true);
   expect('execution_settings' in obj).toBe(true);
-  expect(typeof obj.last_update).toBe('string');
+  expect(typeof obj.joined_at).toBe('string');
   expectSnakeCaseKeys(obj, label);
 }
 
@@ -104,8 +104,10 @@ export function validateExecutionResultShape(obj: ExecutionResult, label = 'Exec
 
 /** Validate the shape of a SectionProblem object from the backend. */
 export function validateSectionProblemShape(obj: SectionProblem, label = 'SectionProblem') {
+  expect(typeof obj.id).toBe('string');
   expect(typeof obj.section_id).toBe('string');
   expect(typeof obj.problem_id).toBe('string');
+  expect(typeof obj.published_by).toBe('string');
   expect(typeof obj.show_solution).toBe('boolean');
   expect(typeof obj.published_at).toBe('string');
   expectSnakeCaseKeys(obj, label);

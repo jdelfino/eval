@@ -182,7 +182,7 @@ describe('lib/api/sessions', () => {
         problem: { title: 'Test Problem', description: 'A test problem', starter_code: 'print("starter")' },
       },
       students: [
-        { id: 'rec-1', user_id: 'student-1', name: 'Alice', code: 'print("hello")', last_update: '2024-01-01T00:00:00Z' },
+        { id: 'rec-1', user_id: 'student-1', name: 'Alice', code: 'print("hello")', joined_at: '2024-01-01T00:00:00Z' },
       ],
       join_code: 'ABC123',
     };
@@ -205,7 +205,7 @@ describe('lib/api/sessions', () => {
         id: 'student-1',
         name: 'Alice',
         code: 'print("hello")',
-        last_update: '2024-01-01T00:00:00Z',
+        joined_at: '2024-01-01T00:00:00Z',
       });
       expect(result.participant_count).toBe(1);
     });
@@ -269,14 +269,14 @@ describe('lib/api/sessions', () => {
       expect(result.starter_code).toBe('def solve(): pass');
     });
 
-    it('SessionStudentSummary has only summary fields (id, name, code, last_update)', () => {
+    it('SessionStudentSummary has only summary fields (id, name, code, joined_at)', () => {
       const summary: SessionStudentSummary = {
         id: 'test',
         name: 'Test',
         code: 'code',
-        last_update: '2024-01-01T00:00:00Z',
+        joined_at: '2024-01-01T00:00:00Z',
       };
-      expect(Object.keys(summary)).toEqual(['id', 'name', 'code', 'last_update']);
+      expect(Object.keys(summary)).toEqual(['id', 'name', 'code', 'joined_at']);
     });
   });
 

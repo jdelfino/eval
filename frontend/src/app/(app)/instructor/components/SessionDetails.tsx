@@ -165,7 +165,7 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
                     {selectedStudent.name}'s Code
                   </h3>
                   <span className="text-sm text-gray-500">
-                    Last updated: {new Date(selectedStudent.last_update).toLocaleString()}
+                    Joined: {new Date(selectedStudent.joined_at).toLocaleString()}
                   </span>
                 </div>
                 <EditorContainer height="500px">

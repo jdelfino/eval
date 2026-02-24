@@ -114,7 +114,6 @@ func TestUpdateCode_WithStudentWork_UpdatesStudentWorkNotSessionStudents(t *test
 
 	var updatedWorkID uuid.UUID
 	var updatedParams store.UpdateStudentWorkParams
-	var updateCodeCalled bool
 
 	studentRepo := &mockSessionStudentRepo{
 		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
@@ -122,11 +121,6 @@ func TestUpdateCode_WithStudentWork_UpdatesStudentWorkNotSessionStudents(t *test
 				return nil, store.ErrNotFound
 			}
 			return ss, nil
-		},
-		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
-			updateCodeCalled = true
-			t.Error("UpdateCode should NOT be called on session_students anymore")
-			return nil, nil
 		},
 	}
 
@@ -155,11 +149,6 @@ func TestUpdateCode_WithStudentWork_UpdatesStudentWorkNotSessionStudents(t *test
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// Verify old UpdateCode was NOT called
-	if updateCodeCalled {
-		t.Error("UpdateCode on session_students should not be called")
 	}
 
 	// Verify UpdateStudentWork was called with correct student_work_id

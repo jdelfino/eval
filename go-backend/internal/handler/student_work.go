@@ -16,15 +16,9 @@ type StudentWorkHandler struct {
 	executor ExecutorClient
 }
 
-// NewStudentWorkHandler creates a new StudentWorkHandler.
-func NewStudentWorkHandler() *StudentWorkHandler {
-	return &StudentWorkHandler{}
-}
-
-// WithExecutor sets the executor client (used for testing).
-func (h *StudentWorkHandler) WithExecutor(exec ExecutorClient) *StudentWorkHandler {
-	h.executor = exec
-	return h
+// NewStudentWorkHandler creates a new StudentWorkHandler with the given executor client.
+func NewStudentWorkHandler(exec ExecutorClient) *StudentWorkHandler {
+	return &StudentWorkHandler{executor: exec}
 }
 
 // updateStudentWorkRequest is the request body for PATCH /student-work/{id}.

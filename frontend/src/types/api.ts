@@ -111,7 +111,7 @@ export interface SessionStudent {
   name: string;
   code: string;
   execution_settings: unknown;
-  last_update: string;
+  joined_at: string;
 }
 
 export interface SectionMembership {
@@ -230,8 +230,10 @@ export interface StudentWorkWithProblem extends StudentWork {
 
 /** SectionProblem — a problem published to a section. */
 export interface SectionProblem {
+  id: string;
   section_id: string;
   problem_id: string;
+  published_by: string;
   show_solution: boolean;
   published_at: string;
 }

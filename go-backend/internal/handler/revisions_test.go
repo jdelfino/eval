@@ -34,7 +34,8 @@ func (m *mockRevisionRepo) CreateRevision(ctx context.Context, params store.Crea
 // revisionTestRepos embeds stubRepos and overrides revision methods.
 type revisionTestRepos struct {
 	stubRepos
-	rev *mockRevisionRepo
+	rev     *mockRevisionRepo
+	student *mockSessionStudentRepo
 }
 
 var _ store.Repos = (*revisionTestRepos)(nil)
@@ -45,9 +46,19 @@ func (r *revisionTestRepos) ListRevisions(ctx context.Context, sessionID uuid.UU
 func (r *revisionTestRepos) CreateRevision(ctx context.Context, params store.CreateRevisionParams) (*store.Revision, error) {
 	return r.rev.CreateRevision(ctx, params)
 }
+func (r *revisionTestRepos) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error) {
+	if r.student != nil && r.student.getSessionStudentFn != nil {
+		return r.student.getSessionStudentFn(ctx, sessionID, userID)
+	}
+	return nil, store.ErrNotFound
+}
 
 func revisionRepos(repo *mockRevisionRepo) *revisionTestRepos {
 	return &revisionTestRepos{rev: repo}
+}
+
+func revisionReposWithStudent(repo *mockRevisionRepo, student *mockSessionStudentRepo) *revisionTestRepos {
+	return &revisionTestRepos{rev: repo, student: student}
 }
 
 func testRevision() *store.Revision {
@@ -234,6 +245,7 @@ func TestListRevisions_InternalError(t *testing.T) {
 func TestCreateRevision_Success(t *testing.T) {
 	rev := testRevision()
 	userID := rev.UserID
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
 	repo := &mockRevisionRepo{
 		createRevisionFn: func(_ context.Context, params store.CreateRevisionParams) (*store.Revision, error) {
@@ -253,6 +265,17 @@ func TestCreateRevision_Success(t *testing.T) {
 		},
 	}
 
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			return &store.SessionStudent{
+				ID:            uuid.New(),
+				SessionID:     sessID,
+				UserID:        uID,
+				StudentWorkID: &studentWorkID,
+			}, nil
+		},
+	}
+
 	body, _ := json.Marshal(map[string]any{
 		"full_code":        "fmt.Println(\"hello\")",
 		"is_diff":          false,
@@ -268,7 +291,7 @@ func TestCreateRevision_Success(t *testing.T) {
 		Role:        auth.RoleStudent,
 		NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, revisionRepos(repo))
+	ctx = store.WithRepos(ctx, revisionReposWithStudent(repo, studentRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -337,9 +360,20 @@ func TestCreateRevision_InvalidBody(t *testing.T) {
 }
 
 func TestCreateRevision_InternalError(t *testing.T) {
+	studentWorkID := uuid.New()
 	repo := &mockRevisionRepo{
 		createRevisionFn: func(_ context.Context, _ store.CreateRevisionParams) (*store.Revision, error) {
 			return nil, errors.New("db error")
+		},
+	}
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			return &store.SessionStudent{
+				ID:            uuid.New(),
+				SessionID:     sessID,
+				UserID:        uID,
+				StudentWorkID: &studentWorkID,
+			}, nil
 		},
 	}
 
@@ -353,7 +387,7 @@ func TestCreateRevision_InternalError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	ctx := revisionRouteCtx(sessionID.String())
 	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent, NamespaceID: "test-ns"})
-	ctx = store.WithRepos(ctx, revisionRepos(repo))
+	ctx = store.WithRepos(ctx, revisionReposWithStudent(repo, studentRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -426,5 +460,102 @@ func TestCreateRevision_Unauthorized_ErrorBody(t *testing.T) {
 	}
 	if errResp["error"] != "authentication required" {
 		t.Errorf("expected error %q, got %q", "authentication required", errResp["error"])
+	}
+}
+
+// TestCreateRevision_IncludesStudentWorkID verifies that Create looks up the
+// session_student and passes its StudentWorkID to CreateRevision.
+// This is a regression test for Fix 2: revisions.student_work_id NOT NULL.
+func TestCreateRevision_IncludesStudentWorkID(t *testing.T) {
+	rev := testRevision()
+	userID := rev.UserID
+	studentWorkID := uuid.MustParse("deadbeef-dead-beef-dead-beefdeadbeef")
+
+	var capturedStudentWorkID *uuid.UUID
+	revRepo := &mockRevisionRepo{
+		createRevisionFn: func(_ context.Context, params store.CreateRevisionParams) (*store.Revision, error) {
+			capturedStudentWorkID = params.StudentWorkID
+			return rev, nil
+		},
+	}
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			return &store.SessionStudent{
+				ID:            uuid.New(),
+				SessionID:     sessID,
+				UserID:        uID,
+				Name:          "Alice",
+				StudentWorkID: &studentWorkID,
+			}, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"full_code":        "print('hello')",
+		"is_diff":          false,
+		"execution_result": json.RawMessage(`{"passed":true}`),
+	})
+
+	h := NewRevisionHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := revisionRouteCtx(rev.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          userID,
+		Role:        auth.RoleStudent,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, revisionReposWithStudent(revRepo, studentRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if capturedStudentWorkID == nil {
+		t.Fatal("expected StudentWorkID to be set in CreateRevisionParams, got nil")
+	}
+	if *capturedStudentWorkID != studentWorkID {
+		t.Errorf("expected StudentWorkID %v, got %v", studentWorkID, *capturedStudentWorkID)
+	}
+}
+
+// TestCreateRevision_StudentNotInSession verifies that Create returns 404 when
+// the student has no session_student record (and thus no StudentWorkID).
+func TestCreateRevision_StudentNotInSession(t *testing.T) {
+	rev := testRevision()
+	userID := rev.UserID
+
+	revRepo := &mockRevisionRepo{}
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"full_code": "x"})
+
+	h := NewRevisionHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := revisionRouteCtx(rev.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          userID,
+		Role:        auth.RoleStudent,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, revisionReposWithStudent(revRepo, studentRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

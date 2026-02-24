@@ -201,7 +201,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(custommw.ForCategory(rl, "join", custommw.IPKey)).Post("/sections/join", membershipHandler.Join)
 
 			sectionProblemHandler := handler.NewSectionProblemHandler()
-			studentWorkHandler := handler.NewStudentWorkHandler().WithExecutor(execClient)
+			studentWorkHandler := handler.NewStudentWorkHandler(execClient)
 
 			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler).WithRateLimiting(readRL, writeRL)
 			r.With(readRL).Get("/sections/my", sectionHandler.MySections)

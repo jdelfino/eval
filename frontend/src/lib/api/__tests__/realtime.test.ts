@@ -53,7 +53,7 @@ const fakeSessionStudent: SessionStudent = {
   name: 'Alice',
   code: 'print("hello")',
   execution_settings: null,
-  last_update: '2024-01-01T00:00:00Z',
+  joined_at: '2024-01-01T00:00:00Z',
 };
 
 const fakeExecutionResult: ExecutionResult = {

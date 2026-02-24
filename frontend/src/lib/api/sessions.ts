@@ -86,7 +86,7 @@ export interface SessionStudentSummary {
   id: string;
   name: string;
   code: string;
-  last_update: string;
+  joined_at: string;
 }
 
 /**
@@ -112,7 +112,7 @@ export interface SessionDetails {
  */
 interface SessionStateResponse {
   session: Session;
-  students: Array<{ id: string; user_id: string; name: string; code: string; last_update: string }>;
+  students: Array<{ id: string; user_id: string; name: string; code: string; joined_at: string }>;
   join_code: string;
 }
 
@@ -140,7 +140,7 @@ export async function getSessionDetails(sessionId: string): Promise<SessionDetai
       id: s.user_id || s.id,
       name: s.name,
       code: s.code,
-      last_update: s.last_update,
+      joined_at: s.joined_at,
     })),
     participant_count: raw.students.length,
   };

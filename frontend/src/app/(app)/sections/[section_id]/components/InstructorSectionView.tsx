@@ -4,16 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import type { Session, PublishedProblemWithStatus } from '@/types/api';
 import { BackButton } from '@/components/ui/BackButton';
-
-interface SectionDetail {
-  id: string;
-  classId: string;
-  name: string;
-  className: string;
-  classDescription: string;
-  semester: string | null;
-  role: 'instructor' | 'student';
-}
+import type { SectionDetail } from '../page';
 
 interface InstructorSectionViewProps {
   section: SectionDetail;

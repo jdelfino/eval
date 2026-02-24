@@ -183,7 +183,7 @@ func TestStudentWorkHandler_GetOrCreate_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -222,7 +222,7 @@ func TestStudentWorkHandler_GetOrCreate_ProblemNotPublished(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -267,7 +267,7 @@ func TestStudentWorkHandler_Get_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", workID.String())
@@ -305,7 +305,7 @@ func TestStudentWorkHandler_Get_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", workID.String())
@@ -356,7 +356,7 @@ func TestStudentWorkHandler_Update_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -424,7 +424,7 @@ func TestStudentWorkHandler_Execute_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler().WithExecutor(execClient)
+	h := NewStudentWorkHandler(execClient)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -466,7 +466,7 @@ func TestStudentWorkHandler_Execute_WorkNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -502,7 +502,7 @@ func TestStudentWorkHandler_GetOrCreate_EmptyNamespaceID(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -537,7 +537,7 @@ func TestStudentWorkHandler_Update_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler()
+	h := NewStudentWorkHandler(nil)
 	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -589,7 +589,7 @@ func TestStudentWorkHandler_Execute_ExecutorError(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler().WithExecutor(execClient)
+	h := NewStudentWorkHandler(execClient)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -716,3 +716,60 @@ func TestMergeStudentWorkExecutionSettings_NilRequestSettingsPreservesLowerLayer
 
 // intPtr returns a pointer to an int value.
 func intPtr(v int) *int { return &v }
+
+// TestStudentWorkHandler_ConstructorInjectsExecutor verifies that the constructor
+// takes an executor argument directly (Fix 4: no nil-panic risk from missing WithExecutor call).
+func TestStudentWorkHandler_ConstructorInjectsExecutor(t *testing.T) {
+	workID := uuid.New()
+	userID := uuid.New()
+	problemID := uuid.New()
+	namespaceID := "test-ns"
+	code := "print('hello')"
+
+	reqBody := executeStudentWorkRequest{
+		Code: code,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	work := &store.StudentWorkWithProblem{
+		StudentWork: store.StudentWork{
+			ID:        workID,
+			UserID:    userID,
+			ProblemID: problemID,
+			Code:      code,
+		},
+		Problem: store.Problem{
+			ID: problemID,
+		},
+	}
+
+	swRepo := &mockStudentWorkRepo{
+		getStudentWorkFn: func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	// This line should compile with the new constructor signature NewStudentWorkHandler(exec ExecutorClient)
+	h := NewStudentWorkHandler(execClient)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", workID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: namespaceID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Execute(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
