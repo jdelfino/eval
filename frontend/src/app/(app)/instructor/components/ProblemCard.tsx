@@ -7,6 +7,7 @@
  */
 
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CopyLinkDropdown } from './CopyLinkDropdown';
@@ -102,38 +103,21 @@ export default function ProblemCard({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onEdit(problem.id)}
-              className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Edit problem"
-            >
+            <Button variant="ghost" size="sm" onClick={() => onEdit(problem.id)} title="Edit problem">
               Edit
-            </button>
+            </Button>
             <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
             {onPublish && (
-              <button
-                onClick={() => onPublish(problem.id)}
-                className="px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                title="Publish to sections"
-              >
+              <Button variant="ghost" size="sm" onClick={() => onPublish(problem.id)} title="Publish to sections">
                 Publish
-              </button>
+              </Button>
             )}
-            <button
-              onClick={() => onCreateSession(problem.id)}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-              title="Create session"
-            >
+            <Button variant="secondary" size="sm" onClick={() => onCreateSession(problem.id)} title="Create session">
               Create Session
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              disabled={isDeleting}
-              className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-              title="Delete problem"
-            >
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleDeleteClick} disabled={isDeleting} title="Delete problem">
               {isDeleting ? '...' : 'Delete'}
-            </button>
+            </Button>
           </div>
         </div>
         <ConfirmDialog
@@ -168,37 +152,22 @@ export default function ProblemCard({
         <span>{formatDate(problem.created_at)}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => onEdit(problem.id)}
-          className="col-span-2 px-3 py-2 text-sm text-blue-600 border border-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-        >
+      <div className="flex flex-col gap-2">
+        <Button variant="ghost" size="sm" className="w-full" onClick={() => onEdit(problem.id)}>
           Edit
-        </button>
-        <div className="col-span-2">
-          <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
-        </div>
+        </Button>
+        <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
         {onPublish && (
-          <button
-            onClick={() => onPublish(problem.id)}
-            className="col-span-2 px-3 py-2 text-sm text-purple-600 border border-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-          >
+          <Button variant="ghost" size="sm" className="w-full" onClick={() => onPublish(problem.id)}>
             Publish
-          </button>
+          </Button>
         )}
-        <button
-          onClick={() => onCreateSession(problem.id)}
-          className="col-span-2 px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-        >
+        <Button variant="secondary" size="sm" className="w-full" onClick={() => onCreateSession(problem.id)}>
           Create Session
-        </button>
-        <button
-          onClick={handleDeleteClick}
-          disabled={isDeleting}
-          className="col-span-2 px-3 py-2 text-sm text-red-600 border border-red-300 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="ghost" size="sm" className="w-full" onClick={handleDeleteClick} disabled={isDeleting}>
           {isDeleting ? 'Deleting...' : 'Delete'}
-        </button>
+        </Button>
       </div>
       <ConfirmDialog
         open={showDeleteConfirm}
