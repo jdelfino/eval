@@ -1,12 +1,31 @@
 # ──────────────────────────────────────────────
 # Aggregate targets
 # ──────────────────────────────────────────────
-.PHONY: build test test-integration lint docker-build test-e2e
+.PHONY: build test test-integration lint docker-build test-e2e test-all ensure-test-deps
 
 build: build-api build-executor build-frontend
 test: test-api test-executor test-frontend
 test-integration: test-integration-store test-integration-realtime test-integration-api test-integration-executor test-integration-contract
 lint: lint-api lint-executor lint-frontend
+
+# Run all unit + integration tests. Use: make -j2 test-all
+# ensure-test-deps runs first (order-only prerequisite), then test targets run in parallel.
+
+# Force re-run if postgres isn't responding, even if stamp file is current
+ifneq ($(shell pg_isready -h localhost -p 5432 -q 2>/dev/null && echo yes),yes)
+.PHONY: .deps-ready
+endif
+
+.deps-ready: $(wildcard migrations/*.up.sql) docker-compose.yml
+	./scripts/ensure-test-postgres.sh
+	@touch $@
+
+ensure-test-deps: .deps-ready
+
+test-all: | ensure-test-deps
+test-all: test-api test-executor test-frontend \
+	test-integration-store test-integration-realtime test-integration-api \
+	test-integration-contract
 
 docker-build: docker-build-api docker-build-executor
 

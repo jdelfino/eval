@@ -31,6 +31,7 @@ make reset-db            # Destroy and recreate DB with seed data
 make build               # Build all binaries
 make test                # Run all unit tests (with race detector)
 make test-integration    # Run all integration tests
+make test-all            # Unit + integration tests in parallel
 make lint                # Lint all projects
 make docker-build        # Build all Docker images
 ```
