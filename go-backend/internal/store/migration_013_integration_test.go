@@ -27,6 +27,7 @@ import (
 // =============================================================================
 
 func TestIntegration_Migration013_SectionProblemsTableExists(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -90,6 +91,7 @@ func TestIntegration_Migration013_SectionProblemsTableExists(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -153,6 +155,7 @@ func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -209,6 +212,7 @@ func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_SectionProblemsRLS(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -307,6 +311,7 @@ func TestIntegration_Migration013_SectionProblemsRLS(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -496,6 +501,7 @@ func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_ForeignKeys(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -604,6 +610,7 @@ func TestIntegration_Migration013_ForeignKeys(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration013_FakePracticeSessionsCleanup(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()

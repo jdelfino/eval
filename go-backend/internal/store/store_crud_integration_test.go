@@ -24,6 +24,7 @@ import (
 // =============================================================================
 
 func TestIntegration_CreateNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -106,6 +107,7 @@ func TestIntegration_CreateNamespace(t *testing.T) {
 }
 
 func TestIntegration_GetNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -145,6 +147,7 @@ func TestIntegration_GetNamespace(t *testing.T) {
 }
 
 func TestIntegration_ListNamespaces(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -197,6 +200,7 @@ func TestIntegration_ListNamespaces(t *testing.T) {
 }
 
 func TestIntegration_UpdateNamespace(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -254,6 +258,7 @@ func TestIntegration_UpdateNamespace(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -305,6 +310,7 @@ func TestIntegration_CreateClass(t *testing.T) {
 }
 
 func TestIntegration_GetClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -353,6 +359,7 @@ func TestIntegration_GetClass(t *testing.T) {
 }
 
 func TestIntegration_ListClasses(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -405,6 +412,7 @@ func TestIntegration_ListClasses(t *testing.T) {
 }
 
 func TestIntegration_UpdateClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -449,6 +457,7 @@ func TestIntegration_UpdateClass(t *testing.T) {
 }
 
 func TestIntegration_DeleteClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -498,6 +507,7 @@ func TestIntegration_DeleteClass(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -556,6 +566,7 @@ func TestIntegration_CreateSection(t *testing.T) {
 }
 
 func TestIntegration_GetSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -607,6 +618,7 @@ func TestIntegration_GetSection(t *testing.T) {
 }
 
 func TestIntegration_ListSectionsByClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -661,6 +673,7 @@ func TestIntegration_ListSectionsByClass(t *testing.T) {
 }
 
 func TestIntegration_UpdateSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -712,6 +725,7 @@ func TestIntegration_UpdateSection(t *testing.T) {
 }
 
 func TestIntegration_DeleteSection(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -765,6 +779,7 @@ func TestIntegration_DeleteSection(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateMembership(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -824,6 +839,7 @@ func TestIntegration_CreateMembership(t *testing.T) {
 }
 
 func TestIntegration_GetSectionByJoinCode(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -872,6 +888,7 @@ func TestIntegration_GetSectionByJoinCode(t *testing.T) {
 }
 
 func TestIntegration_DeleteMembership(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -925,6 +942,7 @@ func TestIntegration_DeleteMembership(t *testing.T) {
 }
 
 func TestIntegration_ListMembers(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()

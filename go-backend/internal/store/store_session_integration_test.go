@@ -93,6 +93,7 @@ func (db *integrationDB) createSessionStudent(ctx context.Context, t *testing.T,
 // =============================================================================
 
 func TestIntegration_CreateSession(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -160,6 +161,7 @@ func TestIntegration_CreateSession(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetSession(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -214,6 +216,7 @@ func TestIntegration_GetSession(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListSessions(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -301,6 +304,7 @@ func TestIntegration_ListSessions(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpdateSession(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -443,6 +447,7 @@ func TestIntegration_UpdateSession(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_JoinSession(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -556,6 +561,7 @@ func TestIntegration_JoinSession(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListSessionStudents(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -625,6 +631,7 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetSessionStudent(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -683,6 +690,7 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateRevision(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -747,6 +755,7 @@ func TestIntegration_CreateRevision(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListRevisions(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -874,6 +883,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CreateProblem(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -940,6 +950,7 @@ func TestIntegration_CreateProblem(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetProblem(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -987,6 +998,7 @@ func TestIntegration_GetProblem(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpdateProblem(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1050,6 +1062,7 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_DeleteProblem(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1101,6 +1114,7 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListProblems(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1160,6 +1174,7 @@ func TestIntegration_ListProblems(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetUserByID(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1208,6 +1223,7 @@ func TestIntegration_GetUserByID(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetUserByExternalID(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1263,6 +1279,7 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpdateUser(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()

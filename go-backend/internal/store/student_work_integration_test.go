@@ -20,6 +20,7 @@ import (
 )
 
 func TestIntegration_StudentWorkCRUD(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -257,6 +258,7 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 }
 
 func TestIntegration_ListStudentWorkBySession(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()

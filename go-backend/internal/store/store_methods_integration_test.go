@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +25,10 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
+
+// ensureRolesOnce guards the one-time EnsureAppRole call so that parallel
+// tests don't race on PostgreSQL catalog GRANT statements.
+var ensureRolesOnce sync.Once
 
 // integrationDB wraps a pool for integration tests and provides helper methods.
 // Each instance owns a random namespace for test isolation.
@@ -53,9 +58,15 @@ func setupIntegrationDB(t *testing.T) *integrationDB {
 	}
 
 	// Ensure eval_app and app roles exist for RLS testing.
-	if err := testutil.EnsureAppRole(ctx, pool); err != nil {
+	// Guarded by sync.Once because concurrent GRANT statements cause
+	// "tuple concurrently updated" errors in PostgreSQL system catalogs.
+	var roleErr error
+	ensureRolesOnce.Do(func() {
+		roleErr = testutil.EnsureAppRole(ctx, pool)
+	})
+	if roleErr != nil {
 		pool.Close()
-		t.Fatalf("failed to ensure app roles: %v", err)
+		t.Fatalf("failed to ensure app roles: %v", roleErr)
 	}
 
 	// Create non-superuser pool mirroring production.
@@ -278,6 +289,7 @@ func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uui
 // =============================================================================
 
 func TestIntegration_ListProblemsFiltered(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -439,6 +451,7 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListUsers(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -509,6 +522,7 @@ func TestIntegration_ListUsers(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -650,6 +664,7 @@ func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_NamespaceIsolation_UserVisibility(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -732,6 +747,7 @@ func TestIntegration_NamespaceIsolation_UserVisibility(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_NamespaceIsolation_CreateClass(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -794,6 +810,7 @@ func TestIntegration_NamespaceIsolation_CreateClass(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_NamespaceIsolation_Sessions(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -886,6 +903,7 @@ func TestIntegration_NamespaceIsolation_Sessions(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_SystemAdminCanSeeAllNamespaces(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1028,6 +1046,7 @@ func TestIntegration_SystemAdminCanSeeAllNamespaces(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1121,6 +1140,7 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_GetUserByEmail(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1169,6 +1189,7 @@ func TestIntegration_GetUserByEmail(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpdateUserAdmin(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1268,6 +1289,7 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_DeleteUser(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1330,6 +1352,7 @@ func TestIntegration_DeleteUser(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_CountUsersByRole(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1390,6 +1413,7 @@ func TestIntegration_CountUsersByRole(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListClassInstructorNames(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1459,6 +1483,7 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListMySections(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1530,6 +1555,7 @@ func TestIntegration_ListMySections(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1584,6 +1610,7 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListMembersByRole(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1663,6 +1690,7 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_UpsertUser_Insert(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1694,6 +1722,7 @@ func TestIntegration_UpsertUser_Insert(t *testing.T) {
 }
 
 func TestIntegration_UpsertUser_Update(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -1753,6 +1782,7 @@ func TestIntegration_UpsertUser_Update(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_ListMyClasses(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()

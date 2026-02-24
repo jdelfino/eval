@@ -24,6 +24,7 @@ import (
 // =============================================================================
 
 func TestIntegration_Migration014_SessionStudentsColumnsDropped(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -64,6 +65,7 @@ func TestIntegration_Migration014_SessionStudentsColumnsDropped(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration014_SessionStudentsColumnRenamed(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -104,6 +106,7 @@ func TestIntegration_Migration014_SessionStudentsColumnRenamed(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration014_RevisionsSessionIdNullable(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -176,6 +179,7 @@ func TestIntegration_Migration014_RevisionsSessionIdNullable(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration014_RevisionsStudentWorkIdNotNull(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
@@ -245,6 +249,7 @@ func TestIntegration_Migration014_RevisionsStudentWorkIdNotNull(t *testing.T) {
 // =============================================================================
 
 func TestIntegration_Migration014_RevisionsBackfill(t *testing.T) {
+	t.Parallel()
 	db := setupIntegrationDB(t)
 
 	ctx := context.Background()
