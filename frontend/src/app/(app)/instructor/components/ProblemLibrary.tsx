@@ -14,6 +14,7 @@ import { listProblems, deleteProblem } from '@/lib/api/problems';
 import ProblemSearch from './ProblemSearch';
 import ProblemCard from './ProblemCard';
 import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
+import PublishProblemModal from './PublishProblemModal';
 import type { Class } from '@/types/api';
 import type { ProblemSummary } from '../types';
 
@@ -44,6 +45,9 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   // Session creation modal state
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [selectedProblemForSession, setSelectedProblemForSession] = useState<{ id: string; title: string; class_id: string } | null>(null);
+
+  // Publish modal state
+  const [publishProblem, setPublishProblem] = useState<{ id: string; class_id: string } | null>(null);
 
   // Load classes on mount
   useEffect(() => {
@@ -207,6 +211,13 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     setSelectedProblemForSession(null);
   };
 
+  const handlePublish = (problem_id: string) => {
+    const problem = problems.find(p => p.id === problem_id);
+    if (problem) {
+      setPublishProblem({ id: problem.id, class_id: problem.class_id });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -332,6 +343,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
               onEdit={handleEdit}
               onDelete={handleDelete}
               onCreateSession={handleCreateSession}
+              onPublish={handlePublish}
               onTagClick={handleTagToggle}
             />
           ))}
@@ -347,6 +359,15 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
           className={classes.find(c => c.id === selectedProblemForSession.class_id)?.name || ''}
           onClose={handleCloseSessionModal}
           onSuccess={handleSessionCreated}
+        />
+      )}
+
+      {/* Publish Problem Modal */}
+      {publishProblem && (
+        <PublishProblemModal
+          problemId={publishProblem.id}
+          classId={publishProblem.class_id}
+          onClose={() => setPublishProblem(null)}
         />
       )}
     </div>
