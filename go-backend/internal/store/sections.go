@@ -86,6 +86,9 @@ func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	sec, err := scanSection(s.q.QueryRow(ctx, query, id, params.Name, params.Semester, params.Active))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleNotFound(err)
 	}
 	return sec, nil
@@ -96,6 +99,9 @@ func (s *Store) UpdateSection(ctx context.Context, id uuid.UUID, params UpdateSe
 func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
 	tag, err := s.q.Exec(ctx, "DELETE FROM sections WHERE id = $1", id)
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
@@ -147,6 +153,9 @@ func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCod
 
 	sec, err := scanSection(s.q.QueryRow(ctx, query, id, joinCode))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleNotFound(err)
 	}
 	return sec, nil

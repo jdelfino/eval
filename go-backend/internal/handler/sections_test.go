@@ -1920,3 +1920,148 @@ func TestSectionRoutes_RemoveInstructor_RBACForbidden(t *testing.T) {
 		t.Fatalf("expected 403 for student DELETE instructor via Routes(), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// --- RLS Forbidden tests (store returns ErrForbidden → handler returns 403) ---
+
+func TestUpdateSection_RLSForbidden(t *testing.T) {
+	repo := &mockSectionRepo{
+		updateSectionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSectionParams) (*store.Section, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	id := uuid.New()
+	body, _ := json.Marshal(map[string]any{"name": "New Name"})
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteSection_RLSForbidden(t *testing.T) {
+	repo := &mockSectionRepo{
+		deleteSectionFn: func(_ context.Context, _ uuid.UUID) error {
+			return store.ErrForbidden
+		},
+	}
+
+	id := uuid.New()
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRegenerateCode_RLSForbidden(t *testing.T) {
+	repo := &mockSectionRepo{
+		updateSectionJoinCodeFn: func(_ context.Context, _ uuid.UUID, _ string) (*store.Section, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	id := uuid.New()
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/"+id.String()+"/regenerate-code", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.RegenerateCode(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAddInstructor_RLSForbidden(t *testing.T) {
+	sectionID := uuid.New()
+	instrUser := &store.User{
+		ID:    uuid.New(),
+		Email: "prof@example.com",
+		Role:  string(auth.RoleInstructor),
+	}
+
+	userRepo := &StubUserRepo{
+		GetUserByEmailFn: func(_ context.Context, _ string) (*store.User, error) {
+			return instrUser, nil
+		},
+	}
+	membRepo := &mockMembershipRepo{
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, userRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.AddInstructor(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRemoveInstructor_RLSForbidden(t *testing.T) {
+	sectionID := uuid.New()
+	userToRemove := uuid.New()
+
+	membRepo := &mockMembershipRepo{
+		deleteMembershipIfNotLastFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) error {
+			return store.ErrForbidden
+		},
+	}
+
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("userID", userToRemove.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, nil, membRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.RemoveInstructor(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

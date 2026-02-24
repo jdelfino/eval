@@ -185,6 +185,9 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	sess, err := scanSession(s.q.QueryRow(ctx, query, ac.args...))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleNotFound(err)
 	}
 
@@ -235,6 +238,9 @@ func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem 
 
 	sess, err := scanSession(s.q.QueryRow(ctx, query, id, problem))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleNotFound(err)
 	}
 
@@ -288,6 +294,9 @@ func (s *Store) CreateSessionReplacingActive(ctx context.Context, params CreateS
 		params.CreatorID,
 	))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, nil, e
+		}
 		return nil, nil, err
 	}
 
@@ -340,6 +349,9 @@ func (s *Store) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, 
 
 	sess, err := scanSession(tx.QueryRow(ctx, reopenQuery, id))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, nil, e
+		}
 		return nil, nil, HandleNotFound(err)
 	}
 

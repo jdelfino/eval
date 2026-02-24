@@ -99,6 +99,10 @@ func (h *SectionProblemHandler) Publish(w http.ResponseWriter, r *http.Request) 
 		ShowSolution: req.ShowSolution,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrDuplicate) {
 			httputil.WriteError(w, http.StatusConflict, "problem already published to this section")
 			return
@@ -132,6 +136,10 @@ func (h *SectionProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ShowSolution: req.ShowSolution,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section problem not found")
 			return
@@ -158,6 +166,10 @@ func (h *SectionProblemHandler) Unpublish(w http.ResponseWriter, r *http.Request
 	repos := store.ReposFromContext(r.Context())
 	err := repos.DeleteSectionProblem(r.Context(), sectionID, problemID)
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section problem not found")
 			return

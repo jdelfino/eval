@@ -113,6 +113,9 @@ func (s *Store) CreateSectionProblem(ctx context.Context, params CreateSectionPr
 		params.SectionID, params.ProblemID, params.PublishedBy, params.ShowSolution,
 	))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleDuplicate(err)
 	}
 	return sp, nil
@@ -142,6 +145,9 @@ func (s *Store) UpdateSectionProblem(ctx context.Context, sectionID, problemID u
 
 	sp, err := scanSectionProblem(s.q.QueryRow(ctx, query, ac.args...))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleNotFound(err)
 	}
 	return sp, nil
@@ -151,6 +157,9 @@ func (s *Store) UpdateSectionProblem(ctx context.Context, sectionID, problemID u
 func (s *Store) DeleteSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) error {
 	tag, err := s.q.Exec(ctx, "DELETE FROM section_problems WHERE section_id = $1 AND problem_id = $2", sectionID, problemID)
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
