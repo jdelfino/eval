@@ -1,6 +1,9 @@
 package store
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // argCounter tracks the next placeholder index for dynamic SQL queries.
 // It avoids the error-prone manual argIdx pattern where each conditional
@@ -33,4 +36,10 @@ func (ac *argCounter) Next(arg any) string {
 	ac.next++
 	ac.args = append(ac.args, arg)
 	return placeholder
+}
+
+// parseTime parses a timestamp string in RFC3339 format.
+// Returns zero time on error.
+func parseTime(s string) (time.Time, error) {
+	return time.Parse(time.RFC3339, s)
 }

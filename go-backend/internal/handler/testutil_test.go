@@ -446,6 +446,36 @@ func (stubRepos) RevokeInvitation(context.Context, uuid.UUID) (*store.Invitation
 func (stubRepos) ConsumeInvitation(context.Context, uuid.UUID, uuid.UUID) (*store.Invitation, error) {
 	panic("stubRepos: unexpected ConsumeInvitation call")
 }
+func (stubRepos) ListSectionProblems(context.Context, uuid.UUID, uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
+	panic("stubRepos: unexpected ListSectionProblems call")
+}
+func (stubRepos) CreateSectionProblem(context.Context, store.CreateSectionProblemParams) (*store.SectionProblem, error) {
+	panic("stubRepos: unexpected CreateSectionProblem call")
+}
+func (stubRepos) UpdateSectionProblem(context.Context, uuid.UUID, uuid.UUID, store.UpdateSectionProblemParams) (*store.SectionProblem, error) {
+	panic("stubRepos: unexpected UpdateSectionProblem call")
+}
+func (stubRepos) DeleteSectionProblem(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubRepos: unexpected DeleteSectionProblem call")
+}
+func (stubRepos) ListSectionsForProblem(context.Context, uuid.UUID) ([]store.SectionProblem, error) {
+	panic("stubRepos: unexpected ListSectionsForProblem call")
+}
+func (stubRepos) GetOrCreateStudentWork(context.Context, string, uuid.UUID, uuid.UUID, uuid.UUID) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected GetOrCreateStudentWork call")
+}
+func (stubRepos) UpdateStudentWork(context.Context, uuid.UUID, store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected UpdateStudentWork call")
+}
+func (stubRepos) GetStudentWork(context.Context, uuid.UUID) (*store.StudentWorkWithProblem, error) {
+	panic("stubRepos: unexpected GetStudentWork call")
+}
+func (stubRepos) GetStudentWorkByProblem(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (*store.StudentWork, error) {
+	panic("stubRepos: unexpected GetStudentWorkByProblem call")
+}
+func (stubRepos) ListStudentWorkBySession(context.Context, uuid.UUID) ([]store.StudentWork, error) {
+	panic("stubRepos: unexpected ListStudentWorkBySession call")
+}
 
 // Compile-time check that stubRepos implements store.Repos.
 var _ store.Repos = stubRepos{}

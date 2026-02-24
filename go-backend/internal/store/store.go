@@ -39,6 +39,8 @@ type Repos interface {
 	AuditLogRepository
 	DashboardRepository
 	InvitationRepository
+	SectionProblemRepository
+	StudentWorkRepository
 }
 
 // Store provides data access methods for the application.
