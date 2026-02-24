@@ -106,14 +106,14 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
     <div className="relative inline-flex" ref={ref}>
       <button
         onClick={copyGenericLink}
-        className="px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-l-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 border-r-0 hover:bg-gray-50 rounded-l-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         aria-label="Copy Link"
       >
         {copied ? 'Copied!' : 'Copy Link'}
       </button>
       <button
         onClick={openDropdown}
-        className="px-1.5 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-r-lg border-l border-gray-300 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        className="px-1.5 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-r-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
         aria-label="Show sections"
         aria-expanded={isOpen}
         aria-haspopup="true"

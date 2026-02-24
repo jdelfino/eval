@@ -103,19 +103,19 @@ export default function ProblemCard({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onEdit(problem.id)} title="Edit problem">
+            <Button variant="secondary" size="sm" onClick={() => onEdit(problem.id)} title="Edit problem">
               Edit
             </Button>
             <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
             {onPublish && (
-              <Button variant="ghost" size="sm" onClick={() => onPublish(problem.id)} title="Publish to sections">
+              <Button variant="secondary" size="sm" onClick={() => onPublish(problem.id)} title="Publish to sections">
                 Publish
               </Button>
             )}
-            <Button variant="secondary" size="sm" onClick={() => onCreateSession(problem.id)} title="Create session">
+            <Button variant="primary" size="sm" onClick={() => onCreateSession(problem.id)} title="Create session">
               Create Session
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleDeleteClick} disabled={isDeleting} title="Delete problem">
+            <Button variant="danger" size="sm" onClick={handleDeleteClick} disabled={isDeleting} title="Delete problem">
               {isDeleting ? '...' : 'Delete'}
             </Button>
           </div>
@@ -153,19 +153,19 @@ export default function ProblemCard({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Button variant="ghost" size="sm" className="w-full" onClick={() => onEdit(problem.id)}>
+        <Button variant="secondary" size="sm" className="w-full" onClick={() => onEdit(problem.id)}>
           Edit
         </Button>
         <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
         {onPublish && (
-          <Button variant="ghost" size="sm" className="w-full" onClick={() => onPublish(problem.id)}>
+          <Button variant="secondary" size="sm" className="w-full" onClick={() => onPublish(problem.id)}>
             Publish
           </Button>
         )}
-        <Button variant="secondary" size="sm" className="w-full" onClick={() => onCreateSession(problem.id)}>
+        <Button variant="primary" size="sm" className="w-full" onClick={() => onCreateSession(problem.id)}>
           Create Session
         </Button>
-        <Button variant="ghost" size="sm" className="w-full" onClick={handleDeleteClick} disabled={isDeleting}>
+        <Button variant="danger" size="sm" className="w-full" onClick={handleDeleteClick} disabled={isDeleting}>
           {isDeleting ? 'Deleting...' : 'Delete'}
         </Button>
       </div>
