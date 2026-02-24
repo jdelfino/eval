@@ -202,8 +202,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			sectionProblemHandler := handler.NewSectionProblemHandler()
 			studentWorkHandler := handler.NewStudentWorkHandler(execClient)
+			studentReviewHandler := handler.NewStudentReviewHandler()
 
-			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler).WithRateLimiting(readRL, writeRL)
+			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler, studentReviewHandler).WithRateLimiting(readRL, writeRL)
 			r.With(readRL).Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
