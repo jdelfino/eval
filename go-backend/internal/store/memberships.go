@@ -53,6 +53,9 @@ func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipPar
 
 	m, err := scanMembership(s.q.QueryRow(ctx, query, params.UserID, params.SectionID, params.Role))
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return nil, e
+		}
 		return nil, HandleDuplicate(err)
 	}
 	return m, nil
@@ -63,6 +66,9 @@ func (s *Store) CreateMembership(ctx context.Context, params CreateMembershipPar
 func (s *Store) DeleteMembership(ctx context.Context, sectionID, userID uuid.UUID) error {
 	tag, err := s.q.Exec(ctx, "DELETE FROM section_memberships WHERE section_id = $1 AND user_id = $2", sectionID, userID)
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {
@@ -163,6 +169,9 @@ func (s *Store) DeleteMembershipIfNotLast(ctx context.Context, sectionID, userID
 		sectionID, userID, role,
 	)
 	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
 		return err
 	}
 	if tag.RowsAffected() == 0 {

@@ -18,6 +18,8 @@ var (
 	ErrDuplicate = errors.New("duplicate record")
 	// ErrLastMember indicates the operation would remove the last member of a required role.
 	ErrLastMember = errors.New("cannot remove last member")
+	// ErrForbidden indicates the operation was blocked by a row-level security policy.
+	ErrForbidden = errors.New("forbidden by row-level security")
 )
 
 // HandleNotFound converts pgx.ErrNoRows to ErrNotFound.
@@ -41,6 +43,20 @@ func HandleDuplicate(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return ErrDuplicate
+	}
+	return err
+}
+
+// HandleForbidden converts PostgreSQL insufficient_privilege (42501) to ErrForbidden.
+// This error occurs when a row-level security policy blocks the operation.
+// Other errors are returned unchanged. Nil errors return nil.
+func HandleForbidden(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "42501" {
+		return ErrForbidden
 	}
 	return err
 }

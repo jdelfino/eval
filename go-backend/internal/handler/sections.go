@@ -255,6 +255,10 @@ func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Active:   req.Active,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
@@ -276,6 +280,10 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	err := repos.DeleteSection(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
@@ -350,6 +358,10 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 		section, err = repos.UpdateSectionJoinCode(r.Context(), id, joinCode)
 		if err == nil {
 			break
+		}
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
 		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
@@ -430,6 +442,10 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 		Role:      "instructor",
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrDuplicate) {
 			httputil.WriteError(w, http.StatusConflict, "user is already an instructor for this section")
 			return
@@ -456,6 +472,10 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 	repos := store.ReposFromContext(r.Context())
 	err := repos.DeleteMembershipIfNotLast(r.Context(), sectionID, userID, string(auth.RoleInstructor))
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrLastMember) {
 			httputil.WriteError(w, http.StatusBadRequest, "cannot remove the last instructor")
 			return

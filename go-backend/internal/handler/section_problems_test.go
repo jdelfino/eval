@@ -231,6 +231,41 @@ func TestSectionProblemHandler_Publish_Duplicate(t *testing.T) {
 	}
 }
 
+func TestSectionProblemHandler_Publish_Forbidden(t *testing.T) {
+	sectionID := uuid.New()
+	problemID := uuid.New()
+	userID := uuid.New()
+
+	reqBody := publishProblemRequest{
+		ProblemID:    problemID.String(),
+		ShowSolution: false,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	repo := &mockSectionProblemRepo{
+		createSectionProblemFn: func(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSectionProblemHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, spRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Publish(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSectionProblemHandler_Update_Success(t *testing.T) {
 	sectionID := uuid.New()
 	problemID := uuid.New()

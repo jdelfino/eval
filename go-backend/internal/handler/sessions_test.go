@@ -1638,3 +1638,151 @@ func TestUpdateSession_IdempotentFeaturedStudent_NoPublish(t *testing.T) {
 		t.Errorf("expected no FeaturedStudentChanged calls on idempotent update, got %d", len(pub.featuredStudentChangedCalls))
 	}
 }
+
+// --- RLS Forbidden tests (store returns ErrForbidden → handler returns 403) ---
+
+func TestUpdateSession_RLSForbidden(t *testing.T) {
+	sess := testSession()
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSessionHandler(noopPublisher())
+	body, _ := json.Marshal(map[string]any{"status": "completed"})
+	req := httptest.NewRequest(http.MethodPatch, "/"+sess.ID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteSession_RLSForbidden(t *testing.T) {
+	sess := testSession()
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		updateSessionFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateSessionParams) (*store.Session, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodDelete, "/"+sess.ID.String(), nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateSession_RLSForbidden(t *testing.T) {
+	section := &store.Section{
+		ID:          uuid.New(),
+		NamespaceID: "test-ns",
+		Name:        "Section A",
+	}
+
+	repo := &mockSessionRepo{
+		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+			return nil, nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSessionHandler(noopPublisher())
+	body, _ := json.Marshal(map[string]any{"section_id": section.ID.String()})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReopenSession_RLSForbidden(t *testing.T) {
+	sess := testSession()
+	sess.Status = "completed"
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
+			return nil, nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSessionHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Reopen(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateProblem_RLSForbidden(t *testing.T) {
+	sess := testSession()
+	repo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+		updateSessionProblemFn: func(_ context.Context, _ uuid.UUID, _ json.RawMessage) (*store.Session, error) {
+			return nil, store.ErrForbidden
+		},
+	}
+
+	h := NewSessionHandler(noopPublisher())
+	body, _ := json.Marshal(map[string]any{"problem": json.RawMessage(`{"title":"test"}`)})
+	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/update-problem", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sess.ID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, sessRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateProblem(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

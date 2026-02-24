@@ -175,6 +175,10 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatorID:   authUser.ID,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
@@ -235,6 +239,10 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	session, err := repos.UpdateSession(r.Context(), id, params)
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
 			return
@@ -294,6 +302,10 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		EndedAt: &now,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -334,6 +346,10 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 	// Atomically end any other active sessions and reopen this one in a single transaction.
 	session, endedIDs, err := repos.ReopenSessionReplacingActive(r.Context(), id, existing.SectionID)
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -382,6 +398,10 @@ func (h *SessionHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 
 	session, err := repos.UpdateSessionProblem(r.Context(), id, req.Problem)
 	if err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
 			return
