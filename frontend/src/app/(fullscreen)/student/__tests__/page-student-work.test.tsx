@@ -26,6 +26,15 @@ jest.mock('@/lib/api/student-work', () => ({
 
 jest.mock('@/lib/api/sections', () => ({
   getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
+  getSection: jest.fn().mockResolvedValue({
+    id: 'section-1',
+    name: 'Test Section',
+    class_id: 'class-1',
+    namespace_id: 'ns-1',
+    join_code: 'ABCD',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  }),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

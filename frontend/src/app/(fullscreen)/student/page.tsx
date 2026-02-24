@@ -9,7 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import { getStudentWork, updateStudentWork, executeStudentWork } from '@/lib/api/student-work';
-import { getActiveSessions } from '@/lib/api/sections';
+import { getActiveSessions, getSection } from '@/lib/api/sections';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import CodeEditor from './components/CodeEditor';
@@ -36,6 +37,9 @@ function StudentPage() {
     random_seed?: number;
     attached_files?: Array<{ name: string; content: string }>;
   } | null>(null);
+
+  // Breadcrumb state
+  const [sectionName, setSectionName] = useState<string | null>(null);
 
   // Mode state
   const [mode, setMode] = useState<'loading' | 'practice' | 'live' | 'error'>('loading');
@@ -116,6 +120,17 @@ function StudentPage() {
 
     loadWork();
   }, [workId, user?.id]);
+
+  // Fetch section name for breadcrumb
+  useEffect(() => {
+    if (!sectionId) return;
+
+    getSection(sectionId)
+      .then((section) => setSectionName(section.name))
+      .catch(() => {
+        // Graceful degradation: breadcrumb will show fallback text
+      });
+  }, [sectionId]);
 
   // Step 2: Check for active session matching this problem
   useEffect(() => {
@@ -415,6 +430,14 @@ function StudentPage() {
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
+      {sectionId && (
+        <div className="px-3 py-1.5 bg-white border-b border-gray-200 flex-shrink-0">
+          <Breadcrumb items={[
+            { label: sectionName || 'Section', href: `/sections/${sectionId}` },
+            { label: problem?.title || 'Problem' },
+          ]} />
+        </div>
+      )}
       {connectionError && mode === 'live' && (
         <ErrorAlert
           error={connectionError}
