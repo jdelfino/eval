@@ -113,8 +113,9 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // createSessionRequest is the request body for POST /sessions.
 type createSessionRequest struct {
-	SectionID uuid.UUID  `json:"section_id" validate:"required"`
-	ProblemID *uuid.UUID `json:"problem_id"` // optional - if nil, creates blank session
+	SectionID    uuid.UUID  `json:"section_id" validate:"required"`
+	ProblemID    *uuid.UUID `json:"problem_id"`    // optional - if nil, creates blank session
+	ShowSolution *bool      `json:"show_solution"` // optional - whether to show solution to students
 }
 
 // Create handles POST /api/v1/sessions — creates a new session (instructor+).
@@ -164,6 +165,23 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Blank session - empty problem object
 		problemJSON = json.RawMessage(`{}`)
+	}
+
+	// If a problem is selected, ensure it is published to the section (idempotent).
+	if req.ProblemID != nil {
+		showSolution := false
+		if req.ShowSolution != nil {
+			showSolution = *req.ShowSolution
+		}
+		if err := repos.EnsureSectionProblem(r.Context(), store.CreateSectionProblemParams{
+			SectionID:    req.SectionID,
+			ProblemID:    *req.ProblemID,
+			PublishedBy:  authUser.ID,
+			ShowSolution: showSolution,
+		}); err != nil {
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
 	}
 
 	// Atomically end any active sessions and create the new one in a single transaction.

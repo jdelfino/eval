@@ -5,12 +5,18 @@
  *
  * Modal that allows instructors to start a new session for a section.
  * Provides option to select a problem from the library or create a blank session.
+ *
+ * When a problem (not blank) is selected, the modal checks if it is already published to
+ * the section (section_id prop). If not published: shows a forced "Publish to section"
+ * checkbox (checked, disabled) and a "Show solution to students" toggle (unchecked by default).
+ * If already published: shows a small "Already published to this section" note.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listProblems } from '@/lib/api/problems';
 import { createSession } from '@/lib/api/sessions';
+import { listProblemSections } from '@/lib/api/section-problems';
 
 interface ProblemInfo {
   id: string;
@@ -39,6 +45,10 @@ export default function StartSessionModal({
   const [loading, setLoading] = useState(false);
   const [loadingProblems, setLoadingProblems] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Publish UX state
+  const [publishedInSection, setPublishedInSection] = useState(false);
+  const [showSolution, setShowSolution] = useState(false);
+  const [checkingPublished, setCheckingPublished] = useState(false);
 
   useEffect(() => {
     loadProblems();
@@ -58,6 +68,29 @@ export default function StartSessionModal({
     }
   };
 
+  const handleSelectOption = async (option: SelectionType) => {
+    setSelectedOption(option);
+    setShowSolution(false);
+
+    if (option === 'blank') {
+      setPublishedInSection(false);
+      return;
+    }
+
+    // It's a problem ID — check if already published to this section
+    setCheckingPublished(true);
+    try {
+      const sections = await listProblemSections(option);
+      const isPublished = sections.some(sp => sp.section_id === section_id);
+      setPublishedInSection(isPublished);
+    } catch (err) {
+      console.error('Error checking publish status:', err);
+      setPublishedInSection(false);
+    } finally {
+      setCheckingPublished(false);
+    }
+  };
+
   const handleStartSession = async () => {
     if (!selectedOption) {
       return;
@@ -68,7 +101,8 @@ export default function StartSessionModal({
       setError(null);
 
       const problemId = selectedOption !== 'blank' ? selectedOption : undefined;
-      const session = await createSession(section_id, problemId);
+      const showSolutionArg = problemId && !publishedInSection ? showSolution : undefined;
+      const session = await createSession(section_id, problemId, showSolutionArg);
       onSessionCreated(session.id);
       router.push(`/instructor/session/${session.id}`);
     } catch (err) {
@@ -84,6 +118,8 @@ export default function StartSessionModal({
       onClose();
     }
   };
+
+  const selectedProblem = selectedOption && selectedOption !== 'blank' ? selectedOption : null;
 
   return (
     <div
@@ -129,7 +165,7 @@ export default function StartSessionModal({
           <div>
             <button
               type="button"
-              onClick={() => setSelectedOption('blank')}
+              onClick={() => handleSelectOption('blank')}
               disabled={loading}
               className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                 selectedOption === 'blank'
@@ -166,7 +202,7 @@ export default function StartSessionModal({
                   <button
                     key={problem.id}
                     type="button"
-                    onClick={() => setSelectedOption(problem.id)}
+                    onClick={() => handleSelectOption(problem.id)}
                     disabled={loading}
                     className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
                       selectedOption === problem.id
@@ -183,6 +219,39 @@ export default function StartSessionModal({
               </div>
             )}
           </div>
+
+          {/* Publish UX — shown only when a non-blank problem is selected */}
+          {selectedProblem && !checkingPublished && (
+            publishedInSection ? (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+                Already published to this section
+              </div>
+            ) : (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                <label className="flex items-center gap-2 text-sm text-blue-900">
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    disabled={true}
+                    aria-label="Publish to section"
+                    className="rounded"
+                    readOnly
+                  />
+                  <span>Publish to section</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-blue-800 ml-5">
+                  <input
+                    type="checkbox"
+                    checked={showSolution}
+                    onChange={(e) => setShowSolution(e.target.checked)}
+                    aria-label="Show solution to students"
+                    className="rounded"
+                  />
+                  <span>Show solution to students</span>
+                </label>
+              </div>
+            )
+          )}
         </div>
 
         {/* Actions */}

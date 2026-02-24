@@ -18,11 +18,12 @@ import (
 
 // mockSectionProblemRepo implements store.SectionProblemRepository for testing.
 type mockSectionProblemRepo struct {
-	listSectionProblemsFn     func(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error)
-	createSectionProblemFn    func(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error)
-	updateSectionProblemFn    func(ctx context.Context, sectionID, problemID uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error)
-	deleteSectionProblemFn    func(ctx context.Context, sectionID, problemID uuid.UUID) error
-	listSectionsForProblemFn  func(ctx context.Context, problemID uuid.UUID) ([]store.SectionProblem, error)
+	listSectionProblemsFn    func(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error)
+	createSectionProblemFn   func(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error)
+	ensureSectionProblemFn   func(ctx context.Context, params store.CreateSectionProblemParams) error
+	updateSectionProblemFn   func(ctx context.Context, sectionID, problemID uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error)
+	deleteSectionProblemFn   func(ctx context.Context, sectionID, problemID uuid.UUID) error
+	listSectionsForProblemFn func(ctx context.Context, problemID uuid.UUID) ([]store.SectionProblem, error)
 }
 
 func (m *mockSectionProblemRepo) ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
@@ -31,6 +32,13 @@ func (m *mockSectionProblemRepo) ListSectionProblems(ctx context.Context, sectio
 
 func (m *mockSectionProblemRepo) CreateSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {
 	return m.createSectionProblemFn(ctx, params)
+}
+
+func (m *mockSectionProblemRepo) EnsureSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) error {
+	if m.ensureSectionProblemFn != nil {
+		return m.ensureSectionProblemFn(ctx, params)
+	}
+	panic("mockSectionProblemRepo: unexpected EnsureSectionProblem call")
 }
 
 func (m *mockSectionProblemRepo) UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error) {
@@ -57,6 +65,10 @@ func (r spReposImpl) ListSectionProblems(ctx context.Context, sectionID, userID 
 
 func (r spReposImpl) CreateSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {
 	return r.sp.CreateSectionProblem(ctx, params)
+}
+
+func (r spReposImpl) EnsureSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) error {
+	return r.sp.EnsureSectionProblem(ctx, params)
 }
 
 func (r spReposImpl) UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error) {

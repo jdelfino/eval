@@ -7,6 +7,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StartSessionModal from '../StartSessionModal';
 import * as problemsApi from '@/lib/api/problems';
 import * as sessionsApi from '@/lib/api/sessions';
+import * as sectionProblemsApi from '@/lib/api/section-problems';
 
 // Mock next/navigation
 const mockPush = jest.fn();
@@ -19,6 +20,7 @@ jest.mock('next/navigation', () => ({
 // Mock API modules
 jest.mock('@/lib/api/problems');
 jest.mock('@/lib/api/sessions');
+jest.mock('@/lib/api/section-problems');
 
 describe('StartSessionModal', () => {
   const mockOnClose = jest.fn();
@@ -34,6 +36,8 @@ describe('StartSessionModal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no published sections for any problem
+    (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -288,7 +292,8 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1');
+        // Now passes showSolution=false (default) since problem is not published to section
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false);
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-123');
@@ -333,7 +338,8 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, undefined);
+        // Blank session: no problem_id, no showSolution
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, undefined, undefined);
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-456');
@@ -617,6 +623,175 @@ describe('StartSessionModal', () => {
 
       // But blank session option should still be available
       expect(screen.getByText(/create blank session/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Publish UX', () => {
+    it('does not show publish UX when blank session is selected', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/create blank session/i)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/create blank session/i));
+
+      expect(screen.queryByText(/publish to section/i)).not.toBeInTheDocument();
+    });
+
+    it('shows publish info box when selected problem is not published to section', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      // problem NOT published to this section
+      jest.spyOn(sectionProblemsApi, 'listProblemSections').mockResolvedValueOnce([]);
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('FizzBuzz'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/publish to section/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows "Already published" when selected problem is published to section', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      // problem IS published to this section
+      jest.spyOn(sectionProblemsApi, 'listProblemSections').mockResolvedValueOnce([
+        { id: 'sp-1', section_id: section_id, problem_id: 'problem-1', published_by: 'u-1', show_solution: false, published_at: '2025-01-01T00:00:00Z' },
+      ]);
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('FizzBuzz'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/already published to this section/i)).toBeInTheDocument();
+      });
+    });
+
+    it('passes showSolution to createSession when problem is not published', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sectionProblemsApi, 'listProblemSections').mockResolvedValueOnce([]);
+      jest.spyOn(sessionsApi, 'createSession').mockResolvedValueOnce({
+        id: 'session-123',
+        namespace_id: 'ns-1',
+        section_id: section_id,
+        section_name: section_name,
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: [],
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        last_activity: '2024-01-01T00:00:00Z',
+        ended_at: null,
+      });
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('FizzBuzz'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: /show solution/i })).toBeInTheDocument();
+      });
+
+      // Toggle show solution on
+      fireEvent.click(screen.getByRole('checkbox', { name: /show solution/i }));
+
+      fireEvent.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => {
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', true);
+      });
+    });
+
+    it('passes showSolution=false by default when problem is not published', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+      jest.spyOn(sectionProblemsApi, 'listProblemSections').mockResolvedValueOnce([]);
+      jest.spyOn(sessionsApi, 'createSession').mockResolvedValueOnce({
+        id: 'session-123',
+        namespace_id: 'ns-1',
+        section_id: section_id,
+        section_name: section_name,
+        problem: null,
+        featured_student_id: null,
+        featured_code: null,
+        creator_id: 'user-1',
+        participants: [],
+        status: 'active',
+        created_at: '2024-01-01T00:00:00Z',
+        last_activity: '2024-01-01T00:00:00Z',
+        ended_at: null,
+      });
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('FizzBuzz'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: /show solution/i })).toBeInTheDocument();
+      });
+
+      // Do NOT toggle — default is false
+      fireEvent.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => {
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false);
+      });
     });
   });
 });

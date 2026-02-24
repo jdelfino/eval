@@ -121,6 +121,23 @@ func (s *Store) CreateSectionProblem(ctx context.Context, params CreateSectionPr
 	return sp, nil
 }
 
+// EnsureSectionProblem idempotently ensures a section_problems record exists for the given
+// (section, problem) pair. Uses INSERT ON CONFLICT DO NOTHING so it is safe to call even
+// when the problem is already published to the section.
+func (s *Store) EnsureSectionProblem(ctx context.Context, params CreateSectionProblemParams) error {
+	query := `INSERT INTO section_problems (section_id, problem_id, published_by, show_solution)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (section_id, problem_id) DO NOTHING`
+	_, err := s.q.Exec(ctx, query, params.SectionID, params.ProblemID, params.PublishedBy, params.ShowSolution)
+	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
+		return err
+	}
+	return nil
+}
+
 // UpdateSectionProblem updates a section problem's mutable fields.
 func (s *Store) UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params UpdateSectionProblemParams) (*SectionProblem, error) {
 	ac := newArgCounter(3, sectionID, problemID)

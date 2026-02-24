@@ -7,9 +7,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CreateSessionFromProblemModal from '../CreateSessionFromProblemModal';
 import * as sectionsApi from '@/lib/api/sections';
 import * as sessionsApi from '@/lib/api/sessions';
+import * as sectionProblemsApi from '@/lib/api/section-problems';
 
 jest.mock('@/lib/api/sections');
 jest.mock('@/lib/api/sessions');
+jest.mock('@/lib/api/section-problems');
 
 describe('CreateSessionFromProblemModal', () => {
   const defaultProps = {
@@ -24,6 +26,8 @@ describe('CreateSessionFromProblemModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    // Default: no published sections
+    (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -79,8 +83,8 @@ describe('CreateSessionFromProblemModal', () => {
       expect(defaultProps.onSuccess).toHaveBeenCalledWith('session-1', 'ABC');
     });
 
-    // Verify session creation call
-    expect(sessionsApi.createSession).toHaveBeenCalledWith('sec-1', 'prob-1');
+    // Verify session creation call — passes showSolution=false (default) since not published
+    expect(sessionsApi.createSession).toHaveBeenCalledWith('sec-1', 'prob-1', false);
   });
 
   it('only fetches sections, not classes', async () => {
@@ -158,5 +162,139 @@ describe('CreateSessionFromProblemModal', () => {
 
     const stored = JSON.parse(localStorage.getItem('lastUsedSection')!);
     expect(stored).toEqual({ section_id: 'sec-1', class_id: 'class-1' });
+  });
+
+  describe('publish UX', () => {
+    it('shows publish info box when section is not yet published', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      // problem is NOT published to this section
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([]);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/publish to section/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows "Already published" note when problem is already in the section', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      // problem IS already published to sec-1
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([
+        { id: 'sp-1', section_id: 'sec-1', problem_id: 'prob-1', published_by: 'u-1', show_solution: false, published_at: '2025-01-01T00:00:00Z' },
+      ]);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/already published to this section/i)).toBeInTheDocument();
+      });
+    });
+
+    it('publish checkbox is disabled (forced on)', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([]);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        const publishCheckbox = screen.getByRole('checkbox', { name: /publish to section/i });
+        expect(publishCheckbox).toBeChecked();
+        expect(publishCheckbox).toBeDisabled();
+      });
+    });
+
+    it('show solution toggle defaults to unchecked', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([]);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        const showSolutionCheckbox = screen.getByRole('checkbox', { name: /show solution/i });
+        expect(showSolutionCheckbox).not.toBeChecked();
+      });
+    });
+
+    it('passes showSolution=true to createSession when toggled', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      const mockSession = { id: 'session-1', join_code: 'JOIN123' };
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([]);
+      (sessionsApi.createSession as jest.Mock).mockResolvedValueOnce(mockSession);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: /show solution/i })).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('checkbox', { name: /show solution/i }));
+      fireEvent.click(screen.getByRole('button', { name: /create session/i }));
+
+      await waitFor(() => {
+        expect(sessionsApi.createSession).toHaveBeenCalledWith('sec-1', 'prob-1', true);
+      });
+    });
+
+    it('passes showSolution=false (default) to createSession when not toggled', async () => {
+      const mockSections = [{ id: 'sec-1', name: 'Section A', join_code: 'ABC' }];
+      const mockSession = { id: 'session-1', join_code: 'JOIN123' };
+      (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce(mockSections);
+      (sectionProblemsApi.listProblemSections as jest.Mock).mockResolvedValueOnce([]);
+      (sessionsApi.createSession as jest.Mock).mockResolvedValueOnce(mockSession);
+
+      render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sec-1' } });
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: /show solution/i })).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /create session/i }));
+
+      await waitFor(() => {
+        expect(sessionsApi.createSession).toHaveBeenCalledWith('sec-1', 'prob-1', false);
+      });
+    });
   });
 });
