@@ -7,7 +7,7 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getRealtimeToken } from '@/lib/api/realtime-token';
-import { expectSnakeCaseKeys, expectString } from './validators';
+import { expectSnakeCaseKeys } from './validators';
 
 describe('getRealtimeToken()', () => {
   beforeAll(() => {
@@ -22,7 +22,7 @@ describe('getRealtimeToken()', () => {
     try {
       const response = await getRealtimeToken();
 
-      expectString(response, 'token');
+      expect(typeof response.token).toBe('string');
       expectSnakeCaseKeys(response, 'tokenResponse');
     } catch (error) {
       // 404 is acceptable if Centrifugo not configured in test environment

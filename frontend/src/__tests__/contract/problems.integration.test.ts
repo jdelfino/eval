@@ -24,10 +24,7 @@ import {
 } from '@/lib/api/problems';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectArray,
-} from './validators';
+  } from './validators';
 
 describe('Problems API', () => {
   let createdProblemId: string | null = null;
@@ -69,25 +66,25 @@ describe('Problems API', () => {
       expectSnakeCaseKeys(problem, 'Problem');
 
       // Validate required string fields
-      expectString(problem, 'id');
-      expectString(problem, 'namespace_id');
-      expectString(problem, 'title');
-      expectString(problem, 'author_id');
-      expectString(problem, 'created_at');
-      expectString(problem, 'updated_at');
+      expect(typeof problem.id).toBe('string');
+      expect(typeof problem.namespace_id).toBe('string');
+      expect(typeof problem.title).toBe('string');
+      expect(typeof problem.author_id).toBe('string');
+      expect(typeof problem.created_at).toBe('string');
+      expect(typeof problem.updated_at).toBe('string');
 
       // Validate nullable string fields
-      expectNullableString(problem, 'description');
-      expectNullableString(problem, 'starter_code');
-      expectNullableString(problem, 'class_id');
-      expectNullableString(problem, 'solution');
+      expect(problem.description === null || typeof problem.description === 'string').toBe(true);
+      expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
+      expect(problem.class_id === null || typeof problem.class_id === 'string').toBe(true);
+      expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
 
       // Validate array fields
-      expectArray(problem, 'tags');
+      expect(Array.isArray(problem.tags)).toBe(true);
 
       // Validate nullable complex fields
-      expect(problem).toHaveProperty('test_cases');
-      expect(problem).toHaveProperty('execution_settings');
+      expect('test_cases' in problem).toBe(true);
+      expect('execution_settings' in problem).toBe(true);
 
       // Verify the values match what we sent
       expect(problem.title).toBe(title);
@@ -109,25 +106,25 @@ describe('Problems API', () => {
       expectSnakeCaseKeys(problem, 'Problem');
 
       // Validate required string fields
-      expectString(problem, 'id');
-      expectString(problem, 'namespace_id');
-      expectString(problem, 'title');
-      expectString(problem, 'author_id');
-      expectString(problem, 'created_at');
-      expectString(problem, 'updated_at');
+      expect(typeof problem.id).toBe('string');
+      expect(typeof problem.namespace_id).toBe('string');
+      expect(typeof problem.title).toBe('string');
+      expect(typeof problem.author_id).toBe('string');
+      expect(typeof problem.created_at).toBe('string');
+      expect(typeof problem.updated_at).toBe('string');
 
       // Validate nullable string fields
-      expectNullableString(problem, 'description');
-      expectNullableString(problem, 'starter_code');
-      expectNullableString(problem, 'class_id');
-      expectNullableString(problem, 'solution');
+      expect(problem.description === null || typeof problem.description === 'string').toBe(true);
+      expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
+      expect(problem.class_id === null || typeof problem.class_id === 'string').toBe(true);
+      expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
 
       // Validate array fields
-      expectArray(problem, 'tags');
+      expect(Array.isArray(problem.tags)).toBe(true);
 
       // Validate nullable complex fields
-      expect(problem).toHaveProperty('test_cases');
-      expect(problem).toHaveProperty('execution_settings');
+      expect('test_cases' in problem).toBe(true);
+      expect('execution_settings' in problem).toBe(true);
 
       // Verify it matches the created problem
       expect(problem.id).toBe(createdProblemId);
@@ -151,18 +148,18 @@ describe('Problems API', () => {
         expectSnakeCaseKeys(problem, 'PublicProblem');
 
         // Validate required string fields
-        expectString(problem, 'id');
-        expectString(problem, 'title');
+        expect(typeof problem.id).toBe('string');
+        expect(typeof problem.title).toBe('string');
 
         // Validate nullable string fields
-        expectNullableString(problem, 'description');
-        expectNullableString(problem, 'solution');
-        expectNullableString(problem, 'starter_code');
-        expectNullableString(problem, 'class_id');
-        expectNullableString(problem, 'class_name');
+        expect(problem.description === null || typeof problem.description === 'string').toBe(true);
+        expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
+        expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
+        expect(problem.class_id === null || typeof problem.class_id === 'string').toBe(true);
+        expect(problem.class_name === null || typeof problem.class_name === 'string').toBe(true);
 
         // Validate array fields
-        expectArray(problem, 'tags');
+        expect(Array.isArray(problem.tags)).toBe(true);
 
         // Verify it matches the created problem
         expect(problem.id).toBe(createdProblemId);
@@ -191,17 +188,17 @@ describe('Problems API', () => {
       expectSnakeCaseKeys(summary, 'ProblemSummary');
 
       // Validate required string fields
-      expectString(summary, 'id');
-      expectString(summary, 'title');
-      expectString(summary, 'author_id');
-      expectString(summary, 'class_id');
-      expectString(summary, 'created_at');
+      expect(typeof summary.id).toBe('string');
+      expect(typeof summary.title).toBe('string');
+      expect(typeof summary.author_id).toBe('string');
+      expect(typeof summary.class_id).toBe('string');
+      expect(typeof summary.created_at).toBe('string');
 
       // Validate nullable string fields
-      expectNullableString(summary, 'description');
+      expect(summary.description === null || typeof summary.description === 'string').toBe(true);
 
       // Validate array fields
-      expectArray(summary, 'tags');
+      expect(Array.isArray(summary.tags)).toBe(true);
     });
 
     it('returns problems filtered by class_id', async () => {
@@ -233,25 +230,25 @@ describe('Problems API', () => {
       expectSnakeCaseKeys(problem, 'Problem');
 
       // Validate required string fields
-      expectString(problem, 'id');
-      expectString(problem, 'namespace_id');
-      expectString(problem, 'title');
-      expectString(problem, 'author_id');
-      expectString(problem, 'created_at');
-      expectString(problem, 'updated_at');
+      expect(typeof problem.id).toBe('string');
+      expect(typeof problem.namespace_id).toBe('string');
+      expect(typeof problem.title).toBe('string');
+      expect(typeof problem.author_id).toBe('string');
+      expect(typeof problem.created_at).toBe('string');
+      expect(typeof problem.updated_at).toBe('string');
 
       // Validate nullable string fields
-      expectNullableString(problem, 'description');
-      expectNullableString(problem, 'starter_code');
-      expectNullableString(problem, 'class_id');
-      expectNullableString(problem, 'solution');
+      expect(problem.description === null || typeof problem.description === 'string').toBe(true);
+      expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
+      expect(problem.class_id === null || typeof problem.class_id === 'string').toBe(true);
+      expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
 
       // Validate array fields
-      expectArray(problem, 'tags');
+      expect(Array.isArray(problem.tags)).toBe(true);
 
       // Validate nullable complex fields
-      expect(problem).toHaveProperty('test_cases');
-      expect(problem).toHaveProperty('execution_settings');
+      expect('test_cases' in problem).toBe(true);
+      expect('execution_settings' in problem).toBe(true);
 
       // Verify the updated values
       expect(problem.id).toBe(createdProblemId);
@@ -316,7 +313,7 @@ describe('Problems API', () => {
 
       // Validate response shape
       expectSnakeCaseKeys(result, 'startPractice response');
-      expectString(result, 'session_id');
+      expect(typeof result.session_id).toBe('string');
 
       // session_id should be a valid UUID-like string
       expect(result.session_id).toBeTruthy();

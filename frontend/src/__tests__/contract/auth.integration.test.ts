@@ -6,9 +6,7 @@ import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helper
 import { getCurrentUser } from '@/lib/api/auth';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-} from './validators';
+  } from './validators';
 
 describe('getCurrentUser()', () => {
   beforeAll(() => {
@@ -23,14 +21,14 @@ describe('getCurrentUser()', () => {
     const user = await getCurrentUser();
 
     // Field presence and types
-    expectString(user, 'id');
-    expectNullableString(user, 'external_id');
-    expectString(user, 'email');
-    expectString(user, 'role');
-    expectNullableString(user, 'namespace_id');
-    expectNullableString(user, 'display_name');
-    expectString(user, 'created_at');
-    expectString(user, 'updated_at');
+    expect(typeof user.id).toBe('string');
+    expect(user.external_id === null || typeof user.external_id === 'string').toBe(true);
+    expect(typeof user.email).toBe('string');
+    expect(typeof user.role).toBe('string');
+    expect(user.namespace_id === null || typeof user.namespace_id === 'string').toBe(true);
+    expect(user.display_name === null || typeof user.display_name === 'string').toBe(true);
+    expect(typeof user.created_at).toBe('string');
+    expect(typeof user.updated_at).toBe('string');
 
     // No PascalCase
     expectSnakeCaseKeys(user, 'User');

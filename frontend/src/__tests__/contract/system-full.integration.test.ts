@@ -16,7 +16,6 @@ import {
   resendSystemInvitation,
   createSystemInvitation,
 } from '@/lib/api/system';
-import { expectString, expectBoolean } from './validators';
 
 describe('System API — full coverage', () => {
   beforeAll(() => {
@@ -41,9 +40,9 @@ describe('System API — full coverage', () => {
 
       // NamespaceInfo has camelCase fields due to internal mapping:
       // { id: string, displayName: string, active: boolean, userCount?: number }
-      expectString(ns, 'id');
-      expectString(ns, 'displayName');
-      expectBoolean(ns, 'active');
+      expect(typeof ns.id).toBe('string');
+      expect(typeof ns.displayName).toBe('string');
+      expect(typeof ns.active).toBe('boolean');
 
       // userCount is optional — if present, it should be a number
       if ('userCount' in ns && ns.userCount !== undefined) {
@@ -68,9 +67,9 @@ describe('System API — full coverage', () => {
       const ns = await getSystemNamespace(namespaceId);
 
       // NamespaceInfo shape: { id, displayName, active, userCount? }
-      expectString(ns, 'id');
-      expectString(ns, 'displayName');
-      expectBoolean(ns, 'active');
+      expect(typeof ns.id).toBe('string');
+      expect(typeof ns.displayName).toBe('string');
+      expect(typeof ns.active).toBe('boolean');
 
       // Verify the id matches what we requested
       expect(ns.id).toBe(namespaceId);

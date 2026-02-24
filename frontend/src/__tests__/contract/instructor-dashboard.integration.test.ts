@@ -10,7 +10,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getInstructorDashboard } from '@/lib/api/instructor';
-import { expectString, expectArray, expectNumber } from './validators';
 
 describe('getInstructorDashboard()', () => {
   beforeAll(() => {
@@ -25,7 +24,7 @@ describe('getInstructorDashboard()', () => {
     const dashboard = await getInstructorDashboard();
 
     // Top-level: must have a classes array
-    expectArray(dashboard, 'classes');
+    expect(Array.isArray(dashboard.classes)).toBe(true);
   });
 
   it('validates DashboardClass shape when classes exist', async () => {
@@ -38,9 +37,9 @@ describe('getInstructorDashboard()', () => {
 
     const cls = dashboard.classes[0];
 
-    expectString(cls, 'id');
-    expectString(cls, 'name');
-    expectArray(cls, 'sections');
+    expect(typeof cls.id).toBe('string');
+    expect(typeof cls.name).toBe('string');
+    expect(Array.isArray(cls.sections)).toBe(true);
   });
 
   it('validates DashboardSection shape when sections exist', async () => {
@@ -59,9 +58,9 @@ describe('getInstructorDashboard()', () => {
     const section = classWithSections.sections[0];
 
     // Fields that match the DashboardSection interface (camelCase convention)
-    expectString(section, 'id');
-    expectString(section, 'name');
-    expectString(section, 'join_code');
+    expect(typeof section.id).toBe('string');
+    expect(typeof section.name).toBe('string');
+    expect(typeof section.join_code).toBe('string');
 
     // semester is optional per the interface
     if ('semester' in section && section.semester !== undefined) {
@@ -69,7 +68,7 @@ describe('getInstructorDashboard()', () => {
     }
 
     // studentCount is declared as number in DashboardSection
-    expectNumber(section, 'studentCount');
+    expect(typeof section.studentCount).toBe('number');
 
     // activeSessionId is optional per the interface
     if ('activeSessionId' in section && section.activeSessionId !== undefined) {

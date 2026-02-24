@@ -24,10 +24,6 @@ import {
 import { createClass, createSection } from '@/lib/api/classes';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectBoolean,
-  expectArray,
   validateSessionShape,
 } from './validators';
 
@@ -50,15 +46,15 @@ describe('Sections API (full coverage)', () => {
 
       const sec = await getSection(sectionId);
 
-      expectString(sec, 'id');
-      expectString(sec, 'namespace_id');
-      expectString(sec, 'class_id');
-      expectString(sec, 'name');
-      expectNullableString(sec, 'semester');
-      expectString(sec, 'join_code');
-      expectBoolean(sec, 'active');
-      expectString(sec, 'created_at');
-      expectString(sec, 'updated_at');
+      expect(typeof sec.id).toBe('string');
+      expect(typeof sec.namespace_id).toBe('string');
+      expect(typeof sec.class_id).toBe('string');
+      expect(typeof sec.name).toBe('string');
+      expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
+      expect(typeof sec.join_code).toBe('string');
+      expect(typeof sec.active).toBe('boolean');
+      expect(typeof sec.created_at).toBe('string');
+      expect(typeof sec.updated_at).toBe('string');
 
       expectSnakeCaseKeys(sec, 'Section');
       expect(sec.id).toBe(sectionId);
@@ -81,15 +77,15 @@ describe('Sections API (full coverage)', () => {
       const sec = sections[0];
 
       // Field presence and types
-      expectString(sec, 'id');
-      expectString(sec, 'namespace_id');
-      expectString(sec, 'class_id');
-      expectString(sec, 'name');
-      expectNullableString(sec, 'semester');
-      expectString(sec, 'join_code');
-      expectBoolean(sec, 'active');
-      expectString(sec, 'created_at');
-      expectString(sec, 'updated_at');
+      expect(typeof sec.id).toBe('string');
+      expect(typeof sec.namespace_id).toBe('string');
+      expect(typeof sec.class_id).toBe('string');
+      expect(typeof sec.name).toBe('string');
+      expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
+      expect(typeof sec.join_code).toBe('string');
+      expect(typeof sec.active).toBe('boolean');
+      expect(typeof sec.created_at).toBe('string');
+      expect(typeof sec.updated_at).toBe('string');
 
       // No PascalCase leaks
       expectSnakeCaseKeys(sec, 'Section');
@@ -131,11 +127,11 @@ describe('Sections API (full coverage)', () => {
       // Validate shape only if there are memberships.
       if (instructors.length > 0) {
         const membership = instructors[0];
-        expectString(membership, 'id');
-        expectString(membership, 'user_id');
-        expectString(membership, 'section_id');
-        expectString(membership, 'role');
-        expectString(membership, 'joined_at');
+        expect(typeof membership.id).toBe('string');
+        expect(typeof membership.user_id).toBe('string');
+        expect(typeof membership.section_id).toBe('string');
+        expect(typeof membership.role).toBe('string');
+        expect(typeof membership.joined_at).toBe('string');
         expect(membership.role).toBe('instructor');
         expectSnakeCaseKeys(membership, 'SectionMembership');
       }
@@ -202,12 +198,12 @@ describe('Sections API (full coverage)', () => {
         const membership = await joinSection(tempSection.join_code);
 
         // Validate SectionMembership shape
-        expectString(membership, 'id');
-        expectString(membership, 'user_id');
-        expectString(membership, 'section_id');
-        expectString(membership, 'role');
+        expect(typeof membership.id).toBe('string');
+        expect(typeof membership.user_id).toBe('string');
+        expect(typeof membership.section_id).toBe('string');
+        expect(typeof membership.role).toBe('string');
         expect(['instructor', 'student']).toContain(membership.role);
-        expectString(membership, 'joined_at');
+        expect(typeof membership.joined_at).toBe('string');
 
         expectSnakeCaseKeys(membership, 'SectionMembership');
 
@@ -278,8 +274,8 @@ describe('Sections API (full coverage)', () => {
       tempSectionId = tempSection.id;
 
       // Validate the section was created with the right shape before deleting
-      expectString(tempSection, 'id');
-      expectString(tempSection, 'name');
+      expect(typeof tempSection.id).toBe('string');
+      expect(typeof tempSection.name).toBe('string');
 
       // Now delete it -- should return void (no error)
       await deleteSection(tempSection.id);

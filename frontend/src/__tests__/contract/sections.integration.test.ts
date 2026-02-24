@@ -6,10 +6,7 @@ import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helper
 import { listMySections } from '@/lib/api/sections';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectBoolean,
-} from './validators';
+  } from './validators';
 
 describe('listMySections()', () => {
   beforeAll(() => {
@@ -31,19 +28,19 @@ describe('listMySections()', () => {
 
       // MySectionInfo has { section: Section, class_name: string }
       expectSnakeCaseKeys(item, 'MySectionInfo');
-      expect(item).toHaveProperty('section');
-      expectString(item, 'class_name');
+      expect('section' in item).toBe(true);
+      expect(typeof item.class_name).toBe('string');
 
       const sec = item.section;
-      expectString(sec, 'id');
-      expectString(sec, 'namespace_id');
-      expectString(sec, 'class_id');
-      expectString(sec, 'name');
-      expectNullableString(sec, 'semester');
-      expectString(sec, 'join_code');
-      expectBoolean(sec, 'active');
-      expectString(sec, 'created_at');
-      expectString(sec, 'updated_at');
+      expect(typeof sec.id).toBe('string');
+      expect(typeof sec.namespace_id).toBe('string');
+      expect(typeof sec.class_id).toBe('string');
+      expect(typeof sec.name).toBe('string');
+      expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
+      expect(typeof sec.join_code).toBe('string');
+      expect(typeof sec.active).toBe('boolean');
+      expect(typeof sec.created_at).toBe('string');
+      expect(typeof sec.updated_at).toBe('string');
 
       expectSnakeCaseKeys(sec, 'Section');
     }

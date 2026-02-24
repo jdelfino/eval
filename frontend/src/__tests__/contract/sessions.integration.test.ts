@@ -11,9 +11,6 @@ import { getSessionState } from '@/lib/api/realtime';
 import { getRevisions } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectArray,
   validateSessionShape,
 } from './validators';
 
@@ -34,9 +31,9 @@ describe('Sessions API', () => {
       const body = await getSessionState(sessionId);
 
       // Top-level shape: { session, students, join_code }
-      expect(body).toHaveProperty('session');
-      expect(body).toHaveProperty('students');
-      expectString(body, 'join_code');
+      expect('session' in body).toBe(true);
+      expect('students' in body).toBe(true);
+      expect(typeof body.join_code).toBe('string');
       expectSnakeCaseKeys(body, 'SessionState');
 
       // Session sub-object
@@ -46,13 +43,13 @@ describe('Sessions API', () => {
       expect(Array.isArray(body.students)).toBe(true);
       if (body.students.length > 0) {
         const student = body.students[0];
-        expectString(student, 'id');
-        expectString(student, 'session_id');
-        expectString(student, 'user_id');
-        expectString(student, 'name');
-        expect(student).toHaveProperty('code');
-        expect(student).toHaveProperty('execution_settings');
-        expectString(student, 'last_update');
+        expect(typeof student.id).toBe('string');
+        expect(typeof student.session_id).toBe('string');
+        expect(typeof student.user_id).toBe('string');
+        expect(typeof student.name).toBe('string');
+        expect('code' in student).toBe(true);
+        expect('execution_settings' in student).toBe(true);
+        expect(typeof student.last_update).toBe('string');
         expectSnakeCaseKeys(student, 'SessionStudent');
       }
     });
@@ -70,17 +67,17 @@ describe('Sessions API', () => {
       // If there are revisions, validate shape
       if (revisions.length > 0) {
         const revision = revisions[0];
-        expectString(revision, 'id');
-        expectString(revision, 'namespace_id');
-        expectString(revision, 'session_id');
-        expectString(revision, 'user_id');
-        expectString(revision, 'timestamp');
-        expect(revision).toHaveProperty('is_diff');
+        expect(typeof revision.id).toBe('string');
+        expect(typeof revision.namespace_id).toBe('string');
+        expect(typeof revision.session_id).toBe('string');
+        expect(typeof revision.user_id).toBe('string');
+        expect(typeof revision.timestamp).toBe('string');
+        expect('is_diff' in revision).toBe(true);
         expect(typeof revision.is_diff).toBe('boolean');
-        expectNullableString(revision, 'diff');
-        expectNullableString(revision, 'full_code');
-        expectNullableString(revision, 'base_revision_id');
-        expect(revision).toHaveProperty('execution_result');
+        expect(revision.diff === null || typeof revision.diff === 'string').toBe(true);
+        expect(revision.full_code === null || typeof revision.full_code === 'string').toBe(true);
+        expect(revision.base_revision_id === null || typeof revision.base_revision_id === 'string').toBe(true);
+        expect('execution_result' in revision).toBe(true);
         expectSnakeCaseKeys(revision, 'Revision');
       }
     });

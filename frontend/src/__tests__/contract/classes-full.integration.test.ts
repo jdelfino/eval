@@ -28,35 +28,31 @@ import {
 } from '@/lib/api/classes';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectBoolean,
-  expectArray,
-} from './validators';
+  } from './validators';
 
 /** Validate the shape of a Class object. */
-function validateClassShape(cls: object) {
-  expectString(cls, 'id');
-  expectString(cls, 'namespace_id');
-  expectString(cls, 'name');
-  expectNullableString(cls, 'description');
-  expectString(cls, 'created_by');
-  expectString(cls, 'created_at');
-  expectString(cls, 'updated_at');
+function validateClassShape(cls: import("@/types/api").Class) {
+  expect(typeof cls.id).toBe('string');
+  expect(typeof cls.namespace_id).toBe('string');
+  expect(typeof cls.name).toBe('string');
+  expect(cls.description === null || typeof cls.description === 'string').toBe(true);
+  expect(typeof cls.created_by).toBe('string');
+  expect(typeof cls.created_at).toBe('string');
+  expect(typeof cls.updated_at).toBe('string');
   expectSnakeCaseKeys(cls, 'Class');
 }
 
 /** Validate the shape of a Section object. */
-function validateSectionShape(sec: object) {
-  expectString(sec, 'id');
-  expectString(sec, 'namespace_id');
-  expectString(sec, 'class_id');
-  expectString(sec, 'name');
-  expectNullableString(sec, 'semester');
-  expectString(sec, 'join_code');
-  expectBoolean(sec, 'active');
-  expectString(sec, 'created_at');
-  expectString(sec, 'updated_at');
+function validateSectionShape(sec: import("@/types/api").Section) {
+  expect(typeof sec.id).toBe('string');
+  expect(typeof sec.namespace_id).toBe('string');
+  expect(typeof sec.class_id).toBe('string');
+  expect(typeof sec.name).toBe('string');
+  expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
+  expect(typeof sec.join_code).toBe('string');
+  expect(typeof sec.active).toBe('boolean');
+  expect(typeof sec.created_at).toBe('string');
+  expect(typeof sec.updated_at).toBe('string');
   expectSnakeCaseKeys(sec, 'Section');
 }
 
@@ -92,9 +88,9 @@ describe('Classes API — full coverage', () => {
       const result = await getClass(classId);
 
       // Top-level keys
-      expect(result).toHaveProperty('class');
-      expect(result).toHaveProperty('sections');
-      expect(result).toHaveProperty('instructorNames');
+      expect('class' in result).toBe(true);
+      expect('sections' in result).toBe(true);
+      expect('instructorNames' in result).toBe(true);
 
       // Class sub-object
       validateClassShape(result.class);
