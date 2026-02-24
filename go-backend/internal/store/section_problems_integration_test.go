@@ -339,5 +339,13 @@ func TestIntegration_ListSectionProblemsWithStudentWork(t *testing.T) {
 		if p.StudentWork.Code != `print("hello")` {
 			t.Errorf("expected code 'print(\"hello\")', got %s", p.StudentWork.Code)
 		}
+		// Verify timestamps are parsed correctly (regression for PLAT-wqpn).
+		// Previously the ::text cast caused time parsing to fail silently, yielding zero times.
+		if p.StudentWork.CreatedAt.IsZero() {
+			t.Error("expected non-zero student_work.created_at")
+		}
+		if p.StudentWork.LastUpdate.IsZero() {
+			t.Error("expected non-zero student_work.last_update")
+		}
 	})
 }

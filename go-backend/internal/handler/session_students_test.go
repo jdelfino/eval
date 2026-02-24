@@ -1111,3 +1111,39 @@ func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 		t.Errorf("expected no CodeUpdated calls when DB fails, got %d", len(pub.codeUpdatedCalls))
 	}
 }
+
+// TestJoinSession_EmptyNamespace verifies that system-admin users (empty NamespaceID)
+// get a 400 error instead of a FK violation when trying to join a session.
+func TestJoinSession_EmptyNamespace(t *testing.T) {
+	sessionID := uuid.New()
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+	sess := testSession()
+	sess.ID = sessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"name": "Admin"})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sessionID.String()+"/join", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", sessionID.String())
+	// system-admin has empty NamespaceID
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "", Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(&mockSessionStudentRepo{}, sessionRepo, &mockStudentWorkRepo{}))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Join(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

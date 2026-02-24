@@ -76,6 +76,12 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject system-admin users who have no namespace and would cause a FK violation.
+	if authUser.NamespaceID == "" {
+		httputil.WriteError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
 	// Get or create student_work
 	studentWork, err := repos.GetOrCreateStudentWork(r.Context(), authUser.NamespaceID, authUser.ID, problemData.ID, session.SectionID)
 	if err != nil {

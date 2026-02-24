@@ -55,6 +55,15 @@ func (h *SectionProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		problems = []store.PublishedProblemWithStatus{}
 	}
 
+	// Strip sensitive fields before returning to clients.
+	// test_cases is always hidden; solution is hidden unless ShowSolution is set.
+	for i := range problems {
+		if !problems[i].ShowSolution {
+			problems[i].Problem.Solution = nil
+		}
+		problems[i].Problem.TestCases = nil
+	}
+
 	httputil.WriteJSON(w, http.StatusOK, problems)
 }
 

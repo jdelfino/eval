@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -26,8 +27,8 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 	var workSectionID *uuid.UUID
 	var workCode *string
 	var workExecutionSettings []byte
-	var workCreatedAt *string
-	var workLastUpdate *string
+	var workCreatedAt *time.Time
+	var workLastUpdate *time.Time
 
 	err := row.Scan(
 		// SectionProblem fields
@@ -59,10 +60,10 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 			p.StudentWork.ExecutionSettings = workExecutionSettings
 		}
 		if workCreatedAt != nil {
-			p.StudentWork.CreatedAt, _ = parseTime(*workCreatedAt)
+			p.StudentWork.CreatedAt = *workCreatedAt
 		}
 		if workLastUpdate != nil {
-			p.StudentWork.LastUpdate, _ = parseTime(*workLastUpdate)
+			p.StudentWork.LastUpdate = *workLastUpdate
 		}
 	}
 
@@ -76,7 +77,7 @@ func (s *Store) ListSectionProblems(ctx context.Context, sectionID, userID uuid.
 		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
 		p.author_id, p.class_id, p.tags, p.solution, p.created_at, p.updated_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.execution_settings, sw.created_at::text, sw.last_update::text
+		sw.code, sw.execution_settings, sw.created_at, sw.last_update
 		FROM section_problems sp
 		LEFT JOIN problems p ON sp.problem_id = p.id
 		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id

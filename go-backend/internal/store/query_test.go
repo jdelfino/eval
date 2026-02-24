@@ -2,6 +2,7 @@ package store
 
 import (
 	"testing"
+	"time"
 )
 
 func TestArgCounter_Next(t *testing.T) {
@@ -85,5 +86,31 @@ func TestArgCounter_InitialArgs(t *testing.T) {
 	}
 	if len(ac.args) != 3 {
 		t.Errorf("args length after Next = %d, want 3", len(ac.args))
+	}
+}
+
+// TestParseTime_RFC3339 verifies parseTime handles RFC3339 format correctly.
+func TestParseTime_RFC3339(t *testing.T) {
+	ts := "2024-01-15T10:30:00Z"
+	got, err := parseTime(ts)
+	if err != nil {
+		t.Fatalf("parseTime(%q): unexpected error: %v", ts, err)
+	}
+	want := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("parseTime(%q) = %v, want %v", ts, got, want)
+	}
+}
+
+// TestParseTime_RFC3339WithOffset verifies parseTime handles RFC3339 with timezone offset.
+func TestParseTime_RFC3339WithOffset(t *testing.T) {
+	ts := "2024-01-15T10:30:00+00:00"
+	got, err := parseTime(ts)
+	if err != nil {
+		t.Fatalf("parseTime(%q): unexpected error: %v", ts, err)
+	}
+	want := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Errorf("parseTime(%q) = %v, want %v", ts, got, want)
 	}
 }

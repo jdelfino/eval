@@ -453,3 +453,107 @@ func TestSectionProblemHandler_List_InternalError(t *testing.T) {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestSectionProblemHandler_List_StripsSensitiveFields verifies that test_cases are always
+// stripped and solution is stripped when ShowSolution is false.
+func TestSectionProblemHandler_List_StripsSensitiveFields(t *testing.T) {
+	sectionID := uuid.New()
+	userID := uuid.New()
+	problemID1 := uuid.New()
+	problemID2 := uuid.New()
+	solution := "secret solution"
+	testCases := json.RawMessage(`[{"input":"1","output":"1"}]`)
+
+	problems := []store.PublishedProblemWithStatus{
+		{
+			SectionProblem: store.SectionProblem{
+				ID:           uuid.New(),
+				SectionID:    sectionID,
+				ProblemID:    problemID1,
+				ShowSolution: false, // solution should be stripped
+			},
+			Problem: store.Problem{
+				ID:        problemID1,
+				Title:     "Problem Without Solution",
+				Solution:  &solution,
+				TestCases: testCases,
+			},
+		},
+		{
+			SectionProblem: store.SectionProblem{
+				ID:           uuid.New(),
+				SectionID:    sectionID,
+				ProblemID:    problemID2,
+				ShowSolution: true, // solution should be visible
+			},
+			Problem: store.Problem{
+				ID:        problemID2,
+				Title:     "Problem With Solution",
+				Solution:  &solution,
+				TestCases: testCases,
+			},
+		},
+	}
+
+	repo := &mockSectionProblemRepo{
+		listSectionProblemsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
+			return problems, nil
+		},
+	}
+
+	h := NewSectionProblemHandler()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, spRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Decode as raw JSON to inspect fields precisely
+	var got []map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 problems, got %d", len(got))
+	}
+
+	// Check both problems: test_cases must always be null/absent
+	for i, item := range got {
+		problemRaw, ok := item["problem"]
+		if !ok {
+			t.Fatalf("problem[%d]: missing 'problem' field", i)
+		}
+		var prob map[string]json.RawMessage
+		if err := json.Unmarshal(problemRaw, &prob); err != nil {
+			t.Fatalf("problem[%d]: unmarshal: %v", i, err)
+		}
+		if tc, ok := prob["test_cases"]; ok && string(tc) != "null" {
+			t.Errorf("problem[%d]: test_cases should be null, got %s", i, tc)
+		}
+	}
+
+	// Problem 0: ShowSolution=false — solution must be null
+	prob0Raw := got[0]["problem"]
+	var prob0 map[string]json.RawMessage
+	_ = json.Unmarshal(prob0Raw, &prob0)
+	if sol, ok := prob0["solution"]; ok && string(sol) != "null" {
+		t.Errorf("problem[0] (ShowSolution=false): solution should be null, got %s", sol)
+	}
+
+	// Problem 1: ShowSolution=true — solution must be present
+	prob1Raw := got[1]["problem"]
+	var prob1 map[string]json.RawMessage
+	_ = json.Unmarshal(prob1Raw, &prob1)
+	if sol, ok := prob1["solution"]; !ok || string(sol) == "null" {
+		t.Errorf("problem[1] (ShowSolution=true): solution should be present, got %s", sol)
+	}
+}
