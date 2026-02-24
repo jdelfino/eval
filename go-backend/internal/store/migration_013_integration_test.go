@@ -351,6 +351,9 @@ func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 		t.Fatalf("create problem: %v", err)
 	}
 
+	// studentWorkID is set inside the first sub-test and used in isolation sub-tests below.
+	var studentWorkID uuid.UUID
+
 	t.Run("student can insert their own work", func(t *testing.T) {
 		studentAuth := &auth.User{
 			ID:          studentID,
@@ -362,6 +365,7 @@ func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 		defer conn.Release()
 
 		workID := uuid.New()
+		studentWorkID = workID
 		_, err := conn.Exec(ctx, `
 			INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code)
 			VALUES ($1, $2, $3, $4, $5, $6)
@@ -416,6 +420,65 @@ func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 		}
 		if count == 0 {
 			t.Error("instructor should see student work")
+		}
+	})
+
+	// Cross-student RLS isolation: other student must not see or modify studentID's work.
+	t.Run("other student cannot read student A's work by ID", func(t *testing.T) {
+		if studentWorkID == (uuid.UUID{}) {
+			t.Skip("studentWorkID not set (prior sub-test failed)")
+		}
+		otherStudentAuth := &auth.User{
+			ID:          otherStudentID,
+			Email:       "other@test.com",
+			NamespaceID: db.nsID,
+			Role:        auth.RoleStudent,
+		}
+		s, conn := db.storeWithRLS(ctx, t, otherStudentAuth)
+		defer conn.Release()
+
+		_, err := s.GetStudentWork(ctx, studentWorkID)
+		if err != ErrNotFound {
+			t.Errorf("expected ErrNotFound when other student reads student A's work, got: %v", err)
+		}
+	})
+
+	t.Run("other student cannot read student A's work by problem", func(t *testing.T) {
+		otherStudentAuth := &auth.User{
+			ID:          otherStudentID,
+			Email:       "other@test.com",
+			NamespaceID: db.nsID,
+			Role:        auth.RoleStudent,
+		}
+		s, conn := db.storeWithRLS(ctx, t, otherStudentAuth)
+		defer conn.Release()
+
+		// Querying studentID's work using otherStudentID's RLS context should return not found.
+		_, err := s.GetStudentWorkByProblem(ctx, studentID, problemID, sectionID)
+		if err != ErrNotFound {
+			t.Errorf("expected ErrNotFound when other student queries student A's work by problem, got: %v", err)
+		}
+	})
+
+	t.Run("other student cannot update student A's work", func(t *testing.T) {
+		if studentWorkID == (uuid.UUID{}) {
+			t.Skip("studentWorkID not set (prior sub-test failed)")
+		}
+		otherStudentAuth := &auth.User{
+			ID:          otherStudentID,
+			Email:       "other@test.com",
+			NamespaceID: db.nsID,
+			Role:        auth.RoleStudent,
+		}
+		s, conn := db.storeWithRLS(ctx, t, otherStudentAuth)
+		defer conn.Release()
+
+		newCode := "print('hacked')"
+		_, err := s.UpdateStudentWork(ctx, studentWorkID, UpdateStudentWorkParams{
+			Code: &newCode,
+		})
+		if err != ErrNotFound {
+			t.Errorf("expected ErrNotFound when other student updates student A's work, got: %v", err)
 		}
 	})
 
