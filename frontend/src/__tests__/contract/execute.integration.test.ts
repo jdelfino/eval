@@ -5,9 +5,8 @@
  * Requires the executor service to be running. The contract test CI workflow
  * builds and starts the executor Docker container alongside the Go API.
  *
- * NOTE: The backend returns {success, output?, error?, execution_time_ms, stdin?}
- * with omitempty on output/error/stdin. The ExecutionResult type in api.ts uses
- * execution_time (without _ms) — this mismatch is tracked separately.
+ * The backend returns {success, output?, error?, execution_time_ms, stdin?}
+ * with omitempty on output/error/stdin.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { executeStandaloneCode } from '@/lib/api/execute';

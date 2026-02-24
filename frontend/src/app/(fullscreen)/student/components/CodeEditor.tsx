@@ -341,7 +341,7 @@ export default function CodeEditor({
         success: false,
         output: '',
         error: 'Please write some code before running',
-        execution_time: 0,
+        execution_time_ms: 0,
       });
       return;
     }
@@ -361,7 +361,7 @@ export default function CodeEditor({
         success: false,
         output: '',
         error: error.message || 'Failed to execute code',
-        execution_time: 0,
+        execution_time_ms: 0,
       });
     } finally {
       setLocalIsRunning(false);
@@ -1119,7 +1119,7 @@ export default function CodeEditor({
                   <span className={`${outputTextSm} ${
                     effectiveResult.success ? 'text-green-300' : 'text-red-300'
                   }`}>
-                    Execution time: {effectiveResult.execution_time}ms
+                    Execution time: {effectiveResult.execution_time_ms}ms
                   </span>
                 </div>
 

@@ -324,7 +324,7 @@ describe('CodeEditor - Debugger Output Display', () => {
             success: true,
             output: 'Hello\n',
             error: '',
-            execution_time: 100
+            execution_time_ms: 100
           }}
         />
       );

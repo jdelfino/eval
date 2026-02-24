@@ -79,7 +79,7 @@ export default function OutputPanel({ result, isConnected = true, isRunning = fa
       )}
 
       <div className="text-sm text-gray-500 mt-2">
-        Execution time: {result.execution_time}ms
+        Execution time: {result.execution_time_ms}ms
       </div>
     </div>
   );

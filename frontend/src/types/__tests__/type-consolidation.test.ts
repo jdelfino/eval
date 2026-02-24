@@ -17,7 +17,7 @@ describe('ExecutionResult consolidation (PLAT-uum.46)', () => {
       success: true,
       output: 'hello',
       error: '',
-      execution_time: 42,
+      execution_time_ms: 42,
       stdin: 'input',
     };
     expect(result.success).toBe(true);

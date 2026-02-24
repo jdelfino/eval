@@ -226,7 +226,7 @@ describe('Student Page - Session Ended Detection', () => {
   it('should call practice API when running code in ended session', async () => {
     const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ success: true, output: 'hello', error: '', execution_time: 10 }),
+      json: () => Promise.resolve({ success: true, output: 'hello', error: '', execution_time_ms: 10 }),
     });
     global.fetch = mockFetch;
 

@@ -89,7 +89,7 @@ describe('CodeEditor Component', () => {
         success: true,
         output: 'Hello, World!\n',
         error: '',
-        execution_time: 125,
+        execution_time_ms: 125,
       };
 
       render(
@@ -115,7 +115,7 @@ describe('CodeEditor Component', () => {
         success: false,
         output: '',
         error: 'NameError: name "x" is not defined',
-        execution_time: 100,
+        execution_time_ms: 100,
       };
 
       render(
@@ -143,7 +143,7 @@ describe('CodeEditor Component', () => {
         success: true,
         output: 'API execution result\n',
         error: '',
-        execution_time: 150,
+        execution_time_ms: 150,
       });
 
       render(
@@ -234,7 +234,7 @@ describe('CodeEditor Component', () => {
         success: true,
         output: '42\n',
         error: '',
-        execution_time: 125,
+        execution_time_ms: 125,
       });
 
       render(
@@ -301,7 +301,7 @@ describe('CodeEditor Component', () => {
         success: true,
         output: 'Done\n',
         error: '',
-        execution_time: 100,
+        execution_time_ms: 100,
       });
 
       // Should show results

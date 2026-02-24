@@ -19,7 +19,7 @@ const fakeExecutionResult: ExecutionResult = {
   success: true,
   output: 'Hello, World!',
   error: '',
-  execution_time: 123,
+  execution_time_ms: 123,
 };
 
 describe('lib/api/execute', () => {

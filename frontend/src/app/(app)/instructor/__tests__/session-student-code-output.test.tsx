@@ -64,7 +64,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
       success: true,
       output: 'Hello from student code!',
       error: '',
-      execution_time: 42,
+      execution_time_ms: 42,
     };
 
     // Render CodeEditor with the same props pattern used in instructor page
@@ -91,7 +91,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
       success: false,
       output: '',
       error: 'NameError: name "undefined_var" is not defined',
-      execution_time: 15,
+      execution_time_ms: 15,
     };
 
     render(
