@@ -87,7 +87,7 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	revision, err := repos.CreateRevision(r.Context(), store.CreateRevisionParams{
 		NamespaceID:     authUser.NamespaceID,
-		SessionID:       sessionID,
+		SessionID:       &sessionID,
 		UserID:          authUser.ID,
 		IsDiff:          req.IsDiff,
 		Diff:            req.Diff,

@@ -364,22 +364,21 @@ type SessionStudent struct {
 	Code              string          `json:"code"`
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	LastUpdate        time.Time       `json:"last_update"`
+	StudentWorkID     *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
 }
 
 // JoinSessionParams contains the fields for joining a session.
 type JoinSessionParams struct {
-	SessionID uuid.UUID
-	UserID    uuid.UUID
-	Name      string
+	SessionID     uuid.UUID
+	UserID        uuid.UUID
+	Name          string
+	StudentWorkID *uuid.UUID // Link to student_work (Task 4 addition)
 }
 
 // SessionStudentRepository defines the interface for session student data access.
 type SessionStudentRepository interface {
 	// JoinSession adds a student to a session (idempotent via ON CONFLICT).
 	JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error)
-	// UpdateCode updates a student's code and execution settings in a session.
-	// Returns ErrNotFound if the student is not in the session.
-	UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*SessionStudent, error)
 	// ListSessionStudents retrieves all students in a session.
 	ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error)
 	// GetSessionStudent retrieves a single student's record in a session.
@@ -391,7 +390,7 @@ type SessionStudentRepository interface {
 type Revision struct {
 	ID              uuid.UUID       `json:"id"`
 	NamespaceID     string          `json:"namespace_id"`
-	SessionID       uuid.UUID       `json:"session_id"`
+	SessionID       *uuid.UUID      `json:"session_id"`           // Optional (nil for practice mode)
 	UserID          uuid.UUID       `json:"user_id"`
 	Timestamp       time.Time       `json:"timestamp"`
 	IsDiff          bool            `json:"is_diff"`
@@ -405,14 +404,14 @@ type Revision struct {
 // CreateRevisionParams contains the fields for creating a revision.
 type CreateRevisionParams struct {
 	NamespaceID     string
-	SessionID       uuid.UUID
+	SessionID       *uuid.UUID // Optional (nil for practice mode, Task 4 change)
 	UserID          uuid.UUID
 	IsDiff          bool
 	Diff            *string
 	FullCode        *string
 	BaseRevisionID  *uuid.UUID
 	ExecutionResult json.RawMessage
-	StudentWorkID   *uuid.UUID
+	StudentWorkID   *uuid.UUID // Required for revisions (Task 4 change)
 }
 
 // RevisionRepository defines the interface for revision data access.

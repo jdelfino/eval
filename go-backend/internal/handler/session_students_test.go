@@ -20,7 +20,9 @@ import (
 // sessionStudentTestRepos embeds stubRepos for session student tests.
 type sessionStudentTestRepos struct {
 	stubRepos
-	students *mockSessionStudentRepo
+	students    *mockSessionStudentRepo
+	sessions    *mockSessionRepo
+	studentWork *mockStudentWorkRepo
 }
 
 var _ store.Repos = (*sessionStudentTestRepos)(nil)
@@ -28,11 +30,32 @@ var _ store.Repos = (*sessionStudentTestRepos)(nil)
 func (r *sessionStudentTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return r.students.JoinSession(ctx, params)
 }
-func (r *sessionStudentTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
-	return r.students.UpdateCode(ctx, sessionID, userID, code, executionSettings)
-}
 func (r *sessionStudentTestRepos) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
 	return r.students.ListSessionStudents(ctx, sessionID)
+}
+func (r *sessionStudentTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store.Session, error) {
+	if r.sessions != nil && r.sessions.getSessionFn != nil {
+		return r.sessions.getSessionFn(ctx, id)
+	}
+	return nil, store.ErrNotFound
+}
+func (r *sessionStudentTestRepos) GetOrCreateStudentWork(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error) {
+	if r.studentWork != nil && r.studentWork.getOrCreateStudentWorkFn != nil {
+		return r.studentWork.getOrCreateStudentWorkFn(ctx, namespaceID, userID, problemID, sectionID)
+	}
+	return nil, store.ErrNotFound
+}
+func (r *sessionStudentTestRepos) UpdateStudentWork(ctx context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+	if r.studentWork != nil && r.studentWork.updateStudentWorkFn != nil {
+		return r.studentWork.updateStudentWorkFn(ctx, id, params)
+	}
+	return nil, store.ErrNotFound
+}
+func (r *sessionStudentTestRepos) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error) {
+	if r.students != nil && r.students.getSessionStudentFn != nil {
+		return r.students.getSessionStudentFn(ctx, sessionID, userID)
+	}
+	return nil, store.ErrNotFound
 }
 func studRepos(repo *mockSessionStudentRepo) *sessionStudentTestRepos {
 	return &sessionStudentTestRepos{students: repo}
@@ -43,8 +66,16 @@ func studRepos(repo *mockSessionStudentRepo) *sessionStudentTestRepos {
 func TestJoinSession_Success(t *testing.T) {
 	ss := testSessionStudent()
 	userID := ss.UserID
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
-	repo := &mockSessionStudentRepo{
+	sess := testSession()
+	sess.ID = ss.SessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	studentRepo := &mockSessionStudentRepo{
 		joinSessionFn: func(_ context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 			if params.SessionID != ss.SessionID {
 				t.Fatalf("unexpected session_id: %v", params.SessionID)
@@ -55,7 +86,39 @@ func TestJoinSession_Success(t *testing.T) {
 			if params.Name != "Alice" {
 				t.Fatalf("unexpected name: %v", params.Name)
 			}
+			ss.StudentWorkID = params.StudentWorkID
 			return ss, nil
+		},
+	}
+
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			if id != ss.SessionID {
+				t.Fatalf("unexpected session id: %v", id)
+			}
+			return sess, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		getOrCreateStudentWorkFn: func(_ context.Context, nsID string, uID, pID, sectID uuid.UUID) (*store.StudentWork, error) {
+			if uID != userID {
+				t.Errorf("expected user_id %v, got %v", userID, uID)
+			}
+			if pID != problemID {
+				t.Errorf("expected problem_id %v, got %v", problemID, pID)
+			}
+			if sectID != sectionID {
+				t.Errorf("expected section_id %v, got %v", sectionID, sectID)
+			}
+			return &store.StudentWork{
+				ID:          studentWorkID,
+				NamespaceID: nsID,
+				UserID:      uID,
+				ProblemID:   pID,
+				SectionID:   sectID,
+				Code:        "",
+			}, nil
 		},
 	}
 
@@ -64,8 +127,8 @@ func TestJoinSession_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+ss.SessionID.String()+"/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, sessionRepo, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -157,20 +220,47 @@ func TestJoinSession_MissingName(t *testing.T) {
 }
 
 func TestJoinSession_InternalError(t *testing.T) {
-	repo := &mockSessionStudentRepo{
+	sessionID := uuid.New()
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+	sess := testSession()
+	sess.ID = sessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	studentRepo := &mockSessionStudentRepo{
 		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
 			return nil, errors.New("db error")
 		},
 	}
 
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		getOrCreateStudentWorkFn: func(_ context.Context, nsID string, uID, pID, sectID uuid.UUID) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:          uuid.New(),
+				NamespaceID: nsID,
+				UserID:      uID,
+				ProblemID:   pID,
+				SectionID:   sectID,
+				Code:        "",
+			}, nil
+		},
+	}
+
 	body, _ := json.Marshal(map[string]any{"name": "Alice"})
 	h := NewSessionStudentHandler(noopPublisher())
-	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sessionID.String()+"/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, sessionRepo, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -185,16 +275,31 @@ func TestJoinSession_InternalError(t *testing.T) {
 
 func TestUpdateCode_WithExecutionSettings(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	execSettings := json.RawMessage(`{"stdin":"hello","random_seed":42}`)
 	ss.Code = "print('hello')"
 	ss.ExecutionSettings = execSettings
 	userID := ss.UserID
 
 	var capturedExecSettings json.RawMessage
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, es json.RawMessage) (*store.SessionStudent, error) {
-			capturedExecSettings = es
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
+			}
 			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			capturedExecSettings = params.ExecutionSettings
+			return &store.StudentWork{
+				ID:                id,
+				Code:              *params.Code,
+				ExecutionSettings: params.ExecutionSettings,
+			}, nil
 		},
 	}
 
@@ -203,8 +308,8 @@ func TestUpdateCode_WithExecutionSettings(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -247,16 +352,30 @@ func TestUpdateCode_WithExecutionSettings(t *testing.T) {
 
 func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	ss.Code = "x = 1"
 	userID := ss.UserID
 
 	var capturedExecSettings json.RawMessage
 	var capturedExecSettingsCalled bool
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, _ string, es json.RawMessage) (*store.SessionStudent, error) {
-			capturedExecSettings = es
-			capturedExecSettingsCalled = true
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
+			}
 			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			capturedExecSettings = params.ExecutionSettings
+			capturedExecSettingsCalled = true
+			return &store.StudentWork{
+				ID:   id,
+				Code: *params.Code,
+			}, nil
 		},
 	}
 
@@ -266,8 +385,8 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -278,7 +397,7 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 	}
 
 	if !capturedExecSettingsCalled {
-		t.Fatal("expected updateCodeFn to be called")
+		t.Fatal("expected updateStudentWorkFn to be called")
 	}
 	if capturedExecSettings != nil {
 		t.Errorf("expected nil execution_settings when omitted, got %s", capturedExecSettings)
@@ -287,21 +406,32 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 
 func TestUpdateCode_Success(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	ss.Code = "print('hello')"
 	userID := ss.UserID
 
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
-			if sessID != ss.SessionID {
-				t.Fatalf("unexpected session_id: %v", sessID)
-			}
-			if uID != userID {
-				t.Fatalf("unexpected user_id: %v", uID)
-			}
-			if code != "print('hello')" {
-				t.Fatalf("unexpected code: %v", code)
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
 			}
 			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			if id != studentWorkID {
+				t.Fatalf("unexpected student_work_id: %v", id)
+			}
+			if *params.Code != "print('hello')" {
+				t.Fatalf("unexpected code: %v", *params.Code)
+			}
+			return &store.StudentWork{
+				ID:   id,
+				Code: *params.Code,
+			}, nil
 		},
 	}
 
@@ -310,8 +440,8 @@ func TestUpdateCode_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -366,8 +496,8 @@ func TestUpdateCode_InvalidID(t *testing.T) {
 }
 
 func TestUpdateCode_NotFound(t *testing.T) {
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.SessionStudent, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -378,8 +508,8 @@ func TestUpdateCode_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, nil))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -391,8 +521,18 @@ func TestUpdateCode_NotFound(t *testing.T) {
 }
 
 func TestUpdateCode_InternalError(t *testing.T) {
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateStudentWorkParams) (*store.StudentWork, error) {
 			return nil, errors.New("db error")
 		},
 	}
@@ -403,8 +543,8 @@ func TestUpdateCode_InternalError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -417,21 +557,29 @@ func TestUpdateCode_InternalError(t *testing.T) {
 
 func TestUpdateCode_EmptyCode(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	ss.Code = ""
 	userID := ss.UserID
 
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
-			if sessID != ss.SessionID {
-				t.Fatalf("unexpected session_id: %v", sessID)
-			}
-			if uID != userID {
-				t.Fatalf("unexpected user_id: %v", uID)
-			}
-			if code != "" {
-				t.Fatalf("expected empty code, got %q", code)
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
 			}
 			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			if *params.Code != "" {
+				t.Fatalf("expected empty code, got %q", *params.Code)
+			}
+			return &store.StudentWork{
+				ID:   id,
+				Code: "",
+			}, nil
 		},
 	}
 
@@ -440,8 +588,8 @@ func TestUpdateCode_EmptyCode(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -454,14 +602,25 @@ func TestUpdateCode_EmptyCode(t *testing.T) {
 
 func TestUpdateCode_OmittedCodeDefaultsToEmpty(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	userID := ss.UserID
 
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
-			if code != "" {
-				t.Fatalf("expected empty code when field omitted, got %q", code)
-			}
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
 			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			if *params.Code != "" {
+				t.Fatalf("expected empty code when field omitted, got %q", *params.Code)
+			}
+			return &store.StudentWork{
+				ID:   studentWorkID,
+				Code: "",
+			}, nil
 		},
 	}
 
@@ -470,8 +629,8 @@ func TestUpdateCode_OmittedCodeDefaultsToEmpty(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -629,12 +788,40 @@ func TestListStudents_InternalError(t *testing.T) {
 func TestJoinSession_PublishesStudentJoined(t *testing.T) {
 	ss := testSessionStudent()
 	userID := ss.UserID
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
-	repo := &mockSessionStudentRepo{
+	sess := testSession()
+	sess.ID = ss.SessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	studentRepo := &mockSessionStudentRepo{
 		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
+
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		getOrCreateStudentWorkFn: func(_ context.Context, nsID string, uID, pID, sectID uuid.UUID) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:          studentWorkID,
+				NamespaceID: nsID,
+				UserID:      uID,
+				ProblemID:   pID,
+				SectionID:   sectID,
+				Code:        "",
+			}, nil
+		},
+	}
+
 	pub := newMockPublisher()
 	h := NewSessionStudentHandler(pub)
 
@@ -642,8 +829,8 @@ func TestJoinSession_PublishesStudentJoined(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+ss.SessionID.String()+"/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, sessionRepo, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -672,12 +859,40 @@ func TestJoinSession_PublishesStudentJoined(t *testing.T) {
 
 func TestJoinSession_SucceedsWhenPublisherFails(t *testing.T) {
 	ss := testSessionStudent()
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
-	repo := &mockSessionStudentRepo{
+	sess := testSession()
+	sess.ID = ss.SessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	studentRepo := &mockSessionStudentRepo{
 		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
+
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		getOrCreateStudentWorkFn: func(_ context.Context, nsID string, uID, pID, sectID uuid.UUID) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:          studentWorkID,
+				NamespaceID: nsID,
+				UserID:      uID,
+				ProblemID:   pID,
+				SectionID:   sectID,
+				Code:        "",
+			}, nil
+		},
+	}
+
 	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionStudentHandler(pub)
 
@@ -685,8 +900,8 @@ func TestJoinSession_SucceedsWhenPublisherFails(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+ss.SessionID.String()+"/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, sessionRepo, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -698,21 +913,49 @@ func TestJoinSession_SucceedsWhenPublisherFails(t *testing.T) {
 }
 
 func TestJoinSession_DBError_NoPublish(t *testing.T) {
-	repo := &mockSessionStudentRepo{
+	sessionID := uuid.New()
+	problemID := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+	sectionID := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+	sess := testSession()
+	sess.ID = sessionID
+	sess.Problem = json.RawMessage(fmt.Sprintf(`{"id":"%s","title":"Test Problem"}`, problemID))
+	sess.SectionID = sectionID
+
+	studentRepo := &mockSessionStudentRepo{
 		joinSessionFn: func(_ context.Context, _ store.JoinSessionParams) (*store.SessionStudent, error) {
 			return nil, errors.New("db error")
 		},
 	}
+
+	sessionRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
+			return sess, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		getOrCreateStudentWorkFn: func(_ context.Context, nsID string, uID, pID, sectID uuid.UUID) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:          uuid.New(),
+				NamespaceID: nsID,
+				UserID:      uID,
+				ProblemID:   pID,
+				SectionID:   sectID,
+				Code:        "",
+			}, nil
+		},
+	}
+
 	pub := newMockPublisher()
 	h := NewSessionStudentHandler(pub)
 
 	body, _ := json.Marshal(map[string]any{"name": "Alice"})
-	sessionID := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sessionID.String()+"/join", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, sessionRepo, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -731,14 +974,26 @@ func TestJoinSession_DBError_NoPublish(t *testing.T) {
 
 func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	ss.Code = "print('hello')"
 	userID := ss.UserID
 
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:   studentWorkID,
+				Code: *params.Code,
+			}, nil
+		},
+	}
+
 	pub := newMockPublisher()
 	h := NewSessionStudentHandler(pub)
 
@@ -746,8 +1001,8 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -776,13 +1031,25 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 
 func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
 	ss.Code = "x"
 
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:   studentWorkID,
+				Code: *params.Code,
+			}, nil
+		},
+	}
+
 	pub := newMockPublisherWithErr(errors.New("publish failed"))
 	h := NewSessionStudentHandler(pub)
 
@@ -790,8 +1057,8 @@ func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -803,11 +1070,22 @@ func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 }
 
 func TestUpdateCode_DBError_NoPublish(t *testing.T) {
-	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, _ store.UpdateStudentWorkParams) (*store.StudentWork, error) {
 			return nil, errors.New("db error")
 		},
 	}
+
 	pub := newMockPublisher()
 	h := NewSessionStudentHandler(pub)
 
@@ -816,8 +1094,8 @@ func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+sessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sessionID.String())
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, studRepos(repo))
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

@@ -52,10 +52,11 @@ func revisionRepos(repo *mockRevisionRepo) *revisionTestRepos {
 
 func testRevision() *store.Revision {
 	code := "fmt.Println(\"hello\")"
+	sessionID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	return &store.Revision{
 		ID:              uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		NamespaceID:     "test-ns",
-		SessionID:       uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		SessionID:       &sessionID,
 		UserID:          uuid.MustParse("33333333-3333-3333-3333-333333333333"),
 		Timestamp:       time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		IsDiff:          false,
@@ -74,7 +75,7 @@ func TestListRevisions_Success(t *testing.T) {
 	rev := testRevision()
 	repo := &mockRevisionRepo{
 		listRevisionsFn: func(_ context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]store.Revision, error) {
-			if sessionID != rev.SessionID {
+			if rev.SessionID == nil || sessionID != *rev.SessionID {
 				t.Fatalf("unexpected sessionID: %v", sessionID)
 			}
 			if userID != nil {
@@ -116,7 +117,7 @@ func TestListRevisions_WithUserIDFilter(t *testing.T) {
 
 	repo := &mockRevisionRepo{
 		listRevisionsFn: func(_ context.Context, sessionID uuid.UUID, userID *uuid.UUID) ([]store.Revision, error) {
-			if sessionID != rev.SessionID {
+			if rev.SessionID == nil || sessionID != *rev.SessionID {
 				t.Fatalf("unexpected sessionID: %v", sessionID)
 			}
 			if userID == nil {
@@ -239,7 +240,7 @@ func TestCreateRevision_Success(t *testing.T) {
 			if params.NamespaceID != "test-ns" {
 				t.Fatalf("unexpected namespace_id: %v", params.NamespaceID)
 			}
-			if params.SessionID != rev.SessionID {
+			if params.SessionID == nil || rev.SessionID == nil || *params.SessionID != *rev.SessionID {
 				t.Fatalf("unexpected session_id: %v", params.SessionID)
 			}
 			if params.UserID != userID {

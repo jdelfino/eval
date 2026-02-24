@@ -502,101 +502,8 @@ func TestIntegration_JoinSession(t *testing.T) {
 }
 
 // =============================================================================
-// Test: UpdateCode - calls actual Store method with RLS
+// Test: UpdateCode - REMOVED (method no longer exists, replaced by UpdateStudentWork)
 // =============================================================================
-
-func TestIntegration_UpdateCode(t *testing.T) {
-	db := setupIntegrationDB(t)
-	defer db.close()
-	ctx := context.Background()
-
-	nsID := db.nsID
-
-	creatorID := uuid.New()
-	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
-	studentID := uuid.New()
-	db.createUser(ctx, t, studentID, "student@test.com", "student", nsID)
-	classID := uuid.New()
-	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
-	sectionID := uuid.New()
-	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
-	// Instructor needs section membership for session update (last_activity)
-	db.createMembership(ctx, t, creatorID, sectionID, "instructor")
-	sessionID := uuid.New()
-	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
-	db.createSessionStudent(ctx, t, sessionID, studentID, "Alice")
-
-	// Use instructor as auth user - UpdateCode updates sessions.last_activity which requires session update permission
-	authUser := &auth.User{
-		ID:          creatorID,
-		Email:       "creator@test.com",
-		NamespaceID: nsID,
-		Role:        auth.RoleInstructor,
-	}
-
-	t.Run("update code", func(t *testing.T) {
-		s, conn := db.storeWithRLS(ctx, t, authUser)
-		defer conn.Release()
-
-		ss, err := s.UpdateCode(ctx, sessionID, studentID, "x = 42", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if ss.Code != "x = 42" {
-			t.Errorf("expected code 'x = 42', got %q", ss.Code)
-		}
-	})
-
-	t.Run("update code with execution_settings", func(t *testing.T) {
-		s, conn := db.storeWithRLS(ctx, t, authUser)
-		defer conn.Release()
-
-		execSettings := json.RawMessage(`{"stdin":"test input","random_seed":123}`)
-		ss, err := s.UpdateCode(ctx, sessionID, studentID, "y = 99", execSettings)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if ss.Code != "y = 99" {
-			t.Errorf("expected code 'y = 99', got %q", ss.Code)
-		}
-		if ss.ExecutionSettings == nil {
-			t.Fatal("expected execution_settings to be set, got nil")
-		}
-		var got map[string]any
-		if err := json.Unmarshal(ss.ExecutionSettings, &got); err != nil {
-			t.Fatalf("unmarshal execution_settings: %v", err)
-		}
-		if got["stdin"] != "test input" {
-			t.Errorf("expected stdin 'test input', got %v", got["stdin"])
-		}
-		if got["random_seed"] != float64(123) {
-			t.Errorf("expected random_seed 123, got %v", got["random_seed"])
-		}
-	})
-
-	t.Run("update code with nil execution_settings", func(t *testing.T) {
-		s, conn := db.storeWithRLS(ctx, t, authUser)
-		defer conn.Release()
-
-		ss, err := s.UpdateCode(ctx, sessionID, studentID, "z = 0", nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if ss.Code != "z = 0" {
-			t.Errorf("expected code 'z = 0', got %q", ss.Code)
-		}
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		s, conn := db.storeWithRLS(ctx, t, authUser)
-		defer conn.Release()
-
-		_, err := s.UpdateCode(ctx, sessionID, uuid.New(), "code", nil)
-		if !errors.Is(err, ErrNotFound) {
-			t.Errorf("expected ErrNotFound, got: %v", err)
-		}
-	})
-}
 
 // =============================================================================
 // Test: ListSessionStudents - calls actual Store method with RLS
@@ -752,7 +659,7 @@ func TestIntegration_CreateRevision(t *testing.T) {
 		execResult := json.RawMessage(`{"status":"ok"}`)
 		rev, err := s.CreateRevision(ctx, CreateRevisionParams{
 			NamespaceID:     nsID,
-			SessionID:       sessionID,
+			SessionID:       &sessionID,
 			UserID:          creatorID,
 			IsDiff:          false,
 			FullCode:        &fullCode,
@@ -761,8 +668,8 @@ func TestIntegration_CreateRevision(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if rev.SessionID != sessionID {
-			t.Errorf("expected session_id %s, got %s", sessionID, rev.SessionID)
+		if rev.SessionID == nil || *rev.SessionID != sessionID {
+			t.Errorf("expected session_id %s, got %v", sessionID, rev.SessionID)
 		}
 		if rev.IsDiff {
 			t.Error("expected is_diff=false")
@@ -821,7 +728,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	s, conn := db.storeWithRLS(ctx, t, authUser1)
 	_, err := s.CreateRevision(ctx, CreateRevisionParams{
 		NamespaceID:     nsID,
-		SessionID:       sessionID,
+		SessionID:       &sessionID,
 		UserID:          user1,
 		IsDiff:          false,
 		FullCode:        &code1,
@@ -838,7 +745,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	s2, conn2 := db.storeWithRLS(ctx, t, authUser2)
 	_, err = s2.CreateRevision(ctx, CreateRevisionParams{
 		NamespaceID:     nsID,
-		SessionID:       sessionID,
+		SessionID:       &sessionID,
 		UserID:          user2,
 		IsDiff:          false,
 		FullCode:        &code2,

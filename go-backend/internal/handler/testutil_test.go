@@ -353,9 +353,7 @@ func (stubRepos) ReopenSessionReplacingActive(context.Context, uuid.UUID, uuid.U
 func (stubRepos) JoinSession(context.Context, store.JoinSessionParams) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected JoinSession call")
 }
-func (stubRepos) UpdateCode(context.Context, uuid.UUID, uuid.UUID, string, json.RawMessage) (*store.SessionStudent, error) {
-	panic("stubRepos: unexpected UpdateCode call")
-}
+// UpdateCode was removed from the interface
 func (stubRepos) ListSessionStudents(context.Context, uuid.UUID) ([]store.SessionStudent, error) {
 	panic("stubRepos: unexpected ListSessionStudents call")
 }

@@ -2,18 +2,17 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/google/uuid"
 )
 
-const sessionStudentColumns = `id, session_id, user_id, name, code, execution_settings, last_update`
+const sessionStudentColumns = `id, session_id, user_id, name, code, execution_settings, last_update, student_work_id`
 
 func scanSessionStudent(row interface{ Scan(dest ...any) error }) (*SessionStudent, error) {
 	var ss SessionStudent
 	err := row.Scan(
 		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
-		&ss.Code, &ss.ExecutionSettings, &ss.LastUpdate,
+		&ss.Code, &ss.ExecutionSettings, &ss.LastUpdate, &ss.StudentWorkID,
 	)
 	if err != nil {
 		return nil, err
@@ -22,7 +21,7 @@ func scanSessionStudent(row interface{ Scan(dest ...any) error }) (*SessionStude
 }
 
 // JoinSession adds a student to a session. If the student is already in the session,
-// the name is updated (idempotent). Also appends the user to the session's participants array.
+// the name and student_work_id are updated (idempotent). Also appends the user to the session's participants array.
 func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*SessionStudent, error) {
 	tx, err := s.beginTx(ctx)
 	if err != nil {
@@ -30,12 +29,12 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
-	insertQuery := `INSERT INTO session_students (session_id, user_id, name)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (session_id, user_id) DO UPDATE SET name = EXCLUDED.name
+	insertQuery := `INSERT INTO session_students (session_id, user_id, name, student_work_id)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (session_id, user_id) DO UPDATE SET name = EXCLUDED.name, student_work_id = EXCLUDED.student_work_id
 		RETURNING ` + sessionStudentColumns
 
-	ss, err := scanSessionStudent(tx.QueryRow(ctx, insertQuery, params.SessionID, params.UserID, params.Name))
+	ss, err := scanSessionStudent(tx.QueryRow(ctx, insertQuery, params.SessionID, params.UserID, params.Name, params.StudentWorkID))
 	if err != nil {
 		return nil, err
 	}
@@ -54,41 +53,18 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 	return ss, nil
 }
 
-// UpdateCode updates a student's code and execution settings in a session and refreshes the session's last_activity.
-// Returns ErrNotFound if the student is not in the session.
-func (s *Store) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*SessionStudent, error) {
-	tx, err := s.beginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
-
-	updateQuery := `UPDATE session_students SET code = $3, execution_settings = $4, last_update = now()
-		WHERE session_id = $1 AND user_id = $2
-		RETURNING ` + sessionStudentColumns
-
-	ss, err := scanSessionStudent(tx.QueryRow(ctx, updateQuery, sessionID, userID, code, executionSettings))
-	if err != nil {
-		return nil, HandleNotFound(err)
-	}
-
-	// Touch session last_activity via SECURITY DEFINER function
-	// (students can't UPDATE sessions directly under RLS)
-	_, err = tx.Exec(ctx, "SELECT touch_session_activity($1)", sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return ss, nil
-}
-
 // ListSessionStudents retrieves all students in a session.
+// Code and execution_settings are populated from student_work via JOIN.
 func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error) {
-	query := "SELECT " + sessionStudentColumns + " FROM session_students WHERE session_id = $1 ORDER BY last_update DESC"
+	query := `SELECT
+		ss.id, ss.session_id, ss.user_id, ss.name,
+		COALESCE(sw.code, ss.code) as code,
+		COALESCE(sw.execution_settings, ss.execution_settings) as execution_settings,
+		ss.last_update, ss.student_work_id
+		FROM session_students ss
+		LEFT JOIN student_work sw ON ss.student_work_id = sw.id
+		WHERE ss.session_id = $1
+		ORDER BY ss.last_update DESC`
 
 	rows, err := s.q.Query(ctx, query, sessionID)
 	if err != nil {
@@ -108,9 +84,17 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 }
 
 // GetSessionStudent retrieves a single student's record in a session.
+// Code and execution_settings are populated from student_work via JOIN.
 // Returns ErrNotFound if the student is not in the session.
 func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error) {
-	query := "SELECT " + sessionStudentColumns + " FROM session_students WHERE session_id = $1 AND user_id = $2"
+	query := `SELECT
+		ss.id, ss.session_id, ss.user_id, ss.name,
+		COALESCE(sw.code, ss.code) as code,
+		COALESCE(sw.execution_settings, ss.execution_settings) as execution_settings,
+		ss.last_update, ss.student_work_id
+		FROM session_students ss
+		LEFT JOIN student_work sw ON ss.student_work_id = sw.id
+		WHERE ss.session_id = $1 AND ss.user_id = $2`
 	ss, err := scanSessionStudent(s.q.QueryRow(ctx, query, sessionID, userID))
 	if err != nil {
 		return nil, HandleNotFound(err)
