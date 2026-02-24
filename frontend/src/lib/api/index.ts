@@ -17,4 +17,5 @@ export * from './realtime';
 export * from './realtime-token';
 export * from './sections';
 export * from './sessions';
+export * from './student-review';
 export * from './system';

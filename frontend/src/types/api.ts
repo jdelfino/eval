@@ -248,6 +248,27 @@ export interface PublishedProblemWithStatus extends SectionProblem {
 }
 
 // ---------------------------------------------------------------------------
+// Student review
+// ---------------------------------------------------------------------------
+
+/** StudentProgress — progress summary for a student in a section (instructor view). */
+export interface StudentProgress {
+  user_id: string;
+  display_name: string;
+  email: string;
+  problems_started: number;
+  total_problems: number;
+  last_active: string | null;
+}
+
+/** StudentWorkSummary — a published problem with a student's work for instructor review. */
+export interface StudentWorkSummary {
+  problem: Problem;
+  published_at: string;
+  student_work: StudentWork | null;
+}
+
+// ---------------------------------------------------------------------------
 // Execution
 // ---------------------------------------------------------------------------
 
