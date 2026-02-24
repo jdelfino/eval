@@ -232,7 +232,7 @@ func testSessionStudent() *store.SessionStudent {
 		Name:              "Alice",
 		Code:              "",
 		ExecutionSettings: json.RawMessage(`null`),
-		LastUpdate:        time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		JoinedAt:          time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
 

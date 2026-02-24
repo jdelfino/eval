@@ -353,14 +353,15 @@ type MembershipRepository interface {
 }
 
 // SessionStudent represents a student's participation in a session.
+// Code and ExecutionSettings are populated from student_work via JOIN.
 type SessionStudent struct {
 	ID                uuid.UUID       `json:"id"`
 	SessionID         uuid.UUID       `json:"session_id"`
 	UserID            uuid.UUID       `json:"user_id"`
 	Name              string          `json:"name"`
-	Code              string          `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	LastUpdate        time.Time       `json:"last_update"`
+	Code              string          `json:"code"`                      // From student_work
+	ExecutionSettings json.RawMessage `json:"execution_settings"`       // From student_work
+	JoinedAt          time.Time       `json:"joined_at"`                // When student joined session
 	StudentWorkID     *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
 }
 

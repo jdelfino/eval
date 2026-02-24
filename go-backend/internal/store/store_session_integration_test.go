@@ -34,9 +34,55 @@ func (db *integrationDB) createSession(ctx context.Context, t *testing.T, id uui
 
 func (db *integrationDB) createSessionStudent(ctx context.Context, t *testing.T, sessionID, userID uuid.UUID, name string) {
 	t.Helper()
-	err := db.execAsSuperuser(ctx,
-		`INSERT INTO session_students (session_id, user_id, name) VALUES ($1, $2, $3)`,
-		sessionID, userID, name)
+
+	// Get session to extract problem_id and section_id
+	var problemID, sectionID uuid.UUID
+	var problemJSON json.RawMessage
+	err := db.pool.QueryRow(ctx,
+		`SELECT problem, section_id FROM sessions WHERE id = $1`,
+		sessionID).Scan(&problemJSON, &sectionID)
+	if err != nil {
+		t.Fatalf("get session %s: %v", sessionID, err)
+	}
+
+	// Extract problem_id from problem JSON (if it exists)
+	var problem struct {
+		ID uuid.UUID `json:"id"`
+	}
+	if len(problemJSON) > 2 { // not just "{}"
+		if err := json.Unmarshal(problemJSON, &problem); err != nil {
+			t.Fatalf("unmarshal problem JSON: %v", err)
+		}
+		problemID = problem.ID
+	}
+
+	// If no problem_id in session, create a dummy problem
+	if problemID == uuid.Nil {
+		problemID = uuid.New()
+		err = db.execAsSuperuser(ctx,
+			`INSERT INTO problems (id, namespace_id, title, author_id) VALUES ($1, $2, $3, $4)`,
+			problemID, db.nsID, "Test Problem", userID)
+		if err != nil {
+			t.Fatalf("create problem %s: %v", problemID, err)
+		}
+	}
+
+	// Create or get student_work
+	var workID uuid.UUID
+	err = db.pool.QueryRow(ctx, `
+		INSERT INTO student_work (namespace_id, user_id, problem_id, section_id, code)
+		VALUES ($1, $2, $3, $4, '')
+		ON CONFLICT (user_id, problem_id, section_id) DO UPDATE SET code = student_work.code
+		RETURNING id
+	`, db.nsID, userID, problemID, sectionID).Scan(&workID)
+	if err != nil {
+		t.Fatalf("create student_work: %v", err)
+	}
+
+	// Create session_student with student_work_id
+	err = db.execAsSuperuser(ctx,
+		`INSERT INTO session_students (session_id, user_id, name, student_work_id) VALUES ($1, $2, $3, $4)`,
+		sessionID, userID, name, workID)
 	if err != nil {
 		t.Fatalf("create session student session=%s user=%s: %v", sessionID, userID, err)
 	}
@@ -526,6 +572,10 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Enroll creator as instructor in section (needed for RLS to allow viewing student_work)
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`, creatorID, sectionID); err != nil {
+		t.Fatalf("enroll creator: %v", err)
+	}
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 	db.createSessionStudent(ctx, t, sessionID, s1, "Student 1")
@@ -539,7 +589,7 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 		Role:        auth.RoleInstructor,
 	}
 
-	t.Run("returns students desc by last_update", func(t *testing.T) {
+	t.Run("returns students desc by joined_at", func(t *testing.T) {
 		store, conn := db.storeWithRLS(ctx, t, authUser)
 		defer conn.Release()
 
@@ -589,6 +639,10 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
 	sectionID := uuid.New()
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Enroll creator as instructor in section (needed for RLS to allow viewing student_work)
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`, creatorID, sectionID); err != nil {
+		t.Fatalf("enroll creator: %v", err)
+	}
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
 	db.createSessionStudent(ctx, t, sessionID, studentID, "Alice")

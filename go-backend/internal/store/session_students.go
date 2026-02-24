@@ -6,13 +6,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const sessionStudentColumns = `id, session_id, user_id, name, code, execution_settings, last_update, student_work_id`
+const sessionStudentColumns = `id, session_id, user_id, name, joined_at, student_work_id`
 
 func scanSessionStudent(row interface{ Scan(dest ...any) error }) (*SessionStudent, error) {
 	var ss SessionStudent
 	err := row.Scan(
 		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
-		&ss.Code, &ss.ExecutionSettings, &ss.LastUpdate, &ss.StudentWorkID,
+		&ss.JoinedAt, &ss.StudentWorkID,
 	)
 	if err != nil {
 		return nil, err
@@ -58,13 +58,12 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error) {
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
-		COALESCE(sw.code, ss.code) as code,
-		COALESCE(sw.execution_settings, ss.execution_settings) as execution_settings,
-		ss.last_update, ss.student_work_id
+		sw.code, sw.execution_settings,
+		ss.joined_at, ss.student_work_id
 		FROM session_students ss
-		LEFT JOIN student_work sw ON ss.student_work_id = sw.id
+		JOIN student_work sw ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1
-		ORDER BY ss.last_update DESC`
+		ORDER BY ss.joined_at DESC`
 
 	rows, err := s.q.Query(ctx, query, sessionID)
 	if err != nil {
@@ -74,11 +73,16 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 
 	var students []SessionStudent
 	for rows.Next() {
-		ss, err := scanSessionStudent(rows)
+		var ss SessionStudent
+		err := rows.Scan(
+			&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
+			&ss.Code, &ss.ExecutionSettings,
+			&ss.JoinedAt, &ss.StudentWorkID,
+		)
 		if err != nil {
 			return nil, err
 		}
-		students = append(students, *ss)
+		students = append(students, ss)
 	}
 	return students, rows.Err()
 }
@@ -89,17 +93,21 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error) {
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
-		COALESCE(sw.code, ss.code) as code,
-		COALESCE(sw.execution_settings, ss.execution_settings) as execution_settings,
-		ss.last_update, ss.student_work_id
+		sw.code, sw.execution_settings,
+		ss.joined_at, ss.student_work_id
 		FROM session_students ss
-		LEFT JOIN student_work sw ON ss.student_work_id = sw.id
+		JOIN student_work sw ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1 AND ss.user_id = $2`
-	ss, err := scanSessionStudent(s.q.QueryRow(ctx, query, sessionID, userID))
+	var ss SessionStudent
+	err := s.q.QueryRow(ctx, query, sessionID, userID).Scan(
+		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
+		&ss.Code, &ss.ExecutionSettings,
+		&ss.JoinedAt, &ss.StudentWorkID,
+	)
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
-	return ss, nil
+	return &ss, nil
 }
 
 // Compile-time check that Store implements SessionStudentRepository.
