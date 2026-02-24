@@ -22,7 +22,20 @@ When a test fails, follow this sequence:
 
 Playwright error messages are descriptive. They tell you exactly what selector failed and why. Start there.
 
-### 2. Check Failure Artifacts
+### 2. Check Page Structure Output
+
+Failed tests generate `test-results/<test-name>/error-context.md` with a YAML representation of the page structure:
+
+```yaml
+- heading "Dashboard" [level=1] [ref=e10]
+- paragraph [ref=e11]: Enter your section code to get started
+- textbox "Section Join Code" [active] [ref=e15]
+- button "Join Section" [disabled] [ref=e16]
+```
+
+This shows the actual DOM state at failure time — often more useful than screenshots for understanding what elements are rendered and their states.
+
+### 3. Check Screenshots and Video
 
 On failure, Playwright captures:
 - **Screenshots** — `frontend/test-results/<test-name>/` — shows what the page looked like
@@ -34,11 +47,11 @@ Open the HTML report:
 cd frontend && npx playwright show-report
 ```
 
-### 3. Check API Responses
+### 4. Check API Responses
 
 The test fixtures log API requests/responses to the browser console. Look for non-200 responses or unexpected error bodies in the console log artifacts.
 
-### 4. Trace Back to the Bug
+### 5. Trace Back to the Bug
 
 Common failure patterns:
 - **Element not found** — check if the selector changed, or if the page didn't load (API error, auth issue)
@@ -46,7 +59,7 @@ Common failure patterns:
 - **Text mismatch** — check if the API returned unexpected data
 - **"Failed to create/start/register"** — API setup failed; check that the Go backend is running and migrations are current
 
-### 5. Run in Headed Mode
+### 6. Run in Headed Mode
 
 For interactive debugging:
 ```bash
