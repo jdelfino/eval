@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
-	"github.com/jdelfino/eval/go-backend/internal/executor"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
@@ -179,7 +178,7 @@ func (h *StudentWorkHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	merged := mergeStudentWorkExecutionSettings(work.Problem.ExecutionSettings, work.ExecutionSettings, req.ExecutionSettings)
 
 	// Build executor request
-	execReq := buildStudentWorkExecutorRequest(req.Code, merged)
+	execReq := buildExecutorRequest(req.Code, merged)
 
 	// Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
@@ -195,6 +194,9 @@ func (h *StudentWorkHandler) Execute(w http.ResponseWriter, r *http.Request) {
 // 1. Request payload (highest)
 // 2. Student work record
 // 3. Problem (lowest)
+//
+// Unlike mergeExecutionSettings (session execute), the problemJSON here is already
+// the execution_settings value from store.Problem — not a full problem JSON blob.
 func mergeStudentWorkExecutionSettings(
 	problemJSON json.RawMessage,
 	studentWorkJSON json.RawMessage,
@@ -202,7 +204,8 @@ func mergeStudentWorkExecutionSettings(
 ) executionSettingsJSON {
 	var result executionSettingsJSON
 
-	// Layer 1: Problem-level settings (lowest priority)
+	// Layer 1: Problem-level settings (lowest priority).
+	// problemJSON is the execution_settings field value, not the full problem blob.
 	if len(problemJSON) > 0 {
 		var problemSettings executionSettingsJSON
 		if err := json.Unmarshal(problemJSON, &problemSettings); err == nil {
@@ -210,51 +213,18 @@ func mergeStudentWorkExecutionSettings(
 		}
 	}
 
-	// Layer 2: Student work settings
+	// Layer 2: Student work settings.
 	if len(studentWorkJSON) > 0 {
 		var studentSettings executionSettingsJSON
 		if err := json.Unmarshal(studentWorkJSON, &studentSettings); err == nil {
-			if studentSettings.Stdin != nil {
-				result.Stdin = studentSettings.Stdin
-			}
-			if studentSettings.RandomSeed != nil {
-				result.RandomSeed = studentSettings.RandomSeed
-			}
-			if len(studentSettings.Files) > 0 {
-				result.Files = studentSettings.Files
-			}
+			applySettingsLayer(&result, studentSettings)
 		}
 	}
 
-	// Layer 3: Request settings (highest priority)
+	// Layer 3: Request settings (highest priority).
 	if requestSettings != nil {
-		if requestSettings.Stdin != nil {
-			result.Stdin = requestSettings.Stdin
-		}
-		if requestSettings.RandomSeed != nil {
-			result.RandomSeed = requestSettings.RandomSeed
-		}
-		if len(requestSettings.Files) > 0 {
-			result.Files = requestSettings.Files
-		}
+		applySettingsLayer(&result, *requestSettings)
 	}
 
 	return result
-}
-
-// buildStudentWorkExecutorRequest builds an executor request from code and settings.
-func buildStudentWorkExecutorRequest(code string, settings executionSettingsJSON) executor.ExecuteRequest {
-	req := executor.ExecuteRequest{
-		Code: code,
-	}
-	if settings.Stdin != nil {
-		req.Stdin = *settings.Stdin
-	}
-	if settings.RandomSeed != nil {
-		req.RandomSeed = settings.RandomSeed
-	}
-	if len(settings.Files) > 0 {
-		req.Files = settings.Files
-	}
-	return req
 }
