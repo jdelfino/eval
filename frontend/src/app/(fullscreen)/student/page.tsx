@@ -6,7 +6,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSessionHistory } from '@/hooks/useSessionHistory';
 import { ExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import { getStudentWork, updateStudentWork, executeStudentWork } from '@/lib/api/student-work';
@@ -26,8 +25,6 @@ function StudentPage() {
   const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
-  const sessionIdFromUrl = searchParams.get('session_id');
-  const { refetch: refetchSessions } = useSessionHistory();
 
   // Core state
   const [workId] = useState<string | null>(workIdFromUrl);
@@ -246,24 +243,14 @@ function StudentPage() {
       sessionStorage.setItem(`left-session:${activeSessionId}`, 'true');
     }
 
-    refetchSessions();
     router.push(sectionId ? `/sections/${sectionId}` : '/');
-  }, [activeSessionId, refetchSessions, router, sectionId]);
+  }, [activeSessionId, router, sectionId]);
 
   const handleJoinNewSession = useCallback(() => {
     if (!replacementInfo) return;
-    const oldSessionId = activeSessionId;
-    joinAttemptedRef.current = null;
-    setJoined(false);
-    setSessionEnded(false);
-    setCode('');
-    setExecutionResult(null);
-    setStudentExecutionSettings(null);
-    if (oldSessionId) {
-      sessionStorage.removeItem(`left-session:${oldSessionId}`);
-    }
-    router.push(`/student?session_id=${replacementInfo.newSessionId}`);
-  }, [replacementInfo, activeSessionId, router]);
+    // Redirect to section page so the student can rejoin via the active session banner
+    router.push(sectionId ? `/sections/${sectionId}` : '/');
+  }, [replacementInfo, router, sectionId]);
 
   const editorRef = useRef<any>(null);
 
@@ -352,16 +339,8 @@ function StudentPage() {
     }
   };
 
-  // Backward compatibility: Handle session_id in URL
-  useEffect(() => {
-    if (sessionIdFromUrl && !workIdFromUrl && sectionId && problemId) {
-      // Redirect to work_id URL
-      router.replace(`/student?work_id=${workId}`);
-    }
-  }, [sessionIdFromUrl, workIdFromUrl, sectionId, problemId, workId, router]);
-
   // No work_id in URL
-  if (!workIdFromUrl && !sessionIdFromUrl) {
+  if (!workIdFromUrl) {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">No Student Work</h1>

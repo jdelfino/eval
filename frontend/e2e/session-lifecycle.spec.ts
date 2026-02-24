@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, apiFetch, testToken } from './fixtures/api-setup';
+import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, apiFetch, testToken } from './fixtures/api-setup';
 
 test.describe('Session Lifecycle', () => {
   test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
@@ -23,6 +23,9 @@ test.describe('Session Lifecycle', () => {
     // Register student via API
     await registerStudent(section.join_code, studentExternalId, studentEmail, 'E2E Student');
 
+    // Publish problem to section (required for student flow via section page)
+    await publishProblem(instructor.token, section.id, problem.id);
+
     // Start session from problem via API
     const session1 = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
@@ -39,7 +42,9 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT JOINS =====
       await signInAs(page, studentEmail);
-      await page.goto(`/student?session_id=${session1.id}`);
+      const studentToken = testToken(studentExternalId, studentEmail);
+      const work1 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+      await page.goto(`/student?work_id=${work1.id}`);
       await expect(page.locator('.monaco-editor')).toBeVisible();
       await expect(page.locator('text=Connected')).toBeVisible();
 
@@ -82,15 +87,20 @@ test.describe('Session Lifecycle', () => {
       // Give it extra time since this depends on the server broadcasting the replacement info
       const joinNewButton = page.locator('button:has-text("Join New Session")');
 
-      // If replacement notification doesn't appear automatically, student can navigate manually
-      // Try waiting for the join new button, but if it doesn't appear within a reasonable time,
-      // navigate directly (the replacement broadcast might not work in test environment)
+      // When "Join New Session" is clicked, the student is redirected to the section page
+      // (the new flow: student rejoins via the active session banner on the section page)
+      // If replacement notification doesn't appear automatically, navigate to section page directly
       try {
-        await expect(joinNewButton).toBeVisible();
+        await expect(joinNewButton).toBeVisible({ timeout: 5000 });
         await joinNewButton.click();
+        // After clicking, student is on section page — click "Join Now" to join new session
+        const joinNowButton = page.locator('button:has-text("Join Now")');
+        await expect(joinNowButton).toBeVisible({ timeout: 10000 });
+        await joinNowButton.click();
       } catch {
-        // Fallback: navigate directly to the new session
-        await page.goto(`/student?session_id=${session2.id}`);
+        // Fallback: navigate directly to section page and join the new session via work_id
+        const work2 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+        await page.goto(`/student?work_id=${work2.id}`);
       }
 
       // ===== STUDENT JOINS NEW SESSION =====

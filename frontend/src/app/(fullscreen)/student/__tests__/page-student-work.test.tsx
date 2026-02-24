@@ -28,19 +28,22 @@ jest.mock('@/lib/api/sections', () => ({
   getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockUseRealtimeSession: jest.Mock = jest.fn(() => ({
+  session: null as any,
+  loading: false,
+  error: null,
+  isConnected: false,
+  connectionStatus: 'disconnected',
+  connectionError: null,
+  updateCode: mockUpdateCode,
+  executeCode: mockExecuteCode,
+  joinSession: mockJoinSession,
+  replacementInfo: null as any,
+}));
+
 jest.mock('@/hooks/useRealtimeSession', () => ({
-  useRealtimeSession: () => ({
-    session: null,
-    loading: false,
-    error: null,
-    isConnected: false,
-    connectionStatus: 'disconnected',
-    connectionError: null,
-    updateCode: mockUpdateCode,
-    executeCode: mockExecuteCode,
-    joinSession: mockJoinSession,
-    replacementInfo: null,
-  }),
+  useRealtimeSession: () => mockUseRealtimeSession(),
 }));
 
 jest.mock('next/navigation', () => ({
@@ -62,12 +65,6 @@ jest.mock('@/contexts/AuthContext', () => ({
 jest.mock('@/contexts/HeaderSlotContext', () => ({
   useHeaderSlot: jest.fn(() => ({
     setHeaderSlot: jest.fn(),
-  })),
-}));
-
-jest.mock('@/hooks/useSessionHistory', () => ({
-  useSessionHistory: jest.fn(() => ({
-    refetch: jest.fn(),
   })),
 }));
 
@@ -121,6 +118,19 @@ const fakeStudentWorkWithProblem = {
 describe('StudentPage (student_work-centric)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset useRealtimeSession to default implementation after each test
+    mockUseRealtimeSession.mockReturnValue({
+      session: null,
+      loading: false,
+      error: null,
+      isConnected: false,
+      connectionStatus: 'disconnected',
+      connectionError: null,
+      updateCode: mockUpdateCode,
+      executeCode: mockExecuteCode,
+      joinSession: mockJoinSession,
+      replacementInfo: null,
+    });
   });
 
   describe('Practice mode (no active session)', () => {
@@ -213,6 +223,67 @@ describe('StudentPage (student_work-centric)', () => {
 
       // Restore original mock
       useSearchParams.mockImplementation(originalMock);
+    });
+
+    it('shows "No Student Work" when only session_id is in URL (session_id is no longer supported)', () => {
+      // After removing backward-compat, session_id alone should not be recognized
+      const { useSearchParams } = require('next/navigation');
+      useSearchParams.mockReturnValue({
+        get: (key: string) => (key === 'session_id' ? 'session-old' : null),
+      });
+
+      render(<StudentPageWrapper />);
+
+      expect(screen.getByText(/No student work/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Replacement session handling', () => {
+    it('does not navigate to session_id URL when replacement session is detected', async () => {
+      const mockPush = jest.fn();
+      const { useSearchParams, useRouter } = require('next/navigation');
+      useSearchParams.mockReturnValue({
+        get: (key: string) => (key === 'work_id' ? 'work-123' : null),
+      });
+      useRouter.mockReturnValue({
+        push: mockPush,
+        replace: jest.fn(),
+      });
+
+      // Provide replacementInfo with a new session ID (old code navigated to session_id URL)
+      mockUseRealtimeSession.mockReturnValue({
+        session: { status: 'completed' },
+        loading: false,
+        error: null,
+        isConnected: false,
+        connectionStatus: 'disconnected',
+        connectionError: null,
+        updateCode: mockUpdateCode,
+        executeCode: mockExecuteCode,
+        joinSession: mockJoinSession,
+        replacementInfo: { newSessionId: 'session-new-123' },
+      });
+
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+      mockGetActiveSessions.mockResolvedValue([{
+        id: 'session-live',
+        problem: { id: 'problem-1' },
+        status: 'active',
+        section_id: 'section-1',
+      }]);
+
+      render(<StudentPageWrapper />);
+
+      // Wait for load to complete
+      await waitFor(() => {
+        expect(mockGetStudentWork).toHaveBeenCalledWith('work-123');
+      });
+
+      // Regression test: old code did `router.push('/student?session_id=...')`
+      // After fix, that navigation must never happen
+      expect(mockPush).not.toHaveBeenCalledWith(
+        expect.stringContaining('session_id=')
+      );
     });
   });
 });
