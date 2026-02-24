@@ -194,10 +194,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Mount("/namespaces", handler.NewNamespaceHandler().Routes())
 			r.Mount("/classes", handler.NewClassHandler().Routes())
 
+			// Create executor client early so it can be used by multiple handlers
+			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
+
 			membershipHandler := handler.NewMembershipHandler()
 			r.With(custommw.ForCategory(rl, "join", custommw.IPKey)).Post("/sections/join", membershipHandler.Join)
 
-			sectionHandler := handler.NewSectionHandler(membershipHandler).WithRateLimiting(readRL, writeRL)
+			sectionProblemHandler := handler.NewSectionProblemHandler()
+			studentWorkHandler := handler.NewStudentWorkHandler().WithExecutor(execClient)
+
+			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler).WithRateLimiting(readRL, writeRL)
 			r.With(readRL).Get("/sections/my", sectionHandler.MySections)
 			r.Mount("/sections", sectionHandler.Routes())
 			r.Route("/classes/{classID}/sections", func(r chi.Router) {
@@ -210,7 +216,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.With(readRL).Get("/instructor/dashboard", dashboardHandler.Dashboard)
 			})
 
-			r.Mount("/problems", handler.NewProblemHandler().Routes())
+			r.Mount("/problems", handler.NewProblemHandler(sectionProblemHandler).Routes())
+
+			// Student work routes
+			r.With(readRL).Get("/student-work/{id}", studentWorkHandler.Get)
+			r.With(writeRL).Patch("/student-work/{id}", studentWorkHandler.Update)
+			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/student-work/{id}/execute", studentWorkHandler.Execute)
 
 			// Admin routes (system-admin only)
 			adminHandler := handler.NewAdminHandler()
@@ -283,7 +294,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(readRL).Get("/sessions/{sessionID}/revisions", revisionHandler.List)
 			r.With(writeRL).Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
 
-			execClient := executor.NewClient(cfg.ExecutorURL, cfg.ExecutorTimeout)
 			executeHandler := handler.NewExecuteHandler(execClient)
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/execute", executeHandler.Execute)
 			r.With(custommw.ForCategory(rl, "practice", custommw.UserKey)).Post("/sessions/{id}/practice", executeHandler.PracticeExecute)

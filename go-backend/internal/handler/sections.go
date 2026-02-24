@@ -18,17 +18,21 @@ import (
 
 // SectionHandler handles section management routes.
 type SectionHandler struct {
-	membershipHandler *MembershipHandler
-	readRL            func(http.Handler) http.Handler
-	writeRL           func(http.Handler) http.Handler
+	membershipHandler     *MembershipHandler
+	sectionProblemHandler *SectionProblemHandler
+	studentWorkHandler    *StudentWorkHandler
+	readRL                func(http.Handler) http.Handler
+	writeRL               func(http.Handler) http.Handler
 }
 
 // NewSectionHandler creates a new SectionHandler.
 // membershipHandler is used to mount membership sub-resource routes
 // (members, membership) under /sections/{id}.
-func NewSectionHandler(membershipHandler *MembershipHandler) *SectionHandler {
+func NewSectionHandler(membershipHandler *MembershipHandler, sectionProblemHandler *SectionProblemHandler, studentWorkHandler *StudentWorkHandler) *SectionHandler {
 	return &SectionHandler{
-		membershipHandler: membershipHandler,
+		membershipHandler:     membershipHandler,
+		sectionProblemHandler: sectionProblemHandler,
+		studentWorkHandler:    studentWorkHandler,
 	}
 }
 
@@ -65,6 +69,10 @@ func (h *SectionHandler) Routes() chi.Router {
 		r.With(writeRL).Delete("/membership", h.membershipHandler.Leave)
 		r.With(readRL).Get("/sessions", h.ListSessions)
 
+		// Section problems — read for all members, write for instructors
+		r.With(readRL).Get("/problems", h.sectionProblemHandler.List)
+		r.With(writeRL).Post("/problems/{problemID}/work", h.studentWorkHandler.GetOrCreate)
+
 		// Write sub-resources — instructor+ (PermContentManage).
 		r.Group(func(r chi.Router) {
 			r.Use(custommw.RequirePermission(auth.PermContentManage))
@@ -74,6 +82,10 @@ func (h *SectionHandler) Routes() chi.Router {
 			r.With(readRL).Get("/instructors", h.ListInstructors)
 			r.With(writeRL).Post("/instructors", h.AddInstructor)
 			r.With(writeRL).Delete("/instructors/{userID}", h.RemoveInstructor)
+			// Section problems management
+			r.With(writeRL).Post("/problems", h.sectionProblemHandler.Publish)
+			r.With(writeRL).Patch("/problems/{problemID}", h.sectionProblemHandler.Update)
+			r.With(writeRL).Delete("/problems/{problemID}", h.sectionProblemHandler.Unpublish)
 		})
 	})
 
