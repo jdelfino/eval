@@ -25,7 +25,7 @@ import (
 
 func TestIntegration_Migration014_SessionStudentsColumnsDropped(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Verify 'code' column does not exist
@@ -65,7 +65,7 @@ func TestIntegration_Migration014_SessionStudentsColumnsDropped(t *testing.T) {
 
 func TestIntegration_Migration014_SessionStudentsColumnRenamed(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Verify 'last_update' column does not exist
@@ -105,7 +105,7 @@ func TestIntegration_Migration014_SessionStudentsColumnRenamed(t *testing.T) {
 
 func TestIntegration_Migration014_RevisionsSessionIdNullable(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Check that session_id is nullable
@@ -177,7 +177,7 @@ func TestIntegration_Migration014_RevisionsSessionIdNullable(t *testing.T) {
 
 func TestIntegration_Migration014_RevisionsStudentWorkIdNotNull(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Check that student_work_id is NOT NULL
@@ -246,7 +246,7 @@ func TestIntegration_Migration014_RevisionsStudentWorkIdNotNull(t *testing.T) {
 
 func TestIntegration_Migration014_RevisionsBackfill(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create test data: user, section, problem, student_work, session, session_student

@@ -21,7 +21,7 @@ import (
 
 func TestIntegration_StudentWorkCRUD(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create test data with superuser pool
@@ -258,7 +258,7 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 
 func TestIntegration_ListStudentWorkBySession(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create test data

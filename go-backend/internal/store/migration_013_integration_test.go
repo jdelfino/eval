@@ -28,7 +28,7 @@ import (
 
 func TestIntegration_Migration013_SectionProblemsTableExists(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Verify table exists
@@ -91,7 +91,7 @@ func TestIntegration_Migration013_SectionProblemsTableExists(t *testing.T) {
 
 func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Verify table exists
@@ -154,7 +154,7 @@ func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
 
 func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	tests := []struct {
@@ -210,7 +210,7 @@ func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
 
 func TestIntegration_Migration013_SectionProblemsRLS(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create test data
@@ -308,7 +308,7 @@ func TestIntegration_Migration013_SectionProblemsRLS(t *testing.T) {
 
 func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create test data
@@ -497,7 +497,7 @@ func TestIntegration_Migration013_StudentWorkRLS(t *testing.T) {
 
 func TestIntegration_Migration013_ForeignKeys(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	t.Run("session_students.student_work_id FK", func(t *testing.T) {
@@ -605,7 +605,7 @@ func TestIntegration_Migration013_ForeignKeys(t *testing.T) {
 
 func TestIntegration_Migration013_FakePracticeSessionsCleanup(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	// Create a user for session creator

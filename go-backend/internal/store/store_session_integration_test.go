@@ -94,7 +94,7 @@ func (db *integrationDB) createSessionStudent(ctx context.Context, t *testing.T,
 
 func TestIntegration_CreateSession(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -161,7 +161,7 @@ func TestIntegration_CreateSession(t *testing.T) {
 
 func TestIntegration_GetSession(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -215,7 +215,7 @@ func TestIntegration_GetSession(t *testing.T) {
 
 func TestIntegration_ListSessions(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -302,7 +302,7 @@ func TestIntegration_ListSessions(t *testing.T) {
 
 func TestIntegration_UpdateSession(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -444,7 +444,7 @@ func TestIntegration_UpdateSession(t *testing.T) {
 
 func TestIntegration_JoinSession(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -557,7 +557,7 @@ func TestIntegration_JoinSession(t *testing.T) {
 
 func TestIntegration_ListSessionStudents(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -626,7 +626,7 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 
 func TestIntegration_GetSessionStudent(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -684,7 +684,7 @@ func TestIntegration_GetSessionStudent(t *testing.T) {
 
 func TestIntegration_CreateRevision(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -697,6 +697,10 @@ func TestIntegration_CreateRevision(t *testing.T) {
 	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
+	problemID := uuid.New()
+	db.createProblem(ctx, t, problemID, nsID, "Test Problem", creatorID, &classID, nil)
+	studentWorkID := uuid.New()
+	db.createStudentWork(ctx, t, studentWorkID, nsID, creatorID, problemID, sectionID)
 
 	authUser := &auth.User{
 		ID:          creatorID,
@@ -718,6 +722,7 @@ func TestIntegration_CreateRevision(t *testing.T) {
 			IsDiff:          false,
 			FullCode:        &fullCode,
 			ExecutionResult: execResult,
+			StudentWorkID:   &studentWorkID,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -743,7 +748,7 @@ func TestIntegration_CreateRevision(t *testing.T) {
 
 func TestIntegration_ListRevisions(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -761,6 +766,12 @@ func TestIntegration_ListRevisions(t *testing.T) {
 	db.createMembership(ctx, t, user2, sectionID, "student")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", user1)
+	problemID := uuid.New()
+	db.createProblem(ctx, t, problemID, nsID, "Test Problem", user1, &classID, nil)
+	sw1 := uuid.New()
+	db.createStudentWork(ctx, t, sw1, nsID, user1, problemID, sectionID)
+	sw2 := uuid.New()
+	db.createStudentWork(ctx, t, sw2, nsID, user2, problemID, sectionID)
 
 	authUser1 := &auth.User{
 		ID:          user1,
@@ -787,6 +798,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 		IsDiff:          false,
 		FullCode:        &code1,
 		ExecutionResult: json.RawMessage(`{}`),
+		StudentWorkID:   &sw1,
 	})
 	if err != nil {
 		t.Fatalf("create rev1: %v", err)
@@ -804,6 +816,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 		IsDiff:          false,
 		FullCode:        &code2,
 		ExecutionResult: json.RawMessage(`{}`),
+		StudentWorkID:   &sw2,
 	})
 	if err != nil {
 		t.Fatalf("create rev2: %v", err)
@@ -862,7 +875,7 @@ func TestIntegration_ListRevisions(t *testing.T) {
 
 func TestIntegration_CreateProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -928,7 +941,7 @@ func TestIntegration_CreateProblem(t *testing.T) {
 
 func TestIntegration_GetProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -975,7 +988,7 @@ func TestIntegration_GetProblem(t *testing.T) {
 
 func TestIntegration_UpdateProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1038,7 +1051,7 @@ func TestIntegration_UpdateProblem(t *testing.T) {
 
 func TestIntegration_DeleteProblem(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1089,7 +1102,7 @@ func TestIntegration_DeleteProblem(t *testing.T) {
 
 func TestIntegration_ListProblems(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1148,7 +1161,7 @@ func TestIntegration_ListProblems(t *testing.T) {
 
 func TestIntegration_GetUserByID(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1196,7 +1209,7 @@ func TestIntegration_GetUserByID(t *testing.T) {
 
 func TestIntegration_GetUserByExternalID(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1251,7 +1264,7 @@ func TestIntegration_GetUserByExternalID(t *testing.T) {
 
 func TestIntegration_UpdateUser(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID

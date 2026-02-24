@@ -141,6 +141,11 @@ func (db *integrationDB) storeWithRLS(ctx context.Context, t *testing.T, user *a
 		t.Fatalf("acquire connection: %v", err)
 	}
 
+	// Always release connection on test cleanup to prevent pool.Close() from
+	// hanging when a test fails (e.g. via Fatalf) before the caller's manual
+	// conn.Release(). pgxpool.Conn.Release is idempotent (no-op after first call).
+	t.Cleanup(conn.Release)
+
 	if err := db.setRLSContext(ctx, conn, user); err != nil {
 		conn.Release()
 		t.Fatalf("set RLS context: %v", err)
@@ -245,6 +250,17 @@ func (db *integrationDB) createMembership(ctx context.Context, t *testing.T, use
 	}
 }
 
+func (db *integrationDB) createStudentWork(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, userID, problemID, sectionID uuid.UUID) {
+	t.Helper()
+	err := db.execAsSuperuser(ctx,
+		`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code, execution_settings)
+		 VALUES ($1, $2, $3, $4, $5, '', '{}')`,
+		id, nsID, userID, problemID, sectionID)
+	if err != nil {
+		t.Fatalf("create student_work: %v", err)
+	}
+}
+
 func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uuid.UUID, nsID, title string, authorID uuid.UUID, classID *uuid.UUID, tags []string) {
 	t.Helper()
 	err := db.execAsSuperuser(ctx,
@@ -263,7 +279,7 @@ func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uui
 
 func TestIntegration_ListProblemsFiltered(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -424,7 +440,7 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 
 func TestIntegration_ListUsers(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -494,7 +510,7 @@ func TestIntegration_ListUsers(t *testing.T) {
 
 func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -635,7 +651,7 @@ func TestIntegration_CrossNamespaceIsolation(t *testing.T) {
 
 func TestIntegration_NamespaceIsolation_UserVisibility(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -717,7 +733,7 @@ func TestIntegration_NamespaceIsolation_UserVisibility(t *testing.T) {
 
 func TestIntegration_NamespaceIsolation_CreateClass(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -779,7 +795,7 @@ func TestIntegration_NamespaceIsolation_CreateClass(t *testing.T) {
 
 func TestIntegration_NamespaceIsolation_Sessions(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -871,7 +887,7 @@ func TestIntegration_NamespaceIsolation_Sessions(t *testing.T) {
 
 func TestIntegration_SystemAdminCanSeeAllNamespaces(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsA := db.nsID
@@ -1013,7 +1029,7 @@ func TestIntegration_SystemAdminCanSeeAllNamespaces(t *testing.T) {
 
 func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1106,7 +1122,7 @@ func TestIntegration_DeleteMembershipIfNotLast(t *testing.T) {
 
 func TestIntegration_GetUserByEmail(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1154,7 +1170,7 @@ func TestIntegration_GetUserByEmail(t *testing.T) {
 
 func TestIntegration_UpdateUserAdmin(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1253,7 +1269,7 @@ func TestIntegration_UpdateUserAdmin(t *testing.T) {
 
 func TestIntegration_DeleteUser(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1315,7 +1331,7 @@ func TestIntegration_DeleteUser(t *testing.T) {
 
 func TestIntegration_CountUsersByRole(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1375,7 +1391,7 @@ func TestIntegration_CountUsersByRole(t *testing.T) {
 
 func TestIntegration_ListClassInstructorNames(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1444,7 +1460,7 @@ func TestIntegration_ListClassInstructorNames(t *testing.T) {
 
 func TestIntegration_ListMySections(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1515,7 +1531,7 @@ func TestIntegration_ListMySections(t *testing.T) {
 
 func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1569,7 +1585,7 @@ func TestIntegration_UpdateSectionJoinCode(t *testing.T) {
 
 func TestIntegration_ListMembersByRole(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
@@ -1648,7 +1664,7 @@ func TestIntegration_ListMembersByRole(t *testing.T) {
 
 func TestIntegration_UpsertUser_Insert(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 	db.cleanup(ctx, t)
 
@@ -1679,7 +1695,7 @@ func TestIntegration_UpsertUser_Insert(t *testing.T) {
 
 func TestIntegration_UpsertUser_Update(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 	db.cleanup(ctx, t)
 
@@ -1738,7 +1754,7 @@ func TestIntegration_UpsertUser_Update(t *testing.T) {
 
 func TestIntegration_ListMyClasses(t *testing.T) {
 	db := setupIntegrationDB(t)
-	defer db.close()
+
 	ctx := context.Background()
 
 	nsID := db.nsID
