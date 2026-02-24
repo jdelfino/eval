@@ -241,21 +241,6 @@ func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem 
 	return sess, nil
 }
 
-// FindCompletedSessionByProblem finds the most recent completed session in a section
-// whose problem JSON contains the given problem ID.
-// Returns ErrNotFound if no matching session exists.
-func (s *Store) FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*Session, error) {
-	query := `SELECT ` + sessionColumns + ` FROM sessions
-		WHERE section_id = $1 AND status = 'completed' AND problem->>'id' = $2::text
-		ORDER BY created_at DESC LIMIT 1`
-
-	sess, err := scanSession(s.q.QueryRow(ctx, query, sectionID, problemID))
-	if err != nil {
-		return nil, HandleNotFound(err)
-	}
-	return sess, nil
-}
-
 // CreateSessionReplacingActive atomically ends active sessions and creates a new one.
 func (s *Store) CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error) {
 	tx, err := s.beginTx(ctx)

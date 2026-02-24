@@ -321,9 +321,6 @@ type SessionRepository interface {
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
-	// FindCompletedSessionByProblem finds a completed session in a section whose problem
-	// JSON contains the given problem ID. Returns ErrNotFound if none exists.
-	FindCompletedSessionByProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*Session, error)
 	// CreateSessionReplacingActive atomically ends any active sessions in the section
 	// and creates a new session, all within a single transaction.
 	// Returns the new session and the IDs of ended sessions.
