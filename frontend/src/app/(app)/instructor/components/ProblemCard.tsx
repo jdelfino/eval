@@ -18,6 +18,7 @@ interface ProblemCardProps {
   onEdit: (problem_id: string) => void;
   onDelete: (problem_id: string, title: string) => void;
   onCreateSession: (problem_id: string) => void;
+  onPublish?: (problem_id: string) => void;
   onTagClick?: (tag: string) => void;
 }
 
@@ -27,6 +28,7 @@ export default function ProblemCard({
   onEdit,
   onDelete,
   onCreateSession,
+  onPublish,
   onTagClick,
 }: ProblemCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -108,6 +110,15 @@ export default function ProblemCard({
               Edit
             </button>
             <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
+            {onPublish && (
+              <button
+                onClick={() => onPublish(problem.id)}
+                className="px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                title="Publish to sections"
+              >
+                Publish
+              </button>
+            )}
             <button
               onClick={() => onCreateSession(problem.id)}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
@@ -167,6 +178,14 @@ export default function ProblemCard({
         <div className="col-span-2">
           <CopyLinkDropdown problem_id={problem.id} class_id={problem.class_id} />
         </div>
+        {onPublish && (
+          <button
+            onClick={() => onPublish(problem.id)}
+            className="col-span-2 px-3 py-2 text-sm text-purple-600 border border-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+          >
+            Publish
+          </button>
+        )}
         <button
           onClick={() => onCreateSession(problem.id)}
           className="col-span-2 px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
