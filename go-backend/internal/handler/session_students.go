@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -71,7 +72,8 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // Code is not validated as required because empty code is valid
 // (e.g., student just joined and hasn't typed anything yet).
 type updateCodeRequest struct {
-	Code string `json:"code"`
+	Code              string          `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
 }
 
 // UpdateCode handles PUT /api/v1/sessions/{id}/code — student updates their code.
@@ -93,7 +95,7 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 	}
 
 	repos := store.ReposFromContext(r.Context())
-	student, err := repos.UpdateCode(r.Context(), sessionID, authUser.ID, req.Code)
+	student, err := repos.UpdateCode(r.Context(), sessionID, authUser.ID, req.Code, req.ExecutionSettings)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "session student not found")

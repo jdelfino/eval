@@ -143,6 +143,18 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	ac := newArgCounter(2, id)
 
+	// ClearFeatured NULLs featured fields. Skip columns that will be
+	// explicitly set below to avoid duplicate assignments (PostgreSQL error).
+	if params.ClearFeatured {
+		query += ",\n		    featured_student_id = NULL"
+		if params.FeaturedCode == nil {
+			query += ",\n		    featured_code = NULL"
+		}
+		if params.FeaturedExecutionSettings == nil {
+			query += ",\n		    featured_execution_settings = NULL"
+		}
+	}
+
 	if params.FeaturedStudentID != nil {
 		query += ",\n		    featured_student_id = " + ac.Next(*params.FeaturedStudentID)
 	}
@@ -165,12 +177,6 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 
 	if params.ClearEndedAt {
 		query += ",\n		    ended_at = NULL"
-	}
-
-	if params.ClearFeatured {
-		query += ",\n		    featured_student_id = NULL"
-		query += ",\n		    featured_code = NULL"
-		query += ",\n		    featured_execution_settings = NULL"
 	}
 
 	query += `

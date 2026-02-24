@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,8 +28,8 @@ var _ store.Repos = (*sessionStudentTestRepos)(nil)
 func (r *sessionStudentTestRepos) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
 	return r.students.JoinSession(ctx, params)
 }
-func (r *sessionStudentTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string) (*store.SessionStudent, error) {
-	return r.students.UpdateCode(ctx, sessionID, userID, code)
+func (r *sessionStudentTestRepos) UpdateCode(ctx context.Context, sessionID, userID uuid.UUID, code string, executionSettings json.RawMessage) (*store.SessionStudent, error) {
+	return r.students.UpdateCode(ctx, sessionID, userID, code, executionSettings)
 }
 func (r *sessionStudentTestRepos) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error) {
 	return r.students.ListSessionStudents(ctx, sessionID)
@@ -182,13 +183,115 @@ func TestJoinSession_InternalError(t *testing.T) {
 
 // --- UpdateCode tests ---
 
+func TestUpdateCode_WithExecutionSettings(t *testing.T) {
+	ss := testSessionStudent()
+	execSettings := json.RawMessage(`{"stdin":"hello","random_seed":42}`)
+	ss.Code = "print('hello')"
+	ss.ExecutionSettings = execSettings
+	userID := ss.UserID
+
+	var capturedExecSettings json.RawMessage
+	repo := &mockSessionStudentRepo{
+		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, es json.RawMessage) (*store.SessionStudent, error) {
+			capturedExecSettings = es
+			return ss, nil
+		},
+	}
+
+	body := []byte(`{"code":"print('hello')","execution_settings":{"stdin":"hello","random_seed":42}}`)
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify execution_settings was forwarded to the store
+	if capturedExecSettings == nil {
+		t.Fatal("expected execution_settings to be passed to store, got nil")
+	}
+	// Compare JSON structurally (key order may differ)
+	var capturedMap, expectedMap map[string]any
+	if err := json.Unmarshal(capturedExecSettings, &capturedMap); err != nil {
+		t.Fatalf("unmarshal captured: %v", err)
+	}
+	if err := json.Unmarshal(execSettings, &expectedMap); err != nil {
+		t.Fatalf("unmarshal expected: %v", err)
+	}
+	if len(capturedMap) != len(expectedMap) {
+		t.Errorf("execution_settings key count mismatch: got %d, want %d", len(capturedMap), len(expectedMap))
+	}
+	for k, v := range expectedMap {
+		if fmt.Sprintf("%v", capturedMap[k]) != fmt.Sprintf("%v", v) {
+			t.Errorf("execution_settings[%q]: got %v, want %v", k, capturedMap[k], v)
+		}
+	}
+
+	// Verify execution_settings appears in the response
+	var got store.SessionStudent
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if string(got.ExecutionSettings) != string(execSettings) {
+		t.Errorf("expected execution_settings %s in response, got %s", execSettings, got.ExecutionSettings)
+	}
+}
+
+func TestUpdateCode_NilExecutionSettings(t *testing.T) {
+	ss := testSessionStudent()
+	ss.Code = "x = 1"
+	userID := ss.UserID
+
+	var capturedExecSettings json.RawMessage
+	var capturedExecSettingsCalled bool
+	repo := &mockSessionStudentRepo{
+		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, _ string, es json.RawMessage) (*store.SessionStudent, error) {
+			capturedExecSettings = es
+			capturedExecSettingsCalled = true
+			return ss, nil
+		},
+	}
+
+	// Send request without execution_settings — should pass nil/null to store
+	body, _ := json.Marshal(map[string]any{"code": "x = 1"})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !capturedExecSettingsCalled {
+		t.Fatal("expected updateCodeFn to be called")
+	}
+	if capturedExecSettings != nil {
+		t.Errorf("expected nil execution_settings when omitted, got %s", capturedExecSettings)
+	}
+}
+
 func TestUpdateCode_Success(t *testing.T) {
 	ss := testSessionStudent()
 	ss.Code = "print('hello')"
 	userID := ss.UserID
 
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
 			if sessID != ss.SessionID {
 				t.Fatalf("unexpected session_id: %v", sessID)
 			}
@@ -264,7 +367,7 @@ func TestUpdateCode_InvalidID(t *testing.T) {
 
 func TestUpdateCode_NotFound(t *testing.T) {
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
 			return nil, store.ErrNotFound
 		},
 	}
@@ -289,7 +392,7 @@ func TestUpdateCode_NotFound(t *testing.T) {
 
 func TestUpdateCode_InternalError(t *testing.T) {
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
 			return nil, errors.New("db error")
 		},
 	}
@@ -318,7 +421,7 @@ func TestUpdateCode_EmptyCode(t *testing.T) {
 	userID := ss.UserID
 
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, sessID, uID uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
 			if sessID != ss.SessionID {
 				t.Fatalf("unexpected session_id: %v", sessID)
 			}
@@ -354,7 +457,7 @@ func TestUpdateCode_OmittedCodeDefaultsToEmpty(t *testing.T) {
 	userID := ss.UserID
 
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, code string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _, _ uuid.UUID, code string, _ json.RawMessage) (*store.SessionStudent, error) {
 			if code != "" {
 				t.Fatalf("expected empty code when field omitted, got %q", code)
 			}
@@ -632,7 +735,7 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	userID := ss.UserID
 
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
@@ -676,7 +779,7 @@ func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 	ss.Code = "x"
 
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
 			return ss, nil
 		},
 	}
@@ -701,7 +804,7 @@ func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 
 func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 	repo := &mockSessionStudentRepo{
-		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string) (*store.SessionStudent, error) {
+		updateCodeFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ string, _ json.RawMessage) (*store.SessionStudent, error) {
 			return nil, errors.New("db error")
 		},
 	}
