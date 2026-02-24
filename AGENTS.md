@@ -42,8 +42,13 @@ bd list --json | jq '[.[] | select(.status == "open" and .priority <= 1)]'
 **Create new issues:**
 ```bash
 bd create "Issue title" -t bug|feature|task -p 0-4 --json
+bd create "Issue title" -d "Short description" -p 1 --json
 bd create "Issue title" -p 1 --deps discovered-from:bd-123 --json
 bd create "Subtask" --parent <epic-id> --json  # Hierarchical subtask (gets ID like epic-id.1)
+# Multi-line descriptions: pipe heredoc into --body-file -
+cat <<'EOF' | bd update bd-42 --body-file - --json
+Multi-line description here.
+EOF
 ```
 
 **Claim and update:**
