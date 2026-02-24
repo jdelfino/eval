@@ -181,7 +181,8 @@ func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
 				t.Errorf("%s.%s column does not exist", tt.table, tt.column)
 			}
 
-			// Verify column is nullable (since existing rows won't have it)
+			// session_students.student_work_id stays nullable;
+			// revisions.student_work_id becomes NOT NULL after migration 014.
 			var isNullable string
 			err = db.pool.QueryRow(ctx, `
 				SELECT is_nullable FROM information_schema.columns
@@ -190,8 +191,14 @@ func TestIntegration_Migration013_NewColumnsExist(t *testing.T) {
 			if err != nil {
 				t.Fatalf("check nullable: %v", err)
 			}
-			if isNullable != "YES" {
-				t.Errorf("%s.%s should be nullable, got: %s", tt.table, tt.column, isNullable)
+			if tt.table == "revisions" {
+				if isNullable != "NO" {
+					t.Errorf("%s.%s should be NOT NULL (after migration 014), got: %s", tt.table, tt.column, isNullable)
+				}
+			} else {
+				if isNullable != "YES" {
+					t.Errorf("%s.%s should be nullable, got: %s", tt.table, tt.column, isNullable)
+				}
 			}
 		})
 	}

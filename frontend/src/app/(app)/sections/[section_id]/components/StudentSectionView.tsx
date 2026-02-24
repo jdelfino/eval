@@ -190,7 +190,7 @@ export default function StudentSectionView({
                           <p className="text-gray-600 mb-3 line-clamp-2">{problem.problem.description}</p>
                         )}
                         <div className="flex items-center gap-3 mb-3">
-                          {problem.problem.tags.map((tag) => (
+                          {(problem.problem.tags || []).map((tag) => (
                             <span
                               key={tag}
                               className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded"

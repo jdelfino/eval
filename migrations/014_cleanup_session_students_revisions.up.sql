@@ -47,11 +47,17 @@ WHERE r.session_id = ss.session_id
   AND ss.student_work_id IS NOT NULL;
 
 -- ============================================================================
+-- REVISIONS: Delete orphan revisions that could not be backfilled
+-- ============================================================================
+-- Orphan revisions have no matching session_students row (e.g., from deleted
+-- sessions or the old practice flow). Delete them before applying NOT NULL.
+
+DELETE FROM revisions WHERE student_work_id IS NULL;
+
+-- ============================================================================
 -- REVISIONS: Make student_work_id NOT NULL
 -- ============================================================================
--- Now that all rows with session_students links are backfilled, make it required.
--- Any orphaned revisions (no session_students link) will fail this constraint.
--- This is acceptable because the new code always sets student_work_id.
+-- All remaining rows now have student_work_id set (either from backfill or new code).
 
 ALTER TABLE revisions ALTER COLUMN student_work_id SET NOT NULL;
 
