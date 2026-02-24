@@ -31,10 +31,6 @@ import {
 } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectArray,
-  expectNumber,
   validateSessionShape,
 } from './validators';
 
@@ -116,9 +112,9 @@ describe('Sessions Full API', () => {
     it('returns SessionDetails with correct snake_case shape', async () => {
       const details = await getSessionDetails(testSessionId);
 
-      expectString(details, 'id');
-      expectString(details, 'join_code');
-      expectString(details, 'problem_title');
+      expect(typeof details.id).toBe('string');
+      expect(typeof details.join_code).toBe('string');
+      expect(typeof details.problem_title).toBe('string');
       // problem_description and starter_code are optional
       if (details.problem_description !== undefined) {
         expect(typeof details.problem_description).toBe('string');
@@ -126,15 +122,15 @@ describe('Sessions Full API', () => {
       if (details.starter_code !== undefined) {
         expect(typeof details.starter_code).toBe('string');
       }
-      expectString(details, 'created_at');
+      expect(typeof details.created_at).toBe('string');
       // ended_at is optional
       if (details.ended_at !== undefined) {
         expect(typeof details.ended_at).toBe('string');
       }
-      expectString(details, 'status');
-      expectString(details, 'section_name');
-      expectArray(details, 'students');
-      expectNumber(details, 'participant_count');
+      expect(typeof details.status).toBe('string');
+      expect(typeof details.section_name).toBe('string');
+      expect(Array.isArray(details.students)).toBe(true);
+      expect(typeof details.participant_count).toBe('number');
       expectSnakeCaseKeys(details, 'SessionDetails');
 
       expect(details.id).toBe(testSessionId);
@@ -143,10 +139,10 @@ describe('Sessions Full API', () => {
       // If there are students, validate their shape
       if (details.students.length > 0) {
         const student = details.students[0];
-        expectString(student, 'id');
-        expectString(student, 'name');
-        expect(student).toHaveProperty('code');
-        expectString(student, 'last_update');
+        expect(typeof student.id).toBe('string');
+        expect(typeof student.name).toBe('string');
+        expect('code' in student).toBe(true);
+        expect(typeof student.last_update).toBe('string');
         expectSnakeCaseKeys(student, 'SessionStudentSummary');
       }
     });
@@ -159,11 +155,11 @@ describe('Sessions Full API', () => {
     it('returns SessionPublicState with correct snake_case shape', async () => {
       const publicState = await getSessionPublicState(testSessionId);
 
-      expect(publicState).toHaveProperty('problem');
-      expectNullableString(publicState, 'featured_student_id');
-      expectNullableString(publicState, 'featured_code');
-      expectString(publicState, 'join_code');
-      expectString(publicState, 'status');
+      expect('problem' in publicState).toBe(true);
+      expect(publicState.featured_student_id === null || typeof publicState.featured_student_id === 'string').toBe(true);
+      expect(publicState.featured_code === null || typeof publicState.featured_code === 'string').toBe(true);
+      expect(typeof publicState.join_code).toBe('string');
+      expect(typeof publicState.status).toBe('string');
       expectSnakeCaseKeys(publicState, 'SessionPublicState');
 
       expect(['active', 'completed']).toContain(publicState.status);
@@ -179,7 +175,7 @@ describe('Sessions Full API', () => {
         const analysis = await analyzeSession(testSessionId, 'student-1', 'print("hello")');
 
         // If it succeeds, validate the shape
-        expect(analysis).toHaveProperty('script');
+        expect('script' in analysis).toBe(true);
         expectSnakeCaseKeys(analysis, 'AnalysisResponse');
       } catch (err: unknown) {
         const status = (err as { status?: number }).status;

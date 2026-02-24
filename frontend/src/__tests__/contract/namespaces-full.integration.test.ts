@@ -19,25 +19,19 @@ import {
   deleteUser,
 } from '@/lib/api/namespaces';
 import { createSystemInvitation } from '@/lib/api/system';
-import {
-  expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectBoolean,
-  expectNullableNumber,
-  validateUserShape,
-} from './validators';
+import { expectSnakeCaseKeys, validateUserShape } from './validators';
+import { Namespace } from '@/types/api';
 
 /** Validate the shape of a Namespace object from the backend. */
-function validateNamespaceShape(ns: object) {
-  expectString(ns, 'id');
-  expectString(ns, 'display_name');
-  expectBoolean(ns, 'active');
-  expectNullableNumber(ns, 'max_instructors');
-  expectNullableNumber(ns, 'max_students');
-  expectString(ns, 'created_at');
-  expectNullableString(ns, 'created_by');
-  expectString(ns, 'updated_at');
+function validateNamespaceShape(ns: Namespace) {
+  expect(typeof ns.id).toBe('string');
+  expect(typeof ns.display_name).toBe('string');
+  expect(typeof ns.active).toBe('boolean');
+  expect(ns.max_instructors === null || typeof ns.max_instructors === 'number').toBe(true);
+  expect(ns.max_students === null || typeof ns.max_students === 'number').toBe(true);
+  expect(typeof ns.created_at).toBe('string');
+  expect(ns.created_by === null || typeof ns.created_by === 'string').toBe(true);
+  expect(typeof ns.updated_at).toBe('string');
   expectSnakeCaseKeys(ns, 'Namespace');
 }
 
@@ -120,11 +114,11 @@ describe('Namespaces API — full coverage', () => {
 
       configureTestAuth(userToken);
       const { apiPost } = await import('@/lib/api-client');
-      const user = await apiPost<Record<string, unknown>>('/auth/accept-invite', {
+      const user = await apiPost<import('@/types/api').User>('/auth/accept-invite', {
         token: invitation.id,
         display_name: 'Contract Test User',
       });
-      createdUserId = user.id as string;
+      createdUserId = user.id;
 
       // Switch back to admin
       configureTestAuth(ADMIN_TOKEN);

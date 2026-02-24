@@ -10,9 +10,7 @@ import { listSystemInvitations, createSystemInvitation, revokeSystemInvitation }
 import { state } from './shared-state';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-} from './validators';
+  } from './validators';
 
 describe('listSystemInvitations()', () => {
   beforeAll(() => {
@@ -33,16 +31,16 @@ describe('listSystemInvitations()', () => {
       const inv = invitations[0];
 
       expectSnakeCaseKeys(inv, 'SerializedInvitation');
-      expectString(inv, 'id');
-      expectString(inv, 'email');
-      expectString(inv, 'target_role');
-      expectString(inv, 'namespace_id');
-      expectString(inv, 'created_by');
-      expectString(inv, 'created_at');
-      expectString(inv, 'expires_at');
-      expectNullableString(inv, 'consumed_at');
-      expectNullableString(inv, 'consumed_by');
-      expectNullableString(inv, 'revoked_at');
+      expect(typeof inv.id).toBe('string');
+      expect(typeof inv.email).toBe('string');
+      expect(typeof inv.target_role).toBe('string');
+      expect(typeof inv.namespace_id).toBe('string');
+      expect(typeof inv.created_by).toBe('string');
+      expect(typeof inv.created_at).toBe('string');
+      expect(typeof inv.expires_at).toBe('string');
+      expect(inv.consumed_at === null || typeof inv.consumed_at === 'string').toBe(true);
+      expect(inv.consumed_by === null || typeof inv.consumed_by === 'string').toBe(true);
+      expect(inv.revoked_at === null || typeof inv.revoked_at === 'string').toBe(true);
 
       // Verify role is one of the expected values
       expect(['instructor', 'namespace-admin']).toContain(inv.target_role);
@@ -81,18 +79,18 @@ describe('createSystemInvitation()', () => {
     expectSnakeCaseKeys(inv, 'SerializedInvitation');
 
     // Validate required string fields
-    expectString(inv, 'id');
-    expectString(inv, 'email');
-    expectString(inv, 'target_role');
-    expectString(inv, 'namespace_id');
-    expectString(inv, 'created_by');
-    expectString(inv, 'created_at');
-    expectString(inv, 'expires_at');
+    expect(typeof inv.id).toBe('string');
+    expect(typeof inv.email).toBe('string');
+    expect(typeof inv.target_role).toBe('string');
+    expect(typeof inv.namespace_id).toBe('string');
+    expect(typeof inv.created_by).toBe('string');
+    expect(typeof inv.created_at).toBe('string');
+    expect(typeof inv.expires_at).toBe('string');
 
     // Validate nullable fields
-    expectNullableString(inv, 'consumed_at');
-    expectNullableString(inv, 'consumed_by');
-    expectNullableString(inv, 'revoked_at');
+    expect(inv.consumed_at === null || typeof inv.consumed_at === 'string').toBe(true);
+    expect(inv.consumed_by === null || typeof inv.consumed_by === 'string').toBe(true);
+    expect(inv.revoked_at === null || typeof inv.revoked_at === 'string').toBe(true);
 
     // Verify the values match what we sent
     expect(inv.email).toBe(email);

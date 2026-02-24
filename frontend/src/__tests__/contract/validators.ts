@@ -1,13 +1,13 @@
 /**
  * Shared validation helpers for contract tests.
  *
- * These validators work with both typed objects and raw JSON responses.
+ * Type-safe validators that use TypeScript interfaces to catch API mismatches at compile time.
  */
 
-const SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/;
+import { User, Session, SessionStudent, ExecutionResult } from '@/types/api';
+import type { SerializedInvitation } from '@/lib/api/invitations';
 
-// Helper type for objects that can be indexed
-type Indexable = Record<string, unknown>;
+const SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/;
 
 /** Assert every key in the object is snake_case. */
 export function expectSnakeCaseKeys(obj: object, label: string) {
@@ -24,90 +24,80 @@ export function expectSnakeCaseKeys(obj: object, label: string) {
   expect(obj).not.toHaveProperty('DisplayName');
 }
 
-/** Assert a string field is present and is a string. */
-export function expectString(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  expect(typeof (obj as Indexable)[field]).toBe('string');
-}
-
-/** Assert a field is a string or null. */
-export function expectNullableString(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  const value = (obj as Indexable)[field];
-  expect(value === null || typeof value === 'string').toBe(true);
-}
-
-/** Assert a field is a boolean. */
-export function expectBoolean(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  expect(typeof (obj as Indexable)[field]).toBe('boolean');
-}
-
-/** Assert a field is an array. */
-export function expectArray(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  expect(Array.isArray((obj as Indexable)[field])).toBe(true);
-}
-
-/** Assert a field is a number. */
-export function expectNumber(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  expect(typeof (obj as Indexable)[field]).toBe('number');
-}
-
-/** Assert a field is a number or null. */
-export function expectNullableNumber(obj: object, field: string) {
-  expect(obj).toHaveProperty(field);
-  const value = (obj as Indexable)[field];
-  expect(value === null || typeof value === 'number').toBe(true);
-}
-
 // ---------------------------------------------------------------------------
-// Composite shape validators
+// Composite shape validators - Type-safe versions using typed interfaces
 // ---------------------------------------------------------------------------
 
 /** Validate the shape of a User object from the backend. */
-export function validateUserShape(user: object) {
-  expectString(user, 'id');
-  expectNullableString(user, 'external_id');
-  expectString(user, 'email');
-  expectString(user, 'role');
-  expectNullableString(user, 'namespace_id');
-  expectNullableString(user, 'display_name');
-  expectString(user, 'created_at');
-  expectString(user, 'updated_at');
+export function validateUserShape(user: User) {
+  expect(typeof user.id).toBe('string');
+  expect(typeof user.email).toBe('string');
+  expect(typeof user.role).toBe('string');
+  expect(typeof user.created_at).toBe('string');
+  expect(typeof user.updated_at).toBe('string');
+  // nullable fields
+  expect(user.external_id === null || typeof user.external_id === 'string').toBe(true);
+  expect(user.namespace_id === null || typeof user.namespace_id === 'string').toBe(true);
+  expect(user.display_name === null || typeof user.display_name === 'string').toBe(true);
   expectSnakeCaseKeys(user, 'User');
 }
 
 /** Validate the shape of a SerializedInvitation object from the backend. */
-export function validateInvitationShape(inv: object) {
+export function validateInvitationShape(inv: SerializedInvitation) {
   expectSnakeCaseKeys(inv, 'SerializedInvitation');
-  expectString(inv, 'id');
-  expectString(inv, 'email');
-  expectString(inv, 'target_role');
-  expectString(inv, 'namespace_id');
-  expectString(inv, 'created_by');
-  expectString(inv, 'created_at');
-  expectString(inv, 'expires_at');
-  expectNullableString(inv, 'consumed_at');
-  expectNullableString(inv, 'consumed_by');
-  expectNullableString(inv, 'revoked_at');
+  expect(typeof inv.id).toBe('string');
+  expect(typeof inv.email).toBe('string');
+  expect(typeof inv.target_role).toBe('string');
+  expect(typeof inv.namespace_id).toBe('string');
+  expect(typeof inv.created_by).toBe('string');
+  expect(typeof inv.created_at).toBe('string');
+  expect(typeof inv.expires_at).toBe('string');
+  // nullable fields
+  expect(inv.consumed_at === null || typeof inv.consumed_at === 'string').toBe(true);
+  expect(inv.consumed_by === null || typeof inv.consumed_by === 'string').toBe(true);
+  expect(inv.revoked_at === null || typeof inv.revoked_at === 'string').toBe(true);
 }
 
 /** Validate the shape of a Session object from the backend. */
-export function validateSessionShape(session: object) {
-  expectString(session, 'id');
-  expectString(session, 'namespace_id');
-  expectString(session, 'section_id');
-  expectString(session, 'section_name');
-  expect(session).toHaveProperty('problem');
-  expectNullableString(session, 'featured_student_id');
-  expectNullableString(session, 'featured_code');
-  expectString(session, 'creator_id');
-  expectArray(session, 'participants');
-  expectString(session, 'status');
-  expectString(session, 'created_at');
-  expectString(session, 'last_activity');
-  expectNullableString(session, 'ended_at');
+export function validateSessionShape(session: Session) {
+  expect(typeof session.id).toBe('string');
+  expect(typeof session.namespace_id).toBe('string');
+  expect(typeof session.section_id).toBe('string');
+  expect(typeof session.section_name).toBe('string');
+  expect('problem' in session).toBe(true);
+  expect(session.featured_student_id === null || typeof session.featured_student_id === 'string').toBe(true);
+  expect(session.featured_code === null || typeof session.featured_code === 'string').toBe(true);
+  expect(typeof session.creator_id).toBe('string');
+  expect(Array.isArray(session.participants)).toBe(true);
+  expect(typeof session.status).toBe('string');
+  expect(typeof session.created_at).toBe('string');
+  expect(typeof session.last_activity).toBe('string');
+  expect(session.ended_at === null || typeof session.ended_at === 'string').toBe(true);
   expectSnakeCaseKeys(session, 'Session');
+}
+
+/** Validate the shape of a SessionStudent object with type-safe field access. */
+export function validateSessionStudentShape(obj: SessionStudent, label = 'SessionStudent') {
+  expect(typeof obj.id).toBe('string');
+  expect(typeof obj.session_id).toBe('string');
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.name).toBe('string');
+  expect('code' in obj).toBe(true);
+  expect('execution_settings' in obj).toBe(true);
+  expect(typeof obj.last_update).toBe('string');
+  expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of an ExecutionResult object from the backend. */
+export function validateExecutionResultShape(obj: ExecutionResult, label = 'ExecutionResult') {
+  expect(typeof obj.success).toBe('boolean');
+  expect(typeof obj.execution_time_ms).toBe('number');
+  // output and error use omitempty — only present when non-empty
+  if ('output' in obj) {
+    expect(typeof obj.output).toBe('string');
+  }
+  if ('error' in obj) {
+    expect(typeof obj.error).toBe('string');
+  }
+  expectSnakeCaseKeys(obj, label);
 }

@@ -24,9 +24,7 @@ import {
 import { ApiError } from '@/lib/api-error';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-} from './validators';
+  } from './validators';
 
 const setupState = getSetupState();
 
@@ -104,28 +102,28 @@ describe('Registration API', () => {
       const data = await getStudentRegistrationInfo(joinCode);
 
       // Validate top-level shape
-      expect(data).toHaveProperty('section');
-      expect(data).toHaveProperty('class');
+      expect('section' in data).toBe(true);
+      expect('class' in data).toBe(true);
 
       // Validate section shape
       expectSnakeCaseKeys(data.section, 'Section');
-      expectString(data.section, 'id');
-      expectString(data.section, 'namespace_id');
-      expectString(data.section, 'class_id');
-      expectString(data.section, 'name');
-      expectString(data.section, 'join_code');
-      expectString(data.section, 'created_at');
-      expectString(data.section, 'updated_at');
+      expect(typeof data.section.id).toBe('string');
+      expect(typeof data.section.namespace_id).toBe('string');
+      expect(typeof data.section.class_id).toBe('string');
+      expect(typeof data.section.name).toBe('string');
+      expect(typeof data.section.join_code).toBe('string');
+      expect(typeof data.section.created_at).toBe('string');
+      expect(typeof data.section.updated_at).toBe('string');
 
       // Validate class shape
       expectSnakeCaseKeys(data.class, 'Class');
-      expectString(data.class, 'id');
-      expectString(data.class, 'namespace_id');
-      expectString(data.class, 'name');
-      expectNullableString(data.class, 'description');
-      expectString(data.class, 'created_by');
-      expectString(data.class, 'created_at');
-      expectString(data.class, 'updated_at');
+      expect(typeof data.class.id).toBe('string');
+      expect(typeof data.class.namespace_id).toBe('string');
+      expect(typeof data.class.name).toBe('string');
+      expect(data.class.description === null || typeof data.class.description === 'string').toBe(true);
+      expect(typeof data.class.created_by).toBe('string');
+      expect(typeof data.class.created_at).toBe('string');
+      expect(typeof data.class.updated_at).toBe('string');
     });
 
     it('throws ApiError with status for invalid join code', async () => {

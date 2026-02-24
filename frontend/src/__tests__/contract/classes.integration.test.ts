@@ -6,9 +6,7 @@ import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helper
 import { listClasses } from '@/lib/api/classes';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-} from './validators';
+  } from './validators';
 
 describe('listClasses()', () => {
   beforeAll(() => {
@@ -28,13 +26,13 @@ describe('listClasses()', () => {
     const cls = classes[0];
 
     // Field presence and types
-    expectString(cls, 'id');
-    expectString(cls, 'namespace_id');
-    expectString(cls, 'name');
-    expectNullableString(cls, 'description');
-    expectString(cls, 'created_by');
-    expectString(cls, 'created_at');
-    expectString(cls, 'updated_at');
+    expect(typeof cls.id).toBe('string');
+    expect(typeof cls.namespace_id).toBe('string');
+    expect(typeof cls.name).toBe('string');
+    expect(cls.description === null || typeof cls.description === 'string').toBe(true);
+    expect(typeof cls.created_by).toBe('string');
+    expect(typeof cls.created_at).toBe('string');
+    expect(typeof cls.updated_at).toBe('string');
 
     // No PascalCase
     expectSnakeCaseKeys(cls, 'Class');

@@ -6,10 +6,7 @@ import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helper
 import { listSessionHistory } from '@/lib/api/sessions';
 import {
   expectSnakeCaseKeys,
-  expectString,
-  expectNullableString,
-  expectArray,
-} from './validators';
+  } from './validators';
 
 describe('listSessionHistory()', () => {
   beforeAll(() => {
@@ -30,19 +27,19 @@ describe('listSessionHistory()', () => {
       const session = sessions[0];
 
       // Session fields
-      expectString(session, 'id');
-      expectString(session, 'namespace_id');
-      expectString(session, 'section_id');
-      expectString(session, 'section_name');
-      expect(session).toHaveProperty('problem');
-      expectNullableString(session, 'featured_student_id');
-      expectNullableString(session, 'featured_code');
-      expectString(session, 'creator_id');
-      expectArray(session, 'participants');
-      expectString(session, 'status');
-      expectString(session, 'created_at');
-      expectString(session, 'last_activity');
-      expectNullableString(session, 'ended_at');
+      expect(typeof session.id).toBe('string');
+      expect(typeof session.namespace_id).toBe('string');
+      expect(typeof session.section_id).toBe('string');
+      expect(typeof session.section_name).toBe('string');
+      expect('problem' in session).toBe(true);
+      expect(session.featured_student_id === null || typeof session.featured_student_id === 'string').toBe(true);
+      expect(session.featured_code === null || typeof session.featured_code === 'string').toBe(true);
+      expect(typeof session.creator_id).toBe('string');
+      expect(Array.isArray(session.participants)).toBe(true);
+      expect(typeof session.status).toBe('string');
+      expect(typeof session.created_at).toBe('string');
+      expect(typeof session.last_activity).toBe('string');
+      expect(session.ended_at === null || typeof session.ended_at === 'string').toBe(true);
 
       // No PascalCase leaks
       expectSnakeCaseKeys(session, 'Session');

@@ -21,7 +21,6 @@ import {
   deleteSystemUser,
 } from '@/lib/api/system';
 import {
-  expectNumber,
   validateUserShape,
 } from './validators';
 
@@ -82,27 +81,27 @@ describe('Admin API — full coverage', () => {
       const stats = await getAdminStats(namespaceId);
 
       // Top-level shape: { users, classes, sections, sessions }
-      expect(stats).toHaveProperty('users');
-      expect(stats).toHaveProperty('classes');
-      expect(stats).toHaveProperty('sections');
-      expect(stats).toHaveProperty('sessions');
+      expect('users' in stats).toBe(true);
+      expect('classes' in stats).toBe(true);
+      expect('sections' in stats).toBe(true);
+      expect('sessions' in stats).toBe(true);
 
       // users: { total: number, byRole: { admin, instructor, student } }
       expect(stats.users).toHaveProperty('total');
-      expectNumber(stats.users, 'total');
+      expect(typeof stats.users.total).toBe('number');
       expect(stats.users).toHaveProperty('byRole');
-      expectNumber(stats.users.byRole, 'admin');
-      expectNumber(stats.users.byRole, 'instructor');
-      expectNumber(stats.users.byRole, 'student');
+      expect(typeof stats.users.byRole.admin).toBe('number');
+      expect(typeof stats.users.byRole.instructor).toBe('number');
+      expect(typeof stats.users.byRole.student).toBe('number');
 
       // classes: { total: number }
-      expectNumber(stats.classes, 'total');
+      expect(typeof stats.classes.total).toBe('number');
 
       // sections: { total: number }
-      expectNumber(stats.sections, 'total');
+      expect(typeof stats.sections.total).toBe('number');
 
       // sessions: { active: number }
-      expectNumber(stats.sessions, 'active');
+      expect(typeof stats.sessions.active).toBe('number');
 
       // All numbers should be non-negative
       expect(stats.users.total).toBeGreaterThanOrEqual(0);
@@ -117,15 +116,15 @@ describe('Admin API — full coverage', () => {
     it('returns AdminStats without namespace filter', async () => {
       const stats = await getAdminStats();
 
-      expect(stats).toHaveProperty('users');
-      expect(stats).toHaveProperty('classes');
-      expect(stats).toHaveProperty('sections');
-      expect(stats).toHaveProperty('sessions');
+      expect('users' in stats).toBe(true);
+      expect('classes' in stats).toBe(true);
+      expect('sections' in stats).toBe(true);
+      expect('sessions' in stats).toBe(true);
 
-      expectNumber(stats.users, 'total');
-      expectNumber(stats.classes, 'total');
-      expectNumber(stats.sections, 'total');
-      expectNumber(stats.sessions, 'active');
+      expect(typeof stats.users.total).toBe('number');
+      expect(typeof stats.classes.total).toBe('number');
+      expect(typeof stats.sections.total).toBe('number');
+      expect(typeof stats.sessions.active).toBe('number');
     });
   });
 

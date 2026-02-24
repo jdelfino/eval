@@ -16,6 +16,10 @@ const mockPendingInvitation: Invitation = {
   created_at: '2026-01-15T10:00:00Z',
   expires_at: '2027-02-15T10:00:00Z', // Far future - always pending
   created_by: 'admin-1',
+  consumed_at: null,
+  consumed_by: null,
+  revoked_at: null,
+  status: 'pending',
 };
 
 const mockConsumedInvitation: Invitation = {
@@ -27,7 +31,9 @@ const mockConsumedInvitation: Invitation = {
   expires_at: '2027-02-10T10:00:00Z',
   consumed_at: '2026-01-12T10:00:00Z',
   consumed_by: 'user-1',
+  revoked_at: null,
   created_by: 'admin-1',
+  status: 'consumed',
 };
 
 const mockRevokedInvitation: Invitation = {
@@ -37,8 +43,11 @@ const mockRevokedInvitation: Invitation = {
   target_role: 'instructor',
   created_at: '2026-01-05T10:00:00Z',
   expires_at: '2027-02-05T10:00:00Z',
+  consumed_at: null,
+  consumed_by: null,
   revoked_at: '2026-01-08T10:00:00Z',
   created_by: 'admin-1',
+  status: 'revoked',
 };
 
 const mockExpiredInvitation: Invitation = {
@@ -48,7 +57,11 @@ const mockExpiredInvitation: Invitation = {
   target_role: 'instructor',
   created_at: '2024-12-01T10:00:00Z',
   expires_at: '2024-12-15T10:00:00Z', // Already expired
+  consumed_at: null,
+  consumed_by: null,
+  revoked_at: null,
   created_by: 'admin-1',
+  status: 'expired',
 };
 
 const mockNamespaces: NamespaceOption[] = [

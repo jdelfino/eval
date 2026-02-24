@@ -25,10 +25,10 @@ export interface SerializedInvitation {
   created_by: string;
   created_at: string;
   expires_at: string;
-  consumed_at?: string;
-  consumed_by?: string;
-  revoked_at?: string;
-  status?: InvitationStatus;
+  consumed_at: string | null;
+  consumed_by: string | null;
+  revoked_at: string | null;
+  status: InvitationStatus;
 }
 
 /**

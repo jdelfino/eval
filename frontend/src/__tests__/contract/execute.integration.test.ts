@@ -10,7 +10,7 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { executeStandaloneCode } from '@/lib/api/execute';
-import { expectSnakeCaseKeys, expectBoolean, expectNumber } from './validators';
+import { expectSnakeCaseKeys } from './validators';
 
 describe('executeStandaloneCode()', () => {
   beforeAll(() => {
@@ -25,8 +25,8 @@ describe('executeStandaloneCode()', () => {
     const result = await executeStandaloneCode('print("hello")', 'python3');
 
     // Validate required fields
-    expectBoolean(result, 'success');
-    expectNumber(result, 'execution_time_ms');
+    expect(typeof result.success).toBe('boolean');
+    expect(typeof result.execution_time_ms).toBe('number');
 
     // Verify code actually executed successfully (not just shape validation)
     expect(result.success).toBe(true);
@@ -57,8 +57,8 @@ describe('executeStandaloneCode()', () => {
       { stdin: 'contract-test-input' }
     );
 
-    expectBoolean(result, 'success');
-    expectNumber(result, 'execution_time_ms');
+    expect(typeof result.success).toBe('boolean');
+    expect(typeof result.execution_time_ms).toBe('number');
 
     // output uses omitempty — only present when non-empty
     const raw = result as unknown as Record<string, unknown>;
