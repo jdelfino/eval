@@ -236,15 +236,13 @@ export interface SectionProblem {
   published_at: string;
 }
 
-/** PublishedProblemWithStatus — problem published to a section with student's work status. */
-export interface PublishedProblemWithStatus {
-  problem_id: string;
-  title: string;
-  description: string | null;
-  tags: string[];
-  show_solution: boolean;
-  student_work_id: string | null;
-  last_worked: string | null;
+/** PublishedProblemWithStatus — problem published to a section with student's work status.
+ *  Wire format matches Go's PublishedProblemWithStatus (embedded SectionProblem + nested Problem + optional StudentWork). */
+export interface PublishedProblemWithStatus extends SectionProblem {
+  id: string;
+  published_by: string;
+  problem: Problem;
+  student_work?: StudentWork;
 }
 
 // ---------------------------------------------------------------------------

@@ -80,17 +80,19 @@ export default function SectionDetailPage() {
 
       // Sort problems: live session problems first, then by last_worked DESC
       const sortedProblems = [...problemsData].sort((a, b) => {
-        const aIsLive = active.some((s) => s.problem?.id === a.problem_id);
-        const bIsLive = active.some((s) => s.problem?.id === b.problem_id);
+        const aIsLive = active.some((s) => s.problem?.id === a.problem.id);
+        const bIsLive = active.some((s) => s.problem?.id === b.problem.id);
 
         if (aIsLive && !bIsLive) return -1;
         if (!aIsLive && bIsLive) return 1;
 
-        // Both live or both not live: sort by last_worked
-        if (a.last_worked && !b.last_worked) return -1;
-        if (!a.last_worked && b.last_worked) return 1;
-        if (a.last_worked && b.last_worked) {
-          return new Date(b.last_worked).getTime() - new Date(a.last_worked).getTime();
+        // Both live or both not live: sort by last_update DESC
+        const aTime = a.student_work?.last_update;
+        const bTime = b.student_work?.last_update;
+        if (aTime && !bTime) return -1;
+        if (!aTime && bTime) return 1;
+        if (aTime && bTime) {
+          return new Date(bTime).getTime() - new Date(aTime).getTime();
         }
         return 0;
       });
@@ -165,7 +167,7 @@ export default function SectionDetailPage() {
   };
 
   const filteredProblems = showWorkedOnly
-    ? publishedProblems.filter((p) => p.student_work_id !== null)
+    ? publishedProblems.filter((p) => p.student_work != null)
     : publishedProblems;
 
   if (authLoading || loading) {
@@ -276,10 +278,10 @@ export default function SectionDetailPage() {
           {filteredProblems.length > 0 ? (
             <div className="space-y-4">
               {filteredProblems.map((problem) => {
-                const isLive = activeSessions.some((s) => s.problem?.id === problem.problem_id);
+                const isLive = activeSessions.some((s) => s.problem?.id === problem.problem.id);
                 return (
                   <div
-                    key={problem.problem_id}
+                    key={problem.problem.id}
                     className={`bg-white rounded-lg shadow hover:shadow-md transition-shadow border ${
                       isLive ? 'border-green-200' : 'border-gray-200'
                     }`}
@@ -288,18 +290,18 @@ export default function SectionDetailPage() {
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-xl font-semibold text-gray-900">{problem.title}</h3>
+                            <h3 className="text-xl font-semibold text-gray-900">{problem.problem.title}</h3>
                             {isLive && (
                               <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full animate-pulse">
                                 Live
                               </span>
                             )}
                           </div>
-                          {problem.description && (
-                            <p className="text-gray-600 mb-3 line-clamp-2">{problem.description}</p>
+                          {problem.problem.description && (
+                            <p className="text-gray-600 mb-3 line-clamp-2">{problem.problem.description}</p>
                           )}
                           <div className="flex items-center gap-3 mb-3">
-                            {problem.tags.map((tag) => (
+                            {problem.problem.tags.map((tag) => (
                               <span
                                 key={tag}
                                 className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded"
@@ -309,8 +311,8 @@ export default function SectionDetailPage() {
                             ))}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {problem.student_work_id ? (
-                              <span>Last worked: {formatTimeAgo(problem.last_worked!)}</span>
+                            {problem.student_work?.id ? (
+                              <span>Last worked: {formatTimeAgo(problem.student_work?.last_update!)}</span>
                             ) : (
                               <span>Not started</span>
                             )}
@@ -318,10 +320,10 @@ export default function SectionDetailPage() {
                         </div>
                         <div className="flex flex-col gap-2 ml-4">
                           <button
-                            onClick={() => handleProblemClick(problem.problem_id)}
+                            onClick={() => handleProblemClick(problem.problem.id)}
                             className="px-6 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow hover:shadow-md"
                           >
-                            {problem.student_work_id ? 'Continue' : 'Practice'}
+                            {problem.student_work?.id ? 'Continue' : 'Practice'}
                           </button>
                           {problem.show_solution && (
                             <button className="px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
@@ -541,18 +543,18 @@ export default function SectionDetailPage() {
           <div className="space-y-3">
             {publishedProblems.map((problem) => (
               <div
-                key={problem.problem_id}
+                key={problem.problem.id}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{problem.title}</h3>
-                      {problem.description && (
-                        <p className="text-gray-600 mb-2 line-clamp-2 text-sm">{problem.description}</p>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{problem.problem.title}</h3>
+                      {problem.problem.description && (
+                        <p className="text-gray-600 mb-2 line-clamp-2 text-sm">{problem.problem.description}</p>
                       )}
                       <div className="flex items-center gap-2">
-                        {problem.tags.map((tag) => (
+                        {problem.problem.tags.map((tag) => (
                           <span
                             key={tag}
                             className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded"

@@ -119,11 +119,27 @@ func (s *Store) CreateSectionProblem(ctx context.Context, params CreateSectionPr
 
 // UpdateSectionProblem updates a section problem's mutable fields.
 func (s *Store) UpdateSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID, params UpdateSectionProblemParams) (*SectionProblem, error) {
-	query := `UPDATE section_problems SET show_solution = $3
-		WHERE section_id = $1 AND problem_id = $2
-		RETURNING ` + sectionProblemColumns
+	ac := newArgCounter(3, sectionID, problemID)
 
-	sp, err := scanSectionProblem(s.q.QueryRow(ctx, query, sectionID, problemID, params.ShowSolution))
+	setClauses := ""
+	if params.ShowSolution != nil {
+		setClauses += "show_solution = " + ac.Next(*params.ShowSolution)
+	}
+
+	if setClauses == "" {
+		// Nothing to update — just fetch current row.
+		query := `SELECT ` + sectionProblemColumns + ` FROM section_problems WHERE section_id = $1 AND problem_id = $2`
+		sp, err := scanSectionProblem(s.q.QueryRow(ctx, query, sectionID, problemID))
+		if err != nil {
+			return nil, HandleNotFound(err)
+		}
+		return sp, nil
+	}
+
+	query := `UPDATE section_problems SET ` + setClauses +
+		` WHERE section_id = $1 AND problem_id = $2 RETURNING ` + sectionProblemColumns
+
+	sp, err := scanSectionProblem(s.q.QueryRow(ctx, query, ac.args...))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}

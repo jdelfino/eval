@@ -28,13 +28,37 @@ import {
 import type { PublishedProblemWithStatus, SectionProblem } from '@/types/api';
 
 const fakePublishedProblem: PublishedProblemWithStatus = {
+  id: 'sp-1',
+  section_id: 'section-1',
   problem_id: 'problem-1',
-  title: 'Test Problem',
-  description: 'Test description',
-  tags: ['python', 'loops'],
+  published_by: 'user-1',
   show_solution: true,
-  student_work_id: 'work-1',
-  last_worked: '2024-01-01T00:00:00Z',
+  published_at: '2024-01-01T00:00:00Z',
+  problem: {
+    id: 'problem-1',
+    namespace_id: 'ns-1',
+    title: 'Test Problem',
+    description: 'Test description',
+    starter_code: null,
+    test_cases: [],
+    execution_settings: {},
+    author_id: 'user-1',
+    class_id: null,
+    tags: ['python', 'loops'],
+    solution: null,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+  student_work: {
+    id: 'work-1',
+    user_id: 'user-1',
+    section_id: 'section-1',
+    problem_id: 'problem-1',
+    code: '',
+    execution_settings: {},
+    last_update: '2024-01-01T00:00:00Z',
+    created_at: '2024-01-01T00:00:00Z',
+  },
 };
 
 const fakeSectionProblem: SectionProblem = {
