@@ -1,6 +1,7 @@
 ---
 name: test-runner
 description: Lightweight sub-agent that runs quality gates and returns a concise pass/fail result. Used by implementer to preserve context.
+model: haiku
 ---
 
 # Test Runner
