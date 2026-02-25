@@ -13,9 +13,11 @@
  */
 
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { acceptInvite } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
 
 export default function EmailSignInPage() {
   return (
@@ -43,14 +45,56 @@ function EmailSignInContent() {
   const [submitError, setSubmitError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('invite');
   const { isAuthenticated } = useAuth();
 
-  // Redirect when authenticated (AuthContext picks up Firebase user)
+  // Redirect when authenticated (AuthContext picks up Firebase user).
+  // Suppressed when invite param is present — acceptInvite handles the redirect instead.
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !inviteToken) {
       router.push('/');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, inviteToken, router]);
+
+  // Redirect based on user role after accepting an invite
+  const redirectBasedOnRole = useCallback(
+    (role: string) => {
+      if (role === 'namespace-admin') {
+        router.push('/namespace/invitations');
+      } else if (role === 'instructor') {
+        router.push('/instructor');
+      } else {
+        router.push('/');
+      }
+    },
+    [router]
+  );
+
+  // Accept the invite token and redirect, or show error
+  const handleAcceptInvite = useCallback(
+    async (token: string) => {
+      try {
+        const data = await acceptInvite(token);
+        redirectBasedOnRole(data.role);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.code === 'INVITATION_EXPIRED') {
+            setSubmitError('This invitation has expired. Please contact your administrator.');
+          } else if (error.code === 'INVITATION_CONSUMED') {
+            setSubmitError('This invitation has already been used.');
+          } else {
+            setSubmitError(error.message || 'Failed to accept invitation. Please try again.');
+          }
+        } else {
+          setSubmitError('Failed to accept invitation. Please try again.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [redirectBasedOnRole]
+  );
 
   const validate = useCallback((): boolean => {
     let valid = true;
@@ -84,8 +128,13 @@ function EmailSignInContent() {
         const { signInWithEmailAndPassword } = await import('firebase/auth');
         const { firebaseAuth } = await import('@/lib/firebase');
         await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
-        // onAuthStateChanged in AuthContext fires, updates isAuthenticated,
+        // If invite param is present, accept the invite and redirect by role.
+        // Otherwise, onAuthStateChanged in AuthContext fires, updates isAuthenticated,
         // and the useEffect above redirects to home.
+        if (inviteToken) {
+          await handleAcceptInvite(inviteToken);
+          return;
+        }
       } catch (error) {
         const firebaseError = error as { code?: string };
         if (
@@ -102,7 +151,7 @@ function EmailSignInContent() {
         setIsLoading(false);
       }
     },
-    [email, password, validate]
+    [email, password, validate, inviteToken, handleAcceptInvite]
   );
 
   return (

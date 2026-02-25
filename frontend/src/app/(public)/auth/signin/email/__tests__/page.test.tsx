@@ -6,9 +6,11 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import EmailSignInPage from '../page';
 import { useAuth } from '@/contexts/AuthContext';
+import { acceptInvite } from '@/lib/api/registration';
+import { ApiError } from '@/lib/api-error';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -35,6 +37,13 @@ jest.mock('firebase/auth', () => ({
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {},
 }));
+
+// Mock acceptInvite
+jest.mock('@/lib/api/registration', () => ({
+  acceptInvite: jest.fn(),
+}));
+
+const mockAcceptInvite = acceptInvite as jest.Mock;
 
 describe('EmailSignInPage', () => {
   const mockPush = jest.fn();
@@ -246,6 +255,183 @@ describe('EmailSignInPage', () => {
       // Button should be disabled or show loading
       const button = screen.getByRole('button', { name: /sign(ing)? in/i });
       expect(button).toBeDisabled();
+    });
+  });
+
+  describe('Invite token flow', () => {
+    beforeEach(() => {
+      const params = new URLSearchParams('invite=test-invite-token-123');
+      (useSearchParams as jest.Mock).mockReturnValue(params);
+    });
+
+    it('calls acceptInvite with the invite token after successful sign-in', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockResolvedValue({ role: 'instructor' });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockAcceptInvite).toHaveBeenCalledWith('test-invite-token-123');
+      });
+    });
+
+    it('redirects to /instructor when invite accepted by instructor role', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockResolvedValue({ role: 'instructor' });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/instructor');
+      });
+    });
+
+    it('redirects to /namespace/invitations when invite accepted by namespace-admin role', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockResolvedValue({ role: 'namespace-admin' });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/namespace/invitations');
+      });
+    });
+
+    it('redirects to / when invite accepted by default role', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockResolvedValue({ role: 'student' });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('shows error message when invite token is expired', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockRejectedValue(
+        new ApiError('Invitation expired', 410, 'INVITATION_EXPIRED')
+      );
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/expired/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('shows error message when invite token is already consumed', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockRejectedValue(
+        new ApiError('Invitation already consumed', 409, 'INVITATION_CONSUMED')
+      );
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/already been used|consumed/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('shows generic error message when acceptInvite fails with unknown error', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      mockAcceptInvite.mockRejectedValue(new Error('Network error'));
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/failed|error/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('does NOT redirect to / when isAuthenticated becomes true (suppresses auto-redirect)', () => {
+      // When invite param is present, the isAuthenticated redirect should be suppressed
+      // so that acceptInvite can run and redirect based on role instead.
+      (useAuth as jest.Mock).mockReturnValue({
+        isAuthenticated: true,
+      });
+
+      render(<EmailSignInPage />);
+
+      expect(mockPush).not.toHaveBeenCalledWith('/');
+    });
+
+    it('does not call acceptInvite without signing in first', () => {
+      render(<EmailSignInPage />);
+
+      // Simply rendering the page with invite param should not call acceptInvite
+      expect(mockAcceptInvite).not.toHaveBeenCalled();
+    });
+
+    it('shows Firebase credential error even when invite token is present', async () => {
+      const user = userEvent.setup();
+      const firebaseError = new Error('Firebase: Error (auth/invalid-credential).');
+      (firebaseError as { code?: string }).code = 'auth/invalid-credential';
+      mockSignInWithEmailAndPassword.mockRejectedValue(firebaseError);
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'wrongpassword');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
+      });
+      expect(mockAcceptInvite).not.toHaveBeenCalled();
     });
   });
 });
