@@ -147,13 +147,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 		// Public routes — no authentication required.
 		// Uses the reader role which has unrestricted SELECT access (no RLS).
-		r.Group(func(r chi.Router) {
-			if pgxPool := pool.PgxPool(); pgxPool != nil {
+		if pgxPool := pool.PgxPool(); pgxPool != nil {
+			r.Group(func(r chi.Router) {
 				r.Use(custommw.PublicStoreMiddleware(pgxPool))
-			}
-			readRL := custommw.ForCategory(rl, "read", custommw.IPKey)
-			r.With(readRL).Get("/public/problems/{id}", handler.NewPublicProblemHandler().Get)
-		})
+				readRL := custommw.ForCategory(rl, "read", custommw.IPKey)
+				r.With(readRL).Get("/public/problems/{id}", handler.NewPublicProblemHandler().Get)
+			})
+		}
 
 		// Registration routes — GET is public, POST requires JWT (via inline middleware).
 		// No user lookup needed (new users don't have a DB profile yet).

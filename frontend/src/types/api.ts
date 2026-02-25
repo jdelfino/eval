@@ -202,7 +202,7 @@ export interface PublicProblem {
   description: string | null;
   solution: string | null;
   starter_code: string | null;
-  class_id: string;
+  class_id: string | null;
   class_name: string | null;
   tags: string[];
 }

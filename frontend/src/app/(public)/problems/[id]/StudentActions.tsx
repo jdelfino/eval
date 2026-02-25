@@ -9,7 +9,7 @@ import type { MySectionInfo } from '@/types/api';
 
 interface StudentActionsProps {
   problem_id: string;
-  class_id: string;
+  class_id: string | null;
 }
 
 export default function StudentActions({ problem_id, class_id }: StudentActionsProps) {
@@ -25,6 +25,10 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
   // Fetch student's matching sections for this class
   useEffect(() => {
     if (!isStudent) return;
+    if (!class_id) {
+      setMatchingSections([]);
+      return;
+    }
 
     listMySections()
       .then((sections) => {
