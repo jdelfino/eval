@@ -19,6 +19,7 @@ import (
 // mockSectionProblemRepo implements store.SectionProblemRepository for testing.
 type mockSectionProblemRepo struct {
 	listSectionProblemsFn    func(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error)
+	getSectionProblemFn      func(ctx context.Context, sectionID, problemID uuid.UUID) (*store.SectionProblem, error)
 	createSectionProblemFn   func(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error)
 	ensureSectionProblemFn   func(ctx context.Context, params store.CreateSectionProblemParams) error
 	updateSectionProblemFn   func(ctx context.Context, sectionID, problemID uuid.UUID, params store.UpdateSectionProblemParams) (*store.SectionProblem, error)
@@ -28,6 +29,13 @@ type mockSectionProblemRepo struct {
 
 func (m *mockSectionProblemRepo) ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
 	return m.listSectionProblemsFn(ctx, sectionID, userID)
+}
+
+func (m *mockSectionProblemRepo) GetSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*store.SectionProblem, error) {
+	if m.getSectionProblemFn != nil {
+		return m.getSectionProblemFn(ctx, sectionID, problemID)
+	}
+	panic("mockSectionProblemRepo: unexpected GetSectionProblem call")
 }
 
 func (m *mockSectionProblemRepo) CreateSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {
@@ -61,6 +69,10 @@ type spReposImpl struct {
 
 func (r spReposImpl) ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
 	return r.sp.ListSectionProblems(ctx, sectionID, userID)
+}
+
+func (r spReposImpl) GetSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*store.SectionProblem, error) {
+	return r.sp.GetSectionProblem(ctx, sectionID, problemID)
 }
 
 func (r spReposImpl) CreateSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {

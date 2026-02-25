@@ -185,6 +185,17 @@ func (s *Store) DeleteSectionProblem(ctx context.Context, sectionID, problemID u
 	return nil
 }
 
+// GetSectionProblem retrieves a single section_problems row by section and problem IDs.
+// Returns ErrNotFound if the problem is not published to the section.
+func (s *Store) GetSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*SectionProblem, error) {
+	query := `SELECT ` + sectionProblemColumns + ` FROM section_problems WHERE section_id = $1 AND problem_id = $2`
+	sp, err := scanSectionProblem(s.q.QueryRow(ctx, query, sectionID, problemID))
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+	return sp, nil
+}
+
 // ListSectionsForProblem retrieves all sections where a problem is published.
 func (s *Store) ListSectionsForProblem(ctx context.Context, problemID uuid.UUID) ([]SectionProblem, error) {
 	query := "SELECT " + sectionProblemColumns + " FROM section_problems WHERE problem_id = $1 ORDER BY published_at DESC"

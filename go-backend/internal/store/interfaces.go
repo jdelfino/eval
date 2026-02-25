@@ -641,6 +641,9 @@ type SectionProblemRepository interface {
 	// DeleteSectionProblem removes a problem from a section.
 	// Returns ErrNotFound if the section problem does not exist.
 	DeleteSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) error
+	// GetSectionProblem retrieves a single section problem by section and problem IDs.
+	// Returns ErrNotFound if the problem is not published to the section.
+	GetSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*SectionProblem, error)
 	// ListSectionsForProblem retrieves all sections where a problem is published.
 	ListSectionsForProblem(ctx context.Context, problemID uuid.UUID) ([]SectionProblem, error)
 }

@@ -436,6 +436,9 @@ func (stubRepos) ConsumeInvitation(context.Context, uuid.UUID, uuid.UUID) (*stor
 func (stubRepos) ListSectionProblems(context.Context, uuid.UUID, uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
 	panic("stubRepos: unexpected ListSectionProblems call")
 }
+func (stubRepos) GetSectionProblem(context.Context, uuid.UUID, uuid.UUID) (*store.SectionProblem, error) {
+	panic("stubRepos: unexpected GetSectionProblem call")
+}
 func (stubRepos) CreateSectionProblem(context.Context, store.CreateSectionProblemParams) (*store.SectionProblem, error) {
 	panic("stubRepos: unexpected CreateSectionProblem call")
 }

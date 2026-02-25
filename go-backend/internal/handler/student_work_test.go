@@ -69,6 +69,13 @@ func (r swReposImpl) ListSectionProblems(ctx context.Context, sectionID, userID 
 	return nil, nil
 }
 
+func (r swReposImpl) GetSectionProblem(ctx context.Context, sectionID, problemID uuid.UUID) (*store.SectionProblem, error) {
+	if r.sp != nil {
+		return r.sp.GetSectionProblem(ctx, sectionID, problemID)
+	}
+	panic("swReposImpl: unexpected GetSectionProblem call")
+}
+
 func (r swReposImpl) CreateSectionProblem(ctx context.Context, params store.CreateSectionProblemParams) (*store.SectionProblem, error) {
 	if r.sp != nil {
 		return r.sp.CreateSectionProblem(ctx, params)
@@ -160,15 +167,16 @@ func TestStudentWorkHandler_GetOrCreate_Success(t *testing.T) {
 	}
 
 	spRepo := &mockSectionProblemRepo{
-		listSectionProblemsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
-			// Return at least one problem to indicate it's published
-			return []store.PublishedProblemWithStatus{
-				{
-					SectionProblem: store.SectionProblem{
-						ProblemID: problemID,
-						SectionID: sectionID,
-					},
-				},
+		getSectionProblemFn: func(ctx context.Context, sid, pid uuid.UUID) (*store.SectionProblem, error) {
+			if sid != sectionID {
+				t.Fatalf("unexpected sectionID: got %v, want %v", sid, sectionID)
+			}
+			if pid != problemID {
+				t.Fatalf("unexpected problemID: got %v, want %v", pid, problemID)
+			}
+			return &store.SectionProblem{
+				ProblemID: problemID,
+				SectionID: sectionID,
 			}, nil
 		},
 	}
@@ -224,9 +232,9 @@ func TestStudentWorkHandler_GetOrCreate_ProblemNotPublished(t *testing.T) {
 	namespaceID := "test-ns"
 
 	spRepo := &mockSectionProblemRepo{
-		listSectionProblemsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
-			// Return empty list - problem not published
-			return []store.PublishedProblemWithStatus{}, nil
+		getSectionProblemFn: func(ctx context.Context, sid, pid uuid.UUID) (*store.SectionProblem, error) {
+			// Return not found - problem not published to this section
+			return nil, store.ErrNotFound
 		},
 	}
 
@@ -498,14 +506,10 @@ func TestStudentWorkHandler_GetOrCreate_EmptyNamespaceID(t *testing.T) {
 	userID := uuid.New()
 
 	spRepo := &mockSectionProblemRepo{
-		listSectionProblemsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.PublishedProblemWithStatus, error) {
-			return []store.PublishedProblemWithStatus{
-				{
-					SectionProblem: store.SectionProblem{
-						ProblemID: problemID,
-						SectionID: sectionID,
-					},
-				},
+		getSectionProblemFn: func(ctx context.Context, sid, pid uuid.UUID) (*store.SectionProblem, error) {
+			return &store.SectionProblem{
+				ProblemID: problemID,
+				SectionID: sectionID,
 			}, nil
 		},
 	}
