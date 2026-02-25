@@ -69,7 +69,7 @@ After the user approves the plan:
 - **Summary**: What and why in 1-2 sentences
 - **Files to modify**: Exact paths (with line numbers if relevant)
 - **Files to read for context**: Paths the implementer will need to understand before coding
-- **Quality gates**: Which `make` targets to run (e.g., `test-api`, `lint-api`, `test-integration-store`). Include integration test targets when changes affect persistence, API routes, auth, or cross-layer data flow.
+- **Testing notes**: What test coverage to add — e.g., "integration tests for the new RLS policy", "unit tests for the validation logic". Call out integration tests explicitly when changes affect persistence, API routes, auth, or cross-layer data flow.
 - **Implementation steps**: Numbered, specific actions
 - **Example**: Show before → after transformation when applicable
 

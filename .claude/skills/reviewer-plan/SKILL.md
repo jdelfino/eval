@@ -74,8 +74,8 @@ Read the code that will be affected. Understand:
 - [ ] Is each task self-contained? (Readable without external context)
 - [ ] Are file paths specific? (Not "somewhere in the handlers directory")
 - [ ] Are implementation steps concrete? (Not "implement the feature")
-- [ ] Does each task specify which quality gates to run?
-- [ ] Do tasks that touch persistence, API routes, auth, or cross-layer data flow include the relevant integration test targets?
+- [ ] Does each task describe what test coverage to add?
+- [ ] Do tasks that touch persistence, API routes, auth, or cross-layer data flow call out the need for integration tests?
 
 ## Report Your Outcome
 
