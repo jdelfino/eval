@@ -4,7 +4,7 @@
  * Type-safe validators that use TypeScript interfaces to catch API mismatches at compile time.
  */
 
-import { User, Session, SessionStudent, ExecutionResult, SectionProblem, PublishedProblemWithStatus, StudentWork } from '@/types/api';
+import { User, Session, SessionStudent, ExecutionResult, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 
 const SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/;
@@ -156,4 +156,34 @@ export function validateStudentWorkWithProblemShape(
   validateStudentWorkShape(obj, label);
   expect(typeof obj.problem).toBe('object');
   expect(obj.problem).not.toBeNull();
+}
+
+/** Validate the shape of a StudentProgress object from the backend. */
+export function validateStudentProgressShape(obj: StudentProgress, label = 'StudentProgress') {
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.display_name).toBe('string');
+  expect(typeof obj.email).toBe('string');
+  expect(typeof obj.problems_started).toBe('number');
+  expect(typeof obj.total_problems).toBe('number');
+  // last_active is nullable
+  expect(obj.last_active === null || typeof obj.last_active === 'string').toBe(true);
+  expectSnakeCaseKeys(obj, label);
+}
+
+/** Validate the shape of a StudentWorkSummary object from the backend. */
+export function validateStudentWorkSummaryShape(obj: StudentWorkSummary, label = 'StudentWorkSummary') {
+  // problem is a full Problem object
+  expect(typeof obj.problem).toBe('object');
+  expect(obj.problem).not.toBeNull();
+  expect(typeof obj.problem.id).toBe('string');
+  expect(typeof obj.problem.title).toBe('string');
+  expectSnakeCaseKeys(obj.problem, `${label}.problem`);
+  // published_at is a string
+  expect(typeof obj.published_at).toBe('string');
+  // student_work is null or a StudentWork object
+  if (obj.student_work !== null) {
+    expect(typeof obj.student_work).toBe('object');
+    validateStudentWorkShape(obj.student_work!, `${label}.student_work`);
+  }
+  expectSnakeCaseKeys(obj, label);
 }
