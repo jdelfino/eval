@@ -9,17 +9,17 @@
  * 1. User clicks invite link in email, lands here with token in URL query param (?token=<uuid>)
  * 2. Page sends token to Go backend for verification via GET /auth/accept-invite (unauthenticated)
  * 3. On success, fetches invitation details from the API response
- * 4. User fills in optional display name and required password
- * 5. Create Firebase Auth account with invitation email and password
- * 6. Call authenticated POST /auth/accept-invite to create user profile
+ * 4. If already signed in (firebaseAuth.currentUser): call acceptInvite directly
+ * 5. If not signed in: render <SignInButtons />, then call acceptInvite on success
+ * 6. Optional display name field is shown before sign-in
  * 7. Redirect based on role
  */
 
-import React, { useState, useEffect, FormEvent, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseAuth } from '@/lib/firebase';
+import { SignInButtons } from '@/components/ui/SignInButtons';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
 
@@ -36,7 +36,6 @@ type PageState =
 type ErrorType =
   | 'otp_expired'
   | 'otp_invalid'
-  | 'user_already_exists'
   | 'invitation_consumed'
   | 'invitation_revoked'
   | 'invitation_not_found'
@@ -63,10 +62,6 @@ const ERROR_MESSAGES: Record<ErrorType, { title: string; message: string }> = {
   otp_invalid: {
     title: 'Invalid Link',
     message: 'This invitation link is invalid. Please check your email for the correct link.',
-  },
-  user_already_exists: {
-    title: 'Account Exists',
-    message: 'An account with this email already exists. Please sign in instead.',
   },
   invitation_consumed: {
     title: 'Already Used',
@@ -106,8 +101,6 @@ function mapErrorCode(code: string | undefined, status?: number): ErrorType {
     case 'TOKEN_INVALID':
     case 'INVALID_TOKEN':
       return 'otp_invalid';
-    case 'USER_ALREADY_EXISTS':
-      return 'user_already_exists';
     case 'INVITATION_CONSUMED':
       return 'invitation_consumed';
     case 'INVITATION_REVOKED':
@@ -149,11 +142,58 @@ function AcceptInviteContent() {
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [submitError, setSubmitError] = useState('');
 
-  // Verify token and load invitation on mount
+  // Redirect based on user role
+  const redirectBasedOnRole = useCallback((role: string) => {
+    if (role === 'namespace-admin') {
+      router.push('/namespace/invitations');
+    } else if (role === 'instructor') {
+      router.push('/instructor');
+    } else {
+      router.push('/');
+    }
+  }, [router]);
+
+  // Core accept logic — called both from direct (already signed in) and from SignInButtons handler
+  const doAccept = useCallback(
+    async (inv: InvitationInfo, name: string) => {
+      setPageState({ status: 'submitting', invitation: inv });
+      setSubmitError('');
+
+      try {
+        const data = await acceptInvite(inv.id, name.trim() || undefined);
+        setPageState({ status: 'success' });
+        redirectBasedOnRole(data.role);
+      } catch (backendError) {
+        // Clean up Firebase account on failure
+        await firebaseAuth.currentUser?.delete();
+
+        if (backendError instanceof ApiError) {
+          if (backendError.code === 'INVITATION_CONSUMED') {
+            setPageState({ status: 'error', error: 'invitation_consumed' });
+            return;
+          } else if (backendError.code === 'INVITATION_EXPIRED') {
+            setPageState({ status: 'error', error: 'invitation_expired' });
+            return;
+          }
+          setSubmitError(backendError.message);
+        } else {
+          setSubmitError('Failed to complete registration');
+        }
+
+        // Restore ready state for retry via SignInButtons
+        setPageState({ status: 'ready', invitation: inv });
+      }
+    },
+    [redirectBasedOnRole]
+  );
+
+  // Verify token and load invitation on mount.
+  // doAccept is intentionally omitted from the dependency array here —
+  // we only want this effect to run once when the token changes, not when
+  // doAccept identity changes (doAccept is stable across renders because it
+  // only depends on router, which is also stable).
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
       const queryToken = searchParams.get('token');
@@ -174,7 +214,39 @@ function AcceptInviteContent() {
           namespace: null,
         };
         setInvitation(invitationInfo);
-        setPageState({ status: 'ready', invitation: invitationInfo });
+
+        // If already signed in, proceed directly to accepting
+        if (firebaseAuth.currentUser) {
+          // Inline accept for already-signed-in path (avoids dependency on doAccept in effect)
+          try {
+            const acceptData = await acceptInvite(invitationInfo.id, undefined);
+            setPageState({ status: 'success' });
+            if (acceptData.role === 'namespace-admin') {
+              router.push('/namespace/invitations');
+            } else if (acceptData.role === 'instructor') {
+              router.push('/instructor');
+            } else {
+              router.push('/');
+            }
+          } catch (backendError) {
+            await firebaseAuth.currentUser?.delete();
+            if (backendError instanceof ApiError) {
+              if (backendError.code === 'INVITATION_CONSUMED') {
+                setPageState({ status: 'error', error: 'invitation_consumed' });
+                return;
+              } else if (backendError.code === 'INVITATION_EXPIRED') {
+                setPageState({ status: 'error', error: 'invitation_expired' });
+                return;
+              }
+              setSubmitError(backendError.message);
+            } else {
+              setSubmitError('Failed to complete registration');
+            }
+            setPageState({ status: 'ready', invitation: invitationInfo });
+          }
+        } else {
+          setPageState({ status: 'ready', invitation: invitationInfo });
+        }
       } catch (error) {
         console.error('[AcceptInvite] Verify/fetch error:', error);
         if (error instanceof ApiError) {
@@ -186,95 +258,22 @@ function AcceptInviteContent() {
     };
 
     verifyAndLoadInvitation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-
-    setSubmitError('');
+  // Sign-in success handler from SignInButtons
+  const handleSignIn = useCallback(async () => {
     if (!invitation) return;
+    await doAccept(invitation, displayName);
+  }, [invitation, displayName, doAccept]);
 
-    // Validate password
-    if (!password) {
-      setSubmitError('Password is required');
-      return;
+  // Sign-in error handler
+  const handleSignInError = useCallback((error: Error) => {
+    setSubmitError(error.message || 'Sign in failed. Please try again.');
+    if (invitation) {
+      setPageState({ status: 'ready', invitation });
     }
-    if (password.length < 8) {
-      setSubmitError('Password must be at least 8 characters');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setSubmitError('Passwords do not match');
-      return;
-    }
-
-    setPageState({ status: 'submitting', invitation });
-
-    try {
-      // Step 1: Create Firebase Auth account with invitation email
-      // This gives us a JWT token to authenticate the backend request
-      await createUserWithEmailAndPassword(firebaseAuth, invitation.email, password);
-
-      // Step 2: Call authenticated backend API to create user profile
-      // The backend extracts external_id from JWT claims (not request body)
-      // Wrap in try/catch to clean up Firebase account on failure
-      try {
-        const data = await acceptInvite(invitation.id, displayName.trim() || undefined);
-
-        setPageState({ status: 'success' });
-        redirectBasedOnRole(data.role);
-      } catch (backendError) {
-        // Backend call failed - clean up Firebase account
-        await firebaseAuth.currentUser?.delete();
-
-        if (backendError instanceof ApiError) {
-          if (backendError.code === 'INVITATION_CONSUMED') {
-            setPageState({ status: 'error', error: 'invitation_consumed' });
-            return;
-          } else if (backendError.code === 'INVITATION_EXPIRED') {
-            setPageState({ status: 'error', error: 'invitation_expired' });
-            return;
-          }
-          setSubmitError(backendError.message);
-        } else {
-          setSubmitError('Failed to complete registration');
-        }
-
-        // Restore ready state for retry
-        if (invitation) {
-          setPageState({ status: 'ready', invitation });
-        }
-      }
-    } catch (error) {
-      console.error('[AcceptInvite] Submit error:', error);
-
-      // Handle Firebase Auth errors
-      const firebaseError = error as { code?: string };
-      if (firebaseError.code === 'auth/email-already-in-use') {
-        setPageState({ status: 'error', error: 'user_already_exists' });
-        return;
-      } else if (firebaseError.code === 'auth/weak-password') {
-        setSubmitError('Password is too weak. Please choose a stronger password.');
-        setPageState({ status: 'ready', invitation });
-        return;
-      }
-
-      setSubmitError('Unable to connect. Please try again.');
-      setPageState({ status: 'error', error: 'network_error' });
-    }
-  };
-
-  // Redirect based on user role
-  const redirectBasedOnRole = (role: string) => {
-    if (role === 'namespace-admin') {
-      router.push('/namespace/invitations');
-    } else if (role === 'instructor') {
-      router.push('/instructor');
-    } else {
-      router.push('/');
-    }
-  };
+  }, [invitation]);
 
   // Handle retry for network errors
   const handleRetry = () => {
@@ -331,7 +330,7 @@ function AcceptInviteContent() {
   // Render error state
   if (pageState.status === 'error') {
     const errorInfo = ERROR_MESSAGES[pageState.error];
-    const showSignInLink = ['user_already_exists', 'invitation_consumed'].includes(pageState.error);
+    const showSignInLink = ['invitation_consumed'].includes(pageState.error);
     const showRetryButton = pageState.error === 'network_error';
 
     return (
@@ -387,7 +386,7 @@ function AcceptInviteContent() {
             Complete Your Profile
           </h2>
           <p className="mt-3 text-center text-sm text-gray-600">
-            You've been invited to join as {formatRole(invitation.targetRole).toLowerCase()}
+            You&apos;ve been invited to join as {formatRole(invitation.targetRole).toLowerCase()}
           </p>
         </div>
 
@@ -411,89 +410,41 @@ function AcceptInviteContent() {
           </div>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
-                Display Name <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                id="displayName"
-                name="displayName"
-                type="text"
-                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="Your preferred display name"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                disabled={pageState.status === 'submitting'}
-                maxLength={100}
-              />
-            </div>
+        {/* Optional display name */}
+        <div>
+          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
+            Display Name <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="displayName"
+            name="displayName"
+            type="text"
+            className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
+            placeholder="Your preferred display name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            disabled={pageState.status === 'submitting'}
+            maxLength={100}
+          />
+        </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={pageState.status === 'submitting'}
-                minLength={8}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={pageState.status === 'submitting'}
-                minLength={8}
-              />
+        {submitError && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-red-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm font-medium text-red-800">{submitError}</p>
             </div>
           </div>
+        )}
 
-          {submitError && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-              <div className="flex items-center">
-                <svg className="w-5 h-5 text-red-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <p className="text-sm font-medium text-red-800">{submitError}</p>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={pageState.status === 'submitting'}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
-            >
-              {pageState.status === 'submitting' && (
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
-              {pageState.status === 'submitting' ? 'Creating your account...' : 'Complete Registration'}
-            </button>
-          </div>
-        </form>
+        {/* Sign in with social provider */}
+        <SignInButtons
+          label="Sign in to accept invitation"
+          onSuccess={handleSignIn}
+          onError={handleSignInError}
+        />
       </div>
     </div>
   );

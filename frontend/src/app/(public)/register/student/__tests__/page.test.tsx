@@ -1,5 +1,11 @@
 /**
  * Tests for Student Registration Page
+ *
+ * After the social auth migration:
+ * - Step 1: enter join code → validate
+ * - Step 2: if already signed in, call registerStudent directly
+ *           if not signed in, show SignInButtons
+ * - On sign-in success: call registerStudent → redirect
  */
 
 import React from 'react';
@@ -26,24 +32,33 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
-// Mock Firebase createUserWithEmailAndPassword and deleteUser
-const mockCreateUserWithEmailAndPassword = jest.fn();
-const mockDeleteUser = jest.fn();
-const mockGetIdToken = jest.fn();
-const mockFirebaseUser = {
-  getIdToken: mockGetIdToken,
-  uid: 'firebase-uid-123',
-  email: 'student@example.com',
-  delete: mockDeleteUser,
-};
-
-jest.mock('firebase/auth', () => ({
-  createUserWithEmailAndPassword: (...args: unknown[]) => mockCreateUserWithEmailAndPassword(...args),
-  getAuth: jest.fn(),
+// Mock SignInButtons so tests don't depend on Firebase popup flow
+const mockSignInButtonsOnSuccess = jest.fn();
+jest.mock('@/components/ui/SignInButtons', () => ({
+  SignInButtons: ({ onSuccess, onError, label }: any) => {
+    // Store callbacks for test control
+    mockSignInButtonsOnSuccess.mockImplementation(onSuccess);
+    return (
+      <div data-testid="sign-in-buttons">
+        {label && <p data-testid="sign-in-label">{label}</p>}
+        <button onClick={onSuccess} data-testid="mock-sign-in-success">
+          Mock Sign In
+        </button>
+        <button
+          onClick={() => onError(new Error('Sign in failed'))}
+          data-testid="mock-sign-in-error"
+        >
+          Mock Sign In Error
+        </button>
+      </div>
+    );
+  },
 }));
 
-// Track current user for cleanup tests
-let mockCurrentUser: typeof mockFirebaseUser | null = null;
+// Track current user for "already signed in" tests
+let mockCurrentUser: { delete: jest.Mock; uid: string; email: string } | null = null;
+const mockDeleteUser = jest.fn();
+
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {
     get currentUser() {
@@ -67,19 +82,11 @@ describe('StudentRegistrationPage', () => {
     mockRefreshUser.mockClear();
     mockRefreshUser.mockResolvedValue(undefined);
     mockSearchParams.delete('code');
-    mockCreateUserWithEmailAndPassword.mockClear();
     mockDeleteUser.mockClear();
-    mockGetIdToken.mockClear();
     mockGetStudentRegistrationInfo.mockClear();
     mockRegisterStudent.mockClear();
     mockCurrentUser = null;
-    // Default: Firebase account creation succeeds and sets currentUser
-    mockCreateUserWithEmailAndPassword.mockImplementation(() => {
-      mockCurrentUser = mockFirebaseUser;
-      return Promise.resolve({ user: mockFirebaseUser });
-    });
     mockDeleteUser.mockResolvedValue(undefined);
-    mockGetIdToken.mockResolvedValue('mock-firebase-jwt-token');
   });
 
   describe('Initial State', () => {
@@ -213,102 +220,18 @@ describe('StudentRegistrationPage', () => {
       await user.click(button);
 
       await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
         expect(screen.getByText('CS 101 - Intro to Python')).toBeInTheDocument();
         expect(screen.getByText('Section: Monday 2pm')).toBeInTheDocument();
       });
     });
   });
 
-  describe('Registration Form Validation', () => {
-    beforeEach(async () => {
+  describe('Step 2: Not Already Signed In', () => {
+    const validateCode = async () => {
+      const user = userEvent.setup();
       mockGetStudentRegistrationInfo.mockResolvedValue({
         section: { id: 'sec-1', name: 'Test Section' },
-        class: { id: 'cls-1', name: 'Test Class' },
-      });
-    });
-
-    const setupForm = async () => {
-      const user = userEvent.setup();
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
-      await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
-      });
-
-      return user;
-    };
-
-    it('validates email format', async () => {
-      const user = await setupForm();
-
-      const emailInput = screen.getByPlaceholderText('you@example.com');
-      await user.type(emailInput, 'invalid-email');
-      fireEvent.blur(emailInput);
-
-      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
-    });
-
-    it('validates password strength', async () => {
-      const user = await setupForm();
-
-      // Fill other fields
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'weak');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'weak');
-
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-    });
-
-    it('validates password has letter and number', async () => {
-      const user = await setupForm();
-
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'abcdefgh');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'abcdefgh');
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      expect(screen.getByText('Password must contain at least one letter and one number')).toBeInTheDocument();
-    });
-
-    it('shows password mismatch error', async () => {
-      const user = await setupForm();
-
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'test@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Different123');
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-    });
-
-    it('shows password strength indicator', async () => {
-      const user = await setupForm();
-
-      const passwordInput = screen.getByPlaceholderText('At least 8 characters');
-      await user.type(passwordInput, 'Password123');
-
-      expect(screen.getByText(/medium/i)).toBeInTheDocument();
-    });
-  });
-
-  describe('Form Submission', () => {
-    const setupAndFillForm = async () => {
-      const user = userEvent.setup();
-
-      // Code validation via typed client
-      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
-        section: { id: 'sec-1', name: 'Test Section' },
-        class: { id: 'cls-1', name: 'Test Class' },
+        class: { id: 'cls-1', name: 'CS 101' },
       });
 
       render(<StudentRegistrationPage />);
@@ -318,111 +241,166 @@ describe('StudentRegistrationPage', () => {
       await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
 
       await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
-
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'student@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Password123');
 
       return user;
     };
 
-    it('creates Firebase account before calling backend API', async () => {
-      const user = await setupAndFillForm();
+    it('renders SignInButtons when not signed in after code validation', async () => {
+      mockCurrentUser = null;
+      await validateCode();
 
-      // Backend registration succeeds
-      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      // Verify Firebase account was created first
-      await waitFor(() => {
-        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(
-          expect.anything(), // firebaseAuth
-          'student@example.com',
-          'Password123'
-        );
-      });
+      expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
     });
 
-    it('calls typed registerStudent client for registration', async () => {
-      const user = await setupAndFillForm();
+    it('does NOT render email or password input fields', async () => {
+      mockCurrentUser = null;
+      await validateCode();
 
-      // Backend registration succeeds
-      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
+      expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+    });
 
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+    it('shows class name in sign-in label', async () => {
+      mockCurrentUser = null;
+      await validateCode();
 
-      // Verify typed client was called with the formatted join code
+      expect(screen.getByTestId('sign-in-label')).toHaveTextContent(/CS 101/);
+    });
+
+    it('calls registerStudent after SignInButtons onSuccess', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await validateCode();
+
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
+
       await waitFor(() => {
         expect(mockRegisterStudent).toHaveBeenCalledWith('ABC-123');
       });
     });
 
-    it('submits form and redirects on success', async () => {
-      const user = await setupAndFillForm();
+    it('redirects to section page after successful sign-in and registration', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
 
-      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
+      await validateCode();
 
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Account Created!')).toBeInTheDocument();
-      });
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
     });
 
-    it('shows loading state during submission', async () => {
-      const user = await setupAndFillForm();
+    it('shows error when registerStudent fails after sign-in', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockRejectedValue(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
 
-      mockRegisterStudent.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
+      await validateCode();
 
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      expect(screen.getByText('Creating account...')).toBeInTheDocument();
-    });
-
-    it('shows error for duplicate email from Firebase', async () => {
-      const user = await setupAndFillForm();
-
-      // Firebase throws error for existing email
-      const firebaseError = new Error('Firebase: Error (auth/email-already-in-use).');
-      (firebaseError as { code?: string }).code = 'auth/email-already-in-use';
-      mockCreateUserWithEmailAndPassword.mockRejectedValueOnce(firebaseError);
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
 
       await waitFor(() => {
-        expect(screen.getByText('An account with this email already exists. Please sign in instead.')).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'Sign in instead' })).toBeInTheDocument();
+        expect(screen.getByText('This class has reached its student limit. Contact your instructor.')).toBeInTheDocument();
       });
     });
 
-    it('shows error for weak password from Firebase', async () => {
-      const user = await setupAndFillForm();
+    it('shows error when SignInButtons calls onError', async () => {
+      mockCurrentUser = null;
+      await validateCode();
 
-      // Firebase throws error for weak password
-      const firebaseError = new Error('Firebase: Error (auth/weak-password).');
-      (firebaseError as { code?: string }).code = 'auth/weak-password';
-      mockCreateUserWithEmailAndPassword.mockRejectedValueOnce(firebaseError);
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+      const errorButton = screen.getByTestId('mock-sign-in-error');
+      fireEvent.click(errorButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Password must be at least 8 characters with a number and letter.')).toBeInTheDocument();
+        expect(screen.getByText('Sign in failed')).toBeInTheDocument();
       });
     });
 
-    it('shows error when namespace at capacity from backend', async () => {
-      const user = await setupAndFillForm();
+    it('deletes Firebase account on backend failure after sign-in', async () => {
+      mockCurrentUser = null;
+      // After sign-in via SignInButtons, currentUser is set
+      mockRegisterStudent.mockImplementation(() => {
+        mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+        return Promise.reject(new ApiError('Internal error', 500));
+      });
 
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
+      await validateCode();
 
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      // Simulate sign-in sets currentUser before registerStudent is called
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+      mockRegisterStudent.mockRejectedValue(new ApiError('Internal error', 500));
+
+      fireEvent.click(signInButton);
+
+      await waitFor(() => {
+        expect(mockDeleteUser).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Step 2: Already Signed In', () => {
+    const signedInUser = { delete: mockDeleteUser, uid: 'existing-uid', email: 'student@example.com' };
+
+    const validateCodeAsSignedIn = async () => {
+      mockCurrentUser = signedInUser;
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+
+      render(<StudentRegistrationPage />);
+
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+
+      return user;
+    };
+
+    it('skips sign-in step when already signed in and shows section preview', async () => {
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await validateCodeAsSignedIn();
+
+      // Should NOT show SignInButtons since already signed in
+      await waitFor(() => {
+        expect(screen.queryByTestId('sign-in-buttons')).not.toBeInTheDocument();
+      });
+    });
+
+    it('calls registerStudent directly when already signed in', async () => {
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await validateCodeAsSignedIn();
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC-123');
+      });
+    });
+
+    it('redirects to section page when already signed in', async () => {
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await validateCodeAsSignedIn();
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
+      });
+    });
+
+    it('shows error if registerStudent fails when already signed in', async () => {
+      mockRegisterStudent.mockRejectedValue(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
+
+      await validateCodeAsSignedIn();
 
       await waitFor(() => {
         expect(screen.getByText('This class has reached its student limit. Contact your instructor.')).toBeInTheDocument();
@@ -446,7 +424,7 @@ describe('StudentRegistrationPage', () => {
       await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
 
       await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
 
       await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -466,18 +444,18 @@ describe('StudentRegistrationPage', () => {
     it('shows prominent sign-in box on code entry step', () => {
       render(<StudentRegistrationPage />);
 
-      // The prominent sign-in box has specific helper text
       expect(screen.getByText("If you've registered before, sign in to access your sections.")).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Sign in to your account/i })).toHaveAttribute('href', '/auth/signin');
     });
   });
 
   describe('Auto-login Flow', () => {
-    const setupAndFillForm = async () => {
-      const user = userEvent.setup();
+    it('refreshes user and redirects to section detail on successful registration', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
 
-      // Code validation via typed client
-      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
         section: { id: 'sec-1', name: 'Test Section' },
         class: { id: 'cls-1', name: 'Test Class' },
       });
@@ -489,182 +467,15 @@ describe('StudentRegistrationPage', () => {
       await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
 
       await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
 
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'student@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Password123');
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
-      return user;
-    };
-
-    it('refreshes user and redirects to section detail on successful registration', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend registration succeeds via typed client
-      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      // User is already logged in via Firebase, so refreshUser is called
       await waitFor(() => {
         expect(mockRefreshUser).toHaveBeenCalled();
       });
 
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
-      });
-    });
-  });
-
-  describe('Firebase Account Cleanup on Backend Failure', () => {
-    const setupAndFillForm = async () => {
-      const user = userEvent.setup();
-
-      // Code validation via typed client
-      mockGetStudentRegistrationInfo.mockResolvedValueOnce({
-        section: { id: 'sec-1', name: 'Test Section' },
-        class: { id: 'cls-1', name: 'Test Class' },
-      });
-
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
-      await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Create Your Account')).toBeInTheDocument();
-      });
-
-      await user.type(screen.getByPlaceholderText('you@example.com'), 'student@example.com');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'Password123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'Password123');
-
-      return user;
-    };
-
-    it('deletes Firebase account when backend API returns error', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend API fails with 500 error (typed client throws)
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Internal server error', 500));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      // Verify Firebase account was created
-      await waitFor(() => {
-        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
-      });
-
-      // Verify Firebase account was deleted after backend failure
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-    });
-
-    it('deletes Firebase account when backend returns NAMESPACE_AT_CAPACITY error', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend returns namespace at capacity error (typed client throws)
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY'));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-
-      // User sees the error
-      await waitFor(() => {
-        expect(screen.getByText('This class has reached its student limit. Contact your instructor.')).toBeInTheDocument();
-      });
-    });
-
-    it('deletes Firebase account when backend returns INVALID_CODE error', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend returns invalid code error (code became invalid between validation and registration)
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Invalid code', 400, 'INVALID_CODE'));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-
-      // User is returned to code entry
-      await waitFor(() => {
-        expect(screen.getByText('Join Your Section')).toBeInTheDocument();
-      });
-    });
-
-    it('deletes Firebase account when backend returns SECTION_INACTIVE error', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend returns section inactive error (typed client throws)
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Section inactive', 400, 'SECTION_INACTIVE'));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-    });
-
-    it('deletes Firebase account when backend call throws network error', async () => {
-      const user = await setupAndFillForm();
-
-      // Backend call throws network error (typed client throws)
-      mockRegisterStudent.mockRejectedValueOnce(new Error('Network error'));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-    });
-
-    it('allows retry after Firebase account cleanup on backend failure', async () => {
-      const user = await setupAndFillForm();
-
-      // First attempt: backend fails (typed client throws)
-      mockRegisterStudent.mockRejectedValueOnce(new ApiError('Temporary error', 500));
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      // Wait for cleanup
-      await waitFor(() => {
-        expect(mockDeleteUser).toHaveBeenCalled();
-      });
-
-      // Form should return to ready state for retry
-      await waitFor(() => {
-        expect(screen.getByText('Temporary error')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
-      });
-
-      // Reset mocks for retry
-      mockCreateUserWithEmailAndPassword.mockClear();
-      mockDeleteUser.mockClear();
-      mockCurrentUser = null;
-      mockCreateUserWithEmailAndPassword.mockImplementation(() => {
-        mockCurrentUser = mockFirebaseUser;
-        return Promise.resolve({ user: mockFirebaseUser });
-      });
-
-      // Second attempt: backend succeeds (typed client returns user)
-      mockRegisterStudent.mockResolvedValueOnce({ id: 'user-1', role: 'student' });
-
-      await user.click(screen.getByRole('button', { name: 'Create Account' }));
-
-      // Verify Firebase account was created again on retry
-      await waitFor(() => {
-        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalled();
-      });
-
-      // Verify redirect on success
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
