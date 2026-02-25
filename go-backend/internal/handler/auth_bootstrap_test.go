@@ -44,7 +44,7 @@ func TestBootstrapPost_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("admin@example.com")
 	repos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        &mockInvitationRepo{},
@@ -54,9 +54,9 @@ func TestBootstrapPost_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
-		Subject:      "firebase-uid-admin",
-		Email:        "admin@example.com",
-		CustomClaims: map[string]any{"role": "system-admin"},
+		Subject:       "firebase-uid-admin",
+		Email:         "admin@example.com",
+		EmailVerified: true,
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
@@ -71,7 +71,7 @@ func TestBootstrapPost_Success(t *testing.T) {
 }
 
 func TestBootstrapPost_NoClaims(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("admin@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	rec := httptest.NewRecorder()
 
@@ -82,13 +82,13 @@ func TestBootstrapPost_NoClaims(t *testing.T) {
 	}
 }
 
-func TestBootstrapPost_NoCustomClaim(t *testing.T) {
-	h := NewAuthHandler()
+func TestBootstrapPost_EmailNotVerified(t *testing.T) {
+	h := NewAuthHandler("admin@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
-		Subject: "firebase-uid-admin",
-		Email:   "admin@example.com",
-		// No CustomClaims
+		Subject:       "firebase-uid-admin",
+		Email:         "admin@example.com",
+		EmailVerified: false, // unverified
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	req = req.WithContext(ctx)
@@ -101,13 +101,32 @@ func TestBootstrapPost_NoCustomClaim(t *testing.T) {
 	}
 }
 
-func TestBootstrapPost_WrongRole(t *testing.T) {
-	h := NewAuthHandler()
+func TestBootstrapPost_EmailMismatch(t *testing.T) {
+	h := NewAuthHandler("admin@example.com")
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
-		Subject:      "firebase-uid-admin",
-		Email:        "admin@example.com",
-		CustomClaims: map[string]any{"role": "student"},
+		Subject:       "firebase-uid-admin",
+		Email:         "other@example.com", // different email
+		EmailVerified: true,
+	}
+	ctx := auth.WithClaims(req.Context(), claims)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostBootstrap(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}
+
+func TestBootstrapPost_EmptyBootstrapEmail(t *testing.T) {
+	h := NewAuthHandler("") // bootstrap disabled
+	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
+	claims := &auth.Claims{
+		Subject:       "firebase-uid-admin",
+		Email:         "admin@example.com",
+		EmailVerified: true,
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	req = req.WithContext(ctx)
@@ -127,7 +146,7 @@ func TestBootstrapPost_Duplicate(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("admin@example.com")
 	repos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        &mockInvitationRepo{},
@@ -137,9 +156,9 @@ func TestBootstrapPost_Duplicate(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
-		Subject:      "firebase-uid-admin",
-		Email:        "admin@example.com",
-		CustomClaims: map[string]any{"role": "system-admin"},
+		Subject:       "firebase-uid-admin",
+		Email:         "admin@example.com",
+		EmailVerified: true,
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
@@ -160,7 +179,7 @@ func TestBootstrapPost_CreateError(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("admin@example.com")
 	repos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        &mockInvitationRepo{},
@@ -170,9 +189,9 @@ func TestBootstrapPost_CreateError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
-		Subject:      "firebase-uid-admin",
-		Email:        "admin@example.com",
-		CustomClaims: map[string]any{"role": "system-admin"},
+		Subject:       "firebase-uid-admin",
+		Email:         "admin@example.com",
+		EmailVerified: true,
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)

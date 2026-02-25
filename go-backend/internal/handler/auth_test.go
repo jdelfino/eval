@@ -79,7 +79,7 @@ func TestGetMe_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: user.ID, Email: user.Email, Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, &authTestRepos{stubRepos: stubRepos{}, userRepo: repo})
@@ -102,7 +102,7 @@ func TestGetMe_Success(t *testing.T) {
 }
 
 func TestGetMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -120,7 +120,7 @@ func TestGetMe_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	ctx = withAuthRepos(ctx, repo)
@@ -153,7 +153,7 @@ func TestUpdateMe_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": newName})
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
@@ -177,7 +177,7 @@ func TestUpdateMe_Success(t *testing.T) {
 }
 
 func TestUpdateMe_Unauthorized(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodPut, "/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -196,7 +196,7 @@ func TestUpdateMe_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"display_name": "New Name"})
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})

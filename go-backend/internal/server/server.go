@@ -163,7 +163,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				if pgxPool := pool.PgxPool(); pgxPool != nil {
 					r.Use(custommw.RegistrationStoreMiddleware(pgxPool))
 				}
-				authHandler := handler.NewAuthHandler()
+				authHandler := handler.NewAuthHandler(cfg.BootstrapAdminEmail)
 				r.Mount("/auth", authHandler.RegistrationRoutes(jwtValidator.Validate, custommw.ForCategory(rl, "auth", custommw.IPKey)))
 			})
 		}
@@ -189,8 +189,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				writeRL := custommw.ForCategory(rl, "write", custommw.UserKey)
 
 				// Auth routes for existing users (me endpoints)
-				r.With(readRL).Get("/auth/me", handler.NewAuthHandler().GetMe)
-				r.With(writeRL).Put("/auth/me", handler.NewAuthHandler().UpdateMe)
+				r.With(readRL).Get("/auth/me", handler.NewAuthHandler(cfg.BootstrapAdminEmail).GetMe)
+				r.With(writeRL).Put("/auth/me", handler.NewAuthHandler(cfg.BootstrapAdminEmail).UpdateMe)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {

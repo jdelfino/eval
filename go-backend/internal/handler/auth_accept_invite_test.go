@@ -70,7 +70,7 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -98,7 +98,7 @@ func TestAcceptInviteGet_Success(t *testing.T) {
 }
 
 func TestAcceptInviteGet_MissingToken(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -118,7 +118,7 @@ func TestAcceptInviteGet_MissingToken(t *testing.T) {
 }
 
 func TestAcceptInviteGet_InvalidUUID(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -143,7 +143,7 @@ func TestAcceptInviteGet_NotFound(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -170,7 +170,7 @@ func TestAcceptInviteGet_NotPending(t *testing.T) {
 			return inv, nil
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -197,7 +197,7 @@ func TestAcceptInviteGet_ConsumedReturnsCode(t *testing.T) {
 			return inv, nil
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -231,7 +231,7 @@ func TestAcceptInviteGet_ExpiredReturnsCode(t *testing.T) {
 			return inv, nil
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -305,7 +305,7 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        invRepo,
@@ -320,7 +320,7 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	// Add claims to context (simulating JWT validation middleware)
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -341,16 +341,15 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 	}
 }
 
-func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
+func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 	inv := testInvitation("test-ns")
-	inv.Status = "revoked"
 	invRepo := &mockInvitationRepo{
 		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
 			return inv, nil
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -362,7 +361,41 @@ func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: false}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAcceptInvitePost_InvitationNotPending(t *testing.T) {
+	inv := testInvitation("test-ns")
+	inv.Status = "revoked"
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	repos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -384,7 +417,7 @@ func TestAcceptInvitePost_ConsumedReturnsCode(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -396,7 +429,7 @@ func TestAcceptInvitePost_ConsumedReturnsCode(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -425,7 +458,7 @@ func TestAcceptInvitePost_ExpiredReturnsCode(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -437,7 +470,7 @@ func TestAcceptInvitePost_ExpiredReturnsCode(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -464,7 +497,7 @@ func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        invRepo,
@@ -476,7 +509,7 @@ func TestAcceptInvitePost_InvitationNotFound(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: "test@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: "test@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -502,7 +535,7 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        invRepo,
@@ -514,7 +547,7 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
