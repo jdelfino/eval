@@ -19,7 +19,14 @@ import {
   getAuthToken,
   configureTestAuth,
   resetAuthProvider,
+  TEST_USER_KEY,
 } from '../auth-provider';
+
+describe('TEST_USER_KEY', () => {
+  it('is exported as a string constant with the correct value', () => {
+    expect(TEST_USER_KEY).toBe('testAuthUser');
+  });
+});
 
 describe('auth-provider', () => {
   beforeEach(() => {

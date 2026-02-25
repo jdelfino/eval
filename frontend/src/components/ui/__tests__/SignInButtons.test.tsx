@@ -6,12 +6,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-// Mock auth-provider module
-const mockIsTestMode = jest.fn(() => false);
-jest.mock('@/lib/auth-provider', () => ({
-  isTestMode: () => mockIsTestMode(),
-  setTestUser: jest.fn(),
-}));
+// Mock auth-provider module (no isTestMode or setTestUser — they are not used by SignInButtons)
+jest.mock('@/lib/auth-provider', () => ({}));
 
 // Mock firebase/auth (auto-loaded from __mocks__)
 const mockSignInWithPopup = jest.fn();
@@ -46,7 +42,6 @@ describe('SignInButtons', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockIsTestMode.mockReturnValue(false);
   });
 
   describe('production mode', () => {
@@ -236,30 +231,14 @@ describe('SignInButtons', () => {
     });
   });
 
-  describe('test mode', () => {
-    beforeEach(() => {
-      mockIsTestMode.mockReturnValue(true);
-    });
-
-    it('renders a single Test Sign In button instead of provider buttons', () => {
+  describe('no test mode branch', () => {
+    it('always renders provider buttons, never a Test Sign In button', () => {
       render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
 
-      expect(screen.getByRole('button', { name: /test sign in/i })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /github/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /microsoft/i })).not.toBeInTheDocument();
-    });
-
-    it('calls onSuccess when Test Sign In button is clicked', async () => {
-      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /test sign in/i }));
-      });
-
-      await waitFor(() => {
-        expect(mockOnSuccess).toHaveBeenCalledTimes(1);
-      });
+      expect(screen.queryByRole('button', { name: /test sign in/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /github/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /microsoft/i })).toBeInTheDocument();
     });
   });
 });
