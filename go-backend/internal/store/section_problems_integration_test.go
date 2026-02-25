@@ -194,6 +194,35 @@ func TestIntegration_SectionProblemsCRUD(t *testing.T) {
 		}
 	})
 
+	t.Run("GetSectionProblem", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		sp, err := s.GetSectionProblem(ctx, sectionID, problemID)
+		if err != nil {
+			t.Fatalf("GetSectionProblem failed: %v", err)
+		}
+		if sp.SectionID != sectionID {
+			t.Errorf("expected section_id %s, got %s", sectionID, sp.SectionID)
+		}
+		if sp.ProblemID != problemID {
+			t.Errorf("expected problem_id %s, got %s", problemID, sp.ProblemID)
+		}
+		if sp.PublishedBy != instructorID {
+			t.Errorf("expected published_by %s, got %s", instructorID, sp.PublishedBy)
+		}
+	})
+
+	t.Run("GetSectionProblem_NotFound", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		_, err := s.GetSectionProblem(ctx, sectionID, uuid.New())
+		if err != ErrNotFound {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
 	t.Run("ListSectionsForProblem", func(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, instructorUser)
 		defer conn.Release()
