@@ -104,6 +104,7 @@ export const BREADCRUMB_HIERARCHY: Record<string, string | null> = {
   '/classes/[id]': '/classes',
   '/sections': null,
   '/sections/[section_id]': '/sections',
+  '/sections/[section_id]/students/[user_id]': '/sections/[section_id]',
   '/sections/[section_id]/session/[session_id]': '/sections/[section_id]',
   '/instructor': null,
   '/instructor/session/[id]': '/instructor',
