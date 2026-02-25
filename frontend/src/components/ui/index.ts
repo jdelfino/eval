@@ -47,5 +47,8 @@ export type {
 export { Alert } from './Alert';
 export type { AlertProps, AlertVariant } from './Alert';
 
+export { SignInButtons } from './SignInButtons';
+export type { SignInButtonsProps } from './SignInButtons';
+
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusBadgeStatus } from './StatusBadge';

@@ -44,11 +44,54 @@ func (c *ResendClient) SendInvitation(ctx context.Context, to, inviterName, name
 		From:    c.fromEmail,
 		To:      []string{to},
 		Subject: fmt.Sprintf("You've been invited to %s", namespaceName),
-		HTML: fmt.Sprintf(
-			`<p>%s has invited you to join <strong>%s</strong>.</p>`+
-				`<p><a href="%s">Accept Invitation</a></p>`+
-				`<p>This invitation will expire in 7 days.</p>`,
-			html.EscapeString(inviterName), html.EscapeString(namespaceName), html.EscapeString(acceptURL),
+		HTML: fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invitation</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#4f46e5,#6366f1);border-radius:12px 12px 0 0;padding:24px 32px;text-align:center;">
+              <span style="color:#ffffff;font-size:18px;font-weight:600;letter-spacing:0.5px;">Coding Assignment Platform</span>
+            </td>
+          </tr>
+          <!-- Card -->
+          <tr>
+            <td style="background:#ffffff;border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:32px;">
+              <h1 style="margin:0 0 16px 0;font-size:22px;font-weight:700;color:#1e293b;">You&#39;ve been invited to %s</h1>
+              <p style="margin:0 0 24px 0;font-size:15px;color:#475569;line-height:1.6;">
+                %s has invited you to join <strong>%s</strong> on the Coding Assignment Platform.
+              </p>
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-radius:8px;background-color:#4f46e5;">
+                    <a href="%s" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">Get Started</a>
+                  </td>
+                </tr>
+              </table>
+              <!-- Footer -->
+              <p style="margin:24px 0 0 0;font-size:13px;color:#94a3b8;">
+                This invitation expires in 7 days.
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;color:#cbd5e1;">Coding Assignment Platform</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+			html.EscapeString(namespaceName),
+			html.EscapeString(inviterName), html.EscapeString(namespaceName),
+			html.EscapeString(acceptURL),
 		),
 	}
 

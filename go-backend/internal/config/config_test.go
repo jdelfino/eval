@@ -78,6 +78,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("OAUTH_CLIENT_ID", "test-client-id")
 	t.Setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
 	t.Setenv("RESEND_API_KEY", "re_test_key")
+	t.Setenv("BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
 
 	cfg, err := Load()
 	if err != nil {
@@ -147,6 +148,21 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.OAuthClientSecret != "test-client-secret" {
 		t.Errorf("OAuthClientSecret = %q, want %q", cfg.OAuthClientSecret, "test-client-secret")
+	}
+	if cfg.BootstrapAdminEmail != "admin@example.com" {
+		t.Errorf("BootstrapAdminEmail = %q, want %q", cfg.BootstrapAdminEmail, "admin@example.com")
+	}
+}
+
+func TestLoad_BootstrapAdminEmailDefaultsToEmpty(t *testing.T) {
+	t.Setenv("BOOTSTRAP_ADMIN_EMAIL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+	if cfg.BootstrapAdminEmail != "" {
+		t.Errorf("BootstrapAdminEmail = %q, want empty string (bootstrap disabled)", cfg.BootstrapAdminEmail)
 	}
 }
 

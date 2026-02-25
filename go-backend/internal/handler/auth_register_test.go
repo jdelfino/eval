@@ -39,7 +39,7 @@ func TestRegisterStudentGet_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -69,7 +69,7 @@ func TestRegisterStudentGet_Success(t *testing.T) {
 }
 
 func TestRegisterStudentGet_MissingCode(t *testing.T) {
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -93,7 +93,7 @@ func TestRegisterStudentGet_InvalidCode(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -117,7 +117,7 @@ func TestRegisterStudentGet_InvalidCode_ReturnsCode(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -150,7 +150,7 @@ func TestRegisterStudentGet_InactiveSection(t *testing.T) {
 			return section, nil
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -176,7 +176,7 @@ func TestRegisterStudentGet_InactiveSection_ReturnsCode(t *testing.T) {
 			return section, nil
 		},
 	}
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -257,7 +257,7 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        &mockInvitationRepo{},
@@ -271,7 +271,7 @@ func TestRegisterStudentPost_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	// Add claims to context (simulating JWT validation middleware)
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)
@@ -299,7 +299,7 @@ func TestRegisterStudentPost_InvalidJoinCode(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -311,7 +311,7 @@ func TestRegisterStudentPost_InvalidJoinCode(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)
@@ -331,7 +331,7 @@ func TestRegisterStudentPost_InvalidJoinCode_ReturnsCode(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -343,7 +343,7 @@ func TestRegisterStudentPost_InvalidJoinCode_ReturnsCode(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)
@@ -372,7 +372,7 @@ func TestRegisterStudentPost_InactiveSection(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -384,7 +384,7 @@ func TestRegisterStudentPost_InactiveSection(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)
@@ -406,7 +406,7 @@ func TestRegisterStudentPost_InactiveSection_ReturnsCode(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
@@ -418,7 +418,7 @@ func TestRegisterStudentPost_InactiveSection_ReturnsCode(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)
@@ -438,6 +438,39 @@ func TestRegisterStudentPost_InactiveSection_ReturnsCode(t *testing.T) {
 	}
 }
 
+func TestRegisterStudentPost_EmailNotVerified(t *testing.T) {
+	section := testSection()
+	membershipRepo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return section, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	authRepos := &mockAuthRepos{
+		userRepo:       &StubUserRepo{},
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"join_code": section.JoinCode,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: false}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostRegisterStudent(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 	section := testSection()
 	membershipRepo := &mockMembershipRepo{
@@ -451,7 +484,7 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 		},
 	}
 
-	h := NewAuthHandler()
+	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       userRepo,
 		invRepo:        &mockInvitationRepo{},
@@ -463,7 +496,7 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com"}
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
 	req = req.WithContext(ctx)

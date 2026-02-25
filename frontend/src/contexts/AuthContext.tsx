@@ -3,15 +3,17 @@
 /**
  * Authentication context provider.
  *
- * In production: uses Firebase Auth (onAuthStateChanged, signInWithEmailAndPassword).
+ * In production: uses Firebase Auth (onAuthStateChanged, signInWithPopup via SignInButtons).
  * In test mode (NEXT_PUBLIC_AUTH_MODE=test): uses TestAuthProvider which bypasses
  * Firebase entirely and uses localStorage-backed test tokens.
+ *
+ * Sign-in is handled externally by the <SignInButtons /> component, which calls
+ * signInWithPopup directly. onAuthStateChanged fires when that succeeds.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
-import { apiGet } from '@/lib/api-client';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
-import { isTestMode, setTestUser, clearTestUser, getTestToken } from '@/lib/auth-provider';
+import { isTestMode, clearTestUser, getTestToken } from '@/lib/auth-provider';
 import type { User } from '@/types/api';
 export type { User };
 
@@ -19,7 +21,6 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -44,7 +45,7 @@ function TestAuthProvider({ children }: AuthProviderProps) {
       const token = getTestToken();
       if (token) {
         try {
-          const profile = await apiGet<User>('/auth/me');
+          const profile = await getCurrentUser();
           setUser(profile);
         } catch (error) {
           console.error('[Auth] Error hydrating user:', error);
@@ -56,20 +57,6 @@ function TestAuthProvider({ children }: AuthProviderProps) {
     hydrateUser();
   }, []);
 
-  const signIn = useCallback(async (email: string, _password: string) => {
-    // Derive externalId from email prefix (before @)
-    const externalId = email.split('@')[0];
-    setTestUser(externalId, email);
-
-    try {
-      const profile = await apiGet<User>('/auth/me');
-      setUser(profile);
-    } catch (error) {
-      clearTestUser();
-      throw error;
-    }
-  }, []);
-
   const signOut = useCallback(async () => {
     clearTestUser();
     setUser(null);
@@ -77,7 +64,7 @@ function TestAuthProvider({ children }: AuthProviderProps) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const profile = await apiGet<User>('/auth/me');
+      const profile = await getCurrentUser();
       setUser(profile);
     } catch (error) {
       console.error('[Auth] Error refreshing user:', error);
@@ -88,10 +75,9 @@ function TestAuthProvider({ children }: AuthProviderProps) {
     user,
     isAuthenticated: !!user,
     isLoading,
-    signIn,
     signOut,
     refreshUser,
-  }), [user, isLoading, signIn, signOut, refreshUser]);
+  }), [user, isLoading, signOut, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -108,17 +94,13 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     try {
       return await getCurrentUser();
     } catch (error: unknown) {
-      // If the user doesn't exist in the DB yet, check for bootstrap custom claim.
+      // If the user doesn't exist in the DB yet, always try bootstrap.
+      // On 404: user hasn't been created yet — attempt bootstrap.
+      // On 401: token valid but no DB record — also try bootstrap.
+      // If bootstrap returns 403: not authorized → caller sets user to null.
       const status = (error as { status?: number }).status;
       if (status === 401 || status === 404) {
-        const { firebaseAuth } = await import('@/lib/firebase');
-        const fbUser = firebaseAuth.currentUser;
-        if (fbUser) {
-          const tokenResult = await fbUser.getIdTokenResult();
-          if (tokenResult.claims.role === 'system-admin') {
-            return await bootstrapUser();
-          }
-        }
+        return await bootstrapUser();
       }
       throw error;
     }
@@ -161,13 +143,6 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     };
   }, [fetchUserProfile]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { signInWithEmailAndPassword } = await import('firebase/auth');
-    const { firebaseAuth } = await import('@/lib/firebase');
-    await signInWithEmailAndPassword(firebaseAuth, email, password);
-    // onAuthStateChanged listener handles fetchUserProfile() and setUser()
-  }, []);
-
   const signOut = useCallback(async () => {
     const { signOut: firebaseSignOut } = await import('firebase/auth');
     const { firebaseAuth } = await import('@/lib/firebase');
@@ -188,10 +163,9 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     user,
     isAuthenticated: !!user,
     isLoading,
-    signIn,
     signOut,
     refreshUser,
-  }), [user, isLoading, signIn, signOut, refreshUser]);
+  }), [user, isLoading, signOut, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

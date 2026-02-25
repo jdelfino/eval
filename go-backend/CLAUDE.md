@@ -6,7 +6,6 @@ Go 1.24 HTTP API using Chi v5, PostgreSQL (pgx), and Row-Level Security.
 
 ```
 cmd/server/main.go          # Entry point
-cmd/bootstrap/              # DB bootstrap utility
 internal/
   server/server.go          # Server setup, middleware chain, route mounting
   handler/                  # HTTP handlers (one file per resource)

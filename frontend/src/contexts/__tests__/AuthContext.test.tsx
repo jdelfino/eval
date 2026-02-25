@@ -11,12 +11,10 @@ import { AuthProvider, useAuth } from '../AuthContext';
 
 // Mock firebase/auth
 const mockOnAuthStateChanged = jest.fn();
-const mockSignInWithEmailAndPassword = jest.fn();
 const mockSignOut = jest.fn();
 
 jest.mock('firebase/auth', () => ({
   onAuthStateChanged: (...args: any[]) => mockOnAuthStateChanged(...args),
-  signInWithEmailAndPassword: (...args: any[]) => mockSignInWithEmailAndPassword(...args),
   signOut: (...args: any[]) => mockSignOut(...args),
   createUserWithEmailAndPassword: jest.fn(),
   getAuth: jest.fn(() => ({})),
@@ -36,8 +34,18 @@ jest.mock('@/lib/auth-provider', () => ({
 
 // Mock api-client
 const mockApiGet = jest.fn();
+const mockApiPost = jest.fn();
 jest.mock('@/lib/api-client', () => ({
   apiGet: (...args: any[]) => mockApiGet(...args),
+  apiPost: (...args: any[]) => mockApiPost(...args),
+}));
+
+// Mock api/auth (getCurrentUser and bootstrapUser)
+const mockGetCurrentUser = jest.fn();
+const mockBootstrapUser = jest.fn();
+jest.mock('@/lib/api/auth', () => ({
+  getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
+  bootstrapUser: (...args: any[]) => mockBootstrapUser(...args),
 }));
 
 const mockUser = {
@@ -105,11 +113,17 @@ describe('AuthContext', () => {
       expect(result.current).not.toHaveProperty('cancelMfa');
       expect(result.current).not.toHaveProperty('pendingEmail');
     });
+
+    it('does not expose signIn — sign-in is handled by SignInButtons component', () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      expect(result.current).not.toHaveProperty('signIn');
+    });
   });
 
   describe('onAuthStateChanged', () => {
     it('sets user when Firebase user is detected', async () => {
-      mockApiGet.mockResolvedValue(mockUser);
+      mockGetCurrentUser.mockResolvedValue(mockUser);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -126,11 +140,11 @@ describe('AuthContext', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith('/auth/me');
+      expect(mockGetCurrentUser).toHaveBeenCalled();
     });
 
     it('force-refreshes the Firebase token before fetching user profile', async () => {
-      mockApiGet.mockResolvedValue(mockUser);
+      mockGetCurrentUser.mockResolvedValue(mockUser);
       const mockGetIdToken = jest.fn().mockResolvedValue('fresh-token');
 
       const { result } = renderHook(() => useAuth(), { wrapper });
@@ -167,58 +181,123 @@ describe('AuthContext', () => {
     });
   });
 
-  describe('signIn', () => {
-    it('calls signInWithEmailAndPassword and fetches user profile', async () => {
-      mockSignInWithEmailAndPassword.mockResolvedValue({ user: { getIdToken: jest.fn() } });
-      mockApiGet.mockResolvedValue(mockUser);
+  describe('bootstrap flow (on 404 from getCurrentUser)', () => {
+    it('calls bootstrapUser when getCurrentUser returns 404', async () => {
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      mockBootstrapUser.mockResolvedValue(mockUser);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
-      // Wait for async Firebase setup to complete
       await waitForAuthSetup();
 
-      // Trigger initial auth state (no user)
       await act(async () => {
-        authStateCallback!(null);
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
       });
 
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password123');
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockSignInWithEmailAndPassword).toHaveBeenCalledWith(
-        expect.anything(),
-        'test@example.com',
-        'password123'
-      );
+      expect(mockBootstrapUser).toHaveBeenCalled();
     });
 
-    it('does not call fetchUserProfile directly — onAuthStateChanged handles it (PLAT-wft)', async () => {
-      mockSignInWithEmailAndPassword.mockImplementation(async () => {
-        // Simulate Firebase: signIn resolves, then onAuthStateChanged fires
-        // Do NOT trigger authStateCallback here — we want to verify signIn
-        // itself doesn't call apiGet
-        return { user: { getIdToken: jest.fn() } };
-      });
+    it('does NOT check custom claims before calling bootstrapUser', async () => {
+      // The old behavior checked for role=system-admin custom claim.
+      // New behavior: on 404, always try bootstrap directly, no claim check.
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      mockBootstrapUser.mockResolvedValue(mockUser);
+
+      const mockFirebaseUser = {
+        getIdToken: jest.fn().mockResolvedValue('token'),
+        getIdTokenResult: jest.fn(), // Should NOT be called
+      };
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
       await waitForAuthSetup();
 
-      // Trigger initial auth state (no user)
       await act(async () => {
-        authStateCallback!(null);
+        authStateCallback!(mockFirebaseUser);
       });
 
-      // Clear any calls from initial state setup
-      mockApiGet.mockClear();
-
-      await act(async () => {
-        await result.current.signIn('test@example.com', 'password123');
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
       });
 
-      // signIn itself should NOT have called apiGet — only onAuthStateChanged does
-      expect(mockApiGet).not.toHaveBeenCalled();
+      // getIdTokenResult (used for custom claims) must NOT be called
+      expect(mockFirebaseUser.getIdTokenResult).not.toHaveBeenCalled();
+    });
+
+    it('sets user to null and loading to false when bootstrap returns 403', async () => {
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
+      mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toBeNull();
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it('sets user to null when bootstrap returns any error', async () => {
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      mockBootstrapUser.mockRejectedValue(new Error('Internal server error'));
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toBeNull();
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it('also tries bootstrap on 401 from getCurrentUser', async () => {
+      const unauthorizedError = Object.assign(new Error('Unauthorized'), { status: 401 });
+      mockGetCurrentUser.mockRejectedValue(unauthorizedError);
+      mockBootstrapUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      expect(mockBootstrapUser).toHaveBeenCalled();
     });
   });
 
@@ -245,7 +324,7 @@ describe('AuthContext', () => {
 
   describe('refreshUser', () => {
     it('re-fetches user profile from API', async () => {
-      mockApiGet.mockResolvedValue(mockUser);
+      mockGetCurrentUser.mockResolvedValue(mockUser);
 
       const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -262,7 +341,7 @@ describe('AuthContext', () => {
       });
 
       const updatedUser = { ...mockUser, display_name: 'Updated Name' };
-      mockApiGet.mockResolvedValue(updatedUser);
+      mockGetCurrentUser.mockResolvedValue(updatedUser);
 
       await act(async () => {
         await result.current.refreshUser();

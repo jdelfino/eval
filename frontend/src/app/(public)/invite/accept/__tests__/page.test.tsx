@@ -1,9 +1,12 @@
 /**
  * Tests for Accept Invitation Page
  *
- * Verifies invite acceptance flow using typed API clients:
- * GET /auth/accept-invite (via getInvitationDetails) and
- * POST /auth/accept-invite (via acceptInvite).
+ * After the social auth migration:
+ * - Token validation: GET /auth/accept-invite (via getInvitationDetails)
+ * - If already signed in (via firebaseAuth.currentUser): skip sign-in, call acceptInvite directly
+ * - If not signed in: render SignInButtons, then call acceptInvite on success
+ * - POST /auth/accept-invite (via acceptInvite)
+ * - No password fields — social provider handles auth
  */
 
 import React from 'react';
@@ -20,15 +23,27 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
-// Mock Firebase
-const mockCreateUserWithEmailAndPassword = jest.fn();
-const mockDeleteUser = jest.fn();
-let mockCurrentUser: { delete: jest.Mock } | null = null;
-
-jest.mock('firebase/auth', () => ({
-  createUserWithEmailAndPassword: (...args: unknown[]) => mockCreateUserWithEmailAndPassword(...args),
-  getAuth: jest.fn(),
+// Mock SignInButtons so tests don't depend on Firebase popup flow
+jest.mock('@/components/ui/SignInButtons', () => ({
+  SignInButtons: ({ onSuccess, onError, label }: any) => (
+    <div data-testid="sign-in-buttons">
+      {label && <p data-testid="sign-in-label">{label}</p>}
+      <button onClick={onSuccess} data-testid="mock-sign-in-success">
+        Mock Sign In
+      </button>
+      <button
+        onClick={() => onError(new Error('Sign in failed'))}
+        data-testid="mock-sign-in-error"
+      >
+        Mock Sign In Error
+      </button>
+    </div>
+  ),
 }));
+
+// Track current user for "already signed in" tests
+let mockCurrentUser: { delete: jest.Mock } | null = null;
+const mockDeleteUser = jest.fn();
 
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {
@@ -81,10 +96,6 @@ describe('AcceptInvitePage', () => {
     jest.clearAllMocks();
     mockSearchParams = new URLSearchParams();
     mockCurrentUser = null;
-    mockCreateUserWithEmailAndPassword.mockImplementation(() => {
-      mockCurrentUser = { delete: mockDeleteUser };
-      return Promise.resolve({ user: mockCurrentUser });
-    });
     mockDeleteUser.mockResolvedValue(undefined);
   });
 
@@ -163,7 +174,6 @@ describe('AcceptInvitePage', () => {
       ['OTP_INVALID', 'Invalid Link'],
       ['TOKEN_INVALID', 'Invalid Link'],
       ['INVALID_TOKEN', 'Invalid Link'],
-      ['USER_ALREADY_EXISTS', 'Account Exists'],
       ['INVITATION_CONSUMED', 'Already Used'],
       ['INVITATION_REVOKED', 'Invitation Revoked'],
       ['INVITATION_NOT_FOUND', 'Invitation Not Found'],
@@ -202,9 +212,9 @@ describe('AcceptInvitePage', () => {
       });
     });
 
-    it('shows sign in link for user_already_exists', async () => {
+    it('shows sign in link for invitation_consumed', async () => {
       setSearchParams({ token: VALID_TOKEN });
-      mockGetInvitationDetails.mockRejectedValue(makeApiError('Exists', 409, 'USER_ALREADY_EXISTS'));
+      mockGetInvitationDetails.mockRejectedValue(makeApiError('Exists', 409, 'INVITATION_CONSUMED'));
 
       render(<AcceptInvitePage />);
 
@@ -215,7 +225,7 @@ describe('AcceptInvitePage', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Profile Form
+  // Profile Form — No Password Fields
   // ---------------------------------------------------------------------------
 
   describe('Profile Form', () => {
@@ -224,182 +234,134 @@ describe('AcceptInvitePage', () => {
       mockGetInvitationDetails.mockResolvedValue(mockInvitation);
     });
 
-    it('has required attribute on password fields', async () => {
+    it('renders display name field', async () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      expect(screen.getByPlaceholderText('At least 8 characters')).toHaveAttribute('required');
-      expect(screen.getByPlaceholderText('Re-enter your password')).toHaveAttribute('required');
+      expect(screen.getByPlaceholderText('Your preferred display name')).toBeInTheDocument();
     });
 
-    it('validates password minimum length', async () => {
-      const user = userEvent.setup();
+    it('does NOT render password fields', async () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
         expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
       });
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'short');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'short');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
-
-      expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-    });
-
-    it('validates passwords must match', async () => {
-      const user = userEvent.setup();
-      render(<AcceptInvitePage />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Complete Your Profile')).toBeInTheDocument();
-      });
-
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'password123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'different456');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
-
-      expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/confirm password/i)).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/at least 8 characters/i)).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/re-enter your password/i)).not.toBeInTheDocument();
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Form Submission
+  // Not Signed In: SignInButtons Flow
   // ---------------------------------------------------------------------------
 
-  describe('Form Submission', () => {
+  describe('Not Signed In: SignInButtons flow', () => {
     beforeEach(() => {
       setSearchParams({ token: VALID_TOKEN });
       mockGetInvitationDetails.mockResolvedValue(mockInvitation);
+      mockCurrentUser = null;
     });
 
-    it('creates Firebase account before calling acceptInvite', async () => {
-      const user = userEvent.setup();
-      mockAcceptInvite.mockResolvedValue(mockUser);
-
+    it('renders SignInButtons when not signed in', async () => {
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
-
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(
-          expect.anything(),
-          'test@example.com',
-          'securepassword123'
-        );
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
     });
 
-    it('calls acceptInvite with token and display name', async () => {
-      const user = userEvent.setup();
+    it('shows sign-in label with invitation context', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-label')).toBeInTheDocument();
+      });
+    });
+
+    it('calls acceptInvite after sign-in success', async () => {
       mockAcceptInvite.mockResolvedValue(mockUser);
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
-
-      await user.type(screen.getByPlaceholderText('Your preferred display name'), 'John Doe');
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(mockAcceptInvite).toHaveBeenCalledWith(VALID_TOKEN, 'John Doe');
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        // Empty display name becomes undefined
+        expect(mockAcceptInvite).toHaveBeenCalledWith(VALID_TOKEN, undefined);
       });
     });
 
     it('redirects instructor to /instructor on success', async () => {
-      const user = userEvent.setup();
       mockAcceptInvite.mockResolvedValue(mockUser);
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/instructor');
       });
     });
 
-    it('redirects namespace-admin to /namespace/invitations', async () => {
-      const user = userEvent.setup();
+    it('redirects namespace-admin to /namespace/invitations on success', async () => {
+      mockGetInvitationDetails.mockResolvedValue({
+        ...mockInvitation,
+        target_role: 'namespace-admin',
+      });
       mockAcceptInvite.mockResolvedValue({ ...mockUser, role: 'namespace-admin' });
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'adminpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'adminpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/namespace/invitations');
       });
     });
 
-    it('shows loading state during submission', async () => {
-      const user = userEvent.setup();
-      mockAcceptInvite.mockImplementation(() => new Promise(() => {}));
-
+    it('shows error when SignInButtons calls onError', async () => {
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
-
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
 
       await waitFor(() => {
-        expect(screen.getByText('Creating your account...')).toBeInTheDocument();
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
-    });
-  });
 
-  // ---------------------------------------------------------------------------
-  // Error Handling During Submission
-  // ---------------------------------------------------------------------------
-
-  describe('Submission Errors', () => {
-    beforeEach(() => {
-      setSearchParams({ token: VALID_TOKEN });
-      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
-    });
-
-    it('shows error for duplicate email from Firebase', async () => {
-      const user = userEvent.setup();
-      const firebaseError = new Error('Firebase: Error (auth/email-already-in-use).');
-      (firebaseError as any).code = 'auth/email-already-in-use';
-      mockCreateUserWithEmailAndPassword.mockRejectedValue(firebaseError);
-
-      render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
-
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
 
       await waitFor(() => {
-        expect(screen.getByText('Account Exists')).toBeInTheDocument();
+        expect(screen.getByText('Sign in failed')).toBeInTheDocument();
       });
     });
 
-    it('shows inline error for API failure on submit', async () => {
-      const user = userEvent.setup();
+    it('shows error when acceptInvite fails after sign-in', async () => {
       mockAcceptInvite.mockRejectedValue(makeApiError('Something went wrong', 500));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(screen.getByText('Something went wrong')).toBeInTheDocument();
@@ -407,15 +369,15 @@ describe('AcceptInvitePage', () => {
     });
 
     it('shows consumed error when acceptInvite returns INVITATION_CONSUMED', async () => {
-      const user = userEvent.setup();
       mockAcceptInvite.mockRejectedValue(makeApiError('Already used', 409, 'INVITATION_CONSUMED'));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(screen.getByText('Already Used')).toBeInTheDocument();
@@ -423,15 +385,15 @@ describe('AcceptInvitePage', () => {
     });
 
     it('shows expired error when acceptInvite returns INVITATION_EXPIRED', async () => {
-      const user = userEvent.setup();
       mockAcceptInvite.mockRejectedValue(makeApiError('Invitation expired', 410, 'INVITATION_EXPIRED'));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(screen.getByText('Invitation Expired')).toBeInTheDocument();
@@ -439,42 +401,39 @@ describe('AcceptInvitePage', () => {
     });
 
     it('deletes Firebase account when acceptInvite returns INVITATION_EXPIRED', async () => {
-      const user = userEvent.setup();
+      // Start not signed in (shows SignInButtons)
+      mockCurrentUser = null;
       mockAcceptInvite.mockRejectedValue(makeApiError('Invitation expired', 410, 'INVITATION_EXPIRED'));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'testpassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'testpassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Simulate sign-in sets currentUser before onSuccess fires
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(mockDeleteUser).toHaveBeenCalled();
       });
     });
-  });
 
-  // ---------------------------------------------------------------------------
-  // Firebase Account Cleanup
-  // ---------------------------------------------------------------------------
-
-  describe('Firebase Account Cleanup on Backend Failure', () => {
-    beforeEach(() => {
-      setSearchParams({ token: VALID_TOKEN });
-      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
-    });
-
-    it('deletes Firebase account when acceptInvite fails', async () => {
-      const user = userEvent.setup();
+    it('deletes Firebase account when acceptInvite fails after sign-in', async () => {
+      // Start not signed in (shows SignInButtons)
+      mockCurrentUser = null;
       mockAcceptInvite.mockRejectedValue(makeApiError('Internal error', 500));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Simulate sign-in sets currentUser before onSuccess fires
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(mockDeleteUser).toHaveBeenCalled();
@@ -482,37 +441,149 @@ describe('AcceptInvitePage', () => {
     });
 
     it('allows retry after Firebase cleanup on backend failure', async () => {
-      const user = userEvent.setup();
+      // Start not signed in
+      mockCurrentUser = null;
 
       // First attempt: backend fails
       mockAcceptInvite.mockRejectedValueOnce(makeApiError('Temporary error', 500));
 
       render(<AcceptInvitePage />);
-      await waitFor(() => expect(screen.getByText('Complete Your Profile')).toBeInTheDocument());
 
-      await user.type(screen.getByPlaceholderText('At least 8 characters'), 'securepassword123');
-      await user.type(screen.getByPlaceholderText('Re-enter your password'), 'securepassword123');
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
         expect(screen.getByText('Temporary error')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Complete Registration' })).toBeInTheDocument();
       });
 
-      // Reset for retry
-      mockCreateUserWithEmailAndPassword.mockClear();
-      mockCurrentUser = null;
-      mockCreateUserWithEmailAndPassword.mockImplementation(() => {
-        mockCurrentUser = { delete: mockDeleteUser };
-        return Promise.resolve({ user: mockCurrentUser });
-      });
+      // Should still show SignInButtons for retry
+      expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+    });
+  });
 
-      // Second attempt: succeeds
-      mockAcceptInvite.mockResolvedValueOnce(mockUser);
-      await user.click(screen.getByRole('button', { name: 'Complete Registration' }));
+  // ---------------------------------------------------------------------------
+  // Already Signed In: Direct Flow
+  // ---------------------------------------------------------------------------
+
+  describe('Already Signed In: direct flow', () => {
+    beforeEach(() => {
+      setSearchParams({ token: VALID_TOKEN });
+      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
+      mockCurrentUser = { delete: mockDeleteUser };
+    });
+
+    it('does NOT render SignInButtons when already signed in', async () => {
+      mockAcceptInvite.mockResolvedValue(mockUser);
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('sign-in-buttons')).not.toBeInTheDocument();
+      });
+    });
+
+    it('calls acceptInvite directly when already signed in', async () => {
+      mockAcceptInvite.mockResolvedValue(mockUser);
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        // When already signed in, display name is empty string → undefined
+        expect(mockAcceptInvite).toHaveBeenCalledWith(VALID_TOKEN, undefined);
+      });
+    });
+
+    it('redirects instructor to /instructor when already signed in', async () => {
+      mockAcceptInvite.mockResolvedValue(mockUser);
+
+      render(<AcceptInvitePage />);
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/instructor');
+      });
+    });
+
+    it('redirects namespace-admin when already signed in', async () => {
+      mockGetInvitationDetails.mockResolvedValue({
+        ...mockInvitation,
+        target_role: 'namespace-admin',
+      });
+      mockAcceptInvite.mockResolvedValue({ ...mockUser, role: 'namespace-admin' });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/namespace/invitations');
+      });
+    });
+
+    it('shows error when acceptInvite fails when already signed in', async () => {
+      mockAcceptInvite.mockRejectedValue(makeApiError('Consumed', 409, 'INVITATION_CONSUMED'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Already Used')).toBeInTheDocument();
+      });
+    });
+
+    it('shows inline error for backend failure when already signed in', async () => {
+      mockAcceptInvite.mockRejectedValue(makeApiError('Something broke', 500));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Something broke')).toBeInTheDocument();
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Optional Display Name
+  // ---------------------------------------------------------------------------
+
+  describe('Display Name', () => {
+    beforeEach(() => {
+      setSearchParams({ token: VALID_TOKEN });
+      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
+      mockCurrentUser = null;
+    });
+
+    it('calls acceptInvite with display name when provided', async () => {
+      const user = userEvent.setup();
+      mockAcceptInvite.mockResolvedValue(mockUser);
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      await user.type(screen.getByPlaceholderText('Your preferred display name'), 'John Doe');
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockAcceptInvite).toHaveBeenCalledWith(VALID_TOKEN, 'John Doe');
+      });
+    });
+
+    it('calls acceptInvite with undefined display name when not provided', async () => {
+      mockAcceptInvite.mockResolvedValue(mockUser);
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockAcceptInvite).toHaveBeenCalledWith(VALID_TOKEN, undefined);
       });
     });
   });

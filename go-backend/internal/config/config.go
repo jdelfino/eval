@@ -55,6 +55,12 @@ type Config struct {
 	OAuthClientID              string `env:"OAUTH_CLIENT_ID"`
 	OAuthClientSecret          string `env:"OAUTH_CLIENT_SECRET"`
 
+	// Bootstrap Configuration
+	// BootstrapAdminEmail is the email address authorized to POST /auth/bootstrap.
+	// The first sign-in from a matching verified email becomes system-admin.
+	// Empty means bootstrap is disabled.
+	BootstrapAdminEmail string `env:"BOOTSTRAP_ADMIN_EMAIL"`
+
 	// Auth Mode Configuration ("test" enables test token validator)
 	AuthMode string `env:"AUTH_MODE" envDefault:""`
 

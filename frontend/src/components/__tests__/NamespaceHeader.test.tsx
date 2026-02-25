@@ -31,7 +31,6 @@ function mockAuthUser(overrides: Record<string, unknown> = {}) {
     },
     isAuthenticated: true,
     isLoading: false,
-    signIn: jest.fn(),
     signOut: jest.fn(),
     refreshUser: jest.fn(),
   };
@@ -243,7 +242,6 @@ describe('NamespaceHeader', () => {
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        signIn: jest.fn(),
         signOut: jest.fn(),
         refreshUser: jest.fn(),
       });

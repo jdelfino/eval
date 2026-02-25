@@ -10,7 +10,7 @@ export async function signInAs(
   email: string,
   password: string = 'testpassword123' // any password works in test mode
 ): Promise<void> {
-  await page.goto('/auth/signin');
+  await page.goto('/auth/signin/email');
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
   await page.click('button[type="submit"]');

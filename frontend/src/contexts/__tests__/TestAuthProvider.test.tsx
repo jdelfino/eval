@@ -19,6 +19,14 @@ jest.mock('@/lib/api-client', () => ({
   apiGet: (...args: any[]) => mockApiGet(...args),
 }));
 
+// Mock api/auth
+const mockGetCurrentUser = jest.fn();
+const mockBootstrapUser = jest.fn();
+jest.mock('@/lib/api/auth', () => ({
+  getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
+  bootstrapUser: (...args: any[]) => mockBootstrapUser(...args),
+}));
+
 // Mock auth-provider
 const mockSetTestUser = jest.fn();
 const mockClearTestUser = jest.fn();
@@ -35,7 +43,6 @@ jest.mock('@/lib/auth-provider', () => ({
 // Mock firebase modules so they don't error even when not used
 jest.mock('firebase/auth', () => ({
   onAuthStateChanged: jest.fn((_auth: any, _cb: any) => jest.fn()),
-  signInWithEmailAndPassword: jest.fn(),
   signOut: jest.fn(),
   getAuth: jest.fn(() => ({})),
 }));
@@ -93,40 +100,10 @@ describe('TestAuthProvider', () => {
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
   });
 
-  it('signIn sets test user and fetches profile', async () => {
-    mockApiGet.mockResolvedValue(mockUser);
-
-    const { AuthProvider, useAuth } = require('../AuthContext');
-
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <AuthProvider>{children}</AuthProvider>
-    );
-
-    const { result } = renderHook(() => useAuth(), { wrapper });
-
-    // Wait for initial loading to complete
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    await act(async () => {
-      await result.current.signIn('instructor@test.local', 'anypassword');
-    });
-
-    // Should derive externalId from email prefix
-    expect(mockSetTestUser).toHaveBeenCalledWith('instructor', 'instructor@test.local');
-
-    // Should fetch user profile
-    expect(mockApiGet).toHaveBeenCalledWith('/auth/me');
-
-    await waitFor(() => {
-      expect(result.current.user).toEqual(mockUser);
-      expect(result.current.isAuthenticated).toBe(true);
-    });
-  });
-
   it('signOut clears test user and sets user to null', async () => {
     mockApiGet.mockResolvedValue(mockUser);
+    mockGetTestToken.mockReturnValue('some-token');
+    mockGetCurrentUser.mockResolvedValue(mockUser);
 
     const { AuthProvider, useAuth } = require('../AuthContext');
 
@@ -136,18 +113,9 @@ describe('TestAuthProvider', () => {
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
-    // Wait for initial loading
+    // Wait for initial loading (with token, it loads user)
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
-    });
-
-    // Sign in first
-    await act(async () => {
-      await result.current.signIn('instructor@test.local', 'anypassword');
-    });
-
-    await waitFor(() => {
-      expect(result.current.isAuthenticated).toBe(true);
     });
 
     // Sign out
@@ -164,7 +132,8 @@ describe('TestAuthProvider', () => {
   });
 
   it('refreshUser re-fetches user profile', async () => {
-    mockApiGet.mockResolvedValue(mockUser);
+    mockGetTestToken.mockReturnValue('some-token');
+    mockGetCurrentUser.mockResolvedValue(mockUser);
 
     const { AuthProvider, useAuth } = require('../AuthContext');
 
@@ -179,13 +148,8 @@ describe('TestAuthProvider', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    // Sign in
-    await act(async () => {
-      await result.current.signIn('instructor@test.local', 'anypassword');
-    });
-
     const updatedUser = { ...mockUser, display_name: 'Updated Name' };
-    mockApiGet.mockResolvedValue(updatedUser);
+    mockGetCurrentUser.mockResolvedValue(updatedUser);
 
     await act(async () => {
       await result.current.refreshUser();
@@ -196,7 +160,7 @@ describe('TestAuthProvider', () => {
     });
   });
 
-  it('exposes the same AuthContextType interface as FirebaseAuthProvider', async () => {
+  it('exposes the same AuthContextType interface as FirebaseAuthProvider (without signIn)', async () => {
     const { AuthProvider, useAuth } = require('../AuthContext');
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -209,15 +173,28 @@ describe('TestAuthProvider', () => {
     expect(result.current).toHaveProperty('user');
     expect(result.current).toHaveProperty('isAuthenticated');
     expect(result.current).toHaveProperty('isLoading');
-    expect(result.current).toHaveProperty('signIn');
     expect(result.current).toHaveProperty('signOut');
     expect(result.current).toHaveProperty('refreshUser');
 
+    // signIn has been removed — sign-in is handled by SignInButtons
+    expect(result.current).not.toHaveProperty('signIn');
+
     // Verify types
-    expect(typeof result.current.signIn).toBe('function');
     expect(typeof result.current.signOut).toBe('function');
     expect(typeof result.current.refreshUser).toBe('function');
     expect(typeof result.current.isLoading).toBe('boolean');
     expect(typeof result.current.isAuthenticated).toBe('boolean');
+  });
+
+  it('does not expose signIn method — sign-in is handled by SignInButtons component', async () => {
+    const { AuthProvider, useAuth } = require('../AuthContext');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <AuthProvider>{children}</AuthProvider>
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    expect(result.current).not.toHaveProperty('signIn');
   });
 });

@@ -14,11 +14,15 @@ import (
 )
 
 // AuthHandler handles authentication-related routes for the current user.
-type AuthHandler struct{}
+type AuthHandler struct {
+	bootstrapAdminEmail string
+}
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler() *AuthHandler {
-	return &AuthHandler{}
+// bootstrapAdminEmail is the email address authorized to bootstrap the first system admin.
+// If empty, bootstrap is disabled.
+func NewAuthHandler(bootstrapAdminEmail string) *AuthHandler {
+	return &AuthHandler{bootstrapAdminEmail: bootstrapAdminEmail}
 }
 
 // Routes returns a chi.Router with authenticated auth routes.
@@ -159,6 +163,11 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !claims.EmailVerified {
+		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
+		return
+	}
+
 	req, err := httpbind.BindJSON[acceptInviteRequest](w, r)
 	if err != nil {
 		return
@@ -264,6 +273,11 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !claims.EmailVerified {
+		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
+		return
+	}
+
 	req, err := httpbind.BindJSON[registerStudentRequest](w, r)
 	if err != nil {
 		return
@@ -310,9 +324,9 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 	httputil.WriteJSON(w, http.StatusCreated, user)
 }
 
-// PostBootstrap creates the initial system-admin user from a JWT with a
-// custom "role" claim set by the bootstrap CLI via Firebase Admin SDK.
-// This is a one-time setup endpoint for first deploy.
+// PostBootstrap creates the initial system-admin user for the first deploy.
+// The caller must be signed in with the email matching BOOTSTRAP_ADMIN_EMAIL
+// and that email must be verified by the sign-in provider.
 func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	if claims == nil {
@@ -320,10 +334,14 @@ func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the custom claim set by the bootstrap CLI.
-	role, _ := claims.CustomClaims["role"].(string)
-	if role != string(auth.RoleSystemAdmin) {
-		httputil.WriteError(w, http.StatusForbidden, "missing system-admin custom claim")
+	// Bootstrap is disabled if no admin email is configured.
+	if h.bootstrapAdminEmail == "" || claims.Email != h.bootstrapAdminEmail {
+		httputil.WriteError(w, http.StatusForbidden, "not authorized to bootstrap")
+		return
+	}
+
+	if !claims.EmailVerified {
+		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
 		return
 	}
 
