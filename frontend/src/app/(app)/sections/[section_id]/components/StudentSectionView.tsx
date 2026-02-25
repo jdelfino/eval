@@ -21,7 +21,7 @@ export default function StudentSectionView({
   sectionId,
 }: StudentSectionViewProps) {
   const router = useRouter();
-  const [showWorkedOnly, setShowWorkedOnly] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'worked' | 'unstarted'>('all');
   const [error, setError] = useState<string | null>(null);
 
   const handleProblemClick = async (problemId: string) => {
@@ -74,9 +74,12 @@ export default function StudentSectionView({
     return formatDate(dateString);
   };
 
-  const filteredProblems = showWorkedOnly
-    ? publishedProblems.filter((p) => p.student_work != null)
-    : publishedProblems;
+  const filteredProblems =
+    filter === 'worked'
+      ? publishedProblems.filter((p) => p.student_work != null)
+      : filter === 'unstarted'
+        ? publishedProblems.filter((p) => p.student_work == null)
+        : publishedProblems;
 
   return (
     <div className="space-y-6">
@@ -141,26 +144,19 @@ export default function StudentSectionView({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-900">Problems</h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowWorkedOnly(false)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                !showWorkedOnly
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Show all
-            </button>
-            <button
-              onClick={() => setShowWorkedOnly(true)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                showWorkedOnly
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Worked on
-            </button>
+            {(['all', 'worked', 'unstarted'] as const).map((value) => (
+              <button
+                key={value}
+                onClick={() => setFilter(value)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  filter === value
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {{ all: 'Show all', worked: 'Worked on', unstarted: 'Not started' }[value]}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -234,7 +230,11 @@ export default function StudentSectionView({
               </svg>
             </div>
             <p className="text-gray-600">
-              {showWorkedOnly ? 'No problems worked on yet' : 'No problems published yet'}
+              {filter === 'worked'
+                ? 'No problems worked on yet'
+                : filter === 'unstarted'
+                  ? 'All problems have been started'
+                  : 'No problems published yet'}
             </p>
           </div>
         )}

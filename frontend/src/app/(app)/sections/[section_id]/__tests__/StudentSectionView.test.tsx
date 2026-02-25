@@ -315,7 +315,7 @@ describe('StudentSectionView', () => {
       expect(screen.getByText(/Last worked:/)).toBeInTheDocument();
     });
 
-    it('shows "Not started" for problems without student_work', () => {
+    it('shows "Not started" status for problems without student_work', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
@@ -325,7 +325,10 @@ describe('StudentSectionView', () => {
         />
       );
 
-      expect(screen.getByText('Not started')).toBeInTheDocument();
+      // "Not started" appears as both a filter button and a problem status;
+      // verify the status text exists within the problem card
+      const statusElements = screen.getAllByText('Not started');
+      expect(statusElements.length).toBeGreaterThanOrEqual(2); // button + status
     });
 
     it('shows "Continue" button for problems with existing work', () => {
@@ -493,6 +496,26 @@ describe('StudentSectionView', () => {
       expect(screen.queryByText('Binary Search')).not.toBeInTheDocument();
     });
 
+    it('filters to unstarted problems when "Not started" toggle is clicked', async () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={publishedProblems}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+      expect(screen.getByText('Binary Search')).toBeInTheDocument();
+
+      const unstartedButton = screen.getByRole('button', { name: 'Not started' });
+      await userEvent.click(unstartedButton);
+
+      expect(screen.queryByText('FizzBuzz')).not.toBeInTheDocument();
+      expect(screen.getByText('Binary Search')).toBeInTheDocument();
+    });
+
     it('shows all problems when "Show all" toggle is clicked after filtering', async () => {
       render(
         <StudentSectionView
@@ -515,7 +538,7 @@ describe('StudentSectionView', () => {
       expect(screen.getByText('Binary Search')).toBeInTheDocument();
     });
 
-    it('shows "No problems worked on yet" when filter active and no matches', async () => {
+    it('shows "No problems worked on yet" when worked filter active and no matches', async () => {
       const unworkedProblems: PublishedProblemWithStatus[] = [
         {
           id: 'sp-2',
@@ -555,6 +578,58 @@ describe('StudentSectionView', () => {
       await userEvent.click(workedOnButton);
 
       expect(screen.getByText('No problems worked on yet')).toBeInTheDocument();
+    });
+
+    it('shows "All problems have been started" when unstarted filter active and no matches', async () => {
+      const allWorkedProblems: PublishedProblemWithStatus[] = [
+        {
+          id: 'sp-1',
+          section_id: SECTION_ID,
+          problem_id: PROBLEM_ID_1,
+          published_by: 'user-1',
+          show_solution: false,
+          published_at: '2025-01-01T00:00:00Z',
+          problem: {
+            id: PROBLEM_ID_1,
+            namespace_id: 'ns-1',
+            title: 'FizzBuzz',
+            description: 'Write a FizzBuzz solution',
+            starter_code: null,
+            test_cases: [],
+            execution_settings: {},
+            author_id: 'user-1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            created_at: '2025-01-01T00:00:00Z',
+            updated_at: '2025-01-01T00:00:00Z',
+          },
+          student_work: {
+            id: WORK_ID_1,
+            user_id: 'user-1',
+            section_id: SECTION_ID,
+            problem_id: PROBLEM_ID_1,
+            code: '',
+            execution_settings: {},
+            last_update: '2026-02-20T10:00:00Z',
+            created_at: '2026-02-20T10:00:00Z',
+          },
+        },
+      ];
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={allWorkedProblems}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      const unstartedButton = screen.getByRole('button', { name: 'Not started' });
+      await userEvent.click(unstartedButton);
+
+      expect(screen.getByText('All problems have been started')).toBeInTheDocument();
     });
   });
 });

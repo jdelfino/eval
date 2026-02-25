@@ -478,13 +478,15 @@ describe('SectionDetailPage', () => {
       expect(await screen.findByText(/Last worked:/)).toBeInTheDocument();
     });
 
-    it('shows "Not started" for problems without student_work', async () => {
+    it('shows "Not started" status for problems without student_work', async () => {
       mockUser('student');
       mockSectionData([], publishedProblems);
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('Not started')).toBeInTheDocument();
+      // "Not started" appears as both a filter button and a problem status
+      const elements = await screen.findAllByText('Not started');
+      expect(elements.length).toBeGreaterThanOrEqual(2);
     });
 
     it('shows "Continue" button for problems with existing work', async () => {
