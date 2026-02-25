@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
-	"github.com/jdelfino/eval/go-backend/internal/email"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
 	"github.com/jdelfino/eval/go-backend/internal/store"
@@ -20,24 +18,14 @@ import (
 
 // InvitationHandler handles invitation management routes.
 type InvitationHandler struct {
-	emailClient email.Client
-	baseURL     string
-	logger      *slog.Logger
+	logger *slog.Logger
 }
 
 // NewInvitationHandler creates a new InvitationHandler.
-func NewInvitationHandler(emailClient email.Client, baseURL string, logger *slog.Logger) *InvitationHandler {
+func NewInvitationHandler(logger *slog.Logger) *InvitationHandler {
 	return &InvitationHandler{
-		emailClient: emailClient,
-		baseURL:     baseURL,
-		logger:      logger,
+		logger: logger,
 	}
-}
-
-// createInvitationResponse wraps an invitation with email delivery status.
-type createInvitationResponse struct {
-	*store.Invitation
-	EmailSent bool `json:"email_sent"`
 }
 
 // Routes returns a chi.Router with namespace-scoped invitation routes.
@@ -50,7 +38,6 @@ func (h *InvitationHandler) Routes() chi.Router {
 	r.Post("/", h.Create)
 	r.Get("/{invID}", h.Get)
 	r.Delete("/{invID}", h.Revoke)
-	r.Post("/{invID}/resend", h.Resend)
 
 	return r
 }
@@ -65,7 +52,6 @@ func (h *InvitationHandler) SystemRoutes() chi.Router {
 	r.Post("/", h.SystemCreate)
 	r.Get("/{invID}", h.SystemGet)
 	r.Delete("/{invID}", h.SystemRevoke)
-	r.Post("/{invID}/resend", h.SystemResend)
 
 	return r
 }
@@ -131,22 +117,7 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send email (best-effort, don't fail the request)
-	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	emailSent := true
-	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL); err != nil {
-		emailSent = false
-		h.logger.Warn("failed to send invitation email",
-			"invitation_id", inv.ID,
-			"recipient", inv.Email,
-			"error", err,
-		)
-	}
-
-	httputil.WriteJSON(w, http.StatusCreated, createInvitationResponse{
-		Invitation: inv,
-		EmailSent:  emailSent,
-	})
+	httputil.WriteJSON(w, http.StatusCreated, inv)
 }
 
 // Get handles GET /api/v1/namespaces/{nsID}/invitations/{invID}
@@ -223,55 +194,6 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, revoked)
 }
 
-// Resend handles POST /api/v1/namespaces/{nsID}/invitations/{invID}/resend
-func (h *InvitationHandler) Resend(w http.ResponseWriter, r *http.Request) {
-	nsID := chi.URLParam(r, "id")
-	if !requireNamespaceAccess(w, r, nsID) {
-		return
-	}
-
-	authUser := auth.UserFromContext(r.Context())
-	if authUser == nil {
-		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	invID, err := uuid.Parse(chi.URLParam(r, "invID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid invitation ID")
-		return
-	}
-
-	repos := store.ReposFromContext(r.Context())
-	inv, err := repos.GetInvitation(r.Context(), invID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
-			return
-		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if inv.NamespaceID != nsID {
-		httputil.WriteError(w, http.StatusNotFound, "invitation not found")
-		return
-	}
-
-	if inv.Status != "pending" {
-		httputil.WriteError(w, http.StatusConflict, "invitation is not pending")
-		return
-	}
-
-	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
-		return
-	}
-
-	httputil.WriteJSON(w, http.StatusOK, inv)
-}
-
 // SystemList handles GET /api/v1/system/invitations
 func (h *InvitationHandler) SystemList(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
@@ -329,21 +251,7 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	emailSent := true
-	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, req.NamespaceID, acceptURL); err != nil {
-		emailSent = false
-		h.logger.Warn("failed to send invitation email",
-			"invitation_id", inv.ID,
-			"recipient", inv.Email,
-			"error", err,
-		)
-	}
-
-	httputil.WriteJSON(w, http.StatusCreated, createInvitationResponse{
-		Invitation: inv,
-		EmailSent:  emailSent,
-	})
+	httputil.WriteJSON(w, http.StatusCreated, inv)
 }
 
 // SystemGet handles GET /api/v1/system/invitations/{invID}
@@ -384,45 +292,6 @@ func (h *InvitationHandler) SystemRevoke(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	httputil.WriteJSON(w, http.StatusOK, inv)
-}
-
-// SystemResend handles POST /api/v1/system/invitations/{invID}/resend
-func (h *InvitationHandler) SystemResend(w http.ResponseWriter, r *http.Request) {
-	authUser := auth.UserFromContext(r.Context())
-	if authUser == nil {
-		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	invID, err := uuid.Parse(chi.URLParam(r, "invID"))
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid invitation ID")
-		return
-	}
-
-	repos := store.ReposFromContext(r.Context())
-	inv, err := repos.GetInvitation(r.Context(), invID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
-			return
-		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if inv.Status != "pending" {
-		httputil.WriteError(w, http.StatusConflict, "invitation is not pending")
-		return
-	}
-
-	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
-	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, inv.NamespaceID, acceptURL); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
 		return
 	}
 

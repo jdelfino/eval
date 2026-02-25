@@ -19,7 +19,6 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/config"
-	emailpkg "github.com/jdelfino/eval/go-backend/internal/email"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
 	"github.com/jdelfino/eval/go-backend/internal/handler"
 	"github.com/jdelfino/eval/go-backend/internal/metrics"
@@ -249,13 +248,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.Mount("/system/users", sysUserHandler.SystemRoutes())
 
 			// Invitation routes
-			var emailCli emailpkg.Client
-			if cfg.ResendAPIKey != "" {
-				emailCli = emailpkg.NewResendClient(cfg.ResendAPIKey, cfg.ResendFromEmail)
-			} else {
-				emailCli = emailpkg.NoOpClient{}
-			}
-			invitationHandler := handler.NewInvitationHandler(emailCli, cfg.InviteBaseURL, logger)
+			invitationHandler := handler.NewInvitationHandler(logger)
 			r.Mount("/namespaces/{id}/invitations", invitationHandler.Routes())
 			r.Mount("/system/invitations", invitationHandler.SystemRoutes())
 
