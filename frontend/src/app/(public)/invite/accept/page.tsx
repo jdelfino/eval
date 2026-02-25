@@ -15,7 +15,7 @@
  * 7. Redirect based on role
  */
 
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { firebaseAuth } from '@/lib/firebase';
@@ -189,11 +189,11 @@ function AcceptInviteContent() {
     [redirectBasedOnRole]
   );
 
+  // Ref to access doAccept from effects without adding it as a dependency
+  const doAcceptRef = useRef(doAccept);
+  doAcceptRef.current = doAccept;
+
   // Verify token and load invitation on mount.
-  // doAccept is intentionally omitted from the dependency array here —
-  // we only want this effect to run once when the token changes, not when
-  // doAccept identity changes (doAccept is stable across renders because it
-  // only depends on router, which is also stable).
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
       const queryToken = searchParams.get('token');
@@ -217,33 +217,7 @@ function AcceptInviteContent() {
 
         // If already signed in, proceed directly to accepting
         if (firebaseAuth.currentUser) {
-          // Inline accept for already-signed-in path (avoids dependency on doAccept in effect)
-          try {
-            const acceptData = await acceptInvite(invitationInfo.id, undefined);
-            setPageState({ status: 'success' });
-            if (acceptData.role === 'namespace-admin') {
-              router.push('/namespace/invitations');
-            } else if (acceptData.role === 'instructor') {
-              router.push('/instructor');
-            } else {
-              router.push('/');
-            }
-          } catch (backendError) {
-            await firebaseAuth.currentUser?.delete();
-            if (backendError instanceof ApiError) {
-              if (backendError.code === 'INVITATION_CONSUMED') {
-                setPageState({ status: 'error', error: 'invitation_consumed' });
-                return;
-              } else if (backendError.code === 'INVITATION_EXPIRED') {
-                setPageState({ status: 'error', error: 'invitation_expired' });
-                return;
-              }
-              setSubmitError(backendError.message);
-            } else {
-              setSubmitError('Failed to complete registration');
-            }
-            setPageState({ status: 'ready', invitation: invitationInfo });
-          }
+          await doAcceptRef.current(invitationInfo, '');
         } else {
           setPageState({ status: 'ready', invitation: invitationInfo });
         }
@@ -258,7 +232,6 @@ function AcceptInviteContent() {
     };
 
     verifyAndLoadInvitation();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // Sign-in success handler from SignInButtons

@@ -15,7 +15,7 @@ export async function getCurrentUser(): Promise<User> {
 
 /**
  * Bootstrap the first system-admin user.
- * Called when a Firebase user has a role=system-admin custom claim
+ * Called when the signed-in user's email matches BOOTSTRAP_ADMIN_EMAIL
  * but no database record exists yet.
  * @returns The created User object
  */
