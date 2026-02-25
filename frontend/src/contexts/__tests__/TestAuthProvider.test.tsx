@@ -186,6 +186,51 @@ describe('TestAuthProvider', () => {
     expect(typeof result.current.isAuthenticated).toBe('boolean');
   });
 
+  it('does NOT clear test token on transient network errors during hydration', async () => {
+    mockGetTestToken.mockReturnValue('some-token');
+    // Simulate a network error (TypeError: Failed to fetch) — no status property
+    mockGetCurrentUser.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { AuthProvider, useAuth } = require('../AuthContext');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <AuthProvider>{children}</AuthProvider>
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Token should NOT be cleared — allows retry on next navigation
+    expect(mockClearTestUser).not.toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('clears test token on auth errors (401/403/404) during hydration', async () => {
+    mockGetTestToken.mockReturnValue('some-token');
+    // Simulate a 403 auth error with a status property
+    const authError = Object.assign(new Error('Forbidden'), { status: 403 });
+    mockGetCurrentUser.mockRejectedValue(authError);
+
+    const { AuthProvider, useAuth } = require('../AuthContext');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <AuthProvider>{children}</AuthProvider>
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Token SHOULD be cleared for definitive auth failures
+    expect(mockClearTestUser).toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(false);
+  });
+
   it('does not expose signIn method — sign-in is handled by SignInButtons component', async () => {
     const { AuthProvider, useAuth } = require('../AuthContext');
 
