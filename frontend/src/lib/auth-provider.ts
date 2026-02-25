@@ -21,7 +21,7 @@ export function isTestMode(): boolean {
   return typeof window !== 'undefined' && process.env.NEXT_PUBLIC_AUTH_MODE === 'test';
 }
 
-const TEST_USER_KEY = 'testAuthUser';
+export const TEST_USER_KEY = 'testAuthUser';
 
 /**
  * Test auth provider that stores user in localStorage for persistence across page navigations.

@@ -1,4 +1,5 @@
 import { Page } from '@playwright/test';
+import { TEST_USER_KEY } from '../../src/lib/auth-provider';
 
 /**
  * Sign in by directly setting localStorage — bypasses the sign-in UI entirely.
@@ -10,10 +11,11 @@ export async function signInAs(
   email: string
 ): Promise<void> {
   const externalId = email.split('@')[0];
-  await page.evaluate(({ externalId, email }) => {
-    localStorage.setItem('testAuthUser', JSON.stringify({ externalId, email }));
-  }, { externalId, email });
-  await page.goto('/');
+  await page.goto('/');  // establish the correct origin for localStorage
+  await page.evaluate(({ key, externalId, email }) => {
+    localStorage.setItem(key, JSON.stringify({ externalId, email }));
+  }, { key: TEST_USER_KEY, externalId, email });
+  await page.goto('/');  // reload so TestAuthProvider picks up the token
   // Wait for redirect away from any signin page (auth hydration complete)
   await page.waitForURL(/^(?!.*\/auth\/signin).*$/);
 }
