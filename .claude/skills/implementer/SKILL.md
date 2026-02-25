@@ -16,6 +16,7 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - No type casts that bypass the type system.
 - No optional chaining on required properties.
 - **Every production code change requires tests.** No exceptions for migrations, refactors, copy-paste, or "just wiring things up." If you wrote or modified production code, you must write tests for it. Never defer tests to a follow-up issue.
+- **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
 
 ## Phase 1: Write Failing Tests
 
@@ -39,7 +40,7 @@ Make the production code changes. Keep changes minimal and focused on the task.
 
 ## Phase 3: Verify
 
-Delegate quality gate runs to a test-runner sub-agent to preserve context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+**Delegate quality gate runs to a test-runner sub-agent** to preserve your context window. Do NOT run these commands directly with the Bash tool — test output is verbose and wastes context you need for later phases. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
 ```
 ROLE: Test Runner
