@@ -163,28 +163,13 @@ export default function InstructorSectionView({
       <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as SectionTab)}>
         <Tabs.List className="px-1">
           <Tabs.Tab tabId="students">
-            Students
-            {students.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                {students.length}
-              </span>
-            )}
+            Students ({students.length})
           </Tabs.Tab>
           <Tabs.Tab tabId="sessions">
-            Sessions
-            {pastSessions.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
-                {pastSessions.length}
-              </span>
-            )}
+            Sessions ({pastSessions.length})
           </Tabs.Tab>
           <Tabs.Tab tabId="problems">
-            Problems
-            {publishedProblems.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full">
-                {publishedProblems.length}
-              </span>
-            )}
+            Problems ({publishedProblems.length})
           </Tabs.Tab>
         </Tabs.List>
 
