@@ -29,7 +29,7 @@ Write tests for the behavior you are about to change or add. Do this **before** 
 
 1. Read the relevant production code to understand current behavior
 2. Write new test cases that describe the desired behavior after your change
-3. Run the tests using the appropriate `make test-*` target (see **Quality Gates** in CLAUDE.md)
+3. Verify your new tests fail by delegating to a sub-agent (same pattern as Phase 3 below)
 
 **Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
@@ -39,65 +39,37 @@ Make the production code changes. Keep changes minimal and focused on the task.
 
 ## Phase 3: Verify
 
-Run quality gates matching the code you changed. See the **Quality Gates** table in CLAUDE.md for all targets.
+Delegate quality gate runs to a sub-agent to preserve context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
-At minimum, for any Go backend change:
-```bash
-make test-api
-make lint-api
+```
+Run these commands sequentially in <worktree-path>:
+
+<commands from Quality Gates table in CLAUDE.md matching changed code>
+
+For example, for Go backend changes: make test-api && make lint-api
+For frontend changes: make test-frontend && make lint-frontend && make typecheck-frontend
+For store changes, also: make test-integration-store
+
+Report ONLY:
+- RESULT: PASS or FAIL
+- If FAIL: the specific error output (last 50 lines of the failing command)
+- Do NOT include passing test output
 ```
 
-For frontend changes:
-```bash
-make test-frontend
-make lint-frontend
-make typecheck-frontend
-```
+**Gate:** Sub-agent reports PASS. If FAIL, read the error output, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
 
-For store/persistence changes, also run:
-```bash
-make test-integration-store
-```
+## Phase 4: Test Coverage Audit
 
-**Gate:** All quality gate commands pass with zero errors. If any fails, fix the issues before proceeding.
+Evaluate whether your tests actually cover the changes you made. Do NOT re-read files you already have in context from writing them.
 
-## Phase 4: Test Coverage Review
+1. List changed files: `git diff --name-only`
+2. For each changed production file, evaluate from what you already know:
+   - What behavior changed? (new feature, bug fix, removed feature, refactored logic)
+   - Do your tests cover: happy path, error paths, edge cases, regressions?
+   - Are integration tests needed? (persistence, API routes, auth, cross-layer data flow)
+3. If gaps exist: write the missing tests, then re-run quality gates via sub-agent (same as Phase 3).
 
-This is an audit, not a formality. Evaluate whether your tests actually cover the changes you made.
-
-### Step 1: List what changed
-
-```bash
-git diff --name-only
-```
-
-Separate the output into production files and test files.
-
-### Step 2: For each changed production file, evaluate
-
-- **What behavior changed?** (new feature, bug fix, removed feature, refactored logic)
-- **What existing tests cover this file?** Read the corresponding test file if one exists.
-- **Are there gaps?** Specifically:
-  - Happy path for new/changed behavior
-  - Error paths and edge cases
-  - Regression test if this is a bug fix (a test that would have caught the original bug)
-  - Boundary conditions
-
-### Step 3: Evaluate integration test needs
-
-Integration tests are needed when changes affect:
-- Repository/persistence layer (database queries, data mapping)
-- API routes that combine multiple services
-- Auth flows or permission checks
-- Data flowing across multiple layers
-
-If integration tests are needed, write them.
-
-### Step 4: Fill gaps
-
-Write any missing tests identified above. Then re-run quality gates.
-
-**Gate:** All tests pass, including your new coverage additions. If you identified no gaps in Steps 2-3, document your reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").
+**Gate:** No coverage gaps remain, or gaps are documented with reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").
 
 ## Phase 5: Summary
 
