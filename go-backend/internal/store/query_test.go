@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,6 +87,45 @@ func TestArgCounter_InitialArgs(t *testing.T) {
 	}
 	if len(ac.args) != 3 {
 		t.Errorf("args length after Next = %d, want 3", len(ac.args))
+	}
+}
+
+// TestPrefixCols_Simple verifies prefixCols adds a table alias to a simple column list.
+func TestPrefixCols_Simple(t *testing.T) {
+	got := prefixCols("p", "id, name, created_at")
+	want := "p.id, p.name, p.created_at"
+	if got != want {
+		t.Errorf("prefixCols(%q, %q) = %q, want %q", "p", "id, name, created_at", got, want)
+	}
+}
+
+// TestPrefixCols_MultilineConstant verifies prefixCols handles the multiline format
+// used in problemColumns (with newlines and tabs between column names).
+func TestPrefixCols_MultilineConstant(t *testing.T) {
+	cols := "id, namespace_id, title,\n\t\t       description, created_at"
+	got := prefixCols("p", cols)
+	want := "p.id, p.namespace_id, p.title, p.description, p.created_at"
+	if got != want {
+		t.Errorf("prefixCols result = %q, want %q", got, want)
+	}
+}
+
+// TestPrefixCols_WithProblemColumns verifies prefixCols works correctly with the
+// actual problemColumns constant, which contains a midline break.
+func TestPrefixCols_WithProblemColumns(t *testing.T) {
+	result := prefixCols("p", problemColumns)
+	// Verify it starts with the alias prefix and contains no bare column names
+	// that could cause ambiguity in a JOIN query.
+	if len(result) == 0 {
+		t.Fatal("prefixCols returned empty string")
+	}
+	// The result should start with "p."
+	if result[:2] != "p." {
+		t.Errorf("prefixCols result does not start with \"p.\": %q", result)
+	}
+	// Every column should be prefixed — no bare names (simple check: no ", id" without alias).
+	if strings.Contains(result, ", id") || strings.Contains(result, ", namespace_id") {
+		t.Errorf("prefixCols result contains bare column names: %q", result)
 	}
 }
 

@@ -393,3 +393,298 @@ func TestIntegration_ListStudentWorkBySession(t *testing.T) {
 		}
 	})
 }
+
+func TestIntegration_ListStudentProgress(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+
+	// Create test data
+	instructorID := uuid.New()
+	student1ID := uuid.New()
+	student2ID := uuid.New()
+	classID := uuid.New()
+	sectionID := uuid.New()
+	problemID := uuid.New()
+
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role, namespace_id) VALUES
+		($1, 'instr-sp@test.com', 'instructor', $2),
+		($3, 'stu1-sp@test.com', 'student', $4),
+		($5, 'stu2-sp@test.com', 'student', $6)`,
+		instructorID, db.nsID, student1ID, db.nsID, student2ID, db.nsID)
+	if err != nil {
+		t.Fatalf("create users: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, 'Test Class', $3)`,
+		classID, db.nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+
+	joinCode := "LSP-" + sectionID.String()[:8]
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, 'Test Section', $4)`,
+		sectionID, db.nsID, classID, joinCode)
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO section_memberships (user_id, section_id, role) VALUES
+		($1, $2, 'instructor'),
+		($3, $4, 'student'),
+		($5, $6, 'student')`,
+		instructorID, sectionID, student1ID, sectionID, student2ID, sectionID)
+	if err != nil {
+		t.Fatalf("create memberships: %v", err)
+	}
+
+	testCases := json.RawMessage(`[]`)
+	executionSettings := json.RawMessage(`{"stdin": ""}`)
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
+		problemID, db.nsID, testCases, executionSettings, instructorID)
+	if err != nil {
+		t.Fatalf("create problem: %v", err)
+	}
+
+	// Publish problem to section
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO section_problems (section_id, problem_id, published_by) VALUES ($1, $2, $3)`,
+		sectionID, problemID, instructorID)
+	if err != nil {
+		t.Fatalf("create section_problem: %v", err)
+	}
+
+	// Create student work for student1 only
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO student_work (namespace_id, user_id, problem_id, section_id, code)
+		VALUES ($1, $2, $3, $4, 'print("hello")')`,
+		db.nsID, student1ID, problemID, sectionID)
+	if err != nil {
+		t.Fatalf("create student_work: %v", err)
+	}
+
+	instructorUser := &auth.User{
+		ID:          instructorID,
+		Email:       "instr-sp@test.com",
+		NamespaceID: db.nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("ListStudentProgress_ReturnsAllStudents", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		progress, err := s.ListStudentProgress(ctx, sectionID)
+		if err != nil {
+			t.Fatalf("ListStudentProgress failed: %v", err)
+		}
+		if len(progress) != 2 {
+			t.Fatalf("expected 2 students, got %d", len(progress))
+		}
+
+		// All students should have total_problems = 1
+		for _, p := range progress {
+			if p.TotalProblems != 1 {
+				t.Errorf("expected TotalProblems=1, got %d for user %s", p.TotalProblems, p.UserID)
+			}
+		}
+
+		// student1 has started work, student2 has not
+		var foundStudent1, foundStudent2 bool
+		for _, p := range progress {
+			if p.UserID == student1ID {
+				foundStudent1 = true
+				if p.ProblemsStarted != 1 {
+					t.Errorf("student1: expected ProblemsStarted=1, got %d", p.ProblemsStarted)
+				}
+				if p.LastActive == nil {
+					t.Error("student1: expected non-nil LastActive")
+				}
+				if p.DisplayName == "" {
+					t.Error("student1: expected non-empty DisplayName")
+				}
+			}
+			if p.UserID == student2ID {
+				foundStudent2 = true
+				if p.ProblemsStarted != 0 {
+					t.Errorf("student2: expected ProblemsStarted=0, got %d", p.ProblemsStarted)
+				}
+				if p.LastActive != nil {
+					t.Error("student2: expected nil LastActive (no work done)")
+				}
+			}
+		}
+		if !foundStudent1 {
+			t.Error("student1 not found in results")
+		}
+		if !foundStudent2 {
+			t.Error("student2 not found in results")
+		}
+	})
+
+	t.Run("ListStudentProgress_EmptySection", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		progress, err := s.ListStudentProgress(ctx, uuid.New())
+		if err != nil {
+			t.Fatalf("ListStudentProgress failed: %v", err)
+		}
+		if len(progress) != 0 {
+			t.Fatalf("expected 0 students, got %d", len(progress))
+		}
+	})
+}
+
+func TestIntegration_ListStudentWorkForReview(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+
+	// Create test data
+	instructorID := uuid.New()
+	studentID := uuid.New()
+	classID := uuid.New()
+	sectionID := uuid.New()
+	problem1ID := uuid.New()
+	problem2ID := uuid.New()
+
+	_, err := db.pool.Exec(ctx,
+		`INSERT INTO users (id, email, role, namespace_id) VALUES
+		($1, 'instr-wr@test.com', 'instructor', $2),
+		($3, 'stu-wr@test.com', 'student', $4)`,
+		instructorID, db.nsID, studentID, db.nsID)
+	if err != nil {
+		t.Fatalf("create users: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, 'Test Class', $3)`,
+		classID, db.nsID, instructorID)
+	if err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+
+	joinCode := "WR-" + sectionID.String()[:8]
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, 'Test Section', $4)`,
+		sectionID, db.nsID, classID, joinCode)
+	if err != nil {
+		t.Fatalf("create section: %v", err)
+	}
+
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO section_memberships (user_id, section_id, role) VALUES
+		($1, $2, 'instructor'),
+		($3, $4, 'student')`,
+		instructorID, sectionID, studentID, sectionID)
+	if err != nil {
+		t.Fatalf("create memberships: %v", err)
+	}
+
+	testCases := json.RawMessage(`[]`)
+	execSettings := json.RawMessage(`{"stdin": ""}`)
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
+		VALUES
+		($1, $2, 'Problem 1', $3, $4, $5),
+		($6, $7, 'Problem 2', $8, $9, $10)`,
+		problem1ID, db.nsID, testCases, execSettings, instructorID,
+		problem2ID, db.nsID, testCases, execSettings, instructorID)
+	if err != nil {
+		t.Fatalf("create problems: %v", err)
+	}
+
+	// Publish both problems to section
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO section_problems (section_id, problem_id, published_by) VALUES
+		($1, $2, $3),
+		($4, $5, $6)`,
+		sectionID, problem1ID, instructorID,
+		sectionID, problem2ID, instructorID)
+	if err != nil {
+		t.Fatalf("create section_problems: %v", err)
+	}
+
+	// Student has work for problem1 only
+	_, err = db.pool.Exec(ctx,
+		`INSERT INTO student_work (namespace_id, user_id, problem_id, section_id, code)
+		VALUES ($1, $2, $3, $4, 'print("problem1")')`,
+		db.nsID, studentID, problem1ID, sectionID)
+	if err != nil {
+		t.Fatalf("create student_work: %v", err)
+	}
+
+	instructorUser := &auth.User{
+		ID:          instructorID,
+		Email:       "instr-wr@test.com",
+		NamespaceID: db.nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("ListStudentWorkForReview_PartialCompletion", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		summaries, err := s.ListStudentWorkForReview(ctx, sectionID, studentID)
+		if err != nil {
+			t.Fatalf("ListStudentWorkForReview failed: %v", err)
+		}
+		if len(summaries) != 2 {
+			t.Fatalf("expected 2 summaries, got %d", len(summaries))
+		}
+
+		// Check that we have both problems, one with work and one without
+		var foundProblem1WithWork, foundProblem2WithoutWork bool
+		for _, summary := range summaries {
+			if summary.Problem.ID == problem1ID {
+				if summary.StudentWork == nil {
+					t.Error("problem1: expected non-nil StudentWork")
+				} else {
+					foundProblem1WithWork = true
+					if summary.StudentWork.Code != `print("problem1")` {
+						t.Errorf("problem1: expected code 'print(\"problem1\")', got %s", summary.StudentWork.Code)
+					}
+				}
+			}
+			if summary.Problem.ID == problem2ID {
+				if summary.StudentWork != nil {
+					t.Error("problem2: expected nil StudentWork (student hasn't started)")
+				} else {
+					foundProblem2WithoutWork = true
+				}
+			}
+			// PublishedAt must be set
+			if summary.PublishedAt.IsZero() {
+				t.Errorf("expected non-zero PublishedAt for problem %s", summary.Problem.ID)
+			}
+		}
+		if !foundProblem1WithWork {
+			t.Error("problem1 with work not found")
+		}
+		if !foundProblem2WithoutWork {
+			t.Error("problem2 without work not found")
+		}
+	})
+
+	t.Run("ListStudentWorkForReview_NoProblems", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		summaries, err := s.ListStudentWorkForReview(ctx, uuid.New(), studentID)
+		if err != nil {
+			t.Fatalf("ListStudentWorkForReview failed: %v", err)
+		}
+		if len(summaries) != 0 {
+			t.Fatalf("expected 0 summaries, got %d", len(summaries))
+		}
+	})
+}

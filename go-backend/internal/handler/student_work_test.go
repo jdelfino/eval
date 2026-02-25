@@ -46,6 +46,14 @@ func (m *mockStudentWorkRepo) ListStudentWorkBySession(ctx context.Context, sess
 	return m.listStudentWorkBySessionFn(ctx, sessionID)
 }
 
+func (m *mockStudentWorkRepo) ListStudentProgress(_ context.Context, _ uuid.UUID) ([]store.StudentProgress, error) {
+	panic("mockStudentWorkRepo: unexpected ListStudentProgress call")
+}
+
+func (m *mockStudentWorkRepo) ListStudentWorkForReview(_ context.Context, _, _ uuid.UUID) ([]store.StudentWorkSummary, error) {
+	panic("mockStudentWorkRepo: unexpected ListStudentWorkForReview call")
+}
+
 // Helper to create repos with both section problem and student work repos.
 type swReposImpl struct {
 	stubRepos

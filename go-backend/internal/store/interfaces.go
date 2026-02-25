@@ -654,6 +654,23 @@ type UpdateStudentWorkParams struct {
 	ExecutionSettings json.RawMessage // nil means don't update
 }
 
+// StudentProgress holds progress summary for a single student in a section.
+type StudentProgress struct {
+	UserID          uuid.UUID  `json:"user_id"`
+	DisplayName     string     `json:"display_name"`
+	Email           string     `json:"email"`
+	ProblemsStarted int        `json:"problems_started"`
+	TotalProblems   int        `json:"total_problems"`
+	LastActive      *time.Time `json:"last_active"`
+}
+
+// StudentWorkSummary holds a published problem and the student's work for it (if any).
+type StudentWorkSummary struct {
+	Problem     Problem      `json:"problem"`
+	PublishedAt time.Time    `json:"published_at"`
+	StudentWork *StudentWork `json:"student_work"`
+}
+
 // StudentWorkRepository defines the interface for student work data access.
 type StudentWorkRepository interface {
 	// GetOrCreateStudentWork gets or creates student work for a (user, problem, section) triple.
@@ -669,6 +686,11 @@ type StudentWorkRepository interface {
 	GetStudentWorkByProblem(ctx context.Context, userID, problemID, sectionID uuid.UUID) (*StudentWork, error)
 	// ListStudentWorkBySession retrieves all student work linked to a session.
 	ListStudentWorkBySession(ctx context.Context, sessionID uuid.UUID) ([]StudentWork, error)
+	// ListStudentProgress returns a progress summary for every student in a section.
+	ListStudentProgress(ctx context.Context, sectionID uuid.UUID) ([]StudentProgress, error)
+	// ListStudentWorkForReview returns all published problems in a section with the
+	// given student's work (if any) for each problem.
+	ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentWorkSummary, error)
 }
 
 // AdminStats contains aggregate system statistics.

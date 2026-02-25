@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -141,6 +142,123 @@ func (s *Store) ListStudentWorkBySession(ctx context.Context, sessionID uuid.UUI
 		works = append(works, *sw)
 	}
 	return works, rows.Err()
+}
+
+// ListStudentProgress returns a progress summary for every student in a section.
+// For each student, it reports how many problems they have started and the total
+// number of problems published to the section, along with their last-active time.
+func (s *Store) ListStudentProgress(ctx context.Context, sectionID uuid.UUID) ([]StudentProgress, error) {
+	query := `SELECT
+		u.id,
+		COALESCE(u.display_name, u.email) AS display_name,
+		u.email,
+		COUNT(sw.id) AS problems_started,
+		(SELECT COUNT(*) FROM section_problems WHERE section_id = $1) AS total_problems,
+		MAX(sw.last_update) AS last_active
+		FROM section_memberships sm
+		JOIN users u ON u.id = sm.user_id
+		LEFT JOIN student_work sw ON sw.user_id = sm.user_id AND sw.section_id = $1
+		WHERE sm.section_id = $1 AND sm.role = 'student'
+		GROUP BY u.id, u.display_name, u.email, sm.joined_at
+		ORDER BY COALESCE(MAX(sw.last_update), sm.joined_at) DESC`
+
+	rows, err := s.q.Query(ctx, query, sectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []StudentProgress
+	for rows.Next() {
+		var p StudentProgress
+		if err := rows.Scan(
+			&p.UserID,
+			&p.DisplayName,
+			&p.Email,
+			&p.ProblemsStarted,
+			&p.TotalProblems,
+			&p.LastActive,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+	return results, rows.Err()
+}
+
+// ListStudentWorkForReview returns all problems published to a section along with the
+// given student's work (if any) for each problem.
+func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentWorkSummary, error) {
+	query := `SELECT
+		` + prefixCols("p", problemColumns) + `,
+		sp.published_at,
+		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
+		sw.code, sw.execution_settings, sw.created_at, sw.last_update
+		FROM section_problems sp
+		JOIN problems p ON p.id = sp.problem_id
+		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id
+			AND sw.section_id = sp.section_id
+			AND sw.user_id = $2
+		WHERE sp.section_id = $1
+		ORDER BY sp.published_at DESC`
+
+	rows, err := s.q.Query(ctx, query, sectionID, studentUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []StudentWorkSummary
+	for rows.Next() {
+		var summary StudentWorkSummary
+		var workID *uuid.UUID
+		var workNamespaceID *string
+		var workUserID *uuid.UUID
+		var workProblemID *uuid.UUID
+		var workSectionID *uuid.UUID
+		var workCode *string
+		var workExecutionSettings []byte
+		var workCreatedAt *time.Time
+		var workLastUpdate *time.Time
+
+		if err := rows.Scan(
+			// Problem fields
+			&summary.Problem.ID, &summary.Problem.NamespaceID, &summary.Problem.Title, &summary.Problem.Description,
+			&summary.Problem.StarterCode, &summary.Problem.TestCases, &summary.Problem.ExecutionSettings,
+			&summary.Problem.AuthorID, &summary.Problem.ClassID, &summary.Problem.Tags, &summary.Problem.Solution,
+			&summary.Problem.CreatedAt, &summary.Problem.UpdatedAt,
+			// SectionProblem fields
+			&summary.PublishedAt,
+			// StudentWork fields (nullable)
+			&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
+			&workCode, &workExecutionSettings, &workCreatedAt, &workLastUpdate,
+		); err != nil {
+			return nil, err
+		}
+
+		if workID != nil {
+			summary.StudentWork = &StudentWork{
+				ID:          *workID,
+				NamespaceID: *workNamespaceID,
+				UserID:      *workUserID,
+				ProblemID:   *workProblemID,
+				SectionID:   *workSectionID,
+				Code:        *workCode,
+			}
+			if workExecutionSettings != nil {
+				summary.StudentWork.ExecutionSettings = workExecutionSettings
+			}
+			if workCreatedAt != nil {
+				summary.StudentWork.CreatedAt = *workCreatedAt
+			}
+			if workLastUpdate != nil {
+				summary.StudentWork.LastUpdate = *workLastUpdate
+			}
+		}
+
+		results = append(results, summary)
+	}
+	return results, rows.Err()
 }
 
 // Compile-time check that Store implements StudentWorkRepository.

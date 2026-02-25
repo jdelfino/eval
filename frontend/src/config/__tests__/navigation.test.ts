@@ -61,6 +61,12 @@ describe('Navigation Configuration', () => {
       expect(BREADCRUMB_HIERARCHY['/sections']).toBeNull();
       expect(BREADCRUMB_HIERARCHY['/sections/[section_id]']).toBe('/sections');
     });
+
+    it('maps student detail page to its parent section page', () => {
+      expect(BREADCRUMB_HIERARCHY['/sections/[section_id]/students/[user_id]']).toBe(
+        '/sections/[section_id]',
+      );
+    });
   });
 
   describe('getNavItemsForRole', () => {

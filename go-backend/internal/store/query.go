@@ -2,8 +2,26 @@ package store
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
+
+// colSepRE matches any SQL column list separator (comma optionally surrounded by whitespace/newlines).
+var colSepRE = regexp.MustCompile(`,\s*`)
+
+// prefixCols prefixes each column name in a comma-separated column list with the
+// given table alias (e.g. "p"). This is used to qualify unaliased column constants
+// (such as problemColumns) when the query uses a table alias in a JOIN.
+//
+// Example: prefixCols("p", "id, name, created_at") → "p.id, p.name, p.created_at"
+func prefixCols(alias, cols string) string {
+	parts := colSepRE.Split(strings.TrimSpace(cols), -1)
+	for i, p := range parts {
+		parts[i] = alias + "." + strings.TrimSpace(p)
+	}
+	return strings.Join(parts, ", ")
+}
 
 // argCounter tracks the next placeholder index for dynamic SQL queries.
 // It avoids the error-prone manual argIdx pattern where each conditional

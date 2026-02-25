@@ -3,10 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Session, PublishedProblemWithStatus } from '@/types/api';
+import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/types/api';
 import { getSection, getActiveSessions } from '@/lib/api/sections';
 import { getClass } from '@/lib/api/classes';
 import { listSectionProblems } from '@/lib/api/section-problems';
+import { listStudentProgress } from '@/lib/api/student-review';
 import { BackButton } from '@/components/ui/BackButton';
 import StudentSectionView from './components/StudentSectionView';
 import InstructorSectionView from './components/InstructorSectionView';
@@ -30,6 +31,7 @@ export default function SectionDetailPage() {
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [pastSessions, setPastSessions] = useState<Session[]>([]);
   const [publishedProblems, setPublishedProblems] = useState<PublishedProblemWithStatus[]>([]);
+  const [students, setStudents] = useState<StudentProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,17 +46,28 @@ export default function SectionDetailPage() {
     }
   }, [user, authLoading, section_id, router]);
 
+  const userIsInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
+
   const loadSectionData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch section, sessions, and problems in parallel
-      const [sectionData, sessionsData, problemsData] = await Promise.all([
+      // Fetch section, sessions, and problems in parallel.
+      // For instructors, also fetch student progress (gated behind PermContentManage).
+      const parallelFetches: [
+        ReturnType<typeof getSection>,
+        ReturnType<typeof getActiveSessions>,
+        ReturnType<typeof listSectionProblems>,
+        Promise<StudentProgress[]>,
+      ] = [
         getSection(section_id),
         getActiveSessions(section_id),
         listSectionProblems(section_id),
-      ]);
+        userIsInstructor ? listStudentProgress(section_id) : Promise.resolve([]),
+      ];
+
+      const [sectionData, sessionsData, problemsData, studentsData] = await Promise.all(parallelFetches);
 
       // Fetch class name using the section's class_id
       const classData = await getClass(sectionData.class_id);
@@ -97,6 +110,7 @@ export default function SectionDetailPage() {
       });
 
       setPublishedProblems(sortedProblems);
+      setStudents(studentsData);
     } catch (err) {
       console.error('Error loading section data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load section');
@@ -104,8 +118,6 @@ export default function SectionDetailPage() {
       setLoading(false);
     }
   };
-
-  const isInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
 
   if (authLoading || loading) {
     return (
@@ -120,15 +132,15 @@ export default function SectionDetailPage() {
       <div className="space-y-6">
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-red-600 mb-4">{error || 'Section not found'}</p>
-          <BackButton href={isInstructor ? '/classes' : '/sections'}>
-            {isInstructor ? 'Back to Classes' : 'Back to My Sections'}
+          <BackButton href={userIsInstructor ? '/classes' : '/sections'}>
+            {userIsInstructor ? 'Back to Classes' : 'Back to My Sections'}
           </BackButton>
         </div>
       </div>
     );
   }
 
-  if (!isInstructor) {
+  if (!userIsInstructor) {
     return (
       <StudentSectionView
         section={section}
@@ -145,6 +157,7 @@ export default function SectionDetailPage() {
       activeSessions={activeSessions}
       pastSessions={pastSessions}
       publishedProblems={publishedProblems}
+      students={students}
     />
   );
 }

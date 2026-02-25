@@ -21,6 +21,7 @@ type SectionHandler struct {
 	membershipHandler     *MembershipHandler
 	sectionProblemHandler *SectionProblemHandler
 	studentWorkHandler    *StudentWorkHandler
+	studentReviewHandler  *StudentReviewHandler
 	readRL                func(http.Handler) http.Handler
 	writeRL               func(http.Handler) http.Handler
 }
@@ -28,11 +29,12 @@ type SectionHandler struct {
 // NewSectionHandler creates a new SectionHandler.
 // membershipHandler is used to mount membership sub-resource routes
 // (members, membership) under /sections/{id}.
-func NewSectionHandler(membershipHandler *MembershipHandler, sectionProblemHandler *SectionProblemHandler, studentWorkHandler *StudentWorkHandler) *SectionHandler {
+func NewSectionHandler(membershipHandler *MembershipHandler, sectionProblemHandler *SectionProblemHandler, studentWorkHandler *StudentWorkHandler, studentReviewHandler *StudentReviewHandler) *SectionHandler {
 	return &SectionHandler{
 		membershipHandler:     membershipHandler,
 		sectionProblemHandler: sectionProblemHandler,
 		studentWorkHandler:    studentWorkHandler,
+		studentReviewHandler:  studentReviewHandler,
 	}
 }
 
@@ -86,6 +88,9 @@ func (h *SectionHandler) Routes() chi.Router {
 			r.With(writeRL).Post("/problems", h.sectionProblemHandler.Publish)
 			r.With(writeRL).Patch("/problems/{problemID}", h.sectionProblemHandler.Update)
 			r.With(writeRL).Delete("/problems/{problemID}", h.sectionProblemHandler.Unpublish)
+			// Student review endpoints
+			r.With(readRL).Get("/student-progress", h.studentReviewHandler.ListStudentProgress)
+			r.With(readRL).Get("/students/{userID}/work", h.studentReviewHandler.ListStudentWork)
 		})
 	})
 

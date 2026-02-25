@@ -91,7 +91,7 @@ func TestListSectionsByClass_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", sec.ClassID.String())
@@ -127,7 +127,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -151,7 +151,7 @@ func TestListSectionsByClass_Empty(t *testing.T) {
 
 func TestListSectionsByClass_InvalidClassID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -176,7 +176,7 @@ func TestListSectionsByClass_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", classID.String())
@@ -204,7 +204,7 @@ func TestGetSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+sec.ID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
@@ -237,7 +237,7 @@ func TestGetSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -256,7 +256,7 @@ func TestGetSection_NotFound(t *testing.T) {
 
 func TestGetSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -320,7 +320,7 @@ func TestCreateSection_Success(t *testing.T) {
 		"name":     "Section A",
 		"semester": "Fall 2025",
 	})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -367,7 +367,7 @@ func TestCreateSection_MembershipCreationFails(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -390,7 +390,7 @@ func TestCreateSection_MembershipCreationFails(t *testing.T) {
 }
 
 func TestCreateSection_Unauthorized(t *testing.T) {
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", uuid.New().String())
@@ -406,7 +406,7 @@ func TestCreateSection_Unauthorized(t *testing.T) {
 }
 
 func TestCreateSection_InvalidClassID(t *testing.T) {
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("classID", "not-a-uuid")
@@ -424,7 +424,7 @@ func TestCreateSection_InvalidClassID(t *testing.T) {
 
 func TestCreateSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	router := h.ClassRoutes()
 
 	body, _ := json.Marshal(map[string]any{
@@ -474,7 +474,7 @@ func TestUpdateSection_Success(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"name": newName,
 	})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+sec.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -509,7 +509,7 @@ func TestUpdateSection_NotFound(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -538,7 +538,7 @@ func TestDeleteSection_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -563,7 +563,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -582,7 +582,7 @@ func TestDeleteSection_NotFound(t *testing.T) {
 
 func TestDeleteSection_InvalidID(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/not-a-uuid", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -601,7 +601,7 @@ func TestDeleteSection_InvalidID(t *testing.T) {
 
 func TestDeleteSection_RBACForbidden(t *testing.T) {
 	repo := &mockSectionRepo{}
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	router := h.Routes()
 
 	id := uuid.New()
@@ -623,7 +623,7 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 
 func TestCreateSection_MissingName(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"semester": "Fall 2025"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -647,7 +647,7 @@ func TestCreateSection_MissingName(t *testing.T) {
 
 func TestCreateSection_InvalidBody(t *testing.T) {
 	classID := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -669,7 +669,7 @@ func TestCreateSection_InvalidBody(t *testing.T) {
 }
 
 func TestUpdateSection_InvalidID(t *testing.T) {
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
 	req := httptest.NewRequest(http.MethodPatch, "/not-a-uuid", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -689,7 +689,7 @@ func TestUpdateSection_InvalidID(t *testing.T) {
 
 func TestUpdateSection_InvalidBody(t *testing.T) {
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader([]byte("not json")))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -715,7 +715,7 @@ func TestUpdateSection_InternalError(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -741,7 +741,7 @@ func TestGetSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -766,7 +766,7 @@ func TestDeleteSection_InternalError(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -810,7 +810,7 @@ func TestCreateSection_JoinCodeRetrySuccess(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -847,7 +847,7 @@ func TestCreateSection_JoinCodeRetryExhausted(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -884,7 +884,7 @@ func TestCreateSection_OtherUniqueViolationNoRetry(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]any{"name": "Section A"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -1003,7 +1003,7 @@ func TestMySections_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1029,7 +1029,7 @@ func TestMySections_Success(t *testing.T) {
 }
 
 func TestMySections_Unauthorized(t *testing.T) {
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	rec := httptest.NewRecorder()
 
@@ -1047,7 +1047,7 @@ func TestMySections_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1079,7 +1079,7 @@ func TestSectionListSessions_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1105,7 +1105,7 @@ func TestSectionListSessions_Success(t *testing.T) {
 }
 
 func TestSectionListSessions_InvalidID(t *testing.T) {
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "not-a-uuid")
@@ -1139,7 +1139,7 @@ func TestRegenerateCode_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sec.ID.String())
@@ -1171,7 +1171,7 @@ func TestRegenerateCode_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -1208,7 +1208,7 @@ func TestListInstructors_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1244,7 +1244,7 @@ func TestListInstructors_Empty(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1302,7 +1302,7 @@ func TestAddInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1336,7 +1336,7 @@ func TestAddInstructor_UserNotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "nobody@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1366,7 +1366,7 @@ func TestAddInstructor_NotInstructorRole(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "student@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1410,7 +1410,7 @@ func TestAddInstructor_AlreadyExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1450,7 +1450,7 @@ func TestRemoveInstructor_Success(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1478,7 +1478,7 @@ func TestRemoveInstructor_LastInstructor(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1514,7 +1514,7 @@ func TestRemoveInstructor_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1539,7 +1539,7 @@ func TestMySections_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/my", nil)
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
 	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
@@ -1561,7 +1561,7 @@ func TestSectionListSessions_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1585,7 +1585,7 @@ func TestRegenerateCode_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", uuid.New().String())
@@ -1619,7 +1619,7 @@ func TestAddInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1663,7 +1663,7 @@ func TestRemoveInstructor_NotMemberButOtherInstructorExists(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1691,7 +1691,7 @@ func TestRemoveInstructor_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1717,7 +1717,7 @@ func TestListInstructors_InternalError(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -1754,7 +1754,7 @@ func TestSectionRoutes_ListSessions_StudentAllowed(t *testing.T) {
 	}
 
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/"+sectionID.String()+"/sessions", nil)
@@ -1791,7 +1791,7 @@ func TestSectionRoutes_ListMembers_StudentAllowed(t *testing.T) {
 	}
 
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/"+sectionID.String()+"/members", nil)
@@ -1820,7 +1820,7 @@ func TestSectionRoutes_LeaveMembership(t *testing.T) {
 	}
 
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String()+"/membership", nil)
@@ -1841,7 +1841,7 @@ func TestSectionRoutes_LeaveMembership(t *testing.T) {
 
 func TestSectionRoutes_RegenerateCode_RBACForbidden(t *testing.T) {
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodPost, "/"+uuid.New().String()+"/regenerate-code", nil)
@@ -1861,7 +1861,7 @@ func TestSectionRoutes_RegenerateCode_RBACForbidden(t *testing.T) {
 
 func TestSectionRoutes_ListInstructors_RBACForbidden(t *testing.T) {
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/"+uuid.New().String()+"/instructors", nil)
@@ -1881,7 +1881,7 @@ func TestSectionRoutes_ListInstructors_RBACForbidden(t *testing.T) {
 
 func TestSectionRoutes_AddInstructor_RBACForbidden(t *testing.T) {
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
@@ -1903,7 +1903,7 @@ func TestSectionRoutes_AddInstructor_RBACForbidden(t *testing.T) {
 
 func TestSectionRoutes_RemoveInstructor_RBACForbidden(t *testing.T) {
 	membershipHandler := NewMembershipHandler()
-	h := NewSectionHandler(membershipHandler, nil, nil)
+	h := NewSectionHandler(membershipHandler, nil, nil, nil)
 	router := h.Routes()
 
 	req := httptest.NewRequest(http.MethodDelete, "/"+uuid.New().String()+"/instructors/"+uuid.New().String(), nil)
@@ -1932,7 +1932,7 @@ func TestUpdateSection_RLSForbidden(t *testing.T) {
 
 	id := uuid.New()
 	body, _ := json.Marshal(map[string]any{"name": "New Name"})
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -1958,7 +1958,7 @@ func TestDeleteSection_RLSForbidden(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/"+id.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -1983,7 +1983,7 @@ func TestRegenerateCode_RLSForbidden(t *testing.T) {
 	}
 
 	id := uuid.New()
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/"+id.String()+"/regenerate-code", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id.String())
@@ -2019,7 +2019,7 @@ func TestAddInstructor_RLSForbidden(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	body, _ := json.Marshal(map[string]any{"email": "prof@example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -2048,7 +2048,7 @@ func TestRemoveInstructor_RLSForbidden(t *testing.T) {
 		},
 	}
 
-	h := NewSectionHandler(NewMembershipHandler(), nil, nil)
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
