@@ -8,7 +8,12 @@
 import { withRetry } from '@/lib/api-utils';
 import { ApiError } from '@/lib/api-error';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// During SSR (server components), relative URLs like /api/v1 resolve to
+// localhost:3000 which is Next.js itself, not the Go backend. Use
+// API_INTERNAL_URL (e.g. http://go-api/api/v1) for server-side fetches.
+const BASE_URL = (typeof window === 'undefined' && process.env.API_INTERNAL_URL)
+  ? process.env.API_INTERNAL_URL
+  : (process.env.NEXT_PUBLIC_API_URL || '');
 
 /**
  * Public fetch wrapper with retry logic and error handling.

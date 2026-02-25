@@ -336,6 +336,7 @@ resource "kubernetes_config_map" "frontend_config" {
 
   data = {
     NEXT_PUBLIC_API_URL              = "/api/v1"
+    API_INTERNAL_URL                 = "http://go-api/api/v1" # SSR: server components fetch from internal service
     NEXT_PUBLIC_FIREBASE_API_KEY     = module.identity_platform.api_key
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = module.identity_platform.auth_domain
     NEXT_PUBLIC_FIREBASE_PROJECT_ID  = var.project_id
