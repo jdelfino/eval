@@ -62,6 +62,11 @@ For every test file, read it completely and check:
 - Do test names describe the behavior being tested?
 - Are table-driven tests used where appropriate?
 
+#### Skipped Tests
+- Are there `it.skip`, `test.skip`, `describe.skip`, or `t.Skip()` calls that appear to be deferred work rather than legitimate environment-gating (e.g., skipping integration tests when `DATABASE_URL` is unset)?
+- Skipped tests that represent missing backend endpoints, unimplemented features, or known bugs should be flagged as non-trivial — they indicate work was left incomplete without a tracking issue
+- Legitimate skips: environment-gating (`if os.Getenv("DATABASE_URL") == ""`) or platform-specific exclusions
+
 #### Meaningless Tests (flag these specifically)
 - Tests that assert `ctx != nil` or similar tautologies
 - Tests that only check `err == nil` without verifying the result
