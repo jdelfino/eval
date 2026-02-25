@@ -147,6 +147,7 @@ function EmailSignInContent() {
         } else {
           setSubmitError('Sign in failed. Please try again.');
         }
+      } finally {
         setIsLoading(false);
       }
     },

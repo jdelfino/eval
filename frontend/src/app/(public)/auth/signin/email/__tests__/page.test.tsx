@@ -397,7 +397,7 @@ describe('EmailSignInPage', () => {
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    it('does NOT redirect to / when isAuthenticated becomes true (suppresses auto-redirect)', async () => {
+    it('does NOT redirect to / when isAuthenticated becomes true (suppresses auto-redirect)', () => {
       // When invite param is present, the isAuthenticated redirect should be suppressed
       // so that acceptInvite can run and redirect based on role instead.
       (useAuth as jest.Mock).mockReturnValue({
@@ -406,16 +406,31 @@ describe('EmailSignInPage', () => {
 
       render(<EmailSignInPage />);
 
-      // Wait a bit to confirm no redirect happened
-      await new Promise((resolve) => setTimeout(resolve, 100));
       expect(mockPush).not.toHaveBeenCalledWith('/');
     });
 
-    it('does not call acceptInvite without signing in first', async () => {
+    it('does not call acceptInvite without signing in first', () => {
       render(<EmailSignInPage />);
 
       // Simply rendering the page with invite param should not call acceptInvite
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(mockAcceptInvite).not.toHaveBeenCalled();
+    });
+
+    it('shows Firebase credential error even when invite token is present', async () => {
+      const user = userEvent.setup();
+      const firebaseError = new Error('Firebase: Error (auth/invalid-credential).');
+      (firebaseError as { code?: string }).code = 'auth/invalid-credential';
+      mockSignInWithEmailAndPassword.mockRejectedValue(firebaseError);
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'wrongpassword');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
+      });
       expect(mockAcceptInvite).not.toHaveBeenCalled();
     });
   });
