@@ -11,7 +11,7 @@ import { createSession as apiCreateSession } from '@/lib/api/sessions';
 interface InstructorActionsProps {
   problem_id: string;
   problem_title: string;
-  class_id: string;
+  class_id: string | null;
   className: string;
 }
 
@@ -29,6 +29,7 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   useEffect(() => {
     if (isLoading || autoStartAttempted.current) return;
     if (!isInstructor) return;
+    if (!class_id) return;
 
     const shouldStart = searchParams.get('start') === 'true';
     const section_id = searchParams.get('section_id');
@@ -52,6 +53,7 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
 
   if (isLoading) return null;
   if (!isInstructor) return null;
+  if (!class_id) return null;
 
   const handleSessionCreated = (session_id: string) => {
     const channel = new BroadcastChannel('instructor-session-created');

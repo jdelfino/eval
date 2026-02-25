@@ -199,5 +199,28 @@ func (s *Store) DeleteProblem(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// GetPublicProblem retrieves a problem's public fields by ID, including class name.
+// Returns ErrNotFound if the problem does not exist.
+func (s *Store) GetPublicProblem(ctx context.Context, id uuid.UUID) (*PublicProblem, error) {
+	query := `SELECT p.id, p.title, p.description, p.solution, p.starter_code, p.class_id,
+	                 c.name AS class_name, p.tags
+	          FROM problems p
+	          LEFT JOIN classes c ON c.id = p.class_id
+	          WHERE p.id = $1`
+	row := s.q.QueryRow(ctx, query, id)
+	var pp PublicProblem
+	var tags []string
+	err := row.Scan(&pp.ID, &pp.Title, &pp.Description, &pp.Solution, &pp.StarterCode, &pp.ClassID, &pp.ClassName, &tags)
+	if err != nil {
+		return nil, HandleNotFound(err)
+	}
+	if tags == nil {
+		pp.Tags = []string{}
+	} else {
+		pp.Tags = tags
+	}
+	return &pp, nil
+}
+
 // Compile-time check that Store implements ProblemRepository.
 var _ ProblemRepository = (*Store)(nil)
