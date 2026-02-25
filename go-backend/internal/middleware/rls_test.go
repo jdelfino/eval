@@ -820,10 +820,19 @@ func TestPublicStoreMiddleware_Success(t *testing.T) {
 		t.Errorf("First exec should be SET ROLE eval_app, got queries: %v", queries)
 	}
 
-	// Verify only app.role was set via set_config, and set to 'public'.
+	// Verify stale session vars are cleared (defense-in-depth against pool leakage).
+	if len(queries) < 2 {
+		t.Fatal("Expected clearing stale vars as second exec call")
+	}
+	clearQuery := "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)"
+	if queries[1] != clearQuery {
+		t.Errorf("Second exec should clear stale vars, got %q", queries[1])
+	}
+
+	// Verify only app.role was set via parameterized set_config, and set to 'public'.
 	calls := mock.getSetConfigArgs()
 	if len(calls) != 1 {
-		t.Fatalf("Expected 1 set_config call (app.role=public), got %d: %v", len(calls), calls)
+		t.Fatalf("Expected 1 parameterized set_config call (app.role=public), got %d: %v", len(calls), calls)
 	}
 	if calls[0].setting != "app.role" {
 		t.Errorf("set_config setting = %q, want %q", calls[0].setting, "app.role")
@@ -843,9 +852,38 @@ func TestPublicStoreMiddleware_Success(t *testing.T) {
 	}
 }
 
-func TestPublicStoreMiddleware_SetConfigError(t *testing.T) {
-	// SET ROLE eval_app succeeds (call index 0), set_config fails (call index 1) → 503.
+func TestPublicStoreMiddleware_ClearVarsError(t *testing.T) {
+	// SET ROLE eval_app succeeds (call 0), clear stale vars fails (call 1) → 503.
 	mock := &mockConnFailAfter{failAfter: 1}
+	acquirer := &testAcquirer{conn: mock}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when clearing stale vars fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+	if !mock.wasReleased() {
+		t.Error("Connection should be released even on error")
+	}
+}
+
+func TestPublicStoreMiddleware_SetConfigError(t *testing.T) {
+	// SET ROLE eval_app succeeds (call 0), clear vars succeeds (call 1),
+	// set_config('app.role') fails (call 2) → 503.
+	mock := &mockConnFailAfter{failAfter: 2}
 	acquirer := &testAcquirer{conn: mock}
 
 	handlerCalled := false
@@ -1045,9 +1083,9 @@ func TestPublicStoreMiddleware_SetsRoleBeforeConfig(t *testing.T) {
 		t.Errorf("First Exec query should be SET ROLE eval_app, got %q", queries[0])
 	}
 
-	// Total: SET ROLE + 1 set_config + RESET ROLE + resetVarsQuery = 4 queries
-	if len(queries) < 4 {
-		t.Errorf("Expected at least 4 Exec calls (SET ROLE + set_config + RESET ROLE + clear vars), got %d: %v", len(queries), queries)
+	// Total: SET ROLE + clear stale vars + set_config + RESET ROLE + resetVarsQuery = 5 queries
+	if len(queries) < 5 {
+		t.Errorf("Expected at least 5 Exec calls (SET ROLE + clear vars + set_config + RESET ROLE + resetVarsQuery), got %d: %v", len(queries), queries)
 	}
 }
 

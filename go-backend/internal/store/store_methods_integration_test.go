@@ -173,6 +173,14 @@ func (db *integrationDB) setPublicRLSContext(ctx context.Context, conn *pgxpool.
 		return fmt.Errorf("set role to eval_app: %w", err)
 	}
 
+	// Clear stale user-specific variables — pooled connections may retain
+	// app.user_id / app.namespace_id from a previous storeWithRLS call,
+	// which would widen the public context beyond what migration 016 intends.
+	_, err = conn.Exec(ctx, "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)")
+	if err != nil {
+		return fmt.Errorf("clear stale session vars: %w", err)
+	}
+
 	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "public")
 	if err != nil {
 		return fmt.Errorf("set app.role: %w", err)
