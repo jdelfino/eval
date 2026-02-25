@@ -149,4 +149,23 @@ func TestIntegration_GetPublicProblem(t *testing.T) {
 			t.Errorf("expected class_name 'CS101', got %q", *got.ClassName)
 		}
 	})
+
+	t.Run("public RLS context cannot read other tables", func(t *testing.T) {
+		// Verify that the public RLS context (eval_app + app.role='public') is
+		// blocked from reading sensitive tables not covered by migration 016's
+		// policies. Only problems and classes have SELECT policies under this
+		// context, so querying users should return 0 rows.
+		_, conn := db.storeWithPublicRLS(ctx, t)
+		defer conn.Release()
+
+		var count int
+		err := conn.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+		// With RLS enabled, the query succeeds but returns 0 rows (no matching policy).
+		if err != nil {
+			t.Fatalf("unexpected error querying users under public RLS context: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("expected 0 users under public RLS context, got %d", count)
+		}
+	})
 }

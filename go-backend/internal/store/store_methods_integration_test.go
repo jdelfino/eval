@@ -173,7 +173,7 @@ func (db *integrationDB) setPublicRLSContext(ctx context.Context, conn *pgxpool.
 		return fmt.Errorf("set role to eval_app: %w", err)
 	}
 
-	_, err = conn.Exec(ctx, "SELECT set_config('app.role', 'public', false)")
+	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "public")
 	if err != nil {
 		return fmt.Errorf("set app.role: %w", err)
 	}
