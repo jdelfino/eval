@@ -54,22 +54,13 @@ func (h *StudentWorkHandler) GetOrCreate(w http.ResponseWriter, r *http.Request)
 	// Validate problem is published to section via section_problems.
 	// RLS handles section membership — if user is not a member, section_problems query returns empty.
 	repos := store.ReposFromContext(r.Context())
-	published, err := repos.ListSectionProblems(r.Context(), sectionID, authUser.ID)
+	_, err := repos.GetSectionProblem(r.Context(), sectionID, problemID)
 	if err != nil {
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-
-	// Check if this specific problem is in the published list
-	found := false
-	for _, p := range published {
-		if p.ProblemID == problemID {
-			found = true
-			break
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "problem not published to this section")
+			return
 		}
-	}
-	if !found {
-		httputil.WriteError(w, http.StatusNotFound, "problem not published to this section")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
