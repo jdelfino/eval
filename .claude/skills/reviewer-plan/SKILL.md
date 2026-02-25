@@ -59,6 +59,12 @@ Read the code that will be affected. Understand:
 - [ ] Are there missing dependencies? (Task C uses types from task A but doesn't depend on it)
 - [ ] Is the dependency graph acyclic?
 
+#### Task Sizing (Context Budget)
+- [ ] Does each task modify ≤5 production files?
+- [ ] Does each task require reading ≤10 files for context (including files to modify)?
+- [ ] Are there "horizontal slice" tasks (e.g., "add all CRUD endpoints") that should be vertical slices?
+- If a task exceeds these limits, flag it as a concern. If splitting would create awkward boundaries or tightly coupled tasks, note that the task is large but accept it as-is.
+
 #### Scope & Completeness
 - [ ] Are tasks properly scoped? (Not too large for a single commit, not trivially small)
 - [ ] Are there missing tasks? (migrations, config, test infrastructure, shared utilities)

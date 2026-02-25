@@ -68,10 +68,22 @@ After the user approves the plan:
 **Each subtask MUST be self-contained** (per AGENTS.md rules):
 - **Summary**: What and why in 1-2 sentences
 - **Files to modify**: Exact paths (with line numbers if relevant)
+- **Files to read for context**: Paths the implementer will need to understand before coding
 - **Implementation steps**: Numbered, specific actions
 - **Example**: Show before → after transformation when applicable
 
 A future implementer session must understand the task completely from its description alone — no external context.
+
+### Task Sizing
+
+Each subtask must fit within a single implementer context window without compaction. Use these heuristics:
+
+- **≤5 production files modified** per task
+- **≤10 files read for context** (including the files to modify, test files, shared types, referenced modules)
+- Prefer narrow vertical slices (one endpoint end-to-end) over horizontal layers (all endpoints at once)
+- When in doubt, split. Two small tasks are better than one that causes compaction.
+
+If "Files to read for context" exceeds ~10 entries, the task is probably too large — consider splitting it. But if splitting would create awkward boundaries or tightly coupled tasks, it's better to leave a large task whole.
 
 ### Phase 4 — Plan Review
 
