@@ -13,6 +13,12 @@
  * - Shows student count on sessions
  * - Shows Published Problems section
  * - Does not show Practice/Continue/work-status for instructor view
+ * - Shows Students section with heading and count badge
+ * - Renders student names and progress fraction
+ * - Shows "Never" when last_active is null
+ * - Shows relative time for last_active
+ * - Student rows link to /sections/{sectionId}/students/{userId}
+ * - Shows empty state when no students enrolled
  */
 
 import React from 'react';
@@ -20,7 +26,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import InstructorSectionView from '../components/InstructorSectionView';
-import type { Session, PublishedProblemWithStatus } from '@/types/api';
+import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/types/api';
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
@@ -142,6 +148,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -156,6 +163,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -173,6 +181,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -188,6 +197,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -201,6 +211,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[activeSession]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -215,6 +226,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[activeSession]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -231,6 +243,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -244,6 +257,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[activeSession]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -259,6 +273,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -272,6 +287,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[pastSession]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -286,6 +302,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[pastSession]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -302,6 +319,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -315,6 +333,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[pastSession]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -328,6 +347,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[pastSession]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
@@ -343,6 +363,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={publishedProblems}
+          students={[]}
         />
       );
 
@@ -356,6 +377,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={publishedProblems}
+          students={[]}
         />
       );
 
@@ -369,6 +391,7 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={publishedProblems}
+          students={[]}
         />
       );
 
@@ -384,10 +407,141 @@ describe('InstructorSectionView', () => {
           activeSessions={[]}
           pastSessions={[]}
           publishedProblems={[]}
+          students={[]}
         />
       );
 
       expect(screen.getByText('No problems published to this section yet')).toBeInTheDocument();
+    });
+  });
+
+  describe('students', () => {
+    const students: StudentProgress[] = [
+      {
+        user_id: 'user-student-1',
+        display_name: 'Alice Smith',
+        email: 'alice@example.com',
+        problems_started: 3,
+        total_problems: 5,
+        last_active: '2026-02-24T10:00:00Z',
+      },
+      {
+        user_id: 'user-student-2',
+        display_name: 'Bob Jones',
+        email: 'bob@example.com',
+        problems_started: 0,
+        total_problems: 5,
+        last_active: null,
+      },
+    ];
+
+    it('shows "Students" heading with count badge', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      expect(screen.getByText('Students')).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    it('renders student display names and progress fractions', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+      expect(screen.getByText('3 / 5 problems')).toBeInTheDocument();
+      expect(screen.getByText('Bob Jones')).toBeInTheDocument();
+      expect(screen.getByText('0 / 5 problems')).toBeInTheDocument();
+    });
+
+    it('shows "Never" when last_active is null', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      expect(screen.getByText('Never')).toBeInTheDocument();
+    });
+
+    it('student rows are links to /sections/{sectionId}/students/{userId}', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      const aliceLink = screen.getByText('Alice Smith').closest('a');
+      expect(aliceLink).toHaveAttribute(
+        'href',
+        `/sections/${SECTION_ID}/students/user-student-1`,
+      );
+
+      const bobLink = screen.getByText('Bob Jones').closest('a');
+      expect(bobLink).toHaveAttribute(
+        'href',
+        `/sections/${SECTION_ID}/students/user-student-2`,
+      );
+    });
+
+    it('shows empty state when no students enrolled', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      expect(screen.getByText('No students enrolled yet')).toBeInTheDocument();
+    });
+
+    it('uses email as fallback when display_name is empty', () => {
+      const noNameStudent: StudentProgress[] = [
+        {
+          user_id: 'user-student-3',
+          display_name: '',
+          email: 'charlie@example.com',
+          problems_started: 1,
+          total_problems: 3,
+          last_active: null,
+        },
+      ];
+
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={noNameStudent}
+        />
+      );
+
+      expect(screen.getByText('charlie@example.com')).toBeInTheDocument();
     });
   });
 });

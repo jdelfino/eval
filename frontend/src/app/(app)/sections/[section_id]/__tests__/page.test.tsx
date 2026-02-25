@@ -54,6 +54,10 @@ jest.mock('@/lib/api/student-work', () => ({
   getOrCreateStudentWork: jest.fn(),
 }));
 
+jest.mock('@/lib/api/student-review', () => ({
+  listStudentProgress: jest.fn().mockResolvedValue([]),
+}));
+
 const mockPush = jest.fn();
 const CLASS_ID = 'class-abc-123';
 const SECTION_ID = 'section-xyz-789';
