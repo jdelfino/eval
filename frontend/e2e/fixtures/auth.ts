@@ -5,6 +5,10 @@ import { TEST_USER_KEY } from '../../src/lib/auth-provider';
  * Sign in by directly setting localStorage — bypasses the sign-in UI entirely.
  * Sets testAuthUser in localStorage so TestAuthProvider hydrates on navigation to /.
  * The backend validates the token format test:<externalId>:<email>.
+ *
+ * Waits for auth hydration to complete — the landing page at "/" redirects
+ * authenticated users to their role-appropriate dashboard (/instructor, /system, etc.).
+ * This ensures the caller doesn't proceed until the user is fully authenticated.
  */
 export async function signInAs(
   page: Page,
@@ -16,8 +20,13 @@ export async function signInAs(
     localStorage.setItem(key, JSON.stringify({ externalId, email }));
   }, { key: TEST_USER_KEY, externalId, email });
   await page.goto('/');  // reload so TestAuthProvider picks up the token
-  // Wait for redirect away from any signin page (auth hydration complete)
-  await page.waitForURL(/^(?!.*\/auth\/signin).*$/);
+  // Wait for auth hydration to complete — the landing page redirects
+  // authenticated users away from "/" to their role-appropriate dashboard.
+  // Timeout allows for API retry logic (~7s) on transient network failures.
+  await page.waitForURL((url) => {
+    const path = new URL(url).pathname;
+    return path !== '/' && !path.startsWith('/auth/');
+  }, { timeout: 15_000 });
 }
 
 export async function loginAsInstructor(page: Page, email?: string): Promise<void> {

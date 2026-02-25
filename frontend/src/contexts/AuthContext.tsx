@@ -49,7 +49,13 @@ function TestAuthProvider({ children }: AuthProviderProps) {
           setUser(profile);
         } catch (error) {
           console.error('[Auth] Error hydrating user:', error);
-          clearTestUser();
+          // Only clear the test token on definitive auth failures (401/403/404).
+          // Transient network errors (TypeError: Failed to fetch) should NOT
+          // destroy the token — the next page navigation will retry hydration.
+          const status = (error as { status?: number }).status;
+          if (status === 401 || status === 403 || status === 404) {
+            clearTestUser();
+          }
         }
       }
       setIsLoading(false);
