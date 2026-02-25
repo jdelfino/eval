@@ -118,6 +118,25 @@ jobs:
           kubectl rollout status deployment/executor --timeout=120s
           kubectl rollout status deployment/frontend --timeout=120s
           kubectl rollout status deployment/centrifugo --timeout=120s
+      - name: Wait for ingress
+        run: |
+          # After pods are ready, the GKE NEG (Network Endpoint Group) can
+          # take 30-90s to add the new endpoints to the load balancer.
+          # Poll through the external URL to confirm traffic is flowing
+          # before running smoke tests.
+          url="https://eval.delquillan.com/"
+          echo "Waiting for ingress to route traffic to new pods..."
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" 2>/dev/null || echo "000")
+            if [[ "$code" =~ ^(200|401|403|404)$ ]]; then
+              echo "Ingress ready (HTTP $code after $((i * 5))s)"
+              exit 0
+            fi
+            echo "  Attempt ${i}/60: HTTP ${code}, waiting 5s..."
+            sleep 5
+          done
+          echo "::error::Ingress not ready after 300s"
+          exit 1
       - name: Smoke test
         run: ./scripts/smoke-test.sh
         env:
