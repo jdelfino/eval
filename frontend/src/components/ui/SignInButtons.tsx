@@ -10,6 +10,8 @@ export interface SignInButtonsProps {
   onError: (error: Error) => void;
   /** Optional heading shown above the buttons, e.g. "Sign in to join CS101" */
   label?: string;
+  /** Disable all buttons (e.g. while a backend call is in flight) */
+  disabled?: boolean;
 }
 
 /**
@@ -55,7 +57,7 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
  * <SignInButtons label="Sign in to join CS101" onSuccess={handleSuccess} onError={handleError} />
  * ```
  */
-export function SignInButtons({ onSuccess, onError, label }: SignInButtonsProps) {
+export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled }: SignInButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
 
@@ -113,7 +115,7 @@ export function SignInButtons({ onSuccess, onError, label }: SignInButtonsProps)
           size="lg"
           className="w-full"
           loading={loadingProvider === provider.id}
-          disabled={loadingProvider !== null}
+          disabled={loadingProvider !== null || externalDisabled}
           onClick={() => handleSignIn(provider.providerType, provider.id)}
         >
           Continue with {provider.name}

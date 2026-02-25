@@ -118,7 +118,7 @@ function StudentRegistrationContent() {
   // Core registration logic — called both from direct flow (already signed in)
   // and from the SignInButtons onSuccess handler.
   const doRegister = useCallback(
-    async (info: RegisterStudentInfo, code: string) => {
+    async (info: RegisterStudentInfo, code: string, isNewSignIn = false) => {
       setPageState({ status: 'submitting' });
       setSubmitError('');
 
@@ -129,8 +129,11 @@ function StudentRegistrationContent() {
         await refreshUser();
         router.push(`/sections/${info.section.id}`);
       } catch (backendError) {
-        // Clean up Firebase account on failure
-        await firebaseAuth.currentUser?.delete();
+        // Only clean up Firebase account if the user signed in during this flow
+        // (not if they were already signed in before visiting this page)
+        if (isNewSignIn) {
+          await firebaseAuth.currentUser?.delete();
+        }
 
         if (backendError instanceof ApiError) {
           if (backendError.code === 'NAMESPACE_AT_CAPACITY') {
@@ -194,10 +197,10 @@ function StudentRegistrationContent() {
     }
   };
 
-  // Sign-in success handler from SignInButtons
+  // Sign-in success handler from SignInButtons — user just signed in, so isNewSignIn=true
   const handleSignIn = useCallback(async () => {
     if (!registrationInfo) return;
-    await doRegister(registrationInfo, join_code);
+    await doRegister(registrationInfo, join_code, true);
   }, [registrationInfo, join_code, doRegister]);
 
   // Sign-in error handler
@@ -360,6 +363,7 @@ function StudentRegistrationContent() {
                 label={`Sign in to join ${registrationInfo.class.name}`}
                 onSuccess={handleSignIn}
                 onError={handleSignInError}
+                disabled={pageState.status === 'submitting'}
               />
             </div>
 

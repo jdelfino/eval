@@ -157,7 +157,7 @@ function AcceptInviteContent() {
 
   // Core accept logic — called both from direct (already signed in) and from SignInButtons handler
   const doAccept = useCallback(
-    async (inv: InvitationInfo, name: string) => {
+    async (inv: InvitationInfo, name: string, isNewSignIn = false) => {
       setPageState({ status: 'submitting', invitation: inv });
       setSubmitError('');
 
@@ -166,8 +166,11 @@ function AcceptInviteContent() {
         setPageState({ status: 'success' });
         redirectBasedOnRole(data.role);
       } catch (backendError) {
-        // Clean up Firebase account on failure
-        await firebaseAuth.currentUser?.delete();
+        // Only clean up Firebase account if the user signed in during this flow
+        // (not if they were already signed in before visiting this page)
+        if (isNewSignIn) {
+          await firebaseAuth.currentUser?.delete();
+        }
 
         if (backendError instanceof ApiError) {
           if (backendError.code === 'INVITATION_CONSUMED') {
@@ -234,10 +237,10 @@ function AcceptInviteContent() {
     verifyAndLoadInvitation();
   }, [searchParams]);
 
-  // Sign-in success handler from SignInButtons
+  // Sign-in success handler from SignInButtons — user just signed in, so isNewSignIn=true
   const handleSignIn = useCallback(async () => {
     if (!invitation) return;
-    await doAccept(invitation, displayName);
+    await doAccept(invitation, displayName, true);
   }, [invitation, displayName, doAccept]);
 
   // Sign-in error handler
@@ -417,6 +420,7 @@ function AcceptInviteContent() {
           label="Sign in to accept invitation"
           onSuccess={handleSignIn}
           onError={handleSignInError}
+          disabled={pageState.status === 'submitting'}
         />
       </div>
     </div>
