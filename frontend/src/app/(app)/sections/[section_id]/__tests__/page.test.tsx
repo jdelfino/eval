@@ -332,7 +332,11 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const viewBtn = await screen.findByText('View');
+      // Wait for data to load, then switch to Sessions tab
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      const viewBtn = screen.getByText('View');
       await userEvent.click(viewBtn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
@@ -344,7 +348,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const viewBtn = await screen.findByText('View');
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      const viewBtn = screen.getByText('View');
       await userEvent.click(viewBtn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
@@ -356,7 +363,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const viewBtn = await screen.findByText('View');
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      const viewBtn = screen.getByText('View');
       await userEvent.click(viewBtn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
@@ -381,7 +391,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('Past Problem')).toBeInTheDocument();
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      expect(screen.getByText('Past Problem')).toBeInTheDocument();
       expect(screen.queryByText('Reopen')).not.toBeInTheDocument();
     });
 
@@ -391,7 +404,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('2 students')).toBeInTheDocument();
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      expect(screen.getByText('2 students')).toBeInTheDocument();
     });
   });
 
@@ -833,23 +849,25 @@ describe('SectionDetailPage', () => {
       },
     ];
 
-    it('shows Active Sessions and Past Sessions for instructors', async () => {
+    it('shows Active Sessions and Sessions tab for instructors', async () => {
       mockUser('instructor');
       mockSectionData([activeSession, pastSession], publishedProblems);
 
       render(<SectionDetailPage />);
 
       expect(await screen.findByText('Active Sessions')).toBeInTheDocument();
-      expect(screen.getByText('Past Sessions')).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Sessions/i })).toBeInTheDocument();
     });
 
-    it('shows Published Problems section for instructors', async () => {
+    it('shows Published Problems in Problems tab for instructors', async () => {
       mockUser('instructor');
       mockSectionData([], publishedProblems);
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('Published Problems')).toBeInTheDocument();
+      await screen.findByRole('tab', { name: /Problems/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
+
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
     });
 
@@ -859,7 +877,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('FizzBuzz')).toBeInTheDocument();
+      await screen.findByRole('tab', { name: /Problems/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
+
+      expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.queryByText('Practice')).not.toBeInTheDocument();
       expect(screen.queryByText('Continue')).not.toBeInTheDocument();
       expect(screen.queryByText('Not started')).not.toBeInTheDocument();

@@ -266,21 +266,7 @@ describe('InstructorSectionView', () => {
   });
 
   describe('past sessions', () => {
-    it('shows Past Sessions heading', () => {
-      render(
-        <InstructorSectionView
-          section={sectionDetail}
-          activeSessions={[]}
-          pastSessions={[]}
-          publishedProblems={[]}
-          students={[]}
-        />
-      );
-
-      expect(screen.getByText('Past Sessions')).toBeInTheDocument();
-    });
-
-    it('shows past session with "View" button', () => {
+    it('shows past session with "View" button when Sessions tab is active', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -290,6 +276,8 @@ describe('InstructorSectionView', () => {
           students={[]}
         />
       );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
 
       expect(screen.getByText('Past Problem')).toBeInTheDocument();
       expect(screen.getByText('View')).toBeInTheDocument();
@@ -306,13 +294,14 @@ describe('InstructorSectionView', () => {
         />
       );
 
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
       const viewBtn = screen.getByText('View');
       await userEvent.click(viewBtn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-past-1');
     });
 
-    it('shows empty state when no past sessions', () => {
+    it('shows empty state when no past sessions (Sessions tab)', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -323,10 +312,12 @@ describe('InstructorSectionView', () => {
         />
       );
 
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
       expect(screen.getByText('No past sessions yet')).toBeInTheDocument();
     });
 
-    it('shows student count on past sessions', () => {
+    it('shows student count on past sessions', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -336,11 +327,13 @@ describe('InstructorSectionView', () => {
           students={[]}
         />
       );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
 
       expect(screen.getByText('2 students')).toBeInTheDocument();
     });
 
-    it('does not show Reopen button', () => {
+    it('does not show Reopen button', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -350,13 +343,15 @@ describe('InstructorSectionView', () => {
           students={[]}
         />
       );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
 
       expect(screen.queryByText('Reopen')).not.toBeInTheDocument();
     });
   });
 
   describe('published problems', () => {
-    it('shows Published Problems heading', () => {
+    it('shows published problems when Problems tab is active', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -367,24 +362,12 @@ describe('InstructorSectionView', () => {
         />
       );
 
-      expect(screen.getByText('Published Problems')).toBeInTheDocument();
-    });
-
-    it('shows published problems', () => {
-      render(
-        <InstructorSectionView
-          section={sectionDetail}
-          activeSessions={[]}
-          pastSessions={[]}
-          publishedProblems={publishedProblems}
-          students={[]}
-        />
-      );
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
 
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
     });
 
-    it('does not show Practice/Continue/work-status for instructor', () => {
+    it('does not show Practice/Continue/work-status for instructor', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -394,13 +377,15 @@ describe('InstructorSectionView', () => {
           students={[]}
         />
       );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
 
       expect(screen.queryByText('Practice')).not.toBeInTheDocument();
       expect(screen.queryByText('Continue')).not.toBeInTheDocument();
       expect(screen.queryByText('Not started')).not.toBeInTheDocument();
     });
 
-    it('shows empty state when no published problems', () => {
+    it('shows empty state when no published problems (Problems tab)', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -411,7 +396,169 @@ describe('InstructorSectionView', () => {
         />
       );
 
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
+
       expect(screen.getByText('No problems published to this section yet')).toBeInTheDocument();
+    });
+  });
+
+  describe('tabs layout', () => {
+    it('renders Students, Sessions, and Problems tabs', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={publishedProblems}
+          students={[]}
+        />
+      );
+
+      expect(screen.getByRole('tab', { name: /Students/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Sessions/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Problems/i })).toBeInTheDocument();
+    });
+
+    it('shows students content by default (students tab active)', () => {
+      const students: StudentProgress[] = [
+        {
+          user_id: 'user-student-1',
+          display_name: 'Alice Smith',
+          email: 'alice@example.com',
+          problems_started: 3,
+          total_problems: 5,
+          last_active: null,
+        },
+      ];
+
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={publishedProblems}
+          students={students}
+        />
+      );
+
+      // Students content visible by default
+      expect(screen.getByText('Alice Smith')).toBeInTheDocument();
+      // Past sessions content NOT visible on default tab
+      expect(screen.queryByText('Past Problem')).not.toBeInTheDocument();
+    });
+
+    it('clicking Sessions tab shows past sessions content', async () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={publishedProblems}
+          students={[]}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      expect(screen.getByText('Past Problem')).toBeInTheDocument();
+    });
+
+    it('clicking Problems tab shows published problems content', async () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={publishedProblems}
+          students={[]}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
+
+      expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
+    });
+
+    it('Students tab label includes count badge', () => {
+      const students: StudentProgress[] = [
+        {
+          user_id: 'user-student-1',
+          display_name: 'Alice Smith',
+          email: 'alice@example.com',
+          problems_started: 3,
+          total_problems: 5,
+          last_active: null,
+        },
+        {
+          user_id: 'user-student-2',
+          display_name: 'Bob Jones',
+          email: 'bob@example.com',
+          problems_started: 0,
+          total_problems: 5,
+          last_active: null,
+        },
+      ];
+
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      const studentsTab = screen.getByRole('tab', { name: /Students/i });
+      expect(studentsTab).toHaveTextContent('2');
+    });
+
+    it('Sessions tab label includes past session count badge', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      const sessionsTab = screen.getByRole('tab', { name: /Sessions/i });
+      expect(sessionsTab).toHaveTextContent('1');
+    });
+
+    it('Problems tab label includes published problem count badge', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={publishedProblems}
+          students={[]}
+        />
+      );
+
+      const problemsTab = screen.getByRole('tab', { name: /Problems/i });
+      expect(problemsTab).toHaveTextContent('1');
+    });
+
+    it('Active Sessions section remains above tabs', () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[activeSession]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      // Active Sessions section always visible
+      expect(screen.getByText('Active Sessions')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View Dashboard/i })).toBeInTheDocument();
+      // Tabs also present
+      expect(screen.getByRole('tab', { name: /Students/i })).toBeInTheDocument();
     });
   });
 
@@ -435,7 +582,7 @@ describe('InstructorSectionView', () => {
       },
     ];
 
-    it('shows "Students" heading with count badge', () => {
+    it('shows "Students" tab with count badge', () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -446,8 +593,9 @@ describe('InstructorSectionView', () => {
         />
       );
 
-      expect(screen.getByText('Students')).toBeInTheDocument();
-      expect(screen.getByText('2')).toBeInTheDocument();
+      const studentsTab = screen.getByRole('tab', { name: /Students/i });
+      expect(studentsTab).toBeInTheDocument();
+      expect(studentsTab).toHaveTextContent('2');
     });
 
     it('renders student display names and progress fractions', () => {
