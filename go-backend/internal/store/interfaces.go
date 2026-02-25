@@ -172,6 +172,18 @@ type ProblemFilters struct {
 	SortOrder     string // "asc", "desc"
 }
 
+// PublicProblem is the public-facing subset of a problem, exposed without authentication.
+type PublicProblem struct {
+	ID          uuid.UUID  `json:"id"`
+	Title       string     `json:"title"`
+	Description *string    `json:"description"`
+	Solution    *string    `json:"solution"`
+	StarterCode *string    `json:"starter_code"`
+	ClassID     *uuid.UUID `json:"class_id"`
+	ClassName   *string    `json:"class_name"`
+	Tags        []string   `json:"tags"`
+}
+
 // ProblemRepository defines the interface for problem data access.
 type ProblemRepository interface {
 	// ListProblems retrieves all problems visible to the current user (RLS-filtered).
@@ -182,6 +194,10 @@ type ProblemRepository interface {
 	// GetProblem retrieves a problem by ID.
 	// Returns ErrNotFound if the problem does not exist.
 	GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error)
+	// GetPublicProblem retrieves a problem's public fields by ID.
+	// Used for unauthenticated public problem pages.
+	// Returns ErrNotFound if the problem does not exist.
+	GetPublicProblem(ctx context.Context, id uuid.UUID) (*PublicProblem, error)
 	// CreateProblem creates a new problem and returns it.
 	CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error)
 	// UpdateProblem updates a problem's mutable fields and returns the updated problem.

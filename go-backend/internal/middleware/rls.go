@@ -145,6 +145,47 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 	}
 }
 
+// PublicStoreMiddleware acquires a database connection, sets the role to 'reader'
+// (which has unrestricted SELECT access via RLS bypass policies in migration 007),
+// and attaches a Store to the request context.
+//
+// This middleware does NOT depend on auth middleware; it is used for public
+// (unauthenticated) routes that only need read access to the database.
+// No app.user_id, app.namespace_id, or app.role session variables are set
+// because the reader role bypasses RLS entirely.
+func PublicStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
+	acquirer := &poolAcquirer{pool: pool}
+	return publicStoreMiddlewareWithAcquirer(acquirer)
+}
+
+// publicStoreMiddlewareWithAcquirer is the testable implementation.
+func publicStoreMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			conn, err := acquirer.AcquireConn(ctx)
+			if err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			defer releaseClean(conn)
+
+			// Use the reader role which bypasses RLS for unrestricted SELECT access.
+			if _, err := conn.Exec(ctx, "SET ROLE reader"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
+			s := store.New(conn)
+			ctx = store.WithRepos(ctx, s)
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // resetVarsQuery clears all app.* session variables in a single round-trip.
 const resetVarsQuery = "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false), set_config('app.role', '', false)"
 

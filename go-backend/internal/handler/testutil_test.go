@@ -391,6 +391,9 @@ func (stubRepos) ListProblemsFiltered(context.Context, store.ProblemFilters) ([]
 func (stubRepos) GetProblem(context.Context, uuid.UUID) (*store.Problem, error) {
 	panic("stubRepos: unexpected GetProblem call")
 }
+func (stubRepos) GetPublicProblem(context.Context, uuid.UUID) (*store.PublicProblem, error) {
+	panic("stubRepos: unexpected GetPublicProblem call")
+}
 func (stubRepos) CreateProblem(context.Context, store.CreateProblemParams) (*store.Problem, error) {
 	panic("stubRepos: unexpected CreateProblem call")
 }

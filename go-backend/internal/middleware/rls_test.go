@@ -790,3 +790,162 @@ func TestRLSContextMiddleware_AllRoles(t *testing.T) {
 		})
 	}
 }
+
+// --- PublicStoreMiddleware tests ---
+
+func TestPublicStoreMiddleware_Success(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	var ctxRepos store.Repos
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctxRepos = store.ReposFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Verify SET ROLE reader was called first
+	queries := mock.getExecQueries()
+	if len(queries) == 0 || queries[0] != "SET ROLE reader" {
+		t.Errorf("First exec should be SET ROLE reader, got queries: %v", queries)
+	}
+
+	// Verify no set_config calls were made (reader bypasses RLS entirely)
+	calls := mock.getSetConfigArgs()
+	if len(calls) != 0 {
+		t.Errorf("Expected 0 set_config calls (reader bypasses RLS), got %d: %v", len(calls), calls)
+	}
+
+	// Verify repos was attached to context
+	if ctxRepos == nil {
+		t.Error("Repos should be available in context")
+	}
+
+	// Verify connection was released
+	if !mock.wasReleased() {
+		t.Error("Connection should be released after request completes")
+	}
+}
+
+func TestPublicStoreMiddleware_AcquireError(t *testing.T) {
+	acquirer := &testAcquirer{
+		acquireErr: errors.New("connection pool exhausted"),
+	}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when connection acquire fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestPublicStoreMiddleware_SetRoleError(t *testing.T) {
+	mock := &mockConn{
+		execErr: errors.New("database error"),
+	}
+	acquirer := &testAcquirer{conn: mock}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when SET ROLE fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+
+	// Connection should still be released on error
+	if !mock.wasReleased() {
+		t.Error("Connection should be released even on error")
+	}
+}
+
+func TestPublicStoreMiddleware_NoAuthRequired(t *testing.T) {
+	// Verify the public middleware works without any auth user in context
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify no auth user in context (public is unauthenticated)
+		if user := auth.UserFromContext(r.Context()); user != nil {
+			t.Error("Expected no auth user in context for public endpoint")
+		}
+		// But repos should still be available
+		repos := store.ReposFromContext(r.Context())
+		if repos == nil {
+			t.Error("Repos should be available even without auth user")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	// No auth context set — simulates unauthenticated request
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestPublicStoreMiddleware_ConnectionReleasedOnPanic(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("handler panic")
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected panic to propagate")
+		}
+		if !mock.wasReleased() {
+			t.Error("Connection should be released even on panic")
+		}
+	}()
+
+	wrapped.ServeHTTP(rr, req)
+}
