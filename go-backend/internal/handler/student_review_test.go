@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -331,6 +332,52 @@ func TestStudentReviewHandler_ListStudentWork_NullWork(t *testing.T) {
 	}
 	if got[0].StudentWork != nil {
 		t.Errorf("expected nil StudentWork, got %v", got[0].StudentWork)
+	}
+}
+
+// TestStudentReviewHandler_ListStudentWork_NullWorkSerializedAsNull verifies that
+// when StudentWork is nil, the JSON response contains "student_work":null rather
+// than omitting the field entirely.
+func TestStudentReviewHandler_ListStudentWork_NullWorkSerializedAsNull(t *testing.T) {
+	sectionID := uuid.New()
+	studentID := uuid.New()
+	problemID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Second)
+
+	expected := []store.StudentWorkSummary{
+		{
+			Problem:     store.Problem{ID: problemID, Title: "Unsolved"},
+			PublishedAt: now,
+			StudentWork: nil,
+		},
+	}
+
+	repo := &mockStudentReviewRepo{
+		listStudentWorkForReviewFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.StudentWorkSummary, error) {
+			return expected, nil
+		},
+	}
+
+	h := NewStudentReviewHandler()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("userID", studentID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = store.WithRepos(ctx, srRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListStudentWork(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// student_work must be present as null, not omitted from the JSON.
+	body := rec.Body.String()
+	if !strings.Contains(body, `"student_work":null`) {
+		t.Errorf("expected JSON to contain \"student_work\":null, got: %s", body)
 	}
 }
 

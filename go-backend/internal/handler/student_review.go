@@ -27,7 +27,7 @@ func (h *StudentReviewHandler) ListStudentProgress(w http.ResponseWriter, r *htt
 	repos := store.ReposFromContext(r.Context())
 	progress, err := repos.ListStudentProgress(r.Context(), sectionID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -54,7 +54,7 @@ func (h *StudentReviewHandler) ListStudentWork(w http.ResponseWriter, r *http.Re
 	repos := store.ReposFromContext(r.Context())
 	summaries, err := repos.ListStudentWorkForReview(r.Context(), sectionID, userID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

@@ -668,7 +668,7 @@ type StudentProgress struct {
 type StudentWorkSummary struct {
 	Problem     Problem      `json:"problem"`
 	PublishedAt time.Time    `json:"published_at"`
-	StudentWork *StudentWork `json:"student_work,omitempty"`
+	StudentWork *StudentWork `json:"student_work"`
 }
 
 // StudentWorkRepository defines the interface for student work data access.

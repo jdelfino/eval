@@ -190,8 +190,7 @@ func (s *Store) ListStudentProgress(ctx context.Context, sectionID uuid.UUID) ([
 // given student's work (if any) for each problem.
 func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentWorkSummary, error) {
 	query := `SELECT
-		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
-		p.author_id, p.class_id, p.tags, p.solution, p.created_at, p.updated_at,
+		` + prefixCols("p", problemColumns) + `,
 		sp.published_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
 		sw.code, sw.execution_settings, sw.created_at, sw.last_update
