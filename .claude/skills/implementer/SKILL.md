@@ -29,7 +29,7 @@ Write tests for the behavior you are about to change or add. Do this **before** 
 
 1. Read the relevant production code to understand current behavior
 2. Write new test cases that describe the desired behavior after your change
-3. Verify your new tests fail by delegating to a sub-agent (same pattern as Phase 3 below)
+3. Verify your new tests fail by delegating to a test-runner sub-agent (see Phase 3)
 
 **Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
@@ -39,24 +39,22 @@ Make the production code changes. Keep changes minimal and focused on the task.
 
 ## Phase 3: Verify
 
-Delegate quality gate runs to a sub-agent to preserve context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+Delegate quality gate runs to a test-runner sub-agent to preserve context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
 ```
-Run these commands sequentially in <worktree-path>:
+ROLE: Test Runner
+SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 
-<commands from Quality Gates table in CLAUDE.md matching changed code>
+WORKING DIRECTORY: <worktree-path>
+COMMANDS:
+- <commands from Quality Gates table in CLAUDE.md matching changed code>
 
-For example, for Go backend changes: make test-api && make lint-api
-For frontend changes: make test-frontend && make lint-frontend && make typecheck-frontend
+For example, for Go backend changes: make test-api, make lint-api
+For frontend changes: make test-frontend, make lint-frontend, make typecheck-frontend
 For store changes, also: make test-integration-store
-
-Report ONLY:
-- RESULT: PASS or FAIL
-- If FAIL: the specific error output (last 50 lines of the failing command)
-- Do NOT include passing test output
 ```
 
-**Gate:** Sub-agent reports PASS. If FAIL, read the error output, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
+**Gate:** Sub-agent reports PASS. If FAIL, read the error summary, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
 
 ## Phase 4: Test Coverage Audit
 
@@ -67,7 +65,7 @@ Evaluate whether your tests actually cover the changes you made. Do NOT re-read 
    - What behavior changed? (new feature, bug fix, removed feature, refactored logic)
    - Do your tests cover: happy path, error paths, edge cases, regressions?
    - Are integration tests needed? (persistence, API routes, auth, cross-layer data flow)
-3. If gaps exist: write the missing tests, then re-run quality gates via sub-agent (same as Phase 3).
+3. If gaps exist: write the missing tests, then re-run quality gates via test-runner sub-agent (same as Phase 3).
 
 **Gate:** No coverage gaps remain, or gaps are documented with reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").
 
