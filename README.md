@@ -28,6 +28,10 @@ make go-lint      # Lint
 
 See [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) for full local development setup.
 
+## Initial Bootstrap
+
+On first deploy, create the system-admin account by setting `BOOTSTRAP_ADMIN_EMAIL` to the admin's email address before starting the server. Then sign in with a matching verified social provider account (Google, GitHub, or Microsoft) and `POST /auth/bootstrap`. The first successful call creates the system-admin user. Once the admin account exists, unset or clear `BOOTSTRAP_ADMIN_EMAIL` to disable the bootstrap endpoint.
+
 ## Documentation
 
 - **[Overview](docs/OVERVIEW.md)** - Vision, features, design principles, cost model
