@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Button } from './Button';
 import { authProviders } from '@/config/auth-providers';
-import { isTestMode, setTestUser } from '@/lib/auth-provider';
 
 export interface SignInButtonsProps {
   onSuccess: () => void;
@@ -41,9 +40,7 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
 /**
  * Shared sign-in buttons component for rendering social provider sign-in buttons.
  *
- * In production: renders one button per provider (Google, GitHub, Microsoft).
- * In test mode (NEXT_PUBLIC_AUTH_MODE=test): renders a single "Test Sign In" button
- * that sets a default test user in localStorage and calls onSuccess.
+ * Renders one button per provider (Google, GitHub, Microsoft).
  *
  * Error handling:
  * - auth/popup-closed-by-user — silently ignored (user cancelled)
@@ -60,27 +57,6 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
 export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled }: SignInButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
-
-  if (isTestMode()) {
-    const handleTestSignIn = () => {
-      setTestUser('test-user', 'test@example.com');
-      onSuccess();
-    };
-
-    return (
-      <div className="flex flex-col gap-3 w-full">
-        {label && <p className="text-sm font-medium text-gray-700 text-center">{label}</p>}
-        <Button
-          variant="secondary"
-          size="lg"
-          className="w-full"
-          onClick={handleTestSignIn}
-        >
-          Test Sign In
-        </Button>
-      </div>
-    );
-  }
 
   const handleSignIn = async (providerType: 'google' | 'github' | 'microsoft', providerId: string) => {
     setLoadingProvider(providerId);

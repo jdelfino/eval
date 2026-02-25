@@ -1,20 +1,20 @@
 import { Page } from '@playwright/test';
 
 /**
- * Sign in via the UI using test auth mode.
- * In test mode, signIn derives externalId from email and stores test token.
+ * Sign in by directly setting localStorage — bypasses the sign-in UI entirely.
+ * Sets testAuthUser in localStorage so TestAuthProvider hydrates on navigation to /.
  * The backend validates the token format test:<externalId>:<email>.
  */
 export async function signInAs(
   page: Page,
-  email: string,
-  password: string = 'testpassword123' // any password works in test mode
+  email: string
 ): Promise<void> {
-  await page.goto('/auth/signin/email');
-  await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', password);
-  await page.click('button[type="submit"]');
-  // Wait for redirect away from signin
+  const externalId = email.split('@')[0];
+  await page.evaluate(({ externalId, email }) => {
+    localStorage.setItem('testAuthUser', JSON.stringify({ externalId, email }));
+  }, { externalId, email });
+  await page.goto('/');
+  // Wait for redirect away from any signin page (auth hydration complete)
   await page.waitForURL(/^(?!.*\/auth\/signin).*$/);
 }
 

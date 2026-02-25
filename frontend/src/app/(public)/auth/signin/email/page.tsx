@@ -16,7 +16,6 @@ import React, { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { isTestMode, setTestUser } from '@/lib/auth-provider';
 
 export default function EmailSignInPage() {
   return (
@@ -44,7 +43,7 @@ function EmailSignInContent() {
   const [submitError, setSubmitError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { isAuthenticated, refreshUser } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   // Redirect when authenticated (AuthContext picks up Firebase user)
   useEffect(() => {
@@ -82,16 +81,6 @@ function EmailSignInContent() {
 
       setIsLoading(true);
       try {
-        if (isTestMode()) {
-          // In test mode, set test user in localStorage and refresh the auth context.
-          // externalId is the local part of the email (matches E2E fixture convention).
-          const testEmail = email.trim();
-          const externalId = testEmail.split('@')[0];
-          setTestUser(externalId, testEmail);
-          await refreshUser();
-          // refreshUser sets isAuthenticated=true, which triggers the redirect useEffect above.
-          return;
-        }
         const { signInWithEmailAndPassword } = await import('firebase/auth');
         const { firebaseAuth } = await import('@/lib/firebase');
         await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);

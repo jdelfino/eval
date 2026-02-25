@@ -16,10 +16,13 @@ jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn(() => new URLSearchParams()),
 }));
 
-// Mock AuthContext
+// Mock AuthContext — refreshUser is NOT needed (no test mode branch)
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
+
+// Mock auth-provider — isTestMode and setTestUser are NOT imported by the page
+jest.mock('@/lib/auth-provider', () => ({}));
 
 // Mock Firebase signInWithEmailAndPassword
 const mockSignInWithEmailAndPassword = jest.fn();
@@ -128,6 +131,29 @@ describe('EmailSignInPage', () => {
 
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/');
+      });
+    });
+  });
+
+  describe('no test mode branch', () => {
+    it('always calls signInWithEmailAndPassword — no test mode shortcut', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'instructor@test.local' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'instructor@test.local');
+      await user.type(screen.getByLabelText(/^password$/i), 'any-password');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockSignInWithEmailAndPassword).toHaveBeenCalledWith(
+          expect.anything(),
+          'instructor@test.local',
+          'any-password'
+        );
       });
     });
   });
