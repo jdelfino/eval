@@ -146,7 +146,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 
 		// Public routes — no authentication required.
-		// Uses the reader role which has unrestricted SELECT access (no RLS).
+		// Uses eval_app + app.role='public' with scoped RLS policies (migration 016)
+		// that only permit SELECT on problems and classes.
 		if pgxPool := pool.PgxPool(); pgxPool != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.PublicStoreMiddleware(pgxPool))

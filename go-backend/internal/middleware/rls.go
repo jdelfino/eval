@@ -145,20 +145,26 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 	}
 }
 
-// PublicStoreMiddleware acquires a database connection, sets the role to 'reader'
-// (which has unrestricted SELECT access via RLS bypass policies in migration 007),
-// and attaches a Store to the request context.
+// PublicStoreMiddleware acquires a database connection, sets app.role to
+// 'public', and attaches a Store to the request context.
 //
-// This middleware does NOT depend on auth middleware; it is used for public
-// (unauthenticated) routes that only need read access to the database.
-// No app.user_id, app.namespace_id, or app.role session variables are set
-// because the reader role bypasses RLS entirely.
+// Public routes (e.g. /public/problems/:id) need database read access without
+// an authenticated user. Instead of using the 'reader' role (which bypasses
+// RLS entirely and grants unrestricted SELECT on all tables), we use eval_app
+// with app.role='public' so that RLS policies in migration 016 restrict access
+// to only the specific tables needed by public-facing handlers (problems, classes).
+//
+// This middleware does NOT depend on auth middleware; it should be used for
+// route groups that handle unauthenticated public read flows.
 func PublicStoreMiddleware(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 	acquirer := &poolAcquirer{pool: pool}
 	return publicStoreMiddlewareWithAcquirer(acquirer)
 }
 
 // publicStoreMiddlewareWithAcquirer is the testable implementation.
+// It drops to eval_app (so RLS policies are enforced) then sets
+// app.role = 'public'. The scoped SELECT policies are defined in
+// migration 016_public_rls.
 func publicStoreMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,8 +177,24 @@ func publicStoreMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler)
 			}
 			defer releaseClean(conn)
 
-			// Use the reader role which bypasses RLS for unrestricted SELECT access.
-			if _, err := conn.Exec(ctx, "SET ROLE reader"); err != nil {
+			// Drop to non-owner role so RLS policies are enforced.
+			if _, err := conn.Exec(ctx, "SET ROLE eval_app"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
+			// Clear any stale user-specific session variables from connection reuse.
+			// releaseClean normally handles this, but if it failed silently on a
+			// previous request, leftover app.user_id or app.namespace_id could
+			// widen the public context beyond what migration 016 intends.
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
+			// Set only app.role = 'public'; no user_id or namespace_id.
+			// is_local=false so the setting persists across statements on this connection.
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "public"); err != nil {
 				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
 				return
 			}

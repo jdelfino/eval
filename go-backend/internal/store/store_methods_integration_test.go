@@ -165,6 +165,49 @@ func (db *integrationDB) storeWithRLS(ctx context.Context, t *testing.T, user *a
 	return New(conn), conn
 }
 
+// setPublicRLSContext sets the role to eval_app and sets app.role to 'public'.
+// This mirrors what PublicStoreMiddleware does in production (migration 016).
+func (db *integrationDB) setPublicRLSContext(ctx context.Context, conn *pgxpool.Conn) error {
+	_, err := conn.Exec(ctx, "SET ROLE eval_app")
+	if err != nil {
+		return fmt.Errorf("set role to eval_app: %w", err)
+	}
+
+	// Clear stale user-specific variables — pooled connections may retain
+	// app.user_id / app.namespace_id from a previous storeWithRLS call,
+	// which would widen the public context beyond what migration 016 intends.
+	_, err = conn.Exec(ctx, "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)")
+	if err != nil {
+		return fmt.Errorf("clear stale session vars: %w", err)
+	}
+
+	_, err = conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "public")
+	if err != nil {
+		return fmt.Errorf("set app.role: %w", err)
+	}
+
+	return nil
+}
+
+// storeWithPublicRLS acquires a connection, sets the public RLS context
+// (eval_app + app.role=public), and returns a Store. The caller must release
+// the connection.
+func (db *integrationDB) storeWithPublicRLS(ctx context.Context, t *testing.T) (*Store, *pgxpool.Conn) {
+	t.Helper()
+	conn, err := db.appPool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire connection: %v", err)
+	}
+	t.Cleanup(conn.Release)
+
+	if err := db.setPublicRLSContext(ctx, conn); err != nil {
+		conn.Release()
+		t.Fatalf("set public RLS context: %v", err)
+	}
+
+	return New(conn), conn
+}
+
 // execAsSuperuser runs SQL as superuser by resetting the role first.
 // This is needed because connections returned to the pool may still have
 // SET ROLE eval_app from previous RLS testing.

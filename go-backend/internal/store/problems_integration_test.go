@@ -122,4 +122,50 @@ func TestIntegration_GetPublicProblem(t *testing.T) {
 			t.Errorf("expected empty tags slice, got %v", pp.Tags)
 		}
 	})
+
+	t.Run("works under public RLS context (eval_app + app.role=public)", func(t *testing.T) {
+		// Verify GetPublicProblem works when only app.role = 'public' is set,
+		// with no user_id or namespace_id — matching PublicStoreMiddleware.
+		s, conn := db.storeWithPublicRLS(ctx, t)
+		defer conn.Release()
+
+		got, err := s.GetPublicProblem(ctx, problemWithClassID)
+		if err != nil {
+			t.Fatalf("GetPublicProblem under public RLS: %v", err)
+		}
+		if got.Title != "Problem With Class" {
+			t.Errorf("expected title 'Problem With Class', got %q", got.Title)
+		}
+		if got.ClassID == nil {
+			t.Fatal("expected class_id to be non-nil")
+		}
+		if *got.ClassID != classID {
+			t.Errorf("expected class_id %s, got %s", classID, *got.ClassID)
+		}
+		if got.ClassName == nil {
+			t.Fatal("expected class_name to be non-nil (LEFT JOIN on classes must work under public context)")
+		}
+		if *got.ClassName != "CS101" {
+			t.Errorf("expected class_name 'CS101', got %q", *got.ClassName)
+		}
+	})
+
+	t.Run("public RLS context cannot read other tables", func(t *testing.T) {
+		// Verify that the public RLS context (eval_app + app.role='public') is
+		// blocked from reading sensitive tables not covered by migration 016's
+		// policies. Only problems and classes have SELECT policies under this
+		// context, so querying users should return 0 rows.
+		_, conn := db.storeWithPublicRLS(ctx, t)
+		defer conn.Release()
+
+		var count int
+		err := conn.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+		// With RLS enabled, the query succeeds but returns 0 rows (no matching policy).
+		if err != nil {
+			t.Fatalf("unexpected error querying users under public RLS context: %v", err)
+		}
+		if count != 0 {
+			t.Errorf("expected 0 users under public RLS context, got %d", count)
+		}
+	})
 }
