@@ -2,14 +2,16 @@
 
 /**
  * Sign-in page.
- * Email/password authentication with Firebase Auth.
+ * Social provider authentication via <SignInButtons />.
+ * Falls back to /auth/signin/email for testing (no staging environment).
  */
 
 import React, { Suspense } from 'react';
-import { useState, useCallback, useEffect, FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { SignInButtons } from '@/components/ui/SignInButtons';
 import { ErrorAlert } from '@/components/ErrorAlert';
 
 // Main page wrapper with Suspense for useSearchParams
@@ -33,21 +35,9 @@ function SignInPageLoading() {
 }
 
 function SignInPageContent() {
-  const searchParams = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn, isAuthenticated } = useAuth();
-
-  // Show success message if redirected from registration
-  useEffect(() => {
-    if (searchParams.get('registered') === 'true') {
-      setSuccessMessage('Registration successful! Please sign in with your email and password.');
-    }
-  }, [searchParams]);
+  const { isAuthenticated } = useAuth();
 
   // Redirect when authenticated
   useEffect(() => {
@@ -56,53 +46,14 @@ function SignInPageContent() {
     }
   }, [isAuthenticated, router]);
 
-  const handleSubmit = useCallback(async (e?: FormEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
-    setError('');
+  const handleSuccess = useCallback(() => {
+    // onAuthStateChanged in AuthContext fires after signInWithPopup succeeds,
+    // which updates isAuthenticated and triggers the redirect above.
+  }, []);
 
-    // Validation
-    if (!email.trim()) {
-      setError('Please enter your email address');
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (!password) {
-      setError('Please enter your password');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      await signIn(email.trim(), password);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
-
-      // Map common error messages to user-friendly versions with recovery hints
-      if (errorMessage.includes('Invalid') || errorMessage.includes('credentials')) {
-        setError('Invalid email or password. Please check your credentials and try again.');
-      } else if (errorMessage.includes('not found')) {
-        setError('No account found with this email. Check the email address or register as a new student.');
-      } else if (errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch')) {
-        setError('Connection error. Please check your internet connection and try again.');
-      } else {
-        setError(errorMessage);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [email, password, signIn]);
-
-  const handleRetry = useCallback(() => {
-    handleSubmit();
-  }, [handleSubmit]);
+  const handleError = useCallback((err: Error) => {
+    setError(err.message || 'Sign in failed. Please try again.');
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -123,80 +74,17 @@ function SignInPageContent() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-
-          {successMessage && (
-            <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-              <div className="flex items-center">
-                <svg className="w-5 h-5 text-green-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <p className="text-sm font-medium text-green-800">{successMessage}</p>
-              </div>
-            </div>
-          )}
+        <div className="mt-8 space-y-6">
+          <SignInButtons onSuccess={handleSuccess} onError={handleError} />
 
           {error && (
             <ErrorAlert
               error={error}
-              onRetry={handleRetry}
-              isRetrying={isLoading}
               onDismiss={() => setError('')}
               showHelpText={true}
             />
           )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
-            >
-              {isLoading && (
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </div>
-        </form>
+        </div>
 
         <div className="mt-6 pt-6 border-t border-gray-200">
           <div className="text-center">
@@ -219,6 +107,12 @@ function SignInPageContent() {
           </Link>
           <Link href="/privacy" className="hover:text-indigo-600 transition-colors">
             Privacy
+          </Link>
+          <Link
+            href="/auth/signin/email"
+            className="hover:text-indigo-600 transition-colors"
+          >
+            Sign in with email
           </Link>
         </div>
       </div>
