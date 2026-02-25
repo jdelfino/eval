@@ -49,10 +49,9 @@ git branch feature/<work-name> origin/main
 # Create worktree
 git worktree add ../<project>-<work-name> feature/<work-name>
 
-# CRITICAL: Install dependencies BEFORE spawning subagents
-cd ../<project>-<work-name>
-# Run your project's dependency install command here
-cd <back to main checkout>
+# CRITICAL: Symlink node_modules BEFORE spawning subagents
+# (worktree branches from main, so packages match — no need to reinstall)
+ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/node_modules
 ```
 
 ### 2. Conflict Avoidance
@@ -225,5 +224,5 @@ EOF
 - Merging PRs (that's `/merge`'s job)
 - Watching CI (that's `/merge`'s job)
 - Cleaning up worktrees before merge (that's `/merge`'s job)
-- Running dependency install concurrently in multiple worktrees
+- Running `npm ci` in a worktree (it nukes node_modules through the symlink — use `npm install <pkg>` for additive changes, or break the symlink first if a full reinstall is needed)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
