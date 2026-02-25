@@ -20,3 +20,6 @@ export const setPersistence = jest.fn();
 export const browserLocalPersistence = {};
 export const browserSessionPersistence = {};
 export const inMemoryPersistence = {};
+export const sendSignInLinkToEmail = jest.fn();
+export const isSignInWithEmailLink = jest.fn();
+export const signInWithEmailLink = jest.fn();
