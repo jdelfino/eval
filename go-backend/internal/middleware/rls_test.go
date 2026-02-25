@@ -814,16 +814,22 @@ func TestPublicStoreMiddleware_Success(t *testing.T) {
 		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	// Verify SET ROLE reader was called first
+	// Verify SET ROLE eval_app was called first (not reader — scoped via RLS policies).
 	queries := mock.getExecQueries()
-	if len(queries) == 0 || queries[0] != "SET ROLE reader" {
-		t.Errorf("First exec should be SET ROLE reader, got queries: %v", queries)
+	if len(queries) == 0 || queries[0] != "SET ROLE eval_app" {
+		t.Errorf("First exec should be SET ROLE eval_app, got queries: %v", queries)
 	}
 
-	// Verify no set_config calls were made (reader bypasses RLS entirely)
+	// Verify only app.role was set via set_config, and set to 'public'.
 	calls := mock.getSetConfigArgs()
-	if len(calls) != 0 {
-		t.Errorf("Expected 0 set_config calls (reader bypasses RLS), got %d: %v", len(calls), calls)
+	if len(calls) != 1 {
+		t.Fatalf("Expected 1 set_config call (app.role=public), got %d: %v", len(calls), calls)
+	}
+	if calls[0].setting != "app.role" {
+		t.Errorf("set_config setting = %q, want %q", calls[0].setting, "app.role")
+	}
+	if calls[0].value != "public" {
+		t.Errorf("set_config value = %q, want %q", calls[0].value, "public")
 	}
 
 	// Verify repos was attached to context
@@ -834,6 +840,34 @@ func TestPublicStoreMiddleware_Success(t *testing.T) {
 	// Verify connection was released
 	if !mock.wasReleased() {
 		t.Error("Connection should be released after request completes")
+	}
+}
+
+func TestPublicStoreMiddleware_SetConfigError(t *testing.T) {
+	// SET ROLE eval_app succeeds (call index 0), set_config fails (call index 1) → 503.
+	mock := &mockConnFailAfter{failAfter: 1}
+	acquirer := &testAcquirer{conn: mock}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when set_config fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+	if !mock.wasReleased() {
+		t.Error("Connection should be released even on set_config error")
 	}
 }
 
@@ -893,6 +927,63 @@ func TestPublicStoreMiddleware_SetRoleError(t *testing.T) {
 	}
 }
 
+// mockConnFailAfter is a mock that succeeds for the first N Exec calls,
+// then returns an error. Used to test failures on specific Exec calls.
+type mockConnFailAfter struct {
+	mu        sync.Mutex
+	callCount int
+	failAfter int // fail starting at this call index (0-based)
+
+	setConfigArgs []setConfigCall
+	execQueries   []string
+	released      bool
+}
+
+func (m *mockConnFailAfter) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.execQueries = append(m.execQueries, sql)
+	idx := m.callCount
+	m.callCount++
+
+	if idx >= m.failAfter {
+		return pgconn.CommandTag{}, errors.New("injected error after call " + fmt.Sprintf("%d", idx))
+	}
+
+	if len(args) >= 1 {
+		start := len("SELECT set_config('")
+		end := start
+		for i := start; i < len(sql) && sql[i] != '\''; i++ {
+			end = i + 1
+		}
+		setting := sql[start:end]
+		value, _ := args[0].(string)
+		m.setConfigArgs = append(m.setConfigArgs, setConfigCall{setting: setting, value: value})
+	}
+	return pgconn.CommandTag{}, nil
+}
+
+func (m *mockConnFailAfter) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *mockConnFailAfter) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return nil
+}
+
+func (m *mockConnFailAfter) Release() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.released = true
+}
+
+func (m *mockConnFailAfter) wasReleased() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.released
+}
+
 func TestPublicStoreMiddleware_NoAuthRequired(t *testing.T) {
 	// Verify the public middleware works without any auth user in context
 	mock := &mockConn{}
@@ -921,6 +1012,42 @@ func TestPublicStoreMiddleware_NoAuthRequired(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// TestPublicStoreMiddleware_SetsRoleBeforeConfig verifies that SET ROLE eval_app
+// is issued before set_config in the public middleware path, matching the
+// pattern required for RLS enforcement.
+func TestPublicStoreMiddleware_SetsRoleBeforeConfig(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := publicStoreMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/public/problems/some-id", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	queries := mock.getExecQueries()
+	if len(queries) == 0 {
+		t.Fatal("Expected at least one Exec call, got none")
+	}
+	if queries[0] != "SET ROLE eval_app" {
+		t.Errorf("First Exec query should be SET ROLE eval_app, got %q", queries[0])
+	}
+
+	// Total: SET ROLE + 1 set_config + RESET ROLE + resetVarsQuery = 4 queries
+	if len(queries) < 4 {
+		t.Errorf("Expected at least 4 Exec calls (SET ROLE + set_config + RESET ROLE + clear vars), got %d: %v", len(queries), queries)
 	}
 }
 
