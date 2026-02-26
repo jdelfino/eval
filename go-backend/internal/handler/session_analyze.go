@@ -15,9 +15,14 @@ import (
 
 // analyzeHTTPRequest is the request body for POST /sessions/{id}/analyze.
 type analyzeHTTPRequest struct {
-	StudentID          uuid.UUID `json:"student_id" validate:"required"`
-	Code               string    `json:"code" validate:"required"`
-	ProblemDescription string    `json:"problem_description"`
+	ProblemDescription string `json:"problem_description"`
+	Submissions        []struct {
+		UserID string `json:"user_id" validate:"required"`
+		Name   string `json:"name"`
+		Code   string `json:"code"`
+	} `json:"submissions" validate:"required"`
+	Model        string `json:"model"`
+	CustomPrompt string `json:"custom_prompt"`
 }
 
 // AnalyzeHandler handles AI analysis requests for session code.
@@ -75,16 +80,31 @@ func (h *AnalyzeHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate student_id is a participant
-	if !isCreatorOrParticipant(req.StudentID, session) {
-		httputil.WriteError(w, http.StatusBadRequest, "student_id is not a participant in this session")
-		return
+	// Convert submissions and validate each student is a participant
+	submissions := make([]ai.StudentSubmission, 0, len(req.Submissions))
+	for _, s := range req.Submissions {
+		studentID, parseErr := uuid.Parse(s.UserID)
+		if parseErr != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid user_id in submissions")
+			return
+		}
+		if !isCreatorOrParticipant(studentID, session) {
+			httputil.WriteError(w, http.StatusBadRequest, "a submission user_id is not a participant in this session")
+			return
+		}
+		submissions = append(submissions, ai.StudentSubmission{
+			UserID: s.UserID,
+			Name:   s.Name,
+			Code:   s.Code,
+		})
 	}
 
 	// Call AI client
 	aiResp, err := h.aiClient.AnalyzeCode(r.Context(), ai.AnalyzeRequest{
-		Code:               req.Code,
 		ProblemDescription: req.ProblemDescription,
+		Submissions:        submissions,
+		Model:              req.Model,
+		CustomPrompt:       req.CustomPrompt,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "AI analysis failed")

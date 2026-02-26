@@ -53,11 +53,44 @@ func setupAnalyzeHandler(sessRepo *mockSessionRepo, aiClient ai.Client) http.Han
 
 func newAnalyzeReq(studentID uuid.UUID, code, problemDesc string) []byte {
 	b, _ := json.Marshal(map[string]any{
-		"student_id":          studentID,
-		"code":                code,
 		"problem_description": problemDesc,
+		"submissions": []map[string]any{
+			{
+				"user_id": studentID.String(),
+				"name":    "Test Student",
+				"code":    code,
+			},
+		},
 	})
 	return b
+}
+
+func stubAnalyzeResp() *ai.AnalyzeResponse {
+	return &ai.AnalyzeResponse{
+		Issues: []ai.AnalysisIssue{
+			{
+				Title:                      "Test issue",
+				Explanation:                "The code correctly solves the problem.",
+				Count:                      1,
+				StudentIDs:                 []string{testStudentID.String()},
+				RepresentativeStudentID:    testStudentID.String(),
+				RepresentativeStudentLabel: "Test Student",
+				Severity:                   ai.IssueSeverityStyle,
+			},
+		},
+		FinishedStudentIDs: []string{},
+		OverallNote:        "Overall the class did well.",
+		Summary: ai.AnalysisSummary{
+			TotalSubmissions:    1,
+			FilteredOut:         0,
+			AnalyzedSubmissions: 1,
+			CompletionEstimate: ai.CompletionEstimate{
+				Finished:   0,
+				InProgress: 1,
+				NotStarted: 0,
+			},
+		},
+	}
 }
 
 func TestAnalyze_HappyPath(t *testing.T) {
@@ -68,10 +101,7 @@ func TestAnalyze_HappyPath(t *testing.T) {
 	}
 	aiClient := &mockAIClient{
 		analyzeFn: func(_ context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error) {
-			return &ai.AnalyzeResponse{
-				Analysis:    "The code correctly solves the problem.",
-				Suggestions: []string{"Consider adding error handling."},
-			}, nil
+			return stubAnalyzeResp(), nil
 		},
 	}
 
@@ -93,11 +123,11 @@ func TestAnalyze_HappyPath(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if resp.Analysis == "" {
-		t.Fatal("expected non-empty analysis")
+	if len(resp.Issues) == 0 {
+		t.Fatal("expected at least one issue in response")
 	}
-	if len(resp.Suggestions) != 1 {
-		t.Fatalf("expected 1 suggestion, got %d", len(resp.Suggestions))
+	if resp.Issues[0].Title == "" {
+		t.Fatal("expected non-empty issue title")
 	}
 }
 
@@ -245,7 +275,7 @@ func TestAnalyze_PassesRequestToAIClient(t *testing.T) {
 	aiClient := &mockAIClient{
 		analyzeFn: func(_ context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error) {
 			capturedReq = req
-			return &ai.AnalyzeResponse{Analysis: "ok", Suggestions: []string{}}, nil
+			return stubAnalyzeResp(), nil
 		},
 	}
 
@@ -262,8 +292,11 @@ func TestAnalyze_PassesRequestToAIClient(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if capturedReq.Code != "my code" {
-		t.Fatalf("expected code 'my code', got %q", capturedReq.Code)
+	if len(capturedReq.Submissions) != 1 {
+		t.Fatalf("expected 1 submission, got %d", len(capturedReq.Submissions))
+	}
+	if capturedReq.Submissions[0].Code != "my code" {
+		t.Fatalf("expected code 'my code', got %q", capturedReq.Submissions[0].Code)
 	}
 	if capturedReq.ProblemDescription != "my problem" {
 		t.Fatalf("expected problem_description 'my problem', got %q", capturedReq.ProblemDescription)

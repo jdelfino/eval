@@ -321,7 +321,19 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Advanced session features (instructor+): AI analysis
 			// Rate limits stacked: per-user daily (most restrictive, checked first),
 			// global daily, then per-minute burst.
-			analyzeHandler := handler.NewAnalyzeHandler(&ai.StubClient{})
+			var aiClient ai.Client
+			if cfg.GeminiAPIKey != "" {
+				geminiClient, geminiErr := ai.NewGeminiClient(cfg.GeminiAPIKey)
+				if geminiErr != nil {
+					logger.Warn("failed to initialize Gemini client, falling back to stub", "error", geminiErr)
+					aiClient = &ai.StubClient{}
+				} else {
+					aiClient = geminiClient
+				}
+			} else {
+				aiClient = &ai.StubClient{}
+			}
+			analyzeHandler := handler.NewAnalyzeHandler(aiClient)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
 				r.With(
