@@ -77,6 +77,14 @@ test-integration-contract:
 	./scripts/run-contract-tests.sh
 
 # ──────────────────────────────────────────────
+# Realtime event contract tests (frontend ↔ Centrifugo)
+# ──────────────────────────────────────────────
+.PHONY: test-integration-realtime-contract
+
+test-integration-realtime-contract:
+	./scripts/run-realtime-contract-tests.sh
+
+# ──────────────────────────────────────────────
 # E2E tests (Playwright)
 # ──────────────────────────────────────────────
 .PHONY: test-e2e

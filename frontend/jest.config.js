@@ -90,8 +90,12 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/src/__tests__/contract/**/*.integration.test.ts'],
-      // Exclude setup test since globalSetup handles it
-      testPathIgnorePatterns: ['/node_modules/', '000-setup\\.integration\\.test\\.ts$'],
+      // Exclude setup test and the realtime-events tests (handled by 'realtime-contract' project)
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '000-setup\\.integration\\.test\\.ts$',
+        'realtime-events\\.integration\\.test\\.ts$',
+      ],
       roots: ['<rootDir>/src'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
       globalSetup: '<rootDir>/src/__tests__/contract/globalSetup.ts',
@@ -108,6 +112,29 @@ module.exports = {
       testEnvironment: 'node',
       testMatch: ['<rootDir>/scripts/**/__tests__/**/*.test.ts'],
       roots: ['<rootDir>/scripts'],
+      transform: {
+        '^.+\\.tsx?$': ['ts-jest', {
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }
+        }]
+      },
+    },
+    {
+      // Realtime event contract tests — subscribe to Centrifugo WebSocket channels and verify
+      // event payload shapes against backend-triggered actions.
+      //
+      // Requires: CENTRIFUGO_URL, CENTRIFUGO_WS_URL, CENTRIFUGO_TOKEN_SECRET, CENTRIFUGO_API_KEY,
+      //           API_BASE_URL to be set in the environment.
+      displayName: 'realtime-contract',
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/src/__tests__/contract/realtime-events.integration.test.ts'],
+      testPathIgnorePatterns: ['/node_modules/'],
+      roots: ['<rootDir>/src'],
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      // Reuse the same globalSetup as contract tests (creates namespace, users, sessions, etc.)
+      globalSetup: '<rootDir>/src/__tests__/contract/globalSetup.ts',
+      // Longer timeout — Centrifugo subscribe + backend action + receive can take a few seconds
+      testTimeout: 30000,
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
           tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }

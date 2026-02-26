@@ -6,6 +6,16 @@
 
 import { User, Session, SessionStudent, ExecutionResult, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
+import type {
+  StudentJoinedData,
+  StudentCodeUpdatedData,
+  SessionEndedData,
+  SessionReplacedData,
+  FeaturedStudentChangedData,
+  ProblemUpdatedData,
+  SessionStartedInSectionData,
+  SessionEndedInSectionData,
+} from '@/types/realtime-events';
 
 const SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/;
 
@@ -186,4 +196,71 @@ export function validateStudentWorkSummaryShape(obj: StudentWorkSummary, label =
     validateStudentWorkShape(obj.student_work!, `${label}.student_work`);
   }
   expectSnakeCaseKeys(obj, label);
+}
+
+// ---------------------------------------------------------------------------
+// Realtime event payload shape validators
+// ---------------------------------------------------------------------------
+
+/** Validate the shape of a student_joined event payload. */
+export function validateStudentJoinedShape(obj: StudentJoinedData) {
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.display_name).toBe('string');
+  expectSnakeCaseKeys(obj, 'StudentJoinedData');
+}
+
+/** Validate the shape of a student_code_updated event payload. */
+export function validateStudentCodeUpdatedShape(obj: StudentCodeUpdatedData) {
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.code).toBe('string');
+  // execution_settings is optional (omitempty) — if present, not undefined
+  if ('execution_settings' in obj) {
+    expect(obj.execution_settings !== undefined).toBe(true);
+  }
+  expectSnakeCaseKeys(obj, 'StudentCodeUpdatedData');
+}
+
+/** Validate the shape of a session_ended event payload. */
+export function validateSessionEndedShape(obj: SessionEndedData) {
+  expect(typeof obj.session_id).toBe('string');
+  expect(typeof obj.reason).toBe('string');
+  expectSnakeCaseKeys(obj, 'SessionEndedData');
+}
+
+/**
+ * Validate the shape of a session_replaced event payload.
+ * NOTE: newSessionId uses camelCase (Go JSON tag inconsistency) — expectSnakeCaseKeys is NOT called.
+ */
+export function validateSessionReplacedShape(obj: SessionReplacedData) {
+  expect(typeof obj.newSessionId).toBe('string');
+  // Intentionally does NOT call expectSnakeCaseKeys — newSessionId is a known camelCase exception
+}
+
+/** Validate the shape of a featured_student_changed event payload. */
+export function validateFeaturedStudentChangedShape(obj: FeaturedStudentChangedData) {
+  expect(typeof obj.user_id).toBe('string');
+  expect(typeof obj.code).toBe('string');
+  if ('execution_settings' in obj) {
+    expect(obj.execution_settings !== undefined).toBe(true);
+  }
+  expectSnakeCaseKeys(obj, 'FeaturedStudentChangedData');
+}
+
+/** Validate the shape of a problem_updated event payload. */
+export function validateProblemUpdatedShape(obj: ProblemUpdatedData) {
+  expect(typeof obj.problem_id).toBe('string');
+  expectSnakeCaseKeys(obj, 'ProblemUpdatedData');
+}
+
+/** Validate the shape of a session_started_in_section event payload. */
+export function validateSessionStartedInSectionShape(obj: SessionStartedInSectionData) {
+  expect(typeof obj.session_id).toBe('string');
+  expect(obj.problem !== undefined && obj.problem !== null).toBe(true);
+  expectSnakeCaseKeys(obj, 'SessionStartedInSectionData');
+}
+
+/** Validate the shape of a session_ended_in_section event payload. */
+export function validateSessionEndedInSectionShape(obj: SessionEndedInSectionData) {
+  expect(typeof obj.session_id).toBe('string');
+  expectSnakeCaseKeys(obj, 'SessionEndedInSectionData');
 }
