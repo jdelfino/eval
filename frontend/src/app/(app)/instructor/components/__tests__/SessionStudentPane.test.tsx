@@ -316,9 +316,13 @@ describe('SessionStudentPane', () => {
         expect(screen.getByTestId('custom-prompt-textarea')).toBeInTheDocument();
       });
 
-      it('pre-fills the textarea with default prompt directions', () => {
+      it('pre-fills the textarea with the backend default prompt directions (matching DefaultCustomDirections)', () => {
         const textarea = screen.getByTestId('custom-prompt-textarea') as HTMLTextAreaElement;
-        expect(textarea.value).toContain('Focus on actual bugs');
+        // Must match the backend DefaultCustomDirections — not the old shorter frontend-only string.
+        // This ensures what the instructor sees pre-filled is exactly what the backend uses.
+        expect(textarea.value).toContain('Identify patterns across all student submissions');
+        // Must NOT contain the old short frontend-only default that differs from backend
+        expect(textarea.value).not.toContain('Focus on actual bugs');
       });
 
       it('allows changing the model dropdown value', () => {

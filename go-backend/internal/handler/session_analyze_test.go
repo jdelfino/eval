@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +20,45 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
+
+// capturingSlogHandler is a slog.Handler that records all log records for assertions.
+type capturingSlogHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *capturingSlogHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+
+func (h *capturingSlogHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r)
+	return nil
+}
+
+func (h *capturingSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler { return h }
+func (h *capturingSlogHandler) WithGroup(name string) slog.Handler       { return h }
+
+// containsErrorAttr returns true if any recorded log entry has an "error" attribute
+// containing the given substring.
+func (h *capturingSlogHandler) containsErrorAttr(substr string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.records {
+		found := false
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "error" && strings.Contains(a.Value.String(), substr) {
+				found = true
+				return false
+			}
+			return true
+		})
+		if found {
+			return true
+		}
+	}
+	return false
+}
 
 // mockAIClient implements ai.Client for testing.
 type mockAIClient struct {
@@ -628,5 +670,125 @@ func TestAnalyze_500ListStudentsError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when ListSessionStudents fails, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- WriteInternalError logging: underlying error must be logged for all 500 paths ---
+
+// TestAnalyze_GetSessionError_LogsUnderlyingError verifies that when GetSession fails
+// with an internal error, WriteInternalError is used (not WriteError), so the
+// underlying error string appears in the structured log output.
+func TestAnalyze_GetSessionError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	underlyingErr := fmt.Errorf("db: connection refused from GetSession")
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return nil, underlyingErr
+		},
+	}
+	sessStudentsRepo := &mockSessionStudentRepo{}
+	aiClient := &mockAIClient{}
+
+	handler := setupAnalyzeHandler(sessRepo, sessStudentsRepo, aiClient)
+	body := defaultAnalyzeReq()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/analyze", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	if !h.containsErrorAttr("connection refused from GetSession") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestAnalyze_ListStudentsError_LogsUnderlyingError verifies that when ListSessionStudents
+// fails, the underlying error is logged (WriteInternalError, not WriteError).
+func TestAnalyze_ListStudentsError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	underlyingErr := fmt.Errorf("db: timeout from ListSessionStudents")
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return activeSession(), nil
+		},
+	}
+	sessStudentsRepo := &mockSessionStudentRepo{
+		listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
+			return nil, underlyingErr
+		},
+	}
+	aiClient := &mockAIClient{}
+
+	handler := setupAnalyzeHandler(sessRepo, sessStudentsRepo, aiClient)
+	body := defaultAnalyzeReq()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/analyze", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	if !h.containsErrorAttr("timeout from ListSessionStudents") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestAnalyze_AIClientError_LogsUnderlyingError verifies that when the AI client
+// returns an error, the underlying error is logged (WriteInternalError, not WriteError).
+func TestAnalyze_AIClientError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	underlyingErr := fmt.Errorf("gemini: quota exceeded from AI client")
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return activeSession(), nil
+		},
+	}
+	sessStudentsRepo := &mockSessionStudentRepo{
+		listSessionStudentFn: func(_ context.Context, _ uuid.UUID) ([]store.SessionStudent, error) {
+			return defaultStudents(), nil
+		},
+	}
+	aiClient := &mockAIClient{
+		analyzeFn: func(_ context.Context, _ ai.AnalyzeRequest) (*ai.AnalyzeResponse, error) {
+			return nil, underlyingErr
+		},
+	}
+
+	handler := setupAnalyzeHandler(sessRepo, sessStudentsRepo, aiClient)
+	body := defaultAnalyzeReq()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/analyze", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	if !h.containsErrorAttr("quota exceeded from AI client") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
 	}
 }

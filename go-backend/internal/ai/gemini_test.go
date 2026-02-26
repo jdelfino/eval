@@ -4,6 +4,20 @@ import (
 	"testing"
 )
 
+// TestNewGeminiClient_StoresGenaiClient verifies that NewGeminiClient creates and
+// stores the genai.Client on the struct so it can be reused across AnalyzeCode calls
+// (connection pooling — no new HTTP client per call).
+func TestNewGeminiClient_StoresGenaiClient(t *testing.T) {
+	g, err := NewGeminiClient("fake-api-key-for-testing")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	// The struct must store the genai.Client (not nil) so AnalyzeCode can reuse it.
+	if g.client == nil {
+		t.Error("expected GeminiClient.client to be non-nil after NewGeminiClient; client must be created once and stored")
+	}
+}
+
 // TestNewGeminiClient_RejectsEmptyAPIKey verifies that NewGeminiClient returns
 // an error when the API key is empty.
 func TestNewGeminiClient_RejectsEmptyAPIKey(t *testing.T) {

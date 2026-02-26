@@ -6,7 +6,7 @@
  * Integrates analysis groups for walkthrough navigation.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import StudentList from './StudentList';
 import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
@@ -15,6 +15,24 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Problem, ExecutionSettings } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
+
+const DEFAULT_MODEL = 'gemini-2.0-flash';
+
+// DEFAULT_PROMPT must match the backend's DefaultCustomDirections in go-backend/internal/ai/prompt.go.
+// When the instructor clicks Analyze without editing, this is exactly what the backend uses.
+// Keeping them in sync ensures the pre-filled UI text reflects actual backend behavior.
+const DEFAULT_PROMPT =
+  `Identify patterns across all student submissions. Group students by common mistakes or approaches.\n\n` +
+  `Bucket guidelines:\n` +
+  `- "error": A logical or correctness bug (e.g., off-by-one, wrong operator, incorrect algorithm)\n` +
+  `- "misconception": A conceptual misunderstanding (e.g., confusing iteration with recursion, wrong mental model)\n` +
+  `- "style": A code quality concern that does not affect correctness (e.g., redundant variable, unclear naming)\n` +
+  `- "good-pattern": A positive practice worth highlighting to the class\n\n` +
+  `Constraints:\n` +
+  `- Return at most 5 issues total across all buckets.\n` +
+  `- Each issue must have at least 1 student.\n` +
+  `- Do not create a bucket for students who have not attempted the problem or submitted empty code — omit them from issue buckets and include their IDs in finished_student_ids if their code is complete, or exclude them from all lists if it is empty.\n` +
+  `- Set overall_note to a 1-2 sentence summary of the class's performance.`;
 
 interface SessionStudentPaneProps {
   /** Session ID for analysis API calls */
@@ -72,6 +90,11 @@ export function SessionStudentPane({
   const [execution_result, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [isExecutingCode, setIsExecutingCode] = useState(false);
 
+  // Analysis options state
+  const [showAnalysisOptions, setShowAnalysisOptions] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
+
   // Analysis groups hook
   const {
     analysisState,
@@ -126,10 +149,9 @@ export function SessionStudentPane({
     }
   };
 
-  const handleAnalyze = () => {
-    if (!selectedStudentId) return;
-    analyze(session_id, selectedStudentId, selectedStudentCode, sessionProblem?.description);
-  };
+  const handleAnalyze = useCallback(() => {
+    analyze(session_id, selectedModel, customPrompt);
+  }, [analyze, session_id, selectedModel, customPrompt]);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
 
@@ -185,6 +207,52 @@ export function SessionStudentPane({
               )}
               {analyzeButtonLabel}
             </button>
+          )}
+
+          {/* Analysis options toggle */}
+          <div className="mt-1 text-center">
+            <button
+              type="button"
+              data-testid="analysis-options-toggle"
+              onClick={() => setShowAnalysisOptions(prev => !prev)}
+              className="text-xs text-gray-500 hover:text-gray-700 underline"
+            >
+              Options
+            </button>
+          </div>
+
+          {/* Collapsible analysis options panel */}
+          {showAnalysisOptions && (
+            <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg" data-testid="analysis-options-panel">
+              <div className="mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor="model-select">
+                  Model
+                </label>
+                <select
+                  id="model-select"
+                  data-testid="model-select"
+                  value={selectedModel}
+                  onChange={e => setSelectedModel(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                >
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor="custom-prompt-textarea">
+                  Analysis directions
+                </label>
+                <textarea
+                  id="custom-prompt-textarea"
+                  data-testid="custom-prompt-textarea"
+                  value={customPrompt}
+                  onChange={e => setCustomPrompt(e.target.value)}
+                  rows={4}
+                  className="w-full text-xs border border-gray-300 rounded px-2 py-1 resize-y"
+                />
+              </div>
+            </div>
           )}
         </div>
 
