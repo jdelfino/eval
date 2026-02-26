@@ -163,11 +163,6 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !claims.EmailVerified {
-		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
-		return
-	}
-
 	req, err := httpbind.BindJSON[acceptInviteRequest](w, r)
 	if err != nil {
 		return
@@ -194,6 +189,11 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteErrorWithCode(w, http.StatusGone, code, "invitation is no longer pending")
 		return
 	}
+
+	// No email_verified check here — the invite token is a one-time-use secret
+	// sent to the intended recipient, so possessing it is sufficient authorization.
+	// This allows email/password sign-in (where Firebase sets email_verified=false)
+	// as well as OAuth sign-in with a different email than the invitation.
 
 	// Use external_id from JWT claims (not request body) to prevent impersonation
 	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{

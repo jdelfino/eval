@@ -439,22 +439,15 @@ func TestRegisterStudentPost_InactiveSection_ReturnsCode(t *testing.T) {
 }
 
 func TestRegisterStudentPost_EmailNotVerified(t *testing.T) {
-	section := testSection()
-	membershipRepo := &mockMembershipRepo{
-		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
-			return section, nil
-		},
-	}
-
 	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
 		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
-		membershipRepo: membershipRepo,
+		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"join_code": section.JoinCode,
+		"join_code": "ABC123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

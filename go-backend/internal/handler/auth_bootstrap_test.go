@@ -88,7 +88,7 @@ func TestBootstrapPost_EmailNotVerified(t *testing.T) {
 	claims := &auth.Claims{
 		Subject:       "firebase-uid-admin",
 		Email:         "admin@example.com",
-		EmailVerified: false, // unverified
+		EmailVerified: false,
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
 	req = req.WithContext(ctx)

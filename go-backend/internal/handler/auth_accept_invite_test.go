@@ -341,17 +341,39 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 	}
 }
 
+// TestAcceptInvitePost_EmailNotVerified verifies that email/password sign-in
+// users (EmailVerified=false) can accept an invite. The invite token is a
+// one-time-use secret — possessing it is sufficient authorization.
 func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 	inv := testInvitation("test-ns")
+	createdUser := &store.User{
+		ID:          uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		Email:       inv.Email,
+		Role:        inv.TargetRole,
+		NamespaceID: &inv.NamespaceID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
 	invRepo := &mockInvitationRepo{
 		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
 			return inv, nil
+		},
+		consumeInvitationFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Invitation, error) {
+			consumed := *inv
+			consumed.Status = "consumed"
+			return &consumed, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return createdUser, nil
 		},
 	}
 
 	h := NewAuthHandler("")
 	repos := &mockAuthRepos{
-		userRepo:       &StubUserRepo{},
+		userRepo:       userRepo,
 		invRepo:        invRepo,
 		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
@@ -361,7 +383,7 @@ func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: false}
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: "other@example.com", EmailVerified: false}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -369,8 +391,8 @@ func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 
 	h.PostAcceptInvite(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
