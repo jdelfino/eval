@@ -1062,6 +1062,71 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	}
 }
 
+// TestUpdateCode_PublishesExecutionSettings verifies that execution_settings from
+// the request body are forwarded to the CodeUpdated publisher call.
+func TestUpdateCode_PublishesExecutionSettings(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+	ss.Code = "x = 1"
+	userID := ss.UserID
+	execSettings := json.RawMessage(`{"stdin":"hello inputs"}`)
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{
+				ID:                studentWorkID,
+				Code:              *params.Code,
+				ExecutionSettings: params.ExecutionSettings,
+			}, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionStudentHandler(pub)
+
+	body := []byte(`{"code":"x = 1","execution_settings":{"stdin":"hello inputs"}}`)
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.codeUpdatedCalls) != 1 {
+		t.Fatalf("expected 1 CodeUpdated call, got %d", len(pub.codeUpdatedCalls))
+	}
+	call := pub.codeUpdatedCalls[0]
+	if call.executionSettings == nil {
+		t.Fatal("expected execution_settings to be forwarded to publisher, got nil")
+	}
+	var gotMap, wantMap map[string]any
+	if err := json.Unmarshal(call.executionSettings, &gotMap); err != nil {
+		t.Fatalf("unmarshal got: %v", err)
+	}
+	if err := json.Unmarshal(execSettings, &wantMap); err != nil {
+		t.Fatalf("unmarshal want: %v", err)
+	}
+	if gotMap["stdin"] != wantMap["stdin"] {
+		t.Errorf("execution_settings.stdin: got %v, want %v", gotMap["stdin"], wantMap["stdin"])
+	}
+}
+
 func TestUpdateCode_SucceedsWhenPublisherFails(t *testing.T) {
 	ss := testSessionStudent()
 	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")

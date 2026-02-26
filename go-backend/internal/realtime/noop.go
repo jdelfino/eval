@@ -13,7 +13,9 @@ var _ SessionPublisher = NoOpSessionPublisher{}
 type NoOpSessionPublisher struct{}
 
 func (NoOpSessionPublisher) StudentJoined(_ context.Context, _, _, _ string) error    { return nil }
-func (NoOpSessionPublisher) CodeUpdated(_ context.Context, _, _, _ string) error      { return nil }
+func (NoOpSessionPublisher) CodeUpdated(_ context.Context, _, _, _ string, _ json.RawMessage) error {
+	return nil
+}
 func (NoOpSessionPublisher) SessionEnded(_ context.Context, _, _ string) error        { return nil }
 func (NoOpSessionPublisher) SessionReplaced(_ context.Context, _, _ string) error     { return nil }
 func (NoOpSessionPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {

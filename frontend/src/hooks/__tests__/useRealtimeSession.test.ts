@@ -596,6 +596,79 @@ describe('useRealtimeSession', () => {
       expect(result.current.students[0].code).toBe('print("updated")');
     });
 
+    it('should store execution_settings from student_code_updated event on the student', async () => {
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Add a student first
+      act(() => {
+        simulatePublication('student_joined', {
+          user_id: 'student-1',
+          display_name: 'Alice',
+        });
+      });
+
+      expect(result.current.students[0].execution_settings).toBeUndefined();
+
+      const execSettings = { stdin: 'hello inputs', random_seed: 42 };
+      act(() => {
+        simulatePublication('student_code_updated', {
+          user_id: 'student-1',
+          code: 'print("hello")',
+          execution_settings: execSettings,
+        });
+      });
+
+      expect(result.current.students[0].code).toBe('print("hello")');
+      expect(result.current.students[0].execution_settings).toEqual(execSettings);
+    });
+
+    it('should store execution_settings from student_code_updated in pending updates (out-of-order)', async () => {
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      const execSettings = { stdin: 'pending inputs' };
+
+      // Code update (with execution_settings) arrives before student join
+      act(() => {
+        simulatePublication('student_code_updated', {
+          user_id: 'student-1',
+          code: 'print("early")',
+          execution_settings: execSettings,
+        });
+      });
+
+      expect(result.current.students).toHaveLength(0);
+
+      // Student join arrives after — should apply pending update including execution_settings
+      act(() => {
+        simulatePublication('student_joined', {
+          user_id: 'student-1',
+          display_name: 'Alice',
+        });
+      });
+
+      expect(result.current.students).toHaveLength(1);
+      expect(result.current.students[0].code).toBe('print("early")');
+      expect(result.current.students[0].execution_settings).toEqual(execSettings);
+    });
+
     it('should handle out-of-order events (code update before student join)', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({

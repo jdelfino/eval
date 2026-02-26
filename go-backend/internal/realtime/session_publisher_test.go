@@ -62,7 +62,8 @@ func TestStudentJoined(t *testing.T) {
 
 func TestCodeUpdated(t *testing.T) {
 	mock, sp := newTestPublisher()
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()")
+	execSettings := json.RawMessage(`{"stdin":"world"}`)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", execSettings)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,6 +77,22 @@ func TestCodeUpdated(t *testing.T) {
 	data := event.Data.(StudentCodeUpdatedData)
 	if data.UserID != "user-2" || data.Code != "fmt.Println()" {
 		t.Errorf("payload = %+v", data)
+	}
+	if string(data.ExecutionSettings) != `{"stdin":"world"}` {
+		t.Errorf("execution_settings = %q, want %q", string(data.ExecutionSettings), `{"stdin":"world"}`)
+	}
+}
+
+func TestCodeUpdated_NilExecutionSettings(t *testing.T) {
+	mock, sp := newTestPublisher()
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(StudentCodeUpdatedData)
+	if data.ExecutionSettings != nil {
+		t.Errorf("expected nil execution_settings, got %q", string(data.ExecutionSettings))
 	}
 }
 

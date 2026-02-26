@@ -114,6 +114,7 @@ type studentJoinedCall struct {
 }
 type codeUpdatedCall struct {
 	sessionID, userID, code string
+	executionSettings       json.RawMessage
 }
 type sessionEndedCall struct {
 	sessionID, reason string
@@ -156,9 +157,9 @@ func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userI
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string) error {
+func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
 	m.mu.Lock()
-	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code})
+	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code, executionSettings})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err
