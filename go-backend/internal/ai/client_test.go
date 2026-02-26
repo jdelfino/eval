@@ -34,11 +34,9 @@ func TestStubClient_ReturnsNewResponseShape(t *testing.T) {
 		t.Error("expected non-nil FinishedStudentIDs slice")
 	}
 
-	// Summary must be present
-	if resp.Summary.TotalSubmissions == 0 && resp.Summary.AnalyzedSubmissions == 0 {
-		// At least one summary field must be populated for a real stub
-		// (both zero is technically valid, but let's ensure the struct exists)
-		_ = resp.Summary
+	// Summary struct must be populated — stub must set at least TotalSubmissions
+	if resp.Summary.TotalSubmissions == 0 {
+		t.Error("expected Summary.TotalSubmissions to be non-zero in stub response")
 	}
 }
 
@@ -78,38 +76,6 @@ func TestStubClient_IssueShape(t *testing.T) {
 		if issue.RepresentativeStudentLabel == "" {
 			t.Errorf("issue[%d].RepresentativeStudentLabel is empty", i)
 		}
-	}
-}
-
-// TestAnalyzeRequest_TypeContract verifies the AnalyzeRequest struct has
-// the fields required by the task spec.
-func TestAnalyzeRequest_TypeContract(t *testing.T) {
-	// Compile-time contract: these fields must exist on AnalyzeRequest
-	req := AnalyzeRequest{
-		ProblemDescription: "Test problem",
-		Submissions: []StudentSubmission{
-			{
-				UserID: "user-abc",
-				Name:   "Student A",
-				Code:   "x = 1",
-			},
-		},
-		Model:        "gemini-2.0-flash",
-		CustomPrompt: "Focus on correctness only",
-	}
-
-	if req.ProblemDescription == "" {
-		t.Error("ProblemDescription should be set")
-	}
-	if len(req.Submissions) != 1 {
-		t.Error("expected 1 submission")
-	}
-	sub := req.Submissions[0]
-	if sub.UserID == "" || sub.Name == "" || sub.Code == "" {
-		t.Error("StudentSubmission fields must all be set")
-	}
-	if req.Model == "" {
-		t.Error("Model should be set")
 	}
 }
 
@@ -193,81 +159,5 @@ func TestBuildPrompt_EmptySubmissions(t *testing.T) {
 	prompt := BuildPrompt("Problem", []StudentSubmission{}, DefaultCustomDirections)
 	if prompt == "" {
 		t.Error("expected non-empty prompt even with no submissions")
-	}
-}
-
-// TestIssueSeverity_ValidValues ensures the severity type accepts all values
-// defined in the frontend spec.
-func TestIssueSeverity_ValidValues(t *testing.T) {
-	validSeverities := []IssueSeverity{
-		IssueSeverityError,
-		IssueSeverityMisconception,
-		IssueSeverityStyle,
-		IssueSeverityGoodPattern,
-	}
-	for _, s := range validSeverities {
-		if string(s) == "" {
-			t.Errorf("severity value is empty string")
-		}
-	}
-}
-
-// TestAnalysisIssue_CountMatchesStudentIDs verifies the Count field contract:
-// it must equal the length of StudentIDs.
-func TestAnalysisIssue_CountMatchesStudentIDs(t *testing.T) {
-	issue := AnalysisIssue{
-		Title:                      "Off-by-one error",
-		Explanation:                "Loop boundary incorrect",
-		Count:                      2,
-		StudentIDs:                 []string{"u1", "u2"},
-		RepresentativeStudentID:    "u1",
-		RepresentativeStudentLabel: "Alice",
-		Severity:                   IssueSeverityError,
-	}
-	if issue.Count != len(issue.StudentIDs) {
-		t.Errorf("Count %d != len(StudentIDs) %d", issue.Count, len(issue.StudentIDs))
-	}
-}
-
-// TestAnalyzeResponse_SummaryFields verifies the AnalyzeResponse.Summary has
-// the fields required by the frontend WalkthroughSummary shape.
-func TestAnalyzeResponse_SummaryFields(t *testing.T) {
-	resp := AnalyzeResponse{
-		Issues:             []AnalysisIssue{},
-		FinishedStudentIDs: []string{"u1"},
-		OverallNote:        "Overall the class did well",
-		Summary: AnalysisSummary{
-			TotalSubmissions:   5,
-			FilteredOut:        1,
-			AnalyzedSubmissions: 4,
-			CompletionEstimate: CompletionEstimate{
-				Finished:   3,
-				InProgress: 1,
-				NotStarted: 0,
-			},
-			Warning: "Some students had empty submissions",
-		},
-	}
-
-	if resp.Summary.TotalSubmissions != 5 {
-		t.Errorf("TotalSubmissions = %d, want 5", resp.Summary.TotalSubmissions)
-	}
-	if resp.Summary.FilteredOut != 1 {
-		t.Errorf("FilteredOut = %d, want 1", resp.Summary.FilteredOut)
-	}
-	if resp.Summary.AnalyzedSubmissions != 4 {
-		t.Errorf("AnalyzedSubmissions = %d, want 4", resp.Summary.AnalyzedSubmissions)
-	}
-	if resp.Summary.CompletionEstimate.Finished != 3 {
-		t.Errorf("CompletionEstimate.Finished = %d, want 3", resp.Summary.CompletionEstimate.Finished)
-	}
-	if resp.Summary.CompletionEstimate.InProgress != 1 {
-		t.Errorf("CompletionEstimate.InProgress = %d, want 1", resp.Summary.CompletionEstimate.InProgress)
-	}
-	if resp.Summary.CompletionEstimate.NotStarted != 0 {
-		t.Errorf("CompletionEstimate.NotStarted = %d, want 0", resp.Summary.CompletionEstimate.NotStarted)
-	}
-	if resp.Summary.Warning != "Some students had empty submissions" {
-		t.Errorf("Warning = %q, unexpected", resp.Summary.Warning)
 	}
 }

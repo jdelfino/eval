@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -39,11 +40,11 @@ func TestNewGeminiClient_AcceptsValidAPIKey(t *testing.T) {
 	}
 }
 
-// TestConvertGeminiResponse_CountEnforced verifies that convertGeminiResponse
-// enforces Count == len(StudentIDs), ignoring what the model returned for Count.
-func TestConvertGeminiResponse_CountEnforced(t *testing.T) {
-	raw := geminiResponse{
-		Issues: []geminiIssue{
+// TestValidateResponse_CountEnforced verifies that validateResponse enforces
+// Count == len(StudentIDs), ignoring what the model returned for Count.
+func TestValidateResponse_CountEnforced(t *testing.T) {
+	raw := &AnalyzeResponse{
+		Issues: []AnalysisIssue{
 			{
 				Title:                      "Test issue",
 				Explanation:                "Some explanation",
@@ -51,16 +52,16 @@ func TestConvertGeminiResponse_CountEnforced(t *testing.T) {
 				StudentIDs:                 []string{"u1", "u2", "u3"},
 				RepresentativeStudentID:    "u1",
 				RepresentativeStudentLabel: "Alice",
-				Severity:                   "error",
+				Severity:                   IssueSeverityError,
 			},
 		},
 		FinishedStudentIDs: []string{"u4"},
 		OverallNote:        "Good work",
-		Summary: geminiSummary{
+		Summary: AnalysisSummary{
 			TotalSubmissions:    4,
 			FilteredOut:         0,
 			AnalyzedSubmissions: 4,
-			CompletionEstimate: geminiCompletionEstimate{
+			CompletionEstimate: CompletionEstimate{
 				Finished:   1,
 				InProgress: 2,
 				NotStarted: 1,
@@ -68,12 +69,12 @@ func TestConvertGeminiResponse_CountEnforced(t *testing.T) {
 		},
 	}
 
-	resp := convertGeminiResponse(raw)
+	validateResponse(raw)
 
-	if len(resp.Issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(resp.Issues))
+	if len(raw.Issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(raw.Issues))
 	}
-	issue := resp.Issues[0]
+	issue := raw.Issues[0]
 	if issue.Count != 3 {
 		t.Errorf("Count = %d, want 3 (len(StudentIDs))", issue.Count)
 	}
@@ -82,11 +83,11 @@ func TestConvertGeminiResponse_CountEnforced(t *testing.T) {
 	}
 }
 
-// TestConvertGeminiResponse_NilStudentIDsBecomesEmpty verifies that nil StudentIDs
-// in the raw response are converted to an empty slice (not nil).
-func TestConvertGeminiResponse_NilStudentIDsBecomesEmpty(t *testing.T) {
-	raw := geminiResponse{
-		Issues: []geminiIssue{
+// TestValidateResponse_NilStudentIDsBecomesEmpty verifies that nil StudentIDs
+// in the response are converted to an empty slice (not nil).
+func TestValidateResponse_NilStudentIDsBecomesEmpty(t *testing.T) {
+	raw := &AnalyzeResponse{
+		Issues: []AnalysisIssue{
 			{
 				Title:                      "Empty issue",
 				Explanation:                "Test",
@@ -94,64 +95,88 @@ func TestConvertGeminiResponse_NilStudentIDsBecomesEmpty(t *testing.T) {
 				StudentIDs:                 nil, // nil from JSON
 				RepresentativeStudentID:    "",
 				RepresentativeStudentLabel: "",
-				Severity:                   "style",
+				Severity:                   IssueSeverityStyle,
 			},
 		},
 		FinishedStudentIDs: nil,
-		Summary:            geminiSummary{},
+		Summary:            AnalysisSummary{},
 	}
 
-	resp := convertGeminiResponse(raw)
+	validateResponse(raw)
 
-	if resp.Issues[0].StudentIDs == nil {
+	if raw.Issues[0].StudentIDs == nil {
 		t.Error("expected non-nil StudentIDs slice, got nil")
 	}
-	if resp.FinishedStudentIDs == nil {
+	if raw.FinishedStudentIDs == nil {
 		t.Error("expected non-nil FinishedStudentIDs slice, got nil")
 	}
 }
 
-// TestConvertGeminiResponse_SeverityPreserved verifies that severity strings
-// from the raw response are correctly converted to IssueSeverity values.
-func TestConvertGeminiResponse_SeverityPreserved(t *testing.T) {
+// TestValidateResponse_SeverityPreserved verifies that valid severity values
+// are preserved as-is after validateResponse.
+func TestValidateResponse_SeverityPreserved(t *testing.T) {
 	cases := []struct {
-		raw      string
+		severity IssueSeverity
 		expected IssueSeverity
 	}{
-		{"error", IssueSeverityError},
-		{"misconception", IssueSeverityMisconception},
-		{"style", IssueSeverityStyle},
-		{"good-pattern", IssueSeverityGoodPattern},
+		{IssueSeverityError, IssueSeverityError},
+		{IssueSeverityMisconception, IssueSeverityMisconception},
+		{IssueSeverityStyle, IssueSeverityStyle},
+		{IssueSeverityGoodPattern, IssueSeverityGoodPattern},
 	}
 
 	for _, tc := range cases {
-		raw := geminiResponse{
-			Issues: []geminiIssue{
+		raw := &AnalyzeResponse{
+			Issues: []AnalysisIssue{
 				{
 					Title:                      "Test",
 					Explanation:                "Test",
 					StudentIDs:                 []string{"u1"},
 					RepresentativeStudentID:    "u1",
 					RepresentativeStudentLabel: "Alice",
-					Severity:                   tc.raw,
+					Severity:                   tc.severity,
 				},
 			},
 		}
-		resp := convertGeminiResponse(raw)
-		if resp.Issues[0].Severity != tc.expected {
-			t.Errorf("severity %q: got %q, want %q", tc.raw, resp.Issues[0].Severity, tc.expected)
+		validateResponse(raw)
+		if raw.Issues[0].Severity != tc.expected {
+			t.Errorf("severity %q: got %q, want %q", tc.severity, raw.Issues[0].Severity, tc.expected)
 		}
 	}
 }
 
-// TestConvertGeminiResponse_SummaryFields verifies all summary fields are mapped correctly.
-func TestConvertGeminiResponse_SummaryFields(t *testing.T) {
-	raw := geminiResponse{
-		Summary: geminiSummary{
+// TestValidateResponse_InvalidSeverityBecomesError verifies that an unrecognized
+// severity value is replaced with IssueSeverityError.
+func TestValidateResponse_InvalidSeverityBecomesError(t *testing.T) {
+	raw := &AnalyzeResponse{
+		Issues: []AnalysisIssue{
+			{
+				Title:                      "Test",
+				Explanation:                "Test",
+				StudentIDs:                 []string{"u1"},
+				RepresentativeStudentID:    "u1",
+				RepresentativeStudentLabel: "Alice",
+				Severity:                   IssueSeverity("unknown-severity"),
+			},
+		},
+	}
+
+	validateResponse(raw)
+
+	if raw.Issues[0].Severity != IssueSeverityError {
+		t.Errorf("expected invalid severity to become IssueSeverityError, got %q", raw.Issues[0].Severity)
+	}
+}
+
+// TestValidateResponse_SummaryFieldsIntact verifies all summary fields are
+// preserved correctly after validateResponse.
+func TestValidateResponse_SummaryFieldsIntact(t *testing.T) {
+	raw := &AnalyzeResponse{
+		Summary: AnalysisSummary{
 			TotalSubmissions:    10,
 			FilteredOut:         2,
 			AnalyzedSubmissions: 8,
-			CompletionEstimate: geminiCompletionEstimate{
+			CompletionEstimate: CompletionEstimate{
 				Finished:   5,
 				InProgress: 2,
 				NotStarted: 1,
@@ -160,9 +185,9 @@ func TestConvertGeminiResponse_SummaryFields(t *testing.T) {
 		},
 	}
 
-	resp := convertGeminiResponse(raw)
+	validateResponse(raw)
 
-	s := resp.Summary
+	s := raw.Summary
 	if s.TotalSubmissions != 10 {
 		t.Errorf("TotalSubmissions = %d, want 10", s.TotalSubmissions)
 	}
@@ -183,5 +208,91 @@ func TestConvertGeminiResponse_SummaryFields(t *testing.T) {
 	}
 	if s.Warning != "3 submissions were empty" {
 		t.Errorf("Warning = %q, unexpected", s.Warning)
+	}
+}
+
+// TestJSONUnmarshalDirectlyIntoPublicTypes verifies that a JSON string from
+// Gemini can be unmarshaled directly into AnalyzeResponse without any intermediate
+// private types.
+func TestJSONUnmarshalDirectlyIntoPublicTypes(t *testing.T) {
+	rawJSON := `{
+		"issues": [
+			{
+				"title": "Off-by-one error",
+				"explanation": "Loop boundary is wrong",
+				"count": 2,
+				"student_ids": ["u1", "u2"],
+				"representative_student_id": "u1",
+				"representative_student_label": "Alice",
+				"severity": "error"
+			}
+		],
+		"finished_student_ids": ["u3"],
+		"overall_note": "Most students did well",
+		"summary": {
+			"total_submissions": 3,
+			"filtered_out": 0,
+			"analyzed_submissions": 3,
+			"completion_estimate": {
+				"finished": 1,
+				"in_progress": 1,
+				"not_started": 1
+			},
+			"warning": ""
+		}
+	}`
+
+	var resp AnalyzeResponse
+	if err := json.Unmarshal([]byte(rawJSON), &resp); err != nil {
+		t.Fatalf("failed to unmarshal JSON into AnalyzeResponse: %v", err)
+	}
+
+	if len(resp.Issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(resp.Issues))
+	}
+	issue := resp.Issues[0]
+	if issue.Title != "Off-by-one error" {
+		t.Errorf("Title = %q, want %q", issue.Title, "Off-by-one error")
+	}
+	if issue.Severity != IssueSeverityError {
+		t.Errorf("Severity = %q, want %q", issue.Severity, IssueSeverityError)
+	}
+	if issue.Count != 2 {
+		t.Errorf("Count = %d, want 2", issue.Count)
+	}
+	if len(issue.StudentIDs) != 2 {
+		t.Errorf("len(StudentIDs) = %d, want 2", len(issue.StudentIDs))
+	}
+	if resp.FinishedStudentIDs[0] != "u3" {
+		t.Errorf("FinishedStudentIDs[0] = %q, want u3", resp.FinishedStudentIDs[0])
+	}
+	if resp.Summary.TotalSubmissions != 3 {
+		t.Errorf("TotalSubmissions = %d, want 3", resp.Summary.TotalSubmissions)
+	}
+}
+
+// TestJSONUnmarshalAllSeverities verifies that all valid severity string values
+// unmarshal correctly into the IssueSeverity type (which is just a string alias).
+func TestJSONUnmarshalAllSeverities(t *testing.T) {
+	severities := []struct {
+		jsonVal  string
+		expected IssueSeverity
+	}{
+		{"error", IssueSeverityError},
+		{"misconception", IssueSeverityMisconception},
+		{"style", IssueSeverityStyle},
+		{"good-pattern", IssueSeverityGoodPattern},
+	}
+
+	for _, tc := range severities {
+		rawJSON := `{"issues":[{"title":"T","explanation":"E","count":1,"student_ids":["u1"],"representative_student_id":"u1","representative_student_label":"Alice","severity":"` + tc.jsonVal + `"}],"finished_student_ids":[],"summary":{"total_submissions":1,"filtered_out":0,"analyzed_submissions":1,"completion_estimate":{"finished":0,"in_progress":0,"not_started":1}}}`
+
+		var resp AnalyzeResponse
+		if err := json.Unmarshal([]byte(rawJSON), &resp); err != nil {
+			t.Fatalf("severity %q: unmarshal failed: %v", tc.jsonVal, err)
+		}
+		if resp.Issues[0].Severity != tc.expected {
+			t.Errorf("severity %q: got %q, want %q", tc.jsonVal, resp.Issues[0].Severity, tc.expected)
+		}
 	}
 }
