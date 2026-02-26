@@ -270,7 +270,7 @@ describe('StudentPage (student_work-centric)', () => {
         updateCode: mockUpdateCode,
         executeCode: mockExecuteCode,
         joinSession: mockJoinSession,
-        replacementInfo: { newSessionId: 'session-new-123' },
+        replacementInfo: { new_session_id: 'session-new-123' },
       });
 
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);

@@ -458,7 +458,7 @@ function StudentPage() {
           onLeaveToDashboard={handleLeaveSession}
           code={code}
           codeSaved={true}
-          replacementSessionId={replacementInfo?.newSessionId}
+          replacementSessionId={replacementInfo?.new_session_id}
           onJoinNewSession={replacementInfo ? handleJoinNewSession : undefined}
         />
       )}

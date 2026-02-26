@@ -261,7 +261,7 @@ export default function InstructorSessionPage() {
           <div className="flex items-center gap-2">
             {replacementInfo && (
               <button
-                onClick={() => router.push(`/instructor/session/${replacementInfo.newSessionId}`)}
+                onClick={() => router.push(`/instructor/session/${replacementInfo.new_session_id}`)}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                 data-testid="go-to-new-session-btn"
               >

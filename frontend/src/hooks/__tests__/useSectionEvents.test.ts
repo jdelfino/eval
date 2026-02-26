@@ -440,6 +440,94 @@ describe('useSectionEvents', () => {
     });
   });
 
+  describe('Resilience to malformed/unknown events', () => {
+    it('should ignore unknown event types without throwing', async () => {
+      const session = makeSession({ id: 'session-1' });
+
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialActiveSessions: [session],
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
+      // Simulate an unknown event type that parseRealtimeEvent would throw for
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.activeSessions).toHaveLength(1);
+      expect(result.current.activeSessions[0].id).toBe('session-1');
+    });
+
+    it('should ignore malformed events without throwing', async () => {
+      const session = makeSession({ id: 'session-1' });
+
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialActiveSessions: [session],
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
+      // Simulate a malformed event (null payload)
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: null as any });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.activeSessions).toHaveLength(1);
+    });
+
+    it('should continue handling valid events after an unrecognized one', async () => {
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialActiveSessions: [],
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
+      // Send unknown event first
+      act(() => {
+        if (mockPublicationCallback) {
+          mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+        }
+      });
+
+      // Then send a valid event
+      act(() => {
+        simulatePublication('session_started_in_section', {
+          session_id: 'session-new',
+          problem: null,
+        });
+      });
+
+      expect(result.current.activeSessions).toHaveLength(1);
+      expect(result.current.activeSessions[0].id).toBe('session-new');
+    });
+  });
+
   describe('cleanup', () => {
     it('unsubscribes and disconnects on unmount', async () => {
       const { unmount } = renderHook(() =>

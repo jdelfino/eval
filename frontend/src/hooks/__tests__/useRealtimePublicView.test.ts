@@ -5,7 +5,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRealtimePublicView } from '../useRealtimePublicView';
 
 // Mock centrifuge-js
-type PublicationCallback = (ctx: { data: { type: string; data: any } }) => void;
+type PublicationCallback = (ctx: { data: { type: string; data: any; timestamp?: string } }) => void;
 type StateCallback = (ctx?: any) => void;
 
 let mockPublicationCallback: PublicationCallback | null = null;
@@ -107,7 +107,7 @@ function resetMocks() {
 
 function simulatePublication(type: string, data: any) {
   if (mockPublicationCallback) {
-    mockPublicationCallback({ data: { type, data } });
+    mockPublicationCallback({ data: { type, data, timestamp: new Date().toISOString() } });
   }
 }
 
@@ -332,6 +332,79 @@ describe('useRealtimePublicView', () => {
       await waitFor(() => {
         expect(mockGetSessionPublicState).toHaveBeenCalledWith('session-1');
       });
+    });
+  });
+
+  describe('Resilience to malformed/unknown events', () => {
+    it('should ignore unknown event types without throwing', async () => {
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Simulate an unknown event type that parseRealtimeEvent would throw for
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.state).toEqual(mockPublicState);
+    });
+
+    it('should ignore malformed events without throwing', async () => {
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Simulate a malformed event (null payload)
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: null as any });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.state).toEqual(mockPublicState);
+    });
+
+    it('should continue handling valid events after an unrecognized one', async () => {
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Send unknown event first
+      act(() => {
+        if (mockPublicationCallback) {
+          mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+        }
+      });
+
+      // Then send a valid event
+      act(() => {
+        simulatePublication('session_ended', {
+          session_id: 'session-1',
+          reason: 'instructor_ended',
+        });
+      });
+
+      expect(result.current.state?.status).toBe('completed');
     });
   });
 
