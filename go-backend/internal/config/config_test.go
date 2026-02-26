@@ -297,3 +297,33 @@ func TestConfig_DatabasePoolConfig(t *testing.T) {
 		t.Errorf("PoolConfig.MaxConnIdleTime = %v, want %v", poolCfg.MaxConnIdleTime, 10*time.Minute)
 	}
 }
+
+// TestLoad_GeminiAPIKey verifies that GEMINI_API_KEY is read from the environment
+// and stored in Config.GeminiAPIKey.
+func TestLoad_GeminiAPIKey(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-gemini-key-abc123")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.GeminiAPIKey != "test-gemini-key-abc123" {
+		t.Errorf("GeminiAPIKey = %q, want %q", cfg.GeminiAPIKey, "test-gemini-key-abc123")
+	}
+}
+
+// TestLoad_GeminiAPIKeyDefaultsToEmpty verifies that GEMINI_API_KEY defaults to
+// empty string when not set (Gemini client is optional, not required for startup).
+func TestLoad_GeminiAPIKeyDefaultsToEmpty(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.GeminiAPIKey != "" {
+		t.Errorf("GeminiAPIKey = %q, want empty string when not configured", cfg.GeminiAPIKey)
+	}
+}

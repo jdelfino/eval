@@ -68,6 +68,9 @@ type Config struct {
 	ResendAPIKey   string `env:"RESEND_API_KEY"`
 	ResendFromEmail string `env:"RESEND_FROM_EMAIL" envDefault:"noreply@localhost"`
 	InviteBaseURL  string `env:"INVITE_BASE_URL" envDefault:"http://localhost:3000/invite/accept"`
+
+	// AI Configuration
+	GeminiAPIKey string `env:"GEMINI_API_KEY"`
 }
 
 // Load parses environment variables and returns a Config struct.

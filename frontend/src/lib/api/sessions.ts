@@ -168,23 +168,21 @@ export interface AnalysisResponse {
 }
 
 /**
- * Analyze a student's code in a session.
+ * Analyze all student submissions for a session.
+ * The backend fetches student data server-side; no student_id or code needed.
  * @param sessionId - The session ID
- * @param studentId - The student's user ID
- * @param code - The student's code to analyze
- * @param problemDescription - Optional problem description for context
+ * @param model - Optional Gemini model to use (e.g. "gemini-2.0-flash", "gemini-2.5-flash")
+ * @param customPrompt - Optional custom prompt/directions to guide analysis
  * @returns AnalysisResponse with walkthrough script
  */
 export async function analyzeSession(
   sessionId: string,
-  studentId: string,
-  code: string,
-  problemDescription?: string | null,
+  model?: string,
+  customPrompt?: string,
 ): Promise<AnalysisResponse> {
   return apiPost<AnalysisResponse>(`/sessions/${sessionId}/analyze`, {
-    student_id: studentId,
-    code,
-    problem_description: problemDescription,
+    model,
+    custom_prompt: customPrompt,
   });
 }
 

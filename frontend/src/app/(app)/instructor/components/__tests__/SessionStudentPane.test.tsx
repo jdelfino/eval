@@ -227,13 +227,22 @@ describe('SessionStudentPane', () => {
       expect(btn).toBeDisabled();
     });
 
-    it('calls analyze with session_id, student_id, code, and problem description when clicked', () => {
+    it('calls analyze with session_id only (no student_id or code) when clicked without selecting a student', () => {
       render(<SessionStudentPane {...defaultProps} />);
-      // Select a student first so analyze has the required params
-      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
-      fireEvent.click(viewButtons[0]);
+      // Click analyze WITHOUT selecting a student first
       fireEvent.click(screen.getByTestId('analyze-button'));
-      expect(mockAnalyze).toHaveBeenCalledWith('session-123', 'student-1', 'print("Hello from Alice")', undefined);
+      // analyze should be called with session_id only (backend fetches student data server-side)
+      expect(mockAnalyze).toHaveBeenCalledWith('session-123', expect.anything(), expect.anything());
+      // The first arg must be session_id; no student_id/code args
+      const call = mockAnalyze.mock.calls[0];
+      expect(call[0]).toBe('session-123');
+    });
+
+    it('calls analyze even without a selected student', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      // No student selected - analyze button should still work
+      fireEvent.click(screen.getByTestId('analyze-button'));
+      expect(mockAnalyze).toHaveBeenCalledTimes(1);
     });
 
     it('shows spinner and "Analyzing..." when loading', () => {
@@ -254,12 +263,126 @@ describe('SessionStudentPane', () => {
       mockError = 'Something went wrong';
       render(<SessionStudentPane {...defaultProps} />);
       expect(screen.getByTestId('analysis-error')).toHaveTextContent('Something went wrong');
-      // Select a student first so analyze has the required params
-      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
-      fireEvent.click(viewButtons[0]);
       const tryAgain = screen.getByText('Try Again');
       fireEvent.click(tryAgain);
-      expect(mockAnalyze).toHaveBeenCalledWith('session-123', 'student-1', 'print("Hello from Alice")', undefined);
+      expect(mockAnalyze).toHaveBeenCalled();
+    });
+  });
+
+  describe('analysis options panel', () => {
+    it('renders an "Options" toggle link below the analyze button', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      expect(screen.getByTestId('analysis-options-toggle')).toBeInTheDocument();
+    });
+
+    it('options panel is collapsed by default', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      expect(screen.queryByTestId('analysis-options-panel')).not.toBeInTheDocument();
+    });
+
+    it('clicking the options toggle expands the options panel', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      expect(screen.getByTestId('analysis-options-panel')).toBeInTheDocument();
+    });
+
+    it('clicking the options toggle again collapses the panel', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      expect(screen.getByTestId('analysis-options-panel')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      expect(screen.queryByTestId('analysis-options-panel')).not.toBeInTheDocument();
+    });
+
+    describe('when options panel is open', () => {
+      beforeEach(() => {
+        render(<SessionStudentPane {...defaultProps} />);
+        fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      });
+
+      it('shows a model dropdown with Gemini 2.0 Flash and Gemini 2.5 Flash options', () => {
+        const select = screen.getByTestId('model-select');
+        expect(select).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /gemini 2\.0 flash/i })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /gemini 2\.5 flash/i })).toBeInTheDocument();
+      });
+
+      it('defaults model dropdown to Gemini 2.0 Flash', () => {
+        const select = screen.getByTestId('model-select') as HTMLSelectElement;
+        expect(select.value).toBe('gemini-2.0-flash');
+      });
+
+      it('shows a textarea for custom prompt directions', () => {
+        expect(screen.getByTestId('custom-prompt-textarea')).toBeInTheDocument();
+      });
+
+      it('pre-fills the textarea with the backend default prompt directions (matching DefaultCustomDirections)', () => {
+        const textarea = screen.getByTestId('custom-prompt-textarea') as HTMLTextAreaElement;
+        // Must match the backend DefaultCustomDirections — not the old shorter frontend-only string.
+        // This ensures what the instructor sees pre-filled is exactly what the backend uses.
+        expect(textarea.value).toContain('Identify patterns across all student submissions');
+        // Must NOT contain the old short frontend-only default that differs from backend
+        expect(textarea.value).not.toContain('Focus on actual bugs');
+      });
+
+      it('allows changing the model dropdown value', () => {
+        const select = screen.getByTestId('model-select') as HTMLSelectElement;
+        fireEvent.change(select, { target: { value: 'gemini-2.5-flash' } });
+        expect(select.value).toBe('gemini-2.5-flash');
+      });
+
+      it('allows editing the custom prompt textarea', () => {
+        const textarea = screen.getByTestId('custom-prompt-textarea') as HTMLTextAreaElement;
+        fireEvent.change(textarea, { target: { value: 'Only focus on syntax errors.' } });
+        expect(textarea.value).toBe('Only focus on syntax errors.');
+      });
+    });
+
+    it('passes selected model to analyze() when analyze button is clicked', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+
+      // Open options and change model
+      fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      const select = screen.getByTestId('model-select');
+      fireEvent.change(select, { target: { value: 'gemini-2.5-flash' } });
+
+      // Click analyze
+      fireEvent.click(screen.getByTestId('analyze-button'));
+
+      const call = mockAnalyze.mock.calls[0];
+      expect(call[0]).toBe('session-123');
+      expect(call[1]).toBe('gemini-2.5-flash');
+    });
+
+    it('passes custom prompt to analyze() when analyze button is clicked', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+
+      // Open options and change prompt
+      fireEvent.click(screen.getByTestId('analysis-options-toggle'));
+      const textarea = screen.getByTestId('custom-prompt-textarea');
+      fireEvent.change(textarea, { target: { value: 'Custom prompt text.' } });
+
+      // Click analyze
+      fireEvent.click(screen.getByTestId('analyze-button'));
+
+      const call = mockAnalyze.mock.calls[0];
+      expect(call[0]).toBe('session-123');
+      expect(call[2]).toBe('Custom prompt text.');
+    });
+
+    it('passes default model and prompt to analyze() even when options panel never opened', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+
+      // Click analyze without opening options
+      fireEvent.click(screen.getByTestId('analyze-button'));
+
+      const call = mockAnalyze.mock.calls[0];
+      expect(call[0]).toBe('session-123');
+      // model should default to gemini-2.0-flash
+      expect(call[1]).toBe('gemini-2.0-flash');
+      // customPrompt should be the default directions string (non-empty)
+      expect(typeof call[2]).toBe('string');
+      expect(call[2].length).toBeGreaterThan(0);
     });
   });
 

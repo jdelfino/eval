@@ -332,7 +332,7 @@ describe('lib/api/sessions', () => {
   });
 
   describe('analyzeSession', () => {
-    it('calls POST /sessions/{id}/analyze with student_id, code, and optional problemDescription', async () => {
+    it('calls POST /sessions/{id}/analyze with model and custom_prompt', async () => {
       const fakeAnalysis: AnalysisResponse = {
         script: {
           session_id: 'sess-1',
@@ -349,12 +349,37 @@ describe('lib/api/sessions', () => {
       };
       mockApiPost.mockResolvedValue(fakeAnalysis);
 
-      const result = await analyzeSession('sess-1', 'student-1', 'print("hello")', 'Write a hello world program');
+      const result = await analyzeSession('sess-1', 'gemini-2.0-flash', 'Focus on actual bugs');
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze', {
-        student_id: 'student-1',
-        code: 'print("hello")',
-        problem_description: 'Write a hello world program',
+        model: 'gemini-2.0-flash',
+        custom_prompt: 'Focus on actual bugs',
+      });
+      expect(result).toEqual(fakeAnalysis);
+    });
+
+    it('calls POST /sessions/{id}/analyze with undefined model and prompt when not provided', async () => {
+      const fakeAnalysis: AnalysisResponse = {
+        script: {
+          session_id: 'sess-1',
+          issues: [],
+          summary: {
+            total_submissions: 10,
+            filtered_out: 0,
+            analyzed_submissions: 10,
+            completion_estimate: { finished: 5, in_progress: 3, not_started: 2 },
+          },
+          finished_student_ids: [],
+          generated_at: new Date('2024-01-01'),
+        },
+      };
+      mockApiPost.mockResolvedValue(fakeAnalysis);
+
+      const result = await analyzeSession('sess-1');
+
+      expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze', {
+        model: undefined,
+        custom_prompt: undefined,
       });
       expect(result).toEqual(fakeAnalysis);
     });
