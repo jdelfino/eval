@@ -10,11 +10,26 @@ import (
 
 const defaultModel = "gemini-2.0-flash"
 
+// contentGenerator is a thin interface around the genai SDK's GenerateContent call.
+// It exists so that AnalyzeCode can be unit-tested without making real network calls.
+type contentGenerator interface {
+	GenerateContent(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error)
+}
+
+// genaiModelsAdapter wraps *genai.Models to satisfy the contentGenerator interface.
+type genaiModelsAdapter struct {
+	models *genai.Models
+}
+
+func (a *genaiModelsAdapter) GenerateContent(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+	return a.models.GenerateContent(ctx, model, contents, config)
+}
+
 // GeminiClient implements Client using the Google Gemini API.
-// The genai.Client is created once in NewGeminiClient and reused across
+// The contentGenerator is created once in NewGeminiClient and reused across
 // AnalyzeCode calls, enabling HTTP connection pooling and TLS session reuse.
 type GeminiClient struct {
-	client *genai.Client
+	client contentGenerator
 }
 
 // NewGeminiClient creates a new GeminiClient with the given API key.
@@ -24,14 +39,20 @@ func NewGeminiClient(apiKey string) (*GeminiClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("ai: GEMINI_API_KEY is required")
 	}
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+	c, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ai: failed to create Gemini client: %w", err)
 	}
-	return &GeminiClient{client: client}, nil
+	return &GeminiClient{client: &genaiModelsAdapter{models: c.Models}}, nil
+}
+
+// newGeminiClientWithGenerator creates a GeminiClient using the provided contentGenerator.
+// This is intended for use in tests to inject a mock implementation.
+func newGeminiClientWithGenerator(gen contentGenerator) *GeminiClient {
+	return &GeminiClient{client: gen}
 }
 
 // AnalyzeCode sends student submissions to Gemini for analysis and returns structured results.
@@ -48,7 +69,7 @@ func (g *GeminiClient) AnalyzeCode(ctx context.Context, req AnalyzeRequest) (*An
 
 	prompt := BuildPrompt(req.ProblemDescription, req.Submissions, customDirections)
 
-	result, err := g.client.Models.GenerateContent(
+	result, err := g.client.GenerateContent(
 		ctx,
 		model,
 		genai.Text(prompt),
