@@ -170,7 +170,7 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		h.revBuffer.Record(r.Context(), nsID, *sessionStudent.StudentWorkID, &sessionID, authUser.ID, req.Code)
 	}
 
-	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code)
+	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code, req.ExecutionSettings)
 
 	// Build response using student_work data
 	sessionStudent.Code = studentWork.Code

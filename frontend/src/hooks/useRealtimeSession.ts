@@ -259,9 +259,10 @@ export function useRealtimeSession({
 
         case 'student_code_updated': {
           if (payload) {
-            // Backend sends StudentCodeUpdatedData{user_id, code}
+            // Backend sends StudentCodeUpdatedData{user_id, code, execution_settings}
             const studentId = payload.user_id;
             const code = payload.code;
+            const executionSettings = payload.execution_settings;
             setStudents(prev => {
               const updated = new Map(prev);
               const student = updated.get(studentId);
@@ -269,11 +270,13 @@ export function useRealtimeSession({
                 updated.set(studentId, {
                   ...student,
                   code: code || '',
+                  ...(executionSettings !== undefined && { execution_settings: executionSettings }),
                   last_update: new Date(),
                 });
               } else {
                 pendingCodeUpdatesRef.current.set(studentId, {
                   code: code || '',
+                  ...(executionSettings !== undefined && { execution_settings: executionSettings }),
                 });
               }
               return updated;

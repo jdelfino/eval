@@ -49,7 +49,7 @@ func (r *recordingPublisher) waitForCalls(t *testing.T, n int) {
 func (r *recordingPublisher) StudentJoined(_ context.Context, _, _, _ string) error {
 	return r.record("StudentJoined")
 }
-func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string) error {
+func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return r.record("CodeUpdated")
 }
 func (r *recordingPublisher) SessionEnded(_ context.Context, _, _ string) error {
@@ -89,7 +89,7 @@ func TestAsyncSessionPublisher_CodeUpdated(t *testing.T) {
 	rec := newRecordingPublisher()
 	ap := NewAsyncSessionPublisher(rec, discardLogger())
 
-	err := ap.CodeUpdated(context.Background(), "sess-1", "user-1", "code")
+	err := ap.CodeUpdated(context.Background(), "sess-1", "user-1", "code", nil)
 	if err != nil {
 		t.Fatalf("expected nil error from async call, got %v", err)
 	}
@@ -178,7 +178,7 @@ func TestAsyncSessionPublisher_MultipleCalls(t *testing.T) {
 	ap := NewAsyncSessionPublisher(rec, discardLogger())
 
 	_ = ap.StudentJoined(context.Background(), "s1", "u1", "Alice")
-	_ = ap.CodeUpdated(context.Background(), "s1", "u1", "code")
+	_ = ap.CodeUpdated(context.Background(), "s1", "u1", "code", nil)
 	_ = ap.SessionEnded(context.Background(), "s1", "done")
 
 	rec.waitForCalls(t, 3)

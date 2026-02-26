@@ -32,8 +32,9 @@ type StudentJoinedData struct {
 
 // StudentCodeUpdatedData is the payload for EventStudentCodeUpdated.
 type StudentCodeUpdatedData struct {
-	UserID string `json:"user_id"`
-	Code   string `json:"code"`
+	UserID            string          `json:"user_id"`
+	Code              string          `json:"code"`
+	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
 }
 
 // SessionEndedData is the payload for EventSessionEnded.
