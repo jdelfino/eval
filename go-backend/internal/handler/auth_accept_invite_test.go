@@ -341,7 +341,67 @@ func TestAcceptInvitePost_Success(t *testing.T) {
 	}
 }
 
-func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
+// TestAcceptInvitePost_EmailNotVerified_MatchingEmailSucceeds verifies that
+// email/password sign-in users (EmailVerified=false) can accept an invite
+// when their JWT email matches the invitation email. The invite token is
+// sufficient authorization — email_verified is not required.
+func TestAcceptInvitePost_EmailNotVerified_MatchingEmailSucceeds(t *testing.T) {
+	inv := testInvitation("test-ns")
+	createdUser := &store.User{
+		ID:          uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		Email:       inv.Email,
+		Role:        inv.TargetRole,
+		NamespaceID: &inv.NamespaceID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+		consumeInvitationFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Invitation, error) {
+			consumed := *inv
+			consumed.Status = "consumed"
+			return &consumed, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return createdUser, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// EmailVerified is false (as Firebase sets for email/password sign-in),
+	// but email matches the invitation — should succeed.
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: false}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAcceptInvitePost_EmailMismatch verifies that a user whose JWT email does
+// not match the invitation email is rejected with 403, even with a valid token.
+func TestAcceptInvitePost_EmailMismatch(t *testing.T) {
 	inv := testInvitation("test-ns")
 	invRepo := &mockInvitationRepo{
 		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
@@ -361,7 +421,8 @@ func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: false}
+	// Email does NOT match the invitation email — should be rejected.
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: "other@example.com", EmailVerified: true}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
@@ -371,6 +432,69 @@ func TestAcceptInvitePost_EmailNotVerified(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var respBody map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&respBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if respBody["error"] != "email does not match invitation" {
+		t.Errorf("expected error 'email does not match invitation', got %q", respBody["error"])
+	}
+}
+
+// TestAcceptInvitePost_EmailMismatch_CaseInsensitive verifies that the email
+// comparison is case-insensitive, as per strings.EqualFold.
+func TestAcceptInvitePost_EmailMismatch_CaseInsensitive(t *testing.T) {
+	inv := testInvitation("test-ns")
+	createdUser := &store.User{
+		ID:          uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		Email:       inv.Email,
+		Role:        inv.TargetRole,
+		NamespaceID: &inv.NamespaceID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+		consumeInvitationFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Invitation, error) {
+			consumed := *inv
+			consumed.Status = "consumed"
+			return &consumed, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return createdUser, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// Email matches but with different casing — should succeed.
+	upperEmail := "ALICE@EXAMPLE.COM" // inv.Email is "alice@example.com"
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: upperEmail, EmailVerified: false}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

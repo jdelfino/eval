@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -163,11 +164,6 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !claims.EmailVerified {
-		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
-		return
-	}
-
 	req, err := httpbind.BindJSON[acceptInviteRequest](w, r)
 	if err != nil {
 		return
@@ -192,6 +188,14 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 			code = "INVITATION_CONSUMED"
 		}
 		httputil.WriteErrorWithCode(w, http.StatusGone, code, "invitation is no longer pending")
+		return
+	}
+
+	// Verify that the JWT email matches the invitation email. This prevents
+	// invitation token misuse (e.g., one user accepting another's invite).
+	// The invite token proves authorization; email_verified is not required.
+	if !strings.EqualFold(claims.Email, inv.Email) {
+		httputil.WriteError(w, http.StatusForbidden, "email does not match invitation")
 		return
 	}
 
@@ -273,11 +277,6 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !claims.EmailVerified {
-		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
-		return
-	}
-
 	req, err := httpbind.BindJSON[registerStudentRequest](w, r)
 	if err != nil {
 		return
@@ -335,13 +334,10 @@ func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bootstrap is disabled if no admin email is configured.
+	// The BOOTSTRAP_ADMIN_EMAIL config match is sufficient authorization —
+	// email_verified is not required.
 	if h.bootstrapAdminEmail == "" || claims.Email != h.bootstrapAdminEmail {
 		httputil.WriteError(w, http.StatusForbidden, "not authorized to bootstrap")
-		return
-	}
-
-	if !claims.EmailVerified {
-		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
 		return
 	}
 

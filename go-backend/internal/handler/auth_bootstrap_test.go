@@ -82,22 +82,46 @@ func TestBootstrapPost_NoClaims(t *testing.T) {
 	}
 }
 
-func TestBootstrapPost_EmailNotVerified(t *testing.T) {
+// TestBootstrapPost_EmailNotVerified_Succeeds verifies that email/password sign-in
+// users (EmailVerified=false) can bootstrap when their email matches the configured
+// BOOTSTRAP_ADMIN_EMAIL. The config match is sufficient authorization.
+func TestBootstrapPost_EmailNotVerified_Succeeds(t *testing.T) {
+	createdUser := &store.User{
+		ID:        uuid.MustParse("55555555-5555-5555-5555-555555555555"),
+		Email:     "admin@example.com",
+		Role:      "system-admin",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return createdUser, nil
+		},
+	}
+
 	h := NewAuthHandler("admin@example.com")
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+
 	req := httptest.NewRequest(http.MethodPost, "/bootstrap", nil)
 	claims := &auth.Claims{
 		Subject:       "firebase-uid-admin",
 		Email:         "admin@example.com",
-		EmailVerified: false, // unverified
+		EmailVerified: false, // unverified — should still work because config match is sufficient
 	}
 	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
 	h.PostBootstrap(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rec.Code)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
