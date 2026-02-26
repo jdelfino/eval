@@ -101,7 +101,7 @@ TASK: bd show <task-id> --json
 Commit test files when done. Do not modify beads issues.
 ```
 
-**On SUCCESS:** Proceed to step c — spec tests are committed and failing.
+**On SUCCESS:** Proceed to step c. Pass the test specifier's "Test files written" and "Key behaviors specified" sections to the implementer prompt.
 
 **On FAILURE:** Proceed to step c anyway — the implementer owns full testing responsibility regardless.
 
@@ -113,6 +113,7 @@ Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 SKILL: .claude/skills/implementer/SKILL.md
 WORKTREE: ../<project>-<work-name>
 TASK: bd show <task-id> --json
+SPEC TESTS: <paste "Test files written" and "Key behaviors specified" from test specifier summary, or "None" if specifier failed>
 Do not modify beads issues. Commit and push when done.
 ```
 
