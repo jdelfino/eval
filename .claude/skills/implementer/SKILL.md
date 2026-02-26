@@ -18,16 +18,6 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - **Every production code change requires tests.** No exceptions for migrations, refactors, copy-paste, or "just wiring things up." If you wrote or modified production code, you must write tests for it. Never defer tests to a follow-up issue.
 - **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
 
-## Spec Tests
-
-A test specifier may have run before you and committed **behavioral tests** — tests that encode the planner's intent as executable assertions. These are a head start, not a complete specification.
-
-If spec tests exist in the worktree:
-- Read them first to understand expected behavior
-- Do NOT modify them — if one appears wrong, flag it in Phase 5 under "Spec test issues"
-- They must pass along with all other tests in Phase 3
-- In Phase 1, focus on gaps the spec tests don't cover — don't duplicate coverage they already provide
-
 ## Phase 1: Write Failing Tests
 
 Write tests for the behavior you are about to change or add. Do this **before** touching any production code.
@@ -65,7 +55,7 @@ For frontend changes: make test-frontend, make lint-frontend, make typecheck-fro
 For store changes, also: make test-integration-store
 ```
 
-**Gate:** Sub-agent reports PASS (including any spec tests). If FAIL, read the error summary, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
+**Gate:** Sub-agent reports PASS. If FAIL, read the error summary, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
 
 ## Phase 4: Test Coverage Audit
 
@@ -100,9 +90,6 @@ Commit: <full commit hash, or "N/A" on failure>
 
 ## Test coverage
 - <1 bullet per test file added/modified, what it covers>
-
-## Spec test issues
-- <any spec tests that appear incorrect, with reasoning — or "None">
 
 ## Concerns
 - <anything the coordinator should know, or "None">
