@@ -5,7 +5,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRealtimePublicView } from '../useRealtimePublicView';
 
 // Mock centrifuge-js
-type PublicationCallback = (ctx: { data: { type: string; data: any } }) => void;
+type PublicationCallback = (ctx: { data: { type: string; data: any; timestamp?: string } }) => void;
 type StateCallback = (ctx?: any) => void;
 
 let mockPublicationCallback: PublicationCallback | null = null;
@@ -107,7 +107,7 @@ function resetMocks() {
 
 function simulatePublication(type: string, data: any) {
   if (mockPublicationCallback) {
-    mockPublicationCallback({ data: { type, data } });
+    mockPublicationCallback({ data: { type, data, timestamp: new Date().toISOString() } });
   }
 }
 

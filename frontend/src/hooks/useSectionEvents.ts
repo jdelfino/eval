@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import type { Session } from '@/types/api';
+import { parseRealtimeEvent } from '@/lib/api/realtime-events';
 
 export interface UseSectionEventsOptions {
   sectionId: string;
@@ -31,50 +32,49 @@ export function useSectionEvents({
     });
 
     sub.on('publication', (ctx) => {
-      const { type: event, data: payload } = ctx.data;
+      const parsed = parseRealtimeEvent(ctx.data);
 
-      switch (event) {
+      switch (parsed.type) {
         case 'session_started_in_section': {
-          if (payload) {
-            // Construct a partial Session from the event data.
-            // Trade-off: many Session fields (namespace_id, section_name, creator_id, etc.)
-            // are not included in the event payload, so we fill them with empty defaults.
-            // These fields are not used in StudentSectionView — only id, problem, and status
-            // are needed for the live banner and Live badge logic.
-            //
-            // Wire format: { session_id: string, problem: Problem | null }
-            // The backend sends the full Problem object (or null); section_id comes from
-            // the hook's sectionId param since it is not part of the event payload.
-            const newSession: Session = {
-              id: payload.session_id,
-              namespace_id: '',
-              section_id: sectionId,
-              section_name: '',
-              problem: payload.problem ?? null,
-              featured_student_id: null,
-              featured_code: null,
-              creator_id: '',
-              participants: [],
-              status: 'active',
-              created_at: '',
-              last_activity: '',
-              ended_at: null,
-            };
+          // data: SessionStartedInSectionData{session_id, problem}
+          // Construct a partial Session from the event data.
+          // Trade-off: many Session fields (namespace_id, section_name, creator_id, etc.)
+          // are not included in the event payload, so we fill them with empty defaults.
+          // These fields are not used in StudentSectionView — only id, problem, and status
+          // are needed for the live banner and Live badge logic.
+          //
+          // Wire format: { session_id: string, problem: Problem | null }
+          // The backend sends the full Problem object (or null); section_id comes from
+          // the hook's sectionId param since it is not part of the event payload.
+          const { session_id, problem } = parsed.data;
+          const newSession: Session = {
+            id: session_id,
+            namespace_id: '',
+            section_id: sectionId,
+            section_name: '',
+            problem: (problem ?? null) as Session['problem'],
+            featured_student_id: null,
+            featured_code: null,
+            creator_id: '',
+            participants: [],
+            status: 'active',
+            created_at: '',
+            last_activity: '',
+            ended_at: null,
+          };
 
-            setActiveSessions((prev) => {
-              // Replace existing session with same id, or append new one
-              const filtered = prev.filter((s) => s.id !== newSession.id);
-              return [...filtered, newSession];
-            });
-          }
+          setActiveSessions((prev) => {
+            // Replace existing session with same id, or append new one
+            const filtered = prev.filter((s) => s.id !== newSession.id);
+            return [...filtered, newSession];
+          });
           break;
         }
 
         case 'session_ended_in_section': {
-          if (payload) {
-            const sessionId = payload.session_id;
-            setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
-          }
+          // data: SessionEndedInSectionData{session_id}
+          const { session_id: sessionId } = parsed.data;
+          setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
           break;
         }
       }

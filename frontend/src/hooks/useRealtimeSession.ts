@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/realtime';
 import { Session, Student, ExecutionResult } from '@/types/session';
 import { ExecutionSettings } from '@/types/problem';
+import { parseRealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 
@@ -223,65 +224,59 @@ export function useRealtimeSession({
 
     sub.on('publication', (ctx) => {
       // Backend publishes Event{type, data, timestamp}
-      const { type: event, data: payload } = ctx.data;
+      const parsed = parseRealtimeEvent(ctx.data);
 
-      switch (event) {
+      switch (parsed.type) {
         case 'student_joined': {
-          if (payload) {
-            // Backend sends StudentJoinedData{user_id, display_name}
-            const userId = payload.user_id;
-            const displayName = payload.display_name;
-            setStudents(prev => {
-              const updated = new Map(prev);
-              const pendingUpdate = pendingCodeUpdatesRef.current.get(userId);
-              if (pendingUpdate) {
-                updated.set(userId, {
-                  user_id: userId,
-                  name: displayName,
-                  code: pendingUpdate.code,
-                  last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
-                  execution_settings: pendingUpdate.execution_settings,
-                });
-                pendingCodeUpdatesRef.current.delete(userId);
-              } else {
-                updated.set(userId, {
-                  user_id: userId,
-                  name: displayName,
-                  code: '',
-                  last_update: new Date(),
-                });
-              }
-              return updated;
-            });
-          }
+          // data: StudentJoinedData{user_id, display_name}
+          const { user_id: userId, display_name: displayName } = parsed.data;
+          setStudents(prev => {
+            const updated = new Map(prev);
+            const pendingUpdate = pendingCodeUpdatesRef.current.get(userId);
+            if (pendingUpdate) {
+              updated.set(userId, {
+                user_id: userId,
+                name: displayName,
+                code: pendingUpdate.code,
+                last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
+                execution_settings: pendingUpdate.execution_settings,
+              });
+              pendingCodeUpdatesRef.current.delete(userId);
+            } else {
+              updated.set(userId, {
+                user_id: userId,
+                name: displayName,
+                code: '',
+                last_update: new Date(),
+              });
+            }
+            return updated;
+          });
           break;
         }
 
         case 'student_code_updated': {
-          if (payload) {
-            // Backend sends StudentCodeUpdatedData{user_id, code, execution_settings}
-            const studentId = payload.user_id;
-            const code = payload.code;
-            const executionSettings = payload.execution_settings;
-            setStudents(prev => {
-              const updated = new Map(prev);
-              const student = updated.get(studentId);
-              if (student) {
-                updated.set(studentId, {
-                  ...student,
-                  code: code || '',
-                  ...(executionSettings !== undefined && { execution_settings: executionSettings }),
-                  last_update: new Date(),
-                });
-              } else {
-                pendingCodeUpdatesRef.current.set(studentId, {
-                  code: code || '',
-                  ...(executionSettings !== undefined && { execution_settings: executionSettings }),
-                });
-              }
-              return updated;
-            });
-          }
+          // data: StudentCodeUpdatedData{user_id, code, execution_settings?}
+          const { user_id: studentId, code, execution_settings: rawExecutionSettings } = parsed.data;
+          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          setStudents(prev => {
+            const updated = new Map(prev);
+            const student = updated.get(studentId);
+            if (student) {
+              updated.set(studentId, {
+                ...student,
+                code: code || '',
+                ...(executionSettings !== undefined && { execution_settings: executionSettings }),
+                last_update: new Date(),
+              });
+            } else {
+              pendingCodeUpdatesRef.current.set(studentId, {
+                code: code || '',
+                ...(executionSettings !== undefined && { execution_settings: executionSettings }),
+              });
+            }
+            return updated;
+          });
           break;
         }
 
@@ -301,65 +296,63 @@ export function useRealtimeSession({
         }
 
         case 'featured_student_changed': {
-          if (payload) {
-            // Backend sends FeaturedStudentChangedData{user_id, code, execution_settings}
-            const studentId = payload.user_id;
-            const code = payload.code;
-            const executionSettings = payload.execution_settings;
-            setSession(prev => {
-              if (!prev) {
-                console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
-                return prev;
-              }
-              return {
-                ...prev,
-                featured_student_id: studentId,
-                featured_code: code,
-                featured_execution_settings: executionSettings,
-              };
-            });
-            setFeaturedStudent({
-              studentId,
-              code,
-              executionSettings,
-            });
-          }
+          // data: FeaturedStudentChangedData{user_id, code, execution_settings?}
+          const {
+            user_id: studentId,
+            code,
+            execution_settings: rawExecutionSettings,
+          } = parsed.data;
+          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          setSession(prev => {
+            if (!prev) {
+              console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
+              return prev;
+            }
+            return {
+              ...prev,
+              featured_student_id: studentId,
+              featured_code: code,
+              featured_execution_settings: executionSettings,
+            };
+          });
+          setFeaturedStudent({
+            studentId,
+            code,
+            executionSettings,
+          });
           break;
         }
 
         case 'session_replaced': {
-          if (payload) {
-            const { newSessionId } = payload;
-            setReplacementInfo({ newSessionId });
-            setSession(prev => {
-              if (!prev) {
-                console.warn('[useRealtimeSession] Dropping session_replaced event: state not yet initialized');
-                return prev;
-              }
-              return {
-                ...prev,
-                status: 'completed',
-              };
-            });
-          }
+          // data: SessionReplacedData{newSessionId}
+          const { newSessionId } = parsed.data;
+          setReplacementInfo({ newSessionId });
+          setSession(prev => {
+            if (!prev) {
+              console.warn('[useRealtimeSession] Dropping session_replaced event: state not yet initialized');
+              return prev;
+            }
+            return {
+              ...prev,
+              status: 'completed',
+            };
+          });
           break;
         }
 
         case 'problem_updated': {
-          if (payload) {
-            // Backend sends ProblemUpdatedData{problem_id}
-            const { problem_id } = payload;
-            setSession(prev => {
-              if (!prev) {
-                console.warn('[useRealtimeSession] Dropping problem_updated event: state not yet initialized');
-                return prev;
-              }
-              return {
-                ...prev,
-                problem: { ...prev.problem, id: problem_id } as Session['problem'],
-              };
-            });
-          }
+          // data: ProblemUpdatedData{problem_id}
+          const { problem_id } = parsed.data;
+          setSession(prev => {
+            if (!prev) {
+              console.warn('[useRealtimeSession] Dropping problem_updated event: state not yet initialized');
+              return prev;
+            }
+            return {
+              ...prev,
+              problem: { ...prev.problem, id: problem_id } as Session['problem'],
+            };
+          });
           break;
         }
       }

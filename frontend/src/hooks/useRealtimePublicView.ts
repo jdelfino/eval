@@ -14,6 +14,7 @@ import { Centrifuge, Subscription } from 'centrifuge';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import { getSessionPublicState } from '@/lib/api/sessions';
 import type { SessionPublicState } from '@/types/api';
+import { parseRealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 
@@ -91,25 +92,25 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
     });
 
     sub.on('publication', (ctx) => {
-      const { type: event, data: payload } = ctx.data;
+      const parsed = parseRealtimeEvent(ctx.data);
 
-      switch (event) {
+      switch (parsed.type) {
         case 'featured_student_changed': {
-          if (payload) {
-            const userId = payload.user_id || null;
-            setState(prev => {
-              if (!prev) {
-                console.warn('[useRealtimePublicView] Dropping featured_student_changed event: state not yet initialized');
-                return prev;
-              }
-              return {
-                ...prev,
-                featured_student_id: userId,
-                featured_code: userId ? (payload.code ?? '') : null,
-                featured_execution_settings: userId ? (payload.execution_settings ?? null) : null,
-              };
-            });
-          }
+          // data: FeaturedStudentChangedData{user_id, code, execution_settings?}
+          const { user_id, code, execution_settings } = parsed.data;
+          const userId = user_id || null;
+          setState(prev => {
+            if (!prev) {
+              console.warn('[useRealtimePublicView] Dropping featured_student_changed event: state not yet initialized');
+              return prev;
+            }
+            return {
+              ...prev,
+              featured_student_id: userId,
+              featured_code: userId ? (code ?? '') : null,
+              featured_execution_settings: userId ? (execution_settings ?? null) : null,
+            };
+          });
           break;
         }
 
@@ -125,7 +126,7 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
         }
 
         case 'problem_updated': {
-          // Payload only has problem_id; re-fetch to get full problem data.
+          // data only has problem_id; re-fetch to get full problem data.
           fetchState();
           break;
         }
