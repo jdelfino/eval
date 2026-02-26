@@ -83,7 +83,7 @@ bd dep add <later-task-id> <earlier-task-id> --json
 
 **Independent tasks CAN run in parallel. Dependent tasks MUST wait.**
 
-For each task, the workflow is: **Spec → Implement → Handle**.
+For each task:
 
 #### a. Claim
 ```bash
