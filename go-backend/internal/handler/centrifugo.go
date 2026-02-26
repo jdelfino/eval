@@ -77,7 +77,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 	// Subscription token: branch on channel prefix.
 	switch {
 	case strings.HasPrefix(channel, "session:"):
-		sessionID, err := parseSessionChannel(channel)
+		sessionID, err := parseChannelUUID(channel, "session:")
 		if err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: expected session:{uuid}")
 			return
@@ -92,7 +92,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case strings.HasPrefix(channel, "section:"):
-		sectionID, err := parseSectionChannel(channel)
+		sectionID, err := parseChannelUUID(channel, "section:")
 		if err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: expected section:{uuid}")
 			return
@@ -166,18 +166,9 @@ func (h *CentrifugoHandler) authorizeSubscription(r *http.Request, user *auth.Us
 	return nil
 }
 
-// parseSessionChannel extracts the UUID from a "session:{uuid}" channel string.
-func parseSessionChannel(channel string) (uuid.UUID, error) {
-	prefix := "session:"
-	if !strings.HasPrefix(channel, prefix) {
-		return uuid.Nil, errors.New("invalid channel prefix")
-	}
-	return uuid.Parse(channel[len(prefix):])
-}
-
-// parseSectionChannel extracts the UUID from a "section:{uuid}" channel string.
-func parseSectionChannel(channel string) (uuid.UUID, error) {
-	prefix := "section:"
+// parseChannelUUID extracts the UUID from a "{prefix}{uuid}" channel string.
+// Returns an error if the channel does not start with prefix or the UUID portion is invalid.
+func parseChannelUUID(channel, prefix string) (uuid.UUID, error) {
 	if !strings.HasPrefix(channel, prefix) {
 		return uuid.Nil, errors.New("invalid channel prefix")
 	}

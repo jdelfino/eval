@@ -41,28 +41,16 @@ export function useSectionEvents({
             // are not included in the event payload, so we fill them with empty defaults.
             // These fields are not used in StudentSectionView — only id, problem, and status
             // are needed for the live banner and Live badge logic.
+            //
+            // Wire format: { session_id: string, problem: Problem | null }
+            // The backend sends the full Problem object (or null); section_id comes from
+            // the hook's sectionId param since it is not part of the event payload.
             const newSession: Session = {
               id: payload.session_id,
               namespace_id: '',
-              section_id: payload.section_id ?? sectionId,
+              section_id: sectionId,
               section_name: '',
-              problem: payload.problem_id
-                ? {
-                    id: payload.problem_id,
-                    namespace_id: '',
-                    title: '',
-                    description: null,
-                    starter_code: null,
-                    test_cases: null,
-                    execution_settings: null,
-                    author_id: '',
-                    class_id: null,
-                    tags: [],
-                    solution: null,
-                    created_at: '',
-                    updated_at: '',
-                  }
-                : null,
+              problem: payload.problem ?? null,
               featured_student_id: null,
               featured_code: null,
               creator_id: '',

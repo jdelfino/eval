@@ -465,3 +465,49 @@ func TestCentrifugoHandler_UnknownChannelPrefix(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
 }
+
+// --- parseChannelUUID unit tests ---
+
+func TestParseChannelUUID_ValidSessionChannel(t *testing.T) {
+	id := uuid.New()
+	got, err := parseChannelUUID("session:"+id.String(), "session:")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != id {
+		t.Errorf("got %v, want %v", got, id)
+	}
+}
+
+func TestParseChannelUUID_ValidSectionChannel(t *testing.T) {
+	id := uuid.New()
+	got, err := parseChannelUUID("section:"+id.String(), "section:")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != id {
+		t.Errorf("got %v, want %v", got, id)
+	}
+}
+
+func TestParseChannelUUID_WrongPrefix(t *testing.T) {
+	id := uuid.New()
+	_, err := parseChannelUUID("section:"+id.String(), "session:")
+	if err == nil {
+		t.Fatal("expected error for wrong prefix, got nil")
+	}
+}
+
+func TestParseChannelUUID_InvalidUUID(t *testing.T) {
+	_, err := parseChannelUUID("session:not-a-uuid", "session:")
+	if err == nil {
+		t.Fatal("expected error for invalid UUID, got nil")
+	}
+}
+
+func TestParseChannelUUID_EmptyAfterPrefix(t *testing.T) {
+	_, err := parseChannelUUID("session:", "session:")
+	if err == nil {
+		t.Fatal("expected error for empty UUID portion, got nil")
+	}
+}

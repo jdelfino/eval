@@ -211,10 +211,25 @@ describe('useSectionEvents', () => {
         expect(mockCentrifuge.connect).toHaveBeenCalled();
       });
 
+      // Wire format: { session_id, problem: full Problem object | null }
+      // No section_id or problem_id fields in the real event payload.
       const sessionPayload = {
         session_id: 'session-new',
-        section_id: 'section-1',
-        problem_id: 'problem-1',
+        problem: {
+          id: 'problem-1',
+          namespace_id: 'ns-1',
+          title: 'Two Sum',
+          description: null,
+          starter_code: null,
+          test_cases: null,
+          execution_settings: null,
+          author_id: 'user-1',
+          class_id: null,
+          tags: [],
+          solution: null,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
       };
 
       act(() => {
@@ -223,6 +238,57 @@ describe('useSectionEvents', () => {
 
       expect(result.current.activeSessions).toHaveLength(1);
       expect(result.current.activeSessions[0].id).toBe('session-new');
+      // Verify the full problem object is populated from the event
+      expect(result.current.activeSessions[0].problem).not.toBeNull();
+      expect(result.current.activeSessions[0].problem?.id).toBe('problem-1');
+      expect(result.current.activeSessions[0].problem?.title).toBe('Two Sum');
+    });
+
+    it('sets problem to null when session_started_in_section has problem: null', async () => {
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialActiveSessions: [],
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
+      act(() => {
+        simulatePublication('session_started_in_section', {
+          session_id: 'session-no-problem',
+          problem: null,
+        });
+      });
+
+      expect(result.current.activeSessions).toHaveLength(1);
+      expect(result.current.activeSessions[0].id).toBe('session-no-problem');
+      expect(result.current.activeSessions[0].problem).toBeNull();
+    });
+
+    it('uses the hook sectionId param (not a payload field) for section_id', async () => {
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-42',
+          initialActiveSessions: [],
+        })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
+      act(() => {
+        simulatePublication('session_started_in_section', {
+          session_id: 'session-new',
+          problem: null,
+        });
+      });
+
+      expect(result.current.activeSessions).toHaveLength(1);
+      expect(result.current.activeSessions[0].section_id).toBe('section-42');
     });
 
     it('replaces existing session with same id on duplicate session_started_in_section', async () => {
@@ -243,14 +309,28 @@ describe('useSectionEvents', () => {
       act(() => {
         simulatePublication('session_started_in_section', {
           session_id: 'session-1',
-          section_id: 'section-1',
-          problem_id: 'problem-updated',
+          problem: {
+            id: 'problem-updated',
+            namespace_id: 'ns-1',
+            title: 'Updated Problem',
+            description: null,
+            starter_code: null,
+            test_cases: null,
+            execution_settings: null,
+            author_id: 'user-1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
         });
       });
 
       // Should still have exactly one session (replaced, not duplicated)
       expect(result.current.activeSessions).toHaveLength(1);
       expect(result.current.activeSessions[0].id).toBe('session-1');
+      expect(result.current.activeSessions[0].problem?.id).toBe('problem-updated');
     });
 
     it('does not duplicate sessions when session_started_in_section fires multiple times with same id', async () => {
@@ -268,16 +348,14 @@ describe('useSectionEvents', () => {
       act(() => {
         simulatePublication('session_started_in_section', {
           session_id: 'session-1',
-          section_id: 'section-1',
-          problem_id: 'problem-1',
+          problem: null,
         });
       });
 
       act(() => {
         simulatePublication('session_started_in_section', {
           session_id: 'session-1',
-          section_id: 'section-1',
-          problem_id: 'problem-1',
+          problem: null,
         });
       });
 
