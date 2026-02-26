@@ -46,7 +46,7 @@ function EmailSignInContent() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inviteToken = searchParams.get('invite');
+  const inviteToken = searchParams.get('token') || searchParams.get('token');
   const { isAuthenticated, refreshUser } = useAuth();
 
   // Redirect when authenticated (AuthContext picks up Firebase user).

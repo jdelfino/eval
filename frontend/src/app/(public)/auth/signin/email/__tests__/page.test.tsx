@@ -263,7 +263,7 @@ describe('EmailSignInPage', () => {
 
   describe('Invite token flow', () => {
     beforeEach(() => {
-      const params = new URLSearchParams('invite=test-invite-token-123');
+      const params = new URLSearchParams('token=test-invite-token-123');
       (useSearchParams as jest.Mock).mockReturnValue(params);
     });
 
