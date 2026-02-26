@@ -107,8 +107,8 @@ func TestSendInvitation_BrandedTemplate(t *testing.T) {
 	if !strings.Contains(html, "#6366f1") {
 		t.Errorf("expected indigo color #6366f1 in HTML: %s", html)
 	}
-	if !strings.Contains(html, "Coding Assignment Platform") {
-		t.Errorf("expected 'Coding Assignment Platform' branding in HTML: %s", html)
+	if !strings.Contains(html, "Eval Platform") {
+		t.Errorf("expected 'Eval Platform' branding in HTML: %s", html)
 	}
 
 	// Heading should reference the namespace name
