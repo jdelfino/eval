@@ -103,28 +103,16 @@ Commit test files when done. Do not modify beads issues.
 
 **On SUCCESS:** Proceed to step c — spec tests are committed and failing.
 
-**On FAILURE:** If task description is too vague, clarify and re-spawn. If the task genuinely doesn't need behavioral tests (e.g., pure config changes), skip to step c and the implementer will write all tests in standalone mode.
+**On FAILURE:** Proceed to step c anyway — the implementer owns full testing responsibility regardless.
 
 #### c. Spawn Implementer
 
 Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
-**With spec tests (normal flow):**
 ```
 SKILL: .claude/skills/implementer/SKILL.md
 WORKTREE: ../<project>-<work-name>
 TASK: bd show <task-id> --json
-SPEC TESTS: Yes — read the test files from the test specifier summary.
-Do not modify spec test files — flag issues in your summary. Do not modify beads issues.
-Commit and push when done.
-```
-
-**Without spec tests (fallback):**
-```
-SKILL: .claude/skills/implementer/SKILL.md
-WORKTREE: ../<project>-<work-name>
-TASK: bd show <task-id> --json
-SPEC TESTS: No — use standalone mode.
 Do not modify beads issues. Commit and push when done.
 ```
 
@@ -136,11 +124,7 @@ The implementer's final output is a structured summary (Phase 5). Only read that
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
-Check the "Concerns" section — file follow-up issues if needed.
-
-Check the "Spec test issues" section. If the implementer flagged problems with spec tests:
-- **Trivial** (wrong assertion value, typo in test name): fix directly, commit
-- **Non-trivial** (spec test encodes wrong behavior): re-spawn test specifier with clarification, then re-spawn implementer
+Check "Concerns" and "Spec test issues" sections — file follow-up issues if needed.
 
 **On FAILURE:**
 - If recoverable: fix directly or spawn new subagent with clarification
