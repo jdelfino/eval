@@ -22,16 +22,20 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 // When the instructor clicks Analyze without editing, this is exactly what the backend uses.
 // Keeping them in sync ensures the pre-filled UI text reflects actual backend behavior.
 const DEFAULT_PROMPT =
-  `Identify patterns across all student submissions. Group students by common mistakes or approaches.\n\n` +
-  `Bucket guidelines:\n` +
+  `Identify distinct bugs, misconceptions, or patterns across all student submissions. Group students by issue. A student can appear in multiple issues. Order issues by frequency (most common first).\n\n` +
+  `Also classify each student as either finished (code appears complete and correct) or in-progress (still working, has bugs, or incomplete). Include finished student IDs in finished_student_ids.\n\n` +
+  `Severity guidelines:\n` +
   `- "error": A logical or correctness bug (e.g., off-by-one, wrong operator, incorrect algorithm)\n` +
   `- "misconception": A conceptual misunderstanding (e.g., confusing iteration with recursion, wrong mental model)\n` +
   `- "style": A code quality concern that does not affect correctness (e.g., redundant variable, unclear naming)\n` +
   `- "good-pattern": A positive practice worth highlighting to the class\n\n` +
   `Constraints:\n` +
-  `- Return at most 5 issues total across all buckets.\n` +
+  `- Be CONCISE — instructor reads this live during lecture.\n` +
+  `- Maximum 5 issues. Only include issues that are pedagogically interesting.\n` +
+  `- Title: short (3-8 words).\n` +
+  `- Explanation: one sentence, actionable.\n` +
   `- Each issue must have at least 1 student.\n` +
-  `- Do not create a bucket for students who have not attempted the problem or submitted empty code — omit them from issue buckets and include their IDs in finished_student_ids if their code is complete, or exclude them from all lists if it is empty.\n` +
+  `- Omit students with empty or unmodified starter code from issue lists.\n` +
   `- Set overall_note to a 1-2 sentence summary of the class's performance.`;
 
 interface SessionStudentPaneProps {
