@@ -67,7 +67,7 @@ function SignInPageContent() {
             </div>
           </div>
           <h2 className="text-center text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Coding Tool
+            Eval
           </h2>
           <p className="mt-3 text-center text-sm text-gray-600">
             Sign in to your account

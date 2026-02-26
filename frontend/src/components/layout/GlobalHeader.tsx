@@ -36,9 +36,9 @@ export function GlobalHeader({ onMobileMenuToggle, showMobileMenu = false }: Glo
         )}
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">CT</span>
+            <span className="text-white font-bold text-sm">E</span>
           </div>
-          <span className="font-semibold text-gray-900 hidden sm:inline">Coding Tool</span>
+          <span className="font-semibold text-gray-900 hidden sm:inline">Eval</span>
         </div>
       </div>
 
