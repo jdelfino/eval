@@ -19,6 +19,7 @@
  * - Calls getOrCreateStudentWork and navigates on banner Join click
  * - Shows empty state when no problems
  * - Shows "No problems worked on yet" empty state when filter active and no matches
+ * - Calls useSectionEvents with correct sectionId and initialActiveSessions
  */
 
 import React from 'react';
@@ -35,6 +36,14 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/lib/api/student-work', () => ({
   getOrCreateStudentWork: jest.fn(),
+}));
+
+// Mock useSectionEvents so existing tests keep working: it returns whatever
+// initialActiveSessions is passed to the component (via the hook's return value).
+// This also lets us verify the hook is invoked with the right arguments.
+const mockUseSectionEvents = jest.fn();
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: (...args: any[]) => mockUseSectionEvents(...args),
 }));
 
 const mockPush = jest.fn();
@@ -149,6 +158,12 @@ describe('StudentSectionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
+    // Default: hook returns whatever activeSessions are passed in as initialActiveSessions
+    mockUseSectionEvents.mockImplementation(
+      ({ initialActiveSessions }: { sectionId: string; initialActiveSessions: Session[] }) => ({
+        activeSessions: initialActiveSessions,
+      })
+    );
   });
 
   describe('header', () => {
@@ -630,6 +645,43 @@ describe('StudentSectionView', () => {
       await userEvent.click(unstartedButton);
 
       expect(screen.getByText('All problems have been started')).toBeInTheDocument();
+    });
+  });
+
+  describe('useSectionEvents integration', () => {
+    it('calls useSectionEvents with correct sectionId and initialActiveSessions', () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[activeSessionWithProblem]}
+          publishedProblems={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(mockUseSectionEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sectionId: SECTION_ID,
+          initialActiveSessions: [activeSessionWithProblem],
+        })
+      );
+    });
+
+    it('renders the live banner using activeSessions returned by useSectionEvents, not the prop directly', () => {
+      // The hook overrides the initial sessions — e.g. session ended in real-time
+      mockUseSectionEvents.mockReturnValue({ activeSessions: [] });
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[activeSessionWithProblem]}
+          publishedProblems={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // Banner should not appear because the hook returned empty sessions
+      expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
     });
   });
 });
