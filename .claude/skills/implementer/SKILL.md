@@ -20,13 +20,13 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 
 ## Spec Tests
 
-A test specifier may have run before you and committed **behavioral tests** — tests that encode the planner's intent as executable assertions. These are a head start, not a complete specification. You still own full testing responsibility.
+A test specifier may have run before you and committed **behavioral tests** — tests that encode the planner's intent as executable assertions. These are a head start, not a complete specification.
 
 If spec tests exist in the worktree:
 - Read them first to understand expected behavior and implementation hints
 - Do NOT modify them — if one appears wrong, flag it in Phase 5 under "Spec test issues"
 - They must pass along with all other tests in Phase 3
-- They do NOT reduce your obligation to write thorough tests in Phase 1
+- In Phase 1, focus on gaps the spec tests don't cover — don't duplicate coverage they already provide
 
 ## Phase 1: Write Failing Tests
 
@@ -37,7 +37,6 @@ Write tests for the behavior you are about to change or add. Do this **before** 
 - "It's just wiring up an API client" — API client calls, error handling, and auth headers need tests
 - "The old code didn't have tests" — that's a reason to add them, not skip them
 - "I'll add tests later" — no, tests ship with the code, always
-- "The spec tests already cover it" — spec tests encode intent, not complete coverage. Write your own tests for the behavior you're implementing.
 
 1. Read the relevant production code to understand current behavior
 2. Write new test cases that describe the desired behavior after your change
