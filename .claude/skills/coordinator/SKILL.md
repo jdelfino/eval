@@ -95,68 +95,37 @@ bd update <task-id> --set-labels wip --json
 Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
 ```
-ROLE: Test Specifier
-SKILL: Read and follow .claude/skills/test-specifier/SKILL.md
-
+SKILL: .claude/skills/test-specifier/SKILL.md
 WORKTREE: ../<project>-<work-name>
-TASK: <task-id>
-Read the task description: bd show <task-id> --json
-
-CONSTRAINTS:
-- Work ONLY in the worktree path above
-- Do NOT modify beads issues
-- Commit your test files when done (so the implementer sees them)
-- Phase 4 of the test-specifier skill produces a structured summary — that is your final output
+TASK: bd show <task-id> --json
+Commit test files when done. Do not modify beads issues.
 ```
 
-**Handle test specifier result:**
+**On SUCCESS:** Proceed to step c — spec tests are committed and failing.
 
-Read the Phase 4 summary.
+**On FAILURE:** If task description is too vague, clarify and re-spawn. If the task genuinely doesn't need behavioral tests (e.g., pure config changes), skip to step c and the implementer will write all tests in standalone mode.
 
-**On SUCCESS:** Proceed to step c. The spec tests are committed and failing — ready for the implementer.
-
-**On FAILURE:** Read the error. If the task description is too vague, clarify and re-spawn. If the task genuinely doesn't need behavioral tests (rare — e.g., pure config changes), skip to step c and let the implementer write all tests in standalone mode.
-
-#### c. Spawn Implementer Subagent
+#### c. Spawn Implementer
 
 Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
 **With spec tests (normal flow):**
 ```
-ROLE: Implementer
-SKILL: Read and follow .claude/skills/implementer/SKILL.md
-
+SKILL: .claude/skills/implementer/SKILL.md
 WORKTREE: ../<project>-<work-name>
-TASK: <task-id>
-Read the task description: bd show <task-id> --json
-
-SPEC TESTS: Yes — the test specifier has already committed failing behavioral tests.
-Read the test files listed in the test specifier summary to understand the expected behavior.
-
-CONSTRAINTS:
-- Work ONLY in the worktree path above
-- Do NOT modify beads issues
-- Do NOT modify the spec test files — flag issues in your summary instead
-- Commit and push your work when implementer phases are complete
-- Phase 5 of the implementer skill produces a structured summary — that is your final output
+TASK: bd show <task-id> --json
+SPEC TESTS: Yes — read the test files from the test specifier summary.
+Do not modify spec test files — flag issues in your summary. Do not modify beads issues.
+Commit and push when done.
 ```
 
-**Without spec tests (fallback — test specifier failed or was skipped):**
+**Without spec tests (fallback):**
 ```
-ROLE: Implementer
-SKILL: Read and follow .claude/skills/implementer/SKILL.md
-
+SKILL: .claude/skills/implementer/SKILL.md
 WORKTREE: ../<project>-<work-name>
-TASK: <task-id>
-Read the task description: bd show <task-id> --json
-
-SPEC TESTS: No — write your own tests per the implementer skill's standalone mode.
-
-CONSTRAINTS:
-- Work ONLY in the worktree path above
-- Do NOT modify beads issues
-- Commit and push your work when implementer phases are complete
-- Phase 5 of the implementer skill produces a structured summary — that is your final output
+TASK: bd show <task-id> --json
+SPEC TESTS: No — use standalone mode.
+Do not modify beads issues. Commit and push when done.
 ```
 
 #### d. Handle Result
