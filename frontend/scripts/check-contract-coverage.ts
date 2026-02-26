@@ -31,6 +31,13 @@ export interface CoverageResult {
   percentage: number;
 }
 
+export interface RealtimeCoverageResult {
+  covered: string[];
+  uncovered: string[];
+  /** Coverage percentage (0-100). 100 if no event types exist. */
+  percentage: number;
+}
+
 // ---------------------------------------------------------------------------
 // Core logic (exported for testing)
 // ---------------------------------------------------------------------------
@@ -183,6 +190,144 @@ export function formatReport(coverage: CoverageResult): string {
 }
 
 // ---------------------------------------------------------------------------
+// Realtime event coverage (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract exported interface names matching the `*Data` pattern from a TypeScript
+ * source string (e.g. types/realtime-events.ts).
+ *
+ * Matches patterns like: `export interface FooData {`
+ */
+export function extractDataInterfaces(source: string): string[] {
+  const regex = /export\s+interface\s+(\w+Data)\s*\{/g;
+  const interfaces: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(source)) !== null) {
+    interfaces.push(match[1]);
+  }
+  return interfaces;
+}
+
+/**
+ * Extract exported function names matching the `validate*Shape` pattern from a
+ * TypeScript source string (e.g. validators.ts).
+ *
+ * Matches patterns like: `export function validateFooShape(`
+ */
+export function extractExportedValidators(source: string): string[] {
+  const regex = /export\s+function\s+(validate\w+Shape)\s*\(/g;
+  const validators: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(source)) !== null) {
+    validators.push(match[1]);
+  }
+  return validators;
+}
+
+/**
+ * Extract `validate*Shape` function names imported from `./validators` in a
+ * contract test source string.
+ *
+ * Returns an array of imported validator function names.
+ */
+export function extractImportedValidators(source: string): string[] {
+  const result: string[] = [];
+
+  // Match import statements from ./validators (handles single-line and multi-line)
+  const importRegex = /import\s+\{([^}]+)\}\s+from\s+['"]\.\/validators['"]/g;
+  let match: RegExpExecArray | null;
+  while ((match = importRegex.exec(source)) !== null) {
+    const names = match[1]
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => /^validate\w+Shape$/.test(name));
+    result.push(...names);
+  }
+
+  return [...new Set(result)];
+}
+
+/**
+ * Derive the expected validator name for a `*Data` interface.
+ *
+ * Convention: `StudentJoinedData` → `validateStudentJoinedShape`
+ * (strip `Data` suffix, prepend `validate`, append `Shape`)
+ */
+function dataInterfaceToValidatorName(interfaceName: string): string {
+  const baseName = interfaceName.replace(/Data$/, '');
+  return `validate${baseName}Shape`;
+}
+
+/**
+ * Compute realtime event coverage.
+ *
+ * A `*Data` interface is considered covered if:
+ * 1. A corresponding `validate*Shape` function exists in validators.ts, AND
+ * 2. That validator function is imported by at least one contract test file.
+ *
+ * @param dataInterfaces - Array of `*Data` interface names from realtime-events.ts
+ * @param validatorNames - Set of `validate*Shape` function names exported from validators.ts
+ * @param importedValidators - Set of `validate*Shape` function names imported in contract tests
+ * @returns RealtimeCoverageResult with covered/uncovered lists and percentage
+ */
+export function computeRealtimeCoverage(
+  dataInterfaces: string[],
+  validatorNames: Set<string>,
+  importedValidators: Set<string>
+): RealtimeCoverageResult {
+  const covered: string[] = [];
+  const uncovered: string[] = [];
+
+  for (const interfaceName of dataInterfaces) {
+    const validatorName = dataInterfaceToValidatorName(interfaceName);
+    const hasCoverage = validatorNames.has(validatorName) && importedValidators.has(validatorName);
+    if (hasCoverage) {
+      covered.push(interfaceName);
+    } else {
+      uncovered.push(interfaceName);
+    }
+  }
+
+  const total = dataInterfaces.length;
+  const percentage = total === 0 ? 100 : (covered.length / total) * 100;
+
+  return { covered, uncovered, percentage };
+}
+
+/**
+ * Format the realtime event coverage section of a report.
+ */
+export function formatRealtimeSection(coverage: RealtimeCoverageResult): string {
+  const lines: string[] = [];
+  const total = coverage.covered.length + coverage.uncovered.length;
+
+  lines.push('Realtime Event Coverage');
+  lines.push('-----------------------');
+  lines.push('');
+
+  for (const name of coverage.covered) {
+    lines.push(`  \u2713 ${name}`);
+  }
+  for (const name of coverage.uncovered) {
+    lines.push(`  \u2717 ${name}`);
+  }
+
+  lines.push('');
+  lines.push(
+    `Summary: ${coverage.covered.length}/${total} event types covered (${coverage.percentage.toFixed(1)}%)`
+  );
+
+  if (coverage.percentage === 100) {
+    lines.push('PASS: All realtime event types have contract test coverage');
+  } else {
+    lines.push('FAIL: Realtime event contract coverage is not 100%');
+  }
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // File scanning (main execution)
 // ---------------------------------------------------------------------------
 
@@ -248,6 +393,8 @@ function main(): void {
   const frontendRoot = path.resolve(__dirname, '..');
   const apiDir = path.join(frontendRoot, 'src', 'lib', 'api');
   const contractDir = path.join(frontendRoot, 'src', '__tests__', 'contract');
+  const realtimeTypesFile = path.join(frontendRoot, 'src', 'types', 'realtime-events.ts');
+  const validatorsFile = path.join(contractDir, 'validators.ts');
 
   if (!fs.existsSync(apiDir)) {
     console.error(`Error: API directory not found: ${apiDir}`);
@@ -259,14 +406,48 @@ function main(): void {
     process.exit(1);
   }
 
+  if (!fs.existsSync(realtimeTypesFile)) {
+    console.error(`Error: Realtime types file not found: ${realtimeTypesFile}`);
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(validatorsFile)) {
+    console.error(`Error: Validators file not found: ${validatorsFile}`);
+    process.exit(1);
+  }
+
+  // --- REST API coverage ---
   const apiModules = scanApiModules(apiDir);
   const coveredImports = scanContractTests(contractDir);
   const coverage = computeCoverage(apiModules, coveredImports);
   const report = formatReport(coverage);
 
-  console.log(report);
+  // --- Realtime event coverage ---
+  const realtimeTypesSource = fs.readFileSync(realtimeTypesFile, 'utf-8');
+  const dataInterfaces = extractDataInterfaces(realtimeTypesSource);
 
-  process.exit(coverage.percentage === 100 ? 0 : 1);
+  const validatorsSource = fs.readFileSync(validatorsFile, 'utf-8');
+  const validatorNames = new Set(extractExportedValidators(validatorsSource));
+
+  // Collect all imported validator names from all contract test files
+  const allImportedValidators = new Set<string>();
+  const contractFiles = fs.readdirSync(contractDir).filter((f) => f.endsWith('.integration.test.ts'));
+  for (const file of contractFiles) {
+    const source = fs.readFileSync(path.join(contractDir, file), 'utf-8');
+    for (const name of extractImportedValidators(source)) {
+      allImportedValidators.add(name);
+    }
+  }
+
+  const realtimeCoverage = computeRealtimeCoverage(dataInterfaces, validatorNames, allImportedValidators);
+  const realtimeReport = formatRealtimeSection(realtimeCoverage);
+
+  console.log(report);
+  console.log('');
+  console.log(realtimeReport);
+
+  const allPassed = coverage.percentage === 100 && realtimeCoverage.percentage === 100;
+  process.exit(allPassed ? 0 : 1);
 }
 
 // Only run main when executed directly (not when imported for testing)

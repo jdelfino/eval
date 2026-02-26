@@ -10,6 +10,12 @@ import {
   extractImportedFunctions,
   computeCoverage,
   formatReport,
+  extractDataInterfaces,
+  extractExportedValidators,
+  extractImportedValidators,
+  computeRealtimeCoverage,
+  formatRealtimeSection,
+  type RealtimeCoverageResult,
 } from '../check-contract-coverage';
 
 describe('extractExportedFunctions', () => {
@@ -299,5 +305,283 @@ describe('formatReport', () => {
     expect(report).toContain('\u2713 getCurrentUser');
     // Uncovered function gets an X
     expect(report).toContain('\u2717 bootstrapUser');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Realtime event coverage
+// ---------------------------------------------------------------------------
+
+describe('extractDataInterfaces', () => {
+  it('extracts exported interface names matching *Data pattern', () => {
+    const source = `
+export interface StudentJoinedData {
+  user_id: string;
+  display_name: string;
+}
+
+export interface SessionEndedData {
+  session_id: string;
+  reason: string;
+}
+`;
+    expect(extractDataInterfaces(source)).toEqual([
+      'StudentJoinedData',
+      'SessionEndedData',
+    ]);
+  });
+
+  it('ignores non-exported interfaces', () => {
+    const source = `
+interface InternalData {
+  foo: string;
+}
+
+export interface StudentJoinedData {
+  user_id: string;
+}
+`;
+    expect(extractDataInterfaces(source)).toEqual(['StudentJoinedData']);
+  });
+
+  it('ignores exported interfaces not matching *Data pattern', () => {
+    const source = `
+export interface RealtimeEventEnvelope<T = unknown> {
+  type: string;
+  data: T;
+}
+
+export interface StudentJoinedData {
+  user_id: string;
+}
+`;
+    expect(extractDataInterfaces(source)).toEqual(['StudentJoinedData']);
+  });
+
+  it('ignores exported type aliases', () => {
+    const source = `
+export type RealtimeEventType = 'student_joined' | 'session_ended';
+
+export interface StudentJoinedData {
+  user_id: string;
+}
+`;
+    expect(extractDataInterfaces(source)).toEqual(['StudentJoinedData']);
+  });
+
+  it('returns empty array when no *Data interfaces', () => {
+    const source = `
+export interface Foo { bar: string; }
+`;
+    expect(extractDataInterfaces(source)).toEqual([]);
+  });
+});
+
+describe('extractExportedValidators', () => {
+  it('extracts exported validate*Shape function names', () => {
+    const source = `
+export function validateStudentJoinedShape(obj: StudentJoinedData) {
+  expect(typeof obj.user_id).toBe('string');
+}
+
+export function validateSessionEndedShape(obj: SessionEndedData) {
+  expect(typeof obj.session_id).toBe('string');
+}
+`;
+    expect(extractExportedValidators(source)).toEqual([
+      'validateStudentJoinedShape',
+      'validateSessionEndedShape',
+    ]);
+  });
+
+  it('ignores non-exported validate*Shape functions', () => {
+    const source = `
+function validateInternalShape(obj: object) {}
+
+export function validateStudentJoinedShape(obj: StudentJoinedData) {}
+`;
+    expect(extractExportedValidators(source)).toEqual(['validateStudentJoinedShape']);
+  });
+
+  it('ignores exported functions not matching validate*Shape pattern', () => {
+    const source = `
+export function expectSnakeCaseKeys(obj: object, label: string) {}
+export function validateStudentJoinedShape(obj: StudentJoinedData) {}
+export function validateUserShape(user: User) {}
+`;
+    // validateUserShape does NOT match validate*Shape (because Shape is at the end)
+    // Actually it does match validate*Shape - let's verify the pattern matches validateUserShape too
+    expect(extractExportedValidators(source)).toEqual([
+      'validateStudentJoinedShape',
+      'validateUserShape',
+    ]);
+  });
+
+  it('returns empty array when no validate*Shape functions', () => {
+    const source = `
+export function expectSnakeCaseKeys(obj: object) {}
+`;
+    expect(extractExportedValidators(source)).toEqual([]);
+  });
+});
+
+describe('extractImportedValidators', () => {
+  it('extracts validate*Shape imports from ./validators', () => {
+    const source = `
+import {
+  validateStudentJoinedShape,
+  validateSessionEndedShape,
+} from './validators';
+`;
+    expect(extractImportedValidators(source)).toEqual([
+      'validateStudentJoinedShape',
+      'validateSessionEndedShape',
+    ]);
+  });
+
+  it('extracts single-line imports from ./validators', () => {
+    const source = `import { validateStudentJoinedShape } from './validators';`;
+    expect(extractImportedValidators(source)).toEqual(['validateStudentJoinedShape']);
+  });
+
+  it('ignores non-validate*Shape imports from ./validators', () => {
+    const source = `
+import {
+  validateStudentJoinedShape,
+  expectSnakeCaseKeys,
+  configureTestAuth,
+} from './validators';
+`;
+    const result = extractImportedValidators(source);
+    expect(result).toContain('validateStudentJoinedShape');
+    expect(result).not.toContain('expectSnakeCaseKeys');
+    expect(result).not.toContain('configureTestAuth');
+  });
+
+  it('ignores imports from other sources (not ./validators)', () => {
+    const source = `
+import { validateStudentJoinedShape } from './helpers';
+import { validateSessionEndedShape } from './validators';
+`;
+    expect(extractImportedValidators(source)).toEqual(['validateSessionEndedShape']);
+  });
+
+  it('returns empty array when no matching imports', () => {
+    const source = `
+import { expectSnakeCaseKeys } from './validators';
+`;
+    expect(extractImportedValidators(source)).toEqual([]);
+  });
+});
+
+describe('computeRealtimeCoverage', () => {
+  it('marks event type as covered when validator exists and is imported in tests', () => {
+    const dataInterfaces = ['StudentJoinedData', 'SessionEndedData'];
+    const validatorNames = new Set(['validateStudentJoinedShape', 'validateSessionEndedShape']);
+    const importedValidators = new Set(['validateStudentJoinedShape', 'validateSessionEndedShape']);
+
+    const result = computeRealtimeCoverage(dataInterfaces, validatorNames, importedValidators);
+
+    expect(result.covered).toEqual(['StudentJoinedData', 'SessionEndedData']);
+    expect(result.uncovered).toEqual([]);
+    expect(result.percentage).toBe(100);
+  });
+
+  it('marks event type as uncovered when validator is missing', () => {
+    const dataInterfaces = ['StudentJoinedData', 'SessionEndedData'];
+    const validatorNames = new Set(['validateStudentJoinedShape']);
+    const importedValidators = new Set(['validateStudentJoinedShape']);
+
+    const result = computeRealtimeCoverage(dataInterfaces, validatorNames, importedValidators);
+
+    expect(result.covered).toEqual(['StudentJoinedData']);
+    expect(result.uncovered).toEqual(['SessionEndedData']);
+    expect(result.percentage).toBe(50);
+  });
+
+  it('marks event type as uncovered when validator exists but is not imported in tests', () => {
+    const dataInterfaces = ['StudentJoinedData', 'SessionEndedData'];
+    const validatorNames = new Set(['validateStudentJoinedShape', 'validateSessionEndedShape']);
+    const importedValidators = new Set(['validateStudentJoinedShape']); // SessionEnded not imported
+
+    const result = computeRealtimeCoverage(dataInterfaces, validatorNames, importedValidators);
+
+    expect(result.covered).toEqual(['StudentJoinedData']);
+    expect(result.uncovered).toEqual(['SessionEndedData']);
+    expect(result.percentage).toBe(50);
+  });
+
+  it('returns 100% when no data interfaces exist', () => {
+    const result = computeRealtimeCoverage([], new Set(), new Set());
+
+    expect(result.covered).toEqual([]);
+    expect(result.uncovered).toEqual([]);
+    expect(result.percentage).toBe(100);
+  });
+
+  it('computes correct percentage for partial coverage', () => {
+    const dataInterfaces = ['AData', 'BData', 'CData', 'DData'];
+    const validatorNames = new Set(['validateAShape', 'validateBShape', 'validateCShape', 'validateDShape']);
+    const importedValidators = new Set(['validateAShape', 'validateBShape']); // 2 of 4
+
+    const result = computeRealtimeCoverage(dataInterfaces, validatorNames, importedValidators);
+
+    expect(result.covered).toEqual(['AData', 'BData']);
+    expect(result.uncovered).toEqual(['CData', 'DData']);
+    expect(result.percentage).toBe(50);
+  });
+});
+
+describe('formatRealtimeSection', () => {
+  it('includes realtime coverage section header', () => {
+    const coverage: RealtimeCoverageResult = {
+      covered: ['StudentJoinedData'],
+      uncovered: [],
+      percentage: 100,
+    };
+    const report = formatRealtimeSection(coverage);
+    expect(report).toContain('Realtime Event Coverage');
+  });
+
+  it('shows PASS when all event types are covered', () => {
+    const coverage: RealtimeCoverageResult = {
+      covered: ['StudentJoinedData', 'SessionEndedData'],
+      uncovered: [],
+      percentage: 100,
+    };
+    const report = formatRealtimeSection(coverage);
+    expect(report).toContain('PASS');
+    expect(report).not.toContain('FAIL');
+  });
+
+  it('shows FAIL when some event types are uncovered', () => {
+    const coverage: RealtimeCoverageResult = {
+      covered: ['StudentJoinedData'],
+      uncovered: ['SessionEndedData'],
+      percentage: 50,
+    };
+    const report = formatRealtimeSection(coverage);
+    expect(report).toContain('FAIL');
+  });
+
+  it('marks covered types with checkmark and uncovered with X', () => {
+    const coverage: RealtimeCoverageResult = {
+      covered: ['StudentJoinedData'],
+      uncovered: ['SessionEndedData'],
+      percentage: 50,
+    };
+    const report = formatRealtimeSection(coverage);
+    expect(report).toContain('\u2713 StudentJoinedData');
+    expect(report).toContain('\u2717 SessionEndedData');
+  });
+
+  it('includes summary line with counts', () => {
+    const coverage: RealtimeCoverageResult = {
+      covered: ['StudentJoinedData'],
+      uncovered: ['SessionEndedData'],
+      percentage: 50,
+    };
+    const report = formatRealtimeSection(coverage);
+    expect(report).toContain('1/2');
   });
 });
