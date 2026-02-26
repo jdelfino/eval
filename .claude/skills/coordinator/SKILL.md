@@ -220,13 +220,22 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, re-run quality gates per the **Quality Gates** table in CLAUDE.md.
+After all issues resolved, re-run quality gates via a test-runner sub-agent (see below).
 
 ### 5. Create PR and Hand Off
 
-Run quality gates per the **Quality Gates** table in CLAUDE.md in the worktree before creating the PR.
+**Delegate final quality gate verification to a test-runner sub-agent** — do NOT run tests directly in your context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
-**Do NOT create PR if any checks fail.** Fix locally first.
+```
+ROLE: Test Runner
+SKILL: Read and follow .claude/skills/test-runner/SKILL.md
+
+WORKING DIRECTORY: ../<project>-<work-name>
+COMMANDS:
+- <all quality gate commands from CLAUDE.md matching changed code areas>
+```
+
+**Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
 ```bash
 cd ../<project>-<work-name>
