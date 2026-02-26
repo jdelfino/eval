@@ -1,10 +1,10 @@
 /**
  * Contract tests for ALL session management API functions in sessions.ts.
  *
- * Covers the 8 functions not tested by sessions.integration.test.ts:
+ * Covers the 9 functions not tested by sessions.integration.test.ts:
  *   createSession, endSession, updateSessionProblem, getSessionDetails,
- *   getSessionPublicState, featureCode, reopenSession,
- *   listSessionHistoryWithFilters
+ *   getSessionPublicState, analyzeSession, featureCode,
+ *   reopenSession, listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
  *
@@ -24,6 +24,7 @@ import {
   updateSessionProblem,
   getSessionDetails,
   getSessionPublicState,
+  analyzeSession,
   featureCode,
   reopenSession,
   listSessionHistoryWithFilters,
@@ -166,7 +167,55 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 4. featureCode
+  // 4. analyzeSession (uses StubClient when no AI key is configured)
+  // -----------------------------------------------------------------------
+  describe('analyzeSession()', () => {
+    it('returns AnalysisResponse with valid WalkthroughScript shape', async () => {
+      const analysis = await analyzeSession(testSessionId);
+
+      // Top-level: { script: ... }
+      expect(analysis).toHaveProperty('script');
+      expectSnakeCaseKeys(analysis, 'AnalysisResponse');
+
+      const { script } = analysis;
+
+      // WalkthroughScript fields
+      expect(typeof script.session_id).toBe('string');
+      expect(script.session_id).toBe(testSessionId);
+      expect(Array.isArray(script.issues)).toBe(true);
+      expect(Array.isArray(script.finished_student_ids)).toBe(true);
+      expect(typeof script.generated_at).toBe('string'); // ISO string over the wire
+      expectSnakeCaseKeys(script, 'WalkthroughScript');
+
+      // Summary shape
+      expect(script.summary).toBeDefined();
+      expect(typeof script.summary.total_submissions).toBe('number');
+      expect(typeof script.summary.filtered_out).toBe('number');
+      expect(typeof script.summary.analyzed_submissions).toBe('number');
+      expect(script.summary.completion_estimate).toBeDefined();
+      expect(typeof script.summary.completion_estimate.finished).toBe('number');
+      expect(typeof script.summary.completion_estimate.in_progress).toBe('number');
+      expect(typeof script.summary.completion_estimate.not_started).toBe('number');
+      expectSnakeCaseKeys(script.summary, 'WalkthroughSummary');
+      expectSnakeCaseKeys(script.summary.completion_estimate, 'CompletionEstimate');
+
+      // Each issue (if any) has the right shape
+      for (const issue of script.issues) {
+        expect(typeof issue.title).toBe('string');
+        expect(typeof issue.explanation).toBe('string');
+        expect(typeof issue.count).toBe('number');
+        expect(Array.isArray(issue.student_ids)).toBe(true);
+        expect(issue.count).toBe(issue.student_ids.length);
+        expect(typeof issue.representative_student_id).toBe('string');
+        expect(typeof issue.representative_student_label).toBe('string');
+        expect(typeof issue.severity).toBe('string');
+        expectSnakeCaseKeys(issue, 'AnalysisIssue');
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 5. featureCode
   // -----------------------------------------------------------------------
   describe('featureCode()', () => {
     it('resolves without throwing', async () => {
@@ -182,7 +231,7 @@ describe('Sessions Full API', () => {
   // -----------------------------------------------------------------------
 
   // -----------------------------------------------------------------------
-  // 5. createSession
+  // 6. createSession
   // -----------------------------------------------------------------------
   describe('createSession()', () => {
     it('returns a Session with correct snake_case shape', async () => {
@@ -200,7 +249,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 6. endSession
+  // 7. endSession
   // -----------------------------------------------------------------------
   describe('endSession()', () => {
     it('resolves without throwing', async () => {
@@ -211,7 +260,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. reopenSession (end first, then reopen)
+  // 8. reopenSession (end first, then reopen)
   // -----------------------------------------------------------------------
   describe('reopenSession()', () => {
     it('resolves without throwing after ending a session', async () => {
@@ -230,7 +279,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. listSessionHistoryWithFilters
+  // 9. listSessionHistoryWithFilters
   // -----------------------------------------------------------------------
   describe('listSessionHistoryWithFilters()', () => {
     it('returns Session[] with correct snake_case shape when filtered by section', async () => {

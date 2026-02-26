@@ -26,7 +26,6 @@ import * as path from 'path';
  */
 export const EXCLUDED_FUNCTIONS: Record<string, string> = {
   'realtime-token/getRealtimeToken': 'Requires Centrifugo — covered by PLAT-pp4r.4',
-  'sessions/analyzeSession': 'Requires Gemini AI — remove when PLAT-b57a lands',
   'system/resendSystemInvitation': 'Requires Resend email service',
 };
 
