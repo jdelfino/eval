@@ -1,13 +1,13 @@
 ---
 name: coordinator
-description: Single entry point for all implementation work. Triages tasks, manages beads issues, delegates to implementer skill, runs reviewers, creates PRs.
+description: Single entry point for all implementation work. Triages tasks, manages beads issues, delegates to test specifier and implementer skills, runs reviewers, creates PRs.
 ---
 
 # Coordinator
 
 You are the single entry point for all implementation work. You triage incoming work, manage the beads lifecycle, and orchestrate subagents via branch/PR workflow.
 
-**Model guidance:** The coordinator should run on Opus 4.6. Implementer subagents should run on Sonnet 4.6 (`model: "sonnet"`).
+**Model guidance:** The coordinator should run on Opus 4.6. Test specifier and implementer subagents should run on Sonnet 4.6 (`model: "sonnet"`).
 
 **IMPORTANT:** The main branch is protected. All changes MUST go through a feature branch and PR. Direct commits to main are not allowed.
 
@@ -90,26 +90,34 @@ For each task:
 bd update <task-id> --set-labels wip --json
 ```
 
-#### b. Spawn Implementer Subagent
+#### b. Spawn Test Specifier
 
 Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
 ```
-ROLE: Implementer
-SKILL: Read and follow .claude/skills/implementer/SKILL.md
-
+SKILL: .claude/skills/test-specifier/SKILL.md
 WORKTREE: ../<project>-<work-name>
-TASK: <task-id>
-Read the task description: bd show <task-id> --json
-
-CONSTRAINTS:
-- Work ONLY in the worktree path above
-- Do NOT modify beads issues
-- Commit and push your work when implementer phases are complete
-- Phase 5 of the implementer skill produces a structured summary — that is your final output
+TASK: bd show <task-id> --json
+Commit test files when done. Do not modify beads issues.
 ```
 
-#### c. Handle Result
+**On SUCCESS:** Proceed to step c. Pass the test specifier's "Test files written" and "Key behaviors specified" sections to the implementer prompt.
+
+**On FAILURE:** Proceed to step c anyway — the implementer owns full testing responsibility regardless.
+
+#### c. Spawn Implementer
+
+Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+
+```
+SKILL: .claude/skills/implementer/SKILL.md
+WORKTREE: ../<project>-<work-name>
+TASK: bd show <task-id> --json
+SPEC TESTS: <paste "Test files written" and "Key behaviors specified" from test specifier summary, or "None" if specifier failed>
+Do not modify beads issues. Commit and push when done.
+```
+
+#### d. Handle Result
 
 The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent.
 
@@ -117,7 +125,7 @@ The implementer's final output is a structured summary (Phase 5). Only read that
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
-Check the "Concerns" section — file follow-up issues if needed.
+Check "Concerns" and "Spec test issues" sections — file follow-up issues if needed.
 
 **On FAILURE:**
 - If recoverable: fix directly or spawn new subagent with clarification
@@ -166,13 +174,20 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, re-run quality gates per the **Quality Gates** table in CLAUDE.md.
+After all issues resolved, run quality gates via a test-runner sub-agent. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+
+```
+ROLE: Test Runner
+SKILL: Read and follow .claude/skills/test-runner/SKILL.md
+
+WORKING DIRECTORY: ../<project>-<work-name>
+COMMANDS:
+- <all quality gate commands from CLAUDE.md matching changed code areas>
+```
+
+**Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
 ### 5. Create PR and Hand Off
-
-Run quality gates per the **Quality Gates** table in CLAUDE.md in the worktree before creating the PR.
-
-**Do NOT create PR if any checks fail.** Fix locally first.
 
 ```bash
 cd ../<project>-<work-name>
@@ -226,3 +241,5 @@ EOF
 - Cleaning up worktrees before merge (that's `/merge`'s job)
 - Running `npm ci` in a worktree (it nukes node_modules through the symlink — use `npm install <pkg>` for additive changes, or break the symlink first if a full reinstall is needed)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
+- Skipping the test specifier — always run it first unless the task genuinely has no testable behavior
+- Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
