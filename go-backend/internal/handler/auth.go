@@ -324,8 +324,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 }
 
 // PostBootstrap creates the initial system-admin user for the first deploy.
-// The caller must be signed in with the email matching BOOTSTRAP_ADMIN_EMAIL
-// and that email must be verified by the sign-in provider.
+// The caller must be signed in with the email matching BOOTSTRAP_ADMIN_EMAIL.
 func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	if claims == nil {
