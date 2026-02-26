@@ -320,7 +320,7 @@ describe('SessionStudentPane', () => {
         const textarea = screen.getByTestId('custom-prompt-textarea') as HTMLTextAreaElement;
         // Must match the backend DefaultCustomDirections — not the old shorter frontend-only string.
         // This ensures what the instructor sees pre-filled is exactly what the backend uses.
-        expect(textarea.value).toContain('Identify patterns across all student submissions');
+        expect(textarea.value).toContain('Identify distinct bugs, misconceptions, or patterns across all student submissions');
         // Must NOT contain the old short frontend-only default that differs from backend
         expect(textarea.value).not.toContain('Focus on actual bugs');
       });

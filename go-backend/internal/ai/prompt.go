@@ -7,18 +7,23 @@ import (
 
 // DefaultCustomDirections is the default instructor-editable prompt section.
 // Instructors can override this to adjust how the AI categorizes student work.
-const DefaultCustomDirections = `Identify patterns across all student submissions. Group students by common mistakes or approaches.
+const DefaultCustomDirections = `Identify distinct bugs, misconceptions, or patterns across all student submissions. Group students by issue. A student can appear in multiple issues. Order issues by frequency (most common first).
 
-Bucket guidelines:
+Also classify each student as either finished (code appears complete and correct) or in-progress (still working, has bugs, or incomplete). Include finished student IDs in finished_student_ids.
+
+Severity guidelines:
 - "error": A logical or correctness bug (e.g., off-by-one, wrong operator, incorrect algorithm)
 - "misconception": A conceptual misunderstanding (e.g., confusing iteration with recursion, wrong mental model)
 - "style": A code quality concern that does not affect correctness (e.g., redundant variable, unclear naming)
 - "good-pattern": A positive practice worth highlighting to the class
 
 Constraints:
-- Return at most 5 issues total across all buckets.
+- Be CONCISE — instructor reads this live during lecture.
+- Maximum 5 issues. Only include issues that are pedagogically interesting.
+- Title: short (3-8 words).
+- Explanation: one sentence, actionable.
 - Each issue must have at least 1 student.
-- Do not create a bucket for students who have not attempted the problem or submitted empty code — omit them from issue buckets and include their IDs in finished_student_ids if their code is complete, or exclude them from all lists if it is empty.
+- Omit students with empty or unmodified starter code from issue lists.
 - Set overall_note to a 1-2 sentence summary of the class's performance.`
 
 // BuildPrompt constructs the full prompt for the AI model from the problem description,
@@ -26,8 +31,7 @@ Constraints:
 func BuildPrompt(problemDescription string, submissions []StudentSubmission, customDirections string) string {
 	var sb strings.Builder
 
-	sb.WriteString("You are an expert programming instructor analyzing student code submissions.\n")
-	sb.WriteString("Your task is to identify common patterns, mistakes, and strengths across the class.\n\n")
+	sb.WriteString("You are an experienced CS instructor analyzing student code submissions for a live classroom walkthrough.\n\n")
 
 	sb.WriteString("## Problem Description\n\n")
 	sb.WriteString(problemDescription)
