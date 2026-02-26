@@ -98,15 +98,17 @@ func (m *mockSessionStudentRepo) GetSessionStudent(ctx context.Context, sessionI
 // mockSessionPublisher records calls to SessionPublisher methods.
 // Thread-safe for use with async publish goroutines.
 type mockSessionPublisher struct {
-	mu                          sync.Mutex
-	studentJoinedCalls          []studentJoinedCall
-	codeUpdatedCalls            []codeUpdatedCall
-	sessionEndedCalls           []sessionEndedCall
-	sessionReplacedCalls        []sessionReplacedCall
-	featuredStudentChangedCalls []featuredStudentChangedCall
-	problemUpdatedCalls         []problemUpdatedCall
-	err                         error      // error to return from all methods
-	done                        chan struct{} // closed after each call, for async sync
+	mu                           sync.Mutex
+	studentJoinedCalls           []studentJoinedCall
+	codeUpdatedCalls             []codeUpdatedCall
+	sessionEndedCalls            []sessionEndedCall
+	sessionReplacedCalls         []sessionReplacedCall
+	featuredStudentChangedCalls  []featuredStudentChangedCall
+	problemUpdatedCalls          []problemUpdatedCall
+	sessionStartedInSectionCalls []sessionStartedInSectionCall
+	sessionEndedInSectionCalls   []sessionEndedInSectionCall
+	err                          error        // error to return from all methods
+	done                         chan struct{} // closed after each call, for async sync
 }
 
 type studentJoinedCall struct {
@@ -128,6 +130,13 @@ type featuredStudentChangedCall struct {
 }
 type problemUpdatedCall struct {
 	sessionID, problemID string
+}
+type sessionStartedInSectionCall struct {
+	sectionID, sessionID string
+	problem              json.RawMessage
+}
+type sessionEndedInSectionCall struct {
+	sectionID, sessionID string
 }
 
 func newMockPublisher() *mockSessionPublisher {
@@ -188,6 +197,20 @@ func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, session
 func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, problemID string) error {
 	m.mu.Lock()
 	m.problemUpdatedCalls = append(m.problemUpdatedCalls, problemUpdatedCall{sessionID, problemID})
+	m.mu.Unlock()
+	m.done <- struct{}{}
+	return m.err
+}
+func (m *mockSessionPublisher) SessionStartedInSection(_ context.Context, sectionID, sessionID string, problem json.RawMessage) error {
+	m.mu.Lock()
+	m.sessionStartedInSectionCalls = append(m.sessionStartedInSectionCalls, sessionStartedInSectionCall{sectionID, sessionID, problem})
+	m.mu.Unlock()
+	m.done <- struct{}{}
+	return m.err
+}
+func (m *mockSessionPublisher) SessionEndedInSection(_ context.Context, sectionID, sessionID string) error {
+	m.mu.Lock()
+	m.sessionEndedInSectionCalls = append(m.sessionEndedInSectionCalls, sessionEndedInSectionCall{sectionID, sessionID})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err

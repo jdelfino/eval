@@ -64,6 +64,12 @@ func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ s
 func (r *recordingPublisher) ProblemUpdated(_ context.Context, _, _ string) error {
 	return r.record("ProblemUpdated")
 }
+func (r *recordingPublisher) SessionStartedInSection(_ context.Context, _, _ string, _ json.RawMessage) error {
+	return r.record("SessionStartedInSection")
+}
+func (r *recordingPublisher) SessionEndedInSection(_ context.Context, _, _ string) error {
+	return r.record("SessionEndedInSection")
+}
 
 // Compile-time check that AsyncSessionPublisher implements SessionPublisher.
 var _ SessionPublisher = (*AsyncSessionPublisher)(nil)
@@ -187,6 +193,40 @@ func TestAsyncSessionPublisher_MultipleCalls(t *testing.T) {
 	defer rec.mu.Unlock()
 	if len(rec.calls) != 3 {
 		t.Errorf("expected 3 calls, got %d: %v", len(rec.calls), rec.calls)
+	}
+}
+
+func TestAsyncSessionPublisher_SessionStartedInSection(t *testing.T) {
+	rec := newRecordingPublisher()
+	ap := NewAsyncSessionPublisher(rec, discardLogger())
+
+	err := ap.SessionStartedInSection(context.Background(), "sect-1", "sess-1", json.RawMessage(`{"id":"p1"}`))
+	if err != nil {
+		t.Fatalf("expected nil error from async call, got %v", err)
+	}
+	rec.waitForCalls(t, 1)
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.calls) != 1 || rec.calls[0] != "SessionStartedInSection" {
+		t.Errorf("expected [SessionStartedInSection], got %v", rec.calls)
+	}
+}
+
+func TestAsyncSessionPublisher_SessionEndedInSection(t *testing.T) {
+	rec := newRecordingPublisher()
+	ap := NewAsyncSessionPublisher(rec, discardLogger())
+
+	err := ap.SessionEndedInSection(context.Background(), "sect-2", "sess-2")
+	if err != nil {
+		t.Fatalf("expected nil error from async call, got %v", err)
+	}
+	rec.waitForCalls(t, 1)
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.calls) != 1 || rec.calls[0] != "SessionEndedInSection" {
+		t.Errorf("expected [SessionEndedInSection], got %v", rec.calls)
 	}
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Session, PublishedProblemWithStatus } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import { BackButton } from '@/components/ui/BackButton';
+import { useSectionEvents } from '@/hooks/useSectionEvents';
 import type { SectionDetail } from '../page';
 
 interface StudentSectionViewProps {
@@ -16,11 +17,16 @@ interface StudentSectionViewProps {
 
 export default function StudentSectionView({
   section,
-  activeSessions,
+  activeSessions: initialActiveSessions,
   publishedProblems,
   sectionId,
 }: StudentSectionViewProps) {
   const router = useRouter();
+
+  const { activeSessions } = useSectionEvents({
+    sectionId,
+    initialActiveSessions,
+  });
   const [filter, setFilter] = useState<'all' | 'worked' | 'unstarted'>('all');
   const [error, setError] = useState<string | null>(null);
 

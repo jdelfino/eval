@@ -207,6 +207,9 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
 	}
 
+	// Notify section subscribers that a new session has started.
+	_ = h.publisher.SessionStartedInSection(r.Context(), req.SectionID.String(), newSessionID, session.Problem)
+
 	httputil.WriteJSON(w, http.StatusCreated, session)
 }
 
@@ -279,6 +282,7 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Publish real-time events only when the value actually changed.
 	if req.Status != nil && *req.Status == "completed" && previous.Status != "completed" {
 		_ = h.publisher.SessionEnded(r.Context(), id.String(), "completed")
+		_ = h.publisher.SessionEndedInSection(r.Context(), previous.SectionID.String(), id.String())
 	}
 	if req.FeaturedStudentID != nil && req.FeaturedCode != nil {
 		featuredChanged := previous.FeaturedStudentID == nil || *previous.FeaturedStudentID != *req.FeaturedStudentID
@@ -334,6 +338,7 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = h.publisher.SessionEnded(r.Context(), id.String(), "completed")
+	_ = h.publisher.SessionEndedInSection(r.Context(), existing.SectionID.String(), id.String())
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }
@@ -377,6 +382,9 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 	for _, oldID := range endedIDs {
 		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
 	}
+
+	// Notify section subscribers that the session has been reopened.
+	_ = h.publisher.SessionStartedInSection(r.Context(), existing.SectionID.String(), newSessionID, session.Problem)
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

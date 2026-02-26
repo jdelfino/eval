@@ -417,7 +417,7 @@ func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	pub.waitForCalls(t, 1)
+	pub.waitForCalls(t, 2)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionReplacedCalls) != 1 {
@@ -429,6 +429,16 @@ func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	}
 	if call.newSessionID != newSess.ID.String() {
 		t.Errorf("expected new session %q, got %q", newSess.ID, call.newSessionID)
+	}
+	if len(pub.sessionStartedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
+	}
+	sectionCall := pub.sessionStartedInSectionCalls[0]
+	if sectionCall.sectionID != sectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sectionID, sectionCall.sectionID)
+	}
+	if sectionCall.sessionID != newSess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", newSess.ID, sectionCall.sessionID)
 	}
 }
 
@@ -464,12 +474,22 @@ func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Brief sleep to confirm no publish calls arrive.
-	time.Sleep(50 * time.Millisecond)
+	// SessionStartedInSection is always published; no SessionReplaced since no active sessions were ended.
+	pub.waitForCalls(t, 1)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionReplacedCalls) != 0 {
 		t.Errorf("expected no SessionReplaced calls, got %d", len(pub.sessionReplacedCalls))
+	}
+	if len(pub.sessionStartedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
+	}
+	sectionCall := pub.sessionStartedInSectionCalls[0]
+	if sectionCall.sectionID != sectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sectionID, sectionCall.sectionID)
+	}
+	if sectionCall.sessionID != newSess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", newSess.ID, sectionCall.sessionID)
 	}
 }
 
@@ -1102,7 +1122,7 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	pub.waitForCalls(t, 1)
+	pub.waitForCalls(t, 2)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionEndedCalls) != 1 {
@@ -1113,6 +1133,16 @@ func TestUpdateSession_EndSession_PublishesSessionEnded(t *testing.T) {
 	}
 	if pub.sessionEndedCalls[0].reason != "completed" {
 		t.Errorf("expected reason %q, got %q", "completed", pub.sessionEndedCalls[0].reason)
+	}
+	if len(pub.sessionEndedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionEndedInSection call, got %d", len(pub.sessionEndedInSectionCalls))
+	}
+	endedInSectionCall := pub.sessionEndedInSectionCalls[0]
+	if endedInSectionCall.sectionID != prevSess.SectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", prevSess.SectionID, endedInSectionCall.sectionID)
+	}
+	if endedInSectionCall.sessionID != prevSess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", prevSess.ID, endedInSectionCall.sessionID)
 	}
 }
 
@@ -1363,11 +1393,21 @@ func TestDeleteSession_Success(t *testing.T) {
 		t.Errorf("expected status 'completed', got %q", got.Status)
 	}
 
-	pub.waitForCalls(t, 1)
+	pub.waitForCalls(t, 2)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionEndedCalls) != 1 {
 		t.Fatalf("expected 1 SessionEnded call, got %d", len(pub.sessionEndedCalls))
+	}
+	if len(pub.sessionEndedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionEndedInSection call, got %d", len(pub.sessionEndedInSectionCalls))
+	}
+	endedCall := pub.sessionEndedInSectionCalls[0]
+	if endedCall.sectionID != sess.SectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sess.SectionID, endedCall.sectionID)
+	}
+	if endedCall.sessionID != sess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", sess.ID, endedCall.sessionID)
 	}
 }
 
@@ -1569,7 +1609,8 @@ func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	}
 
 	// Should publish SessionReplaced for the ended session (matching Create handler behavior)
-	pub.waitForCalls(t, 1)
+	// and SessionStartedInSection for the reopened session.
+	pub.waitForCalls(t, 2)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionReplacedCalls) != 1 {
@@ -1584,6 +1625,16 @@ func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	}
 	if len(pub.sessionEndedCalls) != 0 {
 		t.Errorf("expected no SessionEnded calls for replaced sessions, got %d", len(pub.sessionEndedCalls))
+	}
+	if len(pub.sessionStartedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
+	}
+	sectionCall := pub.sessionStartedInSectionCalls[0]
+	if sectionCall.sectionID != sess.SectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sess.SectionID, sectionCall.sectionID)
+	}
+	if sectionCall.sessionID != sess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", sess.ID, sectionCall.sessionID)
 	}
 }
 
@@ -1624,8 +1675,8 @@ func TestReopenSession_NoActiveSessionsToEnd(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Brief sleep to confirm no publish calls arrive.
-	time.Sleep(50 * time.Millisecond)
+	// SessionStartedInSection is always published on reopen; no SessionReplaced since no active sessions ended.
+	pub.waitForCalls(t, 1)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
 	if len(pub.sessionReplacedCalls) != 0 {
@@ -1633,6 +1684,16 @@ func TestReopenSession_NoActiveSessionsToEnd(t *testing.T) {
 	}
 	if len(pub.sessionEndedCalls) != 0 {
 		t.Errorf("expected no SessionEnded calls, got %d", len(pub.sessionEndedCalls))
+	}
+	if len(pub.sessionStartedInSectionCalls) != 1 {
+		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
+	}
+	sectionCall := pub.sessionStartedInSectionCalls[0]
+	if sectionCall.sectionID != sess.SectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sess.SectionID, sectionCall.sectionID)
+	}
+	if sectionCall.sessionID != sess.ID.String() {
+		t.Errorf("expected sessionID %q, got %q", sess.ID, sectionCall.sessionID)
 	}
 }
 

@@ -9,12 +9,14 @@ import (
 type EventType string
 
 const (
-	EventStudentJoined          EventType = "student_joined"
-	EventStudentCodeUpdated     EventType = "student_code_updated"
-	EventSessionEnded           EventType = "session_ended"
-	EventSessionReplaced        EventType = "session_replaced"
-	EventFeaturedStudentChanged EventType = "featured_student_changed"
-	EventProblemUpdated         EventType = "problem_updated"
+	EventStudentJoined           EventType = "student_joined"
+	EventStudentCodeUpdated      EventType = "student_code_updated"
+	EventSessionEnded            EventType = "session_ended"
+	EventSessionReplaced         EventType = "session_replaced"
+	EventFeaturedStudentChanged  EventType = "featured_student_changed"
+	EventProblemUpdated          EventType = "problem_updated"
+	EventSessionStartedInSection EventType = "session_started_in_section"
+	EventSessionEndedInSection   EventType = "session_ended_in_section"
 )
 
 // Event is the envelope sent over Centrifugo channels.
@@ -58,4 +60,15 @@ type FeaturedStudentChangedData struct {
 // ProblemUpdatedData is the payload for EventProblemUpdated.
 type ProblemUpdatedData struct {
 	ProblemID string `json:"problem_id"`
+}
+
+// SessionStartedInSectionData is the payload for EventSessionStartedInSection.
+type SessionStartedInSectionData struct {
+	SessionID string          `json:"session_id"`
+	Problem   json.RawMessage `json:"problem"`
+}
+
+// SessionEndedInSectionData is the payload for EventSessionEndedInSection.
+type SessionEndedInSectionData struct {
+	SessionID string `json:"session_id"`
 }

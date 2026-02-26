@@ -74,20 +74,40 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Subscription token: must be session:{uuid} format.
-	sessionID, err := parseSessionChannel(channel)
-	if err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: expected session:{uuid}")
-		return
-	}
-
-	// Verify user is allowed to subscribe.
-	if err := h.authorizeSubscription(r, authUser, sessionID); err != nil {
-		if errors.Is(err, errForbidden) {
-			httputil.WriteError(w, http.StatusForbidden, "not a participant of this session")
+	// Subscription token: branch on channel prefix.
+	switch {
+	case strings.HasPrefix(channel, "session:"):
+		sessionID, err := parseChannelUUID(channel, "session:")
+		if err != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: expected session:{uuid}")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		if err := h.authorizeSubscription(r, authUser, sessionID); err != nil {
+			if errors.Is(err, errForbidden) {
+				httputil.WriteError(w, http.StatusForbidden, "not a participant of this session")
+				return
+			}
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+	case strings.HasPrefix(channel, "section:"):
+		sectionID, err := parseChannelUUID(channel, "section:")
+		if err != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: expected section:{uuid}")
+			return
+		}
+		if err := h.authorizeSectionSubscription(r, sectionID); err != nil {
+			if errors.Is(err, errForbidden) {
+				httputil.WriteError(w, http.StatusForbidden, "not a member of this section")
+				return
+			}
+			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+	default:
+		httputil.WriteError(w, http.StatusBadRequest, "invalid channel format: unknown prefix")
 		return
 	}
 
@@ -146,11 +166,27 @@ func (h *CentrifugoHandler) authorizeSubscription(r *http.Request, user *auth.Us
 	return nil
 }
 
-// parseSessionChannel extracts the UUID from a "session:{uuid}" channel string.
-func parseSessionChannel(channel string) (uuid.UUID, error) {
-	prefix := "session:"
+// parseChannelUUID extracts the UUID from a "{prefix}{uuid}" channel string.
+// Returns an error if the channel does not start with prefix or the UUID portion is invalid.
+func parseChannelUUID(channel, prefix string) (uuid.UUID, error) {
 	if !strings.HasPrefix(channel, prefix) {
 		return uuid.Nil, errors.New("invalid channel prefix")
 	}
 	return uuid.Parse(channel[len(prefix):])
+}
+
+// authorizeSectionSubscription checks that the user is a member of the section
+// (or can see it via RLS). RLS ensures only members can retrieve the section.
+func (h *CentrifugoHandler) authorizeSectionSubscription(r *http.Request, sectionID uuid.UUID) error {
+	ctx := r.Context()
+	repos := store.ReposFromContext(ctx)
+
+	_, err := repos.GetSection(ctx, sectionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return errForbidden
+		}
+		return err
+	}
+	return nil
 }
