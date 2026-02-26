@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/realtime';
 import { Session, Student, ExecutionResult } from '@/types/session';
 import { ExecutionSettings } from '@/types/problem';
-import { parseRealtimeEvent } from '@/lib/api/realtime-events';
+import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 
@@ -224,7 +224,13 @@ export function useRealtimeSession({
 
     sub.on('publication', (ctx) => {
       // Backend publishes Event{type, data, timestamp}
-      const parsed = parseRealtimeEvent(ctx.data);
+      let parsed: RealtimeEvent;
+      try {
+        parsed = parseRealtimeEvent(ctx.data);
+      } catch {
+        console.warn('[useRealtimeSession] Ignoring unrecognized realtime event:', ctx.data);
+        return;
+      }
 
       switch (parsed.type) {
         case 'student_joined': {

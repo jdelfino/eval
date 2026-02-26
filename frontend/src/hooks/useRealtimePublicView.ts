@@ -14,7 +14,7 @@ import { Centrifuge, Subscription } from 'centrifuge';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import { getSessionPublicState } from '@/lib/api/sessions';
 import type { SessionPublicState } from '@/types/api';
-import { parseRealtimeEvent } from '@/lib/api/realtime-events';
+import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 
@@ -92,7 +92,13 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
     });
 
     sub.on('publication', (ctx) => {
-      const parsed = parseRealtimeEvent(ctx.data);
+      let parsed: RealtimeEvent;
+      try {
+        parsed = parseRealtimeEvent(ctx.data);
+      } catch {
+        console.warn('[useRealtimePublicView] Ignoring unrecognized realtime event:', ctx.data);
+        return;
+      }
 
       switch (parsed.type) {
         case 'featured_student_changed': {

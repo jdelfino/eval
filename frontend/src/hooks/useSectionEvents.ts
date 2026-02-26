@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import type { Session } from '@/types/api';
-import { parseRealtimeEvent } from '@/lib/api/realtime-events';
+import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export interface UseSectionEventsOptions {
   sectionId: string;
@@ -32,7 +32,13 @@ export function useSectionEvents({
     });
 
     sub.on('publication', (ctx) => {
-      const parsed = parseRealtimeEvent(ctx.data);
+      let parsed: RealtimeEvent;
+      try {
+        parsed = parseRealtimeEvent(ctx.data);
+      } catch {
+        console.warn('[useSectionEvents] Ignoring unrecognized realtime event:', ctx.data);
+        return;
+      }
 
       switch (parsed.type) {
         case 'session_started_in_section': {

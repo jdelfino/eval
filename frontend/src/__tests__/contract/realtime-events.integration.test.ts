@@ -17,11 +17,9 @@
  */
 
 import * as crypto from 'crypto';
-import * as os from 'os';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Centrifuge } from 'centrifuge';
 import WebSocket from 'ws';
+import { getSetupState } from './helpers';
 import {
   validateStudentJoinedShape,
   validateStudentCodeUpdatedShape,
@@ -97,35 +95,6 @@ function subscriptionToken(userId: string, channel: string): string {
     { sub: userId, channel, exp: Math.floor(Date.now() / 1000) + 300 },
     CENTRIFUGO_TOKEN_SECRET
   );
-}
-
-// ---------------------------------------------------------------------------
-// Setup state — reuse from globalSetup (via the same temp file pattern)
-// ---------------------------------------------------------------------------
-
-interface SetupState {
-  runId: string;
-  namespaceId: string;
-  instructorUserId: string;
-  classId: string;
-  sectionId: string;
-  sessionId: string;
-  joinCode: string;
-  instructorExternalId: string;
-  instructorEmail: string;
-  instructorToken: string;
-  apiBaseUrl: string;
-}
-
-function loadSetupState(): SetupState {
-  const stateFile = path.join(os.tmpdir(), `jest-contract-state-${process.ppid || 'default'}.json`);
-  if (!fs.existsSync(stateFile)) {
-    throw new Error(
-      `Realtime contract tests require globalSetup state at ${stateFile}.\n` +
-      `Run 'make test-integration-realtime-contract' to start the required infrastructure.`
-    );
-  }
-  return JSON.parse(fs.readFileSync(stateFile, 'utf8')) as SetupState;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +211,7 @@ function subscribeAndCollect(
 const OBSERVER_USER_ID = 'realtime-contract-observer';
 
 describe('Realtime event contract tests', () => {
-  let setupState: SetupState;
+  let setupState: NonNullable<ReturnType<typeof getSetupState>>;
   let client: Centrifuge;
 
   // We create a fresh student for session join / code update tests
@@ -265,7 +234,14 @@ describe('Realtime event contract tests', () => {
       throw new Error(`Centrifugo health check returned ${res.status}`);
     }
 
-    setupState = loadSetupState();
+    const state = getSetupState();
+    if (!state) {
+      throw new Error(
+        `Realtime contract tests require globalSetup state.\n` +
+        `Run 'make test-integration-realtime-contract' to start the required infrastructure.`
+      );
+    }
+    setupState = state;
     process.env.NEXT_PUBLIC_API_URL = `${API_BASE_URL}/api/v1`;
 
     // Connect the observer client once for all tests

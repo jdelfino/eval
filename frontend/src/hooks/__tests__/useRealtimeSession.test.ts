@@ -952,6 +952,97 @@ describe('useRealtimeSession', () => {
     });
   });
 
+  describe('Resilience to malformed/unknown events', () => {
+    beforeEach(async () => {
+      mockGetSessionState.mockResolvedValueOnce({
+        session: { id: 'session-1' },
+        students: [],
+        join_code: '',
+      });
+    });
+
+    it('should ignore unknown event types without throwing', async () => {
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Simulate an unknown event type that parseRealtimeEvent would throw for
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.students).toHaveLength(0);
+    });
+
+    it('should ignore malformed events without throwing', async () => {
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Simulate a malformed event (missing required fields)
+      expect(() => {
+        act(() => {
+          if (mockPublicationCallback) {
+            mockPublicationCallback({ data: null as any });
+          }
+        });
+      }).not.toThrow();
+
+      // State should be unchanged
+      expect(result.current.students).toHaveLength(0);
+    });
+
+    it('should continue handling valid events after an unrecognized one', async () => {
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Send unknown event first
+      act(() => {
+        if (mockPublicationCallback) {
+          mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
+        }
+      });
+
+      // Then send a valid event
+      act(() => {
+        simulatePublication('student_joined', {
+          user_id: 'student-1',
+          display_name: 'Alice',
+        });
+      });
+
+      expect(result.current.students).toHaveLength(1);
+      expect(result.current.students[0].user_id).toBe('student-1');
+    });
+  });
+
   describe('Session navigation', () => {
     it('should clear all state when session_id changes', async () => {
       // Set up initial session with populated state
