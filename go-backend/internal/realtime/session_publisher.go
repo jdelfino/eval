@@ -15,6 +15,8 @@ type SessionPublisher interface {
 	SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error
 	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
+	SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error
+	SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error
 }
 
 type sessionPublisher struct {
@@ -34,6 +36,10 @@ func sessionChannel(sessionID string) string {
 	return fmt.Sprintf("session:%s", sessionID)
 }
 
+func sectionChannel(sectionID string) string {
+	return fmt.Sprintf("section:%s", sectionID)
+}
+
 func (s *sessionPublisher) publish(ctx context.Context, sessionID string, eventType EventType, data any) error {
 	event := Event{
 		Type:      eventType,
@@ -41,6 +47,15 @@ func (s *sessionPublisher) publish(ctx context.Context, sessionID string, eventT
 		Timestamp: s.now(),
 	}
 	return s.publisher.Publish(ctx, sessionChannel(sessionID), event)
+}
+
+func (s *sessionPublisher) publishToSection(ctx context.Context, sectionID string, eventType EventType, data any) error {
+	event := Event{
+		Type:      eventType,
+		Data:      data,
+		Timestamp: s.now(),
+	}
+	return s.publisher.Publish(ctx, sectionChannel(sectionID), event)
 }
 
 func (s *sessionPublisher) StudentJoined(ctx context.Context, sessionID, userID, displayName string) error {
@@ -82,5 +97,18 @@ func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID
 func (s *sessionPublisher) ProblemUpdated(ctx context.Context, sessionID, problemID string) error {
 	return s.publish(ctx, sessionID, EventProblemUpdated, ProblemUpdatedData{
 		ProblemID: problemID,
+	})
+}
+
+func (s *sessionPublisher) SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error {
+	return s.publishToSection(ctx, sectionID, EventSessionStartedInSection, SessionStartedInSectionData{
+		SessionID: sessionID,
+		Problem:   problem,
+	})
+}
+
+func (s *sessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
+	return s.publishToSection(ctx, sectionID, EventSessionEndedInSection, SessionEndedInSectionData{
+		SessionID: sessionID,
 	})
 }

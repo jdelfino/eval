@@ -81,3 +81,17 @@ func (a *AsyncSessionPublisher) ProblemUpdated(ctx context.Context, sessionID, p
 	})
 	return nil
 }
+
+func (a *AsyncSessionPublisher) SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error {
+	a.runAsync(ctx, "SessionStartedInSection", func(ctx context.Context) error {
+		return a.inner.SessionStartedInSection(ctx, sectionID, sessionID, problem)
+	})
+	return nil
+}
+
+func (a *AsyncSessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
+	a.runAsync(ctx, "SessionEndedInSection", func(ctx context.Context) error {
+		return a.inner.SessionEndedInSection(ctx, sectionID, sessionID)
+	})
+	return nil
+}

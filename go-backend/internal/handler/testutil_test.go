@@ -192,6 +192,12 @@ func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, prob
 	m.done <- struct{}{}
 	return m.err
 }
+func (m *mockSessionPublisher) SessionStartedInSection(_ context.Context, _, _ string, _ json.RawMessage) error {
+	return nil
+}
+func (m *mockSessionPublisher) SessionEndedInSection(_ context.Context, _, _ string) error {
+	return nil
+}
 
 // --- Shared test helpers ---
 
