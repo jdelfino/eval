@@ -583,6 +583,7 @@ describe('Realtime event contract tests', () => {
       }
       const replaceProblem = await problemRes.json() as { id: string };
 
+      // Create the first session (will be replaced)
       const firstSessionRes = await apiFetch('/sessions', instructorToken, {
         method: 'POST',
         body: JSON.stringify({
@@ -596,14 +597,14 @@ describe('Realtime event contract tests', () => {
       }
       const firstSession = await firstSessionRes.json() as { id: string };
 
-      // Subscribe to the first session's channel before triggering replace
+      // Subscribe to the first session's channel BEFORE triggering the replace
       const firstSessionChannel = `session:${firstSession.id}`;
       const { collectNext, unsubscribe } = await subscribeAndCollect(
         client, firstSessionChannel, OBSERVER_USER_ID
       );
 
       try {
-        // Create a replacement problem
+        // Create a second problem for the replacement session
         const replaceProblem2Res = await apiFetch('/problems', instructorToken, {
           method: 'POST',
           body: JSON.stringify({
@@ -619,18 +620,9 @@ describe('Realtime event contract tests', () => {
         }
         const replaceProblem2 = await replaceProblem2Res.json() as { id: string };
 
-        // End the first session manually before creating replacement
-        await apiFetch(`/sessions/${firstSession.id}`, instructorToken, { method: 'DELETE' });
-
-        // The DELETE should have published session_ended — collect and discard it
-        const sessionEndedEnvelope = await collectNext();
-        expect(sessionEndedEnvelope.type).toBe('session_ended');
-
-        // NOTE: session_replaced is published to the OLD session channel when a new session
-        // is created for the same section while one was running. Since we ended it first,
-        // we test this scenario differently: create a new active session, then directly
-        // verify that PATCH /sessions/{id} with a replacement approach would work.
-        // For now, we create the replacement session and confirm it comes up correctly.
+        // Create a new session for the SAME section while the first is still active.
+        // CreateSessionReplacingActive atomically ends the old session and publishes
+        // session_replaced to the old session's channel.
         const newSessionRes = await apiFetch('/sessions', instructorToken, {
           method: 'POST',
           body: JSON.stringify({
@@ -644,21 +636,20 @@ describe('Realtime event contract tests', () => {
         }
         const newSession = await newSessionRes.json() as { id: string };
 
-        // Clean up
-        await apiFetch(`/sessions/${newSession.id}`, instructorToken, { method: 'DELETE' });
+        // Collect the session_replaced event from the OLD session's channel
+        const envelope = await collectNext();
 
-        // If we got here without errors, the session lifecycle is working.
-        // The session_replaced event fires when a new session is created while another is active.
-        // (Handled in the server logic for concurrent session management.)
+        expect(envelope.type).toBe('session_replaced');
+        expect(typeof envelope.timestamp).toBe('string');
+        const data = envelope.data as SessionReplacedData;
+        validateSessionReplacedShape(data);
+        expect(data.new_session_id).toBe(newSession.id);
+
+        // Clean up the replacement session
+        await apiFetch(`/sessions/${newSession.id}`, instructorToken, { method: 'DELETE' });
       } finally {
         unsubscribe();
       }
-    });
-
-    it('validates SessionReplacedData shape has new_session_id field in snake_case', () => {
-      // Verify the TypeScript type matches what we expect from Go
-      const mockData: SessionReplacedData = { new_session_id: 'test-session-id' };
-      validateSessionReplacedShape(mockData);
     });
   });
 });
