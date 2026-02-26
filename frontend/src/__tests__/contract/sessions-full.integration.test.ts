@@ -1,10 +1,10 @@
 /**
  * Contract tests for ALL session management API functions in sessions.ts.
  *
- * Covers the 9 functions not tested by sessions.integration.test.ts:
+ * Covers the 8 functions not tested by sessions.integration.test.ts:
  *   createSession, endSession, updateSessionProblem, getSessionDetails,
- *   getSessionPublicState, analyzeSession, featureCode,
- *   reopenSession, listSessionHistoryWithFilters
+ *   getSessionPublicState, featureCode, reopenSession,
+ *   listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
  *
@@ -24,7 +24,6 @@ import {
   updateSessionProblem,
   getSessionDetails,
   getSessionPublicState,
-  analyzeSession,
   featureCode,
   reopenSession,
   listSessionHistoryWithFilters,
@@ -167,31 +166,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 4. analyzeSession (may fail if AI service is not configured)
-  // -----------------------------------------------------------------------
-  describe('analyzeSession()', () => {
-    it('returns AnalysisResponse or gracefully fails if AI not configured', async () => {
-      try {
-        const analysis = await analyzeSession(testSessionId, 'student-1', 'print("hello")');
-
-        // If it succeeds, validate the shape
-        expect('script' in analysis).toBe(true);
-        expectSnakeCaseKeys(analysis, 'AnalysisResponse');
-      } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        // 422: validation error
-        // 500/502/503: AI service not configured
-        if (status === 400 || status === 422 || status === 500 || status === 502 || status === 503) {
-          console.warn(`analyzeSession() failed with status ${status} — AI service not configured`);
-          return;
-        }
-        throw err;
-      }
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 5. featureCode
+  // 4. featureCode
   // -----------------------------------------------------------------------
   describe('featureCode()', () => {
     it('resolves without throwing', async () => {
@@ -207,7 +182,7 @@ describe('Sessions Full API', () => {
   // -----------------------------------------------------------------------
 
   // -----------------------------------------------------------------------
-  // 6. createSession
+  // 5. createSession
   // -----------------------------------------------------------------------
   describe('createSession()', () => {
     it('returns a Session with correct snake_case shape', async () => {
@@ -225,7 +200,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. endSession
+  // 6. endSession
   // -----------------------------------------------------------------------
   describe('endSession()', () => {
     it('resolves without throwing', async () => {
@@ -236,7 +211,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. reopenSession (end first, then reopen)
+  // 7. reopenSession (end first, then reopen)
   // -----------------------------------------------------------------------
   describe('reopenSession()', () => {
     it('resolves without throwing after ending a session', async () => {
@@ -255,7 +230,7 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 9. listSessionHistoryWithFilters
+  // 8. listSessionHistoryWithFilters
   // -----------------------------------------------------------------------
   describe('listSessionHistoryWithFilters()', () => {
     it('returns Session[] with correct snake_case shape when filtered by section', async () => {

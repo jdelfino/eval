@@ -1,10 +1,9 @@
 /**
  * Contract tests for remaining system administration API functions in system.ts.
  *
- * Covers the 3 functions not tested by other system contract tests:
+ * Covers the 2 functions not tested by other system contract tests:
  *   1. listSystemNamespaces() -> NamespaceInfo[]
  *   2. getSystemNamespace(namespaceId) -> NamespaceInfo
- *   3. resendSystemInvitation(invitationId) -> void
  *
  * Uses the admin token (system-admin role required).
  */
@@ -13,8 +12,6 @@ import { state } from './shared-state';
 import {
   listSystemNamespaces,
   getSystemNamespace,
-  resendSystemInvitation,
-  createSystemInvitation,
 } from '@/lib/api/system';
 
 describe('System API — full coverage', () => {
@@ -86,46 +83,4 @@ describe('System API — full coverage', () => {
     });
   });
 
-  // -----------------------------------------------------------------------
-  // 3. resendSystemInvitation
-  // -----------------------------------------------------------------------
-  describe('resendSystemInvitation(invitationId)', () => {
-    let createdInvitationId: string | null = null;
-
-    afterAll(async () => {
-      // Best-effort cleanup: revoke the invitation we created
-      if (createdInvitationId) {
-        try {
-          const { revokeSystemInvitation } = await import('@/lib/api/system');
-          await revokeSystemInvitation(createdInvitationId);
-        } catch {
-          // Best-effort cleanup
-        }
-      }
-    });
-
-    it('resends an invitation without throwing (or handles expected email errors)', async () => {
-      const namespaceId = state.namespaceId;
-      expect(namespaceId).toBeTruthy();
-
-      // Create an invitation to resend
-      const email = `contract-resend-test-${Date.now()}@test.local`;
-      const inv = await createSystemInvitation(email, namespaceId, 'instructor');
-      createdInvitationId = inv.id;
-      expect(inv.id).toBeTruthy();
-
-      try {
-        // resendSystemInvitation returns void
-        await resendSystemInvitation(inv.id);
-        // If it succeeds, the contract is satisfied (void return)
-      } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        if (status === 500 || status === 502 || status === 503) {
-          console.warn(`resendSystemInvitation() returned status ${status} — email service likely not configured`);
-          return;
-        }
-        throw err;
-      }
-    });
-  });
 });

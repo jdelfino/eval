@@ -14,6 +14,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
+// Exclusions — functions intentionally without contract tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Functions excluded from contract coverage because they require infrastructure
+ * not available in CI. Each entry maps "module/function" to a reason.
+ *
+ * When the infrastructure becomes available, remove the exclusion and add a
+ * proper contract test.
+ */
+export const EXCLUDED_FUNCTIONS: Record<string, string> = {
+  'realtime-token/getRealtimeToken': 'Requires Centrifugo — covered by PLAT-pp4r.4',
+  'sessions/analyzeSession': 'Requires Gemini AI — remove when PLAT-b57a lands',
+  'system/resendSystemInvitation': 'Requires Resend email service',
+};
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -111,7 +128,8 @@ export function extractImportedFunctions(source: string): Map<string, string[]> 
  */
 export function computeCoverage(
   apiModules: Map<string, string[]>,
-  coveredImports: Map<string, string[]>
+  coveredImports: Map<string, string[]>,
+  exclusions: Record<string, string> = EXCLUDED_FUNCTIONS
 ): CoverageResult {
   const modules: ModuleCoverage[] = [];
   let totalFunctions = 0;
@@ -128,6 +146,11 @@ export function computeCoverage(
     const uncovered: string[] = [];
 
     for (const fn of exported) {
+      const exclusionKey = `${moduleName}/${fn}`;
+      if (exclusionKey in exclusions) {
+        // Skip excluded functions — they don't count as covered or uncovered
+        continue;
+      }
       if (imported.has(fn)) {
         covered.push(fn);
       } else {
@@ -136,7 +159,7 @@ export function computeCoverage(
     }
 
     modules.push({ name: moduleName, covered, uncovered });
-    totalFunctions += exported.length;
+    totalFunctions += covered.length + uncovered.length;
     coveredFunctions += covered.length;
   }
 
@@ -148,7 +171,10 @@ export function computeCoverage(
 /**
  * Format a coverage result into a human-readable report string.
  */
-export function formatReport(coverage: CoverageResult): string {
+export function formatReport(
+  coverage: CoverageResult,
+  exclusions: Record<string, string> = EXCLUDED_FUNCTIONS
+): string {
   const lines: string[] = [];
 
   lines.push('Contract Test Coverage Report');
@@ -156,8 +182,11 @@ export function formatReport(coverage: CoverageResult): string {
   lines.push('');
 
   for (const mod of coverage.modules) {
-    const total = mod.covered.length + mod.uncovered.length;
-    lines.push(`${mod.name}.ts (${mod.covered.length}/${total} covered)`);
+    // Count excluded functions for this module
+    const excludedForModule = Object.keys(exclusions)
+      .filter((k) => k.startsWith(`${mod.name}/`));
+    const total = mod.covered.length + mod.uncovered.length + excludedForModule.length;
+    lines.push(`${mod.name}.ts (${mod.covered.length}/${total} covered, ${excludedForModule.length} excluded)`);
 
     for (const fn of mod.covered) {
       lines.push(`  \u2713 ${fn}`);
@@ -165,12 +194,18 @@ export function formatReport(coverage: CoverageResult): string {
     for (const fn of mod.uncovered) {
       lines.push(`  \u2717 ${fn}`);
     }
+    for (const key of excludedForModule) {
+      const fnName = key.split('/')[1];
+      lines.push(`  \u2014 ${fnName} (excluded: ${exclusions[key]})`);
+    }
 
     lines.push('');
   }
 
+  const excludedCount = Object.keys(exclusions).length;
   lines.push(
-    `Summary: ${coverage.coveredFunctions}/${coverage.totalFunctions} functions covered (${coverage.percentage.toFixed(1)}%)`
+    `Summary: ${coverage.coveredFunctions}/${coverage.totalFunctions} functions covered (${coverage.percentage.toFixed(1)}%)` +
+    (excludedCount > 0 ? `, ${excludedCount} excluded` : '')
   );
 
   if (coverage.percentage === 100) {
