@@ -174,11 +174,7 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, re-run quality gates via a test-runner sub-agent (see below).
-
-### 5. Create PR and Hand Off
-
-**Delegate final quality gate verification to a test-runner sub-agent** — do NOT run tests directly in your context. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+After all issues resolved, run quality gates via a test-runner sub-agent. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
 ```
 ROLE: Test Runner
@@ -190,6 +186,8 @@ COMMANDS:
 ```
 
 **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
+
+### 5. Create PR and Hand Off
 
 ```bash
 cd ../<project>-<work-name>
