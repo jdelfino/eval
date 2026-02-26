@@ -300,16 +300,16 @@ describe('SessionStudentPane', () => {
         fireEvent.click(screen.getByTestId('analysis-options-toggle'));
       });
 
-      it('shows a model dropdown with Gemini 2.0 Flash and Gemini 2.5 Flash options', () => {
+      it('shows a model dropdown with only Gemini 2.5 Flash option (2.0 removed)', () => {
         const select = screen.getByTestId('model-select');
         expect(select).toBeInTheDocument();
-        expect(screen.getByRole('option', { name: /gemini 2\.0 flash/i })).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /gemini 2\.0 flash/i })).not.toBeInTheDocument();
         expect(screen.getByRole('option', { name: /gemini 2\.5 flash/i })).toBeInTheDocument();
       });
 
-      it('defaults model dropdown to Gemini 2.0 Flash', () => {
+      it('defaults model dropdown to Gemini 2.5 Flash', () => {
         const select = screen.getByTestId('model-select') as HTMLSelectElement;
-        expect(select.value).toBe('gemini-2.0-flash');
+        expect(select.value).toBe('gemini-2.5-flash');
       });
 
       it('shows a textarea for custom prompt directions', () => {
@@ -378,8 +378,8 @@ describe('SessionStudentPane', () => {
 
       const call = mockAnalyze.mock.calls[0];
       expect(call[0]).toBe('session-123');
-      // model should default to gemini-2.0-flash
-      expect(call[1]).toBe('gemini-2.0-flash');
+      // model should default to gemini-2.5-flash
+      expect(call[1]).toBe('gemini-2.5-flash');
       // customPrompt should be the default directions string (non-empty)
       expect(typeof call[2]).toBe('string');
       expect(call[2].length).toBeGreaterThan(0);

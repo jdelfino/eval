@@ -117,10 +117,10 @@ describe('useAnalysisGroups', () => {
       const { result } = renderHook(() => useAnalysisGroups());
 
       await act(async () => {
-        await result.current.analyze('session-1', 'gemini-2.0-flash', 'Focus on bugs and misconceptions.');
+        await result.current.analyze('session-1', 'gemini-2.5-flash', 'Focus on bugs and misconceptions.');
       });
 
-      expect(mockAnalyzeSession).toHaveBeenCalledWith('session-1', 'gemini-2.0-flash', 'Focus on bugs and misconceptions.');
+      expect(mockAnalyzeSession).toHaveBeenCalledWith('session-1', 'gemini-2.5-flash', 'Focus on bugs and misconceptions.');
     });
 
     it('analyze() does NOT send student_id or code to the API', async () => {
@@ -130,7 +130,7 @@ describe('useAnalysisGroups', () => {
       const { result } = renderHook(() => useAnalysisGroups());
 
       await act(async () => {
-        await result.current.analyze('session-1', 'gemini-2.0-flash', 'custom prompt');
+        await result.current.analyze('session-1', 'gemini-2.5-flash', 'custom prompt');
       });
 
       // The mock call should have exactly 3 args: sessionId, model, customPrompt
