@@ -23,7 +23,7 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 A test specifier may have run before you and committed **behavioral tests** — tests that encode the planner's intent as executable assertions. These are a head start, not a complete specification.
 
 If spec tests exist in the worktree:
-- Read them first to understand expected behavior and implementation hints
+- Read them first to understand expected behavior
 - Do NOT modify them — if one appears wrong, flag it in Phase 5 under "Spec test issues"
 - They must pass along with all other tests in Phase 3
 - In Phase 1, focus on gaps the spec tests don't cover — don't duplicate coverage they already provide

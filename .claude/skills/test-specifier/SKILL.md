@@ -54,18 +54,6 @@ Write tests that define the behavioral contract. Focus on:
 ### Type Definitions
 If the task requires new types or interfaces (API request/response types, database models, etc.), define them now. These become part of the contract the implementer builds against.
 
-### Implementation Hints
-After writing tests, add a brief comment block at the top of each new test file:
-
-```
-// Implementation hints:
-// - Follow the pattern in <existing-file> for <what>
-// - Key files to modify: <list>
-// - <any non-obvious design guidance from the task spec>
-```
-
-Keep hints to 3-5 lines. The implementer has the full task description too — don't duplicate it.
-
 ## Phase 3: Verify Tests Fail
 
 Your tests MUST fail against the current codebase. If they pass, they're not testing new behavior.
