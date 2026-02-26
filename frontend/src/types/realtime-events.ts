@@ -55,13 +55,9 @@ export interface SessionEndedData {
   reason: string;
 }
 
-/**
- * Payload for session_replaced — matches Go SessionReplacedData.
- * NOTE: Uses camelCase newSessionId because that is the Go JSON tag
- * (an inconsistency vs. the otherwise snake_case field naming).
- */
+/** Payload for session_replaced — matches Go SessionReplacedData. */
 export interface SessionReplacedData {
-  newSessionId: string; // NOTE: camelCase matches current Go JSON tag
+  new_session_id: string;
 }
 
 /** Payload for featured_student_changed — matches Go FeaturedStudentChangedData. */

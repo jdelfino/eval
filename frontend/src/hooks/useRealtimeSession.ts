@@ -88,7 +88,7 @@ export function useRealtimeSession({
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [students, setStudents] = useState<Map<string, Student>>(new Map());
   const [featuredStudent, setFeaturedStudent] = useState<FeaturedStudent>({});
-  const [replacementInfo, setReplacementInfo] = useState<{ newSessionId: string } | null>(null);
+  const [replacementInfo, setReplacementInfo] = useState<{ new_session_id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -324,9 +324,9 @@ export function useRealtimeSession({
         }
 
         case 'session_replaced': {
-          // data: SessionReplacedData{newSessionId}
-          const { newSessionId } = parsed.data;
-          setReplacementInfo({ newSessionId });
+          // data: SessionReplacedData{new_session_id}
+          const { new_session_id } = parsed.data;
+          setReplacementInfo({ new_session_id });
           setSession(prev => {
             if (!prev) {
               console.warn('[useRealtimeSession] Dropping session_replaced event: state not yet initialized');

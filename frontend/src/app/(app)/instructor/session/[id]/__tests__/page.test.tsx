@@ -237,7 +237,7 @@ describe('InstructorSessionPage', () => {
       (useRealtimeSession as jest.Mock).mockReturnValue({
         ...defaultRealtimeSessionReturn,
         session: { ...mockSession, status: 'completed' },
-        replacementInfo: { newSessionId: 'new-session-456' },
+        replacementInfo: { new_session_id: 'new-session-456' },
       });
 
       render(<InstructorSessionPage />);

@@ -97,11 +97,11 @@ describe('SessionEndedData', () => {
 });
 
 describe('SessionReplacedData', () => {
-  it('has newSessionId field in camelCase (matching Go JSON tag)', () => {
+  it('has new_session_id field in snake_case (matching Go JSON tag)', () => {
     const data: SessionReplacedData = {
-      newSessionId: 's-2',
+      new_session_id: 's-2',
     };
-    expect(data.newSessionId).toBe('s-2');
+    expect(data.new_session_id).toBe('s-2');
   });
 });
 

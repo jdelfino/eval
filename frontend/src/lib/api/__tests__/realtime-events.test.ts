@@ -69,13 +69,13 @@ describe('parseRealtimeEvent', () => {
     it('parses session_replaced event', () => {
       const raw = {
         type: 'session_replaced',
-        data: { newSessionId: 'sess-2' },
+        data: { new_session_id: 'sess-2' },
         timestamp: '2026-01-01T00:00:00Z',
       };
       const parsed = parseRealtimeEvent(raw);
       expect(parsed.type).toBe('session_replaced');
       if (parsed.type === 'session_replaced') {
-        expect(parsed.data.newSessionId).toBe('sess-2');
+        expect(parsed.data.new_session_id).toBe('sess-2');
       }
     });
 

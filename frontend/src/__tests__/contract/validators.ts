@@ -229,11 +229,10 @@ export function validateSessionEndedShape(obj: SessionEndedData) {
 
 /**
  * Validate the shape of a session_replaced event payload.
- * NOTE: newSessionId uses camelCase (Go JSON tag inconsistency) — expectSnakeCaseKeys is NOT called.
  */
 export function validateSessionReplacedShape(obj: SessionReplacedData) {
-  expect(typeof obj.newSessionId).toBe('string');
-  // Intentionally does NOT call expectSnakeCaseKeys — newSessionId is a known camelCase exception
+  expect(typeof obj.new_session_id).toBe('string');
+  expectSnakeCaseKeys(obj, 'SessionReplacedData');
 }
 
 /** Validate the shape of a featured_student_changed event payload. */

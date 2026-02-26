@@ -861,11 +861,11 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('session_replaced', {
-          newSessionId: 'session-2',
+          new_session_id: 'session-2',
         });
       });
 
-      expect(result.current.replacementInfo).toEqual({ newSessionId: 'session-2' });
+      expect(result.current.replacementInfo).toEqual({ new_session_id: 'session-2' });
       expect(result.current.session?.status).toBe('completed');
     });
 
@@ -993,11 +993,11 @@ describe('useRealtimeSession', () => {
 
       act(() => {
         simulatePublication('session_replaced', {
-          newSessionId: 'session-3',
+          new_session_id: 'session-3',
         });
       });
 
-      expect(result.current.replacementInfo).toEqual({ newSessionId: 'session-3' });
+      expect(result.current.replacementInfo).toEqual({ new_session_id: 'session-3' });
 
       // Set up mock for the new session (use a never-resolving promise to
       // capture the intermediate cleared state before the new load completes)

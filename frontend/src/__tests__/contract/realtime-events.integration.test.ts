@@ -679,9 +679,9 @@ describe('Realtime event contract tests', () => {
       }
     });
 
-    it('validates SessionReplacedData shape has newSessionId field', () => {
+    it('validates SessionReplacedData shape has new_session_id field in snake_case', () => {
       // Verify the TypeScript type matches what we expect from Go
-      const mockData: SessionReplacedData = { newSessionId: 'test-session-id' };
+      const mockData: SessionReplacedData = { new_session_id: 'test-session-id' };
       validateSessionReplacedShape(mockData);
     });
   });

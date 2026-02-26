@@ -47,7 +47,7 @@ type SessionEndedData struct {
 
 // SessionReplacedData is the payload for EventSessionReplaced.
 type SessionReplacedData struct {
-	NewSessionID string `json:"newSessionId"`
+	NewSessionID string `json:"new_session_id"`
 }
 
 // FeaturedStudentChangedData is the payload for EventFeaturedStudentChanged.
