@@ -165,7 +165,7 @@ describe('computeCoverage', () => {
       ['auth', ['getCurrentUser']],
     ]);
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.modules).toHaveLength(1);
     expect(result.modules[0].name).toBe('auth');
@@ -184,7 +184,7 @@ describe('computeCoverage', () => {
       ['auth', ['getCurrentUser', 'bootstrapUser']],
     ]);
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.modules[0].covered).toEqual([
       'getCurrentUser',
@@ -202,7 +202,7 @@ describe('computeCoverage', () => {
     ]);
     const coveredImports = new Map<string, string[]>();
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.modules[0].covered).toEqual([]);
     expect(result.modules[0].uncovered).toEqual([
@@ -224,7 +224,7 @@ describe('computeCoverage', () => {
       ['classes', ['listClasses']],
     ]);
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.totalFunctions).toBe(5);
     expect(result.coveredFunctions).toBe(2);
@@ -235,10 +235,28 @@ describe('computeCoverage', () => {
     const apiModules = new Map<string, string[]>();
     const coveredImports = new Map<string, string[]>();
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.totalFunctions).toBe(0);
     expect(result.coveredFunctions).toBe(0);
+    expect(result.percentage).toBe(100);
+  });
+
+  it('excludes functions listed in exclusions', () => {
+    const apiModules = new Map<string, string[]>([
+      ['auth', ['getCurrentUser', 'bootstrapUser', 'secretFunc']],
+    ]);
+    const coveredImports = new Map<string, string[]>([
+      ['auth', ['getCurrentUser', 'bootstrapUser']],
+    ]);
+    const exclusions = { 'auth/secretFunc': 'Requires special infra' };
+
+    const result = computeCoverage(apiModules, coveredImports, exclusions);
+
+    expect(result.modules[0].covered).toEqual(['getCurrentUser', 'bootstrapUser']);
+    expect(result.modules[0].uncovered).toEqual([]);
+    expect(result.totalFunctions).toBe(2);
+    expect(result.coveredFunctions).toBe(2);
     expect(result.percentage).toBe(100);
   });
 
@@ -250,7 +268,7 @@ describe('computeCoverage', () => {
     ]);
     const coveredImports = new Map<string, string[]>();
 
-    const result = computeCoverage(apiModules, coveredImports);
+    const result = computeCoverage(apiModules, coveredImports, {});
 
     expect(result.modules.map((m) => m.name)).toEqual([
       'auth',
@@ -264,9 +282,10 @@ describe('formatReport', () => {
   it('includes header and summary', () => {
     const coverage = computeCoverage(
       new Map([['auth', ['getCurrentUser', 'bootstrapUser']]]),
-      new Map([['auth', ['getCurrentUser']]])
+      new Map([['auth', ['getCurrentUser']]]),
+      {}
     );
-    const report = formatReport(coverage);
+    const report = formatReport(coverage, {});
 
     expect(report).toContain('Contract Test Coverage Report');
     expect(report).toContain('auth.ts');
@@ -280,9 +299,10 @@ describe('formatReport', () => {
   it('shows PASS when 100% covered', () => {
     const coverage = computeCoverage(
       new Map([['auth', ['getCurrentUser']]]),
-      new Map([['auth', ['getCurrentUser']]])
+      new Map([['auth', ['getCurrentUser']]]),
+      {}
     );
-    const report = formatReport(coverage);
+    const report = formatReport(coverage, {});
 
     expect(report).toContain('PASS');
     expect(report).not.toContain('FAIL');
@@ -291,9 +311,10 @@ describe('formatReport', () => {
   it('marks covered functions with checkmark and uncovered with X', () => {
     const coverage = computeCoverage(
       new Map([['auth', ['getCurrentUser', 'bootstrapUser']]]),
-      new Map([['auth', ['getCurrentUser']]])
+      new Map([['auth', ['getCurrentUser']]]),
+      {}
     );
-    const report = formatReport(coverage);
+    const report = formatReport(coverage, {});
 
     // Covered function gets a checkmark
     expect(report).toContain('\u2713 getCurrentUser');
