@@ -438,56 +438,19 @@ func TestRegisterStudentPost_InactiveSection_ReturnsCode(t *testing.T) {
 	}
 }
 
-// TestRegisterStudentPost_EmailNotVerified_Succeeds verifies that email/password
-// sign-in users (EmailVerified=false) can register as a student when they provide
-// a valid join code. The join code is the authorization mechanism, not email_verified.
-func TestRegisterStudentPost_EmailNotVerified_Succeeds(t *testing.T) {
-	section := testSection()
-	nsID := section.NamespaceID
-	createdUser := &store.User{
-		ID:          uuid.MustParse("44444444-4444-4444-4444-444444444444"),
-		Email:       "student@example.com",
-		Role:        "student",
-		NamespaceID: &nsID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	membership := &store.SectionMembership{
-		ID:        uuid.New(),
-		UserID:    createdUser.ID,
-		SectionID: section.ID,
-		Role:      "student",
-		JoinedAt:  time.Now(),
-	}
-
-	membershipRepo := &mockMembershipRepo{
-		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
-			return section, nil
-		},
-		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
-			return membership, nil
-		},
-	}
-	userRepo := &StubUserRepo{
-		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
-			return createdUser, nil
-		},
-	}
-
+func TestRegisterStudentPost_EmailNotVerified(t *testing.T) {
 	h := NewAuthHandler("")
 	authRepos := &mockAuthRepos{
-		userRepo:       userRepo,
+		userRepo:       &StubUserRepo{},
 		invRepo:        &mockInvitationRepo{},
-		membershipRepo: membershipRepo,
+		membershipRepo: &mockMembershipRepo{},
 		classRepo:      &mockClassRepo{},
 	}
 	body, _ := json.Marshal(map[string]string{
-		"join_code": section.JoinCode,
+		"join_code": "ABC123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	// EmailVerified is false (as Firebase sets for email/password sign-in),
-	// but join code is valid — should succeed.
 	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: false}
 	ctx := auth.WithClaims(req.Context(), claims)
 	ctx = store.WithRepos(ctx, authRepos)
@@ -496,8 +459,8 @@ func TestRegisterStudentPost_EmailNotVerified_Succeeds(t *testing.T) {
 
 	h.PostRegisterStudent(rec, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

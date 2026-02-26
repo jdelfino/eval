@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -191,13 +190,10 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify that the JWT email matches the invitation email. This prevents
-	// invitation token misuse (e.g., one user accepting another's invite).
-	// The invite token proves authorization; email_verified is not required.
-	if !strings.EqualFold(claims.Email, inv.Email) {
-		httputil.WriteError(w, http.StatusForbidden, "email does not match invitation")
-		return
-	}
+	// No email_verified check here — the invite token is a one-time-use secret
+	// sent to the intended recipient, so possessing it is sufficient authorization.
+	// This allows email/password sign-in (where Firebase sets email_verified=false)
+	// as well as OAuth sign-in with a different email than the invitation.
 
 	// Use external_id from JWT claims (not request body) to prevent impersonation
 	user, err := repos.CreateUser(r.Context(), store.CreateUserParams{
@@ -277,6 +273,11 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !claims.EmailVerified {
+		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
+		return
+	}
+
 	req, err := httpbind.BindJSON[registerStudentRequest](w, r)
 	if err != nil {
 		return
@@ -324,7 +325,8 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 }
 
 // PostBootstrap creates the initial system-admin user for the first deploy.
-// The caller must be signed in with the email matching BOOTSTRAP_ADMIN_EMAIL.
+// The caller must be signed in with the email matching BOOTSTRAP_ADMIN_EMAIL
+// and that email must be verified by the sign-in provider.
 func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	if claims == nil {
@@ -333,10 +335,13 @@ func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bootstrap is disabled if no admin email is configured.
-	// The BOOTSTRAP_ADMIN_EMAIL config match is sufficient authorization —
-	// email_verified is not required.
 	if h.bootstrapAdminEmail == "" || claims.Email != h.bootstrapAdminEmail {
 		httputil.WriteError(w, http.StatusForbidden, "not authorized to bootstrap")
+		return
+	}
+
+	if !claims.EmailVerified {
+		httputil.WriteError(w, http.StatusForbidden, "email address must be verified by your sign-in provider")
 		return
 	}
 
