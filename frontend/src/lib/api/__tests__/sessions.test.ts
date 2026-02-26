@@ -349,10 +349,10 @@ describe('lib/api/sessions', () => {
       };
       mockApiPost.mockResolvedValue(fakeAnalysis);
 
-      const result = await analyzeSession('sess-1', 'gemini-2.0-flash', 'Focus on actual bugs');
+      const result = await analyzeSession('sess-1', 'gemini-2.5-flash', 'Focus on actual bugs');
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/sess-1/analyze', {
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         custom_prompt: 'Focus on actual bugs',
       });
       expect(result).toEqual(fakeAnalysis);
