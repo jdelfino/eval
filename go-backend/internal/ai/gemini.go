@@ -8,7 +8,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const defaultModel = "gemini-2.5-flash"
+const defaultModel = "gemini-2.5-flash-lite"
 
 // contentGenerator is a thin interface around the genai SDK's GenerateContent call.
 // It exists so that AnalyzeCode can be unit-tested without making real network calls.

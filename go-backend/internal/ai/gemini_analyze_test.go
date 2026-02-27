@@ -371,6 +371,16 @@ func TestAnalyzeCode_DefaultCustomDirectionsUsedWhenEmpty(t *testing.T) {
 	}
 }
 
+// TestDefaultModel_IsFlashLite verifies that the default Gemini model is gemini-2.5-flash-lite.
+// This model is faster and cheaper than gemini-2.5-flash (which is a thinking model),
+// making it more suitable as the default for analyzing large class submissions.
+func TestDefaultModel_IsFlashLite(t *testing.T) {
+	const wantModel = "gemini-2.5-flash-lite"
+	if defaultModel != wantModel {
+		t.Errorf("defaultModel = %q, want %q — update const defaultModel in gemini.go", defaultModel, wantModel)
+	}
+}
+
 // TestBuildResponseSchema_HasRequiredFields verifies that buildResponseSchema returns a schema
 // with the expected top-level required fields.
 func TestBuildResponseSchema_HasRequiredFields(t *testing.T) {
