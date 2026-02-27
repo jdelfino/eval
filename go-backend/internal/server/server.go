@@ -335,6 +335,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 			analyzeHandler := handler.NewAnalyzeHandler(aiClient)
 			r.Group(func(r chi.Router) {
+				r.Use(custommw.TimeoutOverride(120 * time.Second))
 				r.Use(custommw.RequirePermission(auth.PermSessionManage))
 				r.With(
 					custommw.ForCategory(rl, "analyzeDaily", custommw.UserKey),

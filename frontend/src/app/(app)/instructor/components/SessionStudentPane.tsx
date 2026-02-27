@@ -16,7 +16,7 @@ import { Problem, ExecutionSettings } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 // DEFAULT_PROMPT must match the backend's DefaultCustomDirections in go-backend/internal/ai/prompt.go.
 // When the instructor clicks Analyze without editing, this is exactly what the backend uses.
@@ -239,6 +239,7 @@ export function SessionStudentPane({
                   onChange={e => setSelectedModel(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                 >
+                  <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 </select>
               </div>
