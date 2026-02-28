@@ -107,7 +107,6 @@ export function SessionStudentPane({
     activeGroupIndex,
     overall_note,
     completion_estimate,
-    finished_student_ids,
     analyze,
     navigateGroup,
     dismissGroup,
