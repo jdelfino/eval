@@ -120,8 +120,9 @@ func stripCodeFences(s string) string {
 	return s
 }
 
-// buildJSONSchemaInstructions returns a text description of the required JSON response schema.
-// This is used because Claude lacks Gemini's native ResponseSchema constraint.
+// buildJSONSchemaInstructions returns text instructions describing the JSON schema
+// Claude should output. This is the text equivalent of buildResponseSchema() in
+// gemini.go. Both must stay in sync with the AnalyzeResponse type in client.go.
 func buildJSONSchemaInstructions() string {
 	return `Respond with ONLY valid JSON matching this exact schema (no markdown, no code fences, no explanation):
 

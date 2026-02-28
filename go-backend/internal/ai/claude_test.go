@@ -324,9 +324,11 @@ func TestClaudeAnalyzeCode_PromptContainsJSONSchemaInstructions(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// The prompt should include JSON schema instructions telling Claude to output JSON
-	if !strings.Contains(mock.capturedPrompt, "JSON") {
-		t.Errorf("prompt does not contain JSON schema instructions")
+	// The prompt should include JSON schema instructions telling Claude to output JSON.
+	// "finished_student_ids" is a unique field name from the schema, so its presence
+	// confirms the full schema was injected (not just any mention of "JSON").
+	if !strings.Contains(mock.capturedPrompt, "finished_student_ids") {
+		t.Errorf("prompt does not contain JSON schema instructions (missing 'finished_student_ids')")
 	}
 }
 
@@ -335,6 +337,81 @@ func TestClaudeDefaultModel_IsHaiku(t *testing.T) {
 	const wantModel = "claude-haiku-4-5-20251001"
 	if defaultClaudeModel != wantModel {
 		t.Errorf("defaultClaudeModel = %q, want %q", defaultClaudeModel, wantModel)
+	}
+}
+
+// TestNewClaudeClient_RejectsEmptyAPIKey verifies that NewClaudeClient returns an error
+// when the API key is empty.
+func TestNewClaudeClient_RejectsEmptyAPIKey(t *testing.T) {
+	_, err := NewClaudeClient("")
+	if err == nil {
+		t.Fatal("expected error when API key is empty, got nil")
+	}
+}
+
+// TestNewClaudeClient_AcceptsValidAPIKey verifies that NewClaudeClient succeeds
+// when a non-empty API key is provided.
+func TestNewClaudeClient_AcceptsValidAPIKey(t *testing.T) {
+	client, err := NewClaudeClient("fake-key")
+	if err != nil {
+		t.Fatalf("unexpected error with valid API key: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected non-nil client, got nil")
+	}
+}
+
+// TestClaudeAnalyzeCode_PromptContainsStudentCode verifies that the prompt includes student code.
+func TestClaudeAnalyzeCode_PromptContainsStudentCode(t *testing.T) {
+	const studentCode = "def unique_binary_search(arr, target): pass"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(validClaudeResponseJSON), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.AnalyzeCode(context.Background(), AnalyzeRequest{
+		ProblemDescription: "Implement binary search",
+		Submissions: []StudentSubmission{
+			{UserID: "u1", Name: "Alice", Code: studentCode},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(mock.capturedPrompt, studentCode) {
+		t.Errorf("prompt does not contain student code %q", studentCode)
+	}
+}
+
+// TestClaudeAnalyzeCode_PromptContainsCustomDirections verifies that custom prompt
+// appears in the prompt sent to Claude.
+func TestClaudeAnalyzeCode_PromptContainsCustomDirections(t *testing.T) {
+	const customDir = "Only focus on runtime errors. Ignore style issues entirely."
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(validClaudeResponseJSON), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.AnalyzeCode(context.Background(), AnalyzeRequest{
+		ProblemDescription: "Test problem",
+		CustomPrompt:       customDir,
+		Submissions:        []StudentSubmission{{UserID: "u1", Name: "Alice", Code: "x=1"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(mock.capturedPrompt, customDir) {
+		t.Errorf("prompt does not contain custom directions %q", customDir)
 	}
 }
 
