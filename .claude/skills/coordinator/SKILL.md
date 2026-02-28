@@ -56,9 +56,9 @@ ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/n
 
 ### 2. Implement Tasks
 
-**Follow the dependency graph from beads.** The planner has already analyzed file overlap and set dependencies — tasks with no dependency relationship are safe to parallelize. Do NOT re-analyze file overlap yourself.
+**Follow the dependency graph from beads.** Spawn all currently-unblocked tasks in parallel. When a task completes, check if any blocked tasks are now unblocked and spawn those.
 
-Spawn all currently-unblocked tasks in parallel. When a task completes, check if any blocked tasks are now unblocked and spawn those.
+**Optimistic conflict recovery:** If two parallel implementers report overlapping files in their `## Files modified` summaries, one may have clobbered the other's changes. When you detect this, spawn a follow-up implementer to reconcile — give it both summaries and ask it to merge the changes in the overlapping files.
 
 For each task:
 
@@ -202,7 +202,7 @@ EOF
 
 - Committing directly to main (branch is protected — all changes require a PR)
 - Starting dependent task before blocker is closed
-- Re-analyzing file overlap that the planner already resolved via dependencies
+- Blocking on file overlap analysis before spawning tasks (use optimistic execution instead)
 - Creating PR before running specialized reviews
 - Creating PR with failing tests
 - Merging PRs (that's `/merge`'s job)

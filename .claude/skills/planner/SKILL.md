@@ -65,30 +65,7 @@ After the user approves the plan:
    bd dep add <blocked-task> <blocker-task> --json
    ```
 
-4. **Propose execution order** — The coordinator will follow your sequencing, so get it right:
-   - Identify which tasks can run **in parallel** (touch different files/modules)
-   - Identify which tasks must be **sequential** (shared files, type dependencies, migrations before code)
-   - Record this in the epic description as an execution plan
-
-   Tasks conflict if they likely touch the same files:
-   - Same component/module
-   - Same API route or handler file
-   - Same database table/repository
-   - Shared utilities they might both modify
-
-   **Express parallelism through dependencies.** Tasks with no dependency relationship are implicitly parallel. Tasks connected by `bd dep add` are sequential. The coordinator spawns all unblocked tasks concurrently, so the dependency graph IS the execution plan.
-
-   After filing all subtasks and dependencies, update the epic description with a human-readable execution summary:
-   ```bash
-   cat <<'EOF' | bd update <epic-id> --body-file - --json
-   <original epic description>
-
-   ## Execution Plan
-   - **Batch 1** (parallel): Task A, Task B — no file overlap
-   - **Batch 2** (after Batch 1): Task C — depends on types from Task A
-   - **Batch 3** (after Batch 2): Task D, Task E — parallel, both depend on Task C
-   EOF
-   ```
+4. **Set dependencies to model execution order.** Tasks with no dependency relationship are implicitly parallel — the coordinator spawns all unblocked tasks concurrently. Use `bd dep add` only for true data/ordering dependencies (shared types, migrations before code, etc.). Don't over-constrain — occasional file overlap between parallel tasks is fine; the coordinator handles conflicts optimistically.
 
 **Each subtask MUST be self-contained** (per AGENTS.md rules):
 - **Summary**: What and why in 1-2 sentences
