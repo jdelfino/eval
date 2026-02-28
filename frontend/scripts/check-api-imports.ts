@@ -49,6 +49,7 @@ const ALLOWED_PATTERNS: RegExp[] = [
   // Infrastructure with legitimate direct access
   /^lib\/centrifugo\.ts$/,
   /^contexts\/AuthContext\.tsx$/,
+  /^contexts\/PreviewContext\.tsx$/,
 
   // Test files
   /__tests__\//,

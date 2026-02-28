@@ -12,6 +12,22 @@ import { ApiError } from '@/lib/api-error';
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
+ * Module-level preview section ID.
+ * Set by PreviewContext to inject the X-Preview-Section header on all API requests.
+ * Null when not in preview mode.
+ */
+let _previewSectionId: string | null = null;
+
+/**
+ * Sets the preview section ID for header injection.
+ * Call with a section ID when entering preview mode, null when exiting.
+ * Used by PreviewContext — not for direct app code use.
+ */
+export function setPreviewSectionId(id: string | null): void {
+  _previewSectionId = id;
+}
+
+/**
  * Gets Authorization headers with a token from the auth provider.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -25,10 +41,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   return withRetry(async () => {
     const authHeaders = await getAuthHeaders();
+    const previewHeaders: Record<string, string> = _previewSectionId
+      ? { 'X-Preview-Section': _previewSectionId }
+      : {};
     const response = await fetch(`${BASE_URL}${path}`, {
       ...options,
       headers: {
         ...authHeaders,
+        ...previewHeaders,
         ...options.headers,
       },
     });
@@ -54,10 +74,14 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 export async function apiFetchRaw(path: string, options: RequestInit = {}): Promise<Response> {
   return withRetry(async () => {
     const authHeaders = await getAuthHeaders();
+    const previewHeaders: Record<string, string> = _previewSectionId
+      ? { 'X-Preview-Section': _previewSectionId }
+      : {};
     return fetch(`${BASE_URL}${path}`, {
       ...options,
       headers: {
         ...authHeaders,
+        ...previewHeaders,
         ...options.headers,
       },
     });

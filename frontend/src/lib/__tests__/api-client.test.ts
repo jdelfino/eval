@@ -403,6 +403,79 @@ describe('api-client', () => {
     });
   });
 
+  describe('setPreviewSectionId and preview header injection', () => {
+    it('setPreviewSectionId is exported as a function', () => {
+      const { setPreviewSectionId } = require('../api-client');
+      expect(typeof setPreviewSectionId).toBe('function');
+    });
+
+    it('apiFetch includes X-Preview-Section header when preview section id is set', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: 'test' }),
+      });
+
+      const { setPreviewSectionId, apiGet } = require('../api-client');
+      setPreviewSectionId('sec-123');
+
+      try {
+        await apiGet('/v1/sections/sec-123/assignments');
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              'X-Preview-Section': 'sec-123',
+            }),
+          })
+        );
+      } finally {
+        // Clean up module-level state
+        setPreviewSectionId(null);
+      }
+    });
+
+    it('apiFetch does not include X-Preview-Section header when preview section id is null', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: 'test' }),
+      });
+
+      const { setPreviewSectionId, apiGet } = require('../api-client');
+      setPreviewSectionId(null);
+
+      await apiGet('/v1/sections/sec-123/assignments');
+
+      const callArgs = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(callArgs.headers).not.toHaveProperty('X-Preview-Section');
+    });
+
+    it('apiFetch stops including preview header after setPreviewSectionId(null)', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const { setPreviewSectionId, apiGet } = require('../api-client');
+
+      // Set preview section
+      setPreviewSectionId('sec-456');
+      await apiGet('/v1/test');
+      const firstCall = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(firstCall.headers).toHaveProperty('X-Preview-Section', 'sec-456');
+
+      // Clear preview section
+      (global.fetch as jest.Mock).mockClear();
+      setPreviewSectionId(null);
+      await apiGet('/v1/test');
+      const secondCall = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(secondCall.headers).not.toHaveProperty('X-Preview-Section');
+    });
+  });
+
   describe('null/undefined API response shapes (PLAT-uum.54)', () => {
     it('apiGet returns null when API responds with null body', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
