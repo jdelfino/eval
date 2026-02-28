@@ -44,7 +44,20 @@ const (
 	userKey contextKey = "auth.user"
 	// claimsKey is the context key for storing/retrieving JWT claims.
 	claimsKey contextKey = "auth.claims"
+	// previewContextKey is the context key for storing preview mode state.
+	previewContextKey contextKey = "auth.preview"
 )
+
+// PreviewContext holds the state for an active instructor preview session.
+// It records who the real instructor is (before identity swap) and which
+// section is being previewed, so downstream handlers can restore the original
+// identity or reference the section without re-parsing request headers.
+type PreviewContext struct {
+	// OriginalUser is the instructor whose identity was swapped out.
+	OriginalUser *User
+	// SectionID is the section being previewed.
+	SectionID uuid.UUID
+}
 
 // UserFromContext retrieves the authenticated user from the context.
 // Returns nil if no user is present in the context.
@@ -74,4 +87,26 @@ func ClaimsFromContext(ctx context.Context) *Claims {
 // WithClaims returns a new context with the given claims attached.
 func WithClaims(ctx context.Context, claims *Claims) context.Context {
 	return context.WithValue(ctx, claimsKey, claims)
+}
+
+// WithPreviewContext returns a new context with the given PreviewContext attached.
+// This is set by PreviewMiddleware when an instructor is actively previewing as a student.
+func WithPreviewContext(ctx context.Context, pc PreviewContext) context.Context {
+	return context.WithValue(ctx, previewContextKey, &pc)
+}
+
+// PreviewContextFrom retrieves the PreviewContext from the context.
+// Returns nil if preview mode is not active.
+func PreviewContextFrom(ctx context.Context) *PreviewContext {
+	pc, ok := ctx.Value(previewContextKey).(*PreviewContext)
+	if !ok {
+		return nil
+	}
+	return pc
+}
+
+// IsPreview reports whether the current request is being executed in instructor
+// preview-as-student mode.
+func IsPreview(ctx context.Context) bool {
+	return PreviewContextFrom(ctx) != nil
 }
