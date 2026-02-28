@@ -32,12 +32,13 @@ describe('PreviewContext', () => {
   );
 
   describe('usePreview outside provider', () => {
-    it('throws error when used outside PreviewProvider', () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      expect(() => {
-        renderHook(() => usePreview());
-      }).toThrow('usePreview must be used within a PreviewProvider');
-      consoleSpy.mockRestore();
+    it('returns safe no-op defaults when used outside PreviewProvider', () => {
+      const { result } = renderHook(() => usePreview());
+
+      expect(result.current.isPreview).toBe(false);
+      expect(result.current.previewSectionId).toBeNull();
+      expect(typeof result.current.enterPreview).toBe('function');
+      expect(typeof result.current.exitPreview).toBe('function');
     });
   });
 

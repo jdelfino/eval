@@ -79,14 +79,20 @@ export function PreviewProvider({ children }: PreviewProviderProps) {
   return <PreviewContext.Provider value={value}>{children}</PreviewContext.Provider>;
 }
 
+/** Default no-op context for use outside PreviewProvider (e.g. fullscreen layout). */
+const defaultPreviewContext: PreviewContextType = {
+  isPreview: false,
+  previewSectionId: null,
+  enterPreview: async () => {},
+  exitPreview: async () => {},
+};
+
 /**
  * Hook to access preview context.
- * Must be used within PreviewProvider.
+ * Returns safe no-op defaults when used outside PreviewProvider
+ * (e.g. in the fullscreen student editor layout).
  */
 export function usePreview(): PreviewContextType {
   const context = useContext(PreviewContext);
-  if (context === undefined) {
-    throw new Error('usePreview must be used within a PreviewProvider');
-  }
-  return context;
+  return context ?? defaultPreviewContext;
 }
