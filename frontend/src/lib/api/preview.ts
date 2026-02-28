@@ -2,7 +2,7 @@
  * Typed API client functions for preview mode.
  */
 
-import { apiPost, apiFetch } from '@/lib/api-client';
+import { apiPost, apiDelete } from '@/lib/api-client';
 
 export interface PreviewResponse {
   preview_user_id: string;
@@ -18,7 +18,7 @@ export interface PreviewResponse {
  * @returns Preview response containing preview_user_id and section_id
  */
 export async function enterPreview(sectionId: string): Promise<PreviewResponse> {
-  return apiPost<PreviewResponse>(`/api/v1/sections/${sectionId}/preview`);
+  return apiPost<PreviewResponse>(`/sections/${sectionId}/preview`);
 }
 
 /**
@@ -29,5 +29,5 @@ export async function enterPreview(sectionId: string): Promise<PreviewResponse> 
  * @param sectionId - The section ID to exit preview for
  */
 export async function exitPreview(sectionId: string): Promise<void> {
-  await apiFetch(`/api/v1/sections/${sectionId}/preview`, { method: 'DELETE' });
+  await apiDelete(`/sections/${sectionId}/preview`);
 }

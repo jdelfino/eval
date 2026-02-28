@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -556,5 +558,220 @@ func TestExitPreview_UnenrollBestEffort(t *testing.T) {
 	// Unenroll is best-effort, still returns 204
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 (unenroll is best-effort), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- WriteInternalError logging: underlying error must be logged for all 500 paths ---
+
+// TestEnterPreview_GetSectionError_LogsUnderlyingError verifies that when GetSection
+// fails with an internal error, WriteInternalError is used so the underlying error
+// appears in the structured log output.
+func TestEnterPreview_GetSectionError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	underlyingErr := fmt.Errorf("db: connection refused from GetSection")
+
+	repo := &mockPreviewRepo{}
+	repos := &previewTestRepos{
+		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
+			return nil, underlyingErr
+		},
+	}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.EnterPreview(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !h.containsErrorAttr("connection refused from GetSection") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestEnterPreview_GetPreviewStudentError_LogsUnderlyingError verifies that when
+// GetPreviewStudent fails, WriteInternalError is used so the error is logged.
+func TestEnterPreview_GetPreviewStudentError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	underlyingErr := fmt.Errorf("db: timeout from GetPreviewStudent")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return nil, underlyingErr
+		},
+	}
+	repos := &previewTestRepos{}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.EnterPreview(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !h.containsErrorAttr("timeout from GetPreviewStudent") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestEnterPreview_CreatePreviewStudentError_LogsUnderlyingError verifies that when
+// CreatePreviewStudent fails, WriteInternalError is used so the error is logged.
+func TestEnterPreview_CreatePreviewStudentError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	underlyingErr := fmt.Errorf("db: disk full from CreatePreviewStudent")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return nil, store.ErrNotFound
+		},
+		createPreviewStudentFn: func(_ context.Context, _ uuid.UUID, _ string) (*store.PreviewStudent, error) {
+			return nil, underlyingErr
+		},
+	}
+	repos := &previewTestRepos{}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.EnterPreview(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !h.containsErrorAttr("disk full from CreatePreviewStudent") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestEnterPreview_EnrollError_LogsUnderlyingError verifies that when EnrollPreviewStudent
+// fails, WriteInternalError is used so the error is logged.
+func TestEnterPreview_EnrollError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+	underlyingErr := fmt.Errorf("db: deadlock from EnrollPreviewStudent")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		enrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return underlyingErr
+		},
+	}
+	repos := &previewTestRepos{}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.EnterPreview(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !h.containsErrorAttr("deadlock from EnrollPreviewStudent") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestExitPreview_GetPreviewStudentError_LogsUnderlyingError verifies that when
+// GetPreviewStudent fails in ExitPreview, WriteInternalError is used.
+func TestExitPreview_GetPreviewStudentError_LogsUnderlyingError(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	sectionID := uuid.New()
+	underlyingErr := fmt.Errorf("db: connection reset from ExitPreview GetPreviewStudent")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return nil, underlyingErr
+		},
+	}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.ExitPreview(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !h.containsErrorAttr("connection reset from ExitPreview GetPreviewStudent") {
+		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
 	}
 }

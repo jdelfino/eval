@@ -123,7 +123,9 @@ func TestPreviewMiddleware_StudentForbidden(t *testing.T) {
 	}
 }
 
-// TestPreviewMiddleware_NoUser verifies 403 when no user is in context.
+// TestPreviewMiddleware_NoUser verifies 401 when no user is in context.
+// A missing user is an authentication failure, not an authorization failure,
+// so the correct status is 401 Unauthorized (not 403 Forbidden).
 func TestPreviewMiddleware_NoUser(t *testing.T) {
 	repo := &mockPreviewRepo{}
 	mw := PreviewMiddleware(repo)
@@ -142,8 +144,8 @@ func TestPreviewMiddleware_NoUser(t *testing.T) {
 	rr := httptest.NewRecorder()
 	mw(handler).ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusForbidden)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusUnauthorized)
 	}
 	if handlerCalled {
 		t.Error("Handler should not be called when no user in context")

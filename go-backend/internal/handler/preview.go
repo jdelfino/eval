@@ -68,7 +68,7 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -76,20 +76,20 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 	ps, err := h.previewRepo.GetPreviewStudent(r.Context(), instructor.ID)
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 		// No preview student yet — create one now.
 		ps, err = h.previewRepo.CreatePreviewStudent(r.Context(), instructor.ID, instructor.NamespaceID)
 		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 	}
 
 	// Enroll the preview student in the target section.
 	if err := h.previewRepo.EnrollPreviewStudent(r.Context(), ps.StudentUserID, sectionID); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *PreviewHandler) ExitPreview(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

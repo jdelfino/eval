@@ -37,7 +37,7 @@ func PreviewMiddleware(previewRepo store.PreviewRepository) func(http.Handler) h
 			// Require an authenticated user.
 			instructor := auth.UserFromContext(ctx)
 			if instructor == nil {
-				writeJSONError(w, r, http.StatusForbidden, "authentication required")
+				writeJSONError(w, r, http.StatusUnauthorized, "authentication required")
 				return
 			}
 
