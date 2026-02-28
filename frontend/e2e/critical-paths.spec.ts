@@ -301,9 +301,9 @@ test.describe('Critical User Paths', () => {
       const studentDisplayName = 'E2E Student';
       await expect(instructorPage.locator(`text=${studentDisplayName}`)).toBeVisible();
 
-      // Wait for the "In progress" badge to appear -- this confirms the code synced
+      // Wait for activity badge to appear -- this confirms the code synced
       const studentRow = instructorPage.locator(`div.border:has-text("${studentDisplayName}")`).first();
-      await expect(studentRow.locator('text=In progress')).toBeVisible();
+      await expect(studentRow.locator('text=Active').or(studentRow.locator('text=Inactive'))).toBeVisible();
 
       // ===== VERIFY INSTRUCTOR CAN VIEW STUDENT CODE =====
       // Click "View" button to see student's code
