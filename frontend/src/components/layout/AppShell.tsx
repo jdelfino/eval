@@ -10,6 +10,7 @@ import { GlobalHeader } from './GlobalHeader';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { RightPanelContainer } from './RightPanelContainer';
+import { PreviewBanner } from '@/components/preview/PreviewBanner';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 
 interface AppShellProps {
@@ -64,8 +65,11 @@ export function AppShell({
         )}
 
         {/* Main content */}
-        <main className={`flex-1 ${fullscreen ? 'overflow-hidden' : 'overflow-auto p-6'}`}>
-          {children}
+        <main className={`flex-1 flex flex-col ${fullscreen ? 'overflow-hidden' : 'overflow-auto'}`}>
+          <PreviewBanner />
+          <div className={fullscreen ? 'flex-1 overflow-hidden' : 'flex-1 p-6'}>
+            {children}
+          </div>
         </main>
 
         {/* Right panels */}

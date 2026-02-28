@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePreview } from '@/contexts/PreviewContext';
 import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/types/api';
 import { getSection, getActiveSessions } from '@/lib/api/sections';
 import { getClass } from '@/lib/api/classes';
@@ -27,6 +28,7 @@ export default function SectionDetailPage() {
   const params = useParams();
   const section_id = params.section_id as string;
   const { user, isLoading: authLoading } = useAuth();
+  const { isPreview, previewSectionId, enterPreview } = usePreview();
   const [section, setSection] = useState<SectionDetail | null>(null);
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [pastSessions, setPastSessions] = useState<Session[]>([]);
@@ -140,7 +142,10 @@ export default function SectionDetailPage() {
     );
   }
 
-  if (!userIsInstructor) {
+  // Instructor previewing this section as a student
+  const isPreviewingThisSection = isPreview && previewSectionId === section_id;
+
+  if (!userIsInstructor || isPreviewingThisSection) {
     return (
       <StudentSectionView
         section={section}
@@ -151,6 +156,10 @@ export default function SectionDetailPage() {
     );
   }
 
+  const handleEnterPreview = () => {
+    enterPreview(section_id);
+  };
+
   return (
     <InstructorSectionView
       section={section}
@@ -158,6 +167,7 @@ export default function SectionDetailPage() {
       pastSessions={pastSessions}
       publishedProblems={publishedProblems}
       students={students}
+      onEnterPreview={handleEnterPreview}
     />
   );
 }

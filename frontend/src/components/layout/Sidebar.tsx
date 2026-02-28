@@ -10,6 +10,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePreview } from '@/contexts/PreviewContext';
 import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem, NAV_ITEMS } from '@/config/navigation';
 import { SidebarToggle } from './SidebarToggle';
 import { getIconComponent } from './iconMap';
@@ -130,9 +131,11 @@ function isPathActive(href: string, pathname: string): boolean {
 
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useAuth();
+  const { isPreview } = usePreview();
   const pathname = usePathname();
 
-  const role = user?.role || 'student';
+  // During preview mode, show student navigation so instructor sees what students see
+  const role = isPreview ? 'student' : (user?.role || 'student');
   const navItems = getNavItemsForRole(role);
   const navGroups = getNavGroupsForRole(role);
 
