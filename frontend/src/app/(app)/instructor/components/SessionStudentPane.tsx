@@ -291,7 +291,6 @@ export function SessionStudentPane({
           join_code={join_code}
           featured_student_id={featured_student_id}
           headerLabel={studentListHeaderLabel}
-          finished_student_ids={analysisState === 'ready' ? finished_student_ids : undefined}
         />
       </div>
 

@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import StudentList from '../StudentList';
 
@@ -21,6 +21,11 @@ describe('StudentList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('Empty state', () => {
@@ -83,20 +88,53 @@ describe('StudentList', () => {
       expect(screen.getByText('Bob')).toBeInTheDocument();
     });
 
-    it('should indicate which students have started coding', () => {
+    it('should show "Not started" badge when student has no code', () => {
       render(<StudentList {...defaultProps} students={students} />);
 
-      // Alice has code (no analysis yet, so shows "In progress")
-      expect(screen.getByText('In progress')).toBeInTheDocument();
-      // Bob does not
       expect(screen.getByText('Not started')).toBeInTheDocument();
     });
 
-    it('should show "Finished" badge when finished_student_ids is provided', () => {
-      render(<StudentList {...defaultProps} students={students} finished_student_ids={new Set(['student-1'])} />);
+    it('should show "Inactive" badge when student has code but no last_code_update', () => {
+      render(<StudentList {...defaultProps} students={students} />);
 
-      expect(screen.getByText('Finished')).toBeInTheDocument();
-      expect(screen.getByText('Not started')).toBeInTheDocument();
+      // Alice has code but no last_code_update — should be Inactive
+      expect(screen.getByText('Inactive')).toBeInTheDocument();
+    });
+
+    it('should show "Active" badge when student has code and last_code_update within 30s', () => {
+      const now = Date.now();
+      const activeStudents = [
+        { id: 'student-1', name: 'Alice', has_code: true, last_code_update: new Date(now - 10_000) },
+      ];
+      render(<StudentList {...defaultProps} students={activeStudents} />);
+
+      expect(screen.getByText('Active')).toBeInTheDocument();
+    });
+
+    it('should show "Inactive" badge when student has code and last_code_update is older than 30s', () => {
+      const now = Date.now();
+      const staleStudents = [
+        { id: 'student-1', name: 'Alice', has_code: true, last_code_update: new Date(now - 60_000) },
+      ];
+      render(<StudentList {...defaultProps} students={staleStudents} />);
+
+      expect(screen.getByText('Inactive')).toBeInTheDocument();
+    });
+
+    it('should NOT render "In progress" badge at all', () => {
+      render(<StudentList {...defaultProps} students={students} />);
+
+      expect(screen.queryByText('In progress')).not.toBeInTheDocument();
+    });
+
+    it('should NOT render "Finished" badge even when finished_student_ids is provided', () => {
+      // finished_student_ids prop is removed; this tests that old behavior is gone
+      const studentsWithCode = [
+        { id: 'student-1', name: 'Alice', has_code: true },
+      ];
+      render(<StudentList {...defaultProps} students={studentsWithCode} />);
+
+      expect(screen.queryByText('Finished')).not.toBeInTheDocument();
     });
 
     it('should call onSelectStudent when View button is clicked', () => {
@@ -106,6 +144,57 @@ describe('StudentList', () => {
       fireEvent.click(viewButtons[0]);
 
       expect(mockOnSelectStudent).toHaveBeenCalledWith('student-1');
+    });
+  });
+
+  describe('Badge transitions with timer', () => {
+    it('should transition Active badge to Inactive after 30s elapses (10s timer tick)', () => {
+      const now = Date.now();
+      // Student updated 20s ago — currently Active (< 30s)
+      const students = [
+        { id: 'student-1', name: 'Alice', has_code: true, last_code_update: new Date(now - 20_000) },
+      ];
+
+      render(<StudentList {...defaultProps} students={students} />);
+
+      // Initially Active
+      expect(screen.getByText('Active')).toBeInTheDocument();
+
+      // Advance time by 15s — now last_code_update is 35s ago, should be Inactive
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.getByText('Inactive')).toBeInTheDocument();
+      expect(screen.queryByText('Active')).not.toBeInTheDocument();
+    });
+
+    it('should set up a 10s interval for badge re-renders', () => {
+      const setIntervalSpy = jest.spyOn(global, 'setInterval');
+      const students = [
+        { id: 'student-1', name: 'Alice', has_code: true, last_code_update: new Date() },
+      ];
+
+      render(<StudentList {...defaultProps} students={students} />);
+
+      const timerCalls = setIntervalSpy.mock.calls.filter(call => call[1] === 10_000);
+      expect(timerCalls.length).toBeGreaterThanOrEqual(1);
+
+      setIntervalSpy.mockRestore();
+    });
+
+    it('should clean up the interval on unmount', () => {
+      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+      const students = [
+        { id: 'student-1', name: 'Alice', has_code: true, last_code_update: new Date() },
+      ];
+
+      const { unmount } = render(<StudentList {...defaultProps} students={students} />);
+      unmount();
+
+      expect(clearIntervalSpy).toHaveBeenCalled();
+
+      clearIntervalSpy.mockRestore();
     });
   });
 

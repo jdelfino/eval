@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -16,11 +16,16 @@ interface StudentListProps {
   isLoading?: boolean;
   featured_student_id?: string | null;
   headerLabel?: string;
-  /** Set of student IDs classified as finished by analysis. When provided, enables 3-state badges. */
-  finished_student_ids?: Set<string>;
 }
 
-export default function StudentList({ students, onSelectStudent, onShowOnPublicView, onViewHistory, join_code, isLoading = false, featured_student_id, headerLabel, finished_student_ids }: StudentListProps) {
+export default function StudentList({ students, onSelectStudent, onShowOnPublicView, onViewHistory, join_code, isLoading = false, featured_student_id, headerLabel }: StudentListProps) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Card variant="default" className="p-4">
       <div className="flex items-center justify-between mb-3">
@@ -71,14 +76,14 @@ export default function StudentList({ students, onSelectStudent, onShowOnPublicV
                     </Badge>
                   )}
                   {(() => {
-                    const isFinished = finished_student_ids?.has(student.id);
-                    if (isFinished) {
-                      return <Badge variant="success" className="shrink-0">Finished</Badge>;
+                    if (!student.has_code) {
+                      return <Badge variant="default" className="shrink-0">Not started</Badge>;
                     }
-                    if (student.has_code) {
-                      return <Badge variant="info" className="shrink-0">In progress</Badge>;
+                    const isActive = student.last_code_update && (now - student.last_code_update.getTime() < 30_000);
+                    if (isActive) {
+                      return <Badge variant="success" className="shrink-0">Active</Badge>;
                     }
-                    return <Badge variant="default" className="shrink-0">Not started</Badge>;
+                    return <Badge variant="warning" className="shrink-0">Inactive</Badge>;
                   })()}
                 </div>
                 <div className="flex gap-2 flex-wrap">
