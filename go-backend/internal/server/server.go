@@ -321,17 +321,31 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Advanced session features (instructor+): AI analysis
 			// Rate limits stacked: per-user daily (most restrictive, checked first),
 			// global daily, then per-minute burst.
-			var aiClient ai.Client
+			var geminiClient *ai.GeminiClient
 			if cfg.GeminiAPIKey != "" {
-				geminiClient, geminiErr := ai.NewGeminiClient(cfg.GeminiAPIKey)
+				var geminiErr error
+				geminiClient, geminiErr = ai.NewGeminiClient(cfg.GeminiAPIKey)
 				if geminiErr != nil {
-					logger.Warn("failed to initialize Gemini client, falling back to stub", "error", geminiErr)
-					aiClient = &ai.StubClient{}
-				} else {
-					aiClient = geminiClient
+					logger.Warn("failed to initialize Gemini client", "error", geminiErr)
+					geminiClient = nil
 				}
-			} else {
+			}
+
+			var claudeClient *ai.ClaudeClient
+			if cfg.AnthropicAPIKey != "" {
+				var claudeErr error
+				claudeClient, claudeErr = ai.NewClaudeClient(cfg.AnthropicAPIKey)
+				if claudeErr != nil {
+					logger.Warn("failed to initialize Claude client", "error", claudeErr)
+					claudeClient = nil
+				}
+			}
+
+			var aiClient ai.Client
+			if geminiClient == nil && claudeClient == nil {
 				aiClient = &ai.StubClient{}
+			} else {
+				aiClient = ai.NewRouterClient(geminiClient, claudeClient)
 			}
 			analyzeHandler := handler.NewAnalyzeHandler(aiClient)
 			r.Group(func(r chi.Router) {
