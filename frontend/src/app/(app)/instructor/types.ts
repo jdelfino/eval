@@ -24,6 +24,7 @@ export interface Student {
   name: string;
   has_code: boolean;
   execution_settings?: ExecutionSettings;
+  last_code_update?: Date;
 }
 
 export interface RealtimeStudent {

@@ -55,6 +55,13 @@ jest.mock('../../../components/SessionView', () => ({
         <span data-testid="join-code">{join_code}</span>
         <span data-testid="section-name">{sessionContext?.section_name}</span>
         <span data-testid="student-count">{students.length}</span>
+        {students.map((s: any, i: number) => (
+          <span
+            key={s.id ?? i}
+            data-testid={`student-last-code-update-${s.id}`}
+            data-iso={s.last_code_update instanceof Date ? s.last_code_update.toISOString() : String(s.last_code_update)}
+          />
+        ))}
         <button onClick={onEndSession} data-testid="end-session-btn">End Session</button>
         <button onClick={() => onUpdateProblem({ title: 'Updated', description: '', starter_code: '' })} data-testid="update-problem-btn">Update Problem</button>
         <button onClick={() => onFeatureStudent('student-1')} data-testid="feature-student-btn">Feature Student</button>
@@ -501,6 +508,29 @@ describe('InstructorSessionPage', () => {
 
       // Students array is passed to SessionView
       expect(screen.getByTestId('student-count')).toHaveTextContent('1');
+    });
+
+    it('maps last_update from realtime student to last_code_update in display format', () => {
+      const lastUpdate = new Date('2024-06-15T10:30:00.000Z');
+      const studentsWithLastUpdate = [
+        {
+          user_id: 'student-1',
+          name: 'Alice',
+          code: 'print("Hello")',
+          execution_settings: {},
+          last_update: lastUpdate,
+        },
+      ];
+
+      (useRealtimeSession as jest.Mock).mockReturnValue({
+        ...defaultRealtimeSessionReturn,
+        students: studentsWithLastUpdate,
+      });
+
+      render(<InstructorSessionPage />);
+
+      const studentSpan = screen.getByTestId('student-last-code-update-student-1');
+      expect(studentSpan.getAttribute('data-iso')).toBe(lastUpdate.toISOString());
     });
   });
 });

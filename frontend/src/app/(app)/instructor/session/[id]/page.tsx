@@ -92,6 +92,7 @@ export default function InstructorSessionPage() {
         stdin: s.execution_settings?.stdin,
         attached_files: s.execution_settings?.attached_files,
       },
+      last_code_update: s.last_update,
     })),
     [realtimeStudents]
   );
