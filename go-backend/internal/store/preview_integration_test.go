@@ -77,6 +77,52 @@ func TestIntegration_PreviewStore_CreatePreviewStudent(t *testing.T) {
 	})
 }
 
+// TestIntegration_PreviewStore_CreatePreviewStudent_Idempotent verifies that
+// calling CreatePreviewStudent twice for the same instructor does not error and
+// returns the same PreviewStudent on both calls. This covers the race condition
+// where two concurrent requests both try to create a preview student.
+func TestIntegration_PreviewStore_CreatePreviewStudent_Idempotent(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+
+	instructorID := uuid.New()
+	db.createUser(ctx, t, instructorID, "instructor@preview.idempotent.test", "instructor", db.nsID)
+
+	s := db.storeWithPool(ctx, t)
+
+	first, err := s.CreatePreviewStudent(ctx, instructorID, db.nsID)
+	if err != nil {
+		t.Fatalf("CreatePreviewStudent (first call): %v", err)
+	}
+
+	// Second call must not error and must return the same preview student.
+	second, err := s.CreatePreviewStudent(ctx, instructorID, db.nsID)
+	if err != nil {
+		t.Fatalf("CreatePreviewStudent (second call): %v", err)
+	}
+
+	if second.InstructorID != first.InstructorID {
+		t.Errorf("InstructorID mismatch: first=%v second=%v", first.InstructorID, second.InstructorID)
+	}
+	if second.StudentUserID != first.StudentUserID {
+		t.Errorf("StudentUserID mismatch: first=%v second=%v", first.StudentUserID, second.StudentUserID)
+	}
+
+	// Verify there is still exactly one preview_students row for this instructor.
+	var count int
+	err = db.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM preview_students WHERE instructor_id = $1",
+		instructorID).Scan(&count)
+	if err != nil {
+		t.Fatalf("query preview_students: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 preview_students row, got %d", count)
+	}
+}
+
 func TestIntegration_PreviewStore_GetPreviewStudent(t *testing.T) {
 	t.Parallel()
 	db := setupIntegrationDB(t)

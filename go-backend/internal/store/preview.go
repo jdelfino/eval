@@ -69,6 +69,10 @@ func (s *Store) GetPreviewStudent(ctx context.Context, instructorID uuid.UUID) (
 //
 // The preview student user has external_id = NULL (cannot log in directly).
 // The user's email is a deterministic system address scoped to the instructor.
+//
+// CreatePreviewStudent is idempotent: if a preview student already exists for
+// this instructor (e.g. due to a concurrent request), it rolls back the
+// transaction and returns the existing record.
 func (s *Store) CreatePreviewStudent(ctx context.Context, instructorID uuid.UUID, namespaceID string) (*PreviewStudent, error) {
 	tx, err := s.beginTx(ctx)
 	if err != nil {
@@ -95,22 +99,31 @@ func (s *Store) CreatePreviewStudent(ctx context.Context, instructorID uuid.UUID
 	}
 
 	// Register the preview student mapping.
-	var ps PreviewStudent
-	err = tx.QueryRow(ctx, `
+	// Use ON CONFLICT (instructor_id) DO NOTHING so that concurrent calls are
+	// safe: if another request already inserted the row, we get 0 rows affected
+	// rather than a unique-violation error.
+	tag, err := tx.Exec(ctx, `
 		INSERT INTO preview_students (instructor_id, student_user_id)
 		VALUES ($1, $2)
-		RETURNING instructor_id, student_user_id, created_at`,
+		ON CONFLICT (instructor_id) DO NOTHING`,
 		instructorID, studentUserID,
-	).Scan(&ps.InstructorID, &ps.StudentUserID, &ps.CreatedAt)
+	)
 	if err != nil {
 		return nil, fmt.Errorf("insert preview_students: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		// Another concurrent request already created the preview student.
+		// Roll back our orphan user and return the existing record.
+		tx.Rollback(ctx) //nolint:errcheck
+		return s.GetPreviewStudent(ctx, instructorID)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	return &ps, nil
+	return s.GetPreviewStudent(ctx, instructorID)
 }
 
 // EnrollPreviewStudent idempotently enrolls the preview student in a section.
@@ -118,7 +131,7 @@ func (s *Store) EnrollPreviewStudent(ctx context.Context, studentUserID uuid.UUI
 	_, err := s.q.Exec(ctx, `
 		INSERT INTO section_memberships (user_id, section_id, role)
 		VALUES ($1, $2, 'student')
-		ON CONFLICT DO NOTHING`,
+		ON CONFLICT (user_id, section_id) DO NOTHING`,
 		studentUserID, sectionID,
 	)
 	return err
