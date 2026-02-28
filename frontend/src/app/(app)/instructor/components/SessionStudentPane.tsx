@@ -241,6 +241,7 @@ export function SessionStudentPane({
                 >
                   <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
                 </select>
               </div>
               <div>

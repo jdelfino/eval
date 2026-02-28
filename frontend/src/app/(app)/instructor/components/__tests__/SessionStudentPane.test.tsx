@@ -311,6 +311,16 @@ describe('SessionStudentPane', () => {
         expect(screen.getByRole('option', { name: /gemini 2\.5 flash lite/i })).toBeInTheDocument();
       });
 
+      it('includes Claude Haiku 4.5 as a dropdown option', () => {
+        expect(screen.getByRole('option', { name: /claude haiku 4\.5/i })).toBeInTheDocument();
+      });
+
+      it('allows selecting Claude Haiku 4.5 model', () => {
+        const select = screen.getByTestId('model-select') as HTMLSelectElement;
+        fireEvent.change(select, { target: { value: 'claude-haiku-4-5-20251001' } });
+        expect(select.value).toBe('claude-haiku-4-5-20251001');
+      });
+
       it('defaults model dropdown to gemini-2.5-flash-lite', () => {
         const select = screen.getByTestId('model-select') as HTMLSelectElement;
         expect(select.value).toBe('gemini-2.5-flash-lite');

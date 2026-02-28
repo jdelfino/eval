@@ -70,7 +70,8 @@ type Config struct {
 	InviteBaseURL  string `env:"INVITE_BASE_URL" envDefault:"http://localhost:3000/invite/accept"`
 
 	// AI Configuration
-	GeminiAPIKey string `env:"GEMINI_API_KEY"`
+	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
+	AnthropicAPIKey string `env:"ANTHROPIC_API_KEY"`
 }
 
 // Load parses environment variables and returns a Config struct.
