@@ -38,8 +38,8 @@ func NewClaudeClient(apiKey string) (*ClaudeClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("ai: ANTHROPIC_API_KEY is required")
 	}
-	svc := anthropic.NewMessageService(option.WithAPIKey(apiKey))
-	return &ClaudeClient{creator: &anthropicMessagesAdapter{svc: &svc}}, nil
+	client := anthropic.NewClient(option.WithAPIKey(apiKey))
+	return &ClaudeClient{creator: &anthropicMessagesAdapter{svc: &client.Messages}}, nil
 }
 
 // newClaudeClientWithCreator creates a ClaudeClient using the provided messageCreator.
