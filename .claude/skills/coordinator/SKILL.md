@@ -54,34 +54,11 @@ git worktree add ../<project>-<work-name> feature/<work-name>
 ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/node_modules
 ```
 
-### 2. Conflict Avoidance
+### 2. Implement Tasks
 
-Before parallelizing tasks, analyze file overlap:
+**Follow the dependency graph from beads.** The planner has already analyzed file overlap and set dependencies — tasks with no dependency relationship are safe to parallelize. Do NOT re-analyze file overlap yourself.
 
-Tasks conflict if they likely touch the same files:
-- Same component/module
-- Same API route
-- Same database table/repository
-- Shared utilities they might both modify
-
-```
-Task A: Add user profile page (src/app/profile/*)
-Task B: Fix login bug (src/app/login/*)
--> SAFE to parallelize (different directories)
-
-Task A: Add validation to UserForm
-Task B: Add new field to UserForm
--> NOT SAFE (same component)
-```
-
-When in doubt, add a dependency:
-```bash
-bd dep add <later-task-id> <earlier-task-id> --json
-```
-
-### 3. Implement Tasks
-
-**Independent tasks CAN run in parallel. Dependent tasks MUST wait.**
+Spawn all currently-unblocked tasks in parallel. When a task completes, check if any blocked tasks are now unblocked and spawn those.
 
 For each task:
 
@@ -124,7 +101,7 @@ Check the "Concerns" section — file follow-up issues if needed.
 - If blocked: note the blocker, move to next task
 - Do NOT close the task
 
-### 4. Pre-PR Review
+### 3. Pre-PR Review
 
 Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
 
@@ -179,7 +156,7 @@ COMMANDS:
 
 **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
-### 5. Create PR and Hand Off
+### 4. Create PR and Hand Off
 
 ```bash
 cd ../<project>-<work-name>
@@ -225,7 +202,7 @@ EOF
 
 - Committing directly to main (branch is protected — all changes require a PR)
 - Starting dependent task before blocker is closed
-- Parallelizing tasks that touch same files
+- Re-analyzing file overlap that the planner already resolved via dependencies
 - Creating PR before running specialized reviews
 - Creating PR with failing tests
 - Merging PRs (that's `/merge`'s job)

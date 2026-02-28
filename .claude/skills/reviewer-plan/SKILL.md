@@ -54,10 +54,12 @@ Read the code that will be affected. Understand:
 - [ ] Is there a task to create shared types before tasks that depend on them?
 - [ ] Are API contracts defined once and referenced by both client and server tasks?
 
-#### Dependencies
+#### Dependencies & Parallelization
 - [ ] Are task dependencies correct? (Does task B actually need task A?)
 - [ ] Are there missing dependencies? (Task C uses types from task A but doesn't depend on it)
 - [ ] Is the dependency graph acyclic?
+- [ ] Can tasks marked as parallel actually run concurrently? (No shared file writes)
+- [ ] Does the epic include an execution plan summary?
 
 #### Task Sizing (Context Budget)
 - [ ] Does each task modify ≤5 production files?
