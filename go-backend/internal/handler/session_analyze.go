@@ -22,12 +22,11 @@ type analyzeHTTPRequest struct {
 
 // analyzeScript is the WalkthroughScript-shaped envelope returned by the handler.
 type analyzeScript struct {
-	SessionID          string             `json:"session_id"`
-	Issues             []ai.AnalysisIssue `json:"issues"`
-	Summary            ai.AnalysisSummary `json:"summary"`
-	OverallNote        string             `json:"overall_note,omitempty"`
-	FinishedStudentIDs []string           `json:"finished_student_ids"`
-	GeneratedAt        time.Time          `json:"generated_at"`
+	SessionID   string             `json:"session_id"`
+	Issues      []ai.AnalysisIssue `json:"issues"`
+	Summary     ai.AnalysisSummary `json:"summary"`
+	OverallNote string             `json:"overall_note,omitempty"`
+	GeneratedAt time.Time          `json:"generated_at"`
 }
 
 // analyzeHTTPResponse is the JSON envelope wrapping the script.
@@ -126,12 +125,11 @@ func (h *AnalyzeHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 	// Build wrapped response
 	resp := analyzeHTTPResponse{
 		Script: analyzeScript{
-			SessionID:          sessionID.String(),
-			Issues:             aiResp.Issues,
-			Summary:            aiResp.Summary,
-			OverallNote:        aiResp.OverallNote,
-			FinishedStudentIDs: aiResp.FinishedStudentIDs,
-			GeneratedAt:        time.Now().UTC(),
+			SessionID:   sessionID.String(),
+			Issues:      aiResp.Issues,
+			Summary:     aiResp.Summary,
+			OverallNote: aiResp.OverallNote,
+			GeneratedAt: time.Now().UTC(),
 		},
 	}
 

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -55,8 +56,7 @@ func TestValidateResponse_CountEnforced(t *testing.T) {
 				Severity:                   IssueSeverityError,
 			},
 		},
-		FinishedStudentIDs: []string{"u4"},
-		OverallNote:        "Good work",
+		OverallNote: "Good work",
 		Summary: AnalysisSummary{
 			TotalSubmissions:    4,
 			FilteredOut:         0,
@@ -98,8 +98,7 @@ func TestValidateResponse_NilStudentIDsBecomesEmpty(t *testing.T) {
 				Severity:                   IssueSeverityStyle,
 			},
 		},
-		FinishedStudentIDs: nil,
-		Summary:            AnalysisSummary{},
+		Summary: AnalysisSummary{},
 	}
 
 	validateResponse(raw)
@@ -107,8 +106,39 @@ func TestValidateResponse_NilStudentIDsBecomesEmpty(t *testing.T) {
 	if raw.Issues[0].StudentIDs == nil {
 		t.Error("expected non-nil StudentIDs slice, got nil")
 	}
-	if raw.FinishedStudentIDs == nil {
-		t.Error("expected non-nil FinishedStudentIDs slice, got nil")
+}
+
+// TestAnalyzeResponse_NoFinishedStudentIDsField verifies that AnalyzeResponse does not
+// contain a FinishedStudentIDs field. This field was removed in PLAT-cluk.
+// The test verifies via JSON round-trip that the field is absent from the wire format.
+func TestAnalyzeResponse_NoFinishedStudentIDsField(t *testing.T) {
+	// A JSON response including finished_student_ids should be silently ignored
+	// (extra JSON fields are dropped on unmarshal in Go).
+	jsonWithOldField := `{
+		"issues": [],
+		"finished_student_ids": ["u1", "u2"],
+		"overall_note": "test",
+		"summary": {
+			"total_submissions": 2,
+			"filtered_out": 0,
+			"analyzed_submissions": 2,
+			"completion_estimate": {"finished": 0, "in_progress": 0, "not_started": 2}
+		}
+	}`
+
+	var resp AnalyzeResponse
+	if err := json.Unmarshal([]byte(jsonWithOldField), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	// Re-marshal to verify finished_student_ids is not present in output
+	out, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	outStr := string(out)
+	if strings.Contains(outStr, "finished_student_ids") {
+		t.Errorf("marshaled AnalyzeResponse must not contain 'finished_student_ids', got: %s", outStr)
 	}
 }
 
@@ -227,7 +257,6 @@ func TestJSONUnmarshalDirectlyIntoPublicTypes(t *testing.T) {
 				"severity": "error"
 			}
 		],
-		"finished_student_ids": ["u3"],
 		"overall_note": "Most students did well",
 		"summary": {
 			"total_submissions": 3,
@@ -263,9 +292,6 @@ func TestJSONUnmarshalDirectlyIntoPublicTypes(t *testing.T) {
 	if len(issue.StudentIDs) != 2 {
 		t.Errorf("len(StudentIDs) = %d, want 2", len(issue.StudentIDs))
 	}
-	if resp.FinishedStudentIDs[0] != "u3" {
-		t.Errorf("FinishedStudentIDs[0] = %q, want u3", resp.FinishedStudentIDs[0])
-	}
 	if resp.Summary.TotalSubmissions != 3 {
 		t.Errorf("TotalSubmissions = %d, want 3", resp.Summary.TotalSubmissions)
 	}
@@ -285,7 +311,7 @@ func TestJSONUnmarshalAllSeverities(t *testing.T) {
 	}
 
 	for _, tc := range severities {
-		rawJSON := `{"issues":[{"title":"T","explanation":"E","count":1,"student_ids":["u1"],"representative_student_id":"u1","representative_student_label":"Alice","severity":"` + tc.jsonVal + `"}],"finished_student_ids":[],"summary":{"total_submissions":1,"filtered_out":0,"analyzed_submissions":1,"completion_estimate":{"finished":0,"in_progress":0,"not_started":1}}}`
+		rawJSON := `{"issues":[{"title":"T","explanation":"E","count":1,"student_ids":["u1"],"representative_student_id":"u1","representative_student_label":"Alice","severity":"` + tc.jsonVal + `"}],"summary":{"total_submissions":1,"filtered_out":0,"analyzed_submissions":1,"completion_estimate":{"finished":0,"in_progress":0,"not_started":1}}}`
 
 		var resp AnalyzeResponse
 		if err := json.Unmarshal([]byte(rawJSON), &resp); err != nil {

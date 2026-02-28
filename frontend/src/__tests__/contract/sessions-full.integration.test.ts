@@ -183,7 +183,6 @@ describe('Sessions Full API', () => {
       expect(typeof script.session_id).toBe('string');
       expect(script.session_id).toBe(testSessionId);
       expect(Array.isArray(script.issues)).toBe(true);
-      expect(Array.isArray(script.finished_student_ids)).toBe(true);
       expect(typeof script.generated_at).toBe('string'); // ISO string over the wire
       expectSnakeCaseKeys(script, 'WalkthroughScript');
 

@@ -137,18 +137,17 @@ func buildResponseSchema() *genai.Schema {
 	return &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
-			"issues":               {Type: genai.TypeArray, Items: issueSchema},
-			"finished_student_ids": {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
-			"overall_note":        {Type: genai.TypeString},
-			"summary":             summarySchema,
+			"issues":       {Type: genai.TypeArray, Items: issueSchema},
+			"overall_note": {Type: genai.TypeString},
+			"summary":      summarySchema,
 		},
-		Required: []string{"issues", "finished_student_ids", "summary"},
+		Required: []string{"issues", "summary"},
 	}
 }
 
 // validateResponse normalises an AnalyzeResponse in place:
 //   - Enforces Count == len(StudentIDs) for every issue (overrides model value)
-//   - Converts nil StudentIDs / FinishedStudentIDs slices to empty slices
+//   - Converts nil StudentIDs slices to empty slices
 //   - Replaces unrecognised Severity values with IssueSeverityError
 func validateResponse(resp *AnalyzeResponse) {
 	validSeverities := map[IssueSeverity]bool{
@@ -169,10 +168,6 @@ func validateResponse(resp *AnalyzeResponse) {
 		if !validSeverities[issue.Severity] {
 			issue.Severity = IssueSeverityError
 		}
-	}
-
-	if resp.FinishedStudentIDs == nil {
-		resp.FinishedStudentIDs = []string{}
 	}
 }
 

@@ -130,8 +130,7 @@ func stubAnalyzeResp() *ai.AnalyzeResponse {
 				Severity:                   ai.IssueSeverityStyle,
 			},
 		},
-		FinishedStudentIDs: []string{},
-		OverallNote:        "Overall the class did well.",
+		OverallNote: "Overall the class did well.",
 		Summary: ai.AnalysisSummary{
 			TotalSubmissions:    1,
 			FilteredOut:         0,
@@ -164,12 +163,11 @@ type analyzeHTTPResponseTest struct {
 }
 
 type analyzeScriptResponseTest struct {
-	SessionID          string             `json:"session_id"`
-	Issues             []ai.AnalysisIssue `json:"issues"`
-	Summary            ai.AnalysisSummary `json:"summary"`
-	OverallNote        string             `json:"overall_note,omitempty"`
-	FinishedStudentIDs []string           `json:"finished_student_ids"`
-	GeneratedAt        time.Time          `json:"generated_at"`
+	SessionID   string             `json:"session_id"`
+	Issues      []ai.AnalysisIssue `json:"issues"`
+	Summary     ai.AnalysisSummary `json:"summary"`
+	OverallNote string             `json:"overall_note,omitempty"`
+	GeneratedAt time.Time          `json:"generated_at"`
 }
 
 // --- Happy path ---
@@ -355,7 +353,7 @@ func TestAnalyze_FetchesStudentsServerSide(t *testing.T) {
 	aiClient := &mockAIClient{
 		analyzeFn: func(_ context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error) {
 			capturedReq = req
-			return &ai.AnalyzeResponse{Issues: []ai.AnalysisIssue{}, FinishedStudentIDs: []string{}, Summary: ai.AnalysisSummary{}}, nil
+			return &ai.AnalyzeResponse{Issues: []ai.AnalysisIssue{}, Summary: ai.AnalysisSummary{}}, nil
 		},
 	}
 
@@ -493,9 +491,8 @@ func TestAnalyze_EmptySession_ReturnsValidResponse(t *testing.T) {
 				return nil, fmt.Errorf("expected 0 submissions, got %d", len(req.Submissions))
 			}
 			return &ai.AnalyzeResponse{
-				Issues:             []ai.AnalysisIssue{},
-				FinishedStudentIDs: []string{},
-				Summary:            ai.AnalysisSummary{TotalSubmissions: 0},
+				Issues:  []ai.AnalysisIssue{},
+				Summary: ai.AnalysisSummary{TotalSubmissions: 0},
 			}, nil
 		},
 	}

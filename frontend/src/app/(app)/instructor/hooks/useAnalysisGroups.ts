@@ -42,7 +42,6 @@ export default function useAnalysisGroups() {
 
   const overall_note = script?.overall_note ?? null;
   const completion_estimate = script?.summary?.completion_estimate ?? null;
-  const finished_student_ids = useMemo(() => new Set(script?.finished_student_ids ?? []), [script]);
 
   const analyze = useCallback(async (session_id: string, model?: string, customPrompt?: string) => {
     setAnalysisState('loading');
@@ -99,7 +98,6 @@ export default function useAnalysisGroups() {
     activeGroupIndex,
     overall_note,
     completion_estimate,
-    finished_student_ids,
     analyze,
     navigateGroup,
     setActiveGroupIndex,

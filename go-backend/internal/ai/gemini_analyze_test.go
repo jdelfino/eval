@@ -54,7 +54,6 @@ const validAnalyzeResponseJSON = `{
 			"severity": "error"
 		}
 	],
-	"finished_student_ids": ["u3"],
 	"overall_note": "Most students did well",
 	"summary": {
 		"total_submissions": 3,
@@ -106,9 +105,6 @@ func TestAnalyzeCode_HappyPath(t *testing.T) {
 	// Count must be enforced to len(StudentIDs) by validateResponse
 	if issue.Count != len(issue.StudentIDs) {
 		t.Errorf("Count = %d, len(StudentIDs) = %d — must match", issue.Count, len(issue.StudentIDs))
-	}
-	if len(resp.FinishedStudentIDs) != 1 || resp.FinishedStudentIDs[0] != "u3" {
-		t.Errorf("FinishedStudentIDs = %v, want [u3]", resp.FinishedStudentIDs)
 	}
 	if resp.Summary.TotalSubmissions != 3 {
 		t.Errorf("TotalSubmissions = %d, want 3", resp.Summary.TotalSubmissions)
@@ -395,11 +391,30 @@ func TestBuildResponseSchema_HasRequiredFields(t *testing.T) {
 		required[r] = true
 	}
 
-	expectedFields := []string{"issues", "finished_student_ids", "summary"}
+	expectedFields := []string{"issues", "summary"}
 	for _, f := range expectedFields {
 		if !required[f] {
 			t.Errorf("schema.Required missing field %q", f)
 		}
+	}
+}
+
+// TestBuildResponseSchema_NoFinishedStudentIDs verifies that buildResponseSchema does NOT
+// include finished_student_ids in the required fields or properties. This field was
+// removed as part of PLAT-cluk — the AI prompt no longer asks for finished classification.
+func TestBuildResponseSchema_NoFinishedStudentIDs(t *testing.T) {
+	schema := buildResponseSchema()
+
+	// Must not appear in Required list
+	for _, r := range schema.Required {
+		if r == "finished_student_ids" {
+			t.Error("schema.Required must not contain 'finished_student_ids' — field was removed in PLAT-cluk")
+		}
+	}
+
+	// Must not appear as a top-level property
+	if _, ok := schema.Properties["finished_student_ids"]; ok {
+		t.Error("schema.Properties must not contain 'finished_student_ids' — field was removed in PLAT-cluk")
 	}
 }
 

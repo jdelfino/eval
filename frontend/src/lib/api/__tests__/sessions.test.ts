@@ -343,7 +343,6 @@ describe('lib/api/sessions', () => {
             analyzed_submissions: 10,
             completion_estimate: { finished: 5, in_progress: 3, not_started: 2 },
           },
-          finished_student_ids: [],
           generated_at: new Date('2024-01-01'),
         },
       };
@@ -369,7 +368,6 @@ describe('lib/api/sessions', () => {
             analyzed_submissions: 10,
             completion_estimate: { finished: 5, in_progress: 3, not_started: 2 },
           },
-          finished_student_ids: [],
           generated_at: new Date('2024-01-01'),
         },
       };

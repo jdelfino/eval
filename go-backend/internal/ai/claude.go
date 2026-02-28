@@ -138,7 +138,6 @@ func buildJSONSchemaInstructions() string {
       "severity": "error" | "misconception" | "style" | "good-pattern"
     }
   ],
-  "finished_student_ids": [string],
   "overall_note": string,
   "summary": {
     "total_submissions": integer,
@@ -153,7 +152,7 @@ func buildJSONSchemaInstructions() string {
   }
 }
 
-Required fields: issues, finished_student_ids, summary (with total_submissions, filtered_out, analyzed_submissions, completion_estimate).
+Required fields: issues, summary (with total_submissions, filtered_out, analyzed_submissions, completion_estimate).
 Each issue must have: title, explanation, count, student_ids, representative_student_id, representative_student_label, severity.
 severity must be one of: error, misconception, style, good-pattern.`
 }

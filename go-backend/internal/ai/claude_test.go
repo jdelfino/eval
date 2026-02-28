@@ -55,7 +55,6 @@ const validClaudeResponseJSON = `{
 			"severity": "error"
 		}
 	],
-	"finished_student_ids": ["u3"],
 	"overall_note": "Most students did well",
 	"summary": {
 		"total_submissions": 3,
@@ -105,9 +104,6 @@ func TestClaudeAnalyzeCode_HappyPath(t *testing.T) {
 	}
 	if issue.Count != len(issue.StudentIDs) {
 		t.Errorf("Count = %d, len(StudentIDs) = %d — must match", issue.Count, len(issue.StudentIDs))
-	}
-	if len(resp.FinishedStudentIDs) != 1 || resp.FinishedStudentIDs[0] != "u3" {
-		t.Errorf("FinishedStudentIDs = %v, want [u3]", resp.FinishedStudentIDs)
 	}
 	if resp.Summary.TotalSubmissions != 3 {
 		t.Errorf("TotalSubmissions = %d, want 3", resp.Summary.TotalSubmissions)
@@ -325,10 +321,10 @@ func TestClaudeAnalyzeCode_PromptContainsJSONSchemaInstructions(t *testing.T) {
 	}
 
 	// The prompt should include JSON schema instructions telling Claude to output JSON.
-	// "finished_student_ids" is a unique field name from the schema, so its presence
-	// confirms the full schema was injected (not just any mention of "JSON").
-	if !strings.Contains(mock.capturedPrompt, "finished_student_ids") {
-		t.Errorf("prompt does not contain JSON schema instructions (missing 'finished_student_ids')")
+	// "representative_student_label" is a unique field name from the schema, so its
+	// presence confirms the full schema was injected (not just any mention of "JSON").
+	if !strings.Contains(mock.capturedPrompt, "representative_student_label") {
+		t.Errorf("prompt does not contain JSON schema instructions (missing 'representative_student_label')")
 	}
 }
 
@@ -460,7 +456,6 @@ func TestBuildJSONSchemaInstructions(t *testing.T) {
 
 	requiredFields := []string{
 		"issues",
-		"finished_student_ids",
 		"summary",
 		"title",
 		"explanation",
@@ -476,5 +471,41 @@ func TestBuildJSONSchemaInstructions(t *testing.T) {
 		if !strings.Contains(instructions, field) {
 			t.Errorf("JSON schema instructions missing %q", field)
 		}
+	}
+}
+
+// TestBuildJSONSchemaInstructions_NoFinishedStudentIDs verifies that the Claude JSON
+// schema instructions do NOT include finished_student_ids. This field was removed
+// in PLAT-cluk to stop wasting AI tokens on finished classification.
+func TestBuildJSONSchemaInstructions_NoFinishedStudentIDs(t *testing.T) {
+	instructions := buildJSONSchemaInstructions()
+
+	if strings.Contains(instructions, "finished_student_ids") {
+		t.Error("Claude JSON schema instructions must not reference 'finished_student_ids' — field was removed in PLAT-cluk")
+	}
+}
+
+// TestClaudeAnalyzeCode_PromptSchemaHasNoFinishedStudentIDs verifies that the prompt
+// sent to Claude does NOT include the finished_student_ids field in the JSON schema
+// instructions, stopping the AI from wasting tokens on finished classification.
+func TestClaudeAnalyzeCode_PromptSchemaHasNoFinishedStudentIDs(t *testing.T) {
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(validClaudeResponseJSON), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.AnalyzeCode(context.Background(), AnalyzeRequest{
+		ProblemDescription: "Test",
+		Submissions:        []StudentSubmission{{UserID: "u1", Name: "Alice", Code: "x=1"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(mock.capturedPrompt, "finished_student_ids") {
+		t.Error("prompt sent to Claude must not contain 'finished_student_ids' — wasting AI tokens")
 	}
 }

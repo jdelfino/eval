@@ -24,7 +24,6 @@ function makeScript(issues: AnalysisIssue[]): WalkthroughScript {
   return {
     session_id: 'session-1',
     issues,
-    finished_student_ids: ['s1', 's2', 's3'],
     summary: {
       total_submissions: 5,
       filtered_out: 0,
@@ -67,6 +66,13 @@ describe('useAnalysisGroups', () => {
     expect(result.current.activeGroupIndex).toBe(0);
     expect(result.current.overall_note).toBeNull();
     expect(result.current.completion_estimate).toBeNull();
+  });
+
+  // PLAT-cluk: finished_student_ids was removed from the hook return value
+  it('does not expose finished_student_ids from the hook return value', () => {
+    const { result } = renderHook(() => useAnalysisGroups());
+
+    expect('finished_student_ids' in result.current).toBe(false);
   });
 
   describe('analyze() updated signature', () => {
