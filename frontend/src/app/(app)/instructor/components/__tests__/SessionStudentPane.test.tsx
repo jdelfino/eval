@@ -350,6 +350,14 @@ describe('SessionStudentPane', () => {
         fireEvent.change(textarea, { target: { value: 'Only focus on syntax errors.' } });
         expect(textarea.value).toBe('Only focus on syntax errors.');
       });
+
+      it('does not pre-fill the textarea with the finished classification paragraph (PLAT-9gig.2)', () => {
+        // The "Also classify each student as either finished..." paragraph was removed
+        // from both backend DefaultCustomDirections and the frontend DEFAULT_PROMPT.
+        const textarea = screen.getByTestId('custom-prompt-textarea') as HTMLTextAreaElement;
+        expect(textarea.value).not.toContain('Also classify each student as either finished');
+        expect(textarea.value).not.toContain('finished_student_ids');
+      });
     });
 
     it('passes selected model to analyze() when analyze button is clicked', () => {

@@ -23,7 +23,6 @@ const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 // Keeping them in sync ensures the pre-filled UI text reflects actual backend behavior.
 const DEFAULT_PROMPT =
   `Identify distinct bugs, misconceptions, or patterns across all student submissions. Group students by issue. A student can appear in multiple issues. Order issues by frequency (most common first).\n\n` +
-  `Also classify each student as either finished (code appears complete and correct) or in-progress (still working, has bugs, or incomplete). Include finished student IDs in finished_student_ids.\n\n` +
   `Severity guidelines:\n` +
   `- "error": A logical or correctness bug (e.g., off-by-one, wrong operator, incorrect algorithm)\n` +
   `- "misconception": A conceptual misunderstanding (e.g., confusing iteration with recursion, wrong mental model)\n` +

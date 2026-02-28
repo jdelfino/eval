@@ -161,3 +161,22 @@ func TestBuildPrompt_EmptySubmissions(t *testing.T) {
 		t.Error("expected non-empty prompt even with no submissions")
 	}
 }
+
+// TestDefaultCustomDirections_NoFinishedClassification verifies that DefaultCustomDirections
+// does not ask the AI to classify students as finished/in-progress. The Finished badge
+// has been dropped from the UI (PLAT-9gig.1), so we no longer ask the AI to waste
+// tokens on this classification.
+func TestDefaultCustomDirections_NoFinishedClassification(t *testing.T) {
+	lower := strings.ToLower(DefaultCustomDirections)
+
+	// Must not instruct AI to classify students as finished or in-progress
+	if strings.Contains(lower, "finished") {
+		t.Error("DefaultCustomDirections must not instruct AI to classify students as finished")
+	}
+	if strings.Contains(lower, "finished_student_ids") {
+		t.Error("DefaultCustomDirections must not reference finished_student_ids field")
+	}
+	if strings.Contains(lower, "also classify each student") {
+		t.Error("DefaultCustomDirections must not include the finished classification paragraph")
+	}
+}
