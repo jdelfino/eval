@@ -2,7 +2,7 @@
 
 ## Overview
 
-Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and managed services. No data or user migration from existing systems - clean cutover when ready.
+Greenfield build on GCP with Go backend, GKE orchestration, and managed services. No data or user migration from existing systems - clean cutover when ready.
 
 ```
                            +----------------------------------------------------------+
@@ -16,7 +16,7 @@ Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and manage
                            |           |                                               |
                            |           v                                               |
                            |  +------------------------------------------------+      |
-                           |  |              GKE Autopilot Cluster              |      |
+                           |  |              GKE Cluster              |      |
                            |  |              (Private Subnet)                   |      |
                            |  |                                                 |      |
                            |  |  +------------+  +--------------+               |      |
@@ -51,7 +51,7 @@ Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and manage
 
 | Component | GCP Service | Monthly Cost |
 |-----------|-------------|--------------|
-| Kubernetes | GKE Autopilot | $0 control plane + ~$35 pods |
+| Kubernetes | GKE | $0 control plane + ~$35 pods |
 | Database | Cloud SQL (db-g1-small) | ~$15 |
 | Authentication | Identity Platform | Free tier |
 | NAT Gateway | NAT VM (e2-micro) | ~$6 |
@@ -64,7 +64,7 @@ Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and manage
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
 | Backend | Go | Separate from Next.js frontend, good k8s tooling |
-| Orchestration | GKE Autopilot | Fully managed k8s, no node management, automatic scaling |
+| Orchestration | GKE | Managed k8s with automatic scaling |
 | Database | Cloud SQL PostgreSQL | With RLS via session variables, Private Service Access |
 | Auth | Identity Platform | Enterprise IdP federation, SAML support |
 | Real-time | Centrifugo | Managed WS server, Go API just publishes |
@@ -76,7 +76,7 @@ Greenfield build on GCP with Go backend, GKE Autopilot orchestration, and manage
 
 ### Private GKE with NAT VM
 
-GKE Autopilot runs in a private subnet with no public IPs. Outbound internet access (for pulling container images, external APIs) routes through a NAT VM:
+GKE runs in a private subnet with no public IPs. Outbound internet access (for pulling container images, external APIs) routes through a NAT VM:
 
 - **Cost optimization**: NAT VM (e2-micro) costs ~$6/mo vs Cloud NAT ~$30+/mo
 - **Trade-off**: Single point of failure, but acceptable for non-critical outbound traffic
@@ -99,11 +99,10 @@ Identity Platform provides enterprise-grade auth:
 - JWT tokens for stateless auth
 - Free tier covers typical usage
 
-### GKE Autopilot Benefits
+### GKE Benefits
 
-- Zero node management
-- Pay only for pod resources
-- Automatic security hardening
+- Managed control plane
+- Automatic node upgrades
 - Built-in workload identity
 
 ## Core Library
@@ -253,7 +252,7 @@ All state must be externalized:
 
 | Subnet | CIDR | Purpose |
 |--------|------|---------|
-| GKE | 10.0.0.0/20 | GKE Autopilot pods and services |
+| GKE | 10.0.0.0/20 | GKE pods and services |
 | Cloud SQL | 10.0.16.0/24 | Private Service Access for Cloud SQL |
 | Public | 10.0.32.0/24 | NAT VM, bastion (if needed) |
 
