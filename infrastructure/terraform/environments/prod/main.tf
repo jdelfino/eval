@@ -169,7 +169,7 @@ module "secrets" {
   project_id   = var.project_id
   region       = var.region
 
-  secret_ids = ["resend-api-key", "oauth-client-secret", "anthropic-api-key"]
+  secret_ids = ["resend-api-key", "oauth-client-secret", "gemini-api-key", "anthropic-api-key"]
 }
 
 module "artifact_registry" {
@@ -300,7 +300,10 @@ resource "kubernetes_secret" "app_secrets" {
     CENTRIFUGO_API_KEY      = module.centrifugo.api_key
     CENTRIFUGO_TOKEN_SECRET = module.centrifugo.token_secret
 
-    # AI Provider Keys
+    # AI (Gemini) — optional, server falls back to StubClient if empty
+    GEMINI_API_KEY = module.secrets.secret_values["gemini-api-key"]
+
+    # AI (Claude) — optional, server uses RouterClient when at least one AI key is set
     ANTHROPIC_API_KEY = module.secrets.secret_values["anthropic-api-key"]
   }
 
