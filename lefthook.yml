@@ -4,19 +4,19 @@ pre-commit:
     bd-sync:
       run: bd sync
     lint-api:
-      glob: "go-backend/**/*.go"
+      glob: "go-backend/{,**/}*.go"
       run: make lint-api
     lint-executor:
-      glob: "executor/**/*.go"
+      glob: "executor/{,**/}*.go"
       run: make lint-executor
     lint-frontend:
-      glob: "frontend/**/*.{ts,tsx,js,jsx}"
+      glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make lint-frontend
     typecheck-frontend:
-      glob: "frontend/**/*.{ts,tsx,js,jsx}"
+      glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make typecheck-frontend
     check-api-imports:
-      glob: "frontend/**/*.{ts,tsx,js,jsx}"
+      glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make check-api-imports
     gitleaks:
       run: gitleaks git --pre-commit --staged --no-banner
@@ -24,7 +24,7 @@ pre-commit:
 prepare-commit-msg:
   commands:
     bd-trailers:
-      run: bd trailers {1}
+      run: bd hooks run prepare-commit-msg {1}
 
 pre-push:
   parallel: true
@@ -32,24 +32,24 @@ pre-push:
     bd-push:
       run: bd push
     test-api:
-      glob: "go-backend/**/*.go"
+      glob: "go-backend/{,**/}*.go"
       run: make test-api
     test-executor:
-      glob: "executor/**/*.{go,py}"
+      glob: "executor/{,**/}*.{go,py}"
       run: make test-executor
     test-frontend:
-      glob: "frontend/**/*.{ts,tsx,js,jsx}"
+      glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make test-frontend
     check-contract-coverage:
-      glob: "go-backend/**/*.go"
+      glob: "go-backend/{,**/}*.go"
       run: make check-contract-coverage
 
 post-checkout:
   commands:
     bd-hooks:
-      run: bd hooks
+      run: bd hooks run post-checkout
 
 post-merge:
   commands:
     bd-hooks:
-      run: bd hooks
+      run: bd hooks run post-merge
