@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,6 +43,12 @@ type PreviewRepository interface {
 	// UnenrollPreviewStudent removes the preview student from a specific section.
 	// No-op if the student is not enrolled in that section.
 	UnenrollPreviewStudent(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
+
+	// DeletePreviewStudent deletes the preview student user for the given instructor.
+	// Cascade constraints on the users table automatically clean up all related rows
+	// (preview_students, section_memberships, session_students, student_work, revisions).
+	// No-op if the instructor has no preview student.
+	DeletePreviewStudent(ctx context.Context, instructorID uuid.UUID) error
 }
 
 // GetPreviewStudent retrieves the preview student for the given instructor.
@@ -157,6 +164,53 @@ func (s *Store) UnenrollPreviewStudent(ctx context.Context, studentUserID uuid.U
 		studentUserID, sectionID,
 	)
 	return err
+}
+
+// DeletePreviewStudent deletes the preview student user for the given instructor.
+// Within a transaction it:
+//  1. Removes the student from all sessions.participants arrays (not covered by FK cascades)
+//  2. Deletes the user row — ON DELETE CASCADE cleans up preview_students,
+//     section_memberships, session_students, student_work, and revisions.
+//
+// No-op if the instructor has no preview student.
+func (s *Store) DeletePreviewStudent(ctx context.Context, instructorID uuid.UUID) error {
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Look up the student user ID so we can scrub the participants arrays.
+	var studentUserID uuid.UUID
+	err = tx.QueryRow(ctx, `
+		SELECT student_user_id FROM preview_students WHERE instructor_id = $1`,
+		instructorID,
+	).Scan(&studentUserID)
+	if errors.Is(HandleNotFound(err), ErrNotFound) {
+		// No preview student — nothing to delete.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("lookup preview student: %w", err)
+	}
+
+	// Remove from all sessions.participants arrays.
+	_, err = tx.Exec(ctx, `
+		UPDATE sessions SET participants = array_remove(participants, $1)
+		WHERE $1 = ANY(participants)`,
+		studentUserID,
+	)
+	if err != nil {
+		return fmt.Errorf("remove from participants: %w", err)
+	}
+
+	// Delete the user — cascades handle all FK references.
+	_, err = tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, studentUserID)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 // Compile-time check that Store implements PreviewRepository.
