@@ -845,8 +845,8 @@ describe('InstructorSectionView', () => {
       expect(viewBtn!.className).not.toMatch(/\bml-4\b/);
     });
 
-    // PLAT-0m85: Students table should be wrapped in overflow-x-auto for horizontal scroll
-    it('students table is wrapped in a div with overflow-x-auto for horizontal scrolling', async () => {
+    // PLAT-0m85: Students table should be in a container with overflow-x-auto for horizontal scroll
+    it('students table container has overflow-x-auto for horizontal scrolling', async () => {
       const students: StudentProgress[] = [
         {
           user_id: 'user-student-1',
@@ -870,11 +870,9 @@ describe('InstructorSectionView', () => {
 
       await userEvent.click(screen.getByRole('tab', { name: /Students/i }));
 
-      const table = container.querySelector('table');
-      expect(table).not.toBeNull();
-      const tableWrapper = table!.parentElement;
-      expect(tableWrapper).not.toBeNull();
-      expect(tableWrapper!.className).toMatch(/overflow-x-auto/);
+      const tableContainer = container.querySelector('[data-testid="students-table-container"]');
+      expect(tableContainer).not.toBeNull();
+      expect(tableContainer!.className).toMatch(/overflow-x-auto/);
     });
   });
 });

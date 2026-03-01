@@ -426,8 +426,7 @@ describe('ProblemLibrary', () => {
       });
 
       // The outer header div should have flex-wrap
-      const heading = screen.getByText('Problem Library');
-      const headerContainer = heading.closest('h2')!.parentElement!.parentElement!;
+      const headerContainer = screen.getByTestId('problem-library-header');
       expect(headerContainer.className).toMatch(/flex-wrap/);
     });
 
@@ -440,20 +439,18 @@ describe('ProblemLibrary', () => {
       });
 
       // The controls container (right side) should also have flex-wrap
-      const createButton = screen.getByText('Create New Problem');
-      const controlsContainer = createButton.closest('button')!.parentElement!;
+      const controlsContainer = screen.getByTestId('problem-library-controls');
       expect(controlsContainer.className).toMatch(/flex-wrap/);
     });
 
-    it('header container allows items to start at row start on small screens', async () => {
+    it('header container has gap spacing for wrapped items', async () => {
       render(<ProblemLibrary onCreateNew={jest.fn()} />);
 
       await waitFor(() => {
         expect(screen.getByText('Problem Library')).toBeInTheDocument();
       });
 
-      const heading = screen.getByText('Problem Library');
-      const headerContainer = heading.closest('h2')!.parentElement!.parentElement!;
+      const headerContainer = screen.getByTestId('problem-library-header');
       // Should have gap classes to space wrapped rows
       expect(headerContainer.className).toMatch(/gap-/);
     });

@@ -354,8 +354,7 @@ export default function InstructorSectionView({
         {/* Students Tab */}
         <Tabs.Panel tabId="students">
           {students.length > 0 ? (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
+            <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="students-table-container">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -394,7 +393,6 @@ export default function InstructorSectionView({
                   ))}
                 </tbody>
               </table>
-              </div>
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow p-8 text-center">
