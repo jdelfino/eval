@@ -24,6 +24,11 @@ sudo chown -R vscode:vscode /home/vscode/go/pkg/mod
 # Install Air (Go hot reload)
 go install github.com/air-verse/air@latest
 
+# Install lefthook and gitleaks
+go install github.com/evilmartians/lefthook@latest
+go install github.com/zricethezav/gitleaks/v8@latest
+lefthook install
+
 # Install system packages
 sudo apt-get update
 sudo apt-get install -y postgresql-client redis-tools apt-transport-https ca-certificates gnupg

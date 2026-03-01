@@ -64,6 +64,9 @@ terraform.rc
 secrets.tfvars
 *.secret.tfvars
 
+# Lefthook local overrides
+lefthook-local.yml
+
 # Misc
 *.bak
 *.tmp
