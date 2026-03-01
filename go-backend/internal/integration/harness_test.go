@@ -105,7 +105,10 @@ func setupHarness(t *testing.T) *testHarness {
 	// Use a dedicated Prometheus registry to avoid "already registered" panics
 	// when multiple tests create servers in the same process.
 	reg := prometheus.NewRegistry()
-	srv := server.NewWithRegistry(cfg, logger, dbPool, userStore, reg)
+	srv, err := server.NewWithRegistry(cfg, logger, dbPool, userStore, reg)
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	ts := httptest.NewServer(srv.Handler())
 	h := &testHarness{

@@ -9,6 +9,7 @@ require github.com/jdelfino/eval/pkg/executorapi v0.0.0
 require github.com/jdelfino/eval/pkg/ratelimit v0.0.0
 
 require (
+	firebase.google.com/go/v4 v4.19.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/centrifugal/centrifuge-go v0.10.11
@@ -39,7 +40,6 @@ require (
 	cloud.google.com/go/longrunning v0.6.7 // indirect
 	cloud.google.com/go/monitoring v1.24.2 // indirect
 	cloud.google.com/go/storage v1.56.0 // indirect
-	firebase.google.com/go/v4 v4.19.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.27.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 // indirect

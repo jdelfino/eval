@@ -7,7 +7,6 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	firebaseauth "firebase.google.com/go/v4/auth"
-	"google.golang.org/api/option"
 )
 
 // IDTokenVerifier is the interface for verifying Firebase ID tokens.
@@ -26,22 +25,6 @@ type firebaseValidator struct {
 // In tests, pass a mock that implements IDTokenVerifier.
 func NewFirebaseValidator(verifier IDTokenVerifier) TokenValidator {
 	return &firebaseValidator{verifier: verifier}
-}
-
-// NewFirebaseApp initializes a Firebase App using Application Default Credentials.
-// When FIREBASE_AUTH_EMULATOR_HOST is set, the SDK automatically routes to the emulator.
-// projectID must be a non-empty GCP project ID.
-func NewFirebaseApp(ctx context.Context, projectID string) (*firebase.App, error) {
-	if projectID == "" {
-		return nil, fmt.Errorf("auth: GCP project ID must not be empty")
-	}
-	app, err := firebase.NewApp(ctx, &firebase.Config{
-		ProjectID: projectID,
-	}, option.WithoutAuthentication())
-	if err != nil {
-		return nil, fmt.Errorf("auth: initialize Firebase app: %w", err)
-	}
-	return app, nil
 }
 
 // NewFirebaseAuthClient initializes a Firebase App and returns the auth client.
