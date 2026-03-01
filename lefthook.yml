@@ -1,8 +1,8 @@
 pre-commit:
   parallel: true
   commands:
-    bd-sync:
-      run: bd sync
+    bd-pre-commit:
+      run: bd hooks run pre-commit
     lint-api:
       glob: "go-backend/{,**/}*.go"
       run: make lint-api
