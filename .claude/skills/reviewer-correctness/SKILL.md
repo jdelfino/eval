@@ -31,9 +31,9 @@ git diff <base-branch>...HEAD --stat
 git diff <base-branch>...HEAD
 ```
 
-### 2. Run Quality Gates
+### 2. Quality Gates
 
-Run quality gates per the **Quality Gates** table in CLAUDE.md. If any fail, note the specific failures.
+Lint and typecheck are enforced by lefthook git hooks at commit time — do not re-run them here. Focus your review on the code diff itself.
 
 ### 3. Review Every Changed File
 

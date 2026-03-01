@@ -17,6 +17,7 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - No optional chaining on required properties.
 - **Every production code change requires tests.** No exceptions for migrations, refactors, copy-paste, or "just wiring things up." If you wrote or modified production code, you must write tests for it. Never defer tests to a follow-up issue.
 - **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
+- **Lint and typecheck are enforced by lefthook git hooks at commit time.** Do not run lint or typecheck commands manually — focus on tests in Phase 3.
 
 ## Phase 1: Write Failing Tests
 
@@ -50,8 +51,8 @@ WORKING DIRECTORY: <worktree-path>
 COMMANDS:
 - <commands from Quality Gates table in CLAUDE.md matching changed code>
 
-For example, for Go backend changes: make test-api, make lint-api
-For frontend changes: make test-frontend, make lint-frontend, make typecheck-frontend
+For example, for Go backend changes: make test-api
+For frontend changes: make test-frontend
 For store changes, also: make test-integration-store
 ```
 

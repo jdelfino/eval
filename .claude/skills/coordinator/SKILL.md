@@ -169,7 +169,7 @@ SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 
 WORKING DIRECTORY: ../<project>-<work-name>
 COMMANDS:
-- <all quality gate commands from CLAUDE.md matching changed code areas>
+- <test commands from CLAUDE.md matching changed code areas — lint/typecheck are handled by hooks>
 ```
 
 **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
@@ -228,3 +228,11 @@ EOF
 - Running rebase agents in parallel (must be sequential for linear history)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
+
+## Hooks
+
+Lefthook git hooks enforce lint and typecheck at commit time. The test-runner sub-agent should only run test commands, not lint or typecheck. Quality gate commands for test-runner prompts:
+- Go backend: `make test-api`
+- Executor: `make test-executor`
+- Frontend: `make test-frontend`
+- Store integration: `make test-integration-store`
