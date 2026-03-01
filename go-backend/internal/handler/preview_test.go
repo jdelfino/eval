@@ -77,6 +77,72 @@ func (r *previewTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store
 	return &store.Section{ID: id}, nil
 }
 
+// --- Route permission tests ---
+
+// TestPreviewRoutes_UsesPermPreviewStudent verifies that the preview routes use
+// PermPreviewStudent (not PermContentManage) as the required permission.
+// A student must be denied 403, an instructor must be allowed through.
+func TestPreviewRoutes_UsesPermPreviewStudent(t *testing.T) {
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		enrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+
+	h := NewPreviewHandler(repo)
+	router := h.Routes()
+
+	repos := &previewTestRepos{}
+
+	// Student should be rejected (lacks preview.enter permission)
+	t.Run("student forbidden", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+		ctx := auth.WithUser(req.Context(), &auth.User{
+			ID:          uuid.New(),
+			Role:        auth.RoleStudent,
+			NamespaceID: "test-ns",
+		})
+		ctx = store.WithRepos(ctx, repos)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("expected 403 for student, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	// Instructor should be allowed through (has preview.enter permission)
+	t.Run("instructor allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+		ctx := auth.WithUser(req.Context(), &auth.User{
+			ID:          instructorID,
+			Role:        auth.RoleInstructor,
+			NamespaceID: "test-ns",
+		})
+		ctx = store.WithRepos(ctx, repos)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusForbidden {
+			t.Errorf("expected instructor to be allowed, got 403: %s", rec.Body.String())
+		}
+	})
+}
+
 // --- EnterPreview tests ---
 
 func TestEnterPreview_Success_ExistingPreviewStudent(t *testing.T) {

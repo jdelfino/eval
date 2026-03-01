@@ -32,14 +32,14 @@ type enterPreviewResponse struct {
 }
 
 // Routes returns a chi.Router for preview endpoints.
-// All routes require the PermContentManage permission (instructor+).
+// All routes require the PermPreviewStudent permission (instructor+).
 //
 // These routes must be mounted BEFORE PreviewMiddleware is applied to the
 // authenticated route group, so the caller's real instructor identity is used,
 // not a swapped preview identity.
 func (h *PreviewHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Use(custommw.RequirePermission(auth.PermContentManage))
+	r.Use(custommw.RequirePermission(auth.PermPreviewStudent))
 	r.Post("/", h.EnterPreview)
 	r.Delete("/", h.ExitPreview)
 	return r

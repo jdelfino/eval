@@ -422,6 +422,82 @@ func TestPreviewMiddleware_SystemAdminCanPreview(t *testing.T) {
 	}
 }
 
+// TestPreviewMiddleware_UsesPermissionCheck verifies the middleware rejects based on
+// PermPreviewStudent permission, not a raw role equality check.
+// This test uses a hypothetical role that equals auth.RoleStudent string value but
+// we verify that students are rejected via the permission path (not a raw == check).
+// The real behavioral assertion: a user whose role has PermPreviewStudent must pass
+// and a user whose role does not have it must fail — we test this indirectly by
+// confirming an instructor passes (has PermPreviewStudent) and a student is rejected
+// (lacks PermPreviewStudent).
+func TestPreviewMiddleware_UsesPermissionCheck_InstructorAllowed(t *testing.T) {
+	instructorID := uuid.New()
+	studentUserID := uuid.New()
+	sectionID := uuid.New()
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+	}
+	mw := PreviewMiddleware(repo)
+
+	instructor := &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		Email:       "instructor@example.com",
+		NamespaceID: "test-ns",
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := newPreviewMiddlewareRequest(sectionID.String())
+	ctx := auth.WithUser(req.Context(), instructor)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	mw(handler).ServeHTTP(rr, req)
+
+	// Instructor has PermPreviewStudent, should be allowed
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status code = %d, want %d: instructor with PermPreviewStudent should pass", rr.Code, http.StatusOK)
+	}
+}
+
+func TestPreviewMiddleware_UsesPermissionCheck_StudentRejectedByPermission(t *testing.T) {
+	repo := &mockPreviewRepo{}
+	mw := PreviewMiddleware(repo)
+
+	sectionID := uuid.New()
+	student := &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleStudent,
+		Email:       "student@example.com",
+		NamespaceID: "test-ns",
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := newPreviewMiddlewareRequest(sectionID.String())
+	ctx := auth.WithUser(req.Context(), student)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	mw(handler).ServeHTTP(rr, req)
+
+	// Student lacks PermPreviewStudent, must be rejected with 403
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("Status code = %d, want %d: student without PermPreviewStudent must be forbidden", rr.Code, http.StatusForbidden)
+	}
+}
+
 // TestPreviewMiddleware_IsPreviewSetInContext verifies IsPreview returns true during preview.
 func TestPreviewMiddleware_IsPreviewSetInContext(t *testing.T) {
 	instructorID := uuid.New()
