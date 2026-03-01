@@ -42,15 +42,34 @@ git rebase <target-branch>
 
 If `git rebase` exits cleanly, proceed to step 4.
 
-If conflicts are reported, inspect each conflicted file:
+If conflicts are reported, gather context before attempting resolution.
+
+#### a. Identify conflicted files
 
 ```bash
 git diff --name-only --diff-filter=U
 ```
 
-For each conflicted file, determine whether the conflict is **unambiguous** or **ambiguous**:
+#### b. Gather context for each conflicted file
 
-**Unambiguous conflicts** (resolve automatically):
+For each conflicted file, collect three things:
+
+1. **The conflict markers** — read the file to see the actual conflict regions
+2. **What each side intended** — understand the purpose of each change:
+   ```bash
+   # What the source branch changed in this file
+   git log --oneline --all -- <file> | head -10
+   git diff <target-branch> <source-branch> -- <file>
+   # What the target branch changed
+   git diff $(git merge-base <source-branch> <target-branch>) <target-branch> -- <file>
+   ```
+3. **Surrounding code** — read enough of the file (beyond the conflict markers) to understand the context. If the file has tests, read those too to understand expected behavior.
+
+#### c. Resolve or escalate
+
+With full context gathered, resolve each conflict:
+
+**Resolve automatically** (most conflicts fall here with enough context):
 - Adjacent line edits: two sides edited different lines near each other — keep both sets of changes
 - Import ordering: one side added imports, the other reordered — merge the import lists
 - Lock files (package-lock.json, go.sum): regenerate rather than merge markers
@@ -62,23 +81,24 @@ For each conflicted file, determine whether the conflict is **unambiguous** or *
   ```
 - Both sides appended to the same list (routes, exports, config entries): keep all additions
 - Whitespace-only differences: accept one side
+- **Additive changes to the same region**: both sides added code to the same area (e.g., new CSS classes, new fields, new test cases) — combine both additions
+- **One side refactored, other added functionality**: if the intent is clear from the diff context and tests, apply the addition to the refactored structure
 
-For each unambiguous conflict, resolve it, then:
+For each resolved conflict:
 ```bash
 git add <file>
 ```
 
-After resolving all unambiguous conflicts:
+After resolving all conflicts in the current commit:
 ```bash
 git rebase --continue
 ```
 
-**Ambiguous conflicts** (do NOT attempt to resolve):
-- Semantic overlap: both sides modified the same logic in incompatible ways
-- Structural disagreement: one side refactored while the other added functionality in the old structure
-- Intent unclear from diff context alone
+**Escalate only when intent is genuinely unclear:**
+- Both sides modified the same logic with incompatible semantics and you cannot determine correct behavior from tests or surrounding code
+- A refactor changed assumptions that the other side depends on, and the correct adaptation is not obvious
 
-If any ambiguous conflict is encountered:
+If any conflict cannot be resolved:
 ```bash
 git rebase --abort
 ```

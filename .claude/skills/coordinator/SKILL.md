@@ -89,25 +89,44 @@ CONSTRAINTS:
 
 The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent.
 
-**On SUCCESS:** spawn a rebase sub-agent (sequential — do NOT run in parallel with other rebase agents) to integrate into the feature branch:
+**On SUCCESS:** integrate into the feature branch (sequential — do NOT run in parallel with other integrations).
+
+**Try fast-path rebase first** (inline bash — no subagent):
+
+```bash
+cd ../<project>-<task-id>
+git rebase <target-branch> && \
+  git branch -f <target-branch> HEAD && \
+  git worktree remove ../<project>-<task-id> --force 2>/dev/null; \
+  git branch -D <source-branch> 2>/dev/null; \
+  echo "REBASE: OK"
+```
+
+If the rebase command fails (conflict), abort and fall back to a rebase subagent:
+
+```bash
+git rebase --abort
+```
+
+Then spawn the rebase subagent to resolve conflicts:
 
 ```
 ROLE: Rebase Agent
 SKILL: Read and follow .claude/skills/rebase/SKILL.md
 
-SOURCE: feature/<work-name>/<task-id>
-TARGET: feature/<work-name>
+SOURCE: <source-branch>
+TARGET: <target-branch>
 WORKTREE: ../<project>-<task-id>
 CLEANUP: true
 ```
 
-After rebase completes:
+**After successful integration** (either path):
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
 Check the "Concerns" section — file follow-up issues if needed.
 
-**On FAILURE:**
+**On rebase subagent FAILURE:**
 - Spawn a new implementer in a fresh worktree to resolve the conflict
 - If blocked: note the blocker, move to next task
 - Do NOT close the task
@@ -225,7 +244,8 @@ EOF
 - Merging PRs (that's `/merge`'s job)
 - Watching CI (that's `/merge`'s job)
 - Cleaning up worktrees before merge (that's `/merge`'s job)
-- Running rebase agents in parallel (must be sequential for linear history)
+- Running integrations in parallel (must be sequential for linear history)
+- Spawning a rebase subagent when there are no conflicts (use inline fast-path first)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
 
