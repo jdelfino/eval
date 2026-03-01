@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { PanelProvider } from '@/contexts/PanelContext';
+import { PreviewProvider } from '@/contexts/PreviewContext';
 import { AppShell } from '@/components/layout';
 
 export default function FullscreenLayout({ children }: { children: React.ReactNode }) {
@@ -39,12 +40,14 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <ActiveSessionProvider>
-      <PanelProvider pageId="fullscreen">
-        <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
-          {children}
-        </AppShell>
-      </PanelProvider>
-    </ActiveSessionProvider>
+    <PreviewProvider>
+      <ActiveSessionProvider>
+        <PanelProvider pageId="fullscreen">
+          <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
+            {children}
+          </AppShell>
+        </PanelProvider>
+      </ActiveSessionProvider>
+    </PreviewProvider>
   );
 }

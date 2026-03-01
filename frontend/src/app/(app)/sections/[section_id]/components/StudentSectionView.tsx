@@ -13,6 +13,12 @@ interface StudentSectionViewProps {
   activeSessions: Session[];
   publishedProblems: PublishedProblemWithStatus[];
   sectionId: string;
+  /**
+   * Optional callback for the back button. When provided, the back button
+   * renders as a button (not an anchor link) and calls this function on click.
+   * Used in preview mode to exit preview before navigating away.
+   */
+  onBack?: () => void;
 }
 
 export default function StudentSectionView({
@@ -20,6 +26,7 @@ export default function StudentSectionView({
   activeSessions: initialActiveSessions,
   publishedProblems,
   sectionId,
+  onBack,
 }: StudentSectionViewProps) {
   const router = useRouter();
 
@@ -92,7 +99,11 @@ export default function StudentSectionView({
       {/* Header */}
       <div>
         <div className="mb-4">
-          <BackButton href="/sections">Back to My Sections</BackButton>
+          {onBack ? (
+            <BackButton onClick={onBack}>Back to My Sections</BackButton>
+          ) : (
+            <BackButton href="/sections">Back to My Sections</BackButton>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">

@@ -20,6 +20,8 @@
  * - Shows empty state when no problems
  * - Shows "No problems worked on yet" empty state when filter active and no matches
  * - Calls useSectionEvents with correct sectionId and initialActiveSessions
+ * - Preview mode: back button calls onBack when onBack prop is provided (no href link)
+ * - Preview mode: back button links to /sections when onBack prop is not provided
  */
 
 import React from 'react';
@@ -179,6 +181,30 @@ describe('StudentSectionView', () => {
 
       const backLink = screen.getByText('Back to My Sections').closest('a');
       expect(backLink).toHaveAttribute('href', '/sections');
+    });
+
+    it('calls onBack and does not link to /sections when onBack prop is provided', async () => {
+      const mockOnBack = jest.fn();
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={[]}
+          sectionId={SECTION_ID}
+          onBack={mockOnBack}
+        />
+      );
+
+      // Should be a button, not an anchor link to /sections
+      const backLink = screen.queryByText('Back to My Sections')?.closest('a');
+      expect(backLink).toBeNull();
+
+      const backButton = screen.getByText('Back to My Sections').closest('button');
+      expect(backButton).not.toBeNull();
+
+      await userEvent.click(backButton!);
+      expect(mockOnBack).toHaveBeenCalledTimes(1);
     });
 
     it('shows section name, class name, and semester', () => {
