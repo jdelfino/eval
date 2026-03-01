@@ -34,6 +34,16 @@ export function setPreviewSectionId(id: string | null): void {
 }
 
 /**
+ * Gets the current preview section ID.
+ * Returns null when not in preview mode.
+ * Used by centrifugo.ts to include the preview header in token requests.
+ * Safe to call at any time — reads module-level state (no sessionStorage access).
+ */
+export function getPreviewSectionId(): string | null {
+  return _previewSectionId;
+}
+
+/**
  * Gets Authorization headers with a token from the auth provider.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {

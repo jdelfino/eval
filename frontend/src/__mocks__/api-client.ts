@@ -18,6 +18,14 @@ export function setPreviewSectionId(_id: string | null): void {
   // no-op in test mock
 }
 
+/**
+ * No-op mock for getPreviewSectionId.
+ * Tests that need to verify this is called should use jest.mock('@/lib/api-client').
+ */
+export function getPreviewSectionId(): string | null {
+  return null;
+}
+
 export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
   const response = options ? await fetch(path, options) : await fetch(path);
 

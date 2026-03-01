@@ -3,10 +3,19 @@
  */
 
 import { apiPost, apiDelete } from '@/lib/api-client';
+import type { UserRole } from '@/types/api';
 
 export interface PreviewResponse {
+  // Legacy fields (kept for backward compatibility)
   preview_user_id: string;
   section_id: string;
+
+  // Full profile fields for identity swap on the frontend (added in PLAT-gvhg.3)
+  id: string;
+  email: string;
+  role: UserRole;
+  namespace_id: string;
+  permissions: string[];
 }
 
 /**

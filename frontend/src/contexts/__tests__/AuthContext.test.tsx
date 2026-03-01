@@ -303,6 +303,85 @@ describe('AuthContext', () => {
     });
   });
 
+  describe('setUserProfile', () => {
+    it('is exposed on AuthContextType', () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      expect(typeof result.current.setUserProfile).toBe('function');
+    });
+
+    it('swaps the in-memory user without triggering an API fetch', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      const callsBefore = mockGetCurrentUser.mock.calls.length;
+
+      const previewUser = {
+        ...mockUser,
+        id: 'preview-student-id',
+        external_id: null,
+        email: 'preview@system.internal',
+        role: 'student' as const,
+      };
+
+      await act(async () => {
+        result.current.setUserProfile(previewUser);
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(previewUser);
+      });
+
+      // Must not have triggered any extra API call
+      expect(mockGetCurrentUser.mock.calls.length).toBe(callsBefore);
+    });
+
+    it('also updates sessionStorage cache via setUserProfile', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const CACHE_KEY = 'eval:user-profile';
+      sessionStorage.clear();
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      const previewUser = {
+        ...mockUser,
+        id: 'preview-student-id',
+        external_id: null,
+        email: 'preview@system.internal',
+        role: 'student' as const,
+      };
+
+      await act(async () => {
+        result.current.setUserProfile(previewUser);
+      });
+
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      expect(cached).not.toBeNull();
+      const parsed = JSON.parse(cached!);
+      expect(parsed.user).toEqual(previewUser);
+    });
+  });
+
   describe('signOut', () => {
     it('calls firebaseSignOut', async () => {
       mockSignOut.mockResolvedValue(undefined);
@@ -321,6 +400,31 @@ describe('AuthContext', () => {
       });
 
       expect(mockSignOut).toHaveBeenCalled();
+    });
+
+    it('clears preview sessionStorage keys before signing out', async () => {
+      mockSignOut.mockResolvedValue(undefined);
+
+      const PREVIEW_SECTION_KEY = 'eval:preview-section-id';
+      const CACHE_KEY = 'eval:user-profile';
+
+      // Seed preview state in sessionStorage
+      sessionStorage.setItem(PREVIEW_SECTION_KEY, 'sec-abc');
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!(null);
+      });
+
+      await act(async () => {
+        await result.current.signOut();
+      });
+
+      // Preview session storage key must be cleared before Firebase signOut
+      expect(sessionStorage.getItem(PREVIEW_SECTION_KEY)).toBeNull();
     });
   });
 

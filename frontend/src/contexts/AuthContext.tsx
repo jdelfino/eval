@@ -74,12 +74,26 @@ function clearProfileCache(): void {
   }
 }
 
+/**
+ * sessionStorage key for the preview section ID.
+ * Must match the key used in PreviewContext.tsx.
+ * Cleared during signOut so that reloading after sign-out does not restore
+ * a stale preview state.
+ */
+const PREVIEW_SECTION_KEY = 'eval:preview-section-id';
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /**
+   * Swap the in-memory user (and sessionStorage cache) without triggering
+   * an API fetch. Used by PreviewContext to install the preview student's
+   * profile so that `user.id` is the preview student's ID everywhere.
+   */
+  setUserProfile: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,13 +148,19 @@ function TestAuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  const setUserProfile = useCallback((newUser: User) => {
+    writeProfileCache(newUser);
+    setUser(newUser);
+  }, []);
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
     signOut,
     refreshUser,
-  }), [user, isLoading, signOut, refreshUser]);
+    setUserProfile,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -219,6 +239,14 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
   }, [fetchUserProfile]);
 
   const signOut = useCallback(async () => {
+    // Guard: if called during preview mode, clear all preview sessionStorage keys
+    // first so that reloading after sign-out does not restore a stale preview state.
+    // No need to re-fetch the instructor profile — we're signing out anyway.
+    try {
+      sessionStorage.removeItem(PREVIEW_SECTION_KEY);
+    } catch {
+      // sessionStorage may be unavailable — ignore
+    }
     clearProfileCache();
     const { signOut: firebaseSignOut } = await import('firebase/auth');
     const { firebaseAuth } = await import('@/lib/firebase');
@@ -235,13 +263,19 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     }
   }, [fetchUserProfile]);
 
+  const setUserProfile = useCallback((newUser: User) => {
+    writeProfileCache(newUser);
+    setUser(newUser);
+  }, []);
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
     signOut,
     refreshUser,
-  }), [user, isLoading, signOut, refreshUser]);
+    setUserProfile,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

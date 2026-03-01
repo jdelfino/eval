@@ -409,6 +409,35 @@ describe('api-client', () => {
       expect(typeof setPreviewSectionId).toBe('function');
     });
 
+    it('getPreviewSectionId is exported as a function', () => {
+      const { getPreviewSectionId } = require('../api-client');
+      expect(typeof getPreviewSectionId).toBe('function');
+    });
+
+    it('getPreviewSectionId returns null initially', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      // Ensure it's cleared first
+      setPreviewSectionId(null);
+      expect(getPreviewSectionId()).toBeNull();
+    });
+
+    it('getPreviewSectionId returns the current preview section id after setPreviewSectionId', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      setPreviewSectionId('sec-777');
+      try {
+        expect(getPreviewSectionId()).toBe('sec-777');
+      } finally {
+        setPreviewSectionId(null);
+      }
+    });
+
+    it('getPreviewSectionId returns null after setPreviewSectionId(null)', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      setPreviewSectionId('sec-888');
+      setPreviewSectionId(null);
+      expect(getPreviewSectionId()).toBeNull();
+    });
+
     it('apiFetch includes X-Preview-Section header when preview section id is set', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
       (global.fetch as jest.Mock).mockResolvedValue({
