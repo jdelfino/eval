@@ -14,8 +14,60 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
 import { isTestMode, clearTestUser, getTestToken } from '@/lib/auth-provider';
+import { USER_PROFILE_CACHE_KEY, PREVIEW_SECTION_KEY } from '@/lib/storage-keys';
 import type { User } from '@/types/api';
 export type { User };
+
+/**
+ * Profile cache TTL in milliseconds (5 minutes).
+ * Short enough to avoid stale profile bugs; long enough to skip redundant fetches.
+ */
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedProfile {
+  user: User;
+  timestamp: number;
+}
+
+/**
+ * Read a cached user profile from sessionStorage.
+ * Returns null if no cache entry exists, if it is expired, or if sessionStorage throws.
+ */
+function readProfileCache(): User | null {
+  try {
+    const raw = sessionStorage.getItem(USER_PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const cached: CachedProfile = JSON.parse(raw);
+    if (Date.now() - cached.timestamp > PROFILE_CACHE_TTL_MS) return null;
+    return cached.user;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write a user profile to sessionStorage with the current timestamp.
+ * Silently ignores write failures (e.g., private browsing quota).
+ */
+function writeProfileCache(user: User): void {
+  try {
+    const entry: CachedProfile = { user, timestamp: Date.now() };
+    sessionStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Clear the cached user profile from sessionStorage.
+ */
+function clearProfileCache(): void {
+  try {
+    sessionStorage.removeItem(USER_PROFILE_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +75,12 @@ interface AuthContextType {
   isLoading: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /**
+   * Swap the in-memory user (and sessionStorage cache) without triggering
+   * an API fetch. Used by PreviewContext to install the preview student's
+   * profile so that `user.id` is the preview student's ID everywhere.
+   */
+  setUserProfile: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,8 +103,17 @@ function TestAuthProvider({ children }: AuthProviderProps) {
       const token = getTestToken();
       if (token) {
         try {
-          const profile = await getCurrentUser();
-          setUser(profile);
+          // Check profile cache first, matching FirebaseAuthProvider behavior.
+          // This is critical for preview mode: after reload, the cached profile
+          // is the preview student's, so user.id and user.role are correct.
+          const cached = readProfileCache();
+          if (cached) {
+            setUser(cached);
+          } else {
+            const profile = await getCurrentUser();
+            writeProfileCache(profile);
+            setUser(profile);
+          }
         } catch (error) {
           console.error('[Auth] Error hydrating user:', error);
           // Only clear the test token on definitive auth failures (401/403/404).
@@ -64,6 +131,12 @@ function TestAuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signOut = useCallback(async () => {
+    try {
+      sessionStorage.removeItem(PREVIEW_SECTION_KEY);
+    } catch {
+      // sessionStorage may be unavailable — ignore
+    }
+    clearProfileCache();
     clearTestUser();
     setUser(null);
   }, []);
@@ -71,10 +144,16 @@ function TestAuthProvider({ children }: AuthProviderProps) {
   const refreshUser = useCallback(async () => {
     try {
       const profile = await getCurrentUser();
+      writeProfileCache(profile);
       setUser(profile);
     } catch (error) {
       console.error('[Auth] Error refreshing user:', error);
     }
+  }, []);
+
+  const setUserProfile = useCallback((newUser: User) => {
+    writeProfileCache(newUser);
+    setUser(newUser);
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
@@ -83,7 +162,8 @@ function TestAuthProvider({ children }: AuthProviderProps) {
     isLoading,
     signOut,
     refreshUser,
-  }), [user, isLoading, signOut, refreshUser]);
+    setUserProfile,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -98,12 +178,15 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
     try {
-      return await getCurrentUser();
+      const profile = await getCurrentUser();
+      writeProfileCache(profile);
+      return profile;
     } catch (error: unknown) {
       // If the user doesn't exist in the DB yet, always try bootstrap.
       // On 404: user hasn't been created yet — attempt bootstrap.
       // On 401: token valid but no DB record — also try bootstrap.
       // If bootstrap returns 403: not authorized → caller sets user to null.
+      // Note: bootstrapUser() is the first-time path — no cache written here.
       const status = (error as { status?: number }).status;
       if (status === 401 || status === 404) {
         return await bootstrapUser();
@@ -127,8 +210,17 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
             // When restoring from persistence, the cached token may be expired;
             // getIdToken(true) ensures we have a fresh token before any API calls.
             await firebaseUser.getIdToken(true);
-            const profile = await fetchUserProfile();
-            setUser(profile);
+
+            // Check for a fresh cached profile before hitting the API.
+            // Firebase auth is still valid (firebaseUser is non-null), so it's
+            // safe to use the cached profile without re-fetching.
+            const cached = readProfileCache();
+            if (cached) {
+              setUser(cached);
+            } else {
+              const profile = await fetchUserProfile();
+              setUser(profile);
+            }
           } catch (error) {
             console.error('[Auth] Error fetching user profile:', error);
             setUser(null);
@@ -150,6 +242,15 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
   }, [fetchUserProfile]);
 
   const signOut = useCallback(async () => {
+    // Guard: if called during preview mode, clear all preview sessionStorage keys
+    // first so that reloading after sign-out does not restore a stale preview state.
+    // No need to re-fetch the instructor profile — we're signing out anyway.
+    try {
+      sessionStorage.removeItem(PREVIEW_SECTION_KEY);
+    } catch {
+      // sessionStorage may be unavailable — ignore
+    }
+    clearProfileCache();
     const { signOut: firebaseSignOut } = await import('firebase/auth');
     const { firebaseAuth } = await import('@/lib/firebase');
     await firebaseSignOut(firebaseAuth);
@@ -165,13 +266,19 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     }
   }, [fetchUserProfile]);
 
+  const setUserProfile = useCallback((newUser: User) => {
+    writeProfileCache(newUser);
+    setUser(newUser);
+  }, []);
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
     isLoading,
     signOut,
     refreshUser,
-  }), [user, isLoading, signOut, refreshUser]);
+    setUserProfile,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

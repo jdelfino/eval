@@ -8,6 +8,7 @@
 import { getAuthToken } from '@/lib/auth-provider';
 import { withRetry } from '@/lib/api-utils';
 import { ApiError } from '@/lib/api-error';
+import { USER_PROFILE_CACHE_KEY } from '@/lib/storage-keys';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -25,6 +26,16 @@ let _previewSectionId: string | null = null;
  */
 export function setPreviewSectionId(id: string | null): void {
   _previewSectionId = id;
+}
+
+/**
+ * Gets the current preview section ID.
+ * Returns null when not in preview mode.
+ * Used by centrifugo.ts to include the preview header in token requests.
+ * Safe to call at any time — reads module-level state (no sessionStorage access).
+ */
+export function getPreviewSectionId(): string | null {
+  return _previewSectionId;
 }
 
 /**
@@ -54,6 +65,16 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     });
 
     if (!response.ok) {
+      // On 403, clear the cached user profile so the next page load re-fetches
+      // a fresh profile. This catches stale permissions (role changes, namespace moves)
+      // without adding complexity — 403s are rare in normal use.
+      if (response.status === 403) {
+        try {
+          sessionStorage.removeItem(USER_PROFILE_CACHE_KEY);
+        } catch {
+          // sessionStorage may be unavailable (e.g., private browsing quota) — ignore
+        }
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new ApiError(
         errorData.error || `Request failed: ${response.status}`,

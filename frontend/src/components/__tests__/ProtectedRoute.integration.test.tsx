@@ -62,6 +62,8 @@ describe('ProtectedRoute + AuthContext integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     authStateCallback = null;
+    // Clear sessionStorage to prevent profile cache from leaking across tests
+    sessionStorage.clear();
   });
 
   it('redirects unauthenticated user to /auth/signin', async () => {

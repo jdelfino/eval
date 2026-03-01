@@ -41,10 +41,10 @@ func PreviewMiddleware(previewRepo store.PreviewRepository) func(http.Handler) h
 				return
 			}
 
-			// Only instructors and above may use preview mode.
-			// Students are explicitly rejected; they cannot preview as another student.
-			if instructor.Role == auth.RoleStudent {
-				writeJSONError(w, r, http.StatusForbidden, "preview mode requires instructor or higher role")
+			// Only users with PermPreviewStudent may use preview mode.
+			// Students are rejected because they lack this permission.
+			if !auth.HasPermission(instructor.Role, auth.PermPreviewStudent) {
+				writeJSONError(w, r, http.StatusForbidden, "preview mode requires preview.enter permission")
 				return
 			}
 

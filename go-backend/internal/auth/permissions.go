@@ -23,6 +23,9 @@ const (
 	PermUserManage     Permission = "user.manage"     // CRUD users within namespace
 	PermUserChangeRole Permission = "user.changeRole" // Change user roles
 
+	// Preview permissions
+	PermPreviewStudent Permission = "preview.enter" // Enter preview-as-student mode
+
 	// Administrative permissions
 	PermNamespaceManage Permission = "namespace.manage" // Manage namespace settings
 	PermSystemAdmin     Permission = "system.admin"     // Full system access
@@ -42,6 +45,7 @@ var rolePermissions = map[Role][]Permission{
 		PermDataViewOwn,
 		PermDataViewAll,
 		PermDataExport,
+		PermPreviewStudent,
 	},
 	RoleNamespaceAdmin: {
 		PermSessionJoin,
@@ -53,6 +57,7 @@ var rolePermissions = map[Role][]Permission{
 		PermUserManage,
 		PermUserChangeRole,
 		PermNamespaceManage,
+		PermPreviewStudent,
 	},
 	RoleSystemAdmin: {
 		PermSessionJoin,
@@ -65,6 +70,7 @@ var rolePermissions = map[Role][]Permission{
 		PermUserChangeRole,
 		PermNamespaceManage,
 		PermSystemAdmin,
+		PermPreviewStudent,
 	},
 }
 

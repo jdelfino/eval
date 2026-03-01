@@ -77,6 +77,72 @@ func (r *previewTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store
 	return &store.Section{ID: id}, nil
 }
 
+// --- Route permission tests ---
+
+// TestPreviewRoutes_UsesPermPreviewStudent verifies that the preview routes use
+// PermPreviewStudent (not PermContentManage) as the required permission.
+// A student must be denied 403, an instructor must be allowed through.
+func TestPreviewRoutes_UsesPermPreviewStudent(t *testing.T) {
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		enrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+
+	h := NewPreviewHandler(repo)
+	router := h.Routes()
+
+	repos := &previewTestRepos{}
+
+	// Student should be rejected (lacks preview.enter permission)
+	t.Run("student forbidden", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+		ctx := auth.WithUser(req.Context(), &auth.User{
+			ID:          uuid.New(),
+			Role:        auth.RoleStudent,
+			NamespaceID: "test-ns",
+		})
+		ctx = store.WithRepos(ctx, repos)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("expected 403 for student, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	// Instructor should be allowed through (has preview.enter permission)
+	t.Run("instructor allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+		ctx := auth.WithUser(req.Context(), &auth.User{
+			ID:          instructorID,
+			Role:        auth.RoleInstructor,
+			NamespaceID: "test-ns",
+		})
+		ctx = store.WithRepos(ctx, repos)
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusForbidden {
+			t.Errorf("expected instructor to be allowed, got 403: %s", rec.Body.String())
+		}
+	})
+}
+
 // --- EnterPreview tests ---
 
 func TestEnterPreview_Success_ExistingPreviewStudent(t *testing.T) {
@@ -141,7 +207,7 @@ func TestEnterPreview_Success_ExistingPreviewStudent(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp map[string]string
+	var resp map[string]interface{}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -735,6 +801,196 @@ func TestEnterPreview_EnrollError_LogsUnderlyingError(t *testing.T) {
 	}
 	if !h.containsErrorAttr("deadlock from EnrollPreviewStudent") {
 		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
+	}
+}
+
+// TestEnterPreview_FullProfileInResponse verifies that the EnterPreview response
+// includes the full profile fields: id, email, role, namespace_id, and
+// student-level permissions (not the instructor's permissions).
+func TestEnterPreview_FullProfileInResponse(t *testing.T) {
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+	namespaceID := "test-ns"
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		enrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+	repos := &previewTestRepos{}
+
+	h := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: namespaceID,
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h.EnterPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// id must be the preview student's user ID
+	if resp["id"] != studentUserID.String() {
+		t.Errorf("id = %q, want %q", resp["id"], studentUserID.String())
+	}
+	// email must be the deterministic preview student email
+	wantEmail := fmt.Sprintf("preview+%s@system.internal", instructorID.String())
+	if resp["email"] != wantEmail {
+		t.Errorf("email = %q, want %q", resp["email"], wantEmail)
+	}
+	// role must be student (not instructor)
+	if resp["role"] != string(auth.RoleStudent) {
+		t.Errorf("role = %q, want %q", resp["role"], string(auth.RoleStudent))
+	}
+	// namespace_id must match the instructor's namespace
+	if resp["namespace_id"] != namespaceID {
+		t.Errorf("namespace_id = %q, want %q", resp["namespace_id"], namespaceID)
+	}
+	// permissions must be present and contain student permissions
+	perms, ok := resp["permissions"].([]interface{})
+	if !ok {
+		t.Fatalf("permissions field missing or wrong type: %T = %v", resp["permissions"], resp["permissions"])
+	}
+	if len(perms) == 0 {
+		t.Error("permissions must not be empty for student role")
+	}
+	// permissions must NOT contain instructor-only permissions
+	for _, p := range perms {
+		if p == string(auth.PermPreviewStudent) {
+			t.Errorf("permissions must not include instructor-only %s for preview student", auth.PermPreviewStudent)
+		}
+		if p == string(auth.PermContentManage) {
+			t.Errorf("permissions must not include instructor-only %s for preview student", auth.PermContentManage)
+		}
+	}
+	// permissions must include student permissions
+	foundSessionJoin := false
+	for _, p := range perms {
+		if p == string(auth.PermSessionJoin) {
+			foundSessionJoin = true
+		}
+	}
+	if !foundSessionJoin {
+		t.Errorf("permissions must include %s for student role", auth.PermSessionJoin)
+	}
+}
+
+// TestEnterPreview_UnenrollOtherSectionsError_Logged verifies that when
+// UnenrollPreviewStudentFromOtherSections fails, the error is logged as a warning
+// (not silently dropped) and the request still succeeds (best-effort).
+func TestEnterPreview_UnenrollOtherSectionsError_Logged(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+	unenrollErr := fmt.Errorf("db: disk full from UnenrollOtherSections")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		enrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+		unenrollPreviewStudentFromOtherSectionsFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return unenrollErr
+		},
+	}
+	repos := &previewTestRepos{}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.EnterPreview(rec, req)
+
+	// Still succeeds — best-effort
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (unenroll other sections is best-effort), got %d: %s", rec.Code, rec.Body.String())
+	}
+	// But the error must be logged
+	if !h.containsErrorAttr("disk full from UnenrollOtherSections") {
+		t.Error("expected unenroll error to be logged as warn, but not found in slog output")
+	}
+}
+
+// TestExitPreview_UnenrollError_Logged verifies that when UnenrollPreviewStudent
+// fails in ExitPreview, the error is logged as a warning (not silently dropped)
+// and the request still succeeds (best-effort).
+func TestExitPreview_UnenrollError_Logged(t *testing.T) {
+	h := &capturingSlogHandler{}
+	orig := slog.Default()
+	slog.SetDefault(slog.New(h))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	instructorID := uuid.New()
+	sectionID := uuid.New()
+	studentUserID := uuid.New()
+	unenrollErr := fmt.Errorf("db: connection lost from ExitPreview UnenrollPreviewStudent")
+
+	repo := &mockPreviewRepo{
+		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+			return &store.PreviewStudent{
+				InstructorID:  instructorID,
+				StudentUserID: studentUserID,
+			}, nil
+		},
+		unenrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error {
+			return unenrollErr
+		},
+	}
+
+	h2 := NewPreviewHandler(repo)
+	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/preview", nil)
+	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          instructorID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	h2.ExitPreview(rec, req)
+
+	// Still succeeds — best-effort
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 (unenroll is best-effort), got %d: %s", rec.Code, rec.Body.String())
+	}
+	// But the error must be logged
+	if !h.containsErrorAttr("connection lost from ExitPreview UnenrollPreviewStudent") {
+		t.Error("expected unenroll error to be logged as warn, but not found in slog output")
 	}
 }
 

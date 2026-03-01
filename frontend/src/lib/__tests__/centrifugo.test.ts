@@ -3,9 +3,11 @@
  */
 
 const mockGetAuthHeaders = jest.fn();
+const mockGetPreviewSectionId = jest.fn();
 
 jest.mock('@/lib/api-client', () => ({
   getAuthHeaders: () => mockGetAuthHeaders(),
+  getPreviewSectionId: () => mockGetPreviewSectionId(),
 }));
 
 const MockCentrifuge = jest.fn();
@@ -19,6 +21,7 @@ describe('centrifugo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     MockCentrifuge.mockImplementation((url: string, opts: any) => ({ url, opts }));
+    mockGetPreviewSectionId.mockReturnValue(null);
   });
 
   describe('createCentrifuge', () => {
@@ -45,7 +48,7 @@ describe('centrifugo', () => {
       expect(token).toBe('centrifugo-token');
       expect(global.fetch).toHaveBeenCalledWith(
         '/realtime/token',
-        { headers },
+        { headers: { Authorization: 'Bearer tok' } },
       );
     });
 
@@ -57,6 +60,45 @@ describe('centrifugo', () => {
       const getToken = MockCentrifuge.mock.calls[0][1].getToken;
 
       await expect(getToken()).rejects.toThrow('Failed to get token: 401');
+    });
+
+    it('getToken includes X-Preview-Section header when preview is active', async () => {
+      mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer tok' });
+      mockGetPreviewSectionId.mockReturnValue('sec-preview-123');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: 'centrifugo-token' }),
+      }) as any;
+
+      createCentrifuge();
+      const getToken = MockCentrifuge.mock.calls[0][1].getToken;
+      await getToken();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/realtime/token',
+        {
+          headers: {
+            Authorization: 'Bearer tok',
+            'X-Preview-Section': 'sec-preview-123',
+          },
+        },
+      );
+    });
+
+    it('getToken does not include X-Preview-Section header when preview is not active', async () => {
+      mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer tok' });
+      mockGetPreviewSectionId.mockReturnValue(null);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: 'centrifugo-token' }),
+      }) as any;
+
+      createCentrifuge();
+      const getToken = MockCentrifuge.mock.calls[0][1].getToken;
+      await getToken();
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(fetchCall.headers).not.toHaveProperty('X-Preview-Section');
     });
   });
 
@@ -74,7 +116,7 @@ describe('centrifugo', () => {
       expect(token).toBe('sub-token');
       expect(global.fetch).toHaveBeenCalledWith(
         '/realtime/token?channel=channel%3A123',
-        { headers },
+        { headers: { Authorization: 'Bearer tok' } },
       );
     });
 
@@ -83,6 +125,41 @@ describe('centrifugo', () => {
       global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 }) as any;
 
       await expect(getSubscriptionToken('ch')).rejects.toThrow('Failed to get subscription token: 403');
+    });
+
+    it('getSubscriptionToken includes X-Preview-Section header when preview is active', async () => {
+      mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer tok' });
+      mockGetPreviewSectionId.mockReturnValue('sec-preview-456');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: 'sub-token' }),
+      }) as any;
+
+      await getSubscriptionToken('channel:123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/realtime/token?channel=channel%3A123',
+        {
+          headers: {
+            Authorization: 'Bearer tok',
+            'X-Preview-Section': 'sec-preview-456',
+          },
+        },
+      );
+    });
+
+    it('getSubscriptionToken does not include X-Preview-Section header when preview is not active', async () => {
+      mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer tok' });
+      mockGetPreviewSectionId.mockReturnValue(null);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ token: 'sub-token' }),
+      }) as any;
+
+      await getSubscriptionToken('channel:123');
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(fetchCall.headers).not.toHaveProperty('X-Preview-Section');
     });
   });
 });

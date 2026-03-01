@@ -15,6 +15,8 @@
  * - Preview mode: instructor sees StudentSectionView when preview is active
  * - Preview mode: "Preview as Student" button visible for instructors
  * - Preview mode: enterPreview called when preview button clicked
+ * - Preview mode: error-state back button calls exitPreview and navigates to section page
+ * - Preview mode: StudentSectionView back button calls exitPreview and navigates to section page
  */
 
 import React from 'react';
@@ -1003,6 +1005,63 @@ describe('SectionDetailPage', () => {
       expect(await screen.findByText('Active Sessions')).toBeInTheDocument();
       // Instructor tabs are present
       expect(screen.getByRole('tab', { name: /Students/i })).toBeInTheDocument();
+    });
+
+    it('StudentSectionView back button calls exitPreview and navigates to section page when in preview', async () => {
+      mockUser('instructor');
+      mockSectionData([], publishedProblems);
+      mockUsePreview.mockReturnValue({
+        isPreview: true,
+        previewSectionId: SECTION_ID,
+        enterPreview: mockEnterPreview,
+        exitPreview: mockExitPreview,
+      });
+
+      render(<SectionDetailPage />);
+
+      // Wait for student view to render (preview mode)
+      await screen.findByText('FizzBuzz');
+
+      // Find the back button — should be a button (not an anchor) in preview mode
+      const backButton = screen.getByText('Back to My Sections').closest('button');
+      expect(backButton).not.toBeNull();
+
+      await userEvent.click(backButton!);
+
+      await waitFor(() => {
+        expect(mockExitPreview).toHaveBeenCalledTimes(1);
+        expect(mockPush).toHaveBeenCalledWith(`/sections/${SECTION_ID}`);
+      });
+    });
+
+    it('error-state back button calls exitPreview and navigates to section page when in preview', async () => {
+      mockUser('instructor');
+      (getSection as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (getActiveSessions as jest.Mock).mockResolvedValue([]);
+      (listSectionProblems as jest.Mock).mockResolvedValue([]);
+      mockUsePreview.mockReturnValue({
+        isPreview: true,
+        previewSectionId: SECTION_ID,
+        enterPreview: mockEnterPreview,
+        exitPreview: mockExitPreview,
+      });
+
+      render(<SectionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Network error')).toBeInTheDocument();
+      });
+
+      // Error state back button in preview mode should be a button (not a link)
+      const backButton = screen.getByText('Back to Section').closest('button');
+      expect(backButton).not.toBeNull();
+
+      await userEvent.click(backButton!);
+
+      await waitFor(() => {
+        expect(mockExitPreview).toHaveBeenCalledTimes(1);
+        expect(mockPush).toHaveBeenCalledWith(`/sections/${SECTION_ID}`);
+      });
     });
   });
 });

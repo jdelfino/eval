@@ -2,6 +2,21 @@ package auth
 
 import "testing"
 
+func TestPermPreviewStudent(t *testing.T) {
+	// Roles that CAN use preview mode
+	previewRoles := []Role{RoleInstructor, RoleNamespaceAdmin, RoleSystemAdmin}
+	for _, role := range previewRoles {
+		if !HasPermission(role, PermPreviewStudent) {
+			t.Errorf("role %q should have PermPreviewStudent", role)
+		}
+	}
+
+	// Students must NOT have preview.enter
+	if HasPermission(RoleStudent, PermPreviewStudent) {
+		t.Error("student should NOT have PermPreviewStudent")
+	}
+}
+
 func TestHasPermission(t *testing.T) {
 	tests := []struct {
 		name string
@@ -56,9 +71,9 @@ func TestRolePermissions(t *testing.T) {
 		wantCount int
 	}{
 		{RoleStudent, 2},
-		{RoleInstructor, 6},
-		{RoleNamespaceAdmin, 9},
-		{RoleSystemAdmin, 10},
+		{RoleInstructor, 7},
+		{RoleNamespaceAdmin, 10},
+		{RoleSystemAdmin, 11},
 		{Role("unknown"), 0},
 	}
 

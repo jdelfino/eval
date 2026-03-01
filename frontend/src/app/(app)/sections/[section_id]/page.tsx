@@ -28,7 +28,7 @@ export default function SectionDetailPage() {
   const params = useParams();
   const section_id = params.section_id as string;
   const { user, isLoading: authLoading } = useAuth();
-  const { isPreview, previewSectionId, enterPreview } = usePreview();
+  const { isPreview, previewSectionId, enterPreview, exitPreview } = usePreview();
   const [section, setSection] = useState<SectionDetail | null>(null);
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [pastSessions, setPastSessions] = useState<Session[]>([]);
@@ -130,13 +130,27 @@ export default function SectionDetailPage() {
   }
 
   if (error || !section) {
+    // In preview mode, the error could be a permission error because the preview
+    // student doesn't have access. Exit preview and return to the section's instructor view.
+    const isPreviewingThisSectionOnError = isPreview && previewSectionId === section_id;
+    const handleErrorBack = isPreviewingThisSectionOnError
+      ? async () => {
+          await exitPreview();
+          router.push(`/sections/${section_id}`);
+        }
+      : undefined;
+
     return (
       <div className="space-y-6">
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-red-600 mb-4">{error || 'Section not found'}</p>
-          <BackButton href={userIsInstructor ? '/classes' : '/sections'}>
-            {userIsInstructor ? 'Back to Classes' : 'Back to My Sections'}
-          </BackButton>
+          {handleErrorBack ? (
+            <BackButton onClick={handleErrorBack}>Back to Section</BackButton>
+          ) : (
+            <BackButton href={userIsInstructor ? '/classes' : '/sections'}>
+              {userIsInstructor ? 'Back to Classes' : 'Back to My Sections'}
+            </BackButton>
+          )}
         </div>
       </div>
     );
@@ -146,12 +160,23 @@ export default function SectionDetailPage() {
   const isPreviewingThisSection = isPreview && previewSectionId === section_id;
 
   if (!userIsInstructor || isPreviewingThisSection) {
+    // In preview mode, back navigation should exit preview and return to the
+    // section's instructor view rather than going to /sections (which the preview
+    // student has no access to).
+    const handlePreviewBack = isPreviewingThisSection
+      ? async () => {
+          await exitPreview();
+          router.push(`/sections/${section_id}`);
+        }
+      : undefined;
+
     return (
       <StudentSectionView
         section={section}
         activeSessions={activeSessions}
         publishedProblems={publishedProblems}
         sectionId={section_id}
+        onBack={handlePreviewBack}
       />
     );
   }

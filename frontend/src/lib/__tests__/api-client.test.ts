@@ -409,6 +409,35 @@ describe('api-client', () => {
       expect(typeof setPreviewSectionId).toBe('function');
     });
 
+    it('getPreviewSectionId is exported as a function', () => {
+      const { getPreviewSectionId } = require('../api-client');
+      expect(typeof getPreviewSectionId).toBe('function');
+    });
+
+    it('getPreviewSectionId returns null initially', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      // Ensure it's cleared first
+      setPreviewSectionId(null);
+      expect(getPreviewSectionId()).toBeNull();
+    });
+
+    it('getPreviewSectionId returns the current preview section id after setPreviewSectionId', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      setPreviewSectionId('sec-777');
+      try {
+        expect(getPreviewSectionId()).toBe('sec-777');
+      } finally {
+        setPreviewSectionId(null);
+      }
+    });
+
+    it('getPreviewSectionId returns null after setPreviewSectionId(null)', () => {
+      const { getPreviewSectionId, setPreviewSectionId } = require('../api-client');
+      setPreviewSectionId('sec-888');
+      setPreviewSectionId(null);
+      expect(getPreviewSectionId()).toBeNull();
+    });
+
     it('apiFetch includes X-Preview-Section header when preview section id is set', async () => {
       mockGetIdToken.mockResolvedValue('token-abc');
       (global.fetch as jest.Mock).mockResolvedValue({
@@ -473,6 +502,81 @@ describe('api-client', () => {
       await apiGet('/v1/test');
       const secondCall = (global.fetch as jest.Mock).mock.calls[0][1];
       expect(secondCall.headers).not.toHaveProperty('X-Preview-Section');
+    });
+  });
+
+  describe('403 profile cache invalidation', () => {
+    const PROFILE_CACHE_KEY = 'eval:user-profile';
+
+    beforeEach(() => {
+      // jsdom provides sessionStorage
+      sessionStorage.clear();
+    });
+
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('clears eval:user-profile from sessionStorage on 403 response', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      // Pre-seed a cached profile
+      sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ user: { id: 'u1' }, timestamp: Date.now() }));
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ error: 'Forbidden' }),
+      });
+
+      const { apiGet } = require('../api-client');
+      await apiGet('/v1/some-resource').catch(() => {});
+
+      expect(sessionStorage.getItem(PROFILE_CACHE_KEY)).toBeNull();
+    });
+
+    it('does not clear profile cache on non-403 errors', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+      const cachedEntry = JSON.stringify({ user: { id: 'u1' }, timestamp: Date.now() });
+      sessionStorage.setItem(PROFILE_CACHE_KEY, cachedEntry);
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: 'Not found' }),
+      });
+
+      const { apiGet } = require('../api-client');
+      await apiGet('/v1/some-resource').catch(() => {});
+
+      expect(sessionStorage.getItem(PROFILE_CACHE_KEY)).toBe(cachedEntry);
+    });
+
+    it('does not throw when sessionStorage is unavailable during 403 handling', async () => {
+      mockGetIdToken.mockResolvedValue('token-abc');
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ error: 'Forbidden' }),
+      });
+
+      // Simulate sessionStorage.removeItem throwing (e.g., private browsing quota exceeded)
+      const originalRemoveItem = Object.getOwnPropertyDescriptor(Storage.prototype, 'removeItem');
+      Object.defineProperty(Storage.prototype, 'removeItem', {
+        value: () => { throw new Error('sessionStorage not available'); },
+        configurable: true,
+        writable: true,
+      });
+
+      const { apiGet } = require('../api-client');
+      // Should throw ApiError (the 403), not the sessionStorage error
+      const err: any = await apiGet('/v1/some-resource').catch((e: any) => e);
+      expect(err.status).toBe(403);
+
+      // Restore original removeItem
+      if (originalRemoveItem) {
+        Object.defineProperty(Storage.prototype, 'removeItem', originalRemoveItem);
+      }
     });
   });
 
