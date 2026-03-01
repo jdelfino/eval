@@ -65,6 +65,7 @@ const mockUser = {
 describe('TestAuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     process.env = { ...ORIGINAL_ENV };
     mockIsTestMode.mockReturnValue(true);
     mockGetTestToken.mockReturnValue(null); // No user by default
@@ -229,6 +230,30 @@ describe('TestAuthProvider', () => {
     // Token SHOULD be cleared for definitive auth failures
     expect(mockClearTestUser).toHaveBeenCalled();
     expect(result.current.isAuthenticated).toBe(false);
+  });
+
+  it('uses cached profile on hydration and skips API call when cache is fresh', async () => {
+    const CACHE_KEY = 'eval:user-profile';
+    const cachedUser = { ...mockUser, id: 'preview-student', role: 'student' as const };
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: cachedUser, timestamp: Date.now() }));
+
+    mockGetTestToken.mockReturnValue('some-token');
+
+    const { AuthProvider, useAuth } = require('../AuthContext');
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <AuthProvider>{children}</AuthProvider>
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should use cached profile, not call the API
+    expect(result.current.user).toEqual(cachedUser);
+    expect(mockGetCurrentUser).not.toHaveBeenCalled();
   });
 
   it('does not expose signIn method — sign-in is handled by SignInButtons component', async () => {

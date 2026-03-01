@@ -103,8 +103,17 @@ function TestAuthProvider({ children }: AuthProviderProps) {
       const token = getTestToken();
       if (token) {
         try {
-          const profile = await getCurrentUser();
-          setUser(profile);
+          // Check profile cache first, matching FirebaseAuthProvider behavior.
+          // This is critical for preview mode: after reload, the cached profile
+          // is the preview student's, so user.id and user.role are correct.
+          const cached = readProfileCache();
+          if (cached) {
+            setUser(cached);
+          } else {
+            const profile = await getCurrentUser();
+            writeProfileCache(profile);
+            setUser(profile);
+          }
         } catch (error) {
           console.error('[Auth] Error hydrating user:', error);
           // Only clear the test token on definitive auth failures (401/403/404).
