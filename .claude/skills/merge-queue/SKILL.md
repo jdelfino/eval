@@ -111,18 +111,41 @@ When a PR is not mergeable (behind main):
    git worktree add ../<project>-rebase-<number> <branch>
    ```
 
-2. **Spawn a rebase sub-agent** (using the rebase skill) with:
-   - source: the PR branch name
-   - target: `origin/main`
-   - worktree path: the path from step 1
-   - cleanup: `false` (merge-queue handles cleanup after merge)
+2. **Try fast-path rebase first** (inline bash — no subagent):
+   ```bash
+   cd ../<project>-rebase-<number>
+   git fetch origin main
+   git rebase origin/main && echo "REBASE: OK"
+   ```
 
-3. **On `RESULT: PASS`:** force-push the rebased branch, then **wait for CI to finish and merge** (see below).
+3. **If fast-path succeeds:** force-push and proceed to CI polling.
    ```bash
    git push --force-with-lease
    ```
 
-4. **On `RESULT: FAIL`:** file a beads issue describing the conflict using details from the sub-agent output, and report to the user.
+4. **If fast-path fails (conflict):** abort and spawn the rebase subagent:
+   ```bash
+   git rebase --abort
+   ```
+   Then spawn with context:
+   ```
+   ROLE: Rebase Agent (Conflict Resolution)
+   SKILL: Read and follow .claude/skills/rebase/SKILL.md
+
+   SOURCE: <branch>
+   TARGET: origin/main
+   WORKTREE: ../<project>-rebase-<number>
+   CLEANUP: false
+   PR_NUMBER: <number>
+   ```
+
+5. **On `RESULT: PASS`:** force-push the rebased branch, then **wait for CI to finish and merge** (see below).
+   ```bash
+   cd ../<project>-rebase-<number>
+   git push --force-with-lease
+   ```
+
+6. **On `RESULT: FAIL`:** file a beads issue describing the conflict using details from the sub-agent output, and report to the user.
    ```bash
    bd create "Rebase conflict on PR #<number>: <summary>" -t bug -p 1 --json
    ```
