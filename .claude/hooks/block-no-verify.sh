@@ -12,9 +12,10 @@ command=$(echo "$input" | jq -r '.tool_input.command // ""' 2>/dev/null || true)
 
 # Check for forbidden bypass patterns
 if echo "$command" | grep -qE '(--no-verify|LEFTHOOK=0(\s|$)|LEFTHOOK_DISABLE=1(\s|$)|LEFTHOOK=false(\s|$))'; then
-  reason="Bypassing git hooks is not allowed. Remove --no-verify / LEFTHOOK=0 / LEFTHOOK_DISABLE=1 / LEFTHOOK=false from the command."
-  echo "{\"decision\": \"deny\", \"reason\": \"$reason\"}"
+  cat <<'EOF'
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Bypassing git hooks is not allowed. Remove --no-verify / LEFTHOOK=0 / LEFTHOOK_DISABLE=1 / LEFTHOOK=false from the command."}}
+EOF
   exit 0
 fi
 
-echo '{"decision": "allow"}'
+echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}'
