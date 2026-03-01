@@ -11,11 +11,14 @@ for resolving larger issues in follow-on work.
 |----------|---------|
 | New epic or feature design | `/plan <description-or-epic-id>` |
 | All implementation work | `/work <id-or-description>` |
+| Bug investigation and fix | `/bug <description-or-symptoms>` |
 | Process merge queue | `/merge` |
 
 `/plan` explores the codebase, discusses tradeoffs with you, files beads issues, and runs an architectural plan review. Use it before `/work` for new epics.
 
 `/work` is the single entry point for all implementation. It triages the work, creates a branch/PR, manages beads issues, and runs specialized reviews.
+
+`/bug` investigates a bug methodically: explores the codebase, identifies root cause with evidence, files a beads issue, then delegates to `/work` for the fix. Works calmly and thoroughly by default — only rushes when you explicitly say it's urgent.
 
 `/merge` processes open PRs: merges when CI passes, handles rebases, files issues for failures. Run in a dedicated window while other windows do `/work`.
 
