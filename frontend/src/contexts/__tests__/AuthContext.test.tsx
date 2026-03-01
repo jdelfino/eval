@@ -64,6 +64,8 @@ describe('AuthContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     authStateCallback = null;
+    // Clear sessionStorage to prevent profile cache from leaking across tests
+    sessionStorage.clear();
 
     // Capture the onAuthStateChanged callback (now called async)
     mockOnAuthStateChanged.mockImplementation((_auth: any, callback: any) => {
@@ -350,6 +352,154 @@ describe('AuthContext', () => {
       await waitFor(() => {
         expect(result.current.user).toEqual(updatedUser);
       });
+    });
+  });
+
+  describe('profile cache (sessionStorage)', () => {
+    const CACHE_KEY = 'eval:user-profile';
+
+    beforeEach(() => {
+      // Clear sessionStorage before each test
+      sessionStorage.clear();
+    });
+
+    afterEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('caches user profile in sessionStorage after successful fetch', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      expect(cached).not.toBeNull();
+      const parsed = JSON.parse(cached!);
+      expect(parsed.user).toEqual(mockUser);
+      expect(typeof parsed.timestamp).toBe('number');
+    });
+
+    it('uses cached profile on mount and skips API call when cache is fresh', async () => {
+      // Pre-seed a fresh cache entry
+      const cachedAt = Date.now();
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: cachedAt }));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      // Fire auth state with a valid Firebase user
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      // getCurrentUser should NOT have been called — served from cache
+      expect(mockGetCurrentUser).not.toHaveBeenCalled();
+    });
+
+    it('re-fetches from API when cache is expired (TTL exceeded)', async () => {
+      // Seed an expired cache entry (6 minutes ago)
+      const expiredAt = Date.now() - 6 * 60 * 1000;
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: expiredAt }));
+
+      const updatedUser = { ...mockUser, display_name: 'Updated Name' };
+      mockGetCurrentUser.mockResolvedValue(updatedUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(updatedUser);
+      });
+
+      // Expired cache → must have fetched from API
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+    });
+
+    it('clears profile cache on signOut', async () => {
+      // Seed a cache entry
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
+      mockSignOut.mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!(null);
+      });
+
+      await act(async () => {
+        await result.current.signOut();
+      });
+
+      expect(sessionStorage.getItem(CACHE_KEY)).toBeNull();
+    });
+
+    it('updates profile cache after refreshUser', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      const updatedUser = { ...mockUser, display_name: 'Refreshed Name' };
+      mockGetCurrentUser.mockResolvedValue(updatedUser);
+
+      await act(async () => {
+        await result.current.refreshUser();
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(updatedUser);
+      });
+
+      // Cache should be updated with the new user
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      expect(cached).not.toBeNull();
+      const parsed = JSON.parse(cached!);
+      expect(parsed.user).toEqual(updatedUser);
+    });
+
+    it('does not use cached profile when sessionStorage is empty and falls through to API', async () => {
+      // No cache seeded
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      expect(mockGetCurrentUser).toHaveBeenCalled();
     });
   });
 });

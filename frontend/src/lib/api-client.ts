@@ -12,6 +12,12 @@ import { ApiError } from '@/lib/api-error';
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
+ * sessionStorage key for the cached user profile.
+ * Cleared on 403 responses to force a fresh profile fetch on the next navigation.
+ */
+const USER_PROFILE_CACHE_KEY = 'eval:user-profile';
+
+/**
  * Module-level preview section ID.
  * Set by PreviewContext to inject the X-Preview-Section header on all API requests.
  * Null when not in preview mode.
@@ -54,6 +60,16 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     });
 
     if (!response.ok) {
+      // On 403, clear the cached user profile so the next page load re-fetches
+      // a fresh profile. This catches stale permissions (role changes, namespace moves)
+      // without adding complexity — 403s are rare in normal use.
+      if (response.status === 403) {
+        try {
+          sessionStorage.removeItem(USER_PROFILE_CACHE_KEY);
+        } catch {
+          // sessionStorage may be unavailable (e.g., private browsing quota) — ignore
+        }
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new ApiError(
         errorData.error || `Request failed: ${response.status}`,

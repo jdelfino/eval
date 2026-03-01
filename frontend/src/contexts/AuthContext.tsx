@@ -17,6 +17,63 @@ import { isTestMode, clearTestUser, getTestToken } from '@/lib/auth-provider';
 import type { User } from '@/types/api';
 export type { User };
 
+/**
+ * sessionStorage key for cached user profile.
+ * Must match the key used in api-client.ts for 403 invalidation.
+ */
+const USER_PROFILE_CACHE_KEY = 'eval:user-profile';
+
+/**
+ * Profile cache TTL in milliseconds (5 minutes).
+ * Short enough to avoid stale profile bugs; long enough to skip redundant fetches.
+ */
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedProfile {
+  user: User;
+  timestamp: number;
+}
+
+/**
+ * Read a cached user profile from sessionStorage.
+ * Returns null if no cache entry exists, if it is expired, or if sessionStorage throws.
+ */
+function readProfileCache(): User | null {
+  try {
+    const raw = sessionStorage.getItem(USER_PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const cached: CachedProfile = JSON.parse(raw);
+    if (Date.now() - cached.timestamp > PROFILE_CACHE_TTL_MS) return null;
+    return cached.user;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write a user profile to sessionStorage with the current timestamp.
+ * Silently ignores write failures (e.g., private browsing quota).
+ */
+function writeProfileCache(user: User): void {
+  try {
+    const entry: CachedProfile = { user, timestamp: Date.now() };
+    sessionStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Clear the cached user profile from sessionStorage.
+ */
+function clearProfileCache(): void {
+  try {
+    sessionStorage.removeItem(USER_PROFILE_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -98,12 +155,15 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
     try {
-      return await getCurrentUser();
+      const profile = await getCurrentUser();
+      writeProfileCache(profile);
+      return profile;
     } catch (error: unknown) {
       // If the user doesn't exist in the DB yet, always try bootstrap.
       // On 404: user hasn't been created yet — attempt bootstrap.
       // On 401: token valid but no DB record — also try bootstrap.
       // If bootstrap returns 403: not authorized → caller sets user to null.
+      // Note: bootstrapUser() is the first-time path — no cache written here.
       const status = (error as { status?: number }).status;
       if (status === 401 || status === 404) {
         return await bootstrapUser();
@@ -127,8 +187,17 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
             // When restoring from persistence, the cached token may be expired;
             // getIdToken(true) ensures we have a fresh token before any API calls.
             await firebaseUser.getIdToken(true);
-            const profile = await fetchUserProfile();
-            setUser(profile);
+
+            // Check for a fresh cached profile before hitting the API.
+            // Firebase auth is still valid (firebaseUser is non-null), so it's
+            // safe to use the cached profile without re-fetching.
+            const cached = readProfileCache();
+            if (cached) {
+              setUser(cached);
+            } else {
+              const profile = await fetchUserProfile();
+              setUser(profile);
+            }
           } catch (error) {
             console.error('[Auth] Error fetching user profile:', error);
             setUser(null);
@@ -150,6 +219,7 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
   }, [fetchUserProfile]);
 
   const signOut = useCallback(async () => {
+    clearProfileCache();
     const { signOut: firebaseSignOut } = await import('firebase/auth');
     const { firebaseAuth } = await import('@/lib/firebase');
     await firebaseSignOut(firebaseAuth);
