@@ -12,6 +12,9 @@
  * - Student view: active session banner
  * - Student view: Practice/Continue buttons
  * - Instructor view: unchanged session management
+ * - Preview mode: instructor sees StudentSectionView when preview is active
+ * - Preview mode: "Preview as Student" button visible for instructors
+ * - Preview mode: enterPreview called when preview button clicked
  */
 
 import React from 'react';
@@ -34,6 +37,14 @@ jest.mock('next/navigation', () => ({
 // Mock AuthContext
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(),
+}));
+
+// Mock PreviewContext
+const mockEnterPreview = jest.fn();
+const mockExitPreview = jest.fn();
+const mockUsePreview = jest.fn();
+jest.mock('@/contexts/PreviewContext', () => ({
+  usePreview: () => mockUsePreview(),
 }));
 
 // Mock API modules
@@ -140,6 +151,15 @@ describe('SectionDetailPage', () => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     (useParams as jest.Mock).mockReturnValue({ section_id: SECTION_ID });
+    // Default: not in preview mode
+    mockUsePreview.mockReturnValue({
+      isPreview: false,
+      previewSectionId: null,
+      enterPreview: mockEnterPreview,
+      exitPreview: mockExitPreview,
+    });
+    mockEnterPreview.mockResolvedValue(undefined);
+    mockExitPreview.mockResolvedValue(undefined);
   });
 
   describe('main back button (section loaded)', () => {
@@ -884,6 +904,105 @@ describe('SectionDetailPage', () => {
       expect(screen.queryByText('Practice')).not.toBeInTheDocument();
       expect(screen.queryByText('Continue')).not.toBeInTheDocument();
       expect(screen.queryByText('Not started')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('preview mode', () => {
+    const publishedProblems = [
+      {
+        id: 'sp-1',
+        section_id: SECTION_ID,
+        problem_id: PROBLEM_ID_1,
+        published_by: 'user-1',
+        show_solution: false,
+        published_at: '2025-01-01T00:00:00Z',
+        problem: {
+          id: PROBLEM_ID_1,
+          namespace_id: 'ns-1',
+          title: 'FizzBuzz',
+          description: 'Write a FizzBuzz solution',
+          starter_code: null,
+          test_cases: [],
+          execution_settings: {},
+          author_id: 'user-1',
+          class_id: null,
+          tags: ['loops'],
+          solution: null,
+          created_at: '2025-01-01T00:00:00Z',
+          updated_at: '2025-01-01T00:00:00Z',
+        },
+      },
+    ];
+
+    it('shows "Preview as Student" button for instructors when not in preview', async () => {
+      mockUser('instructor');
+      mockSectionData([], publishedProblems);
+
+      render(<SectionDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /preview as student/i })).toBeInTheDocument();
+    });
+
+    it('does not show "Preview as Student" button for students', async () => {
+      mockUser('student');
+      mockSectionData([], publishedProblems);
+
+      render(<SectionDetailPage />);
+
+      await screen.findByText('FizzBuzz');
+      expect(screen.queryByRole('button', { name: /preview as student/i })).not.toBeInTheDocument();
+    });
+
+    it('calls enterPreview with sectionId when "Preview as Student" is clicked', async () => {
+      mockUser('instructor');
+      mockSectionData([], publishedProblems);
+
+      render(<SectionDetailPage />);
+
+      const previewBtn = await screen.findByRole('button', { name: /preview as student/i });
+      await userEvent.click(previewBtn);
+
+      expect(mockEnterPreview).toHaveBeenCalledWith(SECTION_ID);
+    });
+
+    it('renders StudentSectionView instead of InstructorSectionView when preview is active for this section', async () => {
+      mockUser('instructor');
+      mockSectionData([], publishedProblems);
+      // Preview is active for this specific section
+      mockUsePreview.mockReturnValue({
+        isPreview: true,
+        previewSectionId: SECTION_ID,
+        enterPreview: mockEnterPreview,
+        exitPreview: mockExitPreview,
+      });
+
+      render(<SectionDetailPage />);
+
+      // StudentSectionView shows Problems list with filter buttons; InstructorSectionView shows tabs
+      await screen.findByText('FizzBuzz');
+      // Student view has "Show all" filter; instructor view does not
+      expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument();
+      // Instructor-only tab should NOT be present
+      expect(screen.queryByRole('tab', { name: /Students/i })).not.toBeInTheDocument();
+    });
+
+    it('still renders InstructorSectionView when preview is active for a different section', async () => {
+      mockUser('instructor');
+      mockSectionData([], publishedProblems);
+      // Preview active, but for a different section
+      mockUsePreview.mockReturnValue({
+        isPreview: true,
+        previewSectionId: 'other-section-id',
+        enterPreview: mockEnterPreview,
+        exitPreview: mockExitPreview,
+      });
+
+      render(<SectionDetailPage />);
+
+      // InstructorSectionView shows Active Sessions section
+      expect(await screen.findByText('Active Sessions')).toBeInTheDocument();
+      // Instructor tabs are present
+      expect(screen.getByRole('tab', { name: /Students/i })).toBeInTheDocument();
     });
   });
 });

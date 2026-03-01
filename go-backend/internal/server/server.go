@@ -176,6 +176,26 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.Use(userLoader.Load)
 			}
 
+			// Preview routes: mounted before PreviewMiddleware so they use the real
+			// instructor identity (not the swapped preview student identity).
+			// These routes still get JWT + UserLoader + RLS — just not PreviewMiddleware.
+			if pgxPool := pool.PgxPool(); pgxPool != nil && userStore != nil {
+				// pool-level Store (no RLS) for preview operations, following the
+				// same pattern as poolStore on line 276.
+				previewStore := store.New(pool.PgxPool())
+				previewHandler := handler.NewPreviewHandler(previewStore)
+				r.Group(func(r chi.Router) {
+					r.Use(custommw.RLSContextMiddleware(pgxPool))
+					r.Mount("/sections/{section_id}/preview", previewHandler.Routes())
+				})
+
+				// PreviewMiddleware: swaps user identity when X-Preview-Section header
+				// is present. MUST be after UserLoader and before RLSContextMiddleware
+				// on the remaining routes so that RLS session variables are set for the
+				// preview student's identity, not the instructor's.
+				r.Use(custommw.PreviewMiddleware(previewStore))
+			}
+
 			// RLS middleware - after user load, only if pool is available (not in tests)
 			if pgxPool := pool.PgxPool(); pgxPool != nil {
 				r.Use(custommw.RLSContextMiddleware(pgxPool))

@@ -10,6 +10,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return { Authorization: 'Bearer mock-firebase-token' };
 }
 
+/**
+ * No-op mock for setPreviewSectionId.
+ * Tests that need to verify this is called should use jest.mock('@/lib/api-client').
+ */
+export function setPreviewSectionId(_id: string | null): void {
+  // no-op in test mock
+}
+
 export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
   const response = options ? await fetch(path, options) : await fetch(path);
 

@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { PanelProvider } from '@/contexts/PanelContext';
+import { PreviewProvider } from '@/contexts/PreviewContext';
 import { AppShell } from '@/components/layout';
 import SessionCreatedNotification from '@/components/SessionCreatedNotification';
 
@@ -40,11 +41,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ActiveSessionProvider>
-      <PanelProvider pageId="app">
-        <SessionCreatedNotification />
-        <AppShell>{children}</AppShell>
-      </PanelProvider>
-    </ActiveSessionProvider>
+    <PreviewProvider>
+      <ActiveSessionProvider>
+        <PanelProvider pageId="app">
+          <SessionCreatedNotification />
+          <AppShell>{children}</AppShell>
+        </PanelProvider>
+      </ActiveSessionProvider>
+    </PreviewProvider>
   );
 }

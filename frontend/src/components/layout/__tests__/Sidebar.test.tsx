@@ -21,6 +21,12 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+// Mock usePreview
+const mockUsePreview = jest.fn();
+jest.mock('@/contexts/PreviewContext', () => ({
+  usePreview: () => mockUsePreview(),
+}));
+
 describe('Sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -29,6 +35,13 @@ describe('Sidebar', () => {
       id: 'user1',
       email: 'test@example.com',
       role: 'instructor',
+    });
+    // Default: not in preview mode
+    mockUsePreview.mockReturnValue({
+      isPreview: false,
+      previewSectionId: null,
+      enterPreview: jest.fn(),
+      exitPreview: jest.fn(),
     });
   });
 
@@ -267,6 +280,50 @@ describe('Sidebar', () => {
 
       expect(screen.getByText('Main')).toBeInTheDocument();
       expect(screen.queryByText('Teaching')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('preview mode navigation', () => {
+    it('shows student nav items (My Sections) for instructor when preview is active', () => {
+      mockUser.mockReturnValue({
+        id: 'user1',
+        email: 'test@example.com',
+        role: 'instructor',
+      });
+      mockUsePreview.mockReturnValue({
+        isPreview: true,
+        previewSectionId: 'section-123',
+        enterPreview: jest.fn(),
+        exitPreview: jest.fn(),
+      });
+
+      render(<Sidebar />);
+
+      // Student nav shows "My Sections" instead of instructor items
+      expect(screen.getByText('My Sections')).toBeInTheDocument();
+      // Instructor-only items should NOT be visible during preview
+      expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+      expect(screen.queryByText('Classes')).not.toBeInTheDocument();
+    });
+
+    it('shows instructor nav items when preview is not active', () => {
+      mockUser.mockReturnValue({
+        id: 'user1',
+        email: 'test@example.com',
+        role: 'instructor',
+      });
+      mockUsePreview.mockReturnValue({
+        isPreview: false,
+        previewSectionId: null,
+        enterPreview: jest.fn(),
+        exitPreview: jest.fn(),
+      });
+
+      render(<Sidebar />);
+
+      expect(screen.getByText('Dashboard')).toBeInTheDocument();
+      expect(screen.getByText('Classes')).toBeInTheDocument();
+      expect(screen.queryByText('My Sections')).not.toBeInTheDocument();
     });
   });
 });
