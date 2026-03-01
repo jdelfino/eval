@@ -710,4 +710,68 @@ describe('StudentSectionView', () => {
       expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
     });
   });
+
+  describe('mobile layout responsiveness', () => {
+    it('PLAT-lnlm: banner inner flex container uses flex-col sm:flex-row and gap-4', () => {
+      const { container } = render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[activeSessionWithProblem]}
+          publishedProblems={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // The inner flex container inside the banner (direct child of the green bg div)
+      // must have flex-col sm:flex-row gap-4 for stacking on mobile
+      const banner = container.querySelector('.bg-gradient-to-r');
+      expect(banner).not.toBeNull();
+
+      const innerFlex = banner!.firstElementChild;
+      expect(innerFlex).not.toBeNull();
+      expect(innerFlex!.className).toContain('flex-col');
+      expect(innerFlex!.className).toContain('sm:flex-row');
+      expect(innerFlex!.className).toContain('gap-4');
+    });
+
+    it('PLAT-lnlm: banner inner flex container does not use items-center justify-between without responsive stacking', () => {
+      const { container } = render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[activeSessionWithProblem]}
+          publishedProblems={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      const banner = container.querySelector('.bg-gradient-to-r');
+      expect(banner).not.toBeNull();
+      const innerFlex = banner!.firstElementChild;
+      expect(innerFlex).not.toBeNull();
+
+      // Without flex-col/sm:flex-row, a plain "flex items-center justify-between"
+      // would cause mobile collisions — ensure the responsive classes are present
+      expect(innerFlex!.className).toContain('flex');
+      expect(innerFlex!.className).toContain('flex-col');
+      expect(innerFlex!.className).toContain('sm:flex-row');
+    });
+
+    it('PLAT-5n0g: problems heading row uses flex-wrap and gap-2', () => {
+      const { container } = render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={publishedProblems}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // Find the heading "Problems" h2 and check its parent flex container
+      const problemsHeading = screen.getByRole('heading', { name: 'Problems' });
+      const headingRow = problemsHeading.parentElement;
+      expect(headingRow).not.toBeNull();
+      expect(headingRow!.className).toContain('flex-wrap');
+      expect(headingRow!.className).toContain('gap-2');
+    });
+  });
 });
