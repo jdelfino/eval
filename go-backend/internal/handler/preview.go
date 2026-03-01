@@ -2,6 +2,8 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -26,9 +28,19 @@ func NewPreviewHandler(previewRepo store.PreviewRepository) *PreviewHandler {
 }
 
 // enterPreviewResponse is the JSON response body for POST /sections/{id}/preview.
+// It includes the preview student's full profile so the frontend can swap the
+// cached identity without an extra API call.
 type enterPreviewResponse struct {
+	// Legacy fields (kept for backward compatibility)
 	PreviewUserID string `json:"preview_user_id"`
 	SectionID     string `json:"section_id"`
+
+	// Full profile fields for identity swap on the frontend
+	ID          string          `json:"id"`
+	Email       string          `json:"email"`
+	Role        auth.Role       `json:"role"`
+	NamespaceID string          `json:"namespace_id"`
+	Permissions []auth.Permission `json:"permissions"`
 }
 
 // Routes returns a chi.Router for preview endpoints.
@@ -61,7 +73,10 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Defense-in-depth: verify the instructor can see this section via the RLS store.
+	// Authorization gate: GetSection uses the RLS-scoped store, so it verifies
+	// the instructor can see this section before any pool-level preview operations.
+	// This is the security boundary — if the instructor cannot see the section via
+	// RLS, the preview is denied regardless of what the pool-level repo would allow.
 	repos := store.ReposFromContext(r.Context())
 	if _, err := repos.GetSection(r.Context(), sectionID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -94,12 +109,25 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort cleanup: remove the preview student from any other sections.
-	// Errors here are intentionally ignored.
-	_ = h.previewRepo.UnenrollPreviewStudentFromOtherSections(r.Context(), ps.StudentUserID, sectionID)
+	// Errors are logged but do not fail the request — stale memberships are benign.
+	if err := h.previewRepo.UnenrollPreviewStudentFromOtherSections(r.Context(), ps.StudentUserID, sectionID); err != nil {
+		slog.WarnContext(r.Context(), "preview: failed to unenroll from other sections (best-effort)", "error", err)
+	}
+
+	// Compute permissions for the student role so the frontend can swap the
+	// cached identity without an extra API call. Note: we use RoleStudent, not
+	// the instructor's role — the preview student has student-level permissions.
+	studentPerms := auth.RolePermissions(auth.RoleStudent)
+	previewEmail := fmt.Sprintf("preview+%s@system.internal", instructor.ID.String())
 
 	httputil.WriteJSON(w, http.StatusOK, enterPreviewResponse{
 		PreviewUserID: ps.StudentUserID.String(),
 		SectionID:     sectionID.String(),
+		ID:            ps.StudentUserID.String(),
+		Email:         previewEmail,
+		Role:          auth.RoleStudent,
+		NamespaceID:   instructor.NamespaceID,
+		Permissions:   studentPerms,
 	})
 }
 
@@ -130,8 +158,12 @@ func (h *PreviewHandler) ExitPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Best-effort unenroll: ignore errors so clients can always clean up state.
-	_ = h.previewRepo.UnenrollPreviewStudent(r.Context(), ps.StudentUserID, sectionID)
+	// Best-effort unenroll: errors are logged but do not fail the request so
+	// clients can always clean up their local state even if the server-side
+	// membership cleanup fails.
+	if err := h.previewRepo.UnenrollPreviewStudent(r.Context(), ps.StudentUserID, sectionID); err != nil {
+		slog.WarnContext(r.Context(), "preview: failed to unenroll preview student (best-effort)", "error", err)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
