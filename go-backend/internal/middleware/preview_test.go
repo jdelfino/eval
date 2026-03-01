@@ -14,11 +14,12 @@ import (
 
 // mockPreviewRepo implements store.PreviewRepository for testing.
 type mockPreviewRepo struct {
-	getPreviewStudentFn                     func(ctx context.Context, instructorID uuid.UUID) (*store.PreviewStudent, error)
-	createPreviewStudentFn                  func(ctx context.Context, instructorID uuid.UUID, namespaceID string) (*store.PreviewStudent, error)
-	enrollPreviewStudentFn                  func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
+	getPreviewStudentFn                       func(ctx context.Context, instructorID uuid.UUID) (*store.PreviewStudent, error)
+	createPreviewStudentFn                    func(ctx context.Context, instructorID uuid.UUID, namespaceID string) (*store.PreviewStudent, error)
+	enrollPreviewStudentFn                    func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
 	unenrollPreviewStudentFromOtherSectionsFn func(ctx context.Context, studentUserID uuid.UUID, keepSectionID uuid.UUID) error
-	unenrollPreviewStudentFn                func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
+	unenrollPreviewStudentFn                  func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
+	deletePreviewStudentFn                    func(ctx context.Context, instructorID uuid.UUID) error
 }
 
 func (m *mockPreviewRepo) GetPreviewStudent(ctx context.Context, instructorID uuid.UUID) (*store.PreviewStudent, error) {
@@ -39,6 +40,13 @@ func (m *mockPreviewRepo) UnenrollPreviewStudentFromOtherSections(ctx context.Co
 
 func (m *mockPreviewRepo) UnenrollPreviewStudent(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error {
 	return m.unenrollPreviewStudentFn(ctx, studentUserID, sectionID)
+}
+
+func (m *mockPreviewRepo) DeletePreviewStudent(ctx context.Context, instructorID uuid.UUID) error {
+	if m.deletePreviewStudentFn != nil {
+		return m.deletePreviewStudentFn(ctx, instructorID)
+	}
+	return nil
 }
 
 // newPreviewMiddlewareRequest creates a test request with the X-Preview-Section header.

@@ -133,8 +133,10 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 
 // ExitPreview handles DELETE /sections/{section_id}/preview.
 //
-// It unenrolls the preview student from the given section. This is best-effort;
-// errors during unenroll do not fail the request.
+// It deletes the preview student user entirely. Cascade constraints on the users
+// table clean up all related rows (preview_students, section_memberships,
+// session_students, student_work, revisions). This is best-effort; errors during
+// deletion do not fail the request so clients can always clean up local state.
 func (h *PreviewHandler) ExitPreview(w http.ResponseWriter, r *http.Request) {
 	instructor := auth.UserFromContext(r.Context())
 	if instructor == nil {
@@ -142,27 +144,15 @@ func (h *PreviewHandler) ExitPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionID, ok := httpbind.ParseUUIDParam(w, r, "section_id")
-	if !ok {
+	if _, ok := httpbind.ParseUUIDParam(w, r, "section_id"); !ok {
 		return
 	}
 
-	ps, err := h.previewRepo.GetPreviewStudent(r.Context(), instructor.ID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			// No preview student — nothing to unenroll. Treat as success.
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-
-	// Best-effort unenroll: errors are logged but do not fail the request so
+	// Best-effort delete: errors are logged but do not fail the request so
 	// clients can always clean up their local state even if the server-side
-	// membership cleanup fails.
-	if err := h.previewRepo.UnenrollPreviewStudent(r.Context(), ps.StudentUserID, sectionID); err != nil {
-		slog.WarnContext(r.Context(), "preview: failed to unenroll preview student (best-effort)", "error", err)
+	// cleanup fails. DeletePreviewStudent is a no-op if no preview student exists.
+	if err := h.previewRepo.DeletePreviewStudent(r.Context(), instructor.ID); err != nil {
+		slog.WarnContext(r.Context(), "preview: failed to delete preview student (best-effort)", "error", err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

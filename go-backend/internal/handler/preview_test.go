@@ -23,6 +23,7 @@ type mockPreviewRepo struct {
 	enrollPreviewStudentFn                    func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
 	unenrollPreviewStudentFromOtherSectionsFn func(ctx context.Context, studentUserID uuid.UUID, keepSectionID uuid.UUID) error
 	unenrollPreviewStudentFn                  func(ctx context.Context, studentUserID uuid.UUID, sectionID uuid.UUID) error
+	deletePreviewStudentFn                    func(ctx context.Context, instructorID uuid.UUID) error
 }
 
 func (m *mockPreviewRepo) GetPreviewStudent(ctx context.Context, instructorID uuid.UUID) (*store.PreviewStudent, error) {
@@ -59,6 +60,13 @@ func (m *mockPreviewRepo) UnenrollPreviewStudent(ctx context.Context, studentUse
 		return m.unenrollPreviewStudentFn(ctx, studentUserID, sectionID)
 	}
 	panic("mockPreviewRepo: unexpected UnenrollPreviewStudent call")
+}
+
+func (m *mockPreviewRepo) DeletePreviewStudent(ctx context.Context, instructorID uuid.UUID) error {
+	if m.deletePreviewStudentFn != nil {
+		return m.deletePreviewStudentFn(ctx, instructorID)
+	}
+	panic("mockPreviewRepo: unexpected DeletePreviewStudent call")
 }
 
 // --- previewTestRepos: overrides GetSection for defense-in-depth check ---
@@ -454,26 +462,13 @@ func TestEnterPreview_EnrollError(t *testing.T) {
 func TestExitPreview_Success(t *testing.T) {
 	instructorID := uuid.New()
 	sectionID := uuid.New()
-	studentUserID := uuid.New()
 
-	unenrollCalled := false
+	deleteCalled := false
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, id uuid.UUID) (*store.PreviewStudent, error) {
+		deletePreviewStudentFn: func(_ context.Context, id uuid.UUID) error {
+			deleteCalled = true
 			if id != instructorID {
-				t.Fatalf("unexpected instructorID: %v", id)
-			}
-			return &store.PreviewStudent{
-				InstructorID:  instructorID,
-				StudentUserID: studentUserID,
-			}, nil
-		},
-		unenrollPreviewStudentFn: func(_ context.Context, stuID, secID uuid.UUID) error {
-			unenrollCalled = true
-			if stuID != studentUserID {
-				t.Errorf("unenroll: unexpected studentUserID: %v", stuID)
-			}
-			if secID != sectionID {
-				t.Errorf("unenroll: unexpected sectionID: %v", secID)
+				t.Errorf("delete: unexpected instructorID: %v", id)
 			}
 			return nil
 		},
@@ -495,8 +490,8 @@ func TestExitPreview_Success(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !unenrollCalled {
-		t.Error("UnenrollPreviewStudent should have been called")
+	if !deleteCalled {
+		t.Error("DeletePreviewStudent should have been called")
 	}
 }
 
@@ -537,11 +532,12 @@ func TestExitPreview_InvalidSectionID(t *testing.T) {
 	}
 }
 
-func TestExitPreview_PreviewStudentNotFound(t *testing.T) {
+func TestExitPreview_NoPreviewStudent(t *testing.T) {
 	sectionID := uuid.New()
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, store.ErrNotFound
+		deletePreviewStudentFn: func(_ context.Context, _ uuid.UUID) error {
+			// No-op — no preview student exists, DELETE affects 0 rows
+			return nil
 		},
 	}
 
@@ -558,52 +554,16 @@ func TestExitPreview_PreviewStudentNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ExitPreview(rec, req)
 
-	// If no preview student exists, exit is a no-op (204)
+	// If no preview student exists, delete is a no-op (204)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 (no-op when no preview student), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestExitPreview_GetPreviewStudentError(t *testing.T) {
+func TestExitPreview_DeleteError_BestEffort(t *testing.T) {
 	sectionID := uuid.New()
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, errors.New("db error")
-		},
-	}
-
-	h := NewPreviewHandler(repo)
-	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/preview", nil)
-	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
-	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          uuid.New(),
-		Role:        auth.RoleInstructor,
-		NamespaceID: "test-ns",
-	})
-	req = req.WithContext(ctx)
-
-	rec := httptest.NewRecorder()
-	h.ExitPreview(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-// TestExitPreview_UnenrollBestEffort verifies that unenroll errors don't fail the request (best-effort).
-func TestExitPreview_UnenrollBestEffort(t *testing.T) {
-	instructorID := uuid.New()
-	sectionID := uuid.New()
-	studentUserID := uuid.New()
-
-	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return &store.PreviewStudent{
-				InstructorID:  instructorID,
-				StudentUserID: studentUserID,
-			}, nil
-		},
-		unenrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error {
+		deletePreviewStudentFn: func(_ context.Context, _ uuid.UUID) error {
 			return errors.New("db error")
 		},
 	}
@@ -612,7 +572,7 @@ func TestExitPreview_UnenrollBestEffort(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/preview", nil)
 	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
 	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          instructorID,
+		ID:          uuid.New(),
 		Role:        auth.RoleInstructor,
 		NamespaceID: "test-ns",
 	})
@@ -621,11 +581,12 @@ func TestExitPreview_UnenrollBestEffort(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ExitPreview(rec, req)
 
-	// Unenroll is best-effort, still returns 204
+	// Delete is best-effort, still returns 204
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 (unenroll is best-effort), got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 204 (delete is best-effort), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
 
 // --- WriteInternalError logging: underlying error must be logged for all 500 paths ---
 
@@ -945,10 +906,10 @@ func TestEnterPreview_UnenrollOtherSectionsError_Logged(t *testing.T) {
 	}
 }
 
-// TestExitPreview_UnenrollError_Logged verifies that when UnenrollPreviewStudent
+// TestExitPreview_DeleteError_Logged verifies that when DeletePreviewStudent
 // fails in ExitPreview, the error is logged as a warning (not silently dropped)
 // and the request still succeeds (best-effort).
-func TestExitPreview_UnenrollError_Logged(t *testing.T) {
+func TestExitPreview_DeleteError_Logged(t *testing.T) {
 	h := &capturingSlogHandler{}
 	orig := slog.Default()
 	slog.SetDefault(slog.New(h))
@@ -956,18 +917,11 @@ func TestExitPreview_UnenrollError_Logged(t *testing.T) {
 
 	instructorID := uuid.New()
 	sectionID := uuid.New()
-	studentUserID := uuid.New()
-	unenrollErr := fmt.Errorf("db: connection lost from ExitPreview UnenrollPreviewStudent")
+	deleteErr := fmt.Errorf("db: connection lost from ExitPreview DeletePreviewStudent")
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return &store.PreviewStudent{
-				InstructorID:  instructorID,
-				StudentUserID: studentUserID,
-			}, nil
-		},
-		unenrollPreviewStudentFn: func(_ context.Context, _, _ uuid.UUID) error {
-			return unenrollErr
+		deletePreviewStudentFn: func(_ context.Context, _ uuid.UUID) error {
+			return deleteErr
 		},
 	}
 
@@ -986,48 +940,11 @@ func TestExitPreview_UnenrollError_Logged(t *testing.T) {
 
 	// Still succeeds — best-effort
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 (unenroll is best-effort), got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 204 (delete is best-effort), got %d: %s", rec.Code, rec.Body.String())
 	}
 	// But the error must be logged
-	if !h.containsErrorAttr("connection lost from ExitPreview UnenrollPreviewStudent") {
-		t.Error("expected unenroll error to be logged as warn, but not found in slog output")
+	if !h.containsErrorAttr("connection lost from ExitPreview DeletePreviewStudent") {
+		t.Error("expected delete error to be logged as warn, but not found in slog output")
 	}
 }
 
-// TestExitPreview_GetPreviewStudentError_LogsUnderlyingError verifies that when
-// GetPreviewStudent fails in ExitPreview, WriteInternalError is used.
-func TestExitPreview_GetPreviewStudentError_LogsUnderlyingError(t *testing.T) {
-	h := &capturingSlogHandler{}
-	orig := slog.Default()
-	slog.SetDefault(slog.New(h))
-	t.Cleanup(func() { slog.SetDefault(orig) })
-
-	sectionID := uuid.New()
-	underlyingErr := fmt.Errorf("db: connection reset from ExitPreview GetPreviewStudent")
-
-	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, underlyingErr
-		},
-	}
-
-	h2 := NewPreviewHandler(repo)
-	req := httptest.NewRequest(http.MethodDelete, "/sections/"+sectionID.String()+"/preview", nil)
-	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
-	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          uuid.New(),
-		Role:        auth.RoleInstructor,
-		NamespaceID: "test-ns",
-	})
-	req = req.WithContext(ctx)
-
-	rec := httptest.NewRecorder()
-	h2.ExitPreview(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !h.containsErrorAttr("connection reset from ExitPreview GetPreviewStudent") {
-		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
-	}
-}
