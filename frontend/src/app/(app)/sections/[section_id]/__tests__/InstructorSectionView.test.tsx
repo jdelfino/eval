@@ -728,4 +728,153 @@ describe('InstructorSectionView', () => {
       expect(screen.getByText('charlie@example.com')).toBeInTheDocument();
     });
   });
+
+  describe('mobile responsive layout', () => {
+    // PLAT-1zbi: Header should wrap on small screens
+    it('header right-side container has flex-wrap so it stacks vertically on mobile', () => {
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+          onEnterPreview={() => {}}
+        />
+      );
+
+      // The outer header flex container should use flex-col sm:flex-row to stack on mobile
+      // Find the div that wraps both the section title and the right-side controls
+      const headerCard = container.querySelector('.bg-white.rounded-lg.shadow.p-6');
+      expect(headerCard).not.toBeNull();
+      const outerFlex = headerCard!.firstElementChild;
+      expect(outerFlex).not.toBeNull();
+      expect(outerFlex!.className).toMatch(/flex-wrap/);
+    });
+
+    it('header stacks vertically on mobile (flex-col) and horizontally on sm screens (sm:flex-row)', () => {
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+          onEnterPreview={() => {}}
+        />
+      );
+
+      const headerCard = container.querySelector('.bg-white.rounded-lg.shadow.p-6');
+      const outerFlex = headerCard!.firstElementChild;
+      expect(outerFlex!.className).toMatch(/flex-col/);
+      expect(outerFlex!.className).toMatch(/sm:flex-row/);
+    });
+
+    // PLAT-7ib6: Active session cards should wrap their button on small screens
+    it('active session card flex container has flex-wrap so button wraps on mobile', () => {
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[activeSession]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      // The flex container inside the active session card p-6 div
+      const sessionCard = container.querySelector('.border-2.border-green-200');
+      expect(sessionCard).not.toBeNull();
+      const flexContainer = sessionCard!.querySelector('.flex.items-center.justify-between');
+      expect(flexContainer).not.toBeNull();
+      expect(flexContainer!.className).toMatch(/flex-wrap/);
+    });
+
+    it('active session "View Dashboard" button does not use fixed ml-4 margin', () => {
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[activeSession]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      const viewDashboardBtn = screen.getByRole('button', { name: /View Dashboard/i });
+      expect(viewDashboardBtn.className).not.toMatch(/\bml-4\b/);
+    });
+
+    // PLAT-7ib6: Past session cards should wrap their button on small screens
+    it('past session card flex container has flex-wrap so button wraps on mobile', async () => {
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      const sessionCards = container.querySelectorAll('.border.border-gray-200');
+      expect(sessionCards.length).toBeGreaterThan(0);
+      const pastSessionCard = sessionCards[0];
+      const flexContainer = pastSessionCard.querySelector('.flex.items-center.justify-between');
+      expect(flexContainer).not.toBeNull();
+      expect(flexContainer!.className).toMatch(/flex-wrap/);
+    });
+
+    it('past session "View" button does not use fixed ml-4 margin', async () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[pastSession]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      const viewBtn = screen.getByText('View').closest('button');
+      expect(viewBtn).not.toBeNull();
+      expect(viewBtn!.className).not.toMatch(/\bml-4\b/);
+    });
+
+    // PLAT-0m85: Students table should be wrapped in overflow-x-auto for horizontal scroll
+    it('students table is wrapped in a div with overflow-x-auto for horizontal scrolling', async () => {
+      const students: StudentProgress[] = [
+        {
+          user_id: 'user-student-1',
+          display_name: 'Alice Smith',
+          email: 'alice@example.com',
+          problems_started: 3,
+          total_problems: 5,
+          last_active: null,
+        },
+      ];
+
+      const { container } = render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Students/i }));
+
+      const table = container.querySelector('table');
+      expect(table).not.toBeNull();
+      const tableWrapper = table!.parentElement;
+      expect(tableWrapper).not.toBeNull();
+      expect(tableWrapper!.className).toMatch(/overflow-x-auto/);
+    });
+  });
 });
