@@ -3,6 +3,8 @@
 > **Note:** This document captures speculative workflow designs from early planning.
 > These are likely to change significantly during implementation.
 > Treat as reference material, not specification.
+>
+> The Problem Repository section below is superseded by [PROBLEM_REPOS.md](PROBLEM_REPOS.md).
 
 ---
 

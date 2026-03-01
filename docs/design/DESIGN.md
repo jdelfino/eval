@@ -4,7 +4,7 @@
 > across both phases of development. Phase 1 (in-class exercise migration) is underway;
 > Phase 2 (out-of-class assignments) builds on top of it.
 >
-> For the current implementation architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
+> For the current implementation architecture, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ---
 

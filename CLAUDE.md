@@ -60,7 +60,7 @@ Run these before committing. Pick the targets matching the code you changed.
 
 **Infrastructure:** Terraform modules are environment-agnostic. Environment configs in `infrastructure/terraform/environments/` provide all values.
 
-**Migrations:** SQL migrations in `migrations/` with RLS helpers. See [docs/MIGRATION.md](docs/MIGRATION.md).
+**Migrations:** SQL migrations in `migrations/` with RLS helpers.
 
 ## Git Hooks (lefthook)
 
