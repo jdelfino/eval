@@ -18,6 +18,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-no-verify.sh"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {

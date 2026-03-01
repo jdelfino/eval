@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# PreToolUse hook: block git hook bypass attempts.
+# Claude Code passes JSON on stdin with the tool input.
+# We check tool_input.command for forbidden patterns.
+
+set -euo pipefail
+
+input=$(cat)
+
+# Extract the command field; empty string if not present
+command=$(echo "$input" | jq -r '.tool_input.command // ""')
+
+# Check for forbidden bypass patterns
+if echo "$command" | grep -qE '(--no-verify|LEFTHOOK=0(\s|$)|LEFTHOOK_DISABLE=1(\s|$)|LEFTHOOK=false(\s|$))'; then
+  reason="Bypassing git hooks is not allowed. Remove --no-verify / LEFTHOOK=0 / LEFTHOOK_DISABLE=1 / LEFTHOOK=false from the command."
+  echo "{\"decision\": \"deny\", \"reason\": \"$reason\"}"
+  exit 0
+fi
+
+echo '{"decision": "allow"}'
