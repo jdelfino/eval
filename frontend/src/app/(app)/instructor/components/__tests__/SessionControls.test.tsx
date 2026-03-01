@@ -44,6 +44,15 @@ describe('SessionControls', () => {
     expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
   });
 
+  it('should apply flex-wrap to the button container for mobile responsiveness', () => {
+    const { container } = render(<SessionControls {...defaultProps} />);
+
+    // The button container should have flex-wrap so buttons wrap on small screens
+    const buttonContainer = container.querySelector('.flex.gap-2');
+    expect(buttonContainer).toBeInTheDocument();
+    expect(buttonContainer).toHaveClass('flex-wrap');
+  });
+
   describe('End Session confirmation dialog', () => {
     it('should show confirmation dialog when End Session button is clicked', () => {
       render(<SessionControls {...defaultProps} />);
