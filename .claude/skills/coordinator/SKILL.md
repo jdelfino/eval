@@ -45,20 +45,11 @@ All work uses branches and PRs. Uses worktrees and subagents.
 # Create feature branch from main
 git fetch origin main
 git branch feature/<work-name> origin/main
-
-# Create worktree
-git worktree add ../<project>-<work-name> feature/<work-name>
-
-# CRITICAL: Symlink node_modules BEFORE spawning subagents
-# (worktree branches from main, so packages match — no need to reinstall)
-ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/node_modules
 ```
 
 ### 2. Implement Tasks
 
 **Follow the dependency graph from beads.** Spawn all currently-unblocked tasks in parallel. When a task completes, check if any blocked tasks are now unblocked and spawn those.
-
-**Optimistic conflict recovery:** If two parallel implementers report overlapping files in their `## Files modified` summaries, one may have clobbered the other's changes. When you detect this, spawn a follow-up implementer to reconcile — give it both summaries and ask it to merge the changes in the overlapping files.
 
 For each task:
 
@@ -67,7 +58,15 @@ For each task:
 bd update <task-id> --set-labels wip --json
 ```
 
-#### b. Spawn Implementer Subagent
+#### b. Create Per-Task Worktree
+
+```bash
+git branch feature/<work-name>/<task-id> feature/<work-name>
+git worktree add ../<project>-<task-id> feature/<work-name>/<task-id>
+ln -s /workspaces/eval/frontend/node_modules ../<project>-<task-id>/frontend/node_modules
+```
+
+#### c. Spawn Implementer Subagent
 
 Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 
@@ -75,7 +74,7 @@ Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
 ROLE: Implementer
 SKILL: Read and follow .claude/skills/implementer/SKILL.md
 
-WORKTREE: ../<project>-<work-name>
+WORKTREE: ../<project>-<task-id>
 TASK: <task-id>
 Read the task description: bd show <task-id> --json
 
@@ -86,18 +85,30 @@ CONSTRAINTS:
 - Phase 5 of the implementer skill produces a structured summary — that is your final output
 ```
 
-#### c. Handle Result
+#### d. Handle Result
 
 The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent.
 
-**On SUCCESS:**
+**On SUCCESS:** spawn a rebase sub-agent (sequential — do NOT run in parallel with other rebase agents) to integrate into the feature branch:
+
+```
+ROLE: Rebase Agent
+SKILL: Read and follow .claude/skills/rebase/SKILL.md
+
+SOURCE: feature/<work-name>/<task-id>
+TARGET: feature/<work-name>
+WORKTREE: ../<project>-<task-id>
+CLEANUP: true
+```
+
+After rebase completes:
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
 Check the "Concerns" section — file follow-up issues if needed.
 
 **On FAILURE:**
-- If recoverable: fix directly or spawn new subagent with clarification
+- Spawn a new implementer in a fresh worktree to resolve the conflict
 - If blocked: note the blocker, move to next task
 - Do NOT close the task
 
@@ -105,7 +116,14 @@ Check the "Concerns" section — file follow-up issues if needed.
 
 Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
 
-After all tasks are complete, run 3 specialized reviews **in parallel** using the Task tool:
+After all tasks are merged into the feature branch, create a worktree for the feature branch to use for reviews and the test-runner:
+
+```bash
+git worktree add ../<project>-<work-name> feature/<work-name>
+ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/node_modules
+```
+
+Then run 3 specialized reviews **in parallel** using the Task tool:
 
 **Correctness Reviewer:**
 ```
@@ -202,12 +220,11 @@ EOF
 
 - Committing directly to main (branch is protected — all changes require a PR)
 - Starting dependent task before blocker is closed
-- Blocking on file overlap analysis before spawning tasks (use optimistic execution instead)
 - Creating PR before running specialized reviews
 - Creating PR with failing tests
 - Merging PRs (that's `/merge`'s job)
 - Watching CI (that's `/merge`'s job)
 - Cleaning up worktrees before merge (that's `/merge`'s job)
-- Running `npm ci` in a worktree (it nukes node_modules through the symlink — use `npm install <pkg>` for additive changes, or break the symlink first if a full reinstall is needed)
+- Running rebase agents in parallel (must be sequential for linear history)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
