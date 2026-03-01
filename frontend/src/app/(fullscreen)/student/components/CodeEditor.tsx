@@ -324,11 +324,30 @@ export default function CodeEditor({
     decorationsRef.current = newDecorations;
   }, [debuggerHook?.hasTrace, debuggerHook?.currentStep]);
 
+  // Cleanup __TEST_EDITORS on unmount (test mode only)
+  useEffect(() => {
+    return () => {
+      if (process.env.NEXT_PUBLIC_AUTH_MODE === 'test' && editorRef.current) {
+        const w = window as any;
+        if (w.__TEST_EDITORS) {
+          const idx = w.__TEST_EDITORS.indexOf(editorRef.current);
+          if (idx >= 0) w.__TEST_EDITORS.splice(idx, 1);
+        }
+      }
+    };
+  }, []);
+
   const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor;
     // Also store in external ref if provided
     if (externalEditorRef) {
       externalEditorRef.current = editor;
+    }
+    // Expose to E2E tests for reliable programmatic access
+    if (process.env.NEXT_PUBLIC_AUTH_MODE === 'test') {
+      const w = window as any;
+      if (!w.__TEST_EDITORS) w.__TEST_EDITORS = [];
+      w.__TEST_EDITORS.push(editor);
     }
     if (!isReadOnly) {
       editor.focus();
