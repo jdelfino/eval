@@ -105,27 +105,28 @@ gh pr merge <number> --squash|--merge  # per Step 4
 
 When a PR is not mergeable (behind main):
 
-```bash
-git fetch origin main
+1. **Locate or create a worktree for the PR branch:**
+   ```bash
+   # Use existing worktree if present, otherwise create one
+   git worktree add ../<project>-rebase-<number> <branch>
+   ```
 
-# Use existing worktree if present, otherwise create one
-cd <existing-worktree>  # or: git worktree add ../<project>-rebase-<number> <branch>
-git rebase origin/main
-```
+2. **Spawn a rebase sub-agent** (using the rebase skill) with:
+   - source: the PR branch name
+   - target: `origin/main`
+   - worktree path: the path from step 1
+   - cleanup: `false` (merge-queue handles cleanup after merge)
 
-- **Clean rebase:** force-push, then **wait for CI to finish and merge** (see below).
-  ```bash
-  git push --force-with-lease
-  ```
-- **Trivial conflict:** resolve inline if the conflict is mechanical — e.g. adjacent line edits, import ordering, lock file regeneration, or both sides adding to the same list. After resolving, `git add` the files, `git rebase --continue`, and force-push. **Always include a conflict summary in the report:**
-  ```
-  Resolved 2 conflicts during rebase of PR #18:
-  - go-backend/internal/server/server.go: adjacent route additions (kept both)
-  - frontend/package-lock.json: regenerated
-  ```
-- **Non-trivial conflict:** file a beads issue describing the conflict, which files are affected, and what makes it non-trivial (semantic overlap, structural disagreement, etc.). Do not attempt to resolve. Report to user.
+3. **On `RESULT: PASS`:** force-push the rebased branch, then **wait for CI to finish and merge** (see below).
+   ```bash
+   git push --force-with-lease
+   ```
 
-After rebase, clean up any temporary worktree created for the rebase.
+4. **On `RESULT: FAIL`:** file a beads issue describing the conflict using details from the sub-agent output, and report to the user.
+   ```bash
+   bd create "Rebase conflict on PR #<number>: <summary>" -t bug -p 1 --json
+   ```
+   Include in the issue body: which files conflicted, why the conflict is ambiguous, and the PR reference.
 
 **After a clean rebase, poll CI and merge when it passes.** Don't just report "rebased, CI re-running" and stop — unmerged PRs accumulate conflicts. Poll every 60 seconds until CI completes:
 
