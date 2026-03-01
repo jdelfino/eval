@@ -29,10 +29,12 @@ jest.mock('@/lib/api-client', () => ({
   },
 }));
 
-const MockCentrifuge = jest.fn();
 jest.mock('centrifuge', () => ({
-  Centrifuge: MockCentrifuge,
+  Centrifuge: jest.fn(),
 }));
+import { Centrifuge } from 'centrifuge';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MockCentrifuge = Centrifuge as unknown as jest.MockedFunction<(...args: any[]) => any>;
 
 const ORIGINAL_ENV = process.env;
 

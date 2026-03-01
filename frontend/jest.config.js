@@ -1,4 +1,4 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} */
+/** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',
   roots: ['<rootDir>/src'],
@@ -19,7 +19,6 @@ module.exports = {
   projects: [
     {
       displayName: 'client',
-      preset: 'ts-jest',
       testEnvironment: 'jsdom',
       testMatch: [
         '<rootDir>/src/app/**/__tests__/**/*.test.tsx',
@@ -45,19 +44,16 @@ module.exports = {
         '^firebase/auth$': '<rootDir>/src/__mocks__/firebase/auth.ts',
       },
       transform: {
-        '^.+\\.tsx?$': ['ts-jest', {
-          isolatedModules: true,
-          tsconfig: {
-            jsx: 'react-jsx',
-            esModuleInterop: true,
-            allowSyntheticDefaultImports: true,
-          }
-        }]
+        '^.+\\.tsx?$': ['@swc/jest', {
+          jsc: {
+            parser: { syntax: 'typescript', tsx: true },
+            transform: { react: { runtime: 'automatic' } },
+          },
+        }],
       },
     },
     {
       displayName: 'integration',
-      preset: 'ts-jest',
       testEnvironment: 'jsdom',
       testMatch: [
         '<rootDir>/src/**/__tests__/**/*.integration.test.ts',
@@ -77,14 +73,12 @@ module.exports = {
         '^firebase/auth$': '<rootDir>/src/__mocks__/firebase/auth.ts',
       },
       transform: {
-        '^.+\\.tsx?$': ['ts-jest', {
-          isolatedModules: true,
-          tsconfig: {
-            jsx: 'react-jsx',
-            esModuleInterop: true,
-            allowSyntheticDefaultImports: true,
-          }
-        }]
+        '^.+\\.tsx?$': ['@swc/jest', {
+          jsc: {
+            parser: { syntax: 'typescript', tsx: true },
+            transform: { react: { runtime: 'automatic' } },
+          },
+        }],
       },
     },
     {
