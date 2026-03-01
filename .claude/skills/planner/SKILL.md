@@ -65,6 +65,8 @@ After the user approves the plan:
    bd dep add <blocked-task> <blocker-task> --json
    ```
 
+4. **Set dependencies to model execution order.** Tasks with no dependency relationship are implicitly parallel — the coordinator spawns all unblocked tasks concurrently. Use `bd dep add` only for true data/ordering dependencies (shared types, migrations before code, etc.). Don't over-constrain — occasional file overlap between parallel tasks is fine; the coordinator handles conflicts optimistically.
+
 **Each subtask MUST be self-contained** (per AGENTS.md rules):
 - **Summary**: What and why in 1-2 sentences
 - **Files to modify**: Exact paths (with line numbers if relevant)
