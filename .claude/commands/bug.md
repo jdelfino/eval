@@ -4,7 +4,7 @@ Investigate and fix: **$ARGUMENTS**
 
 ## Do Not Panic
 
-Unless the user EXPLICITLY says this is urgent or time-critical, work methodically and carefully. A calm, thorough investigation followed by a correct fix is almost always better than a fast, wrong one.
+Unless the user EXPLICITLY says this is urgent or time-critical, work methodically and carefully. A calm, thorough investigation followed by a correct fix is always better than a fast, wrong one.
 
 Do NOT skip investigation to "ship faster," make speculative fixes without confirming root cause, cut corners on testing, or treat every bug as a P0 emergency. The default pace is methodical — only compress the timeline when the user explicitly asks for speed (e.g., "blocking users right now", "hotfix", "drop everything").
 
