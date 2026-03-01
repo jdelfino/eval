@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
-import { hasRolePermission } from '@/lib/permissions';
 import type { Class, Section } from '@/types/api';
 import { getClass } from '@/lib/api/classes';
 import SectionCard from '../components/SectionCard';
@@ -34,12 +33,6 @@ export default function ClassDetailsPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/signin');
-      return;
-    }
-
-    // Check if user has permission to read classes
-    if (user && !hasRolePermission(user.role, 'class.read')) {
-      router.push('/');
       return;
     }
 
@@ -94,7 +87,7 @@ export default function ClassDetailsPage() {
     );
   }
 
-  if (!user || !hasRolePermission(user.role, 'class.read') || !classData) {
+  if (!user || !classData) {
     return null;
   }
 

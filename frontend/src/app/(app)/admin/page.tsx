@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/lib/permissions';
+import { hasPermission } from '@/hooks/usePermissions';
 import { useSelectedNamespace } from '@/hooks/useSelectedNamespace';
 import NamespaceHeader from '@/components/NamespaceHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -60,7 +60,7 @@ function AdminPage() {
   const [invitations, setInvitations] = useState<SerializedInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
 
-  const isAdmin = user ? hasRolePermission(user.role, 'user.changeRole') : false;
+  const isAdmin = user ? hasPermission(user, 'user.changeRole') : false;
   const isSystemAdmin = user?.role === 'system-admin';
 
   // Get namespaceId for API calls (system-admin can filter by namespace)

@@ -11,15 +11,21 @@ jest.mock('@/lib/api/instructor', () => ({
 // Mock the auth context
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'test-user', name: 'Test User', role: 'instructor', email: 'test@example.com' },
+    user: {
+      id: 'test-user',
+      name: 'Test User',
+      role: 'instructor',
+      email: 'test@example.com',
+      permissions: ['content.manage', 'session.manage'],
+    },
     isAuthenticated: true,
     isLoading: false,
   }),
 }));
 
-// Mock the permissions module
-jest.mock('@/lib/permissions', () => ({
-  hasRolePermission: jest.fn(() => true),
+// Mock usePermissions instead of permissions lib (permissions lib is being deleted)
+jest.mock('@/hooks/usePermissions', () => ({
+  hasPermission: jest.fn(() => true),
 }));
 
 // Mock the join-code module

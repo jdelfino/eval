@@ -18,6 +18,23 @@ type AuthHandler struct {
 	bootstrapAdminEmail string
 }
 
+// meResponse wraps a store.User with server-computed permissions.
+type meResponse struct {
+	*store.User
+	Permissions []string `json:"permissions"`
+}
+
+// newMeResponse builds a meResponse from a DB user, computing permissions
+// from the DB user's role so the returned role and permissions always agree.
+func newMeResponse(user *store.User) meResponse {
+	perms := auth.RolePermissions(auth.Role(user.Role))
+	permStrings := make([]string, len(perms))
+	for i, p := range perms {
+		permStrings[i] = string(p)
+	}
+	return meResponse{User: user, Permissions: permStrings}
+}
+
 // NewAuthHandler creates a new AuthHandler.
 // bootstrapAdminEmail is the email address authorized to bootstrap the first system admin.
 // If empty, bootstrap is disabled.
@@ -74,7 +91,7 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, user)
+	httputil.WriteJSON(w, http.StatusOK, newMeResponse(user))
 }
 
 // updateMeRequest is the request body for PUT /auth/me.
@@ -108,7 +125,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, user)
+	httputil.WriteJSON(w, http.StatusOK, newMeResponse(user))
 }
 
 // GetAcceptInvite returns invitation details for the given token.

@@ -1,58 +1,49 @@
 /**
  * Client-side permission checking hook.
- * Uses the same RBAC permission logic as the server.
+ * Uses the permissions array returned by the server (via /me endpoint).
  */
 
 import { useMemo } from 'react';
-import type { UserRole } from '@/lib/permissions';
-import { ROLE_PERMISSIONS } from '@/lib/permissions';
+import type { UserRole } from '@/types/api';
 
 /**
  * Minimal user type for permission checking.
- * Only needs role - works with both client and server User types.
+ * Uses the server-provided permissions array.
  */
-type UserWithRole = {
-  role: UserRole;
-  [key: string]: any;
+type UserWithPermissions = {
+  permissions?: string[];
 };
+
+// Re-export UserRole so callers that previously imported it from here still work.
+export type { UserRole };
 
 /**
  * Hook to check if a user has a specific permission.
  */
-export function usePermission(user: UserWithRole | null, permission: string): boolean {
+export function usePermission(user: UserWithPermissions | null, permission: string): boolean {
   return useMemo(() => {
     if (!user) return false;
-
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
-    return rolePermissions.includes(permission as any);
+    return user.permissions?.includes(permission) ?? false;
   }, [user, permission]);
 }
 
 /**
  * Hook to check if a user has any of the given permissions.
  */
-export function useAnyPermission(user: UserWithRole | null, permissions: string[]): boolean {
+export function useAnyPermission(user: UserWithPermissions | null, permissions: string[]): boolean {
   return useMemo(() => {
     if (!user) return false;
-
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
-    return permissions.some(permission =>
-      rolePermissions.includes(permission as any)
-    );
+    return permissions.some(permission => user.permissions?.includes(permission) ?? false);
   }, [user, permissions]);
 }
 
 /**
  * Hook to check if a user has all of the given permissions.
  */
-export function useAllPermissions(user: UserWithRole | null, permissions: string[]): boolean {
+export function useAllPermissions(user: UserWithPermissions | null, permissions: string[]): boolean {
   return useMemo(() => {
     if (!user) return false;
-
-    const rolePermissions = ROLE_PERMISSIONS[user.role];
-    return permissions.every(permission =>
-      rolePermissions.includes(permission as any)
-    );
+    return permissions.every(permission => user.permissions?.includes(permission) ?? false);
   }, [user, permissions]);
 }
 
@@ -60,9 +51,7 @@ export function useAllPermissions(user: UserWithRole | null, permissions: string
  * Direct function to check permission (non-hook).
  * Can be used in callbacks, effects, etc.
  */
-export function hasPermission(user: UserWithRole | null, permission: string): boolean {
+export function hasPermission(user: UserWithPermissions | null, permission: string): boolean {
   if (!user) return false;
-
-  const rolePermissions = ROLE_PERMISSIONS[user.role];
-  return rolePermissions.includes(permission as any);
+  return user.permissions?.includes(permission) ?? false;
 }

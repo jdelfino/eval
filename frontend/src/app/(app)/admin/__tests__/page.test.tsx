@@ -21,6 +21,7 @@ const mockUser = {
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   external_id: null,
+  permissions: ['user.changeRole', 'system.admin', 'content.manage', 'session.manage', 'session.join'],
 };
 
 jest.mock('@/contexts/AuthContext', () => ({

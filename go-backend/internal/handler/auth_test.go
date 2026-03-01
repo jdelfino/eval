@@ -92,12 +92,72 @@ func TestGetMe_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 
-	var got store.User
+	var got struct {
+		store.User
+		Permissions []string `json:"permissions"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if got.Email != user.Email {
 		t.Errorf("expected email %q, got %q", user.Email, got.Email)
+	}
+
+	// Verify permissions match those for the student role (from DB user's role).
+	expectedPerms := auth.RolePermissions(auth.RoleStudent)
+	if len(got.Permissions) != len(expectedPerms) {
+		t.Fatalf("expected %d permissions, got %d: %v", len(expectedPerms), len(got.Permissions), got.Permissions)
+	}
+	permSet := make(map[string]struct{}, len(expectedPerms))
+	for _, p := range expectedPerms {
+		permSet[string(p)] = struct{}{}
+	}
+	for _, p := range got.Permissions {
+		if _, ok := permSet[p]; !ok {
+			t.Errorf("unexpected permission %q in response", p)
+		}
+	}
+}
+
+func TestUpdateMe_SuccessIncludesPermissions(t *testing.T) {
+	userID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	newName := "Updated Name"
+	updatedUser := testUser()
+	updatedUser.DisplayName = &newName
+
+	repo := &StubUserRepo{
+		UpdateUserFn: func(_ context.Context, id uuid.UUID, params store.UpdateUserParams) (*store.User, error) {
+			return updatedUser, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]string{"display_name": newName})
+	h := NewAuthHandler("")
+	req := httptest.NewRequest(http.MethodPut, "/me", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, Role: auth.RoleStudent})
+	ctx = withAuthRepos(ctx, repo)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateMe(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got struct {
+		store.User
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	// Verify permissions match those for the student role (from DB user's role).
+	expectedPerms := auth.RolePermissions(auth.RoleStudent)
+	if len(got.Permissions) != len(expectedPerms) {
+		t.Fatalf("expected %d permissions, got %d: %v", len(expectedPerms), len(got.Permissions), got.Permissions)
 	}
 }
 

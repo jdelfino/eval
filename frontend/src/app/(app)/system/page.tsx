@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/lib/permissions';
+import { hasPermission } from '@/hooks/usePermissions';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNamespaces } from '@/hooks/useNamespaces';
 import NamespaceList from './components/NamespaceList';
@@ -175,21 +175,21 @@ function SystemAdminContent() {
 
   // Redirect if not system admin
   useEffect(() => {
-    if (!authLoading && (!user || !hasRolePermission(user.role, 'system.admin'))) {
+    if (!authLoading && (!user || !hasPermission(user, 'system.admin'))) {
       router.push('/');
     }
   }, [user, authLoading, router]);
 
   // Fetch namespaces on mount (needed for both tabs)
   useEffect(() => {
-    if (user && hasRolePermission(user.role, 'system.admin')) {
+    if (user && hasPermission(user, 'system.admin')) {
       fetchNamespaces(includeInactive);
     }
   }, [user, includeInactive, fetchNamespaces]);
 
   // Fetch invitations when tab is active or filters change
   useEffect(() => {
-    if (user && hasRolePermission(user.role, 'system.admin') && activeTab === 'invitations') {
+    if (user && hasPermission(user, 'system.admin') && activeTab === 'invitations') {
       fetchInvitations();
     }
   }, [user, activeTab, fetchInvitations]);
@@ -204,7 +204,7 @@ function SystemAdminContent() {
   }
 
   // Verify system admin role
-  if (!hasRolePermission(user.role, 'system.admin')) {
+  if (!hasPermission(user, 'system.admin')) {
     return null; // Will redirect
   }
 

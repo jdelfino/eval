@@ -30,6 +30,13 @@ describe('getCurrentUser()', () => {
     expect(typeof user.created_at).toBe('string');
     expect(typeof user.updated_at).toBe('string');
 
+    // permissions array returned by the server
+    expect(Array.isArray(user.permissions)).toBe(true);
+    expect((user.permissions as string[]).length).toBeGreaterThan(0);
+    (user.permissions as string[]).forEach((perm: string) => {
+      expect(typeof perm).toBe('string');
+    });
+
     // No PascalCase
     expectSnakeCaseKeys(user, 'User');
   });
