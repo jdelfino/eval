@@ -244,7 +244,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Problem Library</h2>
           <p className="text-sm text-gray-600 mt-1">
@@ -252,7 +252,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
             {searchQuery && ` matching "${searchQuery}"`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {classes.length > 0 && (
             <div className="flex items-center gap-2">
               <label htmlFor="class-picker" className="text-sm font-medium text-gray-700">Class:</label>

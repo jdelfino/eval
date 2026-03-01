@@ -416,4 +416,46 @@ describe('ProblemLibrary', () => {
       });
     });
   });
+
+  describe('Mobile responsive layout', () => {
+    it('header container has flex-wrap to prevent overflow on small screens', async () => {
+      render(<ProblemLibrary onCreateNew={jest.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      // The outer header div should have flex-wrap
+      const heading = screen.getByText('Problem Library');
+      const headerContainer = heading.closest('h2')!.parentElement!.parentElement!;
+      expect(headerContainer.className).toMatch(/flex-wrap/);
+    });
+
+    it('right-side controls container has flex-wrap for small screen stacking', async () => {
+      const onCreateNew = jest.fn();
+      render(<ProblemLibrary onCreateNew={onCreateNew} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Create New Problem')).toBeInTheDocument();
+      });
+
+      // The controls container (right side) should also have flex-wrap
+      const createButton = screen.getByText('Create New Problem');
+      const controlsContainer = createButton.closest('button')!.parentElement!;
+      expect(controlsContainer.className).toMatch(/flex-wrap/);
+    });
+
+    it('header container allows items to start at row start on small screens', async () => {
+      render(<ProblemLibrary onCreateNew={jest.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const heading = screen.getByText('Problem Library');
+      const headerContainer = heading.closest('h2')!.parentElement!.parentElement!;
+      // Should have gap classes to space wrapped rows
+      expect(headerContainer.className).toMatch(/gap-/);
+    });
+  });
 });
