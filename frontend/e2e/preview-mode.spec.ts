@@ -26,7 +26,7 @@ test.describe('Instructor Preview as Student Mode', () => {
     const problem = await createProblem(instructor.token, cls.id, {
       title: `Preview Problem ${testNamespace}`,
       description: 'A problem for preview mode testing',
-      starterCode: '# Write your solution\n',
+      starterCode: 'print("hello from preview")\n',
     });
     await publishProblem(instructor.token, section.id, problem.id);
 
@@ -81,31 +81,30 @@ test.describe('Instructor Preview as Student Mode', () => {
     await expect(page.locator('button:has-text("Run Code"), button:has-text("▶ Run Code")')).toBeVisible({ timeout: 10000 });
 
     // ===== PHASE 4: EXECUTE CODE =====
-    // Click Monaco editor, clear it, and type our test code
-    const monacoEditor = page.locator('.monaco-editor').first();
-    await monacoEditor.click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.waitForTimeout(200);
-    await page.keyboard.press('Backspace');
-    await page.waitForTimeout(300);
-    await page.keyboard.type('print("hello from preview")', { delay: 50 });
+    // Student work starts with empty code. Load the starter code via the
+    // "Restore Starter Code" button (avoids flaky Monaco keyboard interaction).
+    const restoreButton = page.locator('button:has-text("Restore Starter Code")');
+    await expect(restoreButton).toBeVisible({ timeout: 10000 });
+    await restoreButton.click();
 
-    // Wait for debounced auto-save
+    // Verify Monaco has the starter code (matches session-lifecycle poll pattern)
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const editor = document.querySelector('.monaco-editor');
+        return editor?.textContent?.replace(/\s/g, '') || '';
+      });
+    }, { timeout: 5000, message: 'Monaco should contain starter code after restore' }).toContain('hello');
+
+    // Wait for debounced auto-save before executing
     await page.waitForTimeout(1000);
 
     // Click "Run Code" button
     await page.locator('button:has-text("Run Code"), button:has-text("▶ Run Code")').click();
 
-    // Verify execution succeeds — look for "hello from preview" in the output area.
-    // Use expect.poll since execution results arrive asynchronously.
-    await expect.poll(async () => {
-      const outputArea = page.locator('pre');
-      const text = await outputArea.allTextContents();
-      return text.some((t) => t.includes('hello from preview'));
-    }, {
-      timeout: 30000,
-      message: 'Expected "hello from preview" to appear in code execution output',
-    }).toBe(true);
+    // Wait for successful execution result — matches session-lifecycle pattern
+    const outputArea = page.locator('[data-testid="output-area"]');
+    await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
+    await expect(outputArea.locator('text=hello from preview')).toBeVisible();
 
     // ===== PHASE 5: NAVIGATE BACK VIA BREADCRUMB =====
     // The breadcrumb in the student workspace contains the section name as a link
