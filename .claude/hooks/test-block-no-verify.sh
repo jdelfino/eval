@@ -52,6 +52,10 @@ check "--no-verify anywhere in command is denied" \
   '{"tool_input": {"command": "cd /repo && git push --no-verify"}}' \
   "deny"
 
+check "LEFTHOOK=0 at end of string is denied" \
+  '{"tool_input": {"command": "export LEFTHOOK=0"}}' \
+  "deny"
+
 # --- Should ALLOW ---
 
 check "normal git commit is allowed" \
@@ -76,6 +80,10 @@ check "make test is allowed" \
 
 check "non-Bash tool (no tool_input.command) is allowed" \
   '{"tool_input": {}}' \
+  "allow"
+
+check "malformed JSON input is allowed (graceful degradation)" \
+  'not valid json at all' \
   "allow"
 
 # Summary

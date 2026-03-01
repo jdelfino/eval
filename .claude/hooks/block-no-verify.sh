@@ -7,8 +7,8 @@ set -euo pipefail
 
 input=$(cat)
 
-# Extract the command field; empty string if not present
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
+# Extract the command field; empty string if not present or on parse error
+command=$(echo "$input" | jq -r '.tool_input.command // ""' 2>/dev/null || true)
 
 # Check for forbidden bypass patterns
 if echo "$command" | grep -qE '(--no-verify|LEFTHOOK=0(\s|$)|LEFTHOOK_DISABLE=1(\s|$)|LEFTHOOK=false(\s|$))'; then

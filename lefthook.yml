@@ -30,7 +30,7 @@ pre-push:
   parallel: true
   commands:
     bd-push:
-      run: bd push
+      run: bd hooks run pre-push
     test-api:
       glob: "go-backend/{,**/}*.go"
       run: make test-api
@@ -41,7 +41,7 @@ pre-push:
       glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make test-frontend
     check-contract-coverage:
-      glob: "go-backend/{,**/}*.go"
+      glob: "{go-backend/{,**/}*.go,frontend/{,**/}*.{ts,tsx}}"
       run: make check-contract-coverage
 
 post-checkout:
