@@ -1,8 +1,8 @@
-# Target Architecture
+# Architecture
 
 ## Overview
 
-Greenfield build on GCP with Go backend, GKE orchestration, and managed services. No data or user migration from existing systems - clean cutover when ready.
+GCP-hosted platform with Go backend, Next.js frontend, GKE orchestration, and managed services.
 
 ```
                            +----------------------------------------------------------+
@@ -63,13 +63,14 @@ Greenfield build on GCP with Go backend, GKE orchestration, and managed services
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Backend | Go | Separate from Next.js frontend, good k8s tooling |
+| Backend | Go 1.24 (Chi v5) | Lightweight, good k8s tooling, strong concurrency |
+| Frontend | Next.js 16 (App Router) | TypeScript, Tailwind CSS, Firebase Auth |
 | Orchestration | GKE | Managed k8s with automatic scaling |
 | Database | Cloud SQL PostgreSQL | With RLS via session variables, Private Service Access |
 | Auth | Identity Platform | Enterprise IdP federation, SAML support |
-| Real-time | Centrifugo | Managed WS server, Go API just publishes |
-| Code Execution | Executor service + KEDA | Auto-scales 0-N, nsjail sandbox |
-| Cache/Pub-Sub | Memorystore Redis | Stateless message routing |
+| Real-time | Centrifugo v5 | Managed WS server, Go API just publishes |
+| Code Execution | Python executor + KEDA | Auto-scales 0-N, nsjail sandbox |
+| Cache/Pub-Sub | Redis | Centrifugo state, rate limiting |
 | IaC | Terraform | Industry standard |
 
 ## GCP-Specific Patterns
@@ -105,48 +106,30 @@ Identity Platform provides enterprise-grade auth:
 - Automatic node upgrades
 - Built-in workload identity
 
-## Core Library
-
-The central abstraction is a **library** (not a CLI) that encapsulates:
-
-### Template Operations
-- Initialize assignment structure
-- Validate solution against tests
-- Lint configuration
-- Render instructions
-
-### Grading Operations
-- Run tests against student code
-- Capture structured results
-- Package submissions
-
-### Repository Operations
-- Create student repos from templates
-- Sync platform-controlled files
-- Diff for drift detection
-
-The platform imports this library directly. A thin CLI can wrap it for standalone use.
-
 ## Component Details
 
 ### Go API
 
-Core application serving HTTP endpoints.
+Core application serving HTTP endpoints (~50 routes).
 
 ```
 go-backend/
-├── cmd/server/           # main.go, startup
+├── cmd/server/           # Entry point
 ├── internal/
-│   ├── config/           # Environment, feature flags
-│   ├── auth/             # Identity Platform JWT validation, RBAC
-│   ├── middleware/       # Logging, rate limit, RLS context
-│   ├── db/               # Connection pool, transactions
-│   ├── repository/       # Data access layer
-│   ├── service/          # Business logic
-│   ├── handler/          # HTTP handlers
-│   └── realtime/         # Centrifugo client
-└── pkg/
-    └── assignment/       # Core library (template, grade, repo)
+│   ├── server/           # Server setup, middleware chain, route mounting
+│   ├── handler/          # HTTP handlers (one file per resource)
+│   ├── store/            # Data access layer (repository pattern)
+│   ├── auth/             # JWT validation, User struct, RBAC permissions
+│   ├── middleware/       # authn, authz, RLS context, logging
+│   ├── config/           # Environment config (env struct tags)
+│   ├── httpbind/         # JSON binding + validation
+│   ├── db/               # Connection pool, migrations
+│   ├── realtime/         # Centrifugo WebSocket integration
+│   ├── executor/         # Executor service client
+│   ├── ai/               # AI integration
+│   ├── email/            # Email service
+│   ├── revision/         # Code revision tracking
+│   └── metrics/          # Prometheus metrics
 ```
 
 **RLS Middleware:**
@@ -234,17 +217,21 @@ All state must be externalized:
 
 ## API Surface
 
-| Area | Endpoints | Priority |
-|------|-----------|----------|
-| Auth | 7 | First |
-| Namespaces | 6 | Second |
-| Classes/Sections | 11 | Third |
-| Problems | 2 | Third |
-| Sessions | 15 | Fourth |
-| Admin | 6 | Fifth |
-| Invitations | 6 | Fifth |
+| Area | Description |
+|------|-------------|
+| Auth | Registration, login, profile, bootstrap |
+| Namespaces | Multi-tenant namespace management |
+| Classes / Sections | Course structure, membership, joining |
+| Problems | Problem CRUD, public problem access |
+| Sessions | Live session lifecycle, state, history |
+| Session Students | Join, code updates, student work |
+| Execution | Code execution (standalone and in-session) |
+| Revisions | Code revision tracking |
+| Dashboard | Instructor analytics |
+| Admin / Users | User management, invitations |
+| Realtime | Centrifugo auth proxy |
 
-~55 total endpoints.
+~50 total endpoints. See `go-backend/internal/server/server.go` for the full route table.
 
 ## Network Architecture
 
@@ -263,10 +250,3 @@ All state must be externalized:
 - Egress: GKE to NAT VM for internet access
 - Internal: All VPC traffic allowed
 
-## Open Decisions
-
-| Decision | Options |
-|----------|---------|
-| Go HTTP framework | Chi, Echo, or Gin |
-| Domain/DNS | Same domain or new |
-| Redis deployment | Memorystore vs self-managed on GKE |

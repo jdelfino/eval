@@ -54,7 +54,7 @@ Add full assignment lifecycle support: browser-based development workspaces (Cod
 
 **Key additions:** Coder for workspace orchestration, AI grading agent, problem repository model with hidden tests, custom grading and feedback UI.
 
-See [DESIGN.md](DESIGN.md) for the full technical design covering both phases.
+See [design/DESIGN.md](design/DESIGN.md) for the full technical design covering both phases.
 
 ## Design Principles
 
@@ -105,4 +105,4 @@ Based on GKE Standard with Spot instances for student workspaces (preemption is 
 
 With prompt caching and batch API: $0.02-0.05 per submission.
 
-See [DESIGN.md](DESIGN.md) for detailed cost breakdowns and sensitivity analysis.
+See [design/DESIGN.md](design/DESIGN.md) for detailed cost breakdowns and sensitivity analysis.
