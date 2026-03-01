@@ -9,6 +9,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
 import { registerStudent, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Public View Feature', () => {
   test('Public view updates when instructor features different students', async ({ page, browser, testNamespace, setupInstructor }) => {
@@ -124,14 +125,13 @@ test.describe('Public View Feature', () => {
       await expect(page.locator('.monaco-editor')).toBeVisible();
       await expect(page.locator('text=Connected')).toBeVisible();
 
-      // Student types code in the Monaco editor
+      // Student types code in the Monaco editor using the programmatic API
       const studentCode = 'print("Hello from student!")';
-      const monacoEditor = page.locator('.monaco-editor').first();
-      await monacoEditor.click();
-      await page.keyboard.type(studentCode);
+      await waitForMonacoReady(page);
+      await setMonacoValue(page, studentCode);
 
       // Wait for debounced code update (500ms debounce + network time)
-      await page.waitForTimeout(2_000);
+      await page.waitForTimeout(1000);
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT =====
       // Wait for student to appear - via Realtime broadcast or polling fallback

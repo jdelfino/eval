@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, apiFetch, testToken } from './fixtures/api-setup';
+import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
   test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
@@ -52,17 +53,11 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(1000);
 
       // ===== STUDENT TYPES CODE =====
-      const monacoEditor = page.locator('.monaco-editor').first();
-      await monacoEditor.click();
-      await page.keyboard.press('ControlOrMeta+a');
-      await page.waitForTimeout(200);
-      await page.keyboard.press('Backspace');
-      await page.waitForTimeout(300);
-      const studentCode1 = 'print("LIFECYCLE_TEST_1")';
-      await page.keyboard.type(studentCode1, { delay: 50 });
+      await waitForMonacoReady(page);
+      await setMonacoValue(page, 'print("LIFECYCLE_TEST_1")');
 
       // Wait for code sync (500ms debounce + network)
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1000);
 
       // ===== INSTRUCTOR VERIFIES STUDENT CODE =====
       await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
@@ -110,17 +105,11 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(1000);
 
       // ===== STUDENT TYPES IN NEW SESSION =====
-      const monacoEditor2 = page.locator('.monaco-editor').first();
-      await monacoEditor2.click();
-      await page.keyboard.press('ControlOrMeta+a');
-      await page.waitForTimeout(200);
-      await page.keyboard.press('Backspace');
-      await page.waitForTimeout(300);
-      const studentCode2 = 'print("LIFECYCLE_TEST_2")';
-      await page.keyboard.type(studentCode2, { delay: 50 });
+      await waitForMonacoReady(page);
+      await setMonacoValue(page, 'print("LIFECYCLE_TEST_2")');
 
       // Wait for code sync
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1000);
 
       // ===== INSTRUCTOR ENDS SESSION 2 =====
       const endRes2 = await apiFetch(`/api/v1/sessions/${session2.id}`, instructor.token, {
@@ -138,12 +127,10 @@ test.describe('Session Lifecycle', () => {
       await expect(runButton).toBeVisible();
 
       // Verify Monaco still contains the student's code (guards against state loss)
-      await expect.poll(async () => {
-        return page.evaluate(() => {
-          const editor = document.querySelector('.monaco-editor');
-          return editor?.textContent?.replace(/\s/g, '') || '';
-        });
-      }, { timeout: 5000, message: 'Monaco should still contain student code after session end' }).toContain('LIFECYCLE_TEST_2');
+      await expect.poll(() => getMonacoValue(page), {
+        timeout: 5000,
+        message: 'Monaco should still contain student code after session end',
+      }).toContain('LIFECYCLE_TEST_2');
 
       // ===== STUDENT RUNS CODE IN PRACTICE MODE =====
       // Click Run Code — this uses the practice API endpoint

@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { createClass, createSection, startSession, createProblem, publishProblem, startSessionFromProblem, getOrCreateStudentWork, registerStudent, testToken } from './fixtures/api-setup';
+import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 /**
  * Debugger E2E Tests
@@ -40,13 +41,8 @@ test.describe('Debugger', () => {
       await expect(instructorPage.locator('.monaco-editor')).toBeVisible();
 
       // ===== TYPE CODE IN THE EDITOR =====
-      const monacoEditor = instructorPage.locator('.monaco-editor').first();
-      await monacoEditor.click();
-      await instructorPage.keyboard.press('ControlOrMeta+a');
-      await instructorPage.waitForTimeout(200);
-      await instructorPage.keyboard.press('Backspace');
-      await instructorPage.waitForTimeout(300);
-      await instructorPage.keyboard.type('x = 1\nprint(x)', { delay: 50 });
+      await waitForMonacoReady(instructorPage);
+      await setMonacoValue(instructorPage, 'x = 1\nprint(x)');
 
       // ===== OPEN DEBUGGER SIDEBAR =====
       // Click the bug icon in the activity bar to open the debugger sidebar
@@ -128,13 +124,8 @@ test.describe('Debugger', () => {
     await page.waitForTimeout(1000);
 
     // ===== TYPE CODE =====
-    const monacoEditor = page.locator('.monaco-editor').first();
-    await monacoEditor.click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.waitForTimeout(200);
-    await page.keyboard.press('Backspace');
-    await page.waitForTimeout(300);
-    await page.keyboard.type('y = 42\nprint(y)', { delay: 50 });
+    await waitForMonacoReady(page);
+    await setMonacoValue(page, 'y = 42\nprint(y)');
 
     // ===== OPEN DEBUGGER SIDEBAR =====
     const debuggerIcon = page.locator('button[aria-label="Debugger"]');

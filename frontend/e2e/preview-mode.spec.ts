@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { createClass, createSection, createProblem, publishProblem } from './fixtures/api-setup';
+import { waitForMonacoReady, getMonacoValue } from './fixtures/monaco';
 
 /**
  * Preview Mode E2E Tests
@@ -87,13 +88,12 @@ test.describe('Instructor Preview as Student Mode', () => {
     await expect(restoreButton).toBeVisible({ timeout: 10000 });
     await restoreButton.click();
 
-    // Verify Monaco has the starter code (matches session-lifecycle poll pattern)
-    await expect.poll(async () => {
-      return page.evaluate(() => {
-        const editor = document.querySelector('.monaco-editor');
-        return editor?.textContent?.replace(/\s/g, '') || '';
-      });
-    }, { timeout: 5000, message: 'Monaco should contain starter code after restore' }).toContain('hello');
+    // Verify Monaco has the starter code via the Monaco API
+    await waitForMonacoReady(page);
+    await expect.poll(() => getMonacoValue(page), {
+      timeout: 5000,
+      message: 'Monaco should contain starter code after restore',
+    }).toContain('hello');
 
     // Wait for debounced auto-save before executing
     await page.waitForTimeout(1000);
