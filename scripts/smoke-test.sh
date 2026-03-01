@@ -168,8 +168,20 @@ trap cleanup_smoke_pods EXIT
 read -r -d '' EXECUTOR_TEST_SCRIPT << 'PYEOF' || true
 import urllib.request, json, sys
 
+EXECUTOR_URL = "http://executor:8081"
+
+# Wait for the executor service to become reachable.  After a deploy with
+# strategy=Recreate, the Service endpoints may lag behind the rollout status.
+import time
+for _attempt in range(30):
+    try:
+        urllib.request.urlopen(f"{EXECUTOR_URL}/healthz", timeout=5)
+        break
+    except Exception:
+        time.sleep(2)
+
 def execute(code, timeout_ms=10000):
-    req = urllib.request.Request("http://executor:8081/execute",
+    req = urllib.request.Request(f"{EXECUTOR_URL}/execute",
         data=json.dumps({"code": code, "timeout_ms": timeout_ms}).encode(),
         headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
