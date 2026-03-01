@@ -131,7 +131,7 @@ export default function StudentSectionView({
       {/* Active Session Banner */}
       {activeSessions.length > 0 && activeSessions[0].problem?.id && (
         <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                 <svg className="w-7 h-7 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -158,7 +158,7 @@ export default function StudentSectionView({
 
       {/* Published Problems List */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h2 className="text-2xl font-bold text-gray-900">Problems</h2>
           <div className="flex items-center gap-2">
             {(['all', 'worked', 'unstarted'] as const).map((value) => (

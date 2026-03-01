@@ -85,7 +85,7 @@ export default function InstructorSectionView({
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{section.name}</h1>
               <p className="text-lg text-gray-600 mb-1">{section.className}</p>
@@ -154,7 +154,7 @@ export default function InstructorSectionView({
                 className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow border-2 border-green-200"
               >
                 <div className="p-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -185,7 +185,7 @@ export default function InstructorSectionView({
                     </div>
                     <button
                       onClick={() => handleJoinSession(session.id)}
-                      className="ml-4 px-8 py-4 bg-green-600 text-white text-base font-semibold rounded-lg hover:bg-green-700 transition-colors shadow hover:shadow-md flex items-center gap-2"
+                      className="px-8 py-4 bg-green-600 text-white text-base font-semibold rounded-lg hover:bg-green-700 transition-colors shadow hover:shadow-md flex items-center gap-2 w-full sm:w-auto"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -287,7 +287,7 @@ export default function InstructorSectionView({
                   className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
                 >
                   <div className="p-6">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="flex-shrink-0">
                           <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -326,7 +326,7 @@ export default function InstructorSectionView({
                       </div>
                       <button
                         onClick={() => router.push(`/instructor/session/${session.id}`)}
-                        className="ml-4 px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                        className="px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 w-full sm:w-auto"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -354,7 +354,7 @@ export default function InstructorSectionView({
         {/* Students Tab */}
         <Tabs.Panel tabId="students">
           {students.length > 0 ? (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="students-table-container">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>

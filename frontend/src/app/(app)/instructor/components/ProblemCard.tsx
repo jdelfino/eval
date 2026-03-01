@@ -102,7 +102,7 @@ export default function ProblemCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div data-testid="list-view-actions" className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => onEdit(problem.id)} title="Edit problem">
               Edit
             </Button>
