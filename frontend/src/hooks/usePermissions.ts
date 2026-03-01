@@ -4,7 +4,6 @@
  */
 
 import { useMemo } from 'react';
-import type { UserRole } from '@/types/api';
 
 /**
  * Minimal user type for permission checking.
@@ -13,9 +12,6 @@ import type { UserRole } from '@/types/api';
 type UserWithPermissions = {
   permissions?: string[];
 };
-
-// Re-export UserRole so callers that previously imported it from here still work.
-export type { UserRole };
 
 /**
  * Hook to check if a user has a specific permission.

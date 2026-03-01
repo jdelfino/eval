@@ -159,6 +159,15 @@ func TestUpdateMe_SuccessIncludesPermissions(t *testing.T) {
 	if len(got.Permissions) != len(expectedPerms) {
 		t.Fatalf("expected %d permissions, got %d: %v", len(expectedPerms), len(got.Permissions), got.Permissions)
 	}
+	permSet := make(map[string]struct{}, len(expectedPerms))
+	for _, p := range expectedPerms {
+		permSet[string(p)] = struct{}{}
+	}
+	for _, p := range got.Permissions {
+		if _, ok := permSet[p]; !ok {
+			t.Errorf("unexpected permission %q in response", p)
+		}
+	}
 }
 
 func TestGetMe_Unauthorized(t *testing.T) {
