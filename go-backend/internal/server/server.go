@@ -136,8 +136,11 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
 				validator = auth.NewTestValidator()
 			} else {
-				jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
-				validator = auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
+				authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID)
+				if err != nil {
+					panic(fmt.Sprintf("failed to initialize Firebase auth client: %v", err))
+				}
+				validator = auth.NewFirebaseValidator(authClient)
 			}
 			adapter := NewUserLookupAdapter(userStore)
 			jwtValidator = custommw.NewJWTValidator(validator, logger)
