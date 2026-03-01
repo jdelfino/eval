@@ -33,7 +33,6 @@ export interface WalkthroughScript {
   issues: AnalysisIssue[];
   summary: WalkthroughSummary;
   overall_note?: string;
-  finished_student_ids: string[];
   generated_at: Date;
 }
 

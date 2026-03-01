@@ -7,7 +7,7 @@ import (
 )
 
 // TestStubClient_ReturnsNewResponseShape verifies that StubClient returns the
-// redesigned AnalyzeResponse shape (Issues, FinishedStudentIDs, Summary, OverallNote)
+// redesigned AnalyzeResponse shape (Issues, Summary, OverallNote)
 // rather than the old Analysis/Suggestions shape.
 func TestStubClient_ReturnsNewResponseShape(t *testing.T) {
 	client := &StubClient{}
@@ -27,11 +27,6 @@ func TestStubClient_ReturnsNewResponseShape(t *testing.T) {
 	// Issues must be non-nil (can be empty slice but not nil)
 	if resp.Issues == nil {
 		t.Error("expected non-nil Issues slice")
-	}
-
-	// FinishedStudentIDs must be non-nil
-	if resp.FinishedStudentIDs == nil {
-		t.Error("expected non-nil FinishedStudentIDs slice")
 	}
 
 	// Summary struct must be populated — stub must set at least TotalSubmissions

@@ -24,7 +24,6 @@ function makeScript(issues: AnalysisIssue[]): WalkthroughScript {
   return {
     session_id: 'session-1',
     issues,
-    finished_student_ids: ['s1', 's2', 's3'],
     summary: {
       total_submissions: 5,
       filtered_out: 0,

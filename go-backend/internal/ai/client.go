@@ -69,10 +69,9 @@ type AnalysisSummary struct {
 
 // AnalyzeResponse is the result of an AI analysis run.
 type AnalyzeResponse struct {
-	Issues             []AnalysisIssue `json:"issues"`
-	FinishedStudentIDs []string        `json:"finished_student_ids"`
-	OverallNote        string          `json:"overall_note,omitempty"`
-	Summary            AnalysisSummary `json:"summary"`
+	Issues      []AnalysisIssue `json:"issues"`
+	OverallNote string          `json:"overall_note,omitempty"`
+	Summary     AnalysisSummary `json:"summary"`
 }
 
 // Client is the interface for AI code analysis.
@@ -109,9 +108,8 @@ func (s *StubClient) AnalyzeCode(_ context.Context, req AnalyzeRequest) (*Analyz
 	}
 
 	return &AnalyzeResponse{
-		Issues:             issues,
-		FinishedStudentIDs: []string{},
-		OverallNote:        "AI analysis is not configured. Please set up an AI provider.",
+		Issues:      issues,
+		OverallNote: "AI analysis is not configured. Please set up an AI provider.",
 		Summary: AnalysisSummary{
 			TotalSubmissions:    total,
 			FilteredOut:         0,
