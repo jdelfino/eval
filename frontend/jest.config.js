@@ -46,6 +46,7 @@ module.exports = {
       },
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
+          isolatedModules: true,
           tsconfig: {
             jsx: 'react-jsx',
             esModuleInterop: true,
@@ -77,6 +78,7 @@ module.exports = {
       },
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
+          isolatedModules: true,
           tsconfig: {
             jsx: 'react-jsx',
             esModuleInterop: true,
