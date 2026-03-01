@@ -62,6 +62,16 @@ Run these before committing. Pick the targets matching the code you changed.
 
 **Migrations:** SQL migrations in `migrations/` with RLS helpers. See [docs/MIGRATION.md](docs/MIGRATION.md).
 
+## Git Hooks (lefthook)
+
+Quality gates are enforced by lefthook git hooks. `--no-verify` is blocked by a Claude Code PreToolUse hook.
+
+**Pre-commit (parallel):** golangci-lint, eslint, tsc, api-imports, gitleaks, bd sync
+**Pre-push (parallel):** go test, jest, contract coverage, bd push
+**CI-only:** Integration, contract, e2e tests
+
+Hooks scope to changed file types via glob patterns. Manual run: `lefthook run pre-commit`.
+
 ## Issue Tracking (beads)
 
 This project uses `bd` (beads) for issue tracking. Key commands:
