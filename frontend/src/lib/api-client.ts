@@ -8,14 +8,9 @@
 import { getAuthToken } from '@/lib/auth-provider';
 import { withRetry } from '@/lib/api-utils';
 import { ApiError } from '@/lib/api-error';
+import { USER_PROFILE_CACHE_KEY } from '@/lib/storage-keys';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
-/**
- * sessionStorage key for the cached user profile.
- * Cleared on 403 responses to force a fresh profile fetch on the next navigation.
- */
-const USER_PROFILE_CACHE_KEY = 'eval:user-profile';
 
 /**
  * Module-level preview section ID.

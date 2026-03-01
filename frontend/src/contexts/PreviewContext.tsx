@@ -15,14 +15,8 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useEf
 import { setPreviewSectionId } from '@/lib/api-client';
 import { enterPreview as enterPreviewApi, exitPreview as exitPreviewApi } from '@/lib/api/preview';
 import { useAuth } from '@/contexts/AuthContext';
+import { PREVIEW_SECTION_KEY } from '@/lib/storage-keys';
 import type { User } from '@/types/api';
-
-/**
- * sessionStorage key for the preview section ID.
- * Used to survive page reloads during preview mode.
- * Must match the key used in AuthContext.tsx for the signOut guard.
- */
-const PREVIEW_SECTION_KEY = 'eval:preview-section-id';
 
 export interface PreviewContextType {
   /** True when instructor is viewing as a student */
@@ -143,7 +137,7 @@ export function PreviewProvider({ children }: PreviewProviderProps) {
   return <PreviewContext.Provider value={value}>{children}</PreviewContext.Provider>;
 }
 
-/** Default no-op context for use outside PreviewProvider (e.g. fullscreen layout). */
+/** Default no-op context for use outside PreviewProvider. */
 const defaultPreviewContext: PreviewContextType = {
   isPreview: false,
   previewSectionId: null,
@@ -153,8 +147,7 @@ const defaultPreviewContext: PreviewContextType = {
 
 /**
  * Hook to access preview context.
- * Returns safe no-op defaults when used outside PreviewProvider
- * (e.g. in the fullscreen student editor layout).
+ * Returns safe no-op defaults when used outside PreviewProvider.
  */
 export function usePreview(): PreviewContextType {
   const context = useContext(PreviewContext);

@@ -15,7 +15,6 @@ export interface PreviewResponse {
   email: string;
   role: UserRole;
   namespace_id: string;
-  permissions: string[];
 }
 
 /**
@@ -24,7 +23,7 @@ export interface PreviewResponse {
  * Must be called BEFORE setPreviewSectionId so the request goes through without the preview header.
  *
  * @param sectionId - The section ID to preview as a student
- * @returns Preview response containing preview_user_id and section_id
+ * @returns Preview response containing the preview student's full profile
  */
 export async function enterPreview(sectionId: string): Promise<PreviewResponse> {
   return apiPost<PreviewResponse>(`/sections/${sectionId}/preview`);
@@ -33,7 +32,8 @@ export async function enterPreview(sectionId: string): Promise<PreviewResponse> 
 /**
  * Exit preview mode for a section.
  * Unenrolls the preview student from the section (best-effort).
- * Must be called AFTER setPreviewSectionId(null) so the request goes through without the preview header.
+ * Must be called BEFORE setPreviewSectionId(null) — the backend needs the X-Preview-Section header
+ * to identify which preview student to unenroll.
  *
  * @param sectionId - The section ID to exit preview for
  */

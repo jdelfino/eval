@@ -14,14 +14,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
 import { isTestMode, clearTestUser, getTestToken } from '@/lib/auth-provider';
+import { USER_PROFILE_CACHE_KEY, PREVIEW_SECTION_KEY } from '@/lib/storage-keys';
 import type { User } from '@/types/api';
 export type { User };
-
-/**
- * sessionStorage key for cached user profile.
- * Must match the key used in api-client.ts for 403 invalidation.
- */
-const USER_PROFILE_CACHE_KEY = 'eval:user-profile';
 
 /**
  * Profile cache TTL in milliseconds (5 minutes).
@@ -73,14 +68,6 @@ function clearProfileCache(): void {
     // ignore
   }
 }
-
-/**
- * sessionStorage key for the preview section ID.
- * Must match the key used in PreviewContext.tsx.
- * Cleared during signOut so that reloading after sign-out does not restore
- * a stale preview state.
- */
-const PREVIEW_SECTION_KEY = 'eval:preview-section-id';
 
 interface AuthContextType {
   user: User | null;
@@ -135,6 +122,12 @@ function TestAuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signOut = useCallback(async () => {
+    try {
+      sessionStorage.removeItem(PREVIEW_SECTION_KEY);
+    } catch {
+      // sessionStorage may be unavailable — ignore
+    }
+    clearProfileCache();
     clearTestUser();
     setUser(null);
   }, []);
@@ -142,6 +135,7 @@ function TestAuthProvider({ children }: AuthProviderProps) {
   const refreshUser = useCallback(async () => {
     try {
       const profile = await getCurrentUser();
+      writeProfileCache(profile);
       setUser(profile);
     } catch (error) {
       console.error('[Auth] Error refreshing user:', error);
