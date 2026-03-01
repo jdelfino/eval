@@ -218,34 +218,19 @@ test('multi-actor flow', async ({ page, browser, testNamespace, setupInstructor,
 
 ### Monaco Editor Interactions
 
-The code editor is Monaco. Interact with it via keyboard, not by setting values directly:
+In test builds (AUTH_MODE=test), editor instances are exposed on window.__TEST_EDITORS.
+Use helpers from e2e/fixtures/monaco.ts:
 
 ```typescript
-const monacoEditor = page.locator('.monaco-editor').first();
-await monacoEditor.click();
-await page.keyboard.press('ControlOrMeta+a');   // Select all
-await page.waitForTimeout(200);
-await page.keyboard.press('Backspace');           // Clear
-await page.waitForTimeout(300);
-await page.keyboard.type('print("hello")', { delay: 50 });  // Type slowly
-
-// Wait for debounced sync to server
-await page.waitForTimeout(2000);
+import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
+await waitForMonacoReady(page);
+await setMonacoValue(page, 'print("hello")');
+const code = await getMonacoValue(page);
+await page.waitForTimeout(1000); // debounce sync
 ```
 
-### Verifying Monaco Content
-
-Monaco splits text across DOM elements, so direct text assertions don't work. Use `page.evaluate`:
-
-```typescript
-const hasCode = await page.evaluate(() => {
-  const editor = document.querySelector('.monaco-editor');
-  if (!editor) return false;
-  const text = editor.textContent?.replace(/\s/g, '') || '';
-  return text.includes('YOUR_EXPECTED_TEXT');
-});
-expect(hasCode).toBe(true);
-```
+Never use page.keyboard.type() for Monaco content. Never use textContent to read Monaco.
+For multiple editors on one page, pass index parameter: setMonacoValue(page, code, 1).
 
 ## Key Files
 
@@ -254,6 +239,7 @@ expect(hasCode).toBe(true);
 | `frontend/e2e/fixtures/test-fixture.ts` | Extended Playwright test with `testNamespace`, `setupInstructor`, `logCollector` fixtures |
 | `frontend/e2e/fixtures/api-setup.ts` | HTTP helpers for test data setup (namespace, class, section, student, session) |
 | `frontend/e2e/fixtures/auth.ts` | `signInAs()`, `loginAsSystemAdmin()`, sidebar navigation helpers |
+| `frontend/e2e/fixtures/monaco.ts` | Monaco editor helpers (waitForMonacoReady, setMonacoValue, getMonacoValue) |
 | `frontend/playwright.config.ts` | Playwright config (Chromium only, parallel, no retries, screenshots + video on failure) |
 | `scripts/run-e2e-tests.sh` | Full-stack E2E orchestrator (postgres, executor, Go API, Next.js, Playwright) |
 | `scripts/ensure-test-postgres.sh` | Ensures test PostgreSQL is running with migrations |
