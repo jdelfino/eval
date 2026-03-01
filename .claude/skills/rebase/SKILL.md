@@ -1,48 +1,55 @@
 ---
 name: rebase
-model: haiku
-description: Rebases a source branch onto a target branch, advances the target ref, and optionally cleans up the source worktree and branch. Used by coordinator (task integration) and merge-queue (PR rebases).
+description: Resolves rebase conflicts by gathering full context from beads issues, git diffs, and surrounding code. Invoked by coordinator and merge-queue after a fast-path rebase fails.
 ---
 
-# Rebase
+# Rebase (Conflict Resolution)
 
-You are a rebase sub-agent. Your job is to rebase a source branch onto a target branch, advance the target ref, and optionally clean up afterward.
+You are a conflict-resolution specialist. You are invoked **after a fast-path rebase has already failed** — your job is to understand what both sides intended, resolve the conflicts, advance the target ref, and optionally clean up.
 
 ## Input
 
 You will receive:
-- **Source branch**: the branch to rebase (required)
-- **Target branch**: the branch to rebase onto (required)
-- **Worktree path**: path to an existing worktree for the source branch (optional — create a temporary one if not provided)
-- **Cleanup**: whether to remove the worktree and source branch after a successful rebase (optional, default: false)
+- **SOURCE**: branch to rebase (required)
+- **TARGET**: branch to rebase onto (required)
+- **WORKTREE**: path to an existing worktree checked out on the source branch (required)
+- **CLEANUP**: whether to remove the worktree and source branch after success (default: false)
+- **BEADS_IDS**: comma-separated beads issue IDs related to the conflicting changes (optional)
+- **PR_NUMBER**: GitHub PR number if this is a merge-queue rebase (optional)
 
 ## Execution
 
-### 1. Prepare worktree
+### 1. Gather intent
 
-If a worktree path was provided:
+Before touching git, understand what each side was trying to accomplish.
+
+**If BEADS_IDS provided:**
 ```bash
-cd <worktree-path>
+# Fetch each issue for context on what the changes are supposed to do
+bd show <id> --json
 ```
 
-If no worktree path was provided, create a temporary one:
+**If PR_NUMBER provided:**
 ```bash
-git worktree add /tmp/rebase-<source-branch-sanitized> <source-branch>
-cd /tmp/rebase-<source-branch-sanitized>
+gh pr view <number> --json title,body,commits
 ```
 
-### 2. Fetch and rebase
-
+**Always — understand the divergence:**
 ```bash
-git fetch origin
-git rebase <target-branch>
+cd <worktree>
+git log --oneline $(git merge-base <source> <target>)..<target> -- # what landed on target since we branched
+git log --oneline $(git merge-base <source> <target>)..<source> -- # what we're bringing in
 ```
 
-### 3. Handle conflicts
+### 2. Attempt rebase
 
-If `git rebase` exits cleanly, proceed to step 4.
+```bash
+git rebase <target>
+```
 
-If conflicts are reported, gather context before attempting resolution.
+If it exits cleanly (unlikely — caller already tried), proceed to step 4.
+
+### 3. Resolve conflicts
 
 #### a. Identify conflicted files
 
@@ -52,37 +59,29 @@ git diff --name-only --diff-filter=U
 
 #### b. Gather context for each conflicted file
 
-For each conflicted file, collect three things:
+For each conflicted file, collect:
 
-1. **The conflict markers** — read the file to see the actual conflict regions
-2. **What each side intended** — understand the purpose of each change:
+1. **Conflict markers** — read the file to see the actual conflict regions
+2. **What each side changed and why:**
    ```bash
-   # What the source branch changed in this file
-   git log --oneline --all -- <file> | head -10
-   git diff <target-branch> <source-branch> -- <file>
-   # What the target branch changed
-   git diff $(git merge-base <source-branch> <target-branch>) <target-branch> -- <file>
+   git diff $(git merge-base <source> <target>) <target> -- <file>   # target's changes
+   git diff $(git merge-base <source> <target>) <source> -- <file>   # source's changes
    ```
-3. **Surrounding code** — read enough of the file (beyond the conflict markers) to understand the context. If the file has tests, read those too to understand expected behavior.
+3. **Surrounding code** — read enough of the file beyond the conflict markers to understand context
+4. **Related tests** — if the file has tests (check `__tests__/`, `*_test.go`, `*.test.ts`), read them to understand expected behavior
+
+Cross-reference the diffs with the beads issues or PR description gathered in step 1. The intent from the issue descriptions should clarify what each change was trying to accomplish and how they should combine.
 
 #### c. Resolve or escalate
 
-With full context gathered, resolve each conflict:
-
-**Resolve automatically** (most conflicts fall here with enough context):
-- Adjacent line edits: two sides edited different lines near each other — keep both sets of changes
-- Import ordering: one side added imports, the other reordered — merge the import lists
-- Lock files (package-lock.json, go.sum): regenerate rather than merge markers
-  ```bash
-  # For go.sum:
-  go mod tidy
-  # For package-lock.json:
-  npm install --package-lock-only
-  ```
-- Both sides appended to the same list (routes, exports, config entries): keep all additions
-- Whitespace-only differences: accept one side
-- **Additive changes to the same region**: both sides added code to the same area (e.g., new CSS classes, new fields, new test cases) — combine both additions
-- **One side refactored, other added functionality**: if the intent is clear from the diff context and tests, apply the addition to the refactored structure
+**Resolve** (most conflicts, given sufficient context):
+- Adjacent line edits — keep both
+- Import ordering — merge the import lists
+- Lock files — regenerate (`go mod tidy`, `npm install --package-lock-only`)
+- Both sides appended to the same list — keep all additions
+- Whitespace-only — accept one side
+- Additive changes to the same region (new CSS classes, fields, test cases) — combine both
+- One side refactored, other added functionality — apply the addition to the refactored structure if intent is clear from issues/tests
 
 For each resolved conflict:
 ```bash
@@ -94,80 +93,67 @@ After resolving all conflicts in the current commit:
 git rebase --continue
 ```
 
-**Escalate only when intent is genuinely unclear:**
-- Both sides modified the same logic with incompatible semantics and you cannot determine correct behavior from tests or surrounding code
-- A refactor changed assumptions that the other side depends on, and the correct adaptation is not obvious
+Repeat if subsequent commits also conflict.
 
-If any conflict cannot be resolved:
+**Escalate only when intent is genuinely unclear:**
+- Both sides modified the same logic with incompatible semantics and neither beads issues nor tests clarify the correct behavior
+- A refactor changed assumptions that the other side depends on, and the correct adaptation is ambiguous even with full context
+
 ```bash
 git rebase --abort
 ```
-Then output `RESULT: FAIL` (see Output Protocol).
+Then output `RESULT: FAIL`.
 
 ### 4. Advance target ref
 
-After a clean rebase, advance the target branch to point to the rebased source:
-
 ```bash
-git branch -f <target-branch> HEAD
+git branch -f <target> HEAD
 ```
 
-If `<target-branch>` tracks a remote, also push:
+If `<target>` tracks a remote, also push:
 ```bash
-git push origin <target-branch>
+git push origin <target>
 ```
 
-### 5. Optional cleanup
+### 5. Cleanup (if enabled)
 
-If cleanup is enabled:
 ```bash
-# Remove temporary worktree (if we created one in step 1)
-git worktree remove /tmp/rebase-<source-branch-sanitized> --force 2>/dev/null
-
-# Delete source branch (local and remote)
-git branch -d <source-branch> 2>/dev/null
-git push origin --delete <source-branch> 2>/dev/null
-```
-
-If using a caller-provided worktree (cleanup=true), remove it:
-```bash
-git worktree remove <worktree-path> --force 2>/dev/null
-git branch -d <source-branch> 2>/dev/null
-git push origin --delete <source-branch> 2>/dev/null
+git worktree remove <worktree> --force 2>/dev/null
+git branch -d <source> 2>/dev/null
+git push origin --delete <source> 2>/dev/null
 ```
 
 ## Output Protocol
 
-**ALWAYS** respond with exactly this format and nothing else:
+**ALWAYS** respond with exactly one of these formats:
 
 ### On success:
 
 ```
 RESULT: PASS
 Commits integrated: <N>
-Source: <source-branch>
-Target: <target-branch>
-Resolved conflicts: <list of files where conflicts were resolved, or "none">
+Source: <source>
+Target: <target>
+Resolved conflicts: <list of files where conflicts were resolved>
 ```
 
 ### On failure:
 
 ```
 RESULT: FAIL
-Source: <source-branch>
-Target: <target-branch>
-Reason: <one sentence describing why the rebase could not complete>
+Source: <source>
+Target: <target>
+Reason: <one sentence>
 
 Conflicted files:
-- <file>: <why conflict is ambiguous — what each side changed>
+- <file>: <what each side changed and why resolution is ambiguous>
 
 Note: rebase has been aborted. Source branch is unchanged.
 ```
 
 ## What This Agent Does NOT Do
 
-- Resolve ambiguous conflicts (escalate to caller instead)
+- Handle clean rebases (caller does this inline first)
 - Merge PRs
 - Update beads issues
 - Force-push source branches
-- Make any changes beyond rebasing and advancing the target ref

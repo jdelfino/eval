@@ -111,13 +111,14 @@ git rebase --abort
 Then spawn the rebase subagent to resolve conflicts:
 
 ```
-ROLE: Rebase Agent
+ROLE: Rebase Agent (Conflict Resolution)
 SKILL: Read and follow .claude/skills/rebase/SKILL.md
 
 SOURCE: <source-branch>
 TARGET: <target-branch>
 WORKTREE: ../<project>-<task-id>
 CLEANUP: true
+BEADS_IDS: <comma-separated task IDs whose changes are on the source branch>
 ```
 
 **After successful integration** (either path):
