@@ -5,36 +5,55 @@
 import { renderHook } from '@testing-library/react';
 import { usePermission, useAnyPermission, useAllPermissions, hasPermission } from '../usePermissions';
 
-const makeUser = (role: 'system-admin' | 'namespace-admin' | 'instructor' | 'student') => ({ role });
+// New API: user has a permissions array (from server), not a role-based mapping
+const makeUser = (permissions: string[]) => ({ permissions });
 
 describe('usePermission', () => {
-  it('returns true when user has permission', () => {
-    const { result } = renderHook(() => usePermission(makeUser('instructor'), 'session.create'));
+  it('returns true when user has the permission in their permissions array', () => {
+    const { result } = renderHook(() =>
+      usePermission(makeUser(['session.manage', 'content.manage']), 'session.manage')
+    );
     expect(result.current).toBe(true);
   });
 
-  it('returns false when user lacks permission', () => {
-    const { result } = renderHook(() => usePermission(makeUser('student'), 'session.create'));
+  it('returns false when user does not have the permission in their permissions array', () => {
+    const { result } = renderHook(() =>
+      usePermission(makeUser(['session.join']), 'session.manage')
+    );
     expect(result.current).toBe(false);
   });
 
   it('returns false when user is null', () => {
-    const { result } = renderHook(() => usePermission(null, 'session.create'));
+    const { result } = renderHook(() => usePermission(null, 'session.manage'));
+    expect(result.current).toBe(false);
+  });
+
+  it('returns false when user has no permissions array', () => {
+    const { result } = renderHook(() =>
+      usePermission({}, 'session.manage')
+    );
+    expect(result.current).toBe(false);
+  });
+
+  it('returns false when user has an empty permissions array', () => {
+    const { result } = renderHook(() =>
+      usePermission(makeUser([]), 'session.manage')
+    );
     expect(result.current).toBe(false);
   });
 });
 
 describe('useAnyPermission', () => {
-  it('returns true when user has at least one permission', () => {
+  it('returns true when user has at least one of the given permissions', () => {
     const { result } = renderHook(() =>
-      useAnyPermission(makeUser('student'), ['session.create', 'session.join'])
+      useAnyPermission(makeUser(['session.join']), ['session.manage', 'session.join'])
     );
     expect(result.current).toBe(true);
   });
 
-  it('returns false when user has none of the permissions', () => {
+  it('returns false when user has none of the given permissions', () => {
     const { result } = renderHook(() =>
-      useAnyPermission(makeUser('student'), ['session.create', 'system.admin'])
+      useAnyPermission(makeUser(['session.join']), ['session.manage', 'system.admin'])
     );
     expect(result.current).toBe(false);
   });
@@ -46,16 +65,16 @@ describe('useAnyPermission', () => {
 });
 
 describe('useAllPermissions', () => {
-  it('returns true when user has all permissions', () => {
+  it('returns true when user has all of the given permissions', () => {
     const { result } = renderHook(() =>
-      useAllPermissions(makeUser('instructor'), ['session.create', 'class.read'])
+      useAllPermissions(makeUser(['session.manage', 'content.manage']), ['session.manage', 'content.manage'])
     );
     expect(result.current).toBe(true);
   });
 
   it('returns false when user is missing one permission', () => {
     const { result } = renderHook(() =>
-      useAllPermissions(makeUser('student'), ['session.join', 'session.create'])
+      useAllPermissions(makeUser(['session.join']), ['session.join', 'session.manage'])
     );
     expect(result.current).toBe(false);
   });
@@ -67,15 +86,19 @@ describe('useAllPermissions', () => {
 });
 
 describe('hasPermission (non-hook)', () => {
-  it('returns true when user has permission', () => {
-    expect(hasPermission(makeUser('system-admin'), 'system.admin')).toBe(true);
+  it('returns true when user has permission in their permissions array', () => {
+    expect(hasPermission(makeUser(['system.admin']), 'system.admin')).toBe(true);
   });
 
   it('returns false when user lacks permission', () => {
-    expect(hasPermission(makeUser('student'), 'system.admin')).toBe(false);
+    expect(hasPermission(makeUser(['session.join']), 'system.admin')).toBe(false);
   });
 
   it('returns false when user is null', () => {
     expect(hasPermission(null, 'session.join')).toBe(false);
+  });
+
+  it('returns false when user has no permissions field', () => {
+    expect(hasPermission({}, 'session.join')).toBe(false);
   });
 });

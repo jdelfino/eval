@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasRolePermission } from '@/lib/permissions';
+import { hasPermission } from '@/hooks/usePermissions';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { getInstructorDashboard, type DashboardClass, type DashboardSection } from '@/lib/api/instructor';
@@ -33,8 +33,8 @@ export function InstructorDashboard({
   const [error, setError] = useState<Error | null>(null);
   const [showCreateClassModal, setShowCreateClassModal] = useState(false);
 
-  const canCreateClass = user && hasRolePermission(user.role, 'class.create');
-  const canCreateSession = user && hasRolePermission(user.role, 'session.create');
+  const canCreateClass = user && hasPermission(user, 'content.manage');
+  const canCreateSession = user && hasPermission(user, 'session.manage');
 
   const loadDashboardData = useCallback(async () => {
     try {

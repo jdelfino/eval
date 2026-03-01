@@ -23,6 +23,7 @@ const mockUser = {
   id: 'admin-1',
   role: 'system-admin' as const,
   namespace_id: null,
+  permissions: ['system.admin', 'user.changeRole', 'content.manage', 'session.manage', 'session.join'],
 };
 
 const mockSignOut = jest.fn();

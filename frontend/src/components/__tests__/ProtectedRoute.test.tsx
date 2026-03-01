@@ -17,7 +17,7 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 import { ProtectedRoute } from '../ProtectedRoute';
 
-function makeUser(role: string) {
+function makeUser(role: string, permissions: string[] = []) {
   return {
     id: 'u1',
     email: 'test@test.com',
@@ -27,6 +27,7 @@ function makeUser(role: string) {
     external_id: null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
+    permissions,
   };
 }
 
@@ -133,9 +134,9 @@ describe('ProtectedRoute', () => {
   });
 
   it('renders children when user has requiredPermission', () => {
-    mockUseAuth.mockReturnValue({ user: makeUser('instructor'), isLoading: false });
+    mockUseAuth.mockReturnValue({ user: makeUser('instructor', ['session.manage', 'content.manage']), isLoading: false });
     render(
-      <ProtectedRoute requiredPermission="session.create">
+      <ProtectedRoute requiredPermission="session.manage">
         <div>Protected</div>
       </ProtectedRoute>
     );
@@ -143,9 +144,9 @@ describe('ProtectedRoute', () => {
   });
 
   it('blocks user without requiredPermission', () => {
-    mockUseAuth.mockReturnValue({ user: makeUser('student'), isLoading: false });
+    mockUseAuth.mockReturnValue({ user: makeUser('student', ['session.join']), isLoading: false });
     render(
-      <ProtectedRoute requiredPermission="session.create">
+      <ProtectedRoute requiredPermission="session.manage">
         <div>Protected</div>
       </ProtectedRoute>
     );
@@ -154,9 +155,9 @@ describe('ProtectedRoute', () => {
   });
 
   it('renders children when user has any of requiredPermissions', () => {
-    mockUseAuth.mockReturnValue({ user: makeUser('student'), isLoading: false });
+    mockUseAuth.mockReturnValue({ user: makeUser('student', ['session.join']), isLoading: false });
     render(
-      <ProtectedRoute requiredPermissions={['session.create', 'session.join']}>
+      <ProtectedRoute requiredPermissions={['session.manage', 'session.join']}>
         <div>Protected</div>
       </ProtectedRoute>
     );
@@ -164,9 +165,9 @@ describe('ProtectedRoute', () => {
   });
 
   it('blocks user without any of requiredPermissions', () => {
-    mockUseAuth.mockReturnValue({ user: makeUser('student'), isLoading: false });
+    mockUseAuth.mockReturnValue({ user: makeUser('student', ['session.join']), isLoading: false });
     render(
-      <ProtectedRoute requiredPermissions={['session.create', 'system.admin']}>
+      <ProtectedRoute requiredPermissions={['session.manage', 'system.admin']}>
         <div>Protected</div>
       </ProtectedRoute>
     );
@@ -174,7 +175,7 @@ describe('ProtectedRoute', () => {
   });
 
   it('redirects instructor to /instructor when lacking permission', () => {
-    mockUseAuth.mockReturnValue({ user: makeUser('instructor'), isLoading: false });
+    mockUseAuth.mockReturnValue({ user: makeUser('instructor', ['session.manage', 'content.manage']), isLoading: false });
     render(
       <ProtectedRoute requiredPermission="system.admin">
         <div>Protected</div>
