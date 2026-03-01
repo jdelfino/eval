@@ -234,6 +234,16 @@ describe('ProblemCard', () => {
     });
   });
 
+  describe('Mobile responsive layout', () => {
+    it('list view action buttons container has flex-wrap to prevent overflow on mobile', () => {
+      const { container } = render(<ProblemCard {...defaultProps} />);
+      // The action buttons div should have flex-wrap so they wrap on small screens
+      const actionButtons = container.querySelector('[data-testid="list-view-actions"]');
+      expect(actionButtons).toBeInTheDocument();
+      expect(actionButtons).toHaveClass('flex-wrap');
+    });
+  });
+
   describe('Copy Link button', () => {
     beforeEach(() => {
       Object.assign(navigator, {
