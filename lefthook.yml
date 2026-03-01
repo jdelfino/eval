@@ -2,7 +2,7 @@ pre-commit:
   parallel: true
   commands:
     bd-pre-commit:
-      run: bd hooks run pre-commit
+      run: TERM=dumb bd hooks run pre-commit
     lint-api:
       glob: "go-backend/{,**/}*.go"
       run: make lint-api
@@ -24,13 +24,13 @@ pre-commit:
 prepare-commit-msg:
   commands:
     bd-trailers:
-      run: bd hooks run prepare-commit-msg {1}
+      run: TERM=dumb bd hooks run prepare-commit-msg {1}
 
 pre-push:
   parallel: true
   commands:
     bd-push:
-      run: bd hooks run pre-push {1} {2}
+      run: TERM=dumb bd hooks run pre-push {1} {2}
     test-api:
       glob: "go-backend/{,**/}*.go"
       run: make test-api
@@ -47,9 +47,9 @@ pre-push:
 post-checkout:
   commands:
     bd-hooks:
-      run: bd hooks run post-checkout {1} {2} {3}
+      run: TERM=dumb bd hooks run post-checkout {1} {2} {3}
 
 post-merge:
   commands:
     bd-hooks:
-      run: bd hooks run post-merge {1}
+      run: TERM=dumb bd hooks run post-merge {1}
