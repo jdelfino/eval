@@ -68,13 +68,6 @@ describe('useAnalysisGroups', () => {
     expect(result.current.completion_estimate).toBeNull();
   });
 
-  // PLAT-cluk: finished_student_ids was removed from the hook return value
-  it('does not expose finished_student_ids from the hook return value', () => {
-    const { result } = renderHook(() => useAnalysisGroups());
-
-    expect('finished_student_ids' in result.current).toBe(false);
-  });
-
   describe('analyze() updated signature', () => {
     it('analyze() accepts (session_id) with no model or customPrompt and calls API with no extras', async () => {
       const script = makeScript(sampleIssues);

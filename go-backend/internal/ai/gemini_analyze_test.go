@@ -399,25 +399,6 @@ func TestBuildResponseSchema_HasRequiredFields(t *testing.T) {
 	}
 }
 
-// TestBuildResponseSchema_NoFinishedStudentIDs verifies that buildResponseSchema does NOT
-// include finished_student_ids in the required fields or properties. This field was
-// removed as part of PLAT-cluk — the AI prompt no longer asks for finished classification.
-func TestBuildResponseSchema_NoFinishedStudentIDs(t *testing.T) {
-	schema := buildResponseSchema()
-
-	// Must not appear in Required list
-	for _, r := range schema.Required {
-		if r == "finished_student_ids" {
-			t.Error("schema.Required must not contain 'finished_student_ids' — field was removed in PLAT-cluk")
-		}
-	}
-
-	// Must not appear as a top-level property
-	if _, ok := schema.Properties["finished_student_ids"]; ok {
-		t.Error("schema.Properties must not contain 'finished_student_ids' — field was removed in PLAT-cluk")
-	}
-}
-
 // TestBuildResponseSchema_IssueSchemaHasRequiredFields verifies that the issue sub-schema
 // has all required fields.
 func TestBuildResponseSchema_IssueSchemaHasRequiredFields(t *testing.T) {

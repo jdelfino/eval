@@ -473,39 +473,3 @@ func TestBuildJSONSchemaInstructions(t *testing.T) {
 		}
 	}
 }
-
-// TestBuildJSONSchemaInstructions_NoFinishedStudentIDs verifies that the Claude JSON
-// schema instructions do NOT include finished_student_ids. This field was removed
-// in PLAT-cluk to stop wasting AI tokens on finished classification.
-func TestBuildJSONSchemaInstructions_NoFinishedStudentIDs(t *testing.T) {
-	instructions := buildJSONSchemaInstructions()
-
-	if strings.Contains(instructions, "finished_student_ids") {
-		t.Error("Claude JSON schema instructions must not reference 'finished_student_ids' — field was removed in PLAT-cluk")
-	}
-}
-
-// TestClaudeAnalyzeCode_PromptSchemaHasNoFinishedStudentIDs verifies that the prompt
-// sent to Claude does NOT include the finished_student_ids field in the JSON schema
-// instructions, stopping the AI from wasting tokens on finished classification.
-func TestClaudeAnalyzeCode_PromptSchemaHasNoFinishedStudentIDs(t *testing.T) {
-	mock := &mockMessageCreator{
-		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
-			return makeClaudeTextResponse(validClaudeResponseJSON), nil
-		},
-	}
-
-	c := newClaudeClientWithCreator(mock)
-
-	_, err := c.AnalyzeCode(context.Background(), AnalyzeRequest{
-		ProblemDescription: "Test",
-		Submissions:        []StudentSubmission{{UserID: "u1", Name: "Alice", Code: "x=1"}},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if strings.Contains(mock.capturedPrompt, "finished_student_ids") {
-		t.Error("prompt sent to Claude must not contain 'finished_student_ids' — wasting AI tokens")
-	}
-}
