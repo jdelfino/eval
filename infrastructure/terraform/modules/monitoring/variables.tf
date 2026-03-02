@@ -45,3 +45,8 @@ variable "alert_email" {
   description = "Email address for alert notification channel"
   type        = string
 }
+
+variable "domain_name" {
+  description = "Domain name for the application used for HTTPS uptime checks (e.g., eval.example.com)"
+  type        = string
+}

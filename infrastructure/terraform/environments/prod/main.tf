@@ -203,6 +203,7 @@ module "monitoring" {
   region       = var.region
 
   alert_email = var.alert_email
+  domain_name = var.domain_name
 }
 
 module "dns_ssl" {

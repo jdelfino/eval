@@ -40,3 +40,13 @@ output "alert_policy_zero_traffic_id" {
   value       = google_monitoring_alert_policy.zero_traffic.id
 }
 
+output "uptime_check_id" {
+  description = "The ID of the HTTPS uptime check"
+  value       = google_monitoring_uptime_check_config.healthz.id
+}
+
+output "alert_policy_uptime_failure_id" {
+  description = "The ID of the uptime check failure alert policy"
+  value       = google_monitoring_alert_policy.uptime_failure.id
+}
+
