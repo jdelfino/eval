@@ -15,8 +15,8 @@ Run this in a dedicated terminal window. Invoke periodically with `/merge` while
 # Check CI status on main — failing main blocks the entire queue
 gh run list --branch main --limit 1 --json status,conclusion
 
-# List open PRs
-gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews
+# List open PRs (include labels for human-review-required detection)
+gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews,labels
 ```
 
 **If main CI is failing:** file a P0 beads issue (if one doesn't already exist), report prominently, and stop. Nothing can merge until main is green.
@@ -31,12 +31,15 @@ For each PR, determine its state:
 
 | State | Action |
 |-------|--------|
+| `human-review-required` label, no approved human review | **Never merge** — skip, report as requiring human review |
 | CI passing, mergeable, no pending review | Merge |
 | CI passing, mergeable, review requested but not approved | Skip, report |
 | CI passing, mergeable, review approved | Merge |
 | CI pending | Skip, report status |
 | CI failing | File issue, report |
 | Not mergeable (behind main) | Attempt rebase |
+
+**Hard gate: `human-review-required` label.** PRs with this label modify agent behavior (`.claude/skills/`, `.claude/settings.json`, `.claude/hooks/`). These MUST have an approved human review before merging — even if CI passes and the PR is otherwise mergeable. This check takes priority over all other categorization rules. Report these PRs prominently in the summary so the user knows action is needed.
 
 ## Step 3: Decide Merge Order
 
@@ -210,3 +213,4 @@ If there are no open PRs, report "No open PRs."
 - Rerun failed CI (test failures are real)
 - Close beads issues without a successful merge
 - Merge PRs with pending review requests
+- Merge PRs labeled `human-review-required` without an approved human review

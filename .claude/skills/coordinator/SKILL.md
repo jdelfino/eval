@@ -220,15 +220,24 @@ EOF
 
 **After creating the PR:**
 
-1. If user indicated review needed: request review
+1. **Check for skill/agent config changes.** PRs that modify agent behavior MUST have human review before merging — agents must not modify their own instructions without human oversight:
+   ```bash
+   SKILL_CHANGES=$(gh pr diff <number> --name-only | grep -E '\.claude/(skills/|settings\.json|hooks/)' || true)
+   if [ -n "$SKILL_CHANGES" ]; then
+     gh pr edit <number> --add-label "human-review-required"
+   fi
+   ```
+   If skill changes are detected, ALWAYS report this prominently and ask the user to review or assign a reviewer.
+
+2. If user indicated review needed, or skill changes were detected: request review
    ```bash
    gh pr edit <number> --add-reviewer <username>
    ```
-2. Label beads issues as `in-pr`:
+3. Label beads issues as `in-pr`:
    ```bash
    bd update <id> --set-labels in-pr --json
    ```
-3. Report: "PR #X opened. `/merge` will handle CI and merging."
+4. Report: "PR #X opened. `/merge` will handle CI and merging."
 
 **Do NOT** watch CI, merge, or wait for approval. The `/merge` agent handles all of that.
 
@@ -249,6 +258,7 @@ EOF
 - Spawning a rebase subagent when there are no conflicts (use inline fast-path first)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
+- Merging PRs that touch `.claude/skills/`, `.claude/settings.json`, or `.claude/hooks/` without human review — these modify agent behavior and require explicit human approval
 
 ## Hooks — What's Automatic vs Manual
 
