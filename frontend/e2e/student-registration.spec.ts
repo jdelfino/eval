@@ -101,7 +101,9 @@ test.describe('Student Registration UI', () => {
     await page.waitForURL(/\/sections\//, { timeout: 20_000 });
 
     // ===== STEP 6: Verify section detail page =====
-    await expect(page.locator('h1, h2').filter({ hasText: cls.name }).first()).toBeVisible();
+    // Section name is h1, class name is in a paragraph below it
+    await expect(page.locator('h1').filter({ hasText: 'Fall Section' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=${cls.name}`).first()).toBeVisible();
 
     // ===== STEP 7: Verify section appears in /sections =====
     await page.goto('/sections');
