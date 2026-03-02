@@ -127,6 +127,7 @@ test.describe('Session Lifecycle', () => {
       await expect(runButton).toBeVisible();
 
       // Verify Monaco still contains the student's code (guards against state loss)
+      await waitForMonacoReady(page);
       await expect.poll(() => getMonacoValue(page), {
         timeout: 5000,
         message: 'Monaco should still contain student code after session end',

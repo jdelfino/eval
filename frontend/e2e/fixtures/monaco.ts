@@ -44,6 +44,9 @@ export async function getMonacoValue(page: Page, index = 0): Promise<string> {
  * Replace the entire content of the Monaco editor at the given index
  * using editor.executeEdits(). Throws if no editor or model exists.
  *
+ * IMPORTANT: Call waitForMonacoReady() before this function to ensure
+ * the editor is registered. Without it, you'll get an opaque evaluate error.
+ *
  * executeEdits() triggers onDidChangeModelContent → onChange → React state
  * → debounced server sync, matching the behavior of real user edits.
  */
