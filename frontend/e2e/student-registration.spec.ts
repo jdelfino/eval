@@ -72,16 +72,20 @@ test.describe('Student Registration UI', () => {
     await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
 
     // ===== STEP 4: Sign in via the email sign-in page =====
+    // The student isn't in the database yet, so after Firebase sign-in
+    // /auth/me returns 401 and AuthContext won't redirect. We wait for
+    // the Firebase sign-in API response to confirm auth succeeded, then
+    // navigate back to the registration page manually.
     await page.goto('/auth/signin/email');
     await page.fill('#email', studentEmail);
     await page.fill('#password', studentPassword);
-    await page.click('button[type="submit"]');
-
-    // Email sign-in page redirects to / after successful auth
-    await page.waitForURL((url) => {
-      const path = new URL(url).pathname;
-      return path !== '/auth/signin/email';
-    }, { timeout: 15_000 });
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('identitytoolkit') && resp.status() === 200,
+        { timeout: 10_000 }
+      ),
+      page.click('button[type="submit"]'),
+    ]);
 
     // ===== STEP 5: Return to registration page — now signed in =====
     // The page detects currentUser on code validation and auto-registers.
