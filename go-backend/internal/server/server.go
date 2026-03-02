@@ -215,6 +215,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.With(readRL).Get("/auth/me", meHandler.GetMe)
 				r.With(writeRL).Put("/auth/me", meHandler.UpdateMe)
 
+				// Frontend error reporting
+				clientErrorHandler := handler.NewClientErrorHandler()
+				r.With(writeRL).Post("/client-errors", clientErrorHandler.Report)
+
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
 				tokenGen, err := realtime.NewHMACTokenGenerator(cfg.CentrifugoTokenSecret)
