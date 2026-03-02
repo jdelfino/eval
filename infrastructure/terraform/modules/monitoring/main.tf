@@ -508,6 +508,96 @@ resource "google_monitoring_dashboard" "go_api" {
               }
             }
           }
+        },
+
+        # -----------------------------------------------------------------
+        # Row 4: Executor, Frontend Errors, Uptime
+        # -----------------------------------------------------------------
+        {
+          xPos   = 0
+          yPos   = 12
+          width  = 4
+          height = 4
+          widget = {
+            title = "Executor Execution Rate by Status"
+            xyChart = {
+              dataSets = [
+                {
+                  timeSeriesQuery = {
+                    prometheusQuery = "sum by (status) (rate(executor_executions_total[5m]))"
+                  }
+                  plotType = "LINE"
+                }
+              ]
+              timeshiftDuration = "0s"
+              yAxis = {
+                scale = "LINEAR"
+                label = "exec/s"
+              }
+            }
+          }
+        },
+        {
+          xPos   = 4
+          yPos   = 12
+          width  = 4
+          height = 4
+          widget = {
+            title = "Frontend Error Rate"
+            xyChart = {
+              dataSets = [
+                {
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "metric.type=\"logging.googleapis.com/user/${var.project_name}-${var.environment}-frontend-client-errors\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_RATE"
+                        crossSeriesReducer = "REDUCE_SUM"
+                      }
+                    }
+                  }
+                  plotType = "LINE"
+                }
+              ]
+              timeshiftDuration = "0s"
+              yAxis = {
+                scale = "LINEAR"
+                label = "errors/s"
+              }
+            }
+          }
+        },
+        {
+          xPos   = 8
+          yPos   = 12
+          width  = 4
+          height = 4
+          widget = {
+            title = "Uptime Check Latency"
+            xyChart = {
+              dataSets = [
+                {
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "metric.type=\"monitoring.googleapis.com/uptime_check/request_latency\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_MEAN"
+                        crossSeriesReducer = "REDUCE_MEAN"
+                      }
+                    }
+                  }
+                  plotType = "LINE"
+                }
+              ]
+              timeshiftDuration = "0s"
+              yAxis = {
+                scale = "LINEAR"
+                label = "ms"
+              }
+            }
+          }
         }
       ]
     }
