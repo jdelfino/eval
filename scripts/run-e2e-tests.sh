@@ -41,6 +41,15 @@ if fuser "${NEXT_PORT}/tcp" >/dev/null 2>&1; then
   sleep 1
 fi
 
+# Turbopack (Next.js 16 default) cannot follow symlinks outside the project root.
+# In worktrees, node_modules is symlinked to the main repo to save install time.
+# Replace with a real install so the production build works.
+if [ -L frontend/node_modules ]; then
+  echo "Symlinked node_modules detected — running npm install for Turbopack compatibility..."
+  rm frontend/node_modules
+  (cd frontend && npm install --prefer-offline)
+fi
+
 echo "Building Next.js..."
 (cd frontend && \
   NEXT_PUBLIC_AUTH_MODE=test \
