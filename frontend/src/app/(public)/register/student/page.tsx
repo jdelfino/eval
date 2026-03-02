@@ -211,50 +211,6 @@ function StudentRegistrationContent() {
     }
   }, [registrationInfo]);
 
-  // Listen for Firebase auth state changes while awaiting sign-in.
-  // This handles the case where sign-in completes outside of the SignInButtons
-  // component (e.g. signInWithEmailAndPassword called directly in E2E tests
-  // or via a custom auth flow). When the user signs in and we already have
-  // validated registration info, proceed with registration automatically.
-  //
-  // The guard ref prevents double-registration if the auth state listener
-  // fires more than once (e.g. on token refresh) before React re-renders.
-  useEffect(() => {
-    // Only listen when we are waiting for the user to sign in
-    if (pageState.status !== 'code-valid') return;
-    if (!registrationInfo) return;
-
-    let unsubscribe: (() => void) | undefined;
-    let registered = false; // guard against double-registration
-
-    const setupListener = async () => {
-      const { onAuthStateChanged } = await import('firebase/auth');
-      const { firebaseAuth: auth } = await import('@/lib/firebase');
-
-      // Defensive check: firebaseAuth should always be defined but guard regardless.
-      if (!auth) return;
-
-      // onAuthStateChanged fires immediately with the current user (if any),
-      // then again on every subsequent state change.
-      unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser && !registered) {
-          registered = true;
-          doRegister(registrationInfo, join_code, true);
-        }
-      });
-    };
-
-    setupListener();
-
-    return () => {
-      // Cancel any pending registration on cleanup (e.g. user navigates away)
-      registered = true; // prevent late-firing callbacks from proceeding
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [pageState.status, registrationInfo, join_code, doRegister]);
-
   // Go back to code entry
   const handleBackToCode = () => {
     setPageState({ status: 'code-entry' });
