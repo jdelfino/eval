@@ -88,12 +88,16 @@ test.describe('Student Registration UI', () => {
     ]);
 
     // ===== STEP 5: Return to registration page — now signed in =====
-    // The page detects currentUser on code validation and auto-registers.
+    // The code param pre-fills the input but doesn't auto-submit.
+    // Clicking "Continue to Register" validates the code. Since the user is
+    // now signed in (firebaseAuth.currentUser is set), the page calls
+    // registerStudent directly and redirects to the section detail page.
     const codeOnly = joinCode.replace(/-/g, '');
     await page.goto(`/register/student?code=${codeOnly}`);
+    await expect(page.locator('button:has-text("Continue to Register")')).toBeVisible({ timeout: 5_000 });
+    await page.click('button:has-text("Continue to Register")');
 
-    // Since we're now signed in, validating the code auto-triggers registration.
-    // Wait for redirect to section detail page.
+    // Wait for auto-registration and redirect to section detail page.
     await page.waitForURL(/\/sections\//, { timeout: 20_000 });
 
     // ===== STEP 6: Verify section detail page =====
