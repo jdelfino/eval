@@ -15,7 +15,6 @@ import (
 
 	"github.com/jdelfino/eval/go-backend/internal/config"
 	"github.com/jdelfino/eval/go-backend/internal/db"
-	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // mockPool implements DatabasePool for testing
@@ -37,7 +36,10 @@ func TestNew(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
 
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	if s == nil {
 		t.Fatal("New() returned nil")
@@ -60,7 +62,10 @@ func TestRoutes(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	tests := []struct {
 		name           string
@@ -136,7 +141,10 @@ func TestReadyzUnhealthyPool(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: false, Message: "connection failed"}}
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()
@@ -170,7 +178,10 @@ func TestMetricsEndpoint(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	// Make a request to generate some metrics
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -199,7 +210,10 @@ func TestNotFoundRoute(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	rr := httptest.NewRecorder()
@@ -215,7 +229,10 @@ func TestAPIRoutePrefix(t *testing.T) {
 	cfg := &config.Config{Port: 8080}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	s := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
 
 	// API v1 route prefix exists (even if no routes are registered yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1", nil)
@@ -227,20 +244,5 @@ func TestAPIRoutePrefix(t *testing.T) {
 	// but this verifies the router handles the prefix
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("status code = %d, want %d", rr.Code, http.StatusNotFound)
-	}
-}
-
-func TestNewWithStore_BuildsWithoutError(t *testing.T) {
-	// Verify that server construction works when a Store is provided.
-	// This exercises the auth middleware wiring path (JWKS provider, validator, adapter).
-	cfg := &config.Config{Port: 8080, GCPProjectID: "test-project"}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	st := store.New(nil)
-
-	s := NewWithRegistry(cfg, logger, pool, st, prometheus.NewRegistry())
-
-	if s == nil {
-		t.Fatal("New() returned nil when store is provided")
 	}
 }

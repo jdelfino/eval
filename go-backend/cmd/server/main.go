@@ -55,7 +55,11 @@ func main() {
 	userStore := store.New(pool.PgxPool())
 
 	// Create and start server
-	srv := server.New(cfg, logger, pool, userStore)
+	srv, err := server.New(cfg, logger, pool, userStore)
+	if err != nil {
+		logger.Error("failed to create server", "error", err)
+		os.Exit(1)
+	}
 
 	// Graceful shutdown
 	go func() {

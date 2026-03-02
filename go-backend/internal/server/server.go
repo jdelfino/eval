@@ -55,12 +55,12 @@ type Server struct {
 // New creates a new Server with the configured middleware chain and routes.
 // userStore may be nil (e.g. in tests without a database); when nil, the
 // authentication middleware is skipped on API routes.
-func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository) *Server {
+func New(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository) (*Server, error) {
 	return NewWithRegistry(cfg, logger, pool, userStore, prometheus.DefaultRegisterer)
 }
 
 // NewWithRegistry creates a new Server using the provided Prometheus registerer.
-func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository, reg prometheus.Registerer) *Server {
+func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool, userStore store.UserRepository, reg prometheus.Registerer) (*Server, error) {
 	httpMetrics := httpmiddleware.NewHTTPMetrics(reg)
 
 	r := chi.NewRouter()
@@ -123,27 +123,29 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 	var revBuffer *revision.RevisionBuffer
 
+	// Create auth components (before route closure so we can return errors)
+	var jwtValidator *custommw.JWTValidator
+	var userLoader *custommw.UserLoader
+	if userStore != nil {
+		var validator auth.TokenValidator
+		if cfg.AuthMode == "test" {
+			logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
+			validator = auth.NewTestValidator()
+		} else {
+			authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID)
+			if err != nil {
+				return nil, fmt.Errorf("initialize Firebase auth client: %w", err)
+			}
+			validator = auth.NewFirebaseValidator(authClient)
+		}
+		adapter := NewUserLookupAdapter(userStore)
+		jwtValidator = custommw.NewJWTValidator(validator, logger)
+		userLoader = custommw.NewUserLoader(adapter, logger)
+	}
+
 	// API routes with auth and RLS middleware
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.Timeout(30 * time.Second))
-
-		// Create auth components
-		var jwtValidator *custommw.JWTValidator
-		var userLoader *custommw.UserLoader
-		if userStore != nil {
-			var validator auth.TokenValidator
-			if cfg.AuthMode == "test" {
-				logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
-				validator = auth.NewTestValidator()
-			} else {
-				jwksProvider := auth.NewCachedJWKSProvider(auth.DefaultJWKSURL, nil)
-				validator = auth.NewIdentityPlatformValidator(cfg.GCPProjectID, jwksProvider, logger)
-			}
-			adapter := NewUserLookupAdapter(userStore)
-			jwtValidator = custommw.NewJWTValidator(validator, logger)
-			userLoader = custommw.NewUserLoader(adapter, logger)
-
-			}
 
 		// Public routes — no authentication required.
 		// Uses eval_app + app.role='public' with scoped RLS policies (migration 016)
@@ -395,7 +397,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 		pool:       pool,
 		revBuffer:  revBuffer,
 		memLimiter: memLimiter,
-	}
+	}, nil
 }
 
 // Start begins listening and serving HTTP requests.
