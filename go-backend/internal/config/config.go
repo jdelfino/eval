@@ -72,6 +72,10 @@ type Config struct {
 	// AI Configuration
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
 	AnthropicAPIKey string `env:"ANTHROPIC_API_KEY"`
+
+	// Tracing Configuration
+	TracingEnabled    bool    `env:"TRACING_ENABLED" envDefault:"false"`
+	TracingSampleRate float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.01"`
 }
 
 // Load parses environment variables and returns a Config struct.
