@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ProblemInput } from '@/types/problem';
 import { listClasses } from '@/lib/api/classes';
-import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
+import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
@@ -38,6 +38,7 @@ export default function ProblemCreator({
   const [solution, setSolution] = useState('');
   const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
   const [error, setError] = useState<string | null>(null);
 
@@ -192,6 +193,27 @@ export default function ProblemCreator({
 
   const removeTag = (tag: string) => {
     setTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const handleGenerateSolution = async () => {
+    if (solution.trim()) {
+      const confirmed = window.confirm('This will replace the existing solution. Continue?');
+      if (!confirmed) return;
+    }
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const result = await generateSolution({
+        description,
+        starter_code: starter_code || undefined,
+      });
+      setSolution(result.solution);
+      setActiveTab('solution');
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate solution');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const debuggerHook = useApiDebugger();
@@ -363,6 +385,7 @@ export default function ProblemCreator({
       {!isLoading && <div role="tablist" style={{
         flexShrink: 0,
         display: 'flex',
+        alignItems: 'center',
         borderBottom: '1px solid #dee2e6',
         backgroundColor: '#fff',
       }}>
@@ -390,6 +413,24 @@ export default function ProblemCreator({
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={handleGenerateSolution}
+          disabled={!description.trim() || isGenerating || isSubmitting}
+          style={{
+            marginLeft: 'auto',
+            padding: '0.25rem 0.75rem',
+            fontSize: '0.8rem',
+            color: '#0d6efd',
+            backgroundColor: 'transparent',
+            border: '1px solid #0d6efd',
+            borderRadius: '0.25rem',
+            cursor: (!description.trim() || isGenerating || isSubmitting) ? 'not-allowed' : 'pointer',
+            opacity: (!description.trim() || isGenerating || isSubmitting) ? 0.5 : 1,
+          }}
+        >
+          {isGenerating ? 'Generating...' : 'Generate Solution'}
+        </button>
       </div>}
 
       {/* Full-width code editor */}
