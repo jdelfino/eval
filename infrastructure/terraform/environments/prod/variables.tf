@@ -271,3 +271,12 @@ variable "domain_name" {
   description = "Domain name for the application (e.g., eval.delquillan.com)"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# Monitoring Variables
+# -----------------------------------------------------------------------------
+
+variable "alert_email" {
+  description = "Email address for alert notification channel"
+  type        = string
+}

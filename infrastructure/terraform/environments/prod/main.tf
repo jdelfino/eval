@@ -201,6 +201,8 @@ module "monitoring" {
   project_name = var.project_name
   project_id   = var.project_id
   region       = var.region
+
+  alert_email = var.alert_email
 }
 
 module "dns_ssl" {

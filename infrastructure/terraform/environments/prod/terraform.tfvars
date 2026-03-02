@@ -110,3 +110,9 @@ frontend_centrifugo_url = "wss://eval.delquillan.com/connection/websocket"
 # -----------------------------------------------------------------------------
 
 domain_name = "eval.delquillan.com"
+
+# -----------------------------------------------------------------------------
+# Monitoring Configuration
+# -----------------------------------------------------------------------------
+
+alert_email = "alerts@delquillan.com"
