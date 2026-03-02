@@ -181,7 +181,7 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, run quality gates via a test-runner sub-agent. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+After all issues resolved, run quality gates via a test-runner sub-agent. **Only run integration tests here** — unit tests and contract coverage are handled by pre-push hooks when pushing in Phase 4. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
 ```
 ROLE: Test Runner
@@ -189,10 +189,10 @@ SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 
 WORKING DIRECTORY: ../<project>-<work-name>
 COMMANDS:
-- <test commands from CLAUDE.md matching changed code areas — lint/typecheck are handled by hooks>
+- <integration test commands matching changed code — see Hooks section below>
 ```
 
-**Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
+**Skip the test-runner entirely** if no integration tests are needed (e.g., frontend-only changes with no store layer involvement). **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
 ### 4. Create PR and Hand Off
 
@@ -250,10 +250,23 @@ EOF
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
 
-## Hooks
+## Hooks — What's Automatic vs Manual
 
-Lefthook git hooks enforce lint and typecheck at commit time. The test-runner sub-agent should only run test commands, not lint or typecheck. Quality gate commands for test-runner prompts:
-- Go backend: `make test-api`
-- Executor: `make test-executor`
-- Frontend: `make test-frontend`
-- Store integration: `make test-integration-store`
+Lefthook git hooks run quality gates automatically. Do NOT duplicate these in test-runner prompts.
+
+**Pre-commit hooks (automatic at commit time) — never run manually:**
+- `make lint-api`, `make lint-executor`, `make lint-frontend`
+- `make typecheck-frontend`
+- `make check-api-imports`
+
+**Pre-push hooks (automatic at push time) — never run in coordinator test-runner:**
+- `make test-api`, `make test-executor`, `make test-frontend`
+- `make check-contract-coverage`
+
+**Integration tests (NOT in hooks) — run in coordinator test-runner when relevant:**
+- `make test-integration-store` — store/DB changes
+- `make test-integration-realtime` — realtime/Centrifugo changes
+- `make test-integration-api` — API handler changes
+- `make test-integration-contract` — API contract changes
+
+Note: implementer subagents DO run unit tests (`make test-api`, etc.) for TDD feedback before committing. Pre-push hooks re-running them is an accepted safety net, not wasteful duplication.

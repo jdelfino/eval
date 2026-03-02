@@ -49,12 +49,10 @@ SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 
 WORKING DIRECTORY: <worktree-path>
 COMMANDS:
-- <commands from Quality Gates table in CLAUDE.md matching changed code>
-
-For example, for Go backend changes: make test-api
-For frontend changes: make test-frontend
-For store changes, also: make test-integration-store
+- <test commands from the Quality Gates table in CLAUDE.md matching changed code>
 ```
+
+**Only run `test-*` commands.** Lint, typecheck, and import checks are enforced automatically by pre-commit hooks — do not run them here. Pre-push hooks also re-run unit tests as a safety net, but you must run them here first for the TDD feedback loop.
 
 **Gate:** Sub-agent reports PASS. If FAIL, read the error summary, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
 
