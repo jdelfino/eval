@@ -12,6 +12,9 @@ type Config struct {
 	Environment string `env:"ENVIRONMENT" envDefault:"local"`
 	LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
 
+	// GCP Configuration
+	GCPProjectID string `env:"GCP_PROJECT_ID"`
+
 	// Sandbox Configuration
 	NsjailPath     string `env:"NSJAIL_PATH" envDefault:"/usr/bin/nsjail"`
 	PythonPath     string `env:"PYTHON_PATH" envDefault:"/usr/bin/python3"`
@@ -29,6 +32,10 @@ type Config struct {
 	// Redis (for distributed rate limiting)
 	RedisHost string `env:"REDIS_HOST"`
 	RedisPort int    `env:"REDIS_PORT" envDefault:"6379"`
+
+	// Tracing Configuration
+	TracingEnabled    bool    `env:"TRACING_ENABLED" envDefault:"false"`
+	TracingSampleRate float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.01"`
 }
 
 // Load parses environment variables and returns a Config struct.

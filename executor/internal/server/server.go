@@ -54,7 +54,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	// Middleware chain
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(httplog.Logger(logger))
+	r.Use(httplog.OTelMiddleware("executor"))
+	// Add trace-log correlation when GCP project ID is configured.
+	if cfg.GCPProjectID != "" {
+		r.Use(httplog.Logger(logger, httplog.TraceAttrFunc(cfg.GCPProjectID)))
+	} else {
+		r.Use(httplog.Logger(logger))
+	}
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(httpMetrics.Middleware)
@@ -180,6 +186,7 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 		})
 	}
 }
+
 
 // Start begins listening and serving HTTP requests.
 func (s *Server) Start() error {

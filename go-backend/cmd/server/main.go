@@ -14,6 +14,7 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/server"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/slogutil"
+	"github.com/jdelfino/eval/pkg/tracing"
 )
 
 func main() {
@@ -28,8 +29,24 @@ func main() {
 	logger := slogutil.NewLogger(cfg.Environment, cfg.LogLevel)
 	slog.SetDefault(logger)
 
-	// Create database connection pool
 	ctx := context.Background()
+
+	// Initialize distributed tracing if enabled
+	if cfg.TracingEnabled {
+		shutdownTracing, err := tracing.Init(ctx, "go-api", cfg.TracingSampleRate)
+		if err != nil {
+			logger.Warn("failed to initialize tracing", "error", err)
+		} else {
+			defer func() {
+				if err := shutdownTracing(context.Background()); err != nil {
+					logger.Warn("tracing shutdown error", "error", err)
+				}
+			}()
+			logger.Info("tracing initialized", "sample_rate", cfg.TracingSampleRate)
+		}
+	}
+
+	// Create database connection pool
 	pool, err := db.NewPool(ctx, cfg.DatabasePoolConfig())
 	if err != nil {
 		logger.Error("failed to create database pool", "error", err)

@@ -27,6 +27,7 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/realtime"
 	"github.com/jdelfino/eval/go-backend/internal/revision"
 	"github.com/jdelfino/eval/go-backend/internal/store"
+	"github.com/jdelfino/eval/pkg/httplog"
 	"github.com/jdelfino/eval/pkg/httpmiddleware"
 	"github.com/jdelfino/eval/pkg/httputil"
 	"github.com/jdelfino/eval/pkg/ratelimit"
@@ -68,7 +69,13 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	// Middleware chain
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(custommw.Logger(logger))
+	r.Use(httplog.OTelMiddleware("go-api"))
+	// Add trace-log correlation when GCP project ID is configured.
+	if cfg.GCPProjectID != "" {
+		r.Use(custommw.Logger(logger, httplog.TraceAttrFunc(cfg.GCPProjectID)))
+	} else {
+		r.Use(custommw.Logger(logger))
+	}
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(httpMetrics.Middleware)
@@ -204,11 +211,17 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				readRL := custommw.ForCategory(rl, "read", custommw.UserKey)
 				// Write rate limiting for POST/PUT/PATCH/DELETE endpoints
 				writeRL := custommw.ForCategory(rl, "write", custommw.UserKey)
+				// Dedicated rate limiting for frontend error reporting (separate from the shared write bucket)
+				clientErrorRL := custommw.ForCategory(rl, "clientError", custommw.UserKey)
 
 				// Auth routes for existing users (me endpoints) — reuse authHandler from registration routes
 				meHandler := handler.NewAuthHandler(cfg.BootstrapAdminEmail)
 				r.With(readRL).Get("/auth/me", meHandler.GetMe)
 				r.With(writeRL).Put("/auth/me", meHandler.UpdateMe)
+
+				// Frontend error reporting
+				clientErrorHandler := handler.NewClientErrorHandler()
+				r.With(clientErrorRL).Post("/client-errors", clientErrorHandler.Report)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
@@ -394,6 +407,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 		memLimiter: memLimiter,
 	}, nil
 }
+
 
 // Start begins listening and serving HTTP requests.
 // It returns http.ErrServerClosed when Shutdown is called.

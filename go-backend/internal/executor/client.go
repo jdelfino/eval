@@ -10,6 +10,10 @@ import (
 	"net/http"
 	"time"
 
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
@@ -61,6 +65,11 @@ func (c *Client) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteRespo
 		return nil, fmt.Errorf("executor: create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if reqID := chimiddleware.GetReqID(ctx); reqID != "" {
+		httpReq.Header.Set("X-Request-ID", reqID)
+	}
+	// Propagate trace context to the executor service for distributed tracing.
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -118,6 +127,11 @@ func (c *Client) Trace(ctx context.Context, req TraceRequest) (*TraceResponse, e
 		return nil, fmt.Errorf("executor: create trace request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if reqID := chimiddleware.GetReqID(ctx); reqID != "" {
+		httpReq.Header.Set("X-Request-ID", reqID)
+	}
+	// Propagate trace context to the executor service for distributed tracing.
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {

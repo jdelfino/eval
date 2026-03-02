@@ -13,8 +13,12 @@ import (
 // It logs the request method, path, status code, duration in milliseconds,
 // and request ID (from chi's middleware.RequestID context).
 // Authenticated requests also include the user_id.
-func Logger(logger *slog.Logger) func(next http.Handler) http.Handler {
-	return httplog.Logger(logger, userIDAttr)
+// Additional AttrFunc values can be passed to enrich log entries (e.g. trace IDs).
+func Logger(logger *slog.Logger, extra ...httplog.AttrFunc) func(next http.Handler) http.Handler {
+	fns := make([]httplog.AttrFunc, 0, 1+len(extra))
+	fns = append(fns, userIDAttr)
+	fns = append(fns, extra...)
+	return httplog.Logger(logger, fns...)
 }
 
 // userIDAttr enriches log entries with the authenticated user's ID.

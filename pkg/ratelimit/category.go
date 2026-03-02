@@ -70,6 +70,12 @@ var (
 		Limit:     100,
 		Window:    1 * time.Minute,
 	}
+	CategoryClientError = Category{
+		Name:      "clientError",
+		Algorithm: "sliding",
+		Limit:     60,
+		Window:    1 * time.Minute,
+	}
 
 	// Defense-in-depth global limit for the executor service.
 	// Per-student limits are enforced at the go-backend; this only
@@ -97,5 +103,6 @@ func Categories() map[string]Category {
 		CategoryWrite.Name:          CategoryWrite,
 		CategoryRead.Name:           CategoryRead,
 		CategoryExecutorGlobal.Name: CategoryExecutorGlobal,
+		CategoryClientError.Name:    CategoryClientError,
 	}
 }

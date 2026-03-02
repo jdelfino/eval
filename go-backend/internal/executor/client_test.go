@@ -7,8 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func intPtr(n int) *int { return &n }
@@ -204,6 +210,154 @@ func TestExecute_MalformedJSONResponse(t *testing.T) {
 	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "x"})
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
+	}
+}
+
+// TestExecute_PropagatesRequestID verifies that the X-Request-ID header is
+// forwarded to the executor when a request ID is present in the context.
+func TestExecute_PropagatesRequestID(t *testing.T) {
+	const reqID = "test-request-id-123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Request-ID")
+		if got != reqID {
+			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
+		}
+		resp := ExecuteResponse{Success: true, Output: "ok"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	ctx := context.WithValue(context.Background(), chimiddleware.RequestIDKey, reqID)
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(ctx, ExecuteRequest{Code: "print('ok')"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestExecute_NoRequestIDHeader verifies that no X-Request-ID header is sent
+// when no request ID is present in the context.
+func TestExecute_NoRequestIDHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Request-ID"); got != "" {
+			t.Errorf("unexpected X-Request-ID header: %q", got)
+		}
+		resp := ExecuteResponse{Success: true, Output: "ok"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "print('ok')"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestTrace_PropagatesRequestID verifies that the X-Request-ID header is
+// forwarded to the executor trace endpoint when a request ID is in the context.
+func TestTrace_PropagatesRequestID(t *testing.T) {
+	const reqID = "trace-request-id-456"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Request-ID")
+		if got != reqID {
+			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
+		}
+		resp := TraceResponse{}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	ctx := context.WithValue(context.Background(), chimiddleware.RequestIDKey, reqID)
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Trace(ctx, TraceRequest{Code: "x = 1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestExecute_InjectsTraceContext verifies that when an active OTel span is in
+// the context, Execute injects W3C traceparent headers into the outbound request.
+func TestExecute_InjectsTraceContext(t *testing.T) {
+	var receivedTraceparent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedTraceparent = r.Header.Get("traceparent")
+		resp := ExecuteResponse{Success: true, Output: "ok"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	// Set up a real SDK tracer provider with W3C propagator so span context is injected.
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	tracer := tp.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "test-span")
+	defer span.End()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(ctx, ExecuteRequest{Code: "print('ok')"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if receivedTraceparent == "" {
+		t.Fatal("Execute() did not inject traceparent header into outbound request")
+	}
+	if !strings.HasPrefix(receivedTraceparent, "00-") {
+		t.Errorf("traceparent %q does not look like W3C format", receivedTraceparent)
+	}
+}
+
+// TestTrace_InjectsTraceContext verifies that Trace() also propagates trace context.
+func TestTrace_InjectsTraceContext(t *testing.T) {
+	var receivedTraceparent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedTraceparent = r.Header.Get("traceparent")
+		resp := TraceResponse{}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	tracer := tp.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "test-span")
+	defer span.End()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Trace(ctx, TraceRequest{Code: "x = 1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if receivedTraceparent == "" {
+		t.Fatal("Trace() did not inject traceparent header into outbound request")
+	}
+	if !strings.HasPrefix(receivedTraceparent, "00-") {
+		t.Errorf("traceparent %q does not look like W3C format", receivedTraceparent)
 	}
 }
 
