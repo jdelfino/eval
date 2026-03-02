@@ -69,7 +69,7 @@ test.describe('Student Registration UI', () => {
     await expect(page.locator('text=Fall 2025')).toBeVisible();
 
     // ===== STEP 3: Verify sign-in buttons are visible (not yet authenticated) =====
-    await expect(page.locator('text=Sign in')).toBeVisible();
+    await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
 
     // ===== STEP 4: Sign in via the email sign-in page =====
     await page.goto('/auth/signin/email');

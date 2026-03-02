@@ -66,7 +66,8 @@ test.describe('Invitation Acceptance Flow', () => {
 
     // ===== STEP 6: Verify redirect to instructor dashboard =====
     await page.waitForURL('/instructor', { timeout: 20_000 });
-    await expect(page.locator('h2:has-text("Dashboard")')).toBeVisible({ timeout: 15_000 });
+    // Fresh instructor sees the empty-state welcome heading
+    await expect(page.locator('text=Welcome to the Instructor Dashboard')).toBeVisible({ timeout: 15_000 });
   });
 
   test('Accept page shows invitation details when not authenticated', async ({
