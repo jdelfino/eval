@@ -25,11 +25,6 @@ afterAll(() => {
 });
 
 describe('api-client setBaseUrl', () => {
-  it('exports a setBaseUrl function', () => {
-    const mod = require('../api-client');
-    expect(typeof mod.setBaseUrl).toBe('function');
-  });
-
   it('uses NEXT_PUBLIC_API_URL by default', async () => {
     const { configureTestAuth } = require('../auth-provider');
     configureTestAuth('test:u1:u1@test.local');

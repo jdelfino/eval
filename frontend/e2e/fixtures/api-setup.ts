@@ -16,11 +16,10 @@ import { createNamespace as apiCreateNamespace } from '../../src/lib/api/namespa
 import { createSystemInvitation } from '../../src/lib/api/system';
 import { acceptInvite, getStudentRegistrationInfo, registerStudent as apiRegisterStudent } from '../../src/lib/api/registration';
 import { createClass as apiCreateClass, createSection as apiCreateSection } from '../../src/lib/api/classes';
-import { createSession } from '../../src/lib/api/sessions';
+import { createSession, completeSession as apiCompleteSession } from '../../src/lib/api/sessions';
 import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
-import { apiPatch } from '../../src/lib/api-client';
 import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
@@ -34,6 +33,14 @@ export function testToken(externalId: string, email: string): string {
   return `test:${externalId}:${email}`;
 }
 
+/**
+ * Execute an API call with a specific auth token.
+ * Sets the module-level auth provider to the given token, then calls fn.
+ *
+ * WARNING: Not safe for concurrent use — calls must be sequential.
+ * Concurrent withToken calls with different tokens will race on the
+ * shared auth provider, causing requests to use the wrong token.
+ */
 async function withToken<T>(token: string, fn: () => Promise<T>): Promise<T> {
   configureTestAuth(token);
   return fn();
@@ -111,5 +118,5 @@ export async function getOrCreateStudentWork(token: string, sectionId: string, p
 }
 
 export async function completeSession(token: string, sessionId: string): Promise<void> {
-  await withToken(token, () => apiPatch(`/sessions/${sessionId}`, { status: 'completed' }));
+  await withToken(token, () => apiCompleteSession(sessionId));
 }

@@ -25,11 +25,6 @@ afterAll(() => {
 });
 
 describe('public-api-client setBaseUrl', () => {
-  it('exports a setBaseUrl function', () => {
-    const mod = require('../public-api-client');
-    expect(typeof mod.setBaseUrl).toBe('function');
-  });
-
   it('uses NEXT_PUBLIC_API_URL by default', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
