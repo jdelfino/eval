@@ -21,8 +21,12 @@ declare global {
 
 let mockEditorInstance: any;
 
-jest.mock('@monaco-editor/react', () => {
-  return function MockEditor({ onMount }: any) {
+// mockEditorFactory is reassigned per-test for the multi-instance test;
+// all other tests use the default factory assigned in beforeEach.
+let mockEditorFactory: (props: any) => React.ReactElement;
+
+function makeDefaultFactory() {
+  return function DefaultMockEditor({ onMount }: any) {
     React.useEffect(() => {
       if (onMount) {
         mockEditorInstance = {
@@ -35,6 +39,13 @@ jest.mock('@monaco-editor/react', () => {
     }, [onMount]);
 
     return <textarea data-testid="monaco-editor" />;
+  };
+}
+
+jest.mock('@monaco-editor/react', () => {
+  // Delegate to mockEditorFactory so individual tests can override behaviour
+  return function MockEditorWrapper(props: any) {
+    return mockEditorFactory(props);
   };
 });
 
@@ -66,6 +77,11 @@ jest.mock('@/lib/api/execute', () => ({
 
 describe('CodeEditor window.__TEST_EDITORS registration', () => {
   const originalEnv = process.env.NEXT_PUBLIC_AUTH_MODE;
+
+  beforeEach(() => {
+    // Reset factory to the default single-instance behaviour before each test
+    mockEditorFactory = makeDefaultFactory();
+  });
 
   afterEach(() => {
     // Restore env variable
@@ -113,23 +129,54 @@ describe('CodeEditor window.__TEST_EDITORS registration', () => {
     });
 
     it('supports multiple editor instances', async () => {
-      const firstEditor: any = {};
-      const secondEditor: any = {};
-      let mountCount = 0;
+      const mountedEditors: any[] = [];
 
-      // Override mock to track two separate instances
-      const { rerender } = render(
+      // Override the factory to produce a distinct instance per mount call
+      mockEditorFactory = function MultiInstanceMockEditor({ onMount }: any) {
+        React.useEffect(() => {
+          if (onMount) {
+            const instance = {
+              focus: jest.fn(),
+              trigger: jest.fn(),
+              deltaDecorations: jest.fn(() => []),
+            };
+            mountedEditors.push(instance);
+            mockEditorInstance = instance;
+            onMount(instance);
+          }
+        }, [onMount]);
+        return <textarea data-testid="monaco-editor" />;
+      };
+
+      const { unmount: unmountFirst } = render(
         <CodeEditor code="first" onChange={jest.fn()} />
       );
 
       await waitFor(() => {
-        expect(mockEditorInstance).not.toBeNull();
+        expect(window.__TEST_EDITORS).toHaveLength(1);
       });
 
-      // Simulate a second editor being registered manually
-      window.__TEST_EDITORS!.push(secondEditor);
+      const { unmount: unmountSecond } = render(
+        <CodeEditor code="second" onChange={jest.fn()} />
+      );
 
-      expect(window.__TEST_EDITORS).toHaveLength(2);
+      await waitFor(() => {
+        expect(window.__TEST_EDITORS).toHaveLength(2);
+      });
+
+      // Both instances should be the real editor objects registered via handleEditorDidMount
+      expect(window.__TEST_EDITORS![0]).toBe(mountedEditors[0]);
+      expect(window.__TEST_EDITORS![1]).toBe(mountedEditors[1]);
+      expect(window.__TEST_EDITORS![0]).not.toBe(window.__TEST_EDITORS![1]);
+
+      // Unmounting the first should remove only the first instance
+      unmountFirst();
+      expect(window.__TEST_EDITORS).toHaveLength(1);
+      expect(window.__TEST_EDITORS![0]).toBe(mountedEditors[1]);
+
+      // Unmounting the second should leave the array empty
+      unmountSecond();
+      expect(window.__TEST_EDITORS).toHaveLength(0);
     });
 
     it('initialises window.__TEST_EDITORS as array if not already set', async () => {
