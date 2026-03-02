@@ -101,6 +101,47 @@ func (c *ClaudeClient) AnalyzeCode(ctx context.Context, req AnalyzeRequest) (*An
 	return &resp, nil
 }
 
+// GenerateSolution calls Claude to generate a complete solution for a programming problem.
+// It returns the raw code with code fences stripped. The response is plain code, not JSON.
+func (c *ClaudeClient) GenerateSolution(ctx context.Context, req GenerateSolutionRequest) (*GenerateSolutionResponse, error) {
+	var sb strings.Builder
+	sb.WriteString("You are an expert programmer. Given a programming problem description and optional starter code, generate a complete, correct Python solution. Return ONLY the code — no explanation, no markdown fences.\n\n")
+	sb.WriteString("## Problem Description\n\n")
+	sb.WriteString(req.ProblemDescription)
+	sb.WriteString("\n\n")
+	if req.StarterCode != "" {
+		sb.WriteString("## Starter Code\n\n")
+		sb.WriteString(req.StarterCode)
+		sb.WriteString("\n\n")
+	}
+
+	result, err := c.creator.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.Model(defaultClaudeModel),
+		MaxTokens: 4096,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(sb.String())),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ai: Claude API call failed: %w", err)
+	}
+
+	var rawText string
+	for _, block := range result.Content {
+		if block.Type == "text" {
+			rawText += block.Text
+		}
+	}
+
+	rawText = strings.TrimSpace(rawText)
+	if rawText == "" {
+		return nil, fmt.Errorf("ai: Claude returned empty response")
+	}
+
+	solution := stripCodeFences(rawText)
+	return &GenerateSolutionResponse{Solution: solution}, nil
+}
+
 // stripCodeFences removes markdown code fences (```json or ```) from the input string.
 // Claude sometimes wraps JSON output in code fences even when asked not to.
 func stripCodeFences(s string) string {

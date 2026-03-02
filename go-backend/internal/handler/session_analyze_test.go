@@ -62,11 +62,19 @@ func (h *capturingSlogHandler) containsErrorAttr(substr string) bool {
 
 // mockAIClient implements ai.Client for testing.
 type mockAIClient struct {
-	analyzeFn func(ctx context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error)
+	analyzeFn          func(ctx context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error)
+	generateSolutionFn func(ctx context.Context, req ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error)
 }
 
 func (m *mockAIClient) AnalyzeCode(ctx context.Context, req ai.AnalyzeRequest) (*ai.AnalyzeResponse, error) {
 	return m.analyzeFn(ctx, req)
+}
+
+func (m *mockAIClient) GenerateSolution(ctx context.Context, req ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error) {
+	if m.generateSolutionFn != nil {
+		return m.generateSolutionFn(ctx, req)
+	}
+	return nil, fmt.Errorf("mockAIClient.GenerateSolution not implemented")
 }
 
 // analyzeTestRepos embeds stubRepos and overrides session + session student methods for analyze tests.

@@ -74,9 +74,21 @@ type AnalyzeResponse struct {
 	Summary     AnalysisSummary `json:"summary"`
 }
 
-// Client is the interface for AI code analysis.
+// GenerateSolutionRequest contains the input for AI solution generation.
+type GenerateSolutionRequest struct {
+	ProblemDescription string `json:"problem_description"`
+	StarterCode        string `json:"starter_code"`
+}
+
+// GenerateSolutionResponse contains the generated solution code.
+type GenerateSolutionResponse struct {
+	Solution string `json:"solution"`
+}
+
+// Client is the interface for AI code analysis and solution generation.
 type Client interface {
 	AnalyzeCode(ctx context.Context, req AnalyzeRequest) (*AnalyzeResponse, error)
+	GenerateSolution(ctx context.Context, req GenerateSolutionRequest) (*GenerateSolutionResponse, error)
 }
 
 // StubClient is a no-op implementation of Client for testing and development.
@@ -120,6 +132,13 @@ func (s *StubClient) AnalyzeCode(_ context.Context, req AnalyzeRequest) (*Analyz
 				NotStarted: total,
 			},
 		},
+	}, nil
+}
+
+// GenerateSolution returns a stub response indicating AI solution generation is not configured.
+func (s *StubClient) GenerateSolution(_ context.Context, _ GenerateSolutionRequest) (*GenerateSolutionResponse, error) {
+	return &GenerateSolutionResponse{
+		Solution: "# AI solution generation not configured",
 	}, nil
 }
 

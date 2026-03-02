@@ -22,6 +22,15 @@ func NewRouterClient(gemini *GeminiClient, claude *ClaudeClient) *RouterClient {
 	return &RouterClient{gemini: gemini, claude: claude}
 }
 
+// GenerateSolution always delegates to Claude for solution generation.
+// Returns an error if the Claude provider is not configured.
+func (r *RouterClient) GenerateSolution(ctx context.Context, req GenerateSolutionRequest) (*GenerateSolutionResponse, error) {
+	if r.claude == nil {
+		return nil, fmt.Errorf("ai: Claude provider not configured")
+	}
+	return r.claude.GenerateSolution(ctx, req)
+}
+
 // AnalyzeCode routes the request to the appropriate AI client based on the model name.
 // Models with "claude-" prefix are routed to the ClaudeClient; all others go to GeminiClient.
 func (r *RouterClient) AnalyzeCode(ctx context.Context, req AnalyzeRequest) (*AnalyzeResponse, error) {

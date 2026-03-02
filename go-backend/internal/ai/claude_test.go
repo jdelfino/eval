@@ -473,3 +473,218 @@ func TestBuildJSONSchemaInstructions(t *testing.T) {
 		}
 	}
 }
+
+// --- GenerateSolution tests ---
+
+// TestClaudeGenerateSolution_HappyPath verifies a successful round-trip for GenerateSolution.
+func TestClaudeGenerateSolution_HappyPath(t *testing.T) {
+	const wantSolution = "def solve(n):\n    return n * 2"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(wantSolution), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	resp, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Write a function that doubles a number.",
+		StarterCode:        "def solve(n):\n    pass",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Solution != wantSolution {
+		t.Errorf("Solution = %q, want %q", resp.Solution, wantSolution)
+	}
+}
+
+// TestClaudeGenerateSolution_PromptContainsDescription verifies the prompt includes problem description.
+func TestClaudeGenerateSolution_PromptContainsDescription(t *testing.T) {
+	const desc = "Write a function that computes Fibonacci numbers"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse("def fib(n): return n"), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: desc,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(mock.capturedPrompt, desc) {
+		t.Errorf("prompt does not contain problem description %q", desc)
+	}
+}
+
+// TestClaudeGenerateSolution_PromptContainsStarterCode verifies the prompt includes starter code.
+func TestClaudeGenerateSolution_PromptContainsStarterCode(t *testing.T) {
+	const starter = "def fib(n):\n    # TODO: implement"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse("def fib(n): return n"), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Fibonacci",
+		StarterCode:        starter,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(mock.capturedPrompt, starter) {
+		t.Errorf("prompt does not contain starter code %q", starter)
+	}
+}
+
+// TestClaudeGenerateSolution_StripCodeFences verifies that code fences are stripped from the response.
+func TestClaudeGenerateSolution_StripCodeFences(t *testing.T) {
+	const rawCode = "def solve(n):\n    return n * 2"
+	fenced := "```\n" + rawCode + "\n```"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(fenced), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	resp, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Double a number",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(resp.Solution, "```") {
+		t.Errorf("Solution should not contain code fences, got: %q", resp.Solution)
+	}
+	if resp.Solution != rawCode {
+		t.Errorf("Solution = %q, want %q", resp.Solution, rawCode)
+	}
+}
+
+// TestClaudeGenerateSolution_EmptyResponse verifies that an empty response returns an error.
+func TestClaudeGenerateSolution_EmptyResponse(t *testing.T) {
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(""), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Double a number",
+	})
+	if err == nil {
+		t.Fatal("expected error on empty response, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty response") {
+		t.Errorf("error message %q should contain 'empty response'", err.Error())
+	}
+}
+
+// TestClaudeGenerateSolution_SDKError verifies that SDK errors are propagated correctly.
+func TestClaudeGenerateSolution_SDKError(t *testing.T) {
+	sdkErr := errors.New("network timeout")
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return nil, sdkErr
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Double a number",
+	})
+	if err == nil {
+		t.Fatal("expected error when SDK returns error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Claude API call failed") {
+		t.Errorf("error message %q should contain 'Claude API call failed'", err.Error())
+	}
+}
+
+// TestStubClient_GenerateSolution verifies that StubClient returns a placeholder solution.
+func TestStubClient_GenerateSolution(t *testing.T) {
+	c := &StubClient{}
+
+	resp, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Anything",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+	if resp.Solution == "" {
+		t.Error("expected non-empty placeholder solution from StubClient")
+	}
+}
+
+// TestGeminiClient_GenerateSolution verifies that GeminiClient returns an unsupported error.
+func TestGeminiClient_GenerateSolution(t *testing.T) {
+	g := newGeminiClientWithGenerator(nil)
+
+	_, err := g.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Anything",
+	})
+	if err == nil {
+		t.Fatal("expected error from GeminiClient.GenerateSolution, got nil")
+	}
+	if !strings.Contains(err.Error(), "not supported") {
+		t.Errorf("error message %q should contain 'not supported'", err.Error())
+	}
+}
+
+// TestRouterClient_GenerateSolution_DelegatesToClaude verifies RouterClient delegates to Claude.
+func TestRouterClient_GenerateSolution_DelegatesToClaude(t *testing.T) {
+	const wantSolution = "def solve(): return 42"
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse(wantSolution), nil
+		},
+	}
+	claude := newClaudeClientWithCreator(mock)
+	router := NewRouterClient(nil, claude)
+
+	resp, err := router.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Return 42",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Solution != wantSolution {
+		t.Errorf("Solution = %q, want %q", resp.Solution, wantSolution)
+	}
+}
+
+// TestRouterClient_GenerateSolution_ErrorWhenClaudeNil verifies RouterClient errors when Claude is nil.
+func TestRouterClient_GenerateSolution_ErrorWhenClaudeNil(t *testing.T) {
+	router := NewRouterClient(nil, nil)
+
+	_, err := router.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Anything",
+	})
+	if err == nil {
+		t.Fatal("expected error when Claude is nil, got nil")
+	}
+	if !strings.Contains(err.Error(), "Claude provider not configured") {
+		t.Errorf("error message %q should contain 'Claude provider not configured'", err.Error())
+	}
+}
