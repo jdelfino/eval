@@ -44,21 +44,38 @@ export async function getVerifiedEmulatorToken(email: string, password: string):
     const body = await signInRes.text();
     throw new Error(`Failed to sign in emulator user ${email}: ${signInRes.status} ${body}`);
   }
-  const { idToken } = await signInRes.json();
+  const { idToken, localId } = await signInRes.json();
 
-  // Set emailVerified=true via accounts:update
-  const updateUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:update?key=${API_KEY}`;
+  // Set emailVerified=true via the emulator admin API.
+  // The user-facing accounts:update endpoint ignores emailVerified, so we must
+  // use the admin endpoint with "Bearer owner" auth and the localId field.
+  const updateUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:update`;
   const updateRes = await fetch(updateUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken, emailVerified: true }),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer owner',
+    },
+    body: JSON.stringify({ localId, emailVerified: true }),
   });
   if (!updateRes.ok) {
     const body = await updateRes.text();
     throw new Error(`Failed to set emailVerified on ${email}: ${updateRes.status} ${body}`);
   }
 
-  return idToken;
+  // Sign in again to get a token that reflects emailVerified=true
+  const refreshRes = await fetch(signInUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  if (!refreshRes.ok) {
+    const body = await refreshRes.text();
+    throw new Error(`Failed to refresh token for ${email}: ${refreshRes.status} ${body}`);
+  }
+  const refreshData = await refreshRes.json();
+
+  return refreshData.idToken;
 }
 
 const PROJECT_ID = 'demo-test';

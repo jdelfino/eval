@@ -7,8 +7,8 @@ import {
   publishProblem,
   registerStudent,
   getOrCreateStudentWork,
-  testToken,
 } from './fixtures/api-setup';
+import { getEmulatorToken } from './fixtures/emulator-auth';
 
 /**
  * Student Progress Review E2E Tests
@@ -47,13 +47,13 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     await publishProblem(instructor.token, section.id, problem.id);
 
     // Register a student in the section
-    const studentExternalId = `student-review-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
+    const studentEmail = `student-review-${testNamespace}@test.local`;
+    const studentPassword = 'e2e-test-password-123'; // gitleaks:allow
     const studentDisplayName = 'Review Student';
-    await registerStudent(section.join_code, studentExternalId, studentEmail, studentDisplayName);
+    await registerStudent(section.join_code, studentEmail, studentDisplayName, studentPassword);
 
     // Create student work entry via API (simulates the student having started the problem)
-    const studentToken = testToken(studentExternalId, studentEmail);
+    const studentToken = await getEmulatorToken(studentEmail, studentPassword);
     await getOrCreateStudentWork(studentToken, section.id, problem.id);
 
     // ===== INSTRUCTOR NAVIGATES TO SECTION =====
