@@ -23,8 +23,8 @@ export async function apiFetch(path: string, token: string, options?: RequestIni
   });
 }
 
-export async function createNamespace(id: string, displayName: string): Promise<void> {
-  const res = await apiFetch('/api/v1/namespaces', ADMIN_TOKEN, {
+export async function createNamespace(id: string, displayName: string, token?: string): Promise<void> {
+  const res = await apiFetch('/api/v1/namespaces', token ?? ADMIN_TOKEN, {
     method: 'POST',
     body: JSON.stringify({ id, display_name: displayName }),
   });
@@ -33,8 +33,8 @@ export async function createNamespace(id: string, displayName: string): Promise<
   }
 }
 
-export async function createInvitation(email: string, role: string, namespaceId: string): Promise<string> {
-  const res = await apiFetch('/api/v1/system/invitations', ADMIN_TOKEN, {
+export async function createInvitation(email: string, role: string, namespaceId: string, token?: string): Promise<string> {
+  const res = await apiFetch('/api/v1/system/invitations', token ?? ADMIN_TOKEN, {
     method: 'POST',
     body: JSON.stringify({ email, target_role: role, namespace_id: namespaceId }),
   });

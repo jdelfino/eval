@@ -12,6 +12,10 @@ set -euo pipefail
 # Environment:
 #   API_PORT (required)
 #   DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
+#   FIREBASE_AUTH_EMULATOR_HOST (optional) — when set, uses Firebase validator
+#     instead of AUTH_MODE=test, so emulator-issued tokens are accepted.
+#     The emulator admin email (BOOTSTRAP_ADMIN_EMAIL) is fixed so tests can
+#     bootstrap a system admin via the REST API.
 
 API_PORT=${API_PORT:?API_PORT must be set}
 DB_HOST=${DATABASE_HOST:-localhost}
@@ -26,14 +30,27 @@ echo "Building Go server..." >&2
 (cd go-backend && mkdir -p tmp && go build -o ./tmp/server ./cmd/server)
 
 # Start the server
-export AUTH_MODE=test
+if [[ -n "${FIREBASE_AUTH_EMULATOR_HOST:-}" ]]; then
+  # Firebase emulator mode: accept real (emulator-issued) Firebase JWT tokens.
+  # AUTH_MODE is intentionally NOT set — the server uses Firebase validator.
+  # The Admin SDK auto-detects FIREBASE_AUTH_EMULATOR_HOST and trusts emulator tokens.
+  # GCP_PROJECT_ID must match the emulator's project ("demo-test").
+  # BOOTSTRAP_ADMIN_EMAIL allows tests to bootstrap a system admin via the emulator.
+  echo "Firebase emulator mode: AUTH_MODE not set, using Firebase validator" >&2
+  export GCP_PROJECT_ID=demo-test
+  export BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local
+  # FIREBASE_AUTH_EMULATOR_HOST is inherited from the caller's environment
+else
+  # Default test mode: use test token validator (token format: test:<id>:<email>)
+  export AUTH_MODE=test
+  export GCP_PROJECT_ID=test-project
+fi
 export DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME"
 export DATABASE_USER="$DB_USER" DATABASE_PASSWORD="$DB_PASS"
 export REDIS_URL=redis://localhost:6379
 export CENTRIFUGO_URL=http://localhost:8000
 export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
-export GCP_PROJECT_ID=test-project
 export PORT="$API_PORT"
 go-backend/tmp/server >&2 &
 SERVER_PID=$!
