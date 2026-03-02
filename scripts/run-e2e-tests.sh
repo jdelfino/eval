@@ -31,13 +31,16 @@ if ! curl -sf --max-time 3 http://localhost:8081/healthz >/dev/null 2>&1; then
 fi
 
 # --- 1b. Firebase Auth Emulator (always required) ---
-echo "Starting Firebase Auth Emulator..."
-docker compose up -d firebase-emulator --wait
+if ! curl -sf --max-time 3 http://localhost:9099/ >/dev/null 2>&1; then
+  echo "Starting Firebase Auth Emulator..."
+  docker compose up -d firebase-emulator --wait
+fi
 
 # --- 2. Go API on random port (builds binary if needed) ---
 export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 
-FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 SERVER_PID=$(./scripts/ensure-test-api.sh)
+export FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
+SERVER_PID=$(./scripts/ensure-test-api.sh)
 PIDS_TO_KILL+=("$SERVER_PID")
 
 # --- 3. Next.js (production build) ---
