@@ -6,6 +6,7 @@
 
 export * from './admin';
 export * from './auth';
+export * from './error-reporting';
 export * from './classes';
 export * from './execute';
 export * from './instructor';
