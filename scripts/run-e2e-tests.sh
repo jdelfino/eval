@@ -8,6 +8,9 @@ set -euo pipefail
 #
 # Go API is per-run on a random port (different branches may have different
 # code). Next.js proxies to the Go API via API_PROXY_URL.
+#
+# Set USE_FIREBASE_EMULATOR=1 to run against the Firebase Auth Emulator
+# instead of the AUTH_MODE=test bypass. This exercises the real auth flow.
 
 NEXT_PORT=3000
 
@@ -28,9 +31,20 @@ if ! curl -sf --max-time 3 http://localhost:8081/healthz >/dev/null 2>&1; then
   docker compose up -d executor --build --wait
 fi
 
+# --- 1b. Firebase Auth Emulator (when USE_FIREBASE_EMULATOR=1) ---
+if [[ "${USE_FIREBASE_EMULATOR:-}" == "1" ]]; then
+  echo "Starting Firebase Auth Emulator..."
+  docker compose up -d firebase-emulator --wait
+fi
+
 # --- 2. Go API on random port (builds binary if needed) ---
 export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-SERVER_PID=$(./scripts/ensure-test-api.sh)
+
+if [[ "${USE_FIREBASE_EMULATOR:-}" == "1" ]]; then
+  FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 SERVER_PID=$(./scripts/ensure-test-api.sh)
+else
+  SERVER_PID=$(./scripts/ensure-test-api.sh)
+fi
 PIDS_TO_KILL+=("$SERVER_PID")
 
 # --- 3. Next.js (production build) ---
@@ -42,12 +56,24 @@ if fuser "${NEXT_PORT}/tcp" >/dev/null 2>&1; then
 fi
 
 echo "Building Next.js..."
-(cd frontend && \
-  NEXT_PUBLIC_AUTH_MODE=test \
-  NEXT_PUBLIC_API_URL=/api/v1 \
-  NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
-  API_PROXY_URL="http://localhost:${API_PORT}" \
-  npm run build)
+if [[ "${USE_FIREBASE_EMULATOR:-}" == "1" ]]; then
+  (cd frontend && \
+    NEXT_PUBLIC_API_URL=/api/v1 \
+    NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+    NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost \
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
+    NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 \
+    API_PROXY_URL="http://localhost:${API_PORT}" \
+    npm run build)
+else
+  (cd frontend && \
+    NEXT_PUBLIC_AUTH_MODE=test \
+    NEXT_PUBLIC_API_URL=/api/v1 \
+    NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+    API_PROXY_URL="http://localhost:${API_PORT}" \
+    npm run build)
+fi
 
 echo "Starting Next.js on port ${NEXT_PORT}..."
 # Copy static assets into the standalone output (required for standalone mode)
@@ -68,7 +94,14 @@ echo "Next.js ready"
 
 # --- 4. Run Playwright ---
 cd frontend
-NEXT_PUBLIC_AUTH_MODE=test \
-NEXT_PUBLIC_API_URL=/api/v1 \
-API_BASE_URL="http://localhost:${API_PORT}" \
-  npx playwright test "$@"
+if [[ "${USE_FIREBASE_EMULATOR:-}" == "1" ]]; then
+  NEXT_PUBLIC_API_URL=/api/v1 \
+  API_BASE_URL="http://localhost:${API_PORT}" \
+  FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
+    npx playwright test "$@"
+else
+  NEXT_PUBLIC_AUTH_MODE=test \
+  NEXT_PUBLIC_API_URL=/api/v1 \
+  API_BASE_URL="http://localhost:${API_PORT}" \
+    npx playwright test "$@"
+fi

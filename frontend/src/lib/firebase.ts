@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,6 +14,12 @@ let firebaseAuth: Auth;
 if (process.env.NEXT_PUBLIC_AUTH_MODE !== 'test') {
   const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   firebaseAuth = getAuth(app);
+
+  // When running against the Firebase Auth Emulator (e.g. E2E tests with
+  // USE_FIREBASE_EMULATOR=1), connect the Auth SDK to the local emulator.
+  if (process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST) {
+    connectAuthEmulator(firebaseAuth, process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST);
+  }
 }
 
 export { firebaseAuth };
