@@ -8,6 +8,8 @@ set -euo pipefail
 #
 # Go API is per-run on a random port (different branches may have different
 # code). Next.js proxies to the Go API via API_PROXY_URL.
+#
+# Always uses the Firebase Auth Emulator for real end-to-end auth testing.
 
 NEXT_PORT=3000
 
@@ -28,8 +30,16 @@ if ! curl -sf --max-time 3 http://localhost:8081/healthz >/dev/null 2>&1; then
   docker compose up -d executor --build --wait
 fi
 
+# --- 1b. Firebase Auth Emulator (always required) ---
+if ! curl -sf --max-time 3 http://localhost:9099/ >/dev/null 2>&1; then
+  echo "Starting Firebase Auth Emulator..."
+  docker compose up -d firebase-emulator --wait
+fi
+
 # --- 2. Go API on random port (builds binary if needed) ---
 export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+
+export FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 SERVER_PID=$(./scripts/ensure-test-api.sh)
 PIDS_TO_KILL+=("$SERVER_PID")
 
@@ -52,9 +62,12 @@ fi
 
 echo "Building Next.js..."
 (cd frontend && \
-  NEXT_PUBLIC_AUTH_MODE=test \
   NEXT_PUBLIC_API_URL=/api/v1 \
   NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+  NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost \
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
+  NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 \
   API_PROXY_URL="http://localhost:${API_PORT}" \
   npm run build)
 
@@ -77,7 +90,7 @@ echo "Next.js ready"
 
 # --- 4. Run Playwright ---
 cd frontend
-NEXT_PUBLIC_AUTH_MODE=test \
 NEXT_PUBLIC_API_URL=/api/v1 \
 API_BASE_URL="http://localhost:${API_PORT}" \
+FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
   npx playwright test "$@"

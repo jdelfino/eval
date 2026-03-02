@@ -19,9 +19,13 @@ if ! curl -sf http://localhost:8081/healthz >/dev/null 2>&1; then
   docker compose up -d executor --build --wait
 fi
 
+# Firebase Auth Emulator (always required — AUTH_MODE=test is removed)
+echo "Starting Firebase Auth Emulator..."
+docker compose up -d firebase-emulator --wait
+
 # --- 2. Start Go API on random port (builds binary if needed) ---
 export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-SERVER_PID=$(./scripts/ensure-test-api.sh)
+FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 SERVER_PID=$(./scripts/ensure-test-api.sh)
 
 # --- 3. Generate random namespace ---
 NS="contract-$(openssl rand -hex 4)"
@@ -39,5 +43,6 @@ trap cleanup EXIT
 
 # --- 4. Run contract tests ---
 cd frontend
+FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
 API_BASE_URL="http://localhost:${API_PORT}" CONTRACT_NS="$NS" \
   npx jest --selectProjects contract --no-coverage --runInBand

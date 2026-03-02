@@ -28,8 +28,7 @@ test.describe('Critical User Paths', () => {
   test('Complete workflow: Instructor setup and student participation', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentExternalId = `student-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
+    const studentEmail = `student-${testNamespace}@test.local`;
 
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
@@ -119,7 +118,7 @@ test.describe('Critical User Paths', () => {
 
       // ===== STUDENT FLOW =====
       // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
+      await registerStudent(joinCode, studentEmail, 'E2E Student');
 
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
@@ -177,8 +176,7 @@ test.describe('Critical User Paths', () => {
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentExternalId = `student-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
+    const studentEmail = `student-${testNamespace}@test.local`;
 
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
@@ -237,7 +235,7 @@ test.describe('Critical User Paths', () => {
 
       // ===== STUDENT JOINS AND WRITES CODE =====
       // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
+      await registerStudent(joinCode, studentEmail, 'E2E Student');
 
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);

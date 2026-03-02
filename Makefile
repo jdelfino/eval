@@ -87,10 +87,13 @@ test-integration-realtime-contract:
 # ──────────────────────────────────────────────
 # E2E tests (Playwright)
 # ──────────────────────────────────────────────
-.PHONY: test-e2e
+.PHONY: test-e2e test-e2e-auth
 
 test-e2e:
 	./scripts/run-e2e-tests.sh
+
+test-e2e-auth:
+	USE_FIREBASE_EMULATOR=1 ./scripts/run-e2e-tests.sh
 
 # ──────────────────────────────────────────────
 # Realtime integration tests (Centrifugo)

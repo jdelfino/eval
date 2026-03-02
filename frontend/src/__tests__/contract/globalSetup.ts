@@ -2,20 +2,26 @@
  * Jest global setup for contract tests.
  * Runs once before all test files.
  * Creates namespace, instructor user, class, section, and session.
+ * Uses Firebase Auth Emulator for token generation.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getVerifiedEmulatorToken, clearEmulatorUsers } from './emulator-token';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
 
 // Generate unique run ID
 const RUN_ID = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const CONTRACT_NS = `contract-${RUN_ID}`;
-const ADMIN_TOKEN = 'test:contract-admin:contract-admin@test.local';
+
+// Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL in ensure-test-api.sh
+const BOOTSTRAP_ADMIN_EMAIL = 'emulator-admin@test.local';
+const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
+
 const INSTRUCTOR_EXTERNAL_ID = `instructor-${RUN_ID}`;
 const INSTRUCTOR_EMAIL = `instructor-${RUN_ID}@contract-test.local`;
-const INSTRUCTOR_TOKEN = `test:${INSTRUCTOR_EXTERNAL_ID}:${INSTRUCTOR_EMAIL}`;
+const INSTRUCTOR_PASSWORD = `instructor-pw-${RUN_ID}`; // gitleaks:allow
 
 async function contractFetch(path: string, token: string, options?: RequestInit) {
   return fetch(`${API_BASE}${path}`, {
@@ -41,12 +47,25 @@ export default async () => {
     throw new Error(
       `Contract tests require a running backend at ${API_BASE}.\n` +
       `Run 'make test-integration-contract' to start the backend automatically,\n` +
-      `or start it manually and set API_BASE_URL.`
+      `or start it manually with FIREBASE_AUTH_EMULATOR_HOST set.`
     );
   }
 
+  // Clear emulator users from previous runs to avoid email conflicts
+  await clearEmulatorUsers();
+
+  // Bootstrap admin user
+  const adminToken = await getVerifiedEmulatorToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+
+  // Bootstrap the system admin DB record (idempotent)
+  const bootstrapRes = await contractFetch('/api/v1/auth/bootstrap', adminToken, { method: 'POST' });
+  if (bootstrapRes.status !== 201 && bootstrapRes.status !== 409) {
+    const body = await bootstrapRes.text();
+    throw new Error(`Failed to bootstrap admin: ${bootstrapRes.status} ${body}`);
+  }
+
   // Create namespace
-  const nsRes = await contractFetch('/api/v1/namespaces', ADMIN_TOKEN, {
+  const nsRes = await contractFetch('/api/v1/namespaces', adminToken, {
     method: 'POST',
     body: JSON.stringify({
       id: CONTRACT_NS,
@@ -57,8 +76,11 @@ export default async () => {
     throw new Error(`Failed to create namespace: ${nsRes.status}`);
   }
 
+  // Create instructor user in emulator
+  const instructorToken = await getVerifiedEmulatorToken(INSTRUCTOR_EMAIL, INSTRUCTOR_PASSWORD);
+
   // Create invitation
-  const invRes = await contractFetch('/api/v1/system/invitations', ADMIN_TOKEN, {
+  const invRes = await contractFetch('/api/v1/system/invitations', adminToken, {
     method: 'POST',
     body: JSON.stringify({
       email: INSTRUCTOR_EMAIL,
@@ -72,7 +94,7 @@ export default async () => {
   const inv = await invRes.json();
 
   // Accept invitation
-  const acceptRes = await contractFetch('/api/v1/auth/accept-invite', INSTRUCTOR_TOKEN, {
+  const acceptRes = await contractFetch('/api/v1/auth/accept-invite', instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       token: inv.id,
@@ -85,7 +107,7 @@ export default async () => {
   const user = await acceptRes.json();
 
   // Create class
-  const classRes = await contractFetch('/api/v1/classes', INSTRUCTOR_TOKEN, {
+  const classRes = await contractFetch('/api/v1/classes', instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       name: 'Contract Test Class',
@@ -98,7 +120,7 @@ export default async () => {
   const cls = await classRes.json();
 
   // Create section
-  const sectionRes = await contractFetch(`/api/v1/classes/${cls.id}/sections`, INSTRUCTOR_TOKEN, {
+  const sectionRes = await contractFetch(`/api/v1/classes/${cls.id}/sections`, instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       name: 'Contract Test Section',
@@ -111,7 +133,7 @@ export default async () => {
   const sec = await sectionRes.json();
 
   // Create problem (required for session join to work — Join handler needs a real problem UUID)
-  const problemRes = await contractFetch('/api/v1/problems', INSTRUCTOR_TOKEN, {
+  const problemRes = await contractFetch('/api/v1/problems', instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       title: 'Contract Test Problem',
@@ -127,7 +149,7 @@ export default async () => {
   const prob = await problemRes.json();
 
   // Create session from problem
-  const sessionRes = await contractFetch('/api/v1/sessions', INSTRUCTOR_TOKEN, {
+  const sessionRes = await contractFetch('/api/v1/sessions', instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       section_id: sec.id,
@@ -152,7 +174,8 @@ export default async () => {
     joinCode: sec.join_code,
     instructorExternalId: INSTRUCTOR_EXTERNAL_ID,
     instructorEmail: INSTRUCTOR_EMAIL,
-    instructorToken: INSTRUCTOR_TOKEN,
+    instructorToken: instructorToken,
+    adminToken: adminToken,
     apiBaseUrl: API_BASE,
   };
   fs.writeFileSync(stateFile, JSON.stringify(state));

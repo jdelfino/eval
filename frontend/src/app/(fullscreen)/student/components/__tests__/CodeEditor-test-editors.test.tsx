@@ -1,8 +1,9 @@
 /**
  * Tests for CodeEditor window.__TEST_EDITORS registration
  *
- * Verifies that Monaco editor instances are registered on window.__TEST_EDITORS
- * when NEXT_PUBLIC_AUTH_MODE === 'test', and cleaned up on unmount.
+ * Verifies that Monaco editor instances are always registered on
+ * window.__TEST_EDITORS for E2E test access (now unconditional —
+ * NEXT_PUBLIC_AUTH_MODE guard was removed with the AUTH_MODE=test bypass).
  *
  * @jest-environment jsdom
  */
@@ -76,30 +77,18 @@ jest.mock('@/lib/api/execute', () => ({
 }));
 
 describe('CodeEditor window.__TEST_EDITORS registration', () => {
-  const originalEnv = process.env.NEXT_PUBLIC_AUTH_MODE;
-
   beforeEach(() => {
     // Reset factory to the default single-instance behaviour before each test
     mockEditorFactory = makeDefaultFactory();
   });
 
   afterEach(() => {
-    // Restore env variable
-    if (originalEnv === undefined) {
-      delete process.env.NEXT_PUBLIC_AUTH_MODE;
-    } else {
-      process.env.NEXT_PUBLIC_AUTH_MODE = originalEnv;
-    }
     // Clean up global state
     delete window.__TEST_EDITORS;
     mockEditorInstance = null;
   });
 
-  describe('when NEXT_PUBLIC_AUTH_MODE === "test"', () => {
-    beforeEach(() => {
-      process.env.NEXT_PUBLIC_AUTH_MODE = 'test';
-    });
-
+  describe('always registers editor on window.__TEST_EDITORS', () => {
     it('registers the editor on window.__TEST_EDITORS after mount', async () => {
       render(<CodeEditor code="print('hello')" onChange={jest.fn()} />);
 
@@ -190,38 +179,6 @@ describe('CodeEditor window.__TEST_EDITORS registration', () => {
       });
 
       expect(Array.isArray(window.__TEST_EDITORS)).toBe(true);
-    });
-  });
-
-  describe('when NEXT_PUBLIC_AUTH_MODE !== "test"', () => {
-    beforeEach(() => {
-      process.env.NEXT_PUBLIC_AUTH_MODE = 'firebase';
-    });
-
-    it('does NOT register the editor on window.__TEST_EDITORS', async () => {
-      render(<CodeEditor code="print('hello')" onChange={jest.fn()} />);
-
-      await waitFor(() => {
-        expect(mockEditorInstance).not.toBeNull();
-      });
-
-      expect(window.__TEST_EDITORS).toBeUndefined();
-    });
-  });
-
-  describe('when NEXT_PUBLIC_AUTH_MODE is not set', () => {
-    beforeEach(() => {
-      delete process.env.NEXT_PUBLIC_AUTH_MODE;
-    });
-
-    it('does NOT register the editor on window.__TEST_EDITORS', async () => {
-      render(<CodeEditor code="print('hello')" onChange={jest.fn()} />);
-
-      await waitFor(() => {
-        expect(mockEditorInstance).not.toBeNull();
-      });
-
-      expect(window.__TEST_EDITORS).toBeUndefined();
     });
   });
 });

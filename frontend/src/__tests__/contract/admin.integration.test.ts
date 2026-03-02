@@ -7,7 +7,8 @@
  *
  * Uses the admin token (system-admin role required).
  */
-import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider, testToken } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   getAdminStats,
@@ -39,7 +40,8 @@ describe('Admin API — full coverage', () => {
     try {
       const externalId = `contract-admin-user-${Date.now()}`;
       const email = `${externalId}@test.local`;
-      const token = testToken(externalId, email);
+      const password = `contract-admin-pw-${Date.now()}`; // gitleaks:allow
+      const token = await getVerifiedEmulatorToken(email, password);
 
       // Register as student (creates user + section membership)
       configureTestAuth(token);

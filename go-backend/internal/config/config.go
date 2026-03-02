@@ -61,9 +61,6 @@ type Config struct {
 	// Empty means bootstrap is disabled.
 	BootstrapAdminEmail string `env:"BOOTSTRAP_ADMIN_EMAIL"`
 
-	// Auth Mode Configuration ("test" enables test token validator)
-	AuthMode string `env:"AUTH_MODE" envDefault:""`
-
 	// Invitation / Email Configuration
 	ResendAPIKey   string `env:"RESEND_API_KEY"`
 	ResendFromEmail string `env:"RESEND_FROM_EMAIL" envDefault:"noreply@localhost"`

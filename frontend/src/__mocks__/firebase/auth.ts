@@ -14,6 +14,7 @@ export const createUserWithEmailAndPassword = jest.fn();
 export const signOut = jest.fn();
 export const updateProfile = jest.fn();
 export const sendPasswordResetEmail = jest.fn();
+export const connectAuthEmulator = jest.fn();
 export const GoogleAuthProvider = jest.fn();
 export const GithubAuthProvider = jest.fn();
 export const OAuthProvider = jest.fn();

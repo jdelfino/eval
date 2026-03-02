@@ -52,7 +52,7 @@ test.describe('Problem Publishing + Student Practice', () => {
     });
 
     // Register student via API
-    await registerStudent(section.join_code, studentExternalId, studentEmail, 'E2E Student');
+    await registerStudent(section.join_code, studentEmail, 'E2E Student');
 
     // Publish problem to section via API with show_solution enabled
     await publishProblem(instructor.token, section.id, problem.id, true);

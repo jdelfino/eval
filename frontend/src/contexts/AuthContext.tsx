@@ -3,17 +3,13 @@
 /**
  * Authentication context provider.
  *
- * In production: uses Firebase Auth (onAuthStateChanged, signInWithPopup via SignInButtons).
- * In test mode (NEXT_PUBLIC_AUTH_MODE=test): uses TestAuthProvider which bypasses
- * Firebase entirely and uses localStorage-backed test tokens.
- *
+ * Uses Firebase Auth (onAuthStateChanged, signInWithPopup via SignInButtons).
  * Sign-in is handled externally by the <SignInButtons /> component, which calls
  * signInWithPopup directly. onAuthStateChanged fires when that succeeds.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
-import { isTestMode, clearTestUser, getTestToken } from '@/lib/auth-provider';
 import { USER_PROFILE_CACHE_KEY, PREVIEW_SECTION_KEY } from '@/lib/storage-keys';
 import type { User } from '@/types/api';
 export type { User };
@@ -90,87 +86,8 @@ interface AuthProviderProps {
 }
 
 /**
- * Test auth provider — bypasses Firebase entirely.
- * Uses localStorage for token persistence across page navigations.
- */
-function TestAuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Hydrate user from localStorage on mount (handles page navigations)
-  useEffect(() => {
-    const hydrateUser = async () => {
-      const token = getTestToken();
-      if (token) {
-        try {
-          // Check profile cache first, matching FirebaseAuthProvider behavior.
-          // This is critical for preview mode: after reload, the cached profile
-          // is the preview student's, so user.id and user.role are correct.
-          const cached = readProfileCache();
-          if (cached) {
-            setUser(cached);
-          } else {
-            const profile = await getCurrentUser();
-            writeProfileCache(profile);
-            setUser(profile);
-          }
-        } catch (error) {
-          console.error('[Auth] Error hydrating user:', error);
-          // Only clear the test token on definitive auth failures (401/403/404).
-          // Transient network errors (TypeError: Failed to fetch) should NOT
-          // destroy the token — the next page navigation will retry hydration.
-          const status = (error as { status?: number }).status;
-          if (status === 401 || status === 403 || status === 404) {
-            clearTestUser();
-          }
-        }
-      }
-      setIsLoading(false);
-    };
-    hydrateUser();
-  }, []);
-
-  const signOut = useCallback(async () => {
-    try {
-      sessionStorage.removeItem(PREVIEW_SECTION_KEY);
-    } catch {
-      // sessionStorage may be unavailable — ignore
-    }
-    clearProfileCache();
-    clearTestUser();
-    setUser(null);
-  }, []);
-
-  const refreshUser = useCallback(async () => {
-    try {
-      const profile = await getCurrentUser();
-      writeProfileCache(profile);
-      setUser(profile);
-    } catch (error) {
-      console.error('[Auth] Error refreshing user:', error);
-    }
-  }, []);
-
-  const setUserProfile = useCallback((newUser: User) => {
-    writeProfileCache(newUser);
-    setUser(newUser);
-  }, []);
-
-  const value = useMemo<AuthContextType>(() => ({
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    signOut,
-    refreshUser,
-    setUserProfile,
-  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-/**
  * Firebase auth provider — the production path.
- * Dynamically imports Firebase to avoid loading it in test mode.
+ * Always uses Firebase Auth (emulator or real, depending on environment).
  */
 function FirebaseAuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
@@ -284,18 +201,11 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
 }
 
 /**
- * AuthProvider — conditionally renders TestAuthProvider or FirebaseAuthProvider.
+ * AuthProvider — always uses FirebaseAuthProvider.
+ * The emulator connection is configured via NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST
+ * in firebase.ts, so E2E tests using the emulator work transparently.
  */
 export function AuthProvider({ children }: AuthProviderProps) {
-  // isTestMode() checks typeof window && NEXT_PUBLIC_AUTH_MODE === 'test'.
-  // In production the env var is never 'test', so both server and client
-  // render FirebaseAuthProvider — no hydration mismatch, no mount cascade.
-  // In E2E test mode, the server (no window) renders Firebase while the
-  // client renders Test — React handles the mismatch by re-rendering from
-  // scratch, which is fine for E2E tests.
-  if (isTestMode()) {
-    return <TestAuthProvider>{children}</TestAuthProvider>;
-  }
   return <FirebaseAuthProvider>{children}</FirebaseAuthProvider>;
 }
 

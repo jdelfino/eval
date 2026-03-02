@@ -10,7 +10,8 @@
  *
  * Uses the admin token (system-admin role required for all).
  */
-import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider, testToken } from './helpers';
+import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import {
   createNamespace,
   updateNamespace,
@@ -106,8 +107,8 @@ describe('Namespaces API — full coverage', () => {
 
       // Create user via invitation + acceptance (the actual backend flow)
       const email = `contract-user-${Date.now()}@test.local`;
-      const externalId = `contract-user-${Date.now()}`;
-      const userToken = testToken(externalId, email);
+      const password = `contract-ns-user-pw-${Date.now()}`; // gitleaks:allow
+      const userToken = await getVerifiedEmulatorToken(email, password);
 
       // System invitations only support 'namespace-admin' or 'instructor' roles
       const invitation = await createSystemInvitation(email, testNsId, 'instructor');

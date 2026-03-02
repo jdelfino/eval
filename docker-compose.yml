@@ -40,6 +40,23 @@ services:
       timeout: 5s
       retries: 5
 
+  firebase-emulator:
+    image: node:20-slim
+    command: >
+      bash -c "npm install -g firebase-tools --quiet &&
+               firebase emulators:start --only auth --project demo-test"
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./firebase.json:/app/firebase.json:ro
+    working_dir: /app
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const http=require('http');const r=http.get('http://localhost:9099/emulator/v1/projects/demo-test/config',res=>{process.exit(res.statusCode===200?0:1)});r.on('error',()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   executor:
     build:
       context: .

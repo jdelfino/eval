@@ -9,8 +9,8 @@ import {
   configureTestAuth,
   INSTRUCTOR_TOKEN,
   resetAuthProvider,
-  testToken,
 } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   getSection,
@@ -165,7 +165,8 @@ describe('Sections API (full coverage)', () => {
       // This creates the user + membership in the shared section in one step.
       const studentExternalId = `contract-sec-student-${Date.now()}`;
       const studentEmail = `${studentExternalId}@contract-test.local`;
-      const studentToken = testToken(studentExternalId, studentEmail);
+      const studentPassword = `contract-sec-pw-${Date.now()}`; // gitleaks:allow
+      const studentToken = await getVerifiedEmulatorToken(studentEmail, studentPassword);
 
       configureTestAuth(studentToken);
       try {
