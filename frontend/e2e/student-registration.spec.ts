@@ -65,7 +65,7 @@ test.describe('Student Registration UI', () => {
     await page.click('button:has-text("Continue to Register")');
 
     // ===== STEP 2: Verify section preview shows =====
-    await expect(page.locator(`text=${cls.name}`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=${cls.name}`).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('text=Fall 2025')).toBeVisible();
 
     // ===== STEP 3: Verify sign-in buttons are visible (not yet authenticated) =====
@@ -97,6 +97,6 @@ test.describe('Student Registration UI', () => {
 
     // ===== STEP 7: Verify section appears in /sections =====
     await page.goto('/sections');
-    await expect(page.locator(`text=${cls.name}`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=${cls.name}`).first()).toBeVisible({ timeout: 10_000 });
   });
 });

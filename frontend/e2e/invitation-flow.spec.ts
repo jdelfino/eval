@@ -37,11 +37,11 @@ test.describe('Invitation Acceptance Flow', () => {
     const listRes = await apiFetch('/api/v1/system/invitations', adminToken);
     expect(listRes.status).toBe(200);
     const listData = await listRes.json();
-    const createdInvitation = listData.invitations?.find(
-      (inv: { id: string; status: string }) => inv.id === invitationId
+    const createdInvitation = (listData as { id: string; status: string }[]).find(
+      (inv) => inv.id === invitationId
     );
     expect(createdInvitation).toBeDefined();
-    expect(createdInvitation.status).toBe('pending');
+    expect(createdInvitation!.status).toBe('pending');
 
     // ===== STEP 4: Navigate to accept page — verify invitation details =====
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
@@ -49,7 +49,7 @@ test.describe('Invitation Acceptance Flow', () => {
     logCollector.attachPage(page, 'invite-page');
 
     await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('text=Instructor')).toBeVisible();
+    await expect(page.getByText('Instructor', { exact: true })).toBeVisible();
     await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
 
     // ===== STEP 5: Create user in emulator and sign in via email page =====
@@ -90,7 +90,7 @@ test.describe('Invitation Acceptance Flow', () => {
 
     // Verify invitation details are displayed
     await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('text=Instructor')).toBeVisible();
+    await expect(page.getByText('Instructor', { exact: true })).toBeVisible();
     await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
   });
 });
