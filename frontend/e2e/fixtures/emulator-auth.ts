@@ -9,8 +9,6 @@
  * https://firebase.google.com/docs/reference/rest/auth
  */
 
-import { Page } from '@playwright/test';
-
 const EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
 const EMULATOR_BASE_URL = `http://${EMULATOR_HOST}`;
 const API_KEY = 'fake-api-key';
@@ -119,43 +117,3 @@ export async function clearEmulatorUsers(): Promise<void> {
   }
 }
 
-/**
- * Signs in via the Firebase Auth Emulator using Playwright by driving the
- * Firebase client SDK in the browser context. Calls signInWithEmailAndPassword
- * on the window-exposed Firebase auth instance.
- *
- * Requires the frontend to be built with:
- *   NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099
- *
- * After sign-in, waits for auth hydration to complete by polling until the
- * page navigates away from "/" (authenticated users are redirected to their
- * role dashboard).
- */
-export async function signInViaEmulator(
-  page: Page,
-  email: string,
-  password: string
-): Promise<void> {
-  // Navigate to establish origin and trigger auth state initialization
-  await page.goto('/');
-
-  // Use Firebase client SDK via browser evaluation
-  await page.evaluate(
-    async ({ email, password }) => {
-      const { getAuth, signInWithEmailAndPassword } = await import('firebase/auth');
-      const auth = getAuth();
-      await signInWithEmailAndPassword(auth, email, password);
-    },
-    { email, password }
-  );
-
-  // Wait for auth hydration — landing page redirects authenticated users
-  // to their role-appropriate dashboard (/instructor, /sections, /system, etc.)
-  await page.waitForURL(
-    (url) => {
-      const path = new URL(url).pathname;
-      return path !== '/' && !path.startsWith('/auth/');
-    },
-    { timeout: 15_000 }
-  );
-}

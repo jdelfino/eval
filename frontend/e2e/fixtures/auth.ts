@@ -1,5 +1,5 @@
-import { Page } from '@playwright/test';
-import { createVerifiedEmulatorUser, getEmulatorToken, signInViaEmulator } from './emulator-auth';
+import { Page, expect } from '@playwright/test';
+import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
 
 // Default password used for all E2E test users
 const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
@@ -8,11 +8,9 @@ const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
  * Ensure an E2E test user exists in the Firebase Auth Emulator and sign in.
  *
  * Creates the user (if it doesn't already exist) with emailVerified=true, then
- * signs in via the Firebase client SDK in the page context.
+ * signs in via the /auth/signin/email page (the email/password sign-in form).
  *
- * After sign-in, waits for auth hydration to complete — the landing page at "/"
- * redirects authenticated users to their role-appropriate dashboard
- * (/instructor, /system, etc.). This ensures the caller doesn't proceed until
+ * After sign-in, waits for redirect away from the sign-in page, confirming
  * the user is fully authenticated.
  */
 export async function signInAs(
@@ -22,8 +20,21 @@ export async function signInAs(
 ): Promise<void> {
   // Ensure the user exists in the emulator with emailVerified=true
   await createVerifiedEmulatorUser(email, password);
-  // Sign in via the Firebase client SDK in the browser
-  await signInViaEmulator(page, email, password);
+
+  // Sign in via the email/password sign-in page
+  await page.goto('/auth/signin/email');
+  await page.fill('#email', email);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+
+  // Wait for redirect away from sign-in page (auth hydration complete)
+  await page.waitForURL(
+    (url) => {
+      const path = new URL(url).pathname;
+      return path !== '/auth/signin/email' && !path.startsWith('/auth/');
+    },
+    { timeout: 15_000 }
+  );
 }
 
 export async function loginAsInstructor(page: Page, email?: string): Promise<void> {
