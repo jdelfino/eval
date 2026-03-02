@@ -104,10 +104,13 @@ echo "Next.js ready"
 # --- 4. Run Playwright ---
 cd frontend
 if [[ "${USE_FIREBASE_EMULATOR:-}" == "1" ]]; then
+  # In emulator mode only run the auth flow specs — the existing specs use
+  # AUTH_MODE=test tokens which the Firebase validator rejects.
+  # Pass explicit spec files; caller can still override with extra args.
   NEXT_PUBLIC_API_URL=/api/v1 \
   API_BASE_URL="http://localhost:${API_PORT}" \
   FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
-    npx playwright test "$@"
+    npx playwright test student-registration.spec.ts "$@"
 else
   NEXT_PUBLIC_AUTH_MODE=test \
   NEXT_PUBLIC_API_URL=/api/v1 \

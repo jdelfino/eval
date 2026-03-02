@@ -2,7 +2,7 @@
  * Typed API helpers for test data setup.
  *
  * Used to create namespaces, users, classes, etc. via the typed API client
- * before E2E tests run. Uses test auth tokens (AUTH_MODE=test).
+ * before E2E tests run. Uses Firebase Auth Emulator tokens.
  *
  * The typed client functions are plain HTTP calls — auth is injected via
  * configureTestAuth() and the base URL is overridden via setBaseUrl().
@@ -20,17 +20,45 @@ import { createSession, completeSession as apiCompleteSession } from '../../src/
 import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
+import { bootstrapUser } from '../../src/lib/api/auth';
+import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
 import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
-export const ADMIN_TOKEN = 'test:contract-admin:contract-admin@test.local';
 
 // Initialize API clients for E2E context
 setBaseUrl(`${API_BASE}/api/v1`);
 setPublicBaseUrl(`${API_BASE}/api/v1`);
 
-export function testToken(externalId: string, email: string): string {
-  return `test:${externalId}:${email}`;
+// Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL set in ensure-test-api.sh
+const BOOTSTRAP_ADMIN_EMAIL = 'emulator-admin@test.local';
+const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
+
+/**
+ * Get (or create and bootstrap) the admin token for API setup calls.
+ * Cached after first call so bootstrap only runs once per test run.
+ */
+let cachedAdminToken: string | null = null;
+
+export async function getAdminToken(): Promise<string> {
+  if (cachedAdminToken) return cachedAdminToken;
+
+  await createVerifiedEmulatorUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+  const token = await getEmulatorToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+
+  // Bootstrap the admin user (idempotent — 409 means already done)
+  try {
+    await withToken(token, () => bootstrapUser());
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      // already bootstrapped — fine
+    } else {
+      throw err;
+    }
+  }
+
+  cachedAdminToken = token;
+  return token;
 }
 
 /**
@@ -46,17 +74,19 @@ async function withToken<T>(token: string, fn: () => Promise<T>): Promise<T> {
   return fn();
 }
 
-export async function createNamespace(id: string, displayName: string): Promise<void> {
+export async function createNamespace(id: string, displayName: string, token?: string): Promise<void> {
+  const tok = token ?? await getAdminToken();
   try {
-    await withToken(ADMIN_TOKEN, () => apiCreateNamespace(id, displayName));
+    await withToken(tok, () => apiCreateNamespace(id, displayName));
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) return; // already exists
     throw err;
   }
 }
 
-export async function createInvitation(email: string, role: string, namespaceId: string): Promise<string> {
-  const inv = await withToken(ADMIN_TOKEN, () =>
+export async function createInvitation(email: string, role: string, namespaceId: string, token?: string): Promise<string> {
+  const tok = token ?? await getAdminToken();
+  const inv = await withToken(tok, () =>
     createSystemInvitation(email, namespaceId, role as 'namespace-admin' | 'instructor')
   );
   return inv.id;
@@ -80,11 +110,13 @@ export async function startSession(token: string, sectionId: string, _sectionNam
 
 export async function registerStudent(
   joinCode: string,
-  externalId: string,
   email: string,
-  displayName: string
+  displayName: string,
+  password?: string
 ): Promise<User> {
-  const token = testToken(externalId, email);
+  const userPassword = password || 'e2e-test-password-123'; // gitleaks:allow
+  await createVerifiedEmulatorUser(email, userPassword);
+  const token = await getEmulatorToken(email, userPassword);
   return withToken(token, () => apiRegisterStudent(joinCode, displayName));
 }
 
