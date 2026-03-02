@@ -10,7 +10,16 @@ import { withRetry } from '@/lib/api-utils';
 import { ApiError } from '@/lib/api-error';
 import { USER_PROFILE_CACHE_KEY } from '@/lib/storage-keys';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+let _baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
+/**
+ * Override the base URL for API requests.
+ * Used by E2E test fixtures to point the typed client at the test server.
+ * Call before making any API requests when a non-default URL is needed.
+ */
+export function setBaseUrl(url: string): void {
+  _baseUrl = url;
+}
 
 /**
  * Module-level preview section ID.
@@ -55,7 +64,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     const previewHeaders: Record<string, string> = _previewSectionId
       ? { 'X-Preview-Section': _previewSectionId }
       : {};
-    const response = await fetch(`${BASE_URL}${path}`, {
+    const response = await fetch(`${_baseUrl}${path}`, {
       ...options,
       headers: {
         ...authHeaders,
@@ -98,7 +107,7 @@ export async function apiFetchRaw(path: string, options: RequestInit = {}): Prom
     const previewHeaders: Record<string, string> = _previewSectionId
       ? { 'X-Preview-Section': _previewSectionId }
       : {};
-    return fetch(`${BASE_URL}${path}`, {
+    return fetch(`${_baseUrl}${path}`, {
       ...options,
       headers: {
         ...authHeaders,

@@ -6,7 +6,7 @@
  * (not wrapped), so these functions return the response directly.
  */
 
-import { apiGet, apiPost, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 import type { Session, Revision, SessionPublicState } from '@/types/api';
 import type { WalkthroughScript } from '@/types/analysis';
 
@@ -38,6 +38,14 @@ export async function createSession(
  */
 export async function endSession(sessionId: string): Promise<void> {
   await apiDelete(`/sessions/${sessionId}`);
+}
+
+/**
+ * Mark a session as completed.
+ * @param sessionId - The session ID to complete
+ */
+export async function completeSession(sessionId: string): Promise<void> {
+  await apiPatch(`/sessions/${sessionId}`, { status: 'completed' });
 }
 
 /**

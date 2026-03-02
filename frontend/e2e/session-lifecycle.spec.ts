@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, apiFetch, testToken } from './fixtures/api-setup';
+import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession, testToken } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
@@ -67,11 +67,7 @@ test.describe('Session Lifecycle', () => {
       const session2 = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
       // End session 1 via API
-      const endRes = await apiFetch(`/api/v1/sessions/${session1.id}`, instructor.token, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'completed' }),
-      });
-      if (endRes.status !== 200) throw new Error(`Failed to end session: ${endRes.status}`);
+      await completeSession(instructor.token, session1.id);
 
       // ===== STUDENT SEES SESSION ENDED + REPLACEMENT NOTIFICATION =====
       // Student should see the session ended notification
@@ -112,11 +108,7 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(1000);
 
       // ===== INSTRUCTOR ENDS SESSION 2 =====
-      const endRes2 = await apiFetch(`/api/v1/sessions/${session2.id}`, instructor.token, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'completed' }),
-      });
-      if (endRes2.status !== 200) throw new Error(`Failed to end session 2: ${endRes2.status}`);
+      await completeSession(instructor.token, session2.id);
 
       // ===== STUDENT SEES PRACTICE MODE =====
       // Student should see the session ended notification

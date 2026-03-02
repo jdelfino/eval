@@ -11,6 +11,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
+ * No-op mock for setBaseUrl.
+ * Tests that need to verify this is called should use jest.mock('@/lib/api-client').
+ */
+export function setBaseUrl(_url: string): void {
+  // no-op in test mock
+}
+
+/**
  * No-op mock for setPreviewSectionId.
  * Tests that need to verify this is called should use jest.mock('@/lib/api-client').
  */
