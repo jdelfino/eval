@@ -33,7 +33,6 @@ describe('firebase initialization', () => {
   });
 
   it('initializes Firebase and does not call connectAuthEmulator when emulator host is not set', async () => {
-    delete process.env.NEXT_PUBLIC_AUTH_MODE;
     delete process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
 
     // Re-mock after resetModules
@@ -52,7 +51,6 @@ describe('firebase initialization', () => {
   });
 
   it('calls connectAuthEmulator when NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST is set', async () => {
-    delete process.env.NEXT_PUBLIC_AUTH_MODE;
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST = 'http://localhost:9099';
 
     jest.mock('firebase/app', () => ({
@@ -72,8 +70,9 @@ describe('firebase initialization', () => {
     );
   });
 
-  it('does not call connectAuthEmulator in test mode even if emulator host is set', async () => {
-    process.env.NEXT_PUBLIC_AUTH_MODE = 'test';
+  it('calls connectAuthEmulator when NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST is set (no test mode guard)', async () => {
+    // The old NEXT_PUBLIC_AUTH_MODE=test guard was removed. Now emulator is connected
+    // whenever NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST is set, regardless of any other env var.
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST = 'http://localhost:9099';
 
     jest.mock('firebase/app', () => ({
@@ -87,6 +86,30 @@ describe('firebase initialization', () => {
 
     await import('../firebase');
 
-    expect(mockConnectAuthEmulator).not.toHaveBeenCalled();
+    expect(mockConnectAuthEmulator).toHaveBeenCalledWith(
+      expect.anything(),
+      'http://localhost:9099'
+    );
+  });
+
+  it('always initializes Firebase regardless of NEXT_PUBLIC_AUTH_MODE', async () => {
+    // After the test-mode guard is removed, Firebase must always initialize.
+    // Previously, NEXT_PUBLIC_AUTH_MODE=test skipped initialization entirely.
+    process.env.NEXT_PUBLIC_AUTH_MODE = 'test';
+    delete process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+
+    jest.mock('firebase/app', () => ({
+      initializeApp: mockInitializeApp,
+      getApps: mockGetApps,
+    }));
+    jest.mock('firebase/auth', () => ({
+      getAuth: mockGetAuth,
+      connectAuthEmulator: mockConnectAuthEmulator,
+    }));
+
+    await import('../firebase');
+
+    // initializeApp (or getApps) must have been called — Firebase is always initialized
+    expect(mockGetAuth).toHaveBeenCalled();
   });
 });

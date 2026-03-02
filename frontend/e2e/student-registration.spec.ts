@@ -8,10 +8,7 @@
  * 4. Registration completes → redirect to section detail
  * 5. Section appears in student's /sections view
  *
- * Requires USE_FIREBASE_EMULATOR=1 (skipped otherwise).
- * The backend runs without AUTH_MODE=test and with FIREBASE_AUTH_EMULATOR_HOST set
- * so emulator-issued JWT tokens are accepted.
- *
+ * Uses Firebase Auth Emulator which is always running in the E2E test environment.
  * API setup uses an emulator-bootstrapped admin token.
  * Per-test namespace isolation ensures tests do not interfere with each other.
  */
@@ -31,7 +28,6 @@ import {
   clearEmulatorUsers,
 } from './fixtures/emulator-auth';
 
-const USE_EMULATOR = !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
 
 // Admin credentials for bootstrapping — must match BOOTSTRAP_ADMIN_EMAIL
 // set in ensure-test-api.sh when FIREBASE_AUTH_EMULATOR_HOST is configured.
@@ -64,13 +60,7 @@ function generateNamespaceId(): string {
   return `e2e-reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Run the describe block only when the Firebase Auth Emulator is available.
-// When USE_FIREBASE_EMULATOR=1 is not set, FIREBASE_AUTH_EMULATOR_HOST is not
-// defined and these tests are irrelevant (they exercise the real Firebase auth
-// flow, which requires the emulator).
-const describeOrSkip = USE_EMULATOR ? test.describe : test.describe.skip;
-
-describeOrSkip('Student Registration UI', () => {
+test.describe('Student Registration UI', () => {
   let adminToken: string;
 
   test.beforeAll(async () => {

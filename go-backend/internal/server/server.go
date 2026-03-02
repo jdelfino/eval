@@ -128,16 +128,11 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	var userLoader *custommw.UserLoader
 	if userStore != nil {
 		var validator auth.TokenValidator
-		if cfg.AuthMode == "test" {
-			logger.Warn("AUTH_MODE=test: using test token validator — DO NOT USE IN PRODUCTION")
-			validator = auth.NewTestValidator()
-		} else {
-			authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID)
-			if err != nil {
-				return nil, fmt.Errorf("initialize Firebase auth client: %w", err)
-			}
-			validator = auth.NewFirebaseValidator(authClient)
+		authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID)
+		if err != nil {
+			return nil, fmt.Errorf("initialize Firebase auth client: %w", err)
 		}
+		validator = auth.NewFirebaseValidator(authClient)
 		adapter := NewUserLookupAdapter(userStore)
 		jwtValidator = custommw.NewJWTValidator(validator, logger)
 		userLoader = custommw.NewUserLoader(adapter, logger)

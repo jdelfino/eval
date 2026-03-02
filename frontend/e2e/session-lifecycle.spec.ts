@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession, testToken } from './fixtures/api-setup';
+import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession } from './fixtures/api-setup';
+import { getEmulatorToken } from './fixtures/emulator-auth';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
@@ -9,8 +10,7 @@ test.describe('Session Lifecycle', () => {
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentExternalId = `student-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
+    const studentEmail = `student-${testNamespace}@test.local`;
 
     // Create class, section, and problem via API (faster than UI)
     const cls = await createClass(instructor.token, 'Lifecycle Class');
@@ -21,8 +21,8 @@ test.describe('Session Lifecycle', () => {
       starterCode: '# Write your solution\nprint("hello")\n',
     });
 
-    // Register student via API
-    await registerStudent(section.join_code, studentExternalId, studentEmail, 'E2E Student');
+    // Register student via API (creates emulator user and enrolls in section)
+    await registerStudent(section.join_code, studentEmail, 'E2E Student');
 
     // Publish problem to section (required for student flow via section page)
     await publishProblem(instructor.token, section.id, problem.id);
@@ -43,7 +43,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT JOINS =====
       await signInAs(page, studentEmail);
-      const studentToken = testToken(studentExternalId, studentEmail);
+      const studentToken = await getEmulatorToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
       const work1 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
       await page.goto(`/student?work_id=${work1.id}`);
       await expect(page.locator('.monaco-editor')).toBeVisible();

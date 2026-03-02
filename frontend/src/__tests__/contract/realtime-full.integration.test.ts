@@ -7,7 +7,8 @@
  * Operations that depend on external services (e.g., executor for code execution)
  * are wrapped in try/catch so failures due to missing infrastructure are tolerated.
  */
-import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider, testToken } from './helpers';
+import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   updateCode,
@@ -22,14 +23,14 @@ import {
 } from './validators';
 
 // Student identity for joining the session
-const STUDENT_EXTERNAL_ID = `contract-rt-student-${Date.now()}`;
-const STUDENT_EMAIL = `${STUDENT_EXTERNAL_ID}@contract-test.local`;
-const STUDENT_TOKEN = testToken(STUDENT_EXTERNAL_ID, STUDENT_EMAIL);
+const STUDENT_EMAIL = `contract-rt-student-${Date.now()}@contract-test.local`;
+const STUDENT_PASSWORD = `contract-rt-pw-${Date.now()}`; // gitleaks:allow
 const STUDENT_NAME = 'Contract Test Student';
 
 describe('Realtime Session API', () => {
   // Track the student ID returned by joinSession for subsequent calls
   let joinedStudentId: string | null = null;
+  let studentToken: string | null = null;
 
   describe('joinSession()', () => {
     afterAll(() => {
@@ -42,9 +43,12 @@ describe('Realtime Session API', () => {
       expect(sessionId).toBeTruthy();
       expect(joinCode).toBeTruthy();
 
+      // Create the student user in the emulator and get a real token
+      studentToken = await getVerifiedEmulatorToken(STUDENT_EMAIL, STUDENT_PASSWORD);
+
       // Create the student user via register-student endpoint
       // (creates user + section membership in one step using join code)
-      configureTestAuth(STUDENT_TOKEN);
+      configureTestAuth(studentToken);
       try {
         const { apiPost } = await import('@/lib/api-client');
         await apiPost('/auth/register-student', {
@@ -61,7 +65,7 @@ describe('Realtime Session API', () => {
       }
 
       try {
-        const student = await joinSession(sessionId, STUDENT_EXTERNAL_ID, STUDENT_NAME);
+        const student = await joinSession(sessionId, 'unused-student-id', STUDENT_NAME);
 
         validateSessionStudentShape(student, 'SessionStudent (joinSession)');
 
@@ -85,7 +89,7 @@ describe('Realtime Session API', () => {
   describe('updateCode()', () => {
     // updateCode uses authUser.ID — only the student can update their own code
     beforeAll(() => {
-      configureTestAuth(STUDENT_TOKEN);
+      if (studentToken) configureTestAuth(studentToken);
     });
 
     afterAll(() => {

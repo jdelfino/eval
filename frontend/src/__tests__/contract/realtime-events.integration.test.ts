@@ -20,6 +20,7 @@ import * as crypto from 'crypto';
 import { Centrifuge } from 'centrifuge';
 import WebSocket from 'ws';
 import { getSetupState } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import {
   validateStudentJoinedShape,
   validateStudentCodeUpdatedShape,
@@ -215,10 +216,11 @@ describe('Realtime event contract tests', () => {
   let client: Centrifuge;
 
   // We create a fresh student for session join / code update tests
-  const STUDENT_EXTERNAL_ID = `rt-contract-student-${Date.now()}`;
-  const STUDENT_EMAIL = `${STUDENT_EXTERNAL_ID}@contract-test.local`;
-  const STUDENT_TOKEN = `test:${STUDENT_EXTERNAL_ID}:${STUDENT_EMAIL}`;
+  const STUDENT_EMAIL = `rt-contract-student-${Date.now()}@contract-test.local`;
+  const STUDENT_PASSWORD = `rt-contract-pw-${Date.now()}`; // gitleaks:allow
   const STUDENT_NAME = 'RT Contract Student';
+  let STUDENT_TOKEN = '';
+  let joinedStudentUserId = '';
 
   // Health-check Centrifugo before running tests
   beforeAll(async () => {
@@ -246,6 +248,9 @@ describe('Realtime event contract tests', () => {
 
     // Connect the observer client once for all tests
     client = await createConnectedClient(OBSERVER_USER_ID);
+
+    // Create student in emulator and get token
+    STUDENT_TOKEN = await getVerifiedEmulatorToken(STUDENT_EMAIL, STUDENT_PASSWORD);
 
     // Register the student so they can join sessions
     const regRes = await apiFetch('/auth/register-student', STUDENT_TOKEN, {
@@ -343,13 +348,17 @@ describe('Realtime event contract tests', () => {
         const joinRes = await apiFetch(`/sessions/${sessionId}/join`, STUDENT_TOKEN, {
           method: 'POST',
           body: JSON.stringify({
-            student_id: STUDENT_EXTERNAL_ID,
             name: STUDENT_NAME,
           }),
         });
         if (joinRes.status !== 201 && joinRes.status !== 200 && joinRes.status !== 409) {
           const body = await joinRes.text();
           throw new Error(`Failed to join session: ${joinRes.status} ${body}`);
+        }
+        // Capture the student's DB user_id for use in feature tests
+        if (joinRes.status === 201 || joinRes.status === 200) {
+          const joinData = await joinRes.clone().json() as { user_id?: string };
+          if (joinData.user_id) joinedStudentUserId = joinData.user_id;
         }
 
         const envelope = await collectNext();
@@ -381,7 +390,6 @@ describe('Realtime event contract tests', () => {
         const updateRes = await apiFetch(`/sessions/${sessionId}/code`, STUDENT_TOKEN, {
           method: 'PUT',
           body: JSON.stringify({
-            student_id: STUDENT_EXTERNAL_ID,
             code: 'print("rt-contract-test")',
           }),
         });
@@ -415,11 +423,11 @@ describe('Realtime event contract tests', () => {
       const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
 
       try {
-        // Instructor features the student
+        // Instructor features the student (uses DB user_id captured during join)
         const featureRes = await apiFetch(`/sessions/${sessionId}/feature`, instructorToken, {
           method: 'POST',
           body: JSON.stringify({
-            student_id: STUDENT_EXTERNAL_ID,
+            student_id: joinedStudentUserId || undefined,
             code: 'print("featured")',
           }),
         });

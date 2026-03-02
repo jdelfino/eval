@@ -1,32 +1,29 @@
 import { Page } from '@playwright/test';
-import { TEST_USER_KEY } from '../../src/lib/auth-provider';
+import { createVerifiedEmulatorUser, getEmulatorToken, signInViaEmulator } from './emulator-auth';
+
+// Default password used for all E2E test users
+const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 /**
- * Sign in by directly setting localStorage — bypasses the sign-in UI entirely.
- * Sets testAuthUser in localStorage so TestAuthProvider hydrates on navigation to /.
- * The backend validates the token format test:<externalId>:<email>.
+ * Ensure an E2E test user exists in the Firebase Auth Emulator and sign in.
  *
- * Waits for auth hydration to complete — the landing page at "/" redirects
- * authenticated users to their role-appropriate dashboard (/instructor, /system, etc.).
- * This ensures the caller doesn't proceed until the user is fully authenticated.
+ * Creates the user (if it doesn't already exist) with emailVerified=true, then
+ * signs in via the Firebase client SDK in the page context.
+ *
+ * After sign-in, waits for auth hydration to complete — the landing page at "/"
+ * redirects authenticated users to their role-appropriate dashboard
+ * (/instructor, /system, etc.). This ensures the caller doesn't proceed until
+ * the user is fully authenticated.
  */
 export async function signInAs(
   page: Page,
-  email: string
+  email: string,
+  password: string = DEFAULT_PASSWORD
 ): Promise<void> {
-  const externalId = email.split('@')[0];
-  await page.goto('/');  // establish the correct origin for localStorage
-  await page.evaluate(({ key, externalId, email }) => {
-    localStorage.setItem(key, JSON.stringify({ externalId, email }));
-  }, { key: TEST_USER_KEY, externalId, email });
-  await page.goto('/');  // reload so TestAuthProvider picks up the token
-  // Wait for auth hydration to complete — the landing page redirects
-  // authenticated users away from "/" to their role-appropriate dashboard.
-  // Timeout allows for API retry logic (~7s) on transient network failures.
-  await page.waitForURL((url) => {
-    const path = new URL(url).pathname;
-    return path !== '/' && !path.startsWith('/auth/');
-  }, { timeout: 15_000 });
+  // Ensure the user exists in the emulator with emailVerified=true
+  await createVerifiedEmulatorUser(email, password);
+  // Sign in via the Firebase client SDK in the browser
+  await signInViaEmulator(page, email, password);
 }
 
 export async function loginAsInstructor(page: Page, email?: string): Promise<void> {
@@ -38,7 +35,7 @@ export async function loginAsStudent(page: Page, email?: string): Promise<void> 
 }
 
 export async function loginAsSystemAdmin(page: Page, email?: string): Promise<void> {
-  return signInAs(page, email || 'contract-admin@test.local');
+  return signInAs(page, email || 'emulator-admin@test.local');
 }
 
 export async function signOut(page: Page): Promise<void> {
@@ -64,3 +61,12 @@ export const navigateToNamespaces = (page: Page) => navigateViaSidebar(page, 'Na
 export const navigateToUserManagement = (page: Page) => navigateViaSidebar(page, 'User Management', '/admin');
 export const navigateToClasses = (page: Page) => navigateViaSidebar(page, 'Classes', '/classes');
 export const navigateToDashboard = (page: Page) => navigateViaSidebar(page, 'Dashboard', '/instructor');
+
+/**
+ * Get an emulator token for a user (creating if needed) for use in API calls.
+ * This replaces the old testToken() approach for E2E API setup.
+ */
+export async function getTokenForUser(email: string, password: string = DEFAULT_PASSWORD): Promise<string> {
+  await createVerifiedEmulatorUser(email, password);
+  return getEmulatorToken(email, password);
+}

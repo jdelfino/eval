@@ -13,8 +13,8 @@ import {
   configureTestAuth,
   INSTRUCTOR_TOKEN,
   resetAuthProvider,
-  testToken,
 } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   listStudentProgress,
@@ -57,9 +57,9 @@ describe('Student Review API', () => {
     await publishProblem(sectionId, createdProblemId);
 
     // Create and enroll a student
-    const studentExternalId = `contract-sr-student-${Date.now()}`;
-    const studentEmail = `${studentExternalId}@contract-test.local`;
-    const studentToken = testToken(studentExternalId, studentEmail);
+    const studentEmail = `contract-sr-student-${Date.now()}@contract-test.local`;
+    const studentPassword = `contract-sr-pw-${Date.now()}`; // gitleaks:allow
+    const studentToken = await getVerifiedEmulatorToken(studentEmail, studentPassword);
 
     configureTestAuth(studentToken);
     try {
@@ -86,7 +86,7 @@ describe('Student Review API', () => {
     // If we didn't get the user ID from registration, fetch it from student-progress
     if (!studentUserId) {
       const progress = await listStudentProgress(sectionId);
-      const student = progress.find((p) => p.email === `${studentExternalId}@contract-test.local`);
+      const student = progress.find((p) => p.email === studentEmail);
       if (student) {
         studentUserId = student.user_id;
       }

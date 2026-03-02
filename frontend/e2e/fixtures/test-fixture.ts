@@ -8,12 +8,16 @@
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
-import { createNamespace, createInvitation, acceptInvitation, testToken, ADMIN_TOKEN } from './api-setup';
+import { createNamespace, createInvitation, acceptInvitation, getAdminToken } from './api-setup';
+import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
 
 // Generate unique namespace ID for each test
 function generateNamespaceId(): string {
   return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+// Default password for E2E test users
+const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 // Shared log collection for all pages in a test
 interface LogCollector {
@@ -24,7 +28,7 @@ interface LogCollector {
 
 interface TestFixtures {
   testNamespace: string;
-  // Setup an instructor user in the test namespace, returns the test token
+  // Setup an instructor user in the test namespace, returns the emulator token
   setupInstructor: (username?: string) => Promise<{ token: string; email: string; externalId: string }>;
   // Log collector for capturing browser console logs from multiple pages
   logCollector: LogCollector;
@@ -88,10 +92,16 @@ export const test = base.extend<TestFixtures>({
     const setup = async (username: string = 'e2e-instructor') => {
       const externalId = `${username}-${testNamespace}`;
       const email = `${externalId}@test.local`;
-      const token = testToken(externalId, email);
 
-      // Create invitation and accept it to create the user
-      const invId = await createInvitation(email, 'instructor', testNamespace);
+      // Create the user in the Firebase Auth Emulator with emailVerified=true
+      await createVerifiedEmulatorUser(email, DEFAULT_PASSWORD);
+      const token = await getEmulatorToken(email, DEFAULT_PASSWORD);
+
+      // Get admin token for invitation creation
+      const adminToken = await getAdminToken();
+
+      // Create invitation and accept it to create the user's DB record
+      const invId = await createInvitation(email, 'instructor', testNamespace, adminToken);
       await acceptInvitation(invId, token, `E2E ${username}`);
 
       return { token, email, externalId };
@@ -101,5 +111,5 @@ export const test = base.extend<TestFixtures>({
 });
 
 export { expect } from '@playwright/test';
-// Re-export ADMIN_TOKEN for tests that need system-level access
-export { ADMIN_TOKEN };
+// Export getAdminToken for tests that need system-level access
+export { getAdminToken };

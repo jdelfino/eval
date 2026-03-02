@@ -15,8 +15,8 @@ import {
   configureTestAuth,
   INSTRUCTOR_TOKEN,
   resetAuthProvider,
-  testToken,
 } from './helpers';
+import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   getOrCreateStudentWork,
@@ -63,9 +63,9 @@ describe('Student Work API', () => {
     await publishProblem(sectionId, createdProblemId);
 
     // Create and enroll a student
-    const studentExternalId = `contract-sw-student-${Date.now()}`;
-    const studentEmail = `${studentExternalId}@contract-test.local`;
-    studentToken = testToken(studentExternalId, studentEmail);
+    const studentEmail = `contract-sw-student-${Date.now()}@contract-test.local`;
+    const studentPassword = `contract-sw-pw-${Date.now()}`; // gitleaks:allow
+    studentToken = await getVerifiedEmulatorToken(studentEmail, studentPassword);
 
     configureTestAuth(studentToken);
     try {

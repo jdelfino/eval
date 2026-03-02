@@ -18,8 +18,7 @@ test.describe('Public View Feature', () => {
 
     // ===== SETUP USERS VIA API =====
     const instructor = await setupInstructor();
-    const studentExternalId = `student-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
+    const studentEmail = `student-${testNamespace}@test.local`;
 
     const instructorContext = await browser.newContext();
     const instructorPage = await instructorContext.newPage();
@@ -79,7 +78,7 @@ test.describe('Public View Feature', () => {
 
       // ===== STUDENT JOINS AND WRITES CODE =====
       // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentExternalId, studentEmail, 'E2E Student');
+      await registerStudent(joinCode, studentEmail, 'E2E Student');
 
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);

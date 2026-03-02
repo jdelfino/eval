@@ -231,7 +231,7 @@ function StudentRegistrationContent() {
       const { onAuthStateChanged } = await import('firebase/auth');
       const { firebaseAuth: auth } = await import('@/lib/firebase');
 
-      // In test mode (AUTH_MODE=test), firebaseAuth is undefined — skip.
+      // Defensive check: firebaseAuth should always be defined but guard regardless.
       if (!auth) return;
 
       // onAuthStateChanged fires immediately with the current user (if any),

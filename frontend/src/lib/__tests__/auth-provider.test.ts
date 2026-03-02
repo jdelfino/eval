@@ -15,16 +15,32 @@ jest.mock('@/lib/firebase', () => ({
   },
 }));
 
+import * as authProvider from '../auth-provider';
 import {
   getAuthToken,
   configureTestAuth,
   resetAuthProvider,
-  TEST_USER_KEY,
 } from '../auth-provider';
 
-describe('TEST_USER_KEY', () => {
-  it('is exported as a string constant with the correct value', () => {
-    expect(TEST_USER_KEY).toBe('testAuthUser');
+describe('removed test-mode exports', () => {
+  it('does not export isTestMode (LocalStorage test auth is removed)', () => {
+    expect((authProvider as any).isTestMode).toBeUndefined();
+  });
+
+  it('does not export TEST_USER_KEY (LocalStorage test auth is removed)', () => {
+    expect((authProvider as any).TEST_USER_KEY).toBeUndefined();
+  });
+
+  it('does not export setTestUser (LocalStorage test auth is removed)', () => {
+    expect((authProvider as any).setTestUser).toBeUndefined();
+  });
+
+  it('does not export getTestToken (LocalStorage test auth is removed)', () => {
+    expect((authProvider as any).getTestToken).toBeUndefined();
+  });
+
+  it('does not export clearTestUser (LocalStorage test auth is removed)', () => {
+    expect((authProvider as any).clearTestUser).toBeUndefined();
   });
 });
 

@@ -9,45 +9,38 @@
  * 5. Invitation is accepted, instructor is redirected to dashboard
  * 6. Instructor can access their namespace dashboard
  *
- * Uses Firebase Auth Emulator for real auth flow — requires
- * USE_FIREBASE_EMULATOR=1 (automatically set by make test-e2e-auth).
- *
- * API setup uses AUTH_MODE=test tokens (the Go backend still runs with
- * AUTH_MODE=test even in emulator mode — the emulator is frontend-only).
+ * Uses Firebase Auth Emulator which is always running in the E2E test environment.
  */
 
-import { test, expect } from './fixtures/test-fixture';
-import { createNamespace, createInvitation, apiFetch, ADMIN_TOKEN } from './fixtures/api-setup';
+import { test, expect, getAdminToken } from './fixtures/test-fixture';
+import { createNamespace, createInvitation, apiFetch } from './fixtures/api-setup';
 import { createEmulatorUser, clearEmulatorUsers } from './fixtures/emulator-auth';
-
-const isEmulator = process.env.USE_FIREBASE_EMULATOR === '1';
 
 test.describe('Invitation Acceptance Flow', () => {
   test.afterEach(async () => {
     // Clear emulator users between tests to avoid email conflicts
-    if (isEmulator) {
-      await clearEmulatorUsers();
-    }
+    await clearEmulatorUsers();
   });
 
   test('Admin creates invitation, instructor accepts and accesses dashboard', async ({
     page,
     logCollector,
   }) => {
-    test.skip(!isEmulator, 'Requires USE_FIREBASE_EMULATOR=1 — run with make test-e2e-auth');
     test.setTimeout(60_000);
+
+    const adminToken = await getAdminToken();
 
     // ===== STEP 1: Create test namespace via API =====
     const namespaceId = `e2e-inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const namespaceName = 'Invitation Test Org';
-    await createNamespace(namespaceId, namespaceName);
+    await createNamespace(namespaceId, namespaceName, adminToken);
 
     // ===== STEP 2: Create invitation for an instructor email =====
     const instructorEmail = `instructor-${namespaceId}@example.com`;
-    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId);
+    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId, adminToken);
 
     // ===== STEP 3: Verify invitation was created as pending via API =====
-    const listRes = await apiFetch('/api/v1/system/invitations', ADMIN_TOKEN);
+    const listRes = await apiFetch('/api/v1/system/invitations', adminToken);
     expect(listRes.status).toBe(200);
     const listData = await listRes.json();
     const createdInvitation = listData.invitations?.find(
@@ -61,7 +54,7 @@ test.describe('Invitation Acceptance Flow', () => {
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
 
     // ===== STEP 5: Create the instructor user in Firebase emulator =====
-    const instructorPassword = 'test-password-123';
+    const instructorPassword = 'test-password-123'; // gitleaks:allow
     await createEmulatorUser(instructorEmail, instructorPassword);
 
     // ===== STEP 6: Sign in via Firebase emulator BEFORE navigating to accept page =====
@@ -116,14 +109,15 @@ test.describe('Invitation Acceptance Flow', () => {
     page,
     logCollector,
   }) => {
-    test.skip(!isEmulator, 'Requires USE_FIREBASE_EMULATOR=1 — run with make test-e2e-auth');
     test.setTimeout(60_000);
+
+    const adminToken = await getAdminToken();
 
     // ===== STEP 1: Create test namespace and invitation =====
     const namespaceId = `e2e-inv2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    await createNamespace(namespaceId, 'Invite Details Test Org');
+    await createNamespace(namespaceId, 'Invite Details Test Org', adminToken);
     const instructorEmail = `details-test-${namespaceId}@example.com`;
-    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId);
+    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId, adminToken);
 
     // ===== STEP 2: Navigate to accept URL WITHOUT being signed in =====
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
@@ -141,7 +135,7 @@ test.describe('Invitation Acceptance Flow', () => {
     await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
 
     // ===== STEP 4: Create user and sign in to complete the flow =====
-    const instructorPassword = 'test-password-456';
+    const instructorPassword = 'test-password-456'; // gitleaks:allow
     await createEmulatorUser(instructorEmail, instructorPassword);
 
     // Sign in via page.evaluate while on the accept page.

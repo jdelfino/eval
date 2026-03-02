@@ -3,8 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright configuration for E2E testing.
  *
- * Uses test auth mode — the Go backend runs with AUTH_MODE=test
- * and the Next.js frontend runs with NEXT_PUBLIC_AUTH_MODE=test.
+ * Uses Firebase Auth Emulator for authentication.
+ * The Go backend runs with FIREBASE_AUTH_EMULATOR_HOST set and the
+ * Next.js frontend is built with NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST.
  */
 export default defineConfig({
   testDir: './e2e',
