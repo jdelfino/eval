@@ -6,7 +6,6 @@ import {
   createProblem,
   publishProblem,
   registerStudent,
-  testToken,
 } from './fixtures/api-setup';
 import { waitForMonacoReady, getMonacoValue } from './fixtures/monaco';
 
@@ -154,7 +153,11 @@ test.describe('Problem Publishing + Student Practice', () => {
       await expect(page.locator('button:has-text("View Solution")')).toBeVisible({ timeout: 10000 });
 
     } finally {
-      await instructorContext.close();
+      try {
+        await instructorContext.close();
+      } catch {
+        /* ignore cleanup errors */
+      }
     }
   });
 });
