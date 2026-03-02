@@ -9,6 +9,7 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("PORT", "")
 	t.Setenv("ENVIRONMENT", "")
 	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("GCP_PROJECT_ID", "")
 	t.Setenv("NSJAIL_PATH", "")
 	t.Setenv("PYTHON_PATH", "")
 	t.Setenv("DEFAULT_TIMEOUT_MS", "")
@@ -18,6 +19,8 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("MAX_FILES", "")
 	t.Setenv("MAX_FILE_BYTES", "")
 	t.Setenv("MAX_CONCURRENT_EXECUTIONS", "")
+	t.Setenv("TRACING_ENABLED", "")
+	t.Setenv("TRACING_SAMPLE_RATE", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -49,6 +52,40 @@ func TestLoadDefaults(t *testing.T) {
 				t.Errorf("got %v, want %v", tt.got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadTracingDefaults(t *testing.T) {
+	t.Setenv("TRACING_ENABLED", "")
+	t.Setenv("TRACING_SAMPLE_RATE", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.TracingEnabled != false {
+		t.Errorf("TracingEnabled = %v, want false", cfg.TracingEnabled)
+	}
+	if cfg.TracingSampleRate != 0.01 {
+		t.Errorf("TracingSampleRate = %v, want 0.01", cfg.TracingSampleRate)
+	}
+}
+
+func TestLoadTracingCustomValues(t *testing.T) {
+	t.Setenv("TRACING_ENABLED", "true")
+	t.Setenv("TRACING_SAMPLE_RATE", "0.25")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if !cfg.TracingEnabled {
+		t.Errorf("TracingEnabled = %v, want true", cfg.TracingEnabled)
+	}
+	if cfg.TracingSampleRate != 0.25 {
+		t.Errorf("TracingSampleRate = %v, want 0.25", cfg.TracingSampleRate)
 	}
 }
 
