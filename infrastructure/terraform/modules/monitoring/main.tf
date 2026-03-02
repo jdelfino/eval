@@ -8,6 +8,155 @@ locals {
   display_name = var.dashboard_display_name != "" ? var.dashboard_display_name : "${var.project_name}-${var.environment} Go API"
 }
 
+# -----------------------------------------------------------------------------
+# Notification Channel
+# -----------------------------------------------------------------------------
+
+resource "google_monitoring_notification_channel" "email" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} alerts"
+  type         = "email"
+
+  labels = {
+    email_address = var.alert_email
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Alert Policies
+# -----------------------------------------------------------------------------
+
+resource "google_monitoring_alert_policy" "error_rate_5xx" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} High 5xx Error Rate"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "5xx error rate > 5%"
+
+    condition_prometheus_query_language {
+      query               = "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) > 0.05"
+      duration            = "300s"
+      evaluation_interval = "60s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "latency_p95" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} High p95 Latency"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "p95 latency > 2s"
+
+    condition_prometheus_query_language {
+      query               = "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 2.0"
+      duration            = "300s"
+      evaluation_interval = "60s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "pod_crash_loop" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} Pod Crash Loop"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Pod restart rate > 0"
+
+    condition_monitoring_query_language {
+      query    = "fetch k8s_container | metric 'kubernetes.io/container/restart_count' | align rate(1m) | every 1m | condition val() > 0"
+      duration = "300s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "db_pool_exhaustion" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} DB Pool Exhaustion"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "DB pool utilization > 85%"
+
+    condition_prometheus_query_language {
+      query               = "db_pool_connections{state=\"acquired\"} / db_pool_max_connections > 0.85"
+      duration            = "300s"
+      evaluation_interval = "60s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "executor_failure_rate" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} High Executor Failure Rate"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Executor error rate > 10%"
+
+    condition_prometheus_query_language {
+      query               = "sum(rate(executor_executions_total{status=\"error\"}[5m])) / sum(rate(executor_executions_total[5m])) > 0.10"
+      duration            = "300s"
+      evaluation_interval = "60s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+resource "google_monitoring_alert_policy" "zero_traffic" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} Zero Traffic"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "No HTTP traffic for 10 minutes"
+
+    condition_prometheus_query_language {
+      query               = "sum(rate(http_requests_total[10m])) == 0"
+      duration            = "600s"
+      evaluation_interval = "60s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
 resource "google_monitoring_dashboard" "go_api" {
   project = var.project_id
 

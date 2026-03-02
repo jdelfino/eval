@@ -36,3 +36,12 @@ variable "dashboard_display_name" {
   type        = string
   default     = ""
 }
+
+# -----------------------------------------------------------------------------
+# Alerting Configuration
+# -----------------------------------------------------------------------------
+
+variable "alert_email" {
+  description = "Email address for alert notification channel"
+  type        = string
+}
