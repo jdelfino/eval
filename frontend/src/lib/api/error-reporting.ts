@@ -10,7 +10,7 @@ import { apiFetch } from '@/lib/api-client';
 
 /**
  * Reports a client-side error to the backend.
- * Posts to POST /api/v1/client-errors.
+ * Posts to /client-errors (resolved to POST /api/v1/client-errors via BASE_URL).
  * Swallows all failures silently — never throws.
  *
  * @param error - The Error to report
@@ -21,7 +21,7 @@ export async function reportError(
   context?: Record<string, string>
 ): Promise<void> {
   try {
-    await apiFetch('/api/v1/client-errors', {
+    await apiFetch('/client-errors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

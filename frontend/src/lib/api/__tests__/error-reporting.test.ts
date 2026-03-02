@@ -16,7 +16,7 @@ describe('reportError', () => {
     jest.clearAllMocks();
   });
 
-  it('posts to /api/v1/client-errors with error details', async () => {
+  it('posts to /client-errors with error details', async () => {
     mockApiFetch.mockResolvedValue({ ok: true });
 
     const error = new Error('Something broke');
@@ -25,7 +25,7 @@ describe('reportError', () => {
     await reportError(error);
 
     expect(mockApiFetch).toHaveBeenCalledWith(
-      '/api/v1/client-errors',
+      '/client-errors',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
