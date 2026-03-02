@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func intPtr(n int) *int { return &n }
@@ -204,6 +206,74 @@ func TestExecute_MalformedJSONResponse(t *testing.T) {
 	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "x"})
 	if err == nil {
 		t.Fatal("expected error for malformed JSON response")
+	}
+}
+
+// TestExecute_PropagatesRequestID verifies that the X-Request-ID header is
+// forwarded to the executor when a request ID is present in the context.
+func TestExecute_PropagatesRequestID(t *testing.T) {
+	const reqID = "test-request-id-123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Request-ID")
+		if got != reqID {
+			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
+		}
+		resp := ExecuteResponse{Success: true, Output: "ok"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	ctx := context.WithValue(context.Background(), chimiddleware.RequestIDKey, reqID)
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(ctx, ExecuteRequest{Code: "print('ok')"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestExecute_NoRequestIDHeader verifies that no X-Request-ID header is sent
+// when no request ID is present in the context.
+func TestExecute_NoRequestIDHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Request-ID"); got != "" {
+			t.Errorf("unexpected X-Request-ID header: %q", got)
+		}
+		resp := ExecuteResponse{Success: true, Output: "ok"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Execute(context.Background(), ExecuteRequest{Code: "print('ok')"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestTrace_PropagatesRequestID verifies that the X-Request-ID header is
+// forwarded to the executor trace endpoint when a request ID is in the context.
+func TestTrace_PropagatesRequestID(t *testing.T) {
+	const reqID = "trace-request-id-456"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Request-ID")
+		if got != reqID {
+			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
+		}
+		resp := TraceResponse{}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	ctx := context.WithValue(context.Background(), chimiddleware.RequestIDKey, reqID)
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.Trace(ctx, TraceRequest{Code: "x = 1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

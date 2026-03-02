@@ -157,6 +157,70 @@ resource "google_monitoring_alert_policy" "zero_traffic" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# Log-based Metrics
+# -----------------------------------------------------------------------------
+
+# Log-based metric: HTTP 5xx errors from the go-api container.
+# Used for alerting on server error rates in Cloud Monitoring.
+resource "google_logging_metric" "api_5xx_errors" {
+  project = var.project_id
+  name    = "${var.project_name}-${var.environment}-api-5xx-errors"
+
+  filter = <<-EOT
+    resource.type="k8s_container"
+    AND resource.labels.container_name="go-api"
+    AND jsonPayload.status >= 500
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+    display_name = "API 5xx Errors"
+  }
+}
+
+# Log-based metric: ERROR and above log entries from go-api and executor containers.
+# Provides a unified error count across the backend services for dashboards and alerts.
+resource "google_logging_metric" "error_log_entries" {
+  project = var.project_id
+  name    = "${var.project_name}-${var.environment}-error-log-entries"
+
+  filter = <<-EOT
+    resource.type="k8s_container"
+    AND (resource.labels.container_name="go-api" OR resource.labels.container_name="executor")
+    AND severity >= ERROR
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+    display_name = "Error Log Entries"
+  }
+}
+
+# Log-based metric: client-side errors reported by the frontend through the go-api.
+# The frontend posts errors to the API which logs them with source="frontend".
+resource "google_logging_metric" "frontend_client_errors" {
+  project = var.project_id
+  name    = "${var.project_name}-${var.environment}-frontend-client-errors"
+
+  filter = <<-EOT
+    resource.type="k8s_container"
+    AND resource.labels.container_name="go-api"
+    AND jsonPayload.source="frontend"
+  EOT
+
+  metric_descriptor {
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+    display_name = "Frontend Client Errors"
+  }
+}
+
 resource "google_monitoring_dashboard" "go_api" {
   project = var.project_id
 
