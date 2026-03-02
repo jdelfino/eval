@@ -1,9 +1,9 @@
 /**
  * Contract tests for ALL session management API functions in sessions.ts.
  *
- * Covers the 9 functions not tested by sessions.integration.test.ts:
- *   createSession, endSession, updateSessionProblem, getSessionDetails,
- *   getSessionPublicState, analyzeSession, featureCode,
+ * Covers the 10 functions not tested by sessions.integration.test.ts:
+ *   createSession, endSession, completeSession, updateSessionProblem,
+ *   getSessionDetails, getSessionPublicState, analyzeSession, featureCode,
  *   reopenSession, listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
@@ -21,6 +21,7 @@ import { createSection } from '@/lib/api/classes';
 import {
   createSession,
   endSession,
+  completeSession,
   updateSessionProblem,
   getSessionDetails,
   getSessionPublicState,
@@ -259,7 +260,17 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. reopenSession (end first, then reopen)
+  // 8. completeSession
+  // -----------------------------------------------------------------------
+  describe('completeSession()', () => {
+    it('resolves without throwing', async () => {
+      const session = await createSession(ownSectionId);
+      await expect(completeSession(session.id)).resolves.toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. reopenSession (end first, then reopen)
   // -----------------------------------------------------------------------
   describe('reopenSession()', () => {
     it('resolves without throwing after ending a session', async () => {
