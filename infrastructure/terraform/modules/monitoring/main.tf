@@ -158,6 +158,65 @@ resource "google_monitoring_alert_policy" "zero_traffic" {
 }
 
 # -----------------------------------------------------------------------------
+# Uptime Checks
+# -----------------------------------------------------------------------------
+
+resource "google_monitoring_uptime_check_config" "healthz" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} /healthz"
+  timeout      = "10s"
+  period       = "300s"
+
+  http_check {
+    path    = "/healthz"
+    port    = 443
+    use_ssl = true
+  }
+
+  monitored_resource {
+    type = "uptime_url"
+    labels = {
+      project_id = var.project_id
+      host       = var.domain_name
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "uptime_failure" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} Uptime Check Failure"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Uptime check failing from 2+ regions for 5+ minutes"
+
+    condition_threshold {
+      filter          = "resource.type = \"uptime_url\" AND metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id = \"${google_monitoring_uptime_check_config.healthz.uptime_check_id}\""
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+      duration        = "300s"
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_NEXT_OLDER"
+        cross_series_reducer = "REDUCE_COUNT_TRUE"
+        group_by_fields      = ["resource.labels.host"]
+      }
+
+      trigger {
+        count = 2
+      }
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Log-based Metrics
 # -----------------------------------------------------------------------------
 
