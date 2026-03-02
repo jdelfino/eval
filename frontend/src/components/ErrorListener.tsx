@@ -13,9 +13,7 @@ export function ErrorListener() {
   useEffect(() => {
     function handleError(event: ErrorEvent) {
       const error = event.error instanceof Error ? event.error : new Error(event.message);
-      reportError(error, { type: 'uncaught_exception' }).catch(() => {
-        // Silently ignore — reportError already swallows errors
-      });
+      void reportError(error, { type: 'uncaught_exception' });
     }
 
     function handleUnhandledRejection(event: PromiseRejectionEvent) {
@@ -23,9 +21,7 @@ export function ErrorListener() {
         event.reason instanceof Error
           ? event.reason
           : new Error(String(event.reason ?? 'Unhandled promise rejection'));
-      reportError(error, { type: 'unhandled_rejection' }).catch(() => {
-        // Silently ignore — reportError already swallows errors
-      });
+      void reportError(error, { type: 'unhandled_rejection' });
     }
 
     window.addEventListener('error', handleError);

@@ -144,7 +144,10 @@ resource "google_monitoring_alert_policy" "zero_traffic" {
     display_name = "No HTTP traffic for 10 minutes"
 
     condition_prometheus_query_language {
-      query               = "sum(rate(http_requests_total[10m])) == 0"
+      # absent() fires when the series does not exist at all (server completely down).
+      # The OR with == 0 fires when the server is running but receiving zero requests.
+      # Together they cover both cases: no metrics at all, and zero-rate metrics.
+      query               = "absent(sum(rate(http_requests_total[10m]))) or sum(rate(http_requests_total[10m])) == 0"
       duration            = "600s"
       evaluation_interval = "60s"
     }
