@@ -23,7 +23,6 @@ import {
 import {
   createVerifiedEmulatorUser,
   getEmulatorToken,
-  clearEmulatorUsers,
 } from './fixtures/emulator-auth';
 
 function generateNamespaceId(): string {
@@ -34,12 +33,7 @@ test.describe('Student Registration UI', () => {
   let adminToken: string;
 
   test.beforeAll(async () => {
-    await clearEmulatorUsers();
     adminToken = await getAdminToken();
-  });
-
-  test.afterAll(async () => {
-    await clearEmulatorUsers();
   });
 
   test('Student registers via join code on registration page', async ({ page }) => {

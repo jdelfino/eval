@@ -13,13 +13,9 @@
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
 import { createNamespace, createInvitation, apiFetch } from './fixtures/api-setup';
-import { createVerifiedEmulatorUser, clearEmulatorUsers } from './fixtures/emulator-auth';
+import { createVerifiedEmulatorUser } from './fixtures/emulator-auth';
 
 test.describe('Invitation Acceptance Flow', () => {
-  test.afterEach(async () => {
-    await clearEmulatorUsers();
-  });
-
   test('Admin creates invitation, instructor accepts via email sign-in and accesses dashboard', async ({
     page,
     logCollector,

@@ -45,8 +45,11 @@ export async function loginAsStudent(page: Page, email?: string): Promise<void> 
   return signInAs(page, email || 'student@test.local');
 }
 
+// Admin password must match BOOTSTRAP_ADMIN_PASSWORD in api-setup.ts
+const ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
+
 export async function loginAsSystemAdmin(page: Page, email?: string): Promise<void> {
-  return signInAs(page, email || 'emulator-admin@test.local');
+  return signInAs(page, email || 'emulator-admin@test.local', ADMIN_PASSWORD);
 }
 
 export async function signOut(page: Page): Promise<void> {
