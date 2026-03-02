@@ -11,9 +11,18 @@ import { ApiError } from '@/lib/api-error';
 // During SSR (server components), relative URLs like /api/v1 resolve to
 // localhost:3000 which is Next.js itself, not the Go backend. Use
 // API_INTERNAL_URL (e.g. http://go-api/api/v1) for server-side fetches.
-const BASE_URL = (typeof window === 'undefined' && process.env.API_INTERNAL_URL)
+let _baseUrl = (typeof window === 'undefined' && process.env.API_INTERNAL_URL)
   ? process.env.API_INTERNAL_URL
   : (process.env.NEXT_PUBLIC_API_URL || '');
+
+/**
+ * Override the base URL for public API requests.
+ * Used by E2E test fixtures to point the typed client at the test server.
+ * Call before making any API requests when a non-default URL is needed.
+ */
+export function setBaseUrl(url: string): void {
+  _baseUrl = url;
+}
 
 /**
  * Public fetch wrapper with retry logic and error handling.
@@ -21,7 +30,7 @@ const BASE_URL = (typeof window === 'undefined' && process.env.API_INTERNAL_URL)
  */
 export async function publicFetch(path: string, options: RequestInit = {}): Promise<Response> {
   return withRetry(async () => {
-    const response = await fetch(`${BASE_URL}${path}`, options);
+    const response = await fetch(`${_baseUrl}${path}`, options);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -43,7 +52,7 @@ export async function publicFetch(path: string, options: RequestInit = {}): Prom
  */
 export async function publicFetchRaw(path: string, options: RequestInit = {}): Promise<Response> {
   return withRetry(async () => {
-    return fetch(`${BASE_URL}${path}`, options);
+    return fetch(`${_baseUrl}${path}`, options);
   }, {
     // Only retry on network errors (fetch throws), not on HTTP error responses
     shouldRetry: (error: Error) => {
