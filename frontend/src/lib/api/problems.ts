@@ -130,3 +130,15 @@ export async function getPublicProblem(id: string, options?: RequestInit): Promi
   }
 }
 
+/**
+ * Generate a candidate solution for a problem using AI.
+ * @param data - Problem description and optional starter code
+ * @returns Object containing the generated solution code
+ */
+export async function generateSolution(data: {
+  description: string;
+  starter_code?: string;
+}): Promise<{ solution: string }> {
+  return apiPost<{ solution: string }>('/problems/generate-solution', data);
+}
+
