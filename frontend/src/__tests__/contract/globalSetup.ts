@@ -7,12 +7,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getVerifiedEmulatorToken, clearEmulatorUsers } from './emulator-token';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
-const EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
-const EMULATOR_BASE_URL = `http://${EMULATOR_HOST}`;
-const API_KEY = 'fake-api-key';
-const PROJECT_ID = 'demo-test';
 
 // Generate unique run ID
 const RUN_ID = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -25,71 +22,6 @@ const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allo
 const INSTRUCTOR_EXTERNAL_ID = `instructor-${RUN_ID}`;
 const INSTRUCTOR_EMAIL = `instructor-${RUN_ID}@contract-test.local`;
 const INSTRUCTOR_PASSWORD = `instructor-pw-${RUN_ID}`; // gitleaks:allow
-
-async function createVerifiedUser(email: string, password: string): Promise<void> {
-  // Sign up
-  const signUpUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
-  const signUpRes = await fetch(signUpUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, returnSecureToken: false }),
-  });
-  if (!signUpRes.ok) {
-    const body = await signUpRes.text();
-    if (!body.includes('EMAIL_EXISTS')) {
-      throw new Error(`Failed to create user ${email}: ${signUpRes.status} ${body}`);
-    }
-  }
-
-  // Sign in to get token for emailVerified update
-  const signInUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
-  const signInRes = await fetch(signInUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, returnSecureToken: true }),
-  });
-  if (!signInRes.ok) {
-    const body = await signInRes.text();
-    throw new Error(`Failed to sign in ${email}: ${signInRes.status} ${body}`);
-  }
-  const { idToken } = await signInRes.json();
-
-  // Set emailVerified=true
-  const updateUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:update?key=${API_KEY}`;
-  const updateRes = await fetch(updateUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken, emailVerified: true }),
-  });
-  if (!updateRes.ok) {
-    const body = await updateRes.text();
-    throw new Error(`Failed to verify ${email}: ${updateRes.status} ${body}`);
-  }
-}
-
-async function getToken(email: string, password: string): Promise<string> {
-  const signInUrl = `${EMULATOR_BASE_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
-  const res = await fetch(signInUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, returnSecureToken: true }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to get token for ${email}: ${res.status} ${body}`);
-  }
-  const data = await res.json();
-  return data.idToken as string;
-}
-
-async function clearEmulatorUsers(): Promise<void> {
-  const url = `${EMULATOR_BASE_URL}/emulator/v1/projects/${PROJECT_ID}/accounts`;
-  const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to clear emulator users: ${res.status} ${body}`);
-  }
-}
 
 async function contractFetch(path: string, token: string, options?: RequestInit) {
   return fetch(`${API_BASE}${path}`, {
@@ -123,8 +55,7 @@ export default async () => {
   await clearEmulatorUsers();
 
   // Bootstrap admin user
-  await createVerifiedUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
-  const adminToken = await getToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+  const adminToken = await getVerifiedEmulatorToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
 
   // Bootstrap the system admin DB record (idempotent)
   const bootstrapRes = await contractFetch('/api/v1/auth/bootstrap', adminToken, { method: 'POST' });
@@ -146,8 +77,7 @@ export default async () => {
   }
 
   // Create instructor user in emulator
-  await createVerifiedUser(INSTRUCTOR_EMAIL, INSTRUCTOR_PASSWORD);
-  const instructorToken = await getToken(INSTRUCTOR_EMAIL, INSTRUCTOR_PASSWORD);
+  const instructorToken = await getVerifiedEmulatorToken(INSTRUCTOR_EMAIL, INSTRUCTOR_PASSWORD);
 
   // Create invitation
   const invRes = await contractFetch('/api/v1/system/invitations', adminToken, {

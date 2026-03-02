@@ -60,3 +60,17 @@ export async function getVerifiedEmulatorToken(email: string, password: string):
 
   return idToken;
 }
+
+const PROJECT_ID = 'demo-test';
+
+/**
+ * Delete all users from the Firebase Auth Emulator.
+ */
+export async function clearEmulatorUsers(): Promise<void> {
+  const url = `${EMULATOR_BASE_URL}/emulator/v1/projects/${PROJECT_ID}/accounts`;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to clear emulator users: ${res.status} ${body}`);
+  }
+}

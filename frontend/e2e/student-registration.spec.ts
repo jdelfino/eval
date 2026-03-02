@@ -13,34 +13,18 @@
 
 import { test, expect } from '@playwright/test';
 import {
+  getAdminToken,
   createNamespace,
   createInvitation,
   acceptInvitation,
   createClass,
   createSection,
-  apiFetch,
 } from './fixtures/api-setup';
 import {
   createVerifiedEmulatorUser,
   getEmulatorToken,
   clearEmulatorUsers,
 } from './fixtures/emulator-auth';
-
-// Admin credentials for bootstrapping — must match BOOTSTRAP_ADMIN_EMAIL
-// set in ensure-test-api.sh.
-const BOOTSTRAP_ADMIN_EMAIL = 'emulator-admin@test.local';
-const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
-
-async function bootstrapEmulatorAdmin(): Promise<string> {
-  await createVerifiedEmulatorUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
-  const token = await getEmulatorToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
-  const res = await apiFetch('/api/v1/auth/bootstrap', token, { method: 'POST' });
-  if (res.status !== 201 && res.status !== 409) {
-    const body = await res.text();
-    throw new Error(`Bootstrap failed: ${res.status} ${body}`);
-  }
-  return token;
-}
 
 function generateNamespaceId(): string {
   return `e2e-reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -51,7 +35,7 @@ test.describe('Student Registration UI', () => {
 
   test.beforeAll(async () => {
     await clearEmulatorUsers();
-    adminToken = await bootstrapEmulatorAdmin();
+    adminToken = await getAdminToken();
   });
 
   test.afterAll(async () => {
