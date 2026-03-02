@@ -12,7 +12,9 @@
  */
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
-import { createNamespace, createInvitation, apiFetch } from './fixtures/api-setup';
+import { createNamespace, createInvitation } from './fixtures/api-setup';
+import { listSystemInvitations } from '../src/lib/api/system';
+import { configureTestAuth } from '../src/lib/auth-provider';
 import { createVerifiedEmulatorUser } from './fixtures/emulator-auth';
 
 test.describe('Invitation Acceptance Flow', () => {
@@ -34,12 +36,9 @@ test.describe('Invitation Acceptance Flow', () => {
     const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId, adminToken);
 
     // ===== STEP 3: Verify invitation was created as pending via API =====
-    const listRes = await apiFetch('/api/v1/system/invitations', adminToken);
-    expect(listRes.status).toBe(200);
-    const listData = await listRes.json();
-    const createdInvitation = (listData as { id: string; status: string }[]).find(
-      (inv) => inv.id === invitationId
-    );
+    configureTestAuth(adminToken);
+    const invitations = await listSystemInvitations();
+    const createdInvitation = invitations.find((inv) => inv.id === invitationId);
     expect(createdInvitation).toBeDefined();
     expect(createdInvitation!.status).toBe('pending');
 
