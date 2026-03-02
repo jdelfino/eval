@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
 import { registerStudent, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 /**
  * Critical Path E2E Tests
@@ -283,18 +284,11 @@ test.describe('Critical User Paths', () => {
 
       // ===== STUDENT TYPES CODE =====
       const studentCode = 'print("SYNC_TEST_12345")';
-      const monacoEditor = page.locator('.monaco-editor').first();
-      await monacoEditor.click();
-      // Clear any existing code first (select all and delete)
-      await page.keyboard.press('ControlOrMeta+a');
-      await page.waitForTimeout(200);
-      await page.keyboard.press('Backspace');
-      await page.waitForTimeout(300);
-      // Type the new code slowly to ensure Monaco captures it
-      await page.keyboard.type(studentCode, { delay: 50 });
+      await waitForMonacoReady(page);
+      await setMonacoValue(page, studentCode);
 
       // Wait for debounced sync (500ms debounce + network time)
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1000);
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT WITH CODE =====
       // Student should appear in the connected students list
@@ -316,16 +310,12 @@ test.describe('Critical User Paths', () => {
       // Verify the actual code content is visible in the Monaco editor
       await expect(instructorPage.locator('.monaco-editor')).toBeVisible();
 
-      // Verify the Monaco editor is displaying student code
-      // Use polling assertion — Monaco renders asynchronously
-      await expect.poll(async () => {
-        return instructorPage.evaluate(() => {
-          const editorArea = document.querySelector('.monaco-editor');
-          if (!editorArea) return false;
-          const text = editorArea.textContent?.replace(/\s/g, '') || '';
-          return text.includes('SYNC_TEST') || text.includes('print');
-        });
-      }, { timeout: 10000, message: 'Monaco editor on instructor view should contain student code' }).toBe(true);
+      // Verify the Monaco editor is displaying student code via the Monaco API
+      await waitForMonacoReady(instructorPage);
+      await expect.poll(() => getMonacoValue(instructorPage), {
+        timeout: 10000,
+        message: 'Monaco editor on instructor view should contain student code',
+      }).toContain('SYNC_TEST');
 
       // ===== FEATURE STUDENT ON PUBLIC VIEW =====
       // Click "Feature" button to show student code on public view
@@ -340,17 +330,12 @@ test.describe('Critical User Paths', () => {
       // Verify Monaco editor is visible in public view
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
-      // Verify the student's code content is visible on public view
-      // Use polling assertion — Monaco renders asynchronously, so a one-shot
-      // evaluate() can race against the editor populating its DOM.
-      await expect.poll(async () => {
-        return publicViewPage!.evaluate(() => {
-          const editorArea = document.querySelector('.monaco-editor');
-          if (!editorArea) return false;
-          const text = editorArea.textContent?.replace(/\s/g, '') || '';
-          return text.includes('SYNC_TEST') || text.includes('print');
-        });
-      }, { timeout: 10000, message: 'Monaco editor on public view should contain student code' }).toBe(true);
+      // Verify the student's code content is visible on public view via the Monaco API
+      await waitForMonacoReady(publicViewPage!);
+      await expect.poll(() => getMonacoValue(publicViewPage!), {
+        timeout: 10000,
+        message: 'Monaco editor on public view should contain student code',
+      }).toContain('SYNC_TEST');
     } finally {
       try {
         await publicViewPage?.close();
