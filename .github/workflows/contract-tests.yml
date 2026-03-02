@@ -119,20 +119,33 @@ jobs:
           done
           curl -sf http://localhost:8081/healthz > /dev/null 2>&1 || { echo "Executor failed to start"; docker logs executor; exit 1; }
 
+      - name: Start Firebase Auth Emulator
+        run: |
+          npx firebase-tools emulators:start --only auth --project demo-test &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9099/emulator/v1/projects/demo-test/config > /dev/null 2>&1; then
+              echo "Firebase Auth Emulator is ready"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:9099/emulator/v1/projects/demo-test/config > /dev/null 2>&1 || { echo "Firebase Auth Emulator failed to start"; exit 1; }
+
       - name: Build Go server
         run: go build -o server ./cmd/server
         working-directory: go-backend
 
       - name: Start Go server
         env:
-          AUTH_MODE: test
+          FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
+          GCP_PROJECT_ID: demo-test
+          BOOTSTRAP_ADMIN_EMAIL: emulator-admin@test.local
           DATABASE_HOST: localhost
           DATABASE_PORT: '5432'
           DATABASE_NAME: eval
           DATABASE_USER: eval
           DATABASE_PASSWORD: eval_local_password
           CENTRIFUGO_TOKEN_SECRET: test-contract-secret
-          GCP_PROJECT_ID: test-project
           EXECUTOR_URL: http://localhost:8081
         run: |
           PORT=$(shuf -i 10000-60000 -n 1)
@@ -157,6 +170,7 @@ jobs:
         env:
           CONTRACT_NS: contract-${{ github.run_id }}-${{ github.run_attempt }}
           API_BASE_URL: http://localhost:${{ env.PORT }}
+          FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
         run: npx jest --selectProjects contract --no-coverage --runInBand
         working-directory: frontend
 
