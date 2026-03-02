@@ -5,6 +5,27 @@ import (
 	"time"
 )
 
+func TestCategoryClientError_Properties(t *testing.T) {
+	if CategoryClientError.Name != "clientError" {
+		t.Errorf("CategoryClientError.Name = %q, want %q", CategoryClientError.Name, "clientError")
+	}
+	if CategoryClientError.Algorithm != "sliding" {
+		t.Errorf("CategoryClientError.Algorithm = %q, want %q", CategoryClientError.Algorithm, "sliding")
+	}
+	if CategoryClientError.Limit != 60 {
+		t.Errorf("CategoryClientError.Limit = %d, want %d", CategoryClientError.Limit, 60)
+	}
+	if CategoryClientError.Window != 1*time.Minute {
+		t.Errorf("CategoryClientError.Window = %v, want %v", CategoryClientError.Window, 1*time.Minute)
+	}
+}
+
+func TestCategoryClientError_IsDistinctFromWrite(t *testing.T) {
+	if CategoryClientError.Name == CategoryWrite.Name {
+		t.Errorf("CategoryClientError and CategoryWrite share the same name %q; they must be distinct", CategoryClientError.Name)
+	}
+}
+
 func TestCategories_AllPresent(t *testing.T) {
 	cats := Categories()
 
@@ -26,6 +47,7 @@ func TestCategories_AllPresent(t *testing.T) {
 		{"write", "sliding", 30, time.Minute},
 		{"read", "sliding", 100, time.Minute},
 		{"executorGlobal", "sliding", 1000, time.Minute},
+		{"clientError", "sliding", 60, time.Minute},
 	}
 
 	if len(cats) != len(expected) {

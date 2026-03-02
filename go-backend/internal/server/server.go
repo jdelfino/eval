@@ -211,6 +211,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				readRL := custommw.ForCategory(rl, "read", custommw.UserKey)
 				// Write rate limiting for POST/PUT/PATCH/DELETE endpoints
 				writeRL := custommw.ForCategory(rl, "write", custommw.UserKey)
+				// Dedicated rate limiting for frontend error reporting (separate from the shared write bucket)
+				clientErrorRL := custommw.ForCategory(rl, "clientError", custommw.UserKey)
 
 				// Auth routes for existing users (me endpoints) — reuse authHandler from registration routes
 				meHandler := handler.NewAuthHandler(cfg.BootstrapAdminEmail)
@@ -219,7 +221,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 				// Frontend error reporting
 				clientErrorHandler := handler.NewClientErrorHandler()
-				r.With(writeRL).Post("/client-errors", clientErrorHandler.Report)
+				r.With(clientErrorRL).Post("/client-errors", clientErrorHandler.Report)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {
