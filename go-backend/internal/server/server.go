@@ -15,8 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
@@ -71,7 +69,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	// Middleware chain
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(otelHTTPMiddleware("go-api"))
+	r.Use(httplog.OTelMiddleware("go-api"))
 	// Add trace-log correlation when GCP project ID is configured.
 	if cfg.GCPProjectID != "" {
 		r.Use(custommw.Logger(logger, httplog.TraceAttrFunc(cfg.GCPProjectID)))
@@ -408,34 +406,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	}, nil
 }
 
-// otelHTTPMiddleware wraps the handler with OpenTelemetry HTTP instrumentation.
-// Span names use "<METHOD> <route-pattern>" (e.g. "GET /api/v1/sessions/{id}")
-// for meaningful span names in Cloud Trace, instead of the raw URL path.
-// Health-check and metrics endpoints are excluded from tracing to reduce noise.
-func otelHTTPMiddleware(serverName string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return otelhttp.NewHandler(next, serverName,
-			otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-				routeCtx := chi.RouteContext(r.Context())
-				if routeCtx != nil && routeCtx.RoutePattern() != "" {
-					return r.Method + " " + routeCtx.RoutePattern()
-				}
-				return r.Method + " " + r.URL.Path
-			}),
-			otelhttp.WithFilter(func(r *http.Request) bool {
-				// Skip tracing for health and metrics endpoints to reduce noise.
-				return r.URL.Path != "/ping" && r.URL.Path != "/healthz" &&
-					r.URL.Path != "/readyz" && r.URL.Path != "/metrics"
-			}),
-			otelhttp.WithPropagators(
-				propagation.NewCompositeTextMapPropagator(
-					propagation.TraceContext{},
-					propagation.Baggage{},
-				),
-			),
-		)
-	}
-}
 
 // Start begins listening and serving HTTP requests.
 // It returns http.ErrServerClosed when Shutdown is called.

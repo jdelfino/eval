@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -104,5 +105,11 @@ func TestNewLogger_LocalNoSeverityMapping(t *testing.T) {
 	// Text handler output should contain "INFO" (not "severity=")
 	if len(output) == 0 {
 		t.Fatal("expected log output")
+	}
+	if !strings.Contains(output, "INFO") {
+		t.Errorf("local logger output should contain 'INFO', got: %q", output)
+	}
+	if strings.Contains(output, "severity=") {
+		t.Errorf("local logger output should NOT contain 'severity=', got: %q", output)
 	}
 }
