@@ -36,7 +36,7 @@ describe('reportError()', () => {
     // Call the endpoint directly with apiFetch to verify the actual HTTP status code.
     // reportError() swallows all errors so it cannot distinguish a working endpoint
     // from a broken one — this test fills that gap.
-    const response = await apiFetch('/api/v1/client-errors', {
+    const response = await apiFetch('/client-errors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
