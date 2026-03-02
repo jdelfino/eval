@@ -33,6 +33,10 @@ Create a beads issue first:
 bd create "<description>" -t <task|bug|feature> -p 2 --json
 ```
 
+### 2. Check for Existing Branch
+
+If the issue is a fix for code on an existing feature branch (e.g., CI failure on an open PR, `discovered-from` dependency on an issue labeled `in-pr`, or the code to fix doesn't exist on `main`), use that branch as the base in Branch Mode instead of `origin/main`. Commit directly to it — do not create a new branch or PR.
+
 ---
 
 ## Branch Mode
@@ -239,6 +243,7 @@ EOF
 ## Anti-Patterns
 
 - Committing directly to main (branch is protected — all changes require a PR)
+- Creating a new branch/PR for a fix that belongs on an existing feature branch
 - Starting dependent task before blocker is closed
 - Creating PR before running specialized reviews
 - Creating PR with failing tests
