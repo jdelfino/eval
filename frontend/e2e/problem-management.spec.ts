@@ -145,7 +145,7 @@ test.describe('Problem Management', () => {
 
     // The library should show the empty state (since this was the only problem)
     await expect(
-      page.locator('text=No problems yet').or(page.locator('text=Create your first problem to get started'))
+      page.locator('h3:has-text("No problems yet")')
     ).toBeVisible({ timeout: 10000 });
   });
 });

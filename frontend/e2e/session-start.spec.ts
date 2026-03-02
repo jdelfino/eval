@@ -59,7 +59,8 @@ test.describe('Session Start via UI', () => {
     // ===== VERIFY SESSION IS ACTIVE WITH CORRECT PROBLEM TITLE =====
     await expect(page.locator('h2:has-text("Active Session")')).toBeVisible({ timeout: 15000 });
 
-    // Verify the session displays the correct problem title
-    await expect(page.locator(`text=${problemTitle}`)).toBeVisible({ timeout: 10000 });
+    // Verify the session displays the correct section name
+    const sectionName = `Session Start Section ${testNamespace}`;
+    await expect(page.locator(`text=${sectionName}`)).toBeVisible({ timeout: 10000 });
   });
 });
