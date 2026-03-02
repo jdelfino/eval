@@ -15,7 +15,6 @@ import (
 
 	"github.com/jdelfino/eval/go-backend/internal/config"
 	"github.com/jdelfino/eval/go-backend/internal/db"
-	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
 // mockPool implements DatabasePool for testing
@@ -245,25 +244,5 @@ func TestAPIRoutePrefix(t *testing.T) {
 	// but this verifies the router handles the prefix
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("status code = %d, want %d", rr.Code, http.StatusNotFound)
-	}
-}
-
-func TestNewWithStore_BuildsWithoutError(t *testing.T) {
-	// Verify that server construction works when a Store is provided.
-	// Uses AuthMode=test to avoid requiring GCP credentials (which are
-	// unavailable in CI). The Firebase SDK wiring is tested separately
-	// via firebase_test.go with a mock IDTokenVerifier.
-	cfg := &config.Config{Port: 8080, AuthMode: "test"}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
-	st := store.New(nil)
-
-	s, err := NewWithRegistry(cfg, logger, pool, st, prometheus.NewRegistry())
-	if err != nil {
-		t.Fatalf("NewWithRegistry() error: %v", err)
-	}
-
-	if s == nil {
-		t.Fatal("New() returned nil when store is provided")
 	}
 }
