@@ -890,6 +890,13 @@ func TestNormalizeLanguage_EmptyDefaultsPython(t *testing.T) {
 	}
 }
 
+func TestNormalizeLanguage_Python3AliasMapsTo_Python(t *testing.T) {
+	got, err := normalizeLanguage("python3")
+	if err != nil || got != "python" {
+		t.Errorf("expected 'python', got %q, err %v", got, err)
+	}
+}
+
 func TestNormalizeLanguage_InvalidReturnsError(t *testing.T) {
 	_, err := normalizeLanguage("ruby")
 	if err == nil {

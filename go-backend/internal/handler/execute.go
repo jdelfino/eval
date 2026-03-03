@@ -201,10 +201,12 @@ func isCreatorOrParticipant(userID uuid.UUID, session *store.Session) bool {
 	return false
 }
 
-// validLanguages is the set of allowed language identifiers.
-var validLanguages = map[string]bool{
-	"python": true,
-	"java":   true,
+// languageAliases maps accepted language strings to their canonical form.
+// "python3" is accepted as a legacy alias for "python".
+var languageAliases = map[string]string{
+	"python":  "python",
+	"python3": "python",
+	"java":    "java",
 }
 
 // normalizeLanguage returns the normalized language string.
@@ -213,10 +215,10 @@ func normalizeLanguage(lang string) (string, error) {
 	if lang == "" {
 		return "python", nil
 	}
-	if !validLanguages[lang] {
-		return "", fmt.Errorf("unsupported language %q: must be one of python, java", lang)
+	if canonical, ok := languageAliases[lang]; ok {
+		return canonical, nil
 	}
-	return lang, nil
+	return "", fmt.Errorf("unsupported language %q: must be one of python, java", lang)
 }
 
 // extractLanguageFromProblem extracts the language field from a problem JSON blob.
@@ -232,7 +234,7 @@ func extractLanguageFromProblem(problemJSON json.RawMessage) string {
 	if err := json.Unmarshal(problemJSON, &problem); err != nil || problem.Language == "" {
 		return "python"
 	}
-	if !validLanguages[problem.Language] {
+	if _, ok := languageAliases[problem.Language]; !ok {
 		return "python"
 	}
 	return problem.Language
