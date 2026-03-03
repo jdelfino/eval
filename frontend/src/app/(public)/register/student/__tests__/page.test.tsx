@@ -27,10 +27,12 @@ jest.mock('next/navigation', () => ({
 // Mock AuthContext
 const mockRefreshUser = jest.fn();
 const mockSetUserProfile = jest.fn();
+const mockBeginAuthFlow = jest.fn();
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     refreshUser: mockRefreshUser,
     setUserProfile: mockSetUserProfile,
+    beginAuthFlow: mockBeginAuthFlow,
   }),
 }));
 

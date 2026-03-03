@@ -49,6 +49,7 @@ describe('EmailSignInPage', () => {
   const mockRefreshUser = jest.fn();
 
   const mockSetUserProfile = jest.fn();
+  const mockBeginAuthFlow = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -60,6 +61,7 @@ describe('EmailSignInPage', () => {
       isAuthenticated: false,
       refreshUser: mockRefreshUser,
       setUserProfile: mockSetUserProfile,
+      beginAuthFlow: mockBeginAuthFlow,
     });
   });
 
@@ -99,6 +101,7 @@ describe('EmailSignInPage', () => {
         isAuthenticated: true,
         refreshUser: mockRefreshUser,
         setUserProfile: mockSetUserProfile,
+        beginAuthFlow: mockBeginAuthFlow,
       });
 
       render(<EmailSignInPage />);
@@ -142,7 +145,7 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       // Simulate AuthContext updating isAuthenticated
-      (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true, refreshUser: mockRefreshUser, setUserProfile: mockSetUserProfile });
+      (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true, refreshUser: mockRefreshUser, setUserProfile: mockSetUserProfile, beginAuthFlow: mockBeginAuthFlow });
       rerender(<EmailSignInPage />);
 
       await waitFor(() => {
@@ -453,6 +456,7 @@ describe('EmailSignInPage', () => {
         isAuthenticated: true,
         refreshUser: mockRefreshUser,
         setUserProfile: mockSetUserProfile,
+        beginAuthFlow: mockBeginAuthFlow,
       });
 
       render(<EmailSignInPage />);
