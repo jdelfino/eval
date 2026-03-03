@@ -220,7 +220,8 @@ func normalizeLanguage(lang string) (string, error) {
 }
 
 // extractLanguageFromProblem extracts the language field from a problem JSON blob.
-// Returns "python" if the field is absent, empty, or the JSON is malformed.
+// Returns "python" if the field is absent, empty, the JSON is malformed, or the
+// stored value is not a recognized language.
 func extractLanguageFromProblem(problemJSON json.RawMessage) string {
 	if len(problemJSON) == 0 {
 		return "python"
@@ -229,6 +230,9 @@ func extractLanguageFromProblem(problemJSON json.RawMessage) string {
 		Language string `json:"language"`
 	}
 	if err := json.Unmarshal(problemJSON, &problem); err != nil || problem.Language == "" {
+		return "python"
+	}
+	if !validLanguages[problem.Language] {
 		return "python"
 	}
 	return problem.Language

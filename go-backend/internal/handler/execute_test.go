@@ -861,6 +861,14 @@ func TestExtractLanguageFromProblem_NilJSONDefaultsPython(t *testing.T) {
 	}
 }
 
+func TestExtractLanguageFromProblem_InvalidLanguageDefaultsPython(t *testing.T) {
+	// If an invalid language value was somehow stored, it should fall back to "python".
+	got := extractLanguageFromProblem(json.RawMessage(`{"language":"ruby"}`))
+	if got != "python" {
+		t.Errorf("expected 'python' for invalid stored language, got %q", got)
+	}
+}
+
 func TestNormalizeLanguage_PythonReturnsAsIs(t *testing.T) {
 	got, err := normalizeLanguage("python")
 	if err != nil || got != "python" {

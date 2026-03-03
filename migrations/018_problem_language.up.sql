@@ -5,6 +5,6 @@
 -- languages (initially Python and Java). Existing rows default to 'python'
 -- to preserve backward compatibility.
 
-ALTER TABLE problems ADD COLUMN language TEXT NOT NULL DEFAULT 'python';
+ALTER TABLE problems ADD COLUMN language TEXT NOT NULL DEFAULT 'python' CHECK (language IN ('python', 'java'));
 
 COMMENT ON COLUMN problems.language IS 'Programming language for this problem (e.g. python, java)';
