@@ -26,7 +26,7 @@ const traceTimeoutMs = 10000
 
 // defaultTracerJarPath is the well-known location for the Java tracer JAR
 // inside the executor Docker image (built by PLAT-lqsw.6).
-const defaultTracerJarPath = "/usr/local/lib/java-tracer.jar"
+const defaultTracerJarPath = "/usr/lib/java-tracer.jar"
 
 // TraceHandlerConfig holds configuration values for the TraceHandler.
 type TraceHandlerConfig struct {
@@ -130,8 +130,12 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if jarPath == "" {
 			jarPath = defaultTracerJarPath
 		}
+		javaPath := h.cfg.JavaPath
+		if javaPath == "" {
+			javaPath = "/usr/bin/java"
+		}
 		sandboxReq = sandbox.Request{
-			Code:      fmt.Sprintf("java -cp %s JavaTracer", jarPath),
+			Code:      fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
 			Stdin:     "", // tracer reads stdin via argv, not actual stdin
 			TimeoutMs: traceTimeoutMs,
 			Args:      tracerArgs,

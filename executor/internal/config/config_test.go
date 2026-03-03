@@ -42,7 +42,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"PythonPath", cfg.PythonPath, "/usr/bin/python3"},
 		{"JavaPath", cfg.JavaPath, "/usr/bin/java"},
 		{"JavacPath", cfg.JavacPath, "/usr/bin/javac"},
-		{"TracerJarPath", cfg.TracerJarPath, "/usr/local/lib/java-tracer.jar"},
+		{"TracerJarPath", cfg.TracerJarPath, "/usr/lib/java-tracer.jar"},
 		{"DefaultTimeoutMS", cfg.DefaultTimeoutMS, 10000},
 		{"MaxCodeBytes", cfg.MaxCodeBytes, 102400},
 		{"MaxStdinBytes", cfg.MaxStdinBytes, 1048576},

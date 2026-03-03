@@ -82,7 +82,7 @@ public class JavaTracer {
             Path sourceFile = tempDir.resolve(className + ".java");
             Files.writeString(sourceFile, studentCode);
 
-            // 3. Compile the student code.
+            // 3. Compile the student code with full debug info (-g).
             String compileError = compile(sourceFile, tempDir);
             if (compileError != null) {
                 System.out.println(errorResponse(compileError, 1));
@@ -141,7 +141,8 @@ public class JavaTracer {
             Iterable<? extends JavaFileObject> units =
                 fileManager.getJavaFileObjects(sourceFile.toFile());
 
-            List<String> options = Arrays.asList("-d", outputDir.toString());
+            // -g generates full debug info (line numbers + local variables).
+            List<String> options = Arrays.asList("-d", outputDir.toString(), "-g");
             JavaCompiler.CompilationTask task =
                 compiler.getTask(null, fileManager, diagnostics, options, null, units);
 
@@ -167,7 +168,7 @@ public class JavaTracer {
      * Sets up stdin from the provided stdinData string.
      */
     private VirtualMachine launchVM(String className, String classpath, String stdinData)
-            throws ConnectException, IllegalConnectorArgumentsException,
+            throws com.sun.jdi.connect.IllegalConnectorArgumentsException,
                    VMStartException, IOException {
 
         LaunchingConnector connector =
@@ -199,6 +200,7 @@ public class JavaTracer {
     private void configureClassPrepareRequest(EventRequestManager erm, String className) {
         ClassPrepareRequest cpr = erm.createClassPrepareRequest();
         cpr.addClassFilter(className);
+        cpr.setSuspendPolicy(EventRequest.SUSPEND_ALL);
         cpr.enable();
     }
 
@@ -276,7 +278,17 @@ public class JavaTracer {
         StepRequest currentStepRequest = null;
         ThreadReference stepThread = null;
 
-        vm.resume();
+        // Process the initial VMStartEvent before entering the main loop.
+        // The VM was launched with suspend=true, so it's suspended at start.
+        // We must consume the VMStartEvent and resume the VM to proceed.
+        try {
+            EventSet startSet = queue.remove(10000);
+            if (startSet != null) {
+                startSet.resume();
+            }
+        } catch (InterruptedException | VMDisconnectedException e) {
+            return result;
+        }
 
         boolean connected = true;
         while (connected) {
@@ -297,8 +309,49 @@ public class JavaTracer {
             for (Event event : eventSet) {
                 if (event instanceof ClassPrepareEvent) {
                     ClassPrepareEvent cpe = (ClassPrepareEvent) event;
-                    // The student class just loaded — create a step request on its thread.
+                    // The student class just loaded — set a breakpoint at the first
+                    // executable line of main() so the VM stops inside student code.
+                    // Using a StepRequest from ClassPrepareEvent doesn't work reliably
+                    // in JDK 21+ because the VM may finish executing before the step
+                    // event fires (the class exclusion filters suppress all internal
+                    // JDK steps, and the VM completes before reaching student code).
                     stepThread = cpe.thread();
+                    ReferenceType refType = cpe.referenceType();
+                    try {
+                        // Find the main method's first executable line for the breakpoint.
+                        // Using allLineLocations() on the class would include the class
+                        // declaration line which is not executable and won't trigger a breakpoint.
+                        List<Method> mainMethods = refType.methodsByName("main");
+                        if (!mainMethods.isEmpty()) {
+                            List<Location> locs = mainMethods.get(0).allLineLocations();
+                            if (!locs.isEmpty()) {
+                                BreakpointRequest bp = vm.eventRequestManager().createBreakpointRequest(locs.get(0));
+                                bp.setSuspendPolicy(EventRequest.SUSPEND_ALL);
+                                bp.enable();
+                            }
+                        } else {
+                            currentStepRequest = createStepRequest(vm.eventRequestManager(), stepThread);
+                        }
+                    } catch (AbsentInformationException e1) {
+                        // No debug info — fall back to step request.
+                        currentStepRequest = createStepRequest(vm.eventRequestManager(), stepThread);
+                    }
+
+                } else if (event instanceof BreakpointEvent) {
+                    BreakpointEvent be = (BreakpointEvent) event;
+                    // Hit the entry breakpoint — delete it and switch to stepping.
+                    vm.eventRequestManager().deleteEventRequest(be.request());
+                    stepThread = be.thread();
+
+                    // Record this breakpoint location as the first step.
+                    String currentStdout;
+                    synchronized (stdoutBuffer) {
+                        currentStdout = stdoutBuffer.toString();
+                    }
+                    StepData step = buildStep(be, currentStdout);
+                    result.steps.add(step);
+
+                    // Create step request for subsequent lines.
                     currentStepRequest = createStepRequest(vm.eventRequestManager(), stepThread);
 
                 } else if (event instanceof StepEvent) {
@@ -321,8 +374,6 @@ public class JavaTracer {
                     }
 
                     // Read current stdout snapshot from the shared buffer.
-                    // The background stdoutReader thread continuously drains the
-                    // debuggee's stdout stream — we just snapshot what it has collected.
                     String currentStdout;
                     synchronized (stdoutBuffer) {
                         currentStdout = stdoutBuffer.toString();
@@ -397,19 +448,19 @@ public class JavaTracer {
         return sr;
     }
 
-    /** Build a StepData from a StepEvent. */
-    private StepData buildStep(StepEvent se, String currentStdout) {
+    /** Build a StepData from a locatable event (StepEvent or BreakpointEvent). */
+    private StepData buildStep(LocatableEvent le, String currentStdout) {
         StepData step = new StepData();
         step.stdout = currentStdout;
 
-        Location location = se.location();
+        Location location = le.location();
         step.line = location.lineNumber();
 
         // Extract local variables.
         try {
-            StackFrame frame = se.thread().frame(0);
+            StackFrame frame = le.thread().frame(0);
             step.locals = extractLocals(frame);
-            step.callStack = buildCallStack(se.thread());
+            step.callStack = buildCallStack(le.thread());
         } catch (IncompatibleThreadStateException e) {
             // Thread state changed (e.g., resumed by another event) — skip variable capture.
         }
@@ -537,15 +588,9 @@ public class JavaTracer {
      * inside a StepEvent handler is error-prone and can deadlock if the method
      * itself triggers further JDI events. The type name + id is a safe fallback
      * that still gives the student useful information.
-     *
-     * For List/Map types we attempt to show their string value from the JDI
-     * string cache (which is already computed) rather than invoking methods.
      */
     private Object formatObject(ObjectReference obj) {
         String typeName = obj.type().name();
-        // Use the JDI toString representation which is safe (no remote method call).
-        // obj.toString() calls the JDI toString, not the remote object's toString().
-        // Format: "instance of java.util.ArrayList(id=N)" — readable for students.
         String shortType = shortTypeName(typeName);
         return "<" + shortType + ">";
     }

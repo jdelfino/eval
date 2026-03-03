@@ -185,7 +185,7 @@ public class JsonWriter {
                 case '\f': sb.append("\\f");  break;
                 default:
                     if (c < 0x20) {
-                        // Control characters: \uXXXX
+                        // Control characters: unicode escape
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
                         sb.append(c);

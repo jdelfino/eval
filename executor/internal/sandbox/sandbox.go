@@ -509,7 +509,6 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--bindmount_ro", "/usr/bin",
 		"--bindmount_ro", "/usr/lib",
 		"--bindmount_ro", "/lib",
-		"--bindmount_ro", "/lib64",
 		"--bindmount_ro", "/dev/null",
 		"--bindmount_ro", "/dev/urandom",
 		"--tmpfsmount", "/tmp",
@@ -528,6 +527,10 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		args = append(args, req.Args...)
 	}
 
+	// Add /lib64 bind mount if it exists (amd64 only; absent on arm64).
+	if info, err := os.Stat("/lib64"); err == nil && info.IsDir() {
+		args = appendBeforeTerminator(args, "--bindmount_ro", "/lib64")
+	}
 	// Add /usr/lib64 bind mount if it exists (needed on some distros).
 	if info, err := os.Stat("/usr/lib64"); err == nil && info.IsDir() {
 		args = appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
@@ -637,7 +640,8 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
-	if err := os.Chmod(tempDir, 0755); err != nil {
+	// Java needs write access for compilation output (.class files).
+	if err := os.Chmod(tempDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
 	}
 
@@ -882,14 +886,13 @@ func buildJavaArgsWithTimeLimit(tempDir string, timeoutSec int, command []string
 		"--user", "65534",
 		"--group", "65534",
 		"--time_limit", fmt.Sprintf("%d", timeoutSec),
-		"--rlimit_as", "256",
+		"--rlimit_as", "soft",
 		"--rlimit_fsize", "10",
-		"--rlimit_nproc", "32",
+		"--rlimit_nproc", "64",
 		"--cwd", "/tmp/work",
 		"--bindmount_ro", "/usr/bin",
 		"--bindmount_ro", "/usr/lib",
 		"--bindmount_ro", "/lib",
-		"--bindmount_ro", "/lib64",
 		"--bindmount_ro", "/dev/null",
 		"--bindmount_ro", "/dev/urandom",
 		"--tmpfsmount", "/tmp",
@@ -899,6 +902,24 @@ func buildJavaArgsWithTimeLimit(tempDir string, timeoutSec int, command []string
 		"--disable_proc",
 		"--really_quiet",
 		"--",
+	}
+	// Add /lib64 bind mount if it exists (amd64 only; absent on arm64).
+	if info, err := os.Stat("/lib64"); err == nil && info.IsDir() {
+		a = appendBeforeTerminator(a, "--bindmount_ro", "/lib64")
+	}
+	// Add /etc/alternatives if it exists (Debian symlink targets for java/javac).
+	if info, err := os.Stat("/etc/alternatives"); err == nil && info.IsDir() {
+		a = appendBeforeTerminator(a, "--bindmount_ro", "/etc/alternatives")
+	}
+	// Add /etc/ld.so.cache so the dynamic linker finds JDK shared libraries (libjli.so).
+	if _, err := os.Stat("/etc/ld.so.cache"); err == nil {
+		a = appendBeforeTerminator(a, "--bindmount_ro", "/etc/ld.so.cache")
+	}
+	// Add Java config directories under /etc (e.g., /etc/java-17-openjdk).
+	if entries, err := filepath.Glob("/etc/java-*"); err == nil {
+		for _, entry := range entries {
+			a = appendBeforeTerminator(a, "--bindmount_ro", entry)
+		}
 	}
 	// Add /usr/lib/jvm if it exists (JDK installation).
 	if info, err := os.Stat("/usr/lib/jvm"); err == nil && info.IsDir() {

@@ -26,7 +26,7 @@ WORKDIR /nsjail
 RUN make
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build Java tracer JAR
+# Stage 2: Build Java tracer JAR (use JDK 21 for compilation)
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:21-jdk AS java-builder
 
@@ -62,14 +62,22 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 ca-certificates \
     libprotobuf32 libnl-3-200 libnl-route-3-200 \
-    openjdk-21-jdk-headless \
   && rm -rf /var/lib/apt/lists/*
+
+# Copy JDK 21 from the Temurin builder stage (Debian bookworm only packages JDK 17).
+ENV JAVA_HOME=/usr/lib/jvm/temurin-21
+COPY --from=java-builder /opt/java/openjdk ${JAVA_HOME}
+RUN ln -s ${JAVA_HOME}/bin/java /usr/bin/java \
+ && ln -s ${JAVA_HOME}/bin/javac /usr/bin/javac
 
 COPY --from=nsjail-builder /nsjail/nsjail /usr/bin/nsjail
 COPY --from=go-builder /app/executor /executor
-COPY --from=java-builder /java-tracer/java-tracer.jar /usr/local/lib/java-tracer.jar
+COPY --from=java-builder /java-tracer/java-tracer.jar /usr/lib/java-tracer.jar
 COPY executor/seccomp-python.policy /etc/nsjail/seccomp-python.policy
 COPY executor/seccomp-java.policy /etc/nsjail/seccomp-java.policy
+
+# Register JDK shared libraries so the dynamic linker finds libjli.so inside the sandbox.
+RUN echo "${JAVA_HOME}/lib" > /etc/ld.so.conf.d/jdk.conf && ldconfig
 
 # Create the chroot directory with pre-created mount points. nsjail uses this
 # as the filesystem root for sandboxed processes, so only explicitly bind-mounted
@@ -77,7 +85,8 @@ COPY executor/seccomp-java.policy /etc/nsjail/seccomp-java.policy
 # is remounted read-only before bind mounts are applied.
 RUN mkdir -p /sandbox-root/usr/bin /sandbox-root/usr/lib /sandbox-root/lib \
     /sandbox-root/lib64 /sandbox-root/dev /sandbox-root/tmp \
-    /sandbox-root/usr/lib/jvm
+    /sandbox-root/usr/lib/jvm /sandbox-root/etc \
+ && touch /sandbox-root/etc/ld.so.cache
 
 # NOTE: The executor process must run as root so nsjail can create namespaces
 # and chroot. Student code runs as nobody (UID 65534) inside the jail via

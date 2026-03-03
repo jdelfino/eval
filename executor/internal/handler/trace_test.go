@@ -566,7 +566,7 @@ func TestTrace_EmptyLanguage_UsesPythonTracer(t *testing.T) {
 func TestTrace_JavaLanguage_UsesJavaTracerInvocation(t *testing.T) {
 	cap := &traceCaptureRunner{}
 	cfg := defaultTraceConfig()
-	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	cfg.TracerJarPath = "/usr/lib/java-tracer.jar"
 	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
 	w := doTraceRequest(h, `{"code":"public class Main { public static void main(String[] a) {} }","language":"java","stdin":"hello","max_steps":200}`)
 
@@ -599,7 +599,7 @@ func TestTrace_JavaLanguage_UsesJavaTracerInvocation(t *testing.T) {
 func TestTrace_JavaLanguage_DefaultMaxSteps(t *testing.T) {
 	cap := &traceCaptureRunner{}
 	cfg := defaultTraceConfig()
-	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	cfg.TracerJarPath = "/usr/lib/java-tracer.jar"
 	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
 	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
 
@@ -621,7 +621,7 @@ func TestTrace_JavaLanguage_DefaultMaxSteps(t *testing.T) {
 func TestTrace_JavaLanguage_SetsIsCommand(t *testing.T) {
 	cap := &traceCaptureRunner{}
 	cfg := defaultTraceConfig()
-	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	cfg.TracerJarPath = "/usr/lib/java-tracer.jar"
 	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
 	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
 
