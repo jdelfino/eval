@@ -141,6 +141,7 @@ type createProblemRequest struct {
 	ClassID           *uuid.UUID      `json:"class_id"`
 	Tags              []string        `json:"tags"`
 	Solution          *string         `json:"solution"`
+	Language          string          `json:"language,omitempty"`
 }
 
 // Create handles POST /api/v1/problems — creates a new problem (instructor+).
@@ -168,6 +169,7 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ClassID:           req.ClassID,
 		Tags:              req.Tags,
 		Solution:          req.Solution,
+		Language:          req.Language,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -187,6 +189,7 @@ type updateProblemRequest struct {
 	ClassID           *uuid.UUID      `json:"class_id"`
 	Tags              []string        `json:"tags"`
 	Solution          *string         `json:"solution"`
+	Language          *string         `json:"language,omitempty"`
 }
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
@@ -211,6 +214,7 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ClassID:           req.ClassID,
 		Tags:              req.Tags,
 		Solution:          req.Solution,
+		Language:          req.Language,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {

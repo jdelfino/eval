@@ -37,7 +37,7 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 		&p.Problem.ID, &p.Problem.NamespaceID, &p.Problem.Title, &p.Problem.Description,
 		&p.Problem.StarterCode, &p.Problem.TestCases, &p.Problem.ExecutionSettings,
 		&p.Problem.AuthorID, &p.Problem.ClassID, &p.Problem.Tags, &p.Problem.Solution,
-		&p.Problem.CreatedAt, &p.Problem.UpdatedAt,
+		&p.Problem.Language, &p.Problem.CreatedAt, &p.Problem.UpdatedAt,
 		// StudentWork fields (nullable)
 		&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
 		&workCode, &workExecutionSettings, &workCreatedAt, &workLastUpdate,
@@ -75,7 +75,7 @@ func (s *Store) ListSectionProblems(ctx context.Context, sectionID, userID uuid.
 	query := `SELECT
 		sp.id, sp.section_id, sp.problem_id, sp.published_by, sp.show_solution, sp.published_at,
 		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
-		p.author_id, p.class_id, p.tags, p.solution, p.created_at, p.updated_at,
+		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
 		sw.code, sw.execution_settings, sw.created_at, sw.last_update
 		FROM section_problems sp
