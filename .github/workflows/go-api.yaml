@@ -7,6 +7,8 @@ on:
       - 'go-backend/**'
       - 'k8s/**'
       - 'migrations/**'
+      - 'scripts/lint-migrations.sh'
+      - 'scripts/test-lint-migrations.sh'
   workflow_call:
   workflow_dispatch:
 
@@ -61,6 +63,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Need full history for git diff
+      - name: Test lint script
+        run: bash scripts/test-lint-migrations.sh
       - name: Check for migration-override label
         id: check-label
         uses: actions/github-script@v7
