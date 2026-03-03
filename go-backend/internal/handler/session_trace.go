@@ -18,6 +18,7 @@ type TracerClient interface {
 // standaloneTraceRequest is the request body for POST /trace.
 type standaloneTraceRequest struct {
 	Code     string `json:"code" validate:"required"`
+	Language string `json:"language,omitempty"`
 	Stdin    string `json:"stdin"`
 	MaxSteps *int   `json:"max_steps,omitempty"`
 }
@@ -49,8 +50,15 @@ func (h *TraceHandler) StandaloneTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lang, err := normalizeLanguage(req.Language)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{
 		Code:     req.Code,
+		Language: lang,
 		Stdin:    req.Stdin,
 		MaxSteps: req.MaxSteps,
 	})

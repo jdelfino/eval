@@ -667,6 +667,228 @@ func TestExecute_429PropagatedFromExecutor(t *testing.T) {
 	}
 }
 
+func TestStandaloneExecute_LanguagePassedToExecutor(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "class Main {}", "language": "java"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Language != "java" {
+		t.Fatalf("expected language 'java' forwarded to executor, got %q", capturedReq.Language)
+	}
+}
+
+func TestStandaloneExecute_EmptyLanguageDefaultsPython(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	// No language field — should default to "python"
+	body, _ := json.Marshal(map[string]any{"code": "print('hi')"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Language != "python" {
+		t.Fatalf("expected language 'python' as default, got %q", capturedReq.Language)
+	}
+}
+
+func TestStandaloneExecute_400InvalidLanguage(t *testing.T) {
+	execClient := &mockExecutorClient{}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "ruby"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid language, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSessionExecute_LanguageFromProblemJSON(t *testing.T) {
+	// Problem JSON contains language: "java"
+	problemJSON := json.RawMessage(`{"title":"Java Problem","language":"java"}`)
+
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			s := activeSession()
+			s.Problem = problemJSON
+			return s, nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{Success: true}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	body := newExecuteReq(testStudentID, "class Main {}")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Language != "java" {
+		t.Fatalf("expected language 'java' from problem JSON, got %q", capturedReq.Language)
+	}
+}
+
+func TestSessionExecute_EmptyLanguageInProblemDefaultsPython(t *testing.T) {
+	// Problem JSON has no language field — should default to "python"
+	problemJSON := json.RawMessage(`{"title":"Python Problem"}`)
+
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			s := activeSession()
+			s.Problem = problemJSON
+			return s, nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{Success: true}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	body := newExecuteReq(testStudentID, "print('hi')")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Language != "python" {
+		t.Fatalf("expected language 'python' as default when missing in problem, got %q", capturedReq.Language)
+	}
+}
+
+func TestExtractLanguageFromProblem_ReturnsLanguageField(t *testing.T) {
+	got := extractLanguageFromProblem(json.RawMessage(`{"language":"java","title":"test"}`))
+	if got != "java" {
+		t.Errorf("expected 'java', got %q", got)
+	}
+}
+
+func TestExtractLanguageFromProblem_MissingFieldDefaultsPython(t *testing.T) {
+	got := extractLanguageFromProblem(json.RawMessage(`{"title":"test"}`))
+	if got != "python" {
+		t.Errorf("expected 'python', got %q", got)
+	}
+}
+
+func TestExtractLanguageFromProblem_EmptyLanguageValueDefaultsPython(t *testing.T) {
+	got := extractLanguageFromProblem(json.RawMessage(`{"language":""}`))
+	if got != "python" {
+		t.Errorf("expected 'python', got %q", got)
+	}
+}
+
+func TestExtractLanguageFromProblem_MalformedJSONDefaultsPython(t *testing.T) {
+	got := extractLanguageFromProblem(json.RawMessage(`{not valid`))
+	if got != "python" {
+		t.Errorf("expected 'python', got %q", got)
+	}
+}
+
+func TestExtractLanguageFromProblem_NilJSONDefaultsPython(t *testing.T) {
+	got := extractLanguageFromProblem(nil)
+	if got != "python" {
+		t.Errorf("expected 'python', got %q", got)
+	}
+}
+
+func TestNormalizeLanguage_PythonReturnsAsIs(t *testing.T) {
+	got, err := normalizeLanguage("python")
+	if err != nil || got != "python" {
+		t.Errorf("expected 'python', got %q, err %v", got, err)
+	}
+}
+
+func TestNormalizeLanguage_JavaReturnsAsIs(t *testing.T) {
+	got, err := normalizeLanguage("java")
+	if err != nil || got != "java" {
+		t.Errorf("expected 'java', got %q, err %v", got, err)
+	}
+}
+
+func TestNormalizeLanguage_EmptyDefaultsPython(t *testing.T) {
+	got, err := normalizeLanguage("")
+	if err != nil || got != "python" {
+		t.Errorf("expected 'python', got %q, err %v", got, err)
+	}
+}
+
+func TestNormalizeLanguage_InvalidReturnsError(t *testing.T) {
+	_, err := normalizeLanguage("ruby")
+	if err == nil {
+		t.Error("expected error for invalid language 'ruby', got nil")
+	}
+}
+
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
 	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)

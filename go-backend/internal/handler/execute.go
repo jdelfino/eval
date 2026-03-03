@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -114,10 +115,14 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	merged := mergeExecutionSettings(session.Problem, studentRecord, req.ExecutionSettings)
 
-	// 6. Build executor request
-	execReq := buildExecutorRequest(req.Code, merged)
+	// 6. Extract language from problem JSON (defaults to "python" if absent)
+	lang := extractLanguageFromProblem(session.Problem)
 
-	// 7. Call executor
+	// 7. Build executor request
+	execReq := buildExecutorRequest(req.Code, merged)
+	execReq.Language = lang
+
+	// 8. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
 		writeExecutorError(w, r, err, "execution failed")
@@ -149,10 +154,17 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 		return // BindJSON already wrote the error response
 	}
 
+	lang, err := normalizeLanguage(req.Language)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	execReq := executor.ExecuteRequest{
-		Code:  req.Code,
-		Stdin: req.Stdin,
-		Files: req.Files,
+		Code:     req.Code,
+		Stdin:    req.Stdin,
+		Files:    req.Files,
+		Language: lang,
 	}
 
 	execResp, err := h.executor.Execute(r.Context(), execReq)
@@ -187,6 +199,39 @@ func isCreatorOrParticipant(userID uuid.UUID, session *store.Session) bool {
 		}
 	}
 	return false
+}
+
+// validLanguages is the set of allowed language identifiers.
+var validLanguages = map[string]bool{
+	"python": true,
+	"java":   true,
+}
+
+// normalizeLanguage returns the normalized language string.
+// Empty string defaults to "python". Returns an error for unsupported languages.
+func normalizeLanguage(lang string) (string, error) {
+	if lang == "" {
+		return "python", nil
+	}
+	if !validLanguages[lang] {
+		return "", fmt.Errorf("unsupported language %q: must be one of python, java", lang)
+	}
+	return lang, nil
+}
+
+// extractLanguageFromProblem extracts the language field from a problem JSON blob.
+// Returns "python" if the field is absent, empty, or the JSON is malformed.
+func extractLanguageFromProblem(problemJSON json.RawMessage) string {
+	if len(problemJSON) == 0 {
+		return "python"
+	}
+	var problem struct {
+		Language string `json:"language"`
+	}
+	if err := json.Unmarshal(problemJSON, &problem); err != nil || problem.Language == "" {
+		return "python"
+	}
+	return problem.Language
 }
 
 // mergeExecutionSettings merges execution settings with priority:
