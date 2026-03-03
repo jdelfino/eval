@@ -55,6 +55,7 @@ const fakeProblem: Problem = {
   test_cases: [],
   execution_settings: null,
   solution: null,
+  language: 'python',
 };
 
 describe('problems API client', () => {
