@@ -95,7 +95,7 @@ func TestReadyz_BinariesExist(t *testing.T) {
 	}
 }
 
-func TestReadyz_JavaBinaryMissing(t *testing.T) {
+func TestReadyz_JavaBinaryMissing_StillHealthy(t *testing.T) {
 	cfg := &config.Config{
 		Port:        8081,
 		Environment: "local",
@@ -112,16 +112,17 @@ func TestReadyz_JavaBinaryMissing(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	// Java is optional — missing Java should not make the service unhealthy
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
 	var resp readyResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Status != "unhealthy" {
-		t.Errorf("status = %s, want unhealthy", resp.Status)
+	if resp.Status != "ok" {
+		t.Errorf("status = %s, want ok", resp.Status)
 	}
 	if resp.Components["java"] != "unavailable" {
 		t.Errorf("java = %s, want unavailable", resp.Components["java"])

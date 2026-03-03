@@ -63,7 +63,7 @@ jest.mock('@/lib/api-client', () => ({
 }));
 
 const mockPublicState = {
-  problem: { title: 'Test Problem', description: 'A test', starter_code: 'print("hi")' },
+  problem: { title: 'Test Problem', description: 'A test', starter_code: 'print("hi")', language: 'python' },
   featured_student_id: null,
   featured_code: null,
   join_code: 'ABC-123',
@@ -322,7 +322,7 @@ describe('useRealtimePublicView', () => {
       mockGetSessionPublicState.mockClear();
       mockGetSessionPublicState.mockResolvedValue({
         ...mockPublicState,
-        problem: { title: 'Updated Problem', description: 'New', starter_code: '' },
+        problem: { title: 'Updated Problem', description: 'New', starter_code: '', language: 'python' },
       });
 
       act(() => {

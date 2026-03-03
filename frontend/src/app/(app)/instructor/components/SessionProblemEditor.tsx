@@ -39,6 +39,7 @@ export default function SessionProblemEditor({
   const [title, setTitle] = useState(initialProblem?.title || '');
   const [description, setDescription] = useState(initialProblem?.description || '');
   const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
+  const language = (initialProblem as Problem | null)?.language ?? 'python';
 
   // Execution settings
   const [stdin, setStdin] = useState(initialExecutionSettings?.stdin || '');
@@ -129,7 +130,7 @@ export default function SessionProblemEditor({
           onRandomSeedChange={setRandomSeed}
           attached_files={attached_files}
           onAttachedFilesChange={setAttachedFiles}
-          problem={{ title, description, starter_code }}
+          problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}
           onProblemEdit={(updates) => {

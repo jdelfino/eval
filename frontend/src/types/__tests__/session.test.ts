@@ -92,7 +92,7 @@ describe('Session type hierarchy', () => {
 describe('SessionPublicState type', () => {
   it('SessionPublicState.problem is typed with title/description/starter_code', () => {
     const state: SessionPublicState = {
-      problem: { title: 'Test Problem', description: 'desc', starter_code: 'code' },
+      problem: { title: 'Test Problem', description: 'desc', starter_code: 'code', language: 'python' },
       featured_student_id: null,
       featured_code: null,
       join_code: 'ABC',

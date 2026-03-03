@@ -161,6 +161,7 @@ export interface SessionPublicProblem {
   title: string;
   description: string | null;
   starter_code: string | null;
+  language: string;
 }
 
 export interface SessionPublicState {
