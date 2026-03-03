@@ -439,8 +439,8 @@ resource "kubernetes_secret" "staging_app_secrets" {
     DATABASE_URL             = "postgresql://${urlencode(module.cloudsql.database_user)}:${urlencode(module.cloudsql.database_password)}@${module.cloudsql.database_host}:5432/eval_staging"
     READER_DATABASE_USER     = module.cloudsql.reader_user
     READER_DATABASE_PASSWORD = module.cloudsql.reader_password
-    CENTRIFUGO_API_KEY       = module.centrifugo.api_key
-    CENTRIFUGO_TOKEN_SECRET  = module.centrifugo.token_secret
+    CENTRIFUGO_API_KEY       = module.centrifugo_staging.api_key
+    CENTRIFUGO_TOKEN_SECRET  = module.centrifugo_staging.token_secret
     GEMINI_API_KEY           = module.secrets.secret_values["gemini-api-key"]
     ANTHROPIC_API_KEY        = module.secrets.secret_values["anthropic-api-key"]
   }
