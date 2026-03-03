@@ -382,6 +382,7 @@ resource "google_sql_database" "staging" {
 
 # Staging Identity Platform tenant
 resource "google_identity_platform_tenant" "staging" {
+  project               = var.project_id
   display_name          = "staging"
   allow_password_signup = true
 }
