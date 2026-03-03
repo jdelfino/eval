@@ -24,12 +24,17 @@ const defaultTraceSteps = 5000
 // traceTimeoutMs is the timeout for trace executions (10 seconds).
 const traceTimeoutMs = 10000
 
+// defaultTracerJarPath is the well-known location for the Java tracer JAR
+// inside the executor Docker image (built by PLAT-lqsw.6).
+const defaultTracerJarPath = "/usr/local/lib/java-tracer.jar"
+
 // TraceHandlerConfig holds configuration values for the TraceHandler.
 type TraceHandlerConfig struct {
 	NsjailPath              string
 	PythonPath              string
 	JavaPath                string
 	JavacPath               string
+	TracerJarPath           string // Path to the Java tracer JAR; defaults to defaultTracerJarPath.
 	MaxOutputBytes          int
 	MaxCodeBytes            int
 	MaxStdinBytes           int
@@ -109,13 +114,37 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		maxSteps = *req.MaxSteps
 	}
 
-	// Build the tracer invocation: the tracer script becomes main.py,
-	// and the student code, stdin, and maxSteps are passed as arguments.
-	sandboxReq := sandbox.Request{
-		Code:      tracer.Script,
-		Stdin:     "", // tracer reads stdin via argv, not actual stdin
-		TimeoutMs: traceTimeoutMs,
-		Args:      []string{req.Code, req.Stdin, strconv.Itoa(maxSteps)},
+	// Build the sandbox request based on language.
+	// Both Python and Java tracers accept the same Args convention:
+	//   [student_code, stdin, maxSteps]
+	// The difference is which tracer binary/script is invoked.
+	tracerArgs := []string{req.Code, req.Stdin, strconv.Itoa(maxSteps)}
+
+	var sandboxReq sandbox.Request
+	if req.Language == "java" {
+		// Java path: run the Java tracer JAR via the sandbox.
+		// The Code field holds the shell invocation command; Language="java"
+		// signals the sandbox to use Java bind-mounts and resource limits.
+		jarPath := h.cfg.TracerJarPath
+		if jarPath == "" {
+			jarPath = defaultTracerJarPath
+		}
+		sandboxReq = sandbox.Request{
+			Code:      fmt.Sprintf("java -cp %s JavaTracer", jarPath),
+			Stdin:     "", // tracer reads stdin via argv, not actual stdin
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
+			Language:  "java",
+		}
+	} else {
+		// Python path (default): the tracer script becomes main.py,
+		// and the student code, stdin, and maxSteps are passed as arguments.
+		sandboxReq = sandbox.Request{
+			Code:      tracer.Script,
+			Stdin:     "", // tracer reads stdin via argv, not actual stdin
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
+		}
 	}
 
 	sandboxCfg := sandbox.Config{
