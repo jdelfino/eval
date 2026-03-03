@@ -367,7 +367,8 @@ export default function CodeEditor({
     setLocalExecutionResult(null);
 
     try {
-      const result = await executeStandaloneCode(code, 'python', {
+      const language = (problem && 'language' in problem) ? problem.language : 'python';
+      const result = await executeStandaloneCode(code, language || 'python', {
         stdin: stdin || undefined,
         random_seed,
         attached_files,
@@ -964,7 +965,7 @@ export default function CodeEditor({
           >
             <Editor
               height="100%"
-              defaultLanguage="python"
+              defaultLanguage={(problem && 'language' in problem) ? (problem.language || 'python') : 'python'}
               value={code}
               onChange={(value) => !isReadOnly && onChange(value || '')}
               onMount={handleEditorDidMount}
