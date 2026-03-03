@@ -1,0 +1,5 @@
+$patch: delete
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: centrifugo-backend-config

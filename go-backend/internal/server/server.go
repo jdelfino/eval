@@ -135,7 +135,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	var userLoader *custommw.UserLoader
 	if userStore != nil {
 		var validator auth.TokenValidator
-		authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID)
+		authClient, err := auth.NewFirebaseAuthClient(context.Background(), cfg.GCPProjectID, cfg.FirebaseTenantID)
 		if err != nil {
 			return nil, fmt.Errorf("initialize Firebase auth client: %w", err)
 		}

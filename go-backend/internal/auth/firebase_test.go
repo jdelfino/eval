@@ -154,3 +154,17 @@ func TestFirebaseValidator_TimestampMapping(t *testing.T) {
 		t.Errorf("ExpiresAt = %v, want %v", claims.ExpiresAt, expectedExpiresAt)
 	}
 }
+
+func TestNewFirebaseAuthClient_EmptyProjectIDReturnsError(t *testing.T) {
+	_, err := NewFirebaseAuthClient(context.Background(), "", "")
+	if err == nil {
+		t.Fatal("expected error for empty projectID, got nil")
+	}
+}
+
+func TestNewFirebaseAuthClient_EmptyProjectIDWithTenantReturnsError(t *testing.T) {
+	_, err := NewFirebaseAuthClient(context.Background(), "", "some-tenant-id")
+	if err == nil {
+		t.Fatal("expected error for empty projectID even with tenantID, got nil")
+	}
+}

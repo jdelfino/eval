@@ -54,6 +54,8 @@ type Config struct {
 	IdentityPlatformAuthDomain string `env:"IDENTITY_PLATFORM_AUTH_DOMAIN"`
 	OAuthClientID              string `env:"OAUTH_CLIENT_ID"`
 	OAuthClientSecret          string `env:"OAUTH_CLIENT_SECRET"`
+	// Firebase Tenant ID (optional — scopes auth to Identity Platform tenant)
+	FirebaseTenantID string `env:"FIREBASE_TENANT_ID"`
 
 	// Bootstrap Configuration
 	// BootstrapAdminEmail is the email address authorized to POST /auth/bootstrap.

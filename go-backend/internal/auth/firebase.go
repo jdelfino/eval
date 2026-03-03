@@ -31,7 +31,11 @@ func NewFirebaseValidator(verifier IDTokenVerifier) TokenValidator {
 // This is the production entrypoint. It uses Application Default Credentials
 // (ADC) via the ambient GCP service account on GKE, or GOOGLE_APPLICATION_CREDENTIALS
 // for local dev.
-func NewFirebaseAuthClient(ctx context.Context, projectID string) (*firebaseauth.Client, error) {
+//
+// When tenantID is non-empty, the returned client is scoped to that Identity
+// Platform tenant (e.g. the staging test tenant). Production deployments leave
+// tenantID empty, which uses the default tenant with no change in behavior.
+func NewFirebaseAuthClient(ctx context.Context, projectID, tenantID string) (IDTokenVerifier, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("auth: GCP project ID must not be empty")
 	}
@@ -44,6 +48,13 @@ func NewFirebaseAuthClient(ctx context.Context, projectID string) (*firebaseauth
 	client, err := app.Auth(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("auth: get Firebase auth client: %w", err)
+	}
+	if tenantID != "" {
+		tenantClient, err := client.TenantManager.AuthForTenant(tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("auth: get Firebase tenant auth client for tenant %q: %w", tenantID, err)
+		}
+		return tenantClient, nil
 	}
 	return client, nil
 }
