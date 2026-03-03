@@ -8,6 +8,7 @@ type ExecuteRequest struct {
 	Files      []File `json:"files,omitempty"`
 	RandomSeed *int   `json:"random_seed,omitempty"`
 	TimeoutMs  *int   `json:"timeout_ms,omitempty"`
+	Language   string `json:"language,omitempty"`
 }
 
 // File represents an auxiliary file provided to the execution environment.
@@ -30,6 +31,7 @@ type TraceRequest struct {
 	Code     string `json:"code"`
 	Stdin    string `json:"stdin,omitempty"`
 	MaxSteps *int   `json:"max_steps,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 // TraceResponse is the JSON response for debugger tracing.

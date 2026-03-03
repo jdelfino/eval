@@ -132,6 +132,7 @@ type Problem struct {
 	ClassID           *uuid.UUID      `json:"class_id"`
 	Tags              []string        `json:"tags"`
 	Solution          *string         `json:"solution"`
+	Language          string          `json:"language"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
 }
@@ -148,6 +149,7 @@ type CreateProblemParams struct {
 	ClassID           *uuid.UUID
 	Tags              []string
 	Solution          *string
+	Language          string
 }
 
 // UpdateProblemParams contains the fields that can be updated on a problem.
@@ -160,6 +162,7 @@ type UpdateProblemParams struct {
 	ClassID           *uuid.UUID
 	Tags              []string
 	Solution          *string
+	Language          *string
 }
 
 // ProblemFilters contains optional filters for listing problems.
