@@ -477,12 +477,12 @@ func TestPrepareCode(t *testing.T) {
 	seed := 42
 
 	tests := []struct {
-		name          string
-		code          string
-		stdin         string
-		randomSeed    *int
-		wantPreamble  bool
-		wantSeed      bool
+		name         string
+		code         string
+		stdin        string
+		randomSeed   *int
+		wantPreamble bool
+		wantSeed     bool
 	}{
 		{
 			name: "no stdin no seed",
@@ -512,7 +512,7 @@ func TestPrepareCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := prepareCode(tt.code, tt.stdin, tt.randomSeed)
+			got := prepareCode(tt.code, tt.stdin, tt.randomSeed, "")
 
 			// Must always end with the original code.
 			if !strings.HasSuffix(got, tt.code) {
@@ -595,6 +595,119 @@ func TestRunUnsafeRejectsMainPy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reserved") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestPrepareCodeLanguageGuard verifies that preambles are skipped for Java.
+func TestPrepareCodeLanguageGuard(t *testing.T) {
+	seed := 42
+	tests := []struct {
+		name         string
+		language     string
+		stdin        string
+		randomSeed   *int
+		wantPreamble bool
+		wantSeed     bool
+	}{
+		{
+			name:         "python with stdin gets preamble",
+			language:     "python",
+			stdin:        "hello\n",
+			wantPreamble: true,
+		},
+		{
+			name:         "empty language with stdin gets preamble",
+			language:     "",
+			stdin:        "hello\n",
+			wantPreamble: true,
+		},
+		{
+			name:         "java with stdin skips preamble",
+			language:     "java",
+			stdin:        "hello\n",
+			wantPreamble: false,
+		},
+		{
+			name:       "python with seed gets seed injection",
+			language:   "python",
+			randomSeed: &seed,
+			wantSeed:   true,
+		},
+		{
+			name:       "java with seed skips seed injection",
+			language:   "java",
+			randomSeed: &seed,
+			wantSeed:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := prepareCode("print('hi')", tt.stdin, tt.randomSeed, tt.language)
+
+			hasPreamble := strings.Contains(got, "_original_input = input")
+			if tt.wantPreamble && !hasPreamble {
+				t.Errorf("expected input echo preamble, got %q", got)
+			}
+			if !tt.wantPreamble && hasPreamble {
+				t.Errorf("did not expect input echo preamble, got %q", got)
+			}
+
+			hasSeed := strings.Contains(got, "random.seed(42)")
+			if tt.wantSeed && !hasSeed {
+				t.Errorf("expected random seed injection, got %q", got)
+			}
+			if !tt.wantSeed && hasSeed {
+				t.Errorf("did not expect random seed injection, got %q", got)
+			}
+		})
+	}
+}
+
+// TestRunJavaPlaceholder verifies that Run returns "not yet implemented" for Java.
+func TestRunJavaPlaceholder(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		PythonPath:     "/usr/bin/python3",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "public class Main { public static void main(String[] args) {} }",
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for Java (not yet implemented)")
+	}
+	if !strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("expected 'not yet implemented' error, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJavaPlaceholder verifies that RunUnsafe returns "not yet implemented" for Java.
+func TestRunUnsafeJavaPlaceholder(t *testing.T) {
+	cfg := Config{
+		PythonPath:     "/usr/bin/python3",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "public class Main { public static void main(String[] args) {} }",
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for Java (not yet implemented)")
+	}
+	if !strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("expected 'not yet implemented' error, got: %v", err)
 	}
 }
 

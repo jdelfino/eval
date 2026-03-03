@@ -28,6 +28,8 @@ const traceTimeoutMs = 10000
 type TraceHandlerConfig struct {
 	NsjailPath              string
 	PythonPath              string
+	JavaPath                string
+	JavacPath               string
 	MaxOutputBytes          int
 	MaxCodeBytes            int
 	MaxStdinBytes           int
@@ -119,6 +121,8 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sandboxCfg := sandbox.Config{
 		NsjailPath:     h.cfg.NsjailPath,
 		PythonPath:     h.cfg.PythonPath,
+		JavaPath:       h.cfg.JavaPath,
+		JavacPath:      h.cfg.JavacPath,
 		MaxOutputBytes: h.cfg.MaxOutputBytes,
 	}
 
@@ -206,6 +210,9 @@ func (h *TraceHandler) validateRequest(req *executorapi.TraceRequest) (string, s
 		if *req.MaxSteps > maxTraceSteps {
 			return "invalid_request", fmt.Sprintf("max_steps exceeds maximum of %d", maxTraceSteps)
 		}
+	}
+	if req.Language != "" && req.Language != "python" && req.Language != "java" {
+		return "invalid_request", fmt.Sprintf("unsupported language %q: must be empty, \"python\", or \"java\"", req.Language)
 	}
 	return "", ""
 }

@@ -28,6 +28,8 @@ type SandboxRunner func(ctx context.Context, cfg sandbox.Config, req sandbox.Req
 type ExecuteHandlerConfig struct {
 	NsjailPath              string
 	PythonPath              string
+	JavaPath                string
+	JavacPath               string
 	MaxOutputBytes          int
 	DefaultTimeoutMs        int
 	MaxCodeBytes            int
@@ -122,11 +124,14 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Files:      files,
 		RandomSeed: req.RandomSeed,
 		TimeoutMs:  timeoutMs,
+		Language:   req.Language,
 	}
 
 	sandboxCfg := sandbox.Config{
 		NsjailPath:     h.cfg.NsjailPath,
 		PythonPath:     h.cfg.PythonPath,
+		JavaPath:       h.cfg.JavaPath,
+		JavacPath:      h.cfg.JavacPath,
 		MaxOutputBytes: h.cfg.MaxOutputBytes,
 	}
 
@@ -222,6 +227,9 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 		if *req.TimeoutMs > maxTimeoutMs {
 			return "invalid_request", fmt.Sprintf("timeout_ms exceeds maximum of %d", maxTimeoutMs)
 		}
+	}
+	if req.Language != "" && req.Language != "python" && req.Language != "java" {
+		return "invalid_request", fmt.Sprintf("unsupported language %q: must be empty, \"python\", or \"java\"", req.Language)
 	}
 	return "", ""
 }

@@ -48,6 +48,8 @@ const truncationSuffix = "\n... [output truncated]"
 type Config struct {
 	NsjailPath     string
 	PythonPath     string
+	JavaPath       string
+	JavacPath      string
 	MaxOutputBytes int
 }
 
@@ -59,6 +61,7 @@ type Request struct {
 	RandomSeed *int
 	TimeoutMs  int
 	Args       []string // Additional arguments passed to the Python script.
+	Language   string   // Target language: "", "python", or "java".
 }
 
 // File is an attached file available to the executed program.
@@ -77,29 +80,38 @@ type Result struct {
 }
 
 // prepareCode prepends the input echo preamble (when stdin is provided) and
-// random seed injection to the student's code.
-func prepareCode(code string, stdin string, randomSeed *int) string {
-	var prefix string
-	if stdin != "" {
-		prefix += inputEchoPreamble
+// random seed injection to the student's code. Preambles are Python-specific
+// and are skipped when language is "java".
+func prepareCode(code string, stdin string, randomSeed *int, language string) string {
+	// Preambles only apply to Python (empty language defaults to Python).
+	if language == "" || language == "python" {
+		var prefix string
+		if stdin != "" {
+			prefix += inputEchoPreamble
+		}
+		if randomSeed != nil {
+			prefix += fmt.Sprintf("import random\nrandom.seed(%d)\n", *randomSeed)
+		}
+		return prefix + code
 	}
-	if randomSeed != nil {
-		prefix += fmt.Sprintf("import random\nrandom.seed(%d)\n", *randomSeed)
-	}
-	return prefix + code
+	return code
 }
 
-// RunUnsafe executes Python code directly without nsjail sandboxing.
+// RunUnsafe executes code directly without nsjail sandboxing.
 // Use only in environments where nsjail cannot run (CI, devcontainers).
 // Provides timeout enforcement and output capture but no isolation.
 func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	if req.Language == "java" {
+		return nil, fmt.Errorf("java execution not yet implemented")
+	}
+
 	tempDir, err := os.MkdirTemp("", "sandbox-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	code := prepareCode(req.Code, req.Stdin, req.RandomSeed)
+	code := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
 
 	mainPath := filepath.Join(tempDir, "main.py")
 	if err := os.WriteFile(mainPath, []byte(code), 0644); err != nil {
@@ -175,8 +187,12 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}, nil
 }
 
-// Run executes Python code inside an nsjail sandbox.
+// Run executes code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	if req.Language == "java" {
+		return nil, fmt.Errorf("java execution not yet implemented")
+	}
+
 	// Validate attached filenames before doing any work.
 	seen := make(map[string]string) // sanitized name -> original name
 	for _, f := range req.Files {
@@ -208,7 +224,7 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 
 	// Prepare code with input echo preamble and optional random seed.
-	code := prepareCode(req.Code, req.Stdin, req.RandomSeed)
+	code := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
 
 	// Write main.py.
 	mainPath := filepath.Join(tempDir, "main.py")
