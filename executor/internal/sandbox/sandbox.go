@@ -1,4 +1,4 @@
-// Package sandbox provides secure Python code execution using nsjail.
+// Package sandbox provides secure code execution using nsjail.
 package sandbox
 
 import (
@@ -43,6 +43,23 @@ const chrootDir = "/sandbox-root"
 
 // truncationSuffix is appended when output is truncated.
 const truncationSuffix = "\n... [output truncated]"
+
+// javaClassNameRe matches the first public class declaration in Java source.
+var javaClassNameRe = regexp.MustCompile(`public\s+class\s+(\w+)`)
+
+// javacErrorRe matches javac error lines of the form "<ClassName>.java:N: error:".
+// It captures the line number.
+var javacErrorRe = regexp.MustCompile(`\w+\.java:(\d+):`)
+
+// extractJavaClassName extracts the public class name from Java source code.
+// Falls back to "Main" if no public class declaration is found.
+func extractJavaClassName(code string) string {
+	m := javaClassNameRe.FindStringSubmatch(code)
+	if m == nil {
+		return "Main"
+	}
+	return m[1]
+}
 
 // Config holds paths and limits for sandbox execution.
 type Config struct {
@@ -102,7 +119,7 @@ func prepareCode(code string, stdin string, randomSeed *int, language string) st
 // Provides timeout enforcement and output capture but no isolation.
 func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if req.Language == "java" {
-		return nil, fmt.Errorf("java execution not yet implemented")
+		return runUnsafeJava(ctx, cfg, req)
 	}
 
 	tempDir, err := os.MkdirTemp("", "sandbox-")
@@ -187,10 +204,148 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}, nil
 }
 
+// runUnsafeJava executes Java code directly (no nsjail) for local dev / CI.
+// It compiles with javac then runs with java.
+func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	tempDir, err := os.MkdirTemp("", "sandbox-java-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	className := extractJavaClassName(req.Code)
+	javaFile := className + ".java"
+
+	// Reject attached files that conflict with the generated source file.
+	for _, f := range req.Files {
+		name := sanitizeFilename(f.Name)
+		if name == javaFile {
+			return nil, fmt.Errorf("file name %q is reserved", f.Name)
+		}
+		p := filepath.Join(tempDir, name)
+		if err := os.WriteFile(p, []byte(f.Content), 0644); err != nil {
+			return nil, fmt.Errorf("failed to write attached file %q: %w", name, err)
+		}
+	}
+
+	mainPath := filepath.Join(tempDir, javaFile)
+	if err := os.WriteFile(mainPath, []byte(req.Code), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write %s: %w", javaFile, err)
+	}
+
+	timeoutSec := int(math.Ceil(float64(req.TimeoutMs) / 1000.0))
+	if timeoutSec < 1 {
+		timeoutSec = 1
+	}
+
+	maxOut := cfg.MaxOutputBytes
+	if maxOut <= 0 {
+		maxOut = MaxOutputBytes
+	}
+
+	start := time.Now()
+
+	// Phase 1: Compile.
+	compileTimeoutSec := timeoutSec / 2
+	if compileTimeoutSec < 5 {
+		compileTimeoutSec = 5
+	}
+	compileCtx, compileCancel := context.WithTimeout(ctx, time.Duration(compileTimeoutSec)*time.Second)
+	defer compileCancel()
+
+	javacCmd := exec.CommandContext(compileCtx, cfg.JavacPath, mainPath)
+	javacCmd.Dir = tempDir
+
+	var compilationStderr limitedBuffer
+	compilationStderr.maxBytes = maxOut
+	javacCmd.Stderr = &compilationStderr
+
+	if err := javacCmd.Run(); err != nil {
+		duration := time.Since(start)
+		exitCode := 1
+		timedOut := false
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		if compileCtx.Err() == context.DeadlineExceeded {
+			timedOut = true
+			exitCode = -1
+		}
+		stderrStr := compilationStderr.String()
+		stderrStr = sanitizeStderrJava(stderrStr, className)
+		return &Result{
+			Stdout:     "",
+			Stderr:     stderrStr,
+			ExitCode:   exitCode,
+			TimedOut:   timedOut,
+			DurationMs: duration.Milliseconds(),
+		}, nil
+	}
+
+	// Phase 2: Execute.
+	elapsedMs := time.Since(start).Milliseconds()
+	remainingMs := int64(timeoutSec)*1000 - elapsedMs
+	if remainingMs < 1000 {
+		remainingMs = 1000
+	}
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(remainingMs)*time.Millisecond)
+	defer execCancel()
+
+	javaCmd := exec.CommandContext(execCtx, cfg.JavaPath, "-cp", tempDir, className)
+	javaCmd.Dir = tempDir
+
+	if req.Stdin != "" {
+		javaCmd.Stdin = strings.NewReader(req.Stdin)
+	}
+
+	var stdoutBuf, stderrBuf limitedBuffer
+	stdoutBuf.maxBytes = maxOut
+	stderrBuf.maxBytes = maxOut
+	javaCmd.Stdout = &stdoutBuf
+	javaCmd.Stderr = &stderrBuf
+
+	runErr := javaCmd.Run()
+	duration := time.Since(start)
+
+	exitCode := 0
+	timedOut := false
+
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() != nil {
+			timedOut = true
+			exitCode = -1
+		}
+	}
+	if execCtx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+
+	stdout := stdoutBuf.String()
+	stderr := stderrBuf.String()
+	if stdoutBuf.truncated {
+		stdout += truncationSuffix
+	}
+	if stderrBuf.truncated {
+		stderr += truncationSuffix
+	}
+
+	stderr = sanitizeStderrJava(stderr, className)
+
+	return &Result{
+		Stdout:     stdout,
+		Stderr:     stderr,
+		ExitCode:   exitCode,
+		TimedOut:   timedOut,
+		DurationMs: duration.Milliseconds(),
+	}, nil
+}
+
 // Run executes code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if req.Language == "java" {
-		return nil, fmt.Errorf("java execution not yet implemented")
+		return runJava(ctx, cfg, req)
 	}
 
 	// Validate attached filenames before doing any work.
@@ -370,6 +525,239 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		TimedOut:   timedOut,
 		DurationMs: duration.Milliseconds(),
 	}, nil
+}
+
+// runJava executes Java code inside an nsjail sandbox.
+// Phase 1 compiles with javac; Phase 2 runs the resulting class.
+func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	className := extractJavaClassName(req.Code)
+	javaFile := className + ".java"
+
+	// Validate attached filenames before doing any work.
+	seen := make(map[string]string) // sanitized name -> original name
+	for _, f := range req.Files {
+		name := sanitizeFilename(f.Name)
+		if name == javaFile {
+			return nil, fmt.Errorf("file name %q is reserved", f.Name)
+		}
+		if orig, ok := seen[name]; ok {
+			return nil, fmt.Errorf("duplicate filename: %q and %q both sanitize to %q", orig, f.Name, name)
+		}
+		seen[name] = f.Name
+	}
+
+	// Verify nsjail binary exists.
+	if _, err := exec.LookPath(cfg.NsjailPath); err != nil {
+		return nil, fmt.Errorf("nsjail binary not found at %s: %w", cfg.NsjailPath, err)
+	}
+
+	// Create temp directory for code and attached files.
+	tempDir, err := os.MkdirTemp("", "sandbox-java-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+	if err := os.Chmod(tempDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
+	}
+
+	// Write the Java source file.
+	mainPath := filepath.Join(tempDir, javaFile)
+	if err := os.WriteFile(mainPath, []byte(req.Code), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write %s: %w", javaFile, err)
+	}
+
+	// Write attached files with sanitized names.
+	for _, f := range req.Files {
+		name := sanitizeFilename(f.Name)
+		p := filepath.Join(tempDir, name)
+		if err := os.WriteFile(p, []byte(f.Content), 0644); err != nil {
+			return nil, fmt.Errorf("failed to write attached file %q: %w", name, err)
+		}
+	}
+
+	timeoutSec := int(math.Ceil(float64(req.TimeoutMs) / 1000.0))
+	if timeoutSec < 1 {
+		timeoutSec = 1
+	}
+
+	maxOut := cfg.MaxOutputBytes
+	if maxOut <= 0 {
+		maxOut = MaxOutputBytes
+	}
+
+	start := time.Now()
+
+	// Phase 1: Compile.
+	compileTimeoutSec := timeoutSec / 2
+	if compileTimeoutSec < 5 {
+		compileTimeoutSec = 5
+	}
+
+	compileCtx, compileCancel := context.WithTimeout(ctx, time.Duration(compileTimeoutSec)*time.Second+2*time.Second)
+	defer compileCancel()
+
+	compileArgs := buildJavaArgsWithTimeLimit(tempDir, compileTimeoutSec, []string{cfg.JavacPath, "/tmp/work/" + javaFile})
+
+	compileCmd := exec.CommandContext(compileCtx, cfg.NsjailPath, compileArgs...)
+
+	var compilationStderr limitedBuffer
+	compilationStderr.maxBytes = maxOut
+	compileCmd.Stdin = io.NopCloser(bytes.NewReader(nil))
+	compileCmd.Stderr = &compilationStderr
+
+	if err := compileCmd.Run(); err != nil {
+		duration := time.Since(start)
+		exitCode := 1
+		timedOut := false
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		if compileCtx.Err() == context.DeadlineExceeded {
+			timedOut = true
+			exitCode = -1
+		}
+		stderrStr := compilationStderr.String()
+		stderrStr = sanitizeStderrJava(stderrStr, className)
+		return &Result{
+			Stdout:     "",
+			Stderr:     stderrStr,
+			ExitCode:   exitCode,
+			TimedOut:   timedOut,
+			DurationMs: duration.Milliseconds(),
+		}, nil
+	}
+
+	// Phase 2: Execute.
+	elapsedMs := time.Since(start).Milliseconds()
+	remainingMs := int64(timeoutSec)*1000 - elapsedMs
+	if remainingMs < 1000 {
+		remainingMs = 1000
+	}
+	remainingSec := int(math.Ceil(float64(remainingMs) / 1000.0))
+
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(remainingSec)*time.Second+2*time.Second)
+	defer execCancel()
+
+	execArgs := buildJavaArgsWithTimeLimit(tempDir, remainingSec, []string{cfg.JavaPath, "-cp", "/tmp/work", className})
+
+	execCmd := exec.CommandContext(execCtx, cfg.NsjailPath, execArgs...)
+
+	if req.Stdin != "" {
+		execCmd.Stdin = strings.NewReader(req.Stdin)
+	} else {
+		execCmd.Stdin = io.NopCloser(bytes.NewReader(nil))
+	}
+
+	var stdoutBuf, stderrBuf limitedBuffer
+	stdoutBuf.maxBytes = maxOut
+	stderrBuf.maxBytes = maxOut
+	execCmd.Stdout = &stdoutBuf
+	execCmd.Stderr = &stderrBuf
+
+	runErr := execCmd.Run()
+	duration := time.Since(start)
+
+	exitCode := 0
+	timedOut := false
+
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() != nil || ctx.Err() != nil {
+			timedOut = true
+			exitCode = -1
+		}
+	}
+	if execCtx.Err() == context.DeadlineExceeded || ctx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+	if exitCode == 137 {
+		timedOut = true
+	}
+
+	stdout := stdoutBuf.String()
+	stderr := stderrBuf.String()
+	if stdoutBuf.truncated {
+		stdout += truncationSuffix
+	}
+	if stderrBuf.truncated {
+		stderr += truncationSuffix
+	}
+
+	stderr = sanitizeStderrJava(stderr, className)
+
+	return &Result{
+		Stdout:     stdout,
+		Stderr:     stderr,
+		ExitCode:   exitCode,
+		TimedOut:   timedOut,
+		DurationMs: duration.Milliseconds(),
+	}, nil
+}
+
+// buildJavaArgsWithTimeLimit constructs nsjail args for Java with the given time limit and command.
+func buildJavaArgsWithTimeLimit(tempDir string, timeoutSec int, command []string) []string {
+	a := []string{
+		"--mode", "once",
+		"--chroot", chrootDir,
+		"--disable_clone_newuser",
+		"--experimental_mnt", "old",
+		"--user", "65534",
+		"--group", "65534",
+		"--time_limit", fmt.Sprintf("%d", timeoutSec),
+		"--rlimit_as", "256",
+		"--rlimit_fsize", "10",
+		"--rlimit_nproc", "32",
+		"--cwd", "/tmp/work",
+		"--bindmount_ro", "/usr/bin",
+		"--bindmount_ro", "/usr/lib",
+		"--bindmount_ro", "/lib",
+		"--bindmount_ro", "/lib64",
+		"--bindmount_ro", "/dev/null",
+		"--bindmount_ro", "/dev/urandom",
+		"--tmpfsmount", "/tmp",
+		"--bindmount", tempDir + ":/tmp/work",
+		"--env", "PATH=/usr/bin:/bin",
+		"--env", "HOME=/tmp",
+		"--disable_proc",
+		"--really_quiet",
+		"--",
+	}
+	// Add /usr/lib/jvm if it exists (JDK installation).
+	if info, err := os.Stat("/usr/lib/jvm"); err == nil && info.IsDir() {
+		a = appendBeforeTerminator(a, "--bindmount_ro", "/usr/lib/jvm")
+	}
+	// Add /usr/lib64 if it exists.
+	if info, err := os.Stat("/usr/lib64"); err == nil && info.IsDir() {
+		a = appendBeforeTerminator(a, "--bindmount_ro", "/usr/lib64")
+	}
+	a = append(a, command...)
+	return a
+}
+
+// sanitizeStderrJava sanitizes Java stderr by replacing internal file paths
+// and converting javac error format to a cleaner form.
+func sanitizeStderrJava(stderr string, className string) string {
+	javaFile := className + ".java"
+	// Replace "/tmp/work/<ClassName>.java:N:" with "Line N:".
+	result := regexp.MustCompile(`/tmp/work/`+regexp.QuoteMeta(javaFile)+`:(\d+):`).
+		ReplaceAllStringFunc(stderr, func(match string) string {
+			// Extract line number.
+			m := javacErrorRe.FindStringSubmatch(match)
+			if m != nil {
+				return "Line " + m[1] + ":"
+			}
+			return match
+		})
+	// Replace any remaining "/tmp/work/<ClassName>.java" references.
+	result = strings.ReplaceAll(result, "/tmp/work/"+javaFile, "<student code>")
+	// Replace any other /tmp/work/ paths.
+	result = tmpWorkPathRe.ReplaceAllStringFunc(result, func(match string) string {
+		filename := match[len("/tmp/work/"):]
+		return filename
+	})
+	return result
 }
 
 // sanitizeFilename removes path separators and dangerous patterns from filenames.
