@@ -419,6 +419,7 @@ export default function ProblemCreator({
           disabled={!description.trim() || isGenerating || isSubmitting}
           style={{
             marginLeft: 'auto',
+            marginRight: '0.5rem',
             padding: '0.25rem 0.75rem',
             fontSize: '0.8rem',
             color: '#0d6efd',
