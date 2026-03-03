@@ -23,6 +23,7 @@ describe('Problem type hierarchy', () => {
     class_id: 'c-1',
     tags: ['arrays'],
     solution: 'return a+b',
+    language: 'python',
     created_at: '2025-01-15T10:00:00.000Z',
     updated_at: '2025-01-16T12:00:00.000Z',
   };
@@ -79,5 +80,16 @@ describe('Problem type hierarchy', () => {
     expect(client.execution_settings).toBeNull();
     expect(client.class_id).toBeNull();
     expect(client.solution).toBeNull();
+  });
+
+  it('mapApiProblem passes through language field', () => {
+    const client = mapApiProblem(apiProblem);
+    expect(client.language).toBe('python');
+  });
+
+  it('mapApiProblem passes through java language field', () => {
+    const javaApiProblem: ApiProblem = { ...apiProblem, language: 'java' };
+    const client = mapApiProblem(javaApiProblem);
+    expect(client.language).toBe('java');
   });
 });

@@ -84,6 +84,7 @@ export interface Problem {
   class_id: string | null;
   tags: string[];
   solution: string | null;
+  language: string;
   created_at: string;
   updated_at: string;
 }
