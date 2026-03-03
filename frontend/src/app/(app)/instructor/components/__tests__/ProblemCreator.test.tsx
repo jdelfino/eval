@@ -637,7 +637,25 @@ describe('ProblemCreator Component', () => {
       expect(btn).toBeDisabled();
     });
 
-    it('should call generateSolution API with description and starter_code, then populate solution and switch to solution tab', async () => {
+    it('should open modal when Generate Solution button is clicked', () => {
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Write a function that reverses a string.' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Modal should be visible with title
+      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
+      // Modal should have the textarea for custom instructions
+      expect(screen.getByLabelText('Custom Instructions (optional)')).toBeInTheDocument();
+      // Modal should have Cancel and Generate buttons
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+    });
+
+    it('should call generateSolution API with description and starter_code when Generate is clicked in modal', async () => {
       const { generateSolution } = require('@/lib/api/problems');
       generateSolution.mockResolvedValue({ solution: 'def reverse(s): return s[::-1]' });
 
@@ -650,7 +668,11 @@ describe('ProblemCreator Component', () => {
         target: { value: 'def reverse(s):\n    pass' },
       });
 
+      // Open modal
       fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Click Generate in modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
       await waitFor(() => {
         expect(generateSolution).toHaveBeenCalledWith({
@@ -666,7 +688,115 @@ describe('ProblemCreator Component', () => {
       });
     });
 
-    it('should show error when generateSolution API fails', async () => {
+    it('should pass custom instructions to generateSolution API when provided', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def solve(): return []' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Write a function to solve the problem.' },
+      });
+
+      // Open modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Enter custom instructions
+      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
+        target: { value: "Don't use dicts or lists" },
+      });
+
+      // Click Generate in modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(generateSolution).toHaveBeenCalledWith({
+          description: 'Write a function to solve the problem.',
+          starter_code: undefined,
+          custom_instructions: "Don't use dicts or lists",
+        });
+      });
+    });
+
+    it('should not pass custom_instructions when the field is empty', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Open modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Leave custom instructions empty
+      // Click Generate
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(generateSolution).toHaveBeenCalledWith({
+          description: 'Some description',
+          starter_code: undefined,
+        });
+      });
+
+      // Ensure custom_instructions is NOT in the call (no key at all)
+      const callArgs = generateSolution.mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('custom_instructions');
+    });
+
+    it('should close modal and not call API when Cancel is clicked', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Open modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Verify modal is open
+      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
+
+      // Click Cancel
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Modal should be closed
+      expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
+
+      // API should not have been called
+      expect(generateSolution).not.toHaveBeenCalled();
+    });
+
+    it('should clear customInstructions when Cancel is clicked', async () => {
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Open modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Enter custom instructions
+      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
+        target: { value: 'Use recursion only' },
+      });
+
+      // Cancel
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Re-open modal - instructions should be cleared
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      expect(screen.getByLabelText('Custom Instructions (optional)')).toHaveValue('');
+    });
+
+    it('should display error inside modal when generateSolution API fails', async () => {
       const { generateSolution } = require('@/lib/api/problems');
       generateSolution.mockRejectedValue(new Error('AI generation failed'));
 
@@ -676,14 +806,42 @@ describe('ProblemCreator Component', () => {
         target: { value: 'Some description' },
       });
 
+      // Open modal
       fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
 
+      // Click Generate in modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
       await waitFor(() => {
+        // Error should be inside the modal
+        expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
         expect(screen.getByText('AI generation failed')).toBeInTheDocument();
       });
     });
 
-    it('should show generating state while API call is in progress', async () => {
+    it('should close modal on successful generation', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def solve(): return 42' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Open modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Click Generate in modal
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        // Modal should be closed after success
+        expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
+      });
+    });
+
+    it('should show loading state in Generate button while API call is in progress', async () => {
       const { generateSolution } = require('@/lib/api/problems');
       generateSolution.mockImplementation(() => new Promise(() => {})); // Never resolves
 
@@ -693,71 +851,14 @@ describe('ProblemCreator Component', () => {
         target: { value: 'Some description' },
       });
 
+      // Open modal
       fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Click Generate
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: 'Generating...' })).toBeInTheDocument();
-      });
-    });
-
-    it('should show confirmation dialog when solution already has content and cancel aborts generation', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'new solution' });
-      window.confirm = jest.fn().mockReturnValue(false); // User cancels
-
-      render(<ProblemCreator />);
-
-      // Set description
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Set existing solution content
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByLabelText(/Solution Code/), {
-        target: { value: 'existing solution code' },
-      });
-
-      // Switch back to see the button in the tab bar
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      expect(window.confirm).toHaveBeenCalledWith('This will replace the existing solution. Continue?');
-      expect(generateSolution).not.toHaveBeenCalled();
-    });
-
-    it('should proceed with generation when solution has content and user confirms', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'new generated solution' });
-      window.confirm = jest.fn().mockReturnValue(true); // User confirms
-
-      render(<ProblemCreator />);
-
-      // Set description
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Set existing solution content
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByLabelText(/Solution Code/), {
-        target: { value: 'existing solution' },
-      });
-
-      // Switch back to starter tab
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      expect(window.confirm).toHaveBeenCalledWith('This will replace the existing solution. Continue?');
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalled();
-      });
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Solution Code/)).toHaveValue('new generated solution');
       });
     });
 
@@ -772,7 +873,11 @@ describe('ProblemCreator Component', () => {
       });
       // Leave starter_code empty
 
+      // Open modal
       fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      // Click Generate
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
       await waitFor(() => {
         expect(generateSolution).toHaveBeenCalledWith({
@@ -780,6 +885,34 @@ describe('ProblemCreator Component', () => {
           starter_code: undefined,
         });
       });
+    });
+
+    it('should clear customInstructions after successful generation', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Open modal and enter custom instructions
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
+        target: { value: 'Use only loops' },
+      });
+
+      // Generate successfully
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
+      });
+
+      // Re-open modal - instructions should be cleared
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+      expect(screen.getByLabelText('Custom Instructions (optional)')).toHaveValue('');
     });
   });
 
