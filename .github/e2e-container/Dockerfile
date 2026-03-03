@@ -36,3 +36,6 @@ RUN chmod +x /usr/bin/docker
 
 # Default shell to bash (GitHub Actions container jobs default to sh)
 SHELL ["/bin/bash", "-c"]
+
+# Make the ghcr.io package public so CI can pull without auth
+LABEL org.opencontainers.image.source=https://github.com/jdelfino/eval
