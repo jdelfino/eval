@@ -49,6 +49,10 @@ jobs:
           echo "ip=$GATEWAY" >> "$GITHUB_OUTPUT"
           echo "Docker host IP: $GATEWAY"
 
+      # Expose DOCKER_HOST_IP early so all subsequent steps can use it
+      - name: Set DOCKER_HOST_IP
+        run: echo "DOCKER_HOST_IP=${{ steps.host-ip.outputs.ip }}" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -146,7 +150,7 @@ jobs:
                   -e DEFAULT_TIMEOUT_MS=10000 \
                   $EXECUTOR_REGISTRY/executor:latest
                 for i in $(seq 1 30); do
-                  curl -sf http://localhost:8081/healthz >/dev/null 2>&1 && break
+                  curl -sf "http://${DOCKER_HOST_IP:-localhost}:8081/healthz" >/dev/null 2>&1 && break
                   sleep 1
                 done
                 echo "[executor] Executor running from pre-built image"
@@ -167,8 +171,6 @@ jobs:
           if [ "$FAILED" = "true" ]; then exit 1; fi
 
       - name: Run E2E tests
-        env:
-          DOCKER_HOST_IP: ${{ steps.host-ip.outputs.ip }}
         run: make test-e2e
 
       - name: Dump executor logs

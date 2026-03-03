@@ -45,6 +45,7 @@ export BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local
 # FIREBASE_AUTH_EMULATOR_HOST is inherited from the caller's environment
 export DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME"
 export DATABASE_USER="$DB_USER" DATABASE_PASSWORD="$DB_PASS"
+export EXECUTOR_URL="http://${HOST}:8081"
 export REDIS_URL="redis://${HOST}:6379"
 export CENTRIFUGO_URL="http://${HOST}:8000"
 export CENTRIFUGO_API_KEY=local-api-key
