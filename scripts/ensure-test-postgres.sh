@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DB_HOST=${DATABASE_HOST:-localhost}
+# Docker compose services run on the host. In container jobs, use DOCKER_HOST_IP.
+HOST=${DOCKER_HOST_IP:-localhost}
+
+DB_HOST=${DATABASE_HOST:-${HOST}}
 DB_PORT=${DATABASE_PORT:-5432}
 
 # Start docker services (postgres, redis, centrifugo) if not already running
@@ -11,7 +14,7 @@ if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -q 2>/dev/null; then
 fi
 
 # Also ensure centrifugo is running (for E2E tests)
-if ! curl -sf --max-time 3 http://localhost:8000/health >/dev/null 2>&1; then
+if ! curl -sf --max-time 3 "http://${HOST}:8000/health" >/dev/null 2>&1; then
   echo "Starting Centrifugo..."
   docker compose up -d centrifugo --wait
 fi

@@ -14,35 +14,69 @@ on:
 
 env:
   GO_VERSION: '1.24'
-  NODE_VERSION: '20'
   EXECUTOR_REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jdelfino/eval-e2e:v1.57.0
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --privileged
     permissions:
       contents: read
+      packages: read
       id-token: write
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
+
+      # Git safe.directory needed for Go VCS stamping in container jobs
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Docker compose containers bind to the host, not the job container.
+      # Detect the host gateway IP so scripts can connect to postgres/redis/etc.
+      - name: Detect Docker host IP
+        id: host-ip
+        run: |
+          # getent is available in the Playwright base image
+          GATEWAY=$(getent hosts host.docker.internal 2>/dev/null | awk '{print $1}' || true)
+          if [ -z "$GATEWAY" ]; then
+            # Fall back to reading the default route from /proc
+            GATEWAY=$(awk '$2 == "00000000" {print $3; exit}' /proc/net/route \
+              | sed 's/\(..\)/\1\n/g' | tac | while read h; do printf '%d.' "0x$h"; done \
+              | sed 's/\.$//')
+          fi
+          echo "ip=$GATEWAY" >> "$GITHUB_OUTPUT"
+          echo "Docker host IP: $GATEWAY"
 
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go-backend/go.sum
 
-      - uses: actions/setup-node@v4
+      # npm cache — setup-node is not needed (Node.js is in the container image)
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
 
       # Moved earlier — only needs checkout
       - uses: google-github-actions/auth@v2
+        id: gcp-auth
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          token_format: access_token
 
       # Moved earlier — fast check, only needs GH_TOKEN
       - name: Check if executor code changed (PRs)
@@ -56,19 +90,12 @@ jobs:
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "Executor code changed: $CHANGED"
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-
       # Run Go build and executor setup as background processes while npm ci
-      # and Playwright install run in the foreground (Playwright needs npm ci).
-      - name: "Parallel setup: npm ci + Playwright (fg), Go build + executor (bg)"
+      # runs in the foreground. Playwright browsers are already in the container image.
+      - name: "Parallel setup: npm ci (fg), Go build + executor (bg)"
         env:
           GH_TOKEN: ${{ github.token }}
-          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          GCP_ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
           EXECUTOR_CHANGED: ${{ steps.executor-changed.outputs.changed }}
         run: |
           set -euo pipefail
@@ -114,7 +141,9 @@ jobs:
               timeout 300 docker compose up -d executor --build --wait
             else
               echo "[executor] Pulling pre-built executor image..."
-              gcloud auth configure-docker us-east1-docker.pkg.dev --quiet 2>/dev/null || true
+              # Authenticate to Artifact Registry using the WIF access token
+              # (gcloud is not in the container image)
+              echo "$GCP_ACCESS_TOKEN" | docker login -u oauth2accesstoken --password-stdin https://us-east1-docker.pkg.dev 2>/dev/null || true
               if docker pull $EXECUTOR_REGISTRY/executor:latest 2>/dev/null; then
                 docker run -d --name eval-executor-1 \
                   -p 8081:8081 --privileged \
@@ -135,15 +164,8 @@ jobs:
           ) &
           EXEC_PID=$!
 
-          # --- npm ci (foreground, needed before Playwright) ---
+          # --- npm ci (foreground) ---
           cd frontend && npm ci
-
-          # --- Playwright install (foreground, needs npm ci) ---
-          if [ "$PLAYWRIGHT_CACHE_HIT" = "true" ]; then
-            npx playwright install-deps chromium
-          else
-            npx playwright install --with-deps chromium
-          fi
 
           # --- Wait for background jobs ---
           FAILED=false
@@ -152,6 +174,8 @@ jobs:
           if [ "$FAILED" = "true" ]; then exit 1; fi
 
       - name: Run E2E tests
+        env:
+          DOCKER_HOST_IP: ${{ steps.host-ip.outputs.ip }}
         run: make test-e2e
 
       - name: Dump executor logs

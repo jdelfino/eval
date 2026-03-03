@@ -11,8 +11,15 @@ set -euo pipefail
 # in at build time), enabling cache hits across CI runs.
 #
 # Always uses the Firebase Auth Emulator for real end-to-end auth testing.
+#
+# When running inside a GitHub Actions container job, set DOCKER_HOST_IP to
+# the Docker host gateway so scripts can reach compose services on the host.
 
 NEXT_PORT=3000
+
+# Docker compose services run on the host. In container jobs, localhost
+# doesn't reach the host — use DOCKER_HOST_IP (set by CI) instead.
+HOST=${DOCKER_HOST_IP:-localhost}
 
 PIDS_TO_KILL=()
 cleanup() {
@@ -26,13 +33,13 @@ trap cleanup EXIT
 # --- 1. Shared infrastructure ---
 ./scripts/ensure-test-postgres.sh
 
-if ! curl -sf --max-time 3 http://localhost:8081/healthz >/dev/null 2>&1; then
+if ! curl -sf --max-time 3 "http://${HOST}:8081/healthz" >/dev/null 2>&1; then
   echo "Starting executor..."
   docker compose up -d executor --build --wait
 fi
 
 # --- 1b. Firebase Auth Emulator (always required) ---
-if ! curl -sf --max-time 3 http://localhost:9099/ >/dev/null 2>&1; then
+if ! curl -sf --max-time 3 "http://${HOST}:9099/" >/dev/null 2>&1; then
   echo "Starting Firebase Auth Emulator..."
   docker compose up -d firebase-emulator --wait
 fi
@@ -40,7 +47,7 @@ fi
 # --- 2. Go API on fixed port (builds binary if needed) ---
 export API_PORT=${API_PORT:-4100}
 
-export FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
+export FIREBASE_AUTH_EMULATOR_HOST=${HOST}:9099
 SERVER_PID=$(./scripts/ensure-test-api.sh)
 PIDS_TO_KILL+=("$SERVER_PID")
 
@@ -67,11 +74,11 @@ else
   echo "Building Next.js..."
   (cd frontend && \
     NEXT_PUBLIC_API_URL=/api/v1 \
-    NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+    NEXT_PUBLIC_CENTRIFUGO_URL="ws://${HOST}:8000/connection/websocket" \
     NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${HOST}" \
     NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
-    NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 \
+    NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST="http://${HOST}:9099" \
     API_PROXY_URL="http://localhost:${API_PORT}" \
     npm run build)
 fi
@@ -97,5 +104,5 @@ echo "Next.js ready"
 cd frontend
 NEXT_PUBLIC_API_URL=/api/v1 \
 API_BASE_URL="http://localhost:${API_PORT}" \
-FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
+FIREBASE_AUTH_EMULATOR_HOST="${HOST}:9099" \
   npx playwright test "$@"
