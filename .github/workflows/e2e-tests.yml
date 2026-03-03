@@ -45,14 +45,7 @@ jobs:
       - name: Detect Docker host IP
         id: host-ip
         run: |
-          # getent is available in the Playwright base image
-          GATEWAY=$(getent hosts host.docker.internal 2>/dev/null | awk '{print $1}' || true)
-          if [ -z "$GATEWAY" ]; then
-            # Fall back to reading the default route from /proc
-            GATEWAY=$(awk '$2 == "00000000" {print $3; exit}' /proc/net/route \
-              | sed 's/\(..\)/\1\n/g' | tac | while read h; do printf '%d.' "0x$h"; done \
-              | sed 's/\.$//')
-          fi
+          GATEWAY=$(ip route | awk '/default/ {print $3}')
           echo "ip=$GATEWAY" >> "$GITHUB_OUTPUT"
           echo "Docker host IP: $GATEWAY"
 
