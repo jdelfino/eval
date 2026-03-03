@@ -46,6 +46,7 @@ const fakePublishedProblem: PublishedProblemWithStatus = {
     class_id: null,
     tags: ['python', 'loops'],
     solution: null,
+    language: 'python',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   },

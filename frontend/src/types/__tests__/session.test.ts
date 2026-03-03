@@ -22,6 +22,7 @@ describe('Session type hierarchy', () => {
       class_id: null,
       tags: [],
       solution: null,
+      language: 'python',
       created_at: '2025-01-15T10:00:00.000Z',
       updated_at: '2025-01-15T10:00:00.000Z',
     },
