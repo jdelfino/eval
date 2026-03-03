@@ -438,6 +438,16 @@ func TestStripCodeFences(t *testing.T) {
 			input: "  ```json\n{\"key\": \"value\"}\n```  ",
 			want:  `{"key": "value"}`,
 		},
+		{
+			name:  "python language-tagged code fence",
+			input: "```python\ndef solve():\n    pass\n```",
+			want:  "def solve():\n    pass",
+		},
+		{
+			name:  "go language-tagged code fence",
+			input: "```go\nfunc solve() {}\n```",
+			want:  "func solve() {}",
+		},
 	}
 
 	for _, tt := range tests {

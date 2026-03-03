@@ -142,19 +142,18 @@ func (c *ClaudeClient) GenerateSolution(ctx context.Context, req GenerateSolutio
 	return &GenerateSolutionResponse{Solution: solution}, nil
 }
 
-// stripCodeFences removes markdown code fences (```json or ```) from the input string.
-// Claude sometimes wraps JSON output in code fences even when asked not to.
+// stripCodeFences removes markdown code fences from the input string.
+// Handles bare ```, language-tagged fences like ```json, ```python, etc.
+// Claude sometimes wraps output in code fences even when asked not to.
 func stripCodeFences(s string) string {
 	s = strings.TrimSpace(s)
-	// Handle ```json fence
-	if strings.HasPrefix(s, "```json") {
-		s = strings.TrimPrefix(s, "```json")
-		s = strings.TrimSuffix(s, "```")
-		return strings.TrimSpace(s)
-	}
-	// Handle plain ``` fence
 	if strings.HasPrefix(s, "```") {
-		s = strings.TrimPrefix(s, "```")
+		// Strip the opening fence line (including any language tag)
+		if idx := strings.Index(s, "\n"); idx != -1 {
+			s = s[idx+1:]
+		} else {
+			s = strings.TrimPrefix(s, "```")
+		}
 		s = strings.TrimSuffix(s, "```")
 		return strings.TrimSpace(s)
 	}

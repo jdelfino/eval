@@ -287,15 +287,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				aiClient = ai.NewRouterClient(geminiClient, claudeClient)
 			}
 
-			problemHandler := handler.NewProblemHandler(sectionProblemHandler, aiClient)
+			problemHandler := handler.NewProblemHandler(sectionProblemHandler)
 			r.Mount("/problems", problemHandler.Routes())
 			// Generate solution with AI (instructor+, rate-limited)
+			generateSolutionHandler := handler.NewGenerateSolutionHandler(aiClient)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.TimeoutOverride(60 * time.Second))
 				r.Use(custommw.RequirePermission(auth.PermContentManage))
 				r.With(
 					custommw.ForCategory(rl, "generateSolution", custommw.UserKey),
-				).Post("/problems/generate-solution", problemHandler.GenerateSolution)
+				).Post("/problems/generate-solution", generateSolutionHandler.GenerateSolution)
 			})
 
 			// Student work routes

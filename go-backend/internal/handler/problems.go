@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
@@ -20,14 +19,12 @@ import (
 // ProblemHandler handles problem management routes.
 type ProblemHandler struct {
 	sectionProblemHandler *SectionProblemHandler
-	aiClient              ai.Client
 }
 
 // NewProblemHandler creates a new ProblemHandler.
-func NewProblemHandler(sectionProblemHandler *SectionProblemHandler, aiClient ai.Client) *ProblemHandler {
+func NewProblemHandler(sectionProblemHandler *SectionProblemHandler) *ProblemHandler {
 	return &ProblemHandler{
 		sectionProblemHandler: sectionProblemHandler,
-		aiClient:              aiClient,
 	}
 }
 
@@ -248,33 +245,3 @@ func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// generateSolutionRequest is the request body for POST /problems/generate-solution.
-type generateSolutionRequest struct {
-	Description string `json:"description" validate:"required,min=1"`
-	StarterCode string `json:"starter_code"`
-}
-
-// GenerateSolution handles POST /api/v1/problems/generate-solution — generates a solution using AI (instructor+).
-func (h *ProblemHandler) GenerateSolution(w http.ResponseWriter, r *http.Request) {
-	authUser := auth.UserFromContext(r.Context())
-	if authUser == nil {
-		httputil.WriteError(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	req, err := httpbind.BindJSON[generateSolutionRequest](w, r)
-	if err != nil {
-		return // BindJSON already wrote the error response
-	}
-
-	aiResp, err := h.aiClient.GenerateSolution(r.Context(), ai.GenerateSolutionRequest{
-		ProblemDescription: req.Description,
-		StarterCode:        req.StarterCode,
-	})
-	if err != nil {
-		httputil.WriteInternalError(w, r, err, "AI solution generation failed")
-		return
-	}
-
-	httputil.WriteJSON(w, http.StatusOK, map[string]string{"solution": aiResp.Solution})
-}
