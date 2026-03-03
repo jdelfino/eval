@@ -95,10 +95,12 @@ test.describe('Student Registration UI', () => {
     const codeOnly = joinCode.replace(/-/g, '');
     await page.goto(`/register/student?code=${codeOnly}`);
     await expect(page.locator('button:has-text("Continue to Register")')).toBeVisible({ timeout: 5_000 });
+
     await page.click('button:has-text("Continue to Register")');
 
-    // Wait for auto-registration and redirect to section detail page.
-    await page.waitForURL(/\/sections\//, { timeout: 20_000 });
+    // Registration POST + redirect. With refreshUser no longer blocking the
+    // redirect, this should complete in a few seconds even on slow CI runners.
+    await page.waitForURL(/\/sections\//, { timeout: 10_000 });
 
     // ===== STEP 6: Verify section detail page =====
     // Section name is h1, class name is in a paragraph below it
