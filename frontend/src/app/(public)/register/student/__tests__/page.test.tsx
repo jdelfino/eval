@@ -26,9 +26,11 @@ jest.mock('next/navigation', () => ({
 
 // Mock AuthContext
 const mockRefreshUser = jest.fn();
+const mockSetUserProfile = jest.fn();
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     refreshUser: mockRefreshUser,
+    setUserProfile: mockSetUserProfile,
   }),
 }));
 
@@ -81,6 +83,7 @@ describe('StudentRegistrationPage', () => {
     mockPush.mockClear();
     mockRefreshUser.mockClear();
     mockRefreshUser.mockResolvedValue(undefined);
+    mockSetUserProfile.mockClear();
     mockSearchParams.delete('code');
     mockDeleteUser.mockClear();
     mockGetStudentRegistrationInfo.mockClear();
@@ -450,7 +453,39 @@ describe('StudentRegistrationPage', () => {
   });
 
   describe('Auto-login Flow', () => {
-    it('refreshes user and redirects to section detail on successful registration', async () => {
+    it('calls setUserProfile with the returned user and redirects to section detail on successful registration', async () => {
+      mockCurrentUser = null;
+      const registeredUser = { id: 'user-1', role: 'student' };
+      mockRegisterStudent.mockResolvedValue(registeredUser);
+
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'Test Class' },
+      });
+
+      render(<StudentRegistrationPage />);
+
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockSetUserProfile).toHaveBeenCalledWith(registeredUser);
+      });
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
+      });
+    });
+
+    it('does not call refreshUser after successful registration', async () => {
       mockCurrentUser = null;
       mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
 
@@ -473,12 +508,10 @@ describe('StudentRegistrationPage', () => {
       fireEvent.click(screen.getByTestId('mock-sign-in-success'));
 
       await waitFor(() => {
-        expect(mockRefreshUser).toHaveBeenCalled();
-      });
-
-      await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/sections/sec-1');
       });
+
+      expect(mockRefreshUser).not.toHaveBeenCalled();
     });
   });
 

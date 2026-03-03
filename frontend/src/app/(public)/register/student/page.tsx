@@ -71,7 +71,7 @@ export default function StudentRegistrationPage() {
 function StudentRegistrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshUser } = useAuth();
+  const { setUserProfile } = useAuth();
 
   // Page state
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
@@ -123,13 +123,13 @@ function StudentRegistrationContent() {
       setSubmitError('');
 
       try {
-        await registerStudent(code);
+        const user = await registerStudent(code);
 
         setPageState({ status: 'success' });
-        // Refresh the cached profile so the destination page can render
-        // immediately, but don't block the redirect on it — the section
-        // page has its own auth loading state as a fallback.
-        refreshUser();
+        // Write the profile to cache immediately so the section detail page
+        // finds it during auth hydration — eliminates the race between the
+        // fire-and-forget refreshUser() and the destination page's load.
+        setUserProfile(user);
         router.push(`/sections/${info.section.id}`);
       } catch (backendError) {
         // Only clean up Firebase account if the user signed in during this flow
@@ -159,7 +159,7 @@ function StudentRegistrationContent() {
         setPageState({ status: 'code-valid', info });
       }
     },
-    [refreshUser, router]
+    [setUserProfile, router]
   );
 
   // Handle code validation
