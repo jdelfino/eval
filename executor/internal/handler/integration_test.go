@@ -601,6 +601,7 @@ func TestIntegration_Trace_Python_HelloWorld(t *testing.T) {
 }
 
 func TestIntegration_Trace_Java_HelloWorld(t *testing.T) {
+	skipSandboxTest(t) // Java tracer JAR only exists in the Docker image
 	u := executorURL(t)
 	resp := traceRequest(t, u, executorapi.TraceRequest{
 		Code: `public class Main {
