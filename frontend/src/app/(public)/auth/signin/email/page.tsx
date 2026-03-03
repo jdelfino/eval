@@ -47,7 +47,7 @@ function EmailSignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || searchParams.get('token');
-  const { isAuthenticated, refreshUser } = useAuth();
+  const { isAuthenticated, setUserProfile } = useAuth();
 
   // Redirect when authenticated (AuthContext picks up Firebase user).
   // Suppressed when invite param is present — acceptInvite handles the redirect instead.
@@ -76,11 +76,10 @@ function EmailSignInContent() {
     async (token: string) => {
       try {
         const data = await acceptInvite(token);
-        // Update AuthContext with the new user before redirecting.
-        // Without this, onAuthStateChanged races with acceptInvite and
-        // sets user to null (bootstrap 403), so the app layout bounces
-        // us back to sign-in.
-        await refreshUser();
+        // Write the profile to cache immediately so onAuthStateChanged finds it
+        // during hydration — eliminates the race where onAuthStateChanged's
+        // failed fetch overwrites the valid user with null.
+        setUserProfile(data);
         redirectBasedOnRole(data.role);
       } catch (error) {
         if (error instanceof ApiError) {
@@ -98,7 +97,7 @@ function EmailSignInContent() {
         setIsLoading(false);
       }
     },
-    [redirectBasedOnRole, refreshUser]
+    [redirectBasedOnRole, setUserProfile]
   );
 
   const validate = useCallback((): boolean => {

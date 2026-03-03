@@ -140,7 +140,11 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
             }
           } catch (error) {
             console.error('[Auth] Error fetching user profile:', error);
-            setUser(null);
+            // Before clearing user state, check if another flow (e.g.,
+            // acceptInvite or registerStudent) has written a valid profile
+            // to the cache while this fetch was in flight.
+            const fallback = readProfileCache();
+            setUser(fallback);
           }
         } else {
           setUser(null);
