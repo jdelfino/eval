@@ -615,6 +615,39 @@ func TestTrace_JavaLanguage_DefaultMaxSteps(t *testing.T) {
 	}
 }
 
+// TestTrace_JavaLanguage_SetsIsCommand verifies that the Java trace path sets
+// IsCommand=true on the sandbox request, so the sandbox dispatches the JAR
+// invocation directly rather than trying to compile the Code field as Java source.
+func TestTrace_JavaLanguage_SetsIsCommand(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !cap.req.IsCommand {
+		t.Errorf("expected sandbox Request.IsCommand=true for java trace, got false")
+	}
+}
+
+// TestTrace_PythonLanguage_DoesNotSetIsCommand verifies that Python trace does not
+// set IsCommand (since the tracer.Script is real Python source, not a command).
+func TestTrace_PythonLanguage_DoesNotSetIsCommand(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	h := newTraceHandler(cap.run, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=5","language":"python"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cap.req.IsCommand {
+		t.Errorf("expected sandbox Request.IsCommand=false for python trace, got true")
+	}
+}
+
 // TestTrace_JavaLanguage_TracerJarPathInCode verifies the tracer JAR path is
 // encoded in the Code/invocation sent to the sandbox.
 func TestTrace_JavaLanguage_TracerJarPathInCode(t *testing.T) {

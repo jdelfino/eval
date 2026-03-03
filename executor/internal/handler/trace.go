@@ -123,8 +123,9 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var sandboxReq sandbox.Request
 	if req.Language == "java" {
 		// Java path: run the Java tracer JAR via the sandbox.
-		// The Code field holds the shell invocation command; Language="java"
-		// signals the sandbox to use Java bind-mounts and resource limits.
+		// IsCommand=true tells the sandbox to execute Code directly as a command
+		// (not to compile it as Java source). Language="java" ensures the sandbox
+		// uses Java-appropriate bind-mounts and resource limits.
 		jarPath := h.cfg.TracerJarPath
 		if jarPath == "" {
 			jarPath = defaultTracerJarPath
@@ -135,6 +136,7 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			TimeoutMs: traceTimeoutMs,
 			Args:      tracerArgs,
 			Language:  "java",
+			IsCommand: true,
 		}
 	} else {
 		// Python path (default): the tracer script becomes main.py,

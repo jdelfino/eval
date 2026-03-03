@@ -79,6 +79,7 @@ type Request struct {
 	TimeoutMs  int
 	Args       []string // Additional arguments passed to the Python script.
 	Language   string   // Target language: "", "python", or "java".
+	IsCommand  bool     // When true, Code is a command string to execute directly (not source to compile).
 }
 
 // File is an attached file available to the executed program.
@@ -119,6 +120,9 @@ func prepareCode(code string, stdin string, randomSeed *int, language string) st
 // Provides timeout enforcement and output capture but no isolation.
 func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if req.Language == "java" {
+		if req.IsCommand {
+			return runUnsafeJavaCommand(ctx, cfg, req)
+		}
 		return runUnsafeJava(ctx, cfg, req)
 	}
 
@@ -342,9 +346,85 @@ func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error
 	}, nil
 }
 
+// runUnsafeJavaCommand executes a pre-built Java command directly (no nsjail, no compilation).
+// req.Code is a command string (e.g. "java -cp /path/to/tracer.jar JavaTracer") and req.Args
+// are appended as additional arguments. Used for the Java tracer JAR invocation path.
+func runUnsafeJavaCommand(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	timeoutSec := int(math.Ceil(float64(req.TimeoutMs) / 1000.0))
+	if timeoutSec < 1 {
+		timeoutSec = 1
+	}
+
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+	defer execCancel()
+
+	// Split the command string into binary + args.
+	parts := strings.Fields(req.Code)
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("IsCommand=true but Code is empty")
+	}
+	binary := parts[0]
+	cmdArgs := append(parts[1:], req.Args...)
+
+	cmd := exec.CommandContext(execCtx, binary, cmdArgs...)
+
+	if req.Stdin != "" {
+		cmd.Stdin = strings.NewReader(req.Stdin)
+	}
+
+	maxOut := cfg.MaxOutputBytes
+	if maxOut <= 0 {
+		maxOut = MaxOutputBytes
+	}
+	var stdoutBuf, stderrBuf limitedBuffer
+	stdoutBuf.maxBytes = maxOut
+	stderrBuf.maxBytes = maxOut
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	exitCode := 0
+	timedOut := false
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() != nil {
+			timedOut = true
+			exitCode = -1
+		}
+	}
+	if execCtx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+
+	stdout := stdoutBuf.String()
+	stderr := stderrBuf.String()
+	if stdoutBuf.truncated {
+		stdout += truncationSuffix
+	}
+	if stderrBuf.truncated {
+		stderr += truncationSuffix
+	}
+
+	return &Result{
+		Stdout:     stdout,
+		Stderr:     stderr,
+		ExitCode:   exitCode,
+		TimedOut:   timedOut,
+		DurationMs: duration.Milliseconds(),
+	}, nil
+}
+
 // Run executes code inside an nsjail sandbox.
 func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if req.Language == "java" {
+		if req.IsCommand {
+			return runJavaCommand(ctx, cfg, req)
+		}
 		return runJava(ctx, cfg, req)
 	}
 
@@ -686,6 +766,102 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 
 	stderr = sanitizeStderrJava(stderr, className)
+
+	return &Result{
+		Stdout:     stdout,
+		Stderr:     stderr,
+		ExitCode:   exitCode,
+		TimedOut:   timedOut,
+		DurationMs: duration.Milliseconds(),
+	}, nil
+}
+
+// runJavaCommand executes a pre-built Java command inside an nsjail sandbox.
+// req.Code is a command string (e.g. "java -cp /path/to/tracer.jar JavaTracer") and
+// req.Args are appended as additional arguments. The nsjail invocation uses the same
+// Java bind-mounts and resource limits as runJava, but skips compilation entirely.
+func runJavaCommand(ctx context.Context, cfg Config, req Request) (*Result, error) {
+	// Verify nsjail binary exists.
+	if _, err := exec.LookPath(cfg.NsjailPath); err != nil {
+		return nil, fmt.Errorf("nsjail binary not found at %s: %w", cfg.NsjailPath, err)
+	}
+
+	timeoutSec := int(math.Ceil(float64(req.TimeoutMs) / 1000.0))
+	if timeoutSec < 1 {
+		timeoutSec = 1
+	}
+
+	maxOut := cfg.MaxOutputBytes
+	if maxOut <= 0 {
+		maxOut = MaxOutputBytes
+	}
+
+	// Split the command string into binary + args, then append req.Args.
+	parts := strings.Fields(req.Code)
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("IsCommand=true but Code is empty")
+	}
+	command := append(parts, req.Args...)
+
+	// Use an empty tempDir (no source files needed), but nsjail requires a bind mount.
+	// We create a temporary directory just to satisfy the --bindmount requirement.
+	tempDir, err := os.MkdirTemp("", "sandbox-java-cmd-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+	if err := os.Chmod(tempDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
+	}
+
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+2*time.Second)
+	defer execCancel()
+
+	execArgs := buildJavaArgsWithTimeLimit(tempDir, timeoutSec, command)
+	execCmd := exec.CommandContext(execCtx, cfg.NsjailPath, execArgs...)
+
+	if req.Stdin != "" {
+		execCmd.Stdin = strings.NewReader(req.Stdin)
+	} else {
+		execCmd.Stdin = io.NopCloser(bytes.NewReader(nil))
+	}
+
+	var stdoutBuf, stderrBuf limitedBuffer
+	stdoutBuf.maxBytes = maxOut
+	stderrBuf.maxBytes = maxOut
+	execCmd.Stdout = &stdoutBuf
+	execCmd.Stderr = &stderrBuf
+
+	start := time.Now()
+	runErr := execCmd.Run()
+	duration := time.Since(start)
+
+	exitCode := 0
+	timedOut := false
+
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else if execCtx.Err() != nil || ctx.Err() != nil {
+			timedOut = true
+			exitCode = -1
+		}
+	}
+	if execCtx.Err() == context.DeadlineExceeded || ctx.Err() == context.DeadlineExceeded {
+		timedOut = true
+	}
+	if exitCode == 137 {
+		timedOut = true
+	}
+
+	stdout := stdoutBuf.String()
+	stderr := stderrBuf.String()
+	if stdoutBuf.truncated {
+		stdout += truncationSuffix
+	}
+	if stderrBuf.truncated {
+		stderr += truncationSuffix
+	}
 
 	return &Result{
 		Stdout:     stdout,

@@ -2,7 +2,9 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -947,6 +949,212 @@ func TestExtractJavaClassNameUsedAsFilename(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reserved") {
 		t.Errorf("expected reserved filename error, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJavaIsCommand verifies that when IsCommand=true and Language="java",
+// RunUnsafe executes the Code as a direct command with Args appended, not as
+// Java source to compile.
+func TestRunUnsafeJavaIsCommand(t *testing.T) {
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Build a simple command: "java -version" (outputs to stderr, exit 0).
+	// Using IsCommand=true means Code is executed as a shell invocation, not compiled.
+	req := Request{
+		Code:      javaPath + " -version",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 10000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe with IsCommand error: %v", err)
+	}
+	// java -version exits 0.
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+}
+
+// TestRunUnsafeJavaIsCommandWithArgs verifies that Args are passed correctly
+// when IsCommand=true.
+func TestRunUnsafeJavaIsCommandWithArgs(t *testing.T) {
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Compile a tiny Java class that prints its first argument.
+	tempDir, err := os.MkdirTemp("", "test-java-cmd-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	helperSrc := `public class EchoArg { public static void main(String[] args) { if (args.length > 0) System.out.println(args[0]); } }`
+	if err := os.WriteFile(filepath.Join(tempDir, "EchoArg.java"), []byte(helperSrc), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	compileCmd := exec.Command(javacPath, filepath.Join(tempDir, "EchoArg.java"))
+	compileCmd.Dir = tempDir
+	if out, err := compileCmd.CombinedOutput(); err != nil {
+		t.Skipf("compile helper failed (java unavailable?): %v: %s", err, out)
+	}
+
+	// Now run via IsCommand path: "java -cp <tempDir> EchoArg" with Args=["hello-from-args"].
+	req := Request{
+		Code:      javaPath + " -cp " + tempDir + " EchoArg",
+		Language:  "java",
+		IsCommand: true,
+		Args:      []string{"hello-from-args"},
+		TimeoutMs: 10000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe with IsCommand and args error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, "hello-from-args") {
+		t.Errorf("stdout = %q, want it to contain 'hello-from-args'", result.Stdout)
+	}
+}
+
+// TestRunUnsafeJavaIsCommandEmptyCode verifies that IsCommand=true with an empty
+// Code field returns an error rather than panicking or compiling an empty file.
+func TestRunUnsafeJavaIsCommandEmptyCode(t *testing.T) {
+	cfg := Config{
+		JavaPath:       "/usr/bin/java",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	_, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for empty command Code with IsCommand=true")
+	}
+	if !strings.Contains(err.Error(), "Code is empty") {
+		t.Errorf("expected empty Code error, got: %v", err)
+	}
+}
+
+// TestRunJavaIsCommandNsjailNotFound verifies that Run with IsCommand=true and
+// Language="java" returns nsjail-not-found error (same gate as normal java path).
+func TestRunJavaIsCommandNsjailNotFound(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "java -cp /path/to/tracer.jar JavaTracer",
+		Language:  "java",
+		IsCommand: true,
+		Args:      []string{"student code", "", "5000"},
+		TimeoutMs: 10000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when nsjail not found")
+	}
+	if !strings.Contains(err.Error(), "nsjail binary not found") {
+		t.Errorf("expected nsjail binary not found error, got: %v", err)
+	}
+}
+
+// TestRunJavaIsCommandEmptyCode verifies that Run (nsjail) with IsCommand=true
+// and empty Code returns an error rather than executing an empty command.
+func TestRunJavaIsCommandEmptyCode(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for empty command Code with IsCommand=true")
+	}
+	// May be "nsjail binary not found" OR "Code is empty" depending on check order.
+	// Both are valid error responses; just confirm we get an error.
+}
+
+// TestRunUnsafeJavaIsCommandDoesNotCompile verifies that IsCommand=true does NOT
+// attempt to compile the Code field (regression: it must run the command as-is,
+// not treat Code as Java source).
+func TestRunUnsafeJavaIsCommandDoesNotCompile(t *testing.T) {
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Code is NOT valid Java source. If RunUnsafe tries to compile this, javac
+	// will fail and return a non-zero exit code. With IsCommand=true, it should
+	// be executed directly (as a shell command) — which will fail because
+	// "not-valid-java-source" is not a valid command either, but the error will
+	// be an exec error, not a compilation error in stderr.
+	req := Request{
+		Code:      "not-valid-java-source",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	// Either an error from exec (command not found) or non-zero exit code.
+	// The important thing: stderr must NOT contain "error:" (javac compile errors),
+	// meaning we did NOT attempt javac compilation.
+	if err != nil {
+		// exec.LookPath failed for "not-valid-java-source" — acceptable
+		return
+	}
+	if strings.Contains(result.Stderr, "error:") && strings.Contains(result.Stderr, ".java") {
+		t.Errorf("stderr looks like a javac compile error, which means IsCommand was ignored: %s", result.Stderr)
 	}
 }
 
