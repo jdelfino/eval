@@ -41,6 +41,9 @@ export default function ProblemCreator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
   const [error, setError] = useState<string | null>(null);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [generateModalError, setGenerateModalError] = useState<string | null>(null);
 
   // Class and tags state
   const [classes, setClasses] = useState<Class[]>([]);
@@ -195,22 +198,35 @@ export default function ProblemCreator({
     setTags(prev => prev.filter(t => t !== tag));
   };
 
+  const handleOpenGenerateModal = () => {
+    setShowGenerateModal(true);
+    setGenerateModalError(null);
+  };
+
+  const handleCancelGenerateModal = () => {
+    setShowGenerateModal(false);
+    setCustomInstructions('');
+    setGenerateModalError(null);
+  };
+
   const handleGenerateSolution = async () => {
-    if (solution.trim()) {
-      const confirmed = window.confirm('This will replace the existing solution. Continue?');
-      if (!confirmed) return;
-    }
     setIsGenerating(true);
-    setError(null);
+    setGenerateModalError(null);
     try {
-      const result = await generateSolution({
+      const requestData: { description: string; starter_code?: string; custom_instructions?: string } = {
         description,
         starter_code: starter_code || undefined,
-      });
+      };
+      if (customInstructions.trim()) {
+        requestData.custom_instructions = customInstructions.trim();
+      }
+      const result = await generateSolution(requestData);
       setSolution(result.solution);
       setActiveTab('solution');
+      setShowGenerateModal(false);
+      setCustomInstructions('');
     } catch (err: any) {
-      setError(err.message || 'Failed to generate solution');
+      setGenerateModalError(err.message || 'Failed to generate solution');
     } finally {
       setIsGenerating(false);
     }
@@ -415,10 +431,11 @@ export default function ProblemCreator({
         })}
         <button
           type="button"
-          onClick={handleGenerateSolution}
+          onClick={handleOpenGenerateModal}
           disabled={!description.trim() || isGenerating || isSubmitting}
           style={{
             marginLeft: 'auto',
+            marginRight: '0.5rem',
             padding: '0.25rem 0.75rem',
             fontSize: '0.8rem',
             color: '#0d6efd',
@@ -429,7 +446,7 @@ export default function ProblemCreator({
             opacity: (!description.trim() || isGenerating || isSubmitting) ? 0.5 : 1,
           }}
         >
-          {isGenerating ? 'Generating...' : 'Generate Solution'}
+          Generate Solution
         </button>
       </div>}
 
@@ -456,6 +473,104 @@ export default function ProblemCreator({
           editableProblem={true}
         />
       </EditorContainer>}
+
+      {/* Generate Solution Modal */}
+      {showGenerateModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: '0.5rem',
+              padding: '1.5rem',
+              width: '100%',
+              maxWidth: '480px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: 600, color: '#212529' }}>
+              Generate Solution
+            </h2>
+
+            {generateModalError && (
+              <div style={{ padding: '0.75rem', backgroundColor: '#f8d7da', borderRadius: '0.25rem', color: '#842029', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                {generateModalError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="generate-custom-instructions"
+                style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#495057', marginBottom: '0.375rem' }}
+              >
+                Custom Instructions (optional)
+              </label>
+              <textarea
+                id="generate-custom-instructions"
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                placeholder="e.g., Don't use dicts or lists"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  fontSize: '0.875rem',
+                  border: '1px solid #ced4da',
+                  borderRadius: '0.25rem',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={handleCancelGenerateModal}
+                disabled={isGenerating}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  color: '#495057',
+                  backgroundColor: '#e9ecef',
+                  border: '1px solid #ced4da',
+                  borderRadius: '0.25rem',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
+                  opacity: isGenerating ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateSolution}
+                disabled={isGenerating}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  color: 'white',
+                  backgroundColor: '#0d6efd',
+                  border: 'none',
+                  borderRadius: '0.25rem',
+                  cursor: isGenerating ? 'not-allowed' : 'pointer',
+                  opacity: isGenerating ? 0.7 : 1,
+                }}
+              >
+                {isGenerating ? 'Generating...' : 'Generate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

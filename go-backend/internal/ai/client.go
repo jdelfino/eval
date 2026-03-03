@@ -78,6 +78,7 @@ type AnalyzeResponse struct {
 type GenerateSolutionRequest struct {
 	ProblemDescription string `json:"problem_description"`
 	StarterCode        string `json:"starter_code"`
+	CustomInstructions string `json:"custom_instructions"`
 }
 
 // GenerateSolutionResponse contains the generated solution code.

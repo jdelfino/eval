@@ -114,6 +114,10 @@ func (c *ClaudeClient) GenerateSolution(ctx context.Context, req GenerateSolutio
 		sb.WriteString(req.StarterCode)
 		sb.WriteString("\n\n")
 	}
+	if req.CustomInstructions != "" {
+		sb.WriteString("\n\nAdditional constraints:\n")
+		sb.WriteString(req.CustomInstructions)
+	}
 
 	result, err := c.creator.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(defaultClaudeModel),

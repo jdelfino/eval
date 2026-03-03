@@ -87,3 +87,37 @@ func TestGenerateSolution_NewHandler_Success(t *testing.T) {
 		t.Errorf("expected solution %q, got %q", "def add(a, b):\n    return a + b", resp.Solution)
 	}
 }
+
+// TestGenerateSolution_CustomInstructions_PassedThrough verifies that custom_instructions
+// in the HTTP request body is forwarded to the AI client's GenerateSolutionRequest.
+func TestGenerateSolution_CustomInstructions_PassedThrough(t *testing.T) {
+	const wantInstructions = "Only use recursion. No loops allowed."
+
+	var capturedReq ai.GenerateSolutionRequest
+	aiClient := &mockAIClient{
+		generateSolutionFn: func(_ context.Context, req ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error) {
+			capturedReq = req
+			return &ai.GenerateSolutionResponse{Solution: "def solve(): pass"}, nil
+		},
+	}
+
+	h := NewGenerateSolutionHandler(aiClient)
+	body, _ := json.Marshal(map[string]any{
+		"description":          "Write a recursive function",
+		"custom_instructions":  wantInstructions,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.GenerateSolution(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.CustomInstructions != wantInstructions {
+		t.Errorf("CustomInstructions = %q, want %q", capturedReq.CustomInstructions, wantInstructions)
+	}
+}
