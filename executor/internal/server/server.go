@@ -108,13 +108,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	execHandler := handler.NewExecuteHandler(
 		logger, runner, m,
 		handler.ExecuteHandlerConfig{
-			NsjailPath:       cfg.NsjailPath,
-			PythonPath:       cfg.PythonPath,
-			MaxOutputBytes:   cfg.MaxOutputBytes,
-			DefaultTimeoutMs: cfg.DefaultTimeoutMS,
-			MaxCodeBytes:     cfg.MaxCodeBytes,
-			MaxStdinBytes:    cfg.MaxStdinBytes,
-			MaxFiles:         cfg.MaxFiles,
+			NsjailPath:              cfg.NsjailPath,
+			PythonPath:              cfg.PythonPath,
+			JavaPath:                cfg.JavaPath,
+			JavacPath:               cfg.JavacPath,
+			MaxOutputBytes:          cfg.MaxOutputBytes,
+			DefaultTimeoutMs:        cfg.DefaultTimeoutMS,
+			MaxCodeBytes:            cfg.MaxCodeBytes,
+			MaxStdinBytes:           cfg.MaxStdinBytes,
+			MaxFiles:                cfg.MaxFiles,
 			MaxFileBytes:            cfg.MaxFileBytes,
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
@@ -130,6 +132,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 		handler.TraceHandlerConfig{
 			NsjailPath:              cfg.NsjailPath,
 			PythonPath:              cfg.PythonPath,
+			JavaPath:                cfg.JavaPath,
+			JavacPath:               cfg.JavacPath,
+			TracerJarPath:           cfg.TracerJarPath,
 			MaxOutputBytes:          cfg.MaxOutputBytes,
 			MaxCodeBytes:            cfg.MaxCodeBytes,
 			MaxStdinBytes:           cfg.MaxStdinBytes,
@@ -151,6 +156,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 }
 
 // readyzHandler returns an HTTP handler that checks if nsjail and python3 binaries are accessible.
+// Java is reported but not required for readiness (optional language support).
 func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		components := map[string]string{}
@@ -168,6 +174,12 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 			healthy = false
 		} else {
 			components["python"] = "ok"
+		}
+
+		if _, err := os.Stat(cfg.JavaPath); err != nil {
+			components["java"] = "unavailable"
+		} else {
+			components["java"] = "ok"
 		}
 
 		status := "ok"

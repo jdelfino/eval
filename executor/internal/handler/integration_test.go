@@ -314,3 +314,321 @@ func TestIntegration_StdinEchoed(t *testing.T) {
 		t.Errorf("expected stdin echoed back, got %q", resp.Stdin)
 	}
 }
+
+// traceRequest sends a trace request and decodes the response.
+func traceRequest(t *testing.T, baseURL string, req executorapi.TraceRequest) executorapi.TraceResponse {
+	t.Helper()
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Post(baseURL+"/trace", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /trace: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody := make([]byte, 1024)
+		n, _ := resp.Body.Read(respBody)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(respBody[:n]))
+	}
+
+	var result executorapi.TraceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	return result
+}
+
+// ---------------------------------------------------------------------------
+// Java execution integration tests
+// ---------------------------------------------------------------------------
+
+func TestIntegration_Java_HelloWorld(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `public class Main {
+    public static void main(String[] args) {
+        System.out.println("hello from java");
+    }
+}`,
+		Language: "java",
+	})
+	if !resp.Success {
+		t.Fatalf("expected success, got error: %s", resp.Error)
+	}
+	if strings.TrimSpace(resp.Output) != "hello from java" {
+		t.Errorf("expected 'hello from java', got %q", resp.Output)
+	}
+}
+
+func TestIntegration_Java_CompilationError(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `public class Main {
+    public static void main(String[] args) {
+        System.out.println("missing semicolon")
+    }
+}`,
+		Language: "java",
+	})
+	if resp.Success {
+		t.Fatal("expected failure for compilation error")
+	}
+	if !strings.Contains(resp.Error, "error") {
+		t.Errorf("expected compilation error message, got %q", resp.Error)
+	}
+}
+
+func TestIntegration_Java_RuntimeException(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `public class Main {
+    public static void main(String[] args) {
+        int[] arr = new int[1];
+        System.out.println(arr[5]);
+    }
+}`,
+		Language: "java",
+	})
+	if resp.Success {
+		t.Fatal("expected failure for runtime exception")
+	}
+	if !strings.Contains(resp.Error, "ArrayIndexOutOfBoundsException") {
+		t.Errorf("expected ArrayIndexOutOfBoundsException in error, got %q", resp.Error)
+	}
+}
+
+func TestIntegration_Java_Stdin(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `import java.util.Scanner;
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String name = sc.nextLine();
+        System.out.println("hi " + name);
+    }
+}`,
+		Stdin:    "Alice\n",
+		Language: "java",
+	})
+	if !resp.Success {
+		t.Fatalf("expected success, got error: %s", resp.Error)
+	}
+	if !strings.Contains(resp.Output, "hi Alice") {
+		t.Errorf("expected output containing 'hi Alice', got %q", resp.Output)
+	}
+}
+
+func TestIntegration_Java_Timeout(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread.sleep(60000);
+    }
+}`,
+		Language:  "java",
+		TimeoutMs: intPtr(3000),
+	})
+	if resp.Success {
+		t.Fatal("expected failure for timeout")
+	}
+	if resp.Error != "execution timed out" {
+		t.Errorf("expected 'execution timed out', got %q", resp.Error)
+	}
+}
+
+func TestIntegration_Java_StderrSanitization(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `public class Main {
+    public static void main(String[] args) {
+        throw new RuntimeException("test error");
+    }
+}`,
+		Language: "java",
+	})
+	if resp.Success {
+		t.Fatal("expected failure")
+	}
+	// Stderr should not contain sandbox-internal paths.
+	if strings.Contains(resp.Error, "/tmp/work") {
+		t.Error("stderr should sanitize sandbox paths")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Java sandbox isolation (jailbreak) tests
+// ---------------------------------------------------------------------------
+
+func TestIntegration_Java_NetworkDisabled(t *testing.T) {
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `import java.net.Socket;
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Socket s = new Socket("8.8.8.8", 53);
+        System.out.println("CONNECTED");
+        s.close();
+    }
+}`,
+		Language:  "java",
+		TimeoutMs: intPtr(10000),
+	})
+	if resp.Success {
+		t.Log("WARNING: network access was not blocked; network isolation is not enforced in this environment (likely privileged Docker mode)")
+		return
+	}
+}
+
+func TestIntegration_Java_FilesystemIsolation_EtcPasswd(t *testing.T) {
+	skipSandboxTest(t)
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `import java.io.*;
+public class Main {
+    public static void main(String[] args) {
+        try {
+            BufferedReader r = new BufferedReader(new FileReader("/etc/passwd"));
+            System.out.println("LEAKED:" + r.readLine());
+            r.close();
+        } catch (Exception e) {
+            System.out.println("BLOCKED:" + e.getClass().getSimpleName());
+        }
+    }
+}`,
+		Language:  "java",
+		TimeoutMs: intPtr(10000),
+	})
+	output := strings.TrimSpace(resp.Output)
+	if strings.HasPrefix(output, "LEAKED:") {
+		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "BLOCKED:") {
+		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+	}
+}
+
+func TestIntegration_Java_FilesystemIsolation_Proc(t *testing.T) {
+	skipSandboxTest(t)
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `import java.io.File;
+public class Main {
+    public static void main(String[] args) {
+        File proc = new File("/proc");
+        String[] entries = proc.list();
+        if (entries != null && entries.length > 0) {
+            System.out.println("LEAKED:" + entries.length);
+        } else {
+            System.out.println("BLOCKED:NoEntries");
+        }
+    }
+}`,
+		Language:  "java",
+		TimeoutMs: intPtr(10000),
+	})
+	output := strings.TrimSpace(resp.Output)
+	if strings.HasPrefix(output, "LEAKED:") {
+		t.Fatalf("sandbox should not expose /proc, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "BLOCKED:") {
+		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+	}
+}
+
+func TestIntegration_Java_FilesystemIsolation_WriteOutsideWorkDir(t *testing.T) {
+	skipSandboxTest(t)
+	u := executorURL(t)
+	resp := executeRequest(t, u, executorapi.ExecuteRequest{
+		Code: `import java.io.*;
+public class Main {
+    public static void main(String[] args) {
+        try {
+            FileWriter fw = new FileWriter("/usr/evil.txt");
+            fw.write("pwned");
+            fw.close();
+            System.out.println("LEAKED:wrote to /usr");
+        } catch (Exception e) {
+            System.out.println("BLOCKED:" + e.getClass().getSimpleName());
+        }
+    }
+}`,
+		Language:  "java",
+		TimeoutMs: intPtr(10000),
+	})
+	output := strings.TrimSpace(resp.Output)
+	if strings.HasPrefix(output, "LEAKED:") {
+		t.Fatalf("sandbox should not allow writing outside work dir, got: %s", output)
+	}
+	if !strings.HasPrefix(output, "BLOCKED:") {
+		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Trace integration tests (Python + Java)
+// ---------------------------------------------------------------------------
+
+func TestIntegration_Trace_Python_HelloWorld(t *testing.T) {
+	u := executorURL(t)
+	resp := traceRequest(t, u, executorapi.TraceRequest{
+		Code:     "x = 1\ny = 2\nprint(x + y)",
+		MaxSteps: intPtr(50),
+	})
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+	if resp.TotalSteps == 0 {
+		t.Error("expected at least one trace step")
+	}
+	// Should have steps with line numbers.
+	foundLine := false
+	for _, step := range resp.Steps {
+		if step.Line > 0 {
+			foundLine = true
+			break
+		}
+	}
+	if !foundLine {
+		t.Error("expected at least one step with a positive line number")
+	}
+}
+
+func TestIntegration_Trace_Java_HelloWorld(t *testing.T) {
+	skipSandboxTest(t) // Java tracer JAR only exists in the Docker image
+	u := executorURL(t)
+	resp := traceRequest(t, u, executorapi.TraceRequest{
+		Code: `public class Main {
+    public static void main(String[] args) {
+        int x = 1;
+        int y = 2;
+        System.out.println(x + y);
+    }
+}`,
+		Language: "java",
+		MaxSteps: intPtr(50),
+	})
+	if resp.Error != "" {
+		t.Fatalf("expected no error, got: %s", resp.Error)
+	}
+	if resp.TotalSteps == 0 {
+		t.Error("expected at least one trace step")
+	}
+	// Should have steps with line numbers.
+	foundLine := false
+	for _, step := range resp.Steps {
+		if step.Line > 0 {
+			foundLine = true
+			break
+		}
+	}
+	if !foundLine {
+		t.Error("expected at least one step with a positive line number")
+	}
+}

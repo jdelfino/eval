@@ -2,7 +2,9 @@ package sandbox
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -477,12 +479,12 @@ func TestPrepareCode(t *testing.T) {
 	seed := 42
 
 	tests := []struct {
-		name          string
-		code          string
-		stdin         string
-		randomSeed    *int
-		wantPreamble  bool
-		wantSeed      bool
+		name         string
+		code         string
+		stdin        string
+		randomSeed   *int
+		wantPreamble bool
+		wantSeed     bool
 	}{
 		{
 			name: "no stdin no seed",
@@ -512,7 +514,7 @@ func TestPrepareCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := prepareCode(tt.code, tt.stdin, tt.randomSeed)
+			got := prepareCode(tt.code, tt.stdin, tt.randomSeed, "")
 
 			// Must always end with the original code.
 			if !strings.HasSuffix(got, tt.code) {
@@ -595,6 +597,564 @@ func TestRunUnsafeRejectsMainPy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reserved") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestPrepareCodeLanguageGuard verifies that preambles are skipped for Java.
+func TestPrepareCodeLanguageGuard(t *testing.T) {
+	seed := 42
+	tests := []struct {
+		name         string
+		language     string
+		stdin        string
+		randomSeed   *int
+		wantPreamble bool
+		wantSeed     bool
+	}{
+		{
+			name:         "python with stdin gets preamble",
+			language:     "python",
+			stdin:        "hello\n",
+			wantPreamble: true,
+		},
+		{
+			name:         "empty language with stdin gets preamble",
+			language:     "",
+			stdin:        "hello\n",
+			wantPreamble: true,
+		},
+		{
+			name:         "java with stdin skips preamble",
+			language:     "java",
+			stdin:        "hello\n",
+			wantPreamble: false,
+		},
+		{
+			name:       "python with seed gets seed injection",
+			language:   "python",
+			randomSeed: &seed,
+			wantSeed:   true,
+		},
+		{
+			name:       "java with seed skips seed injection",
+			language:   "java",
+			randomSeed: &seed,
+			wantSeed:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := prepareCode("print('hi')", tt.stdin, tt.randomSeed, tt.language)
+
+			hasPreamble := strings.Contains(got, "_original_input = input")
+			if tt.wantPreamble && !hasPreamble {
+				t.Errorf("expected input echo preamble, got %q", got)
+			}
+			if !tt.wantPreamble && hasPreamble {
+				t.Errorf("did not expect input echo preamble, got %q", got)
+			}
+
+			hasSeed := strings.Contains(got, "random.seed(42)")
+			if tt.wantSeed && !hasSeed {
+				t.Errorf("expected random seed injection, got %q", got)
+			}
+			if !tt.wantSeed && hasSeed {
+				t.Errorf("did not expect random seed injection, got %q", got)
+			}
+		})
+	}
+}
+
+// TestRunJavaNsjailNotFound verifies that Run returns a meaningful error when nsjail is not found (Java path).
+func TestRunJavaNsjailNotFound(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		PythonPath:     "/usr/bin/python3",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "public class Main { public static void main(String[] args) {} }",
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when nsjail not found")
+	}
+	if !strings.Contains(err.Error(), "nsjail binary not found") {
+		t.Errorf("expected nsjail binary not found error, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJavaPlaceholder was removed — Java is now implemented.
+
+func TestExtractJavaClassName(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{
+			name:     "simple public class",
+			code:     "public class Foo { public static void main(String[] args) {} }",
+			expected: "Foo",
+		},
+		{
+			name:     "no public class falls back to Main",
+			code:     "class Bar { public static void main(String[] args) {} }",
+			expected: "Main",
+		},
+		{
+			name:     "public class Main",
+			code:     "public class Main { public static void main(String[] args) {} }",
+			expected: "Main",
+		},
+		{
+			name:     "multiple classes returns first public",
+			code:     "class Helper {}\npublic class Solution { public static void main(String[] args) {} }",
+			expected: "Solution",
+		},
+		{
+			name:     "empty code falls back to Main",
+			code:     "",
+			expected: "Main",
+		},
+		{
+			name:     "whitespace variations",
+			code:     "public   class   MyProgram { }",
+			expected: "MyProgram",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractJavaClassName(tt.code)
+			if got != tt.expected {
+				t.Errorf("extractJavaClassName(%q) = %q, want %q", tt.code, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSanitizeStderrJava(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "java file path replaced",
+			code:     "HelloWorld",
+			input:    "/tmp/work/HelloWorld.java:5: error: ';' expected",
+			expected: "Line 5: error: ';' expected",
+		},
+		{
+			name:     "java file path with subdirectory format",
+			code:     "Main",
+			input:    "/tmp/work/Main.java:10: error: class not found",
+			expected: "Line 10: error: class not found",
+		},
+		{
+			name:     "non-java path unchanged",
+			code:     "Foo",
+			input:    "Exception in thread \"main\" java.lang.NullPointerException",
+			expected: "Exception in thread \"main\" java.lang.NullPointerException",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeStderrJava(tt.input, tt.code)
+			if got != tt.expected {
+				t.Errorf("sanitizeStderrJava(%q, %q) = %q, want %q", tt.input, tt.code, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestRunUnsafeJavaExecutes verifies that RunUnsafe executes a Java program.
+func TestRunUnsafeJavaExecutes(t *testing.T) {
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) { System.out.println("hello from java"); } }`,
+		Language:  "java",
+		TimeoutMs: 15000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, "hello from java") {
+		t.Errorf("stdout = %q, want it to contain 'hello from java'", result.Stdout)
+	}
+}
+
+// TestRunUnsafeJavaCompilationError verifies that compilation errors are returned in stderr.
+func TestRunUnsafeJavaCompilationError(t *testing.T) {
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) { System.out.println("missing semicolon") } }`,
+		Language:  "java",
+		TimeoutMs: 15000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if result.ExitCode == 0 {
+		t.Error("expected non-zero exit code for compilation error")
+	}
+	if result.Stderr == "" {
+		t.Error("expected stderr to contain compilation error")
+	}
+}
+
+// TestRunJavaRejectsMainJavaFilename verifies that "Main.java" is reserved for Java.
+func TestRunJavaRejectsMainJavaFilename(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:     "public class Main { public static void main(String[] args) {} }",
+		Language: "java",
+		Files: []File{
+			{Name: "Main.java", Content: "malicious code"},
+		},
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for reserved filename Main.java")
+	}
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("expected reserved filename error, got: %v", err)
+	}
+}
+
+// TestRunJavaRejectsDuplicateSanitizedFilenames verifies that duplicate sanitized filenames are rejected for Java.
+func TestRunJavaRejectsDuplicateSanitizedFilenames(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:     "public class Main { public static void main(String[] args) {} }",
+		Language: "java",
+		Files: []File{
+			{Name: "foo/bar.txt", Content: "a"},
+			{Name: "foo_bar.txt", Content: "b"},
+		},
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for duplicate sanitized filenames")
+	}
+	if !strings.Contains(err.Error(), "duplicate filename") {
+		t.Errorf("expected duplicate filename error, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJavaRejectsReservedFilename verifies that an attached file
+// named after the Java class file is rejected.
+func TestRunUnsafeJavaRejectsReservedFilename(t *testing.T) {
+	cfg := Config{
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:     "public class Main { public static void main(String[] args) {} }",
+		Language: "java",
+		Files: []File{
+			{Name: "Main.java", Content: "malicious code"},
+		},
+		TimeoutMs: 5000,
+	}
+
+	_, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for reserved filename Main.java")
+	}
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("expected reserved filename error, got: %v", err)
+	}
+}
+
+// TestExtractJavaClassNameUsedAsFilename verifies that the extracted class name
+// is what gets used as the filename (not just "Main.java").
+func TestExtractJavaClassNameUsedAsFilename(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	// Class is named "Solution", not "Main" — the reserved file should be "Solution.java".
+	req := Request{
+		Code:     "public class Solution { public static void main(String[] args) {} }",
+		Language: "java",
+		Files: []File{
+			{Name: "Solution.java", Content: "malicious code"},
+		},
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for reserved filename Solution.java")
+	}
+	if !strings.Contains(err.Error(), "reserved") {
+		t.Errorf("expected reserved filename error, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJavaIsCommand verifies that when IsCommand=true and Language="java",
+// RunUnsafe executes the Code as a direct command with Args appended, not as
+// Java source to compile.
+func TestRunUnsafeJavaIsCommand(t *testing.T) {
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Build a simple command: "java -version" (outputs to stderr, exit 0).
+	// Using IsCommand=true means Code is executed as a shell invocation, not compiled.
+	req := Request{
+		Code:      javaPath + " -version",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 10000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe with IsCommand error: %v", err)
+	}
+	// java -version exits 0.
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+}
+
+// TestRunUnsafeJavaIsCommandWithArgs verifies that Args are passed correctly
+// when IsCommand=true.
+func TestRunUnsafeJavaIsCommandWithArgs(t *testing.T) {
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Compile a tiny Java class that prints its first argument.
+	tempDir, err := os.MkdirTemp("", "test-java-cmd-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	helperSrc := `public class EchoArg { public static void main(String[] args) { if (args.length > 0) System.out.println(args[0]); } }`
+	if err := os.WriteFile(filepath.Join(tempDir, "EchoArg.java"), []byte(helperSrc), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	compileCmd := exec.Command(javacPath, filepath.Join(tempDir, "EchoArg.java"))
+	compileCmd.Dir = tempDir
+	if out, err := compileCmd.CombinedOutput(); err != nil {
+		t.Skipf("compile helper failed (java unavailable?): %v: %s", err, out)
+	}
+
+	// Now run via IsCommand path: "java -cp <tempDir> EchoArg" with Args=["hello-from-args"].
+	req := Request{
+		Code:      javaPath + " -cp " + tempDir + " EchoArg",
+		Language:  "java",
+		IsCommand: true,
+		Args:      []string{"hello-from-args"},
+		TimeoutMs: 10000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe with IsCommand and args error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
+	}
+	if !strings.Contains(result.Stdout, "hello-from-args") {
+		t.Errorf("stdout = %q, want it to contain 'hello-from-args'", result.Stdout)
+	}
+}
+
+// TestRunUnsafeJavaIsCommandEmptyCode verifies that IsCommand=true with an empty
+// Code field returns an error rather than panicking or compiling an empty file.
+func TestRunUnsafeJavaIsCommandEmptyCode(t *testing.T) {
+	cfg := Config{
+		JavaPath:       "/usr/bin/java",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	_, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for empty command Code with IsCommand=true")
+	}
+	if !strings.Contains(err.Error(), "Code is empty") {
+		t.Errorf("expected empty Code error, got: %v", err)
+	}
+}
+
+// TestRunJavaIsCommandNsjailNotFound verifies that Run with IsCommand=true and
+// Language="java" returns nsjail-not-found error (same gate as normal java path).
+func TestRunJavaIsCommandNsjailNotFound(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "java -cp /path/to/tracer.jar JavaTracer",
+		Language:  "java",
+		IsCommand: true,
+		Args:      []string{"student code", "", "5000"},
+		TimeoutMs: 10000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when nsjail not found")
+	}
+	if !strings.Contains(err.Error(), "nsjail binary not found") {
+		t.Errorf("expected nsjail binary not found error, got: %v", err)
+	}
+}
+
+// TestRunJavaIsCommandEmptyCode verifies that Run (nsjail) with IsCommand=true
+// and empty Code returns an error rather than executing an empty command.
+func TestRunJavaIsCommandEmptyCode(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     "/nonexistent/nsjail",
+		JavaPath:       "/usr/bin/java",
+		JavacPath:      "/usr/bin/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error for empty command Code with IsCommand=true")
+	}
+	// May be "nsjail binary not found" OR "Code is empty" depending on check order.
+	// Both are valid error responses; just confirm we get an error.
+}
+
+// TestRunUnsafeJavaIsCommandDoesNotCompile verifies that IsCommand=true does NOT
+// attempt to compile the Code field (regression: it must run the command as-is,
+// not treat Code as Java source).
+func TestRunUnsafeJavaIsCommandDoesNotCompile(t *testing.T) {
+	javaPath, err := exec.LookPath("java")
+	if err != nil {
+		t.Skip("java not found")
+	}
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found")
+	}
+
+	cfg := Config{
+		JavaPath:       javaPath,
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+
+	// Code is NOT valid Java source. If RunUnsafe tries to compile this, javac
+	// will fail and return a non-zero exit code. With IsCommand=true, it should
+	// be executed directly (as a shell command) — which will fail because
+	// "not-valid-java-source" is not a valid command either, but the error will
+	// be an exec error, not a compilation error in stderr.
+	req := Request{
+		Code:      "not-valid-java-source",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	// Either an error from exec (command not found) or non-zero exit code.
+	// The important thing: stderr must NOT contain "error:" (javac compile errors),
+	// meaning we did NOT attempt javac compilation.
+	if err != nil {
+		// exec.LookPath failed for "not-valid-java-source" — acceptable
+		return
+	}
+	if strings.Contains(result.Stderr, "error:") && strings.Contains(result.Stderr, ".java") {
+		t.Errorf("stderr looks like a javac compile error, which means IsCommand was ignored: %s", result.Stderr)
 	}
 }
 

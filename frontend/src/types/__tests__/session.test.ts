@@ -22,6 +22,7 @@ describe('Session type hierarchy', () => {
       class_id: null,
       tags: [],
       solution: null,
+      language: 'python',
       created_at: '2025-01-15T10:00:00.000Z',
       updated_at: '2025-01-15T10:00:00.000Z',
     },
@@ -91,7 +92,7 @@ describe('Session type hierarchy', () => {
 describe('SessionPublicState type', () => {
   it('SessionPublicState.problem is typed with title/description/starter_code', () => {
     const state: SessionPublicState = {
-      problem: { title: 'Test Problem', description: 'desc', starter_code: 'code' },
+      problem: { title: 'Test Problem', description: 'desc', starter_code: 'code', language: 'python' },
       featured_student_id: null,
       featured_code: null,
       join_code: 'ABC',

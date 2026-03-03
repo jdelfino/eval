@@ -596,3 +596,79 @@ func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+// --- Language validation tests ---
+
+func TestExecute_ValidateLanguage_EmptyIsOk(t *testing.T) {
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for empty language, got %d", w.Code)
+	}
+}
+
+func TestExecute_ValidateLanguage_PythonIsOk(t *testing.T) {
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for language=python, got %d", w.Code)
+	}
+}
+
+func TestExecute_ValidateLanguage_JavaIsOk(t *testing.T) {
+	// Java causes a sandbox error (not yet implemented), but validation passes.
+	// We use a captureRunner to avoid the sandbox error path.
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"public class Main {}","language":"java"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for language=java (validation passes), got %d", w.Code)
+	}
+}
+
+func TestExecute_ValidateLanguage_InvalidRejected(t *testing.T) {
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)","language":"ruby"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported language, got %d", w.Code)
+	}
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if got := errResp["error"]; !strings.Contains(got, "language") {
+		t.Errorf("expected language error message, got %q", got)
+	}
+}
+
+func TestExecute_LanguagePassedToSandbox(t *testing.T) {
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cap.req.Language != "python" {
+		t.Errorf("expected sandbox req.Language='python', got %q", cap.req.Language)
+	}
+}
+
+func TestExecute_JavaPathPassedToSandboxConfig(t *testing.T) {
+	cap := &captureRunner{}
+	cfg := defaultConfig()
+	cfg.JavaPath = "/usr/bin/java"
+	cfg.JavacPath = "/usr/bin/javac"
+	h := newHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doRequest(h, `{"code":"print(1)"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cap.cfg.JavaPath != "/usr/bin/java" {
+		t.Errorf("expected cfg.JavaPath='/usr/bin/java', got %q", cap.cfg.JavaPath)
+	}
+	if cap.cfg.JavacPath != "/usr/bin/javac" {
+		t.Errorf("expected cfg.JavacPath='/usr/bin/javac', got %q", cap.cfg.JavacPath)
+	}
+}

@@ -777,7 +777,7 @@ describe('CodeEditor - Debugger Output Display', () => {
         <CodeEditor
           code="# Empty code"
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: null, starter_code: null }}
+          problem={{ title: 'Test Problem', description: null, starter_code: null, language: 'python' }}
         />
       );
       expect(screen.getByText('No output yet.')).toBeInTheDocument();
@@ -800,6 +800,7 @@ describe('CodeEditor - Form Interaction', () => {
     created_at: new Date('2024-01-01T00:00:00Z'),
     updated_at: new Date('2024-01-01T00:00:00Z'),
     author_id: 'test-author',
+    language: 'python',
   };
 
   beforeEach(() => {
@@ -984,6 +985,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1004,6 +1006,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1024,6 +1027,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1044,6 +1048,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1066,6 +1071,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1087,6 +1093,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(<CodeEditor code="" onChange={jest.fn()} problem={problem} onLoadStarterCode={jest.fn()} />);
@@ -1121,6 +1128,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1146,6 +1154,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1171,6 +1180,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1196,6 +1206,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1237,6 +1248,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1260,6 +1272,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     const { rerender } = render(
@@ -1301,6 +1314,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       execution_settings: {},
       created_at: new Date(),
       updated_at: new Date(),
+      language: 'python',
     };
 
     render(
@@ -1348,7 +1362,7 @@ describe('CodeEditor - Empty States', () => {
         <CodeEditor
           code=""
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: 'A test problem', starter_code: null }}
+          problem={{ title: 'Test Problem', description: 'A test problem', starter_code: null, language: 'python' }}
         />
       );
       expect(screen.getByText('No output yet.')).toBeInTheDocument();
@@ -1360,7 +1374,7 @@ describe('CodeEditor - Empty States', () => {
         <CodeEditor
           code="print('Hello, World!')"
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: null, starter_code: null }}
+          problem={{ title: 'Test Problem', description: null, starter_code: null, language: 'python' }}
           execution_result={{ success: true, output: 'Hello, World!', error: '', execution_time_ms: 10 }}
         />
       );
@@ -1387,7 +1401,7 @@ describe('CodeEditor - Empty States', () => {
         <CodeEditor
           code=""
           onChange={jest.fn()}
-          problem={{ title: 'Test Problem', description: 'Description here', starter_code: null }}
+          problem={{ title: 'Test Problem', description: 'Description here', starter_code: null, language: 'python' }}
         />
       );
       expect(screen.getByRole('button', { name: 'Problem' })).toBeInTheDocument();

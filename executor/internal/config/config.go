@@ -18,6 +18,9 @@ type Config struct {
 	// Sandbox Configuration
 	NsjailPath     string `env:"NSJAIL_PATH" envDefault:"/usr/bin/nsjail"`
 	PythonPath     string `env:"PYTHON_PATH" envDefault:"/usr/bin/python3"`
+	JavaPath       string `env:"JAVA_PATH" envDefault:"/usr/bin/java"`
+	JavacPath      string `env:"JAVAC_PATH" envDefault:"/usr/bin/javac"`
+	TracerJarPath  string `env:"TRACER_JAR_PATH" envDefault:"/usr/lib/java-tracer.jar"`
 	DisableSandbox bool   `env:"DISABLE_SANDBOX" envDefault:"false"`
 
 	// Execution Limits

@@ -84,6 +84,7 @@ export interface Problem {
   class_id: string | null;
   tags: string[];
   solution: string | null;
+  language: string;
   created_at: string;
   updated_at: string;
 }
@@ -160,6 +161,7 @@ export interface SessionPublicProblem {
   title: string;
   description: string | null;
   starter_code: string | null;
+  language: string;
 }
 
 export interface SessionPublicState {

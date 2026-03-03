@@ -122,6 +122,7 @@ describe('SessionView', () => {
     test_cases: null,
     execution_settings: null,
     solution: null,
+    language: 'python',
     created_at: new Date('2024-01-01'),
     updated_at: new Date('2024-01-02'),
   };

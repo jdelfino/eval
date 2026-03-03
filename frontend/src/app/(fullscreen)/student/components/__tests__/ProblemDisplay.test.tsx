@@ -21,6 +21,7 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     author_id: 'author-1',
     class_id: 'test-class-id',
     tags: [],
+    language: 'python',
     created_at: new Date('2024-01-01T00:00:00Z'),
     updated_at: new Date('2024-01-01T00:00:00Z'),
     ...overrides,

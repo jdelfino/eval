@@ -31,7 +31,7 @@ func scanStudentWorkWithProblem(row interface{ Scan(dest ...any) error }) (*Stud
 		&swp.Problem.ID, &swp.Problem.NamespaceID, &swp.Problem.Title, &swp.Problem.Description,
 		&swp.Problem.StarterCode, &swp.Problem.TestCases, &swp.Problem.ExecutionSettings,
 		&swp.Problem.AuthorID, &swp.Problem.ClassID, &swp.Problem.Tags, &swp.Problem.Solution,
-		&swp.Problem.CreatedAt, &swp.Problem.UpdatedAt,
+		&swp.Problem.Language, &swp.Problem.CreatedAt, &swp.Problem.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *Store) GetStudentWork(ctx context.Context, id uuid.UUID) (*StudentWorkW
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
 		sw.code, sw.execution_settings, sw.created_at, sw.last_update,
 		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
-		p.author_id, p.class_id, p.tags, p.solution, p.created_at, p.updated_at
+		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at
 		FROM student_work sw
 		JOIN problems p ON sw.problem_id = p.id
 		WHERE sw.id = $1`
@@ -226,7 +226,7 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 			&summary.Problem.ID, &summary.Problem.NamespaceID, &summary.Problem.Title, &summary.Problem.Description,
 			&summary.Problem.StarterCode, &summary.Problem.TestCases, &summary.Problem.ExecutionSettings,
 			&summary.Problem.AuthorID, &summary.Problem.ClassID, &summary.Problem.Tags, &summary.Problem.Solution,
-			&summary.Problem.CreatedAt, &summary.Problem.UpdatedAt,
+			&summary.Problem.Language, &summary.Problem.CreatedAt, &summary.Problem.UpdatedAt,
 			// SectionProblem fields
 			&summary.PublishedAt,
 			// StudentWork fields (nullable)

@@ -28,6 +28,7 @@ func newTestServer(t *testing.T) *Server {
 		LogLevel:    "info",
 		NsjailPath:  "/usr/bin/nsjail",
 		PythonPath:  "/usr/bin/python3",
+		JavaPath:    "/usr/bin/java",
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()
@@ -61,6 +62,7 @@ func TestReadyz_BinariesExist(t *testing.T) {
 		Environment: "local",
 		NsjailPath:  os.Args[0], // test binary itself
 		PythonPath:  os.Args[0],
+		JavaPath:    os.Args[0],
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()
@@ -87,6 +89,50 @@ func TestReadyz_BinariesExist(t *testing.T) {
 	}
 	if resp.Components["python"] != "ok" {
 		t.Errorf("python component = %s, want ok", resp.Components["python"])
+	}
+	if resp.Components["java"] != "ok" {
+		t.Errorf("java component = %s, want ok", resp.Components["java"])
+	}
+}
+
+func TestReadyz_JavaBinaryMissing_StillHealthy(t *testing.T) {
+	cfg := &config.Config{
+		Port:        8081,
+		Environment: "local",
+		NsjailPath:  os.Args[0], // test binary itself — present
+		PythonPath:  os.Args[0], // present
+		JavaPath:    "/nonexistent/java",
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	// Java is optional — missing Java should not make the service unhealthy
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp readyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "ok" {
+		t.Errorf("status = %s, want ok", resp.Status)
+	}
+	if resp.Components["java"] != "unavailable" {
+		t.Errorf("java = %s, want unavailable", resp.Components["java"])
+	}
+	// nsjail and python should still be ok
+	if resp.Components["nsjail"] != "ok" {
+		t.Errorf("nsjail = %s, want ok", resp.Components["nsjail"])
+	}
+	if resp.Components["python"] != "ok" {
+		t.Errorf("python = %s, want ok", resp.Components["python"])
 	}
 }
 

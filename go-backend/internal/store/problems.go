@@ -8,7 +8,7 @@ import (
 )
 
 const problemColumns = `id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, tags, solution, created_at, updated_at`
+		       execution_settings, author_id, class_id, tags, solution, language, created_at, updated_at`
 
 func scanProblem(row interface{ Scan(dest ...any) error }) (*Problem, error) {
 	var p Problem
@@ -16,7 +16,7 @@ func scanProblem(row interface{ Scan(dest ...any) error }) (*Problem, error) {
 		&p.ID, &p.NamespaceID, &p.Title, &p.Description,
 		&p.StarterCode, &p.TestCases, &p.ExecutionSettings,
 		&p.AuthorID, &p.ClassID, &p.Tags, &p.Solution,
-		&p.CreatedAt, &p.UpdatedAt,
+		&p.Language, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -121,14 +121,20 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 // CreateProblem creates a new problem and returns the created record.
 func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error) {
 	query := `INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
-		                      execution_settings, author_id, class_id, tags, solution)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		                      execution_settings, author_id, class_id, tags, solution, language)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING ` + problemColumns
+
+	// Default to 'python' if language is not specified.
+	language := params.Language
+	if language == "" {
+		language = "python"
+	}
 
 	p, err := scanProblem(s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.Title, params.Description, params.StarterCode,
 		params.TestCases, params.ExecutionSettings, params.AuthorID, params.ClassID,
-		params.Tags, params.Solution,
+		params.Tags, params.Solution, language,
 	))
 	if err != nil {
 		return nil, err
@@ -172,6 +178,11 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 	// solution: if provided (non-nil), set it; otherwise keep current value
 	if params.Solution != nil {
 		query += "\n		    solution           = " + ac.Next(*params.Solution) + ","
+	}
+
+	// language: if provided (non-nil), set it; otherwise keep current value
+	if params.Language != nil {
+		query += "\n		    language           = " + ac.Next(*params.Language) + ","
 	}
 
 	query += `

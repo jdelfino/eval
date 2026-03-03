@@ -330,6 +330,9 @@ func TestCreateProblem_Success(t *testing.T) {
 			if params.AuthorID != userID {
 				t.Fatalf("unexpected author_id: %v", params.AuthorID)
 			}
+			if params.Language != "java" {
+				t.Fatalf("unexpected language: %v", params.Language)
+			}
 			return p, nil
 		},
 	}
@@ -338,6 +341,7 @@ func TestCreateProblem_Success(t *testing.T) {
 		"title":       "Two Sum",
 		"description": "Write a function that adds two numbers",
 		"test_cases":  json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
+		"language":    "java",
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -406,7 +410,9 @@ func TestCreateProblem_RBACForbidden(t *testing.T) {
 func TestUpdateProblem_Success(t *testing.T) {
 	p := testProblem()
 	newTitle := "Three Sum"
+	newLang := "java"
 	p.Title = newTitle
+	p.Language = newLang
 
 	repo := &mockProblemRepo{
 		updateProblemFn: func(_ context.Context, id uuid.UUID, params store.UpdateProblemParams) (*store.Problem, error) {
@@ -416,12 +422,16 @@ func TestUpdateProblem_Success(t *testing.T) {
 			if params.Title == nil || *params.Title != newTitle {
 				t.Fatalf("unexpected title: %v", params.Title)
 			}
+			if params.Language == nil || *params.Language != newLang {
+				t.Fatalf("unexpected language: %v", params.Language)
+			}
 			return p, nil
 		},
 	}
 
 	body, _ := json.Marshal(map[string]any{
-		"title": newTitle,
+		"title":    newTitle,
+		"language": newLang,
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+p.ID.String(), bytes.NewReader(body))
@@ -884,6 +894,53 @@ func TestListProblems_InvalidSortOrder(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateProblem_InvalidLanguage(t *testing.T) {
+	h := NewProblemHandler(nil)
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Test Problem",
+		"language": "ruby",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for invalid language, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateProblem_InvalidLanguage(t *testing.T) {
+	id := uuid.New()
+	h := NewProblemHandler(nil)
+	lang := "ruby"
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Test Problem",
+		"language": lang,
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for invalid language, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
