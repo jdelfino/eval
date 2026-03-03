@@ -277,6 +277,52 @@ describe('AuthContext', () => {
       consoleSpy.mockRestore();
     });
 
+    it('uses cached profile as fallback when fetchUserProfile fails due to race with acceptInvite', async () => {
+      // Simulate the race condition:
+      // 1. No cache at start — so onAuthStateChanged proceeds to fetch via fetchUserProfile
+      // 2. While that fetch is in-flight, acceptInvite runs and writes the profile to cache
+      // 3. The in-flight fetch fails (bootstrap 403)
+      // 4. The error handler should read the now-populated cache and use it instead of null.
+      const CACHE_KEY = 'eval:user-profile';
+
+      // No cache initially — this forces fetchUserProfile to be called (cache check fails)
+      sessionStorage.clear();
+
+      // getCurrentUser fails → bootstrap attempted → bootstrap also fails
+      // BUT: while the fetch is in flight, we simulate acceptInvite writing to the cache.
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      let resolveFetch: () => void;
+      const fetchInFlight = new Promise<void>((resolve) => { resolveFetch = resolve; });
+
+      mockGetCurrentUser.mockImplementationOnce(async () => {
+        // Simulate acceptInvite writing to cache while this fetch is in flight
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
+        // Then throw the 404 to trigger bootstrap path
+        throw notFoundError;
+      });
+      const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
+      mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        // Should use the cached profile instead of null
+        expect(result.current.user).toEqual(mockUser);
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      consoleSpy.mockRestore();
+    });
+
     it('also tries bootstrap on 401 from getCurrentUser', async () => {
       const unauthorizedError = Object.assign(new Error('Unauthorized'), { status: 401 });
       mockGetCurrentUser.mockRejectedValue(unauthorizedError);

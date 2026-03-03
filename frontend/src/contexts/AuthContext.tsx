@@ -8,7 +8,7 @@
  * signInWithPopup directly. onAuthStateChanged fires when that succeeds.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { getCurrentUser, bootstrapUser } from '@/lib/api/auth';
 import { USER_PROFILE_CACHE_KEY, PREVIEW_SECTION_KEY } from '@/lib/storage-keys';
 import type { User } from '@/types/api';
@@ -75,8 +75,17 @@ interface AuthContextType {
    * Swap the in-memory user (and sessionStorage cache) without triggering
    * an API fetch. Used by PreviewContext to install the preview student's
    * profile so that `user.id` is the preview student's ID everywhere.
+   * Also clears the auth flow gate and sets isLoading=false.
    */
   setUserProfile: (user: User) => void;
+  /**
+   * Signal that an explicit auth flow (invite acceptance, student registration)
+   * is about to trigger a Firebase sign-in. While active, onAuthStateChanged
+   * skips processing so it doesn't race with the flow that will call
+   * setUserProfile when the backend user is created.
+   * Cleared automatically by setUserProfile.
+   */
+  beginAuthFlow: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,6 +101,10 @@ interface AuthProviderProps {
 function FirebaseAuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Gate: when true, onAuthStateChanged skips processing. Set by beginAuthFlow(),
+  // cleared by setUserProfile(). Prevents onAuthStateChanged from racing with
+  // explicit flows (invite acceptance, registration) that create the backend user.
+  const authFlowActiveRef = useRef(false);
 
   const fetchUserProfile = useCallback(async (): Promise<User> => {
     try {
@@ -121,6 +134,13 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
       const { firebaseAuth } = await import('@/lib/firebase');
 
       unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+        // An explicit auth flow (invite acceptance, registration) is handling
+        // user creation. Skip processing — the flow will call setUserProfile()
+        // when the backend user is ready, which clears this gate.
+        if (authFlowActiveRef.current) {
+          return;
+        }
+
         if (firebaseUser) {
           try {
             // Force token refresh to avoid stale cached tokens on page load.
@@ -140,7 +160,11 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
             }
           } catch (error) {
             console.error('[Auth] Error fetching user profile:', error);
-            setUser(null);
+            // Before clearing user state, check if another flow (e.g.,
+            // acceptInvite or registerStudent) has written a valid profile
+            // to the cache while this fetch was in flight.
+            const fallback = readProfileCache();
+            setUser(fallback);
           }
         } else {
           setUser(null);
@@ -184,8 +208,14 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
   }, [fetchUserProfile]);
 
   const setUserProfile = useCallback((newUser: User) => {
+    authFlowActiveRef.current = false;
     writeProfileCache(newUser);
     setUser(newUser);
+    setIsLoading(false);
+  }, []);
+
+  const beginAuthFlow = useCallback(() => {
+    authFlowActiveRef.current = true;
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
@@ -195,7 +225,8 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     signOut,
     refreshUser,
     setUserProfile,
-  }), [user, isLoading, signOut, refreshUser, setUserProfile]);
+    beginAuthFlow,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile, beginAuthFlow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

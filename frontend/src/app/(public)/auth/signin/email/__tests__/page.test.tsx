@@ -48,6 +48,9 @@ describe('EmailSignInPage', () => {
   const mockPush = jest.fn();
   const mockRefreshUser = jest.fn();
 
+  const mockSetUserProfile = jest.fn();
+  const mockBeginAuthFlow = jest.fn();
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRefreshUser.mockResolvedValue(undefined);
@@ -57,6 +60,8 @@ describe('EmailSignInPage', () => {
     (useAuth as jest.Mock).mockReturnValue({
       isAuthenticated: false,
       refreshUser: mockRefreshUser,
+      setUserProfile: mockSetUserProfile,
+      beginAuthFlow: mockBeginAuthFlow,
     });
   });
 
@@ -95,6 +100,8 @@ describe('EmailSignInPage', () => {
       (useAuth as jest.Mock).mockReturnValue({
         isAuthenticated: true,
         refreshUser: mockRefreshUser,
+        setUserProfile: mockSetUserProfile,
+        beginAuthFlow: mockBeginAuthFlow,
       });
 
       render(<EmailSignInPage />);
@@ -138,7 +145,7 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       // Simulate AuthContext updating isAuthenticated
-      (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true, refreshUser: mockRefreshUser });
+      (useAuth as jest.Mock).mockReturnValue({ isAuthenticated: true, refreshUser: mockRefreshUser, setUserProfile: mockSetUserProfile, beginAuthFlow: mockBeginAuthFlow });
       rerender(<EmailSignInPage />);
 
       await waitFor(() => {
@@ -400,7 +407,30 @@ describe('EmailSignInPage', () => {
       expect(mockPush).not.toHaveBeenCalled();
     });
 
-    it('calls refreshUser after accepting invite to sync AuthContext before redirect', async () => {
+    it('calls setUserProfile with acceptInvite result to sync AuthContext cache before redirect', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'test@example.com' },
+      });
+      const inviteResult = { role: 'instructor' };
+      mockAcceptInvite.mockResolvedValue(inviteResult);
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockSetUserProfile).toHaveBeenCalledWith(inviteResult);
+      });
+      // setUserProfile must be called before the redirect
+      const setProfileOrder = mockSetUserProfile.mock.invocationCallOrder[0];
+      const pushOrder = mockPush.mock.invocationCallOrder[0];
+      expect(setProfileOrder).toBeLessThan(pushOrder);
+    });
+
+    it('does NOT call refreshUser after accepting invite (uses setUserProfile instead)', async () => {
       const user = userEvent.setup();
       mockSignInWithEmailAndPassword.mockResolvedValue({
         user: { uid: 'test-uid', email: 'test@example.com' },
@@ -414,12 +444,9 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(mockRefreshUser).toHaveBeenCalled();
+        expect(mockPush).toHaveBeenCalledWith('/instructor');
       });
-      // refreshUser must be called before the redirect
-      const refreshOrder = mockRefreshUser.mock.invocationCallOrder[0];
-      const pushOrder = mockPush.mock.invocationCallOrder[0];
-      expect(refreshOrder).toBeLessThan(pushOrder);
+      expect(mockRefreshUser).not.toHaveBeenCalled();
     });
 
     it('does NOT redirect to / when isAuthenticated becomes true (suppresses auto-redirect)', () => {
@@ -428,6 +455,8 @@ describe('EmailSignInPage', () => {
       (useAuth as jest.Mock).mockReturnValue({
         isAuthenticated: true,
         refreshUser: mockRefreshUser,
+        setUserProfile: mockSetUserProfile,
+        beginAuthFlow: mockBeginAuthFlow,
       });
 
       render(<EmailSignInPage />);

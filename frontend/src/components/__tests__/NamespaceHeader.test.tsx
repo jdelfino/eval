@@ -34,6 +34,7 @@ function mockAuthUser(overrides: Record<string, unknown> = {}) {
     signOut: jest.fn(),
     refreshUser: jest.fn(),
     setUserProfile: jest.fn(),
+    beginAuthFlow: jest.fn(),
   };
 }
 
@@ -246,6 +247,7 @@ describe('NamespaceHeader', () => {
         signOut: jest.fn(),
         refreshUser: jest.fn(),
         setUserProfile: jest.fn(),
+        beginAuthFlow: jest.fn(),
       });
 
       const { container } = render(<NamespaceHeader />);

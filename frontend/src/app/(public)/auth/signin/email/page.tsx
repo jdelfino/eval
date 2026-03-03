@@ -47,7 +47,7 @@ function EmailSignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || searchParams.get('token');
-  const { isAuthenticated, refreshUser } = useAuth();
+  const { isAuthenticated, setUserProfile, beginAuthFlow } = useAuth();
 
   // Redirect when authenticated (AuthContext picks up Firebase user).
   // Suppressed when invite param is present — acceptInvite handles the redirect instead.
@@ -76,11 +76,10 @@ function EmailSignInContent() {
     async (token: string) => {
       try {
         const data = await acceptInvite(token);
-        // Update AuthContext with the new user before redirecting.
-        // Without this, onAuthStateChanged races with acceptInvite and
-        // sets user to null (bootstrap 403), so the app layout bounces
-        // us back to sign-in.
-        await refreshUser();
+        // Write the profile to cache immediately so onAuthStateChanged finds it
+        // during hydration — eliminates the race where onAuthStateChanged's
+        // failed fetch overwrites the valid user with null.
+        setUserProfile(data);
         redirectBasedOnRole(data.role);
       } catch (error) {
         if (error instanceof ApiError) {
@@ -98,7 +97,7 @@ function EmailSignInContent() {
         setIsLoading(false);
       }
     },
-    [redirectBasedOnRole, refreshUser]
+    [redirectBasedOnRole, setUserProfile]
   );
 
   const validate = useCallback((): boolean => {
@@ -130,6 +129,13 @@ function EmailSignInContent() {
 
       setIsLoading(true);
       try {
+        // Gate onAuthStateChanged BEFORE signing in so it doesn't race with
+        // acceptInvite (which creates the backend user). Without this, the
+        // auth handler fires, fails to fetch the not-yet-created user profile,
+        // sets user=null, and the app layout redirects to signin.
+        if (inviteToken) {
+          beginAuthFlow();
+        }
         const { signInWithEmailAndPassword } = await import('firebase/auth');
         const { firebaseAuth } = await import('@/lib/firebase');
         await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
@@ -156,7 +162,7 @@ function EmailSignInContent() {
         setIsLoading(false);
       }
     },
-    [email, password, validate, inviteToken, handleAcceptInvite]
+    [email, password, validate, inviteToken, handleAcceptInvite, beginAuthFlow]
   );
 
   return (
