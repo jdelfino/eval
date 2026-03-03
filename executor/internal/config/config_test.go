@@ -12,6 +12,8 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("GCP_PROJECT_ID", "")
 	t.Setenv("NSJAIL_PATH", "")
 	t.Setenv("PYTHON_PATH", "")
+	t.Setenv("JAVA_PATH", "")
+	t.Setenv("JAVAC_PATH", "")
 	t.Setenv("DEFAULT_TIMEOUT_MS", "")
 	t.Setenv("MAX_CODE_BYTES", "")
 	t.Setenv("MAX_STDIN_BYTES", "")
@@ -37,6 +39,8 @@ func TestLoadDefaults(t *testing.T) {
 		{"LogLevel", cfg.LogLevel, "info"},
 		{"NsjailPath", cfg.NsjailPath, "/usr/bin/nsjail"},
 		{"PythonPath", cfg.PythonPath, "/usr/bin/python3"},
+		{"JavaPath", cfg.JavaPath, "/usr/bin/java"},
+		{"JavacPath", cfg.JavacPath, "/usr/bin/javac"},
 		{"DefaultTimeoutMS", cfg.DefaultTimeoutMS, 10000},
 		{"MaxCodeBytes", cfg.MaxCodeBytes, 102400},
 		{"MaxStdinBytes", cfg.MaxStdinBytes, 1048576},

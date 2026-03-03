@@ -453,3 +453,64 @@ func TestTrace_MetricsValidationCodeTooLarge(t *testing.T) {
 		t.Errorf("expected validation_errors_total{reason=code_too_large}=1, got %v", v)
 	}
 }
+
+// --- Language validation tests for trace handler ---
+
+func TestTrace_ValidateLanguage_EmptyIsOk(t *testing.T) {
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=1"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for empty language, got %d", w.Code)
+	}
+}
+
+func TestTrace_ValidateLanguage_PythonIsOk(t *testing.T) {
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=1","language":"python"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for language=python, got %d", w.Code)
+	}
+}
+
+func TestTrace_ValidateLanguage_JavaIsOk(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	h := newTraceHandler(cap.run, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for language=java (validation passes), got %d", w.Code)
+	}
+}
+
+func TestTrace_ValidateLanguage_InvalidRejected(t *testing.T) {
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=1","language":"ruby"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unsupported language, got %d", w.Code)
+	}
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if got := errResp["error"]; !strings.Contains(got, "language") {
+		t.Errorf("expected language error message, got %q", got)
+	}
+}
+
+func TestTrace_JavaPathPassedToSandboxConfig(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.JavaPath = "/usr/bin/java"
+	cfg.JavacPath = "/usr/bin/javac"
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cap.cfg.JavaPath != "/usr/bin/java" {
+		t.Errorf("expected cfg.JavaPath='/usr/bin/java', got %q", cap.cfg.JavaPath)
+	}
+	if cap.cfg.JavacPath != "/usr/bin/javac" {
+		t.Errorf("expected cfg.JavacPath='/usr/bin/javac', got %q", cap.cfg.JavacPath)
+	}
+}
