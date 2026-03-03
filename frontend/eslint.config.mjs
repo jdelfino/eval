@@ -37,7 +37,6 @@ export default [
       "jest.*.js",
       ".next/**",
       "node_modules/**",
-      "supabase/**",
       "ops/**",
       "e2e/**",
       "playwright.config.ts",
