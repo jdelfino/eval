@@ -126,7 +126,10 @@ function StudentRegistrationContent() {
         await registerStudent(code);
 
         setPageState({ status: 'success' });
-        await refreshUser();
+        // Refresh the cached profile so the destination page can render
+        // immediately, but don't block the redirect on it — the section
+        // page has its own auth loading state as a fallback.
+        refreshUser();
         router.push(`/sections/${info.section.id}`);
       } catch (backendError) {
         // Only clean up Firebase account if the user signed in during this flow
