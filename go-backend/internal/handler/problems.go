@@ -157,6 +157,12 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	lang, err := normalizeLanguage(req.Language)
+	if err != nil {
+		httputil.WriteError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.CreateProblem(r.Context(), store.CreateProblemParams{
 		NamespaceID:       authUser.NamespaceID,
@@ -169,7 +175,7 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ClassID:           req.ClassID,
 		Tags:              req.Tags,
 		Solution:          req.Solution,
-		Language:          req.Language,
+		Language:          lang,
 	})
 	if err != nil {
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
@@ -202,6 +208,15 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 	req, err := httpbind.BindJSON[updateProblemRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
+	}
+
+	if req.Language != nil {
+		normalized, langErr := normalizeLanguage(*req.Language)
+		if langErr != nil {
+			httputil.WriteError(w, http.StatusUnprocessableEntity, langErr.Error())
+			return
+		}
+		req.Language = &normalized
 	}
 
 	repos := store.ReposFromContext(r.Context())

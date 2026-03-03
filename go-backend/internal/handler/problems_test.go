@@ -885,6 +885,53 @@ func TestListProblems_InvalidSortOrder(t *testing.T) {
 	}
 }
 
+func TestCreateProblem_InvalidLanguage(t *testing.T) {
+	h := NewProblemHandler(nil)
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Test Problem",
+		"language": "ruby",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          uuid.New(),
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for invalid language, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateProblem_InvalidLanguage(t *testing.T) {
+	id := uuid.New()
+	h := NewProblemHandler(nil)
+	lang := "ruby"
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Test Problem",
+		"language": lang,
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/"+id.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for invalid language, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListProblems_FilteredSortBy(t *testing.T) {
 	p := testProblem()
 
