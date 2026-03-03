@@ -26,6 +26,12 @@ interface ProblemCreatorProps {
   class_id?: string | null;
 }
 
+const JAVA_DEFAULT_STARTER = `public class Main {
+    public static void main(String[] args) {
+
+    }
+}`;
+
 export default function ProblemCreator({
   problem_id = null,
   onProblemCreated,
@@ -36,6 +42,7 @@ export default function ProblemCreator({
   const [description, setDescription] = useState('');
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
+  const [language, setLanguage] = useState('python');
   const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -92,6 +99,7 @@ export default function ProblemCreator({
       setDescription(problem.description || '');
       setStarterCode(problem.starter_code || '');
       setSolution(problem.solution || '');
+      setLanguage(problem.language || 'python');
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
@@ -117,6 +125,14 @@ export default function ProblemCreator({
     setTags(flushed);
     setTagInput('');
     return flushed;
+  };
+
+  const handleLanguageChange = (newLanguage: string) => {
+    setLanguage(newLanguage);
+    // When switching to Java and starter code is empty, populate with Java default
+    if (newLanguage === 'java' && !starter_code.trim()) {
+      setStarterCode(JAVA_DEFAULT_STARTER);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,6 +161,7 @@ export default function ProblemCreator({
         description: description.trim() || null,
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
+        language,
         test_cases: [] as unknown[], // Test cases added separately
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
@@ -164,6 +181,7 @@ export default function ProblemCreator({
         setDescription('');
         setStarterCode('');
         setSolution('');
+        setLanguage('python');
         setStdin('');
         setRandomSeed(undefined);
         setAttachedFiles([]);
@@ -338,6 +356,26 @@ export default function ProblemCreator({
           </select>
         </div>
 
+        {/* Language selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <label htmlFor="problem-language" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Language</label>
+          <select
+            id="problem-language"
+            value={language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            style={{
+              padding: '0.375rem 0.5rem',
+              fontSize: '0.875rem',
+              border: '1px solid #ced4da',
+              borderRadius: '0.25rem',
+              minWidth: '100px',
+            }}
+          >
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+          </select>
+        </div>
+
         {/* Tags input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
           <label htmlFor="problem-tags" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Tags</label>
@@ -463,7 +501,7 @@ export default function ProblemCreator({
           onRandomSeedChange={setRandomSeed}
           attached_files={attached_files}
           onAttachedFilesChange={setAttachedFiles}
-          problem={{ title, description, starter_code }}
+          problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}
           onProblemEdit={(updates) => {
