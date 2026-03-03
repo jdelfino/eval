@@ -1,15 +1,6 @@
 name: Contract Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'go-backend/**'
-      - 'frontend/**'
-      - 'executor/**'
-      - 'migrations/**'
-      - 'scripts/seed.sql'
-      - 'scripts/contract-test-seed.sql'
   pull_request:
     branches: [main]
     paths:
