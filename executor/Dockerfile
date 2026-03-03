@@ -26,7 +26,17 @@ WORKDIR /nsjail
 RUN make
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build Go binary
+# Stage 2: Build Java tracer JAR
+# ---------------------------------------------------------------------------
+FROM eclipse-temurin:21-jdk AS java-builder
+
+WORKDIR /java-tracer
+
+COPY executor/internal/tracer/java/*.java ./
+RUN javac *.java && jar cf java-tracer.jar *.class
+
+# ---------------------------------------------------------------------------
+# Stage 3: Build Go binary
 # ---------------------------------------------------------------------------
 FROM golang:1.24-alpine AS go-builder
 
@@ -45,25 +55,29 @@ RUN CGO_ENABLED=0 go build \
     ./cmd/executor
 
 # ---------------------------------------------------------------------------
-# Stage 3: Runtime
+# Stage 4: Runtime
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 ca-certificates \
     libprotobuf32 libnl-3-200 libnl-route-3-200 \
+    openjdk-21-jdk-headless \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=nsjail-builder /nsjail/nsjail /usr/bin/nsjail
 COPY --from=go-builder /app/executor /executor
+COPY --from=java-builder /java-tracer/java-tracer.jar /usr/local/lib/java-tracer.jar
 COPY executor/seccomp-python.policy /etc/nsjail/seccomp-python.policy
+COPY executor/seccomp-java.policy /etc/nsjail/seccomp-java.policy
 
 # Create the chroot directory with pre-created mount points. nsjail uses this
 # as the filesystem root for sandboxed processes, so only explicitly bind-mounted
 # paths are visible. Mount point directories must exist because the chroot root
 # is remounted read-only before bind mounts are applied.
 RUN mkdir -p /sandbox-root/usr/bin /sandbox-root/usr/lib /sandbox-root/lib \
-    /sandbox-root/lib64 /sandbox-root/dev /sandbox-root/tmp
+    /sandbox-root/lib64 /sandbox-root/dev /sandbox-root/tmp \
+    /sandbox-root/usr/lib/jvm
 
 # NOTE: The executor process must run as root so nsjail can create namespaces
 # and chroot. Student code runs as nobody (UID 65534) inside the jail via
