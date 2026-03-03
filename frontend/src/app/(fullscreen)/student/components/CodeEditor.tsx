@@ -965,7 +965,7 @@ export default function CodeEditor({
           >
             <Editor
               height="100%"
-              defaultLanguage={(problem && 'language' in problem) ? (problem.language || 'python') : 'python'}
+              language={(problem && 'language' in problem) ? (problem.language || 'python') : 'python'}
               value={code}
               onChange={(value) => !isReadOnly && onChange(value || '')}
               onMount={handleEditorDidMount}

@@ -12,17 +12,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CodeEditor from '../CodeEditor';
 
-// Capture the defaultLanguage prop passed to the MockEditor
-let capturedDefaultLanguage: string | undefined;
+// Capture the language prop passed to the MockEditor
+let capturedLanguage: string | undefined;
 
-// Mock Monaco Editor - captures defaultLanguage prop
+// Mock Monaco Editor - captures language prop
 jest.mock('@monaco-editor/react', () => {
-  return function MockEditor({ value, onChange, defaultLanguage }: any) {
-    capturedDefaultLanguage = defaultLanguage;
+  return function MockEditor({ value, onChange, language }: any) {
+    capturedLanguage = language;
     return (
       <textarea
         data-testid="monaco-editor"
-        data-default-language={defaultLanguage}
+        data-language={language}
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
       />
@@ -62,7 +62,7 @@ jest.mock('@/lib/api/execute', () => ({
 describe('CodeEditor - Language Awareness', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedDefaultLanguage = undefined;
+    capturedLanguage = undefined;
   });
 
   const baseProblem = {
@@ -82,7 +82,7 @@ describe('CodeEditor - Language Awareness', () => {
   };
 
   describe('Monaco editor language', () => {
-    it('should use python as defaultLanguage when problem.language is python', () => {
+    it('should use python as language when problem.language is python', () => {
       const pythonProblem = { ...baseProblem, language: 'python' };
 
       render(
@@ -94,10 +94,10 @@ describe('CodeEditor - Language Awareness', () => {
       );
 
       const editor = screen.getByTestId('monaco-editor');
-      expect(editor).toHaveAttribute('data-default-language', 'python');
+      expect(editor).toHaveAttribute('data-language', 'python');
     });
 
-    it('should use java as defaultLanguage when problem.language is java', () => {
+    it('should use java as language when problem.language is java', () => {
       const javaProblem = { ...baseProblem, language: 'java' };
 
       render(
@@ -109,10 +109,10 @@ describe('CodeEditor - Language Awareness', () => {
       );
 
       const editor = screen.getByTestId('monaco-editor');
-      expect(editor).toHaveAttribute('data-default-language', 'java');
+      expect(editor).toHaveAttribute('data-language', 'java');
     });
 
-    it('should fall back to python as defaultLanguage when problem is null', () => {
+    it('should fall back to python as language when problem is null', () => {
       render(
         <CodeEditor
           code="print('hello')"
@@ -122,7 +122,7 @@ describe('CodeEditor - Language Awareness', () => {
       );
 
       const editor = screen.getByTestId('monaco-editor');
-      expect(editor).toHaveAttribute('data-default-language', 'python');
+      expect(editor).toHaveAttribute('data-language', 'python');
     });
   });
 
