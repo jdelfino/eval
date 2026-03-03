@@ -96,19 +96,17 @@ test.describe('Student Registration UI', () => {
     await page.goto(`/register/student?code=${codeOnly}`);
     await expect(page.locator('button:has-text("Continue to Register")')).toBeVisible({ timeout: 5_000 });
 
-    // Wait for the registration API POST to complete before asserting the URL.
-    // This ensures the API call finishes (including any CI timing variability)
-    // before we assert on the resulting redirect.
+    // Wait for the registration POST to complete before asserting the redirect.
     await Promise.all([
       page.waitForResponse(
         (resp) => resp.url().includes('/register-student') && resp.request().method() === 'POST' && resp.status() === 200,
-        { timeout: 15_000 }
+        { timeout: 5_000 }
       ),
       page.click('button:has-text("Continue to Register")'),
     ]);
 
-    // Wait for auto-registration and redirect to section detail page.
-    await page.waitForURL(/\/sections\//, { timeout: 10_000 });
+    // Redirect to section detail page should be near-instant after API returns.
+    await page.waitForURL(/\/sections\//, { timeout: 5_000 });
 
     // ===== STEP 6: Verify section detail page =====
     // Section name is h1, class name is in a paragraph below it
