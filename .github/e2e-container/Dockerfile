@@ -23,6 +23,7 @@ RUN apt-get update \
        docker-compose-v2 \
        psmisc \
        postgresql-client \
+       iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 # In GitHub Actions container jobs, the workspace is mounted at /__w inside
