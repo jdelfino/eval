@@ -1,0 +1,148 @@
+// Kafel seccomp policy for Java 21 inside nsjail.
+// Allows syscalls needed by the JVM on x86_64 Debian, based on the Python
+// policy with JVM-specific additions.
+// Unknown/dangerous syscalls are killed (SIGSYS).
+
+POLICY java {
+  ALLOW {
+    // --- Memory management ---
+    brk,
+    mmap,
+    munmap,
+    mprotect,
+    mremap,
+    madvise,
+    memfd_create,       // JVM uses memfd for anonymous executable memory (JIT)
+
+    // --- File I/O ---
+    read,
+    write,
+    readv,
+    writev,
+    pread64,
+    pwrite64,
+    openat,
+    close,
+    lseek,
+    dup,
+    dup2,
+    dup3,
+    fcntl,
+    flock,
+    pipe,
+    pipe2,
+    ioctl,          // isatty checks
+
+    // --- File metadata ---
+    fstat,
+    newfstatat,
+    statx,
+    access,
+    faccessat,
+    faccessat2,
+    readlink,
+    readlinkat,
+    getcwd,
+    getdents64,
+    umask,
+
+    // --- File operations (temp files, student writes) ---
+    unlink,
+    unlinkat,
+    rename,
+    renameat2,
+    mkdirat,
+    ftruncate,
+    fchmod,
+    fchmodat,
+
+    // --- Process lifecycle ---
+    exit_group,
+    exit,
+    getpid,
+    getppid,
+    gettid,
+    getuid,
+    getgid,
+    geteuid,
+    getegid,
+    getgroups,
+
+    // --- Architecture / TLS ---
+    arch_prctl,
+    set_tid_address,
+    set_robust_list,
+    get_robust_list,    // JVM queries robust list during thread teardown
+    prctl,
+    prlimit64,
+
+    // --- Signals ---
+    rt_sigaction,
+    rt_sigprocmask,
+    rt_sigreturn,
+    rt_sigpending,
+    sigaltstack,
+    tgkill,
+
+    // --- Threading / subprocess ---
+    futex,
+    clone,
+    clone3,             // newer glibc thread creation
+    wait4,
+    waitid,
+
+    // --- JVM scheduling / thread management ---
+    sched_getaffinity,  // JVM queries CPU affinity for thread pool sizing
+    sched_yield,        // JVM cooperative yielding in spin loops
+
+    // --- Async I/O (JVM NIO internals) ---
+    io_setup,
+    io_destroy,
+    io_submit,
+    io_getevents,
+
+    // --- Time ---
+    clock_gettime,
+    clock_getres,
+    clock_nanosleep,
+    gettimeofday,
+    nanosleep,
+
+    // --- Randomness ---
+    getrandom,
+
+    // --- Polling (NIO selectors) ---
+    poll,
+    ppoll,
+    select,
+    pselect6,
+    epoll_create1,
+    epoll_ctl,
+    epoll_wait,
+    epoll_pwait,
+    eventfd2,
+
+    // --- System info ---
+    sysinfo,
+    uname,
+
+    // --- Sockets (will fail in network ns, but avoid SIGSYS crash) ---
+    socket,
+    connect,
+    bind,
+    listen,
+    accept4,
+    sendto,
+    recvfrom,
+    sendmsg,
+    recvmsg,
+    shutdown,
+    getsockname,
+    getpeername,
+    getsockopt,
+    setsockopt,
+    socketpair
+  }
+}
+
+USE java DEFAULT KILL
