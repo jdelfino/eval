@@ -27,6 +27,7 @@ import * as path from 'path';
 export const EXCLUDED_FUNCTIONS: Record<string, string> = {
   'realtime-token/getRealtimeToken': 'Requires Centrifugo — covered by PLAT-pp4r.4',
   'system/resendSystemInvitation': 'Requires Resend email service',
+  'problems/generateSolution': 'Backend endpoint implemented in PLAT-rzin.2 — contract test to be added alongside backend',
 };
 
 // ---------------------------------------------------------------------------

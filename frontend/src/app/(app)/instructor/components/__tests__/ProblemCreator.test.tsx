@@ -25,6 +25,7 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
+  generateSolution: jest.fn(),
 }));
 
 // Mock useApiDebugger hook
@@ -581,6 +582,203 @@ describe('ProblemCreator Component', () => {
       await waitFor(() => {
         const select = screen.getByLabelText('Class *') as HTMLSelectElement;
         expect(select.value).toBe('class-2');
+      });
+    });
+  });
+
+  describe('Generate Solution', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      const { listClasses } = require('@/lib/api/classes');
+      listClasses.mockResolvedValue([]);
+    });
+
+    it('should render the Generate Solution button in the tab bar area', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByRole('button', { name: 'Generate Solution' })).toBeInTheDocument();
+    });
+
+    it('should disable Generate Solution button when description is empty', () => {
+      render(<ProblemCreator />);
+      const btn = screen.getByRole('button', { name: 'Generate Solution' });
+      expect(btn).toBeDisabled();
+    });
+
+    it('should enable Generate Solution button when description has content', () => {
+      render(<ProblemCreator />);
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Write a function that reverses a string.' },
+      });
+      const btn = screen.getByRole('button', { name: 'Generate Solution' });
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('should disable Generate Solution button while isSubmitting', async () => {
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+      fireEvent.change(screen.getByLabelText('Title *'), {
+        target: { value: 'Test' },
+      });
+
+      // Trigger submission
+      fireEvent.click(screen.getByText('Create Problem'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Creating...')).toBeInTheDocument();
+      });
+
+      const btn = screen.getByRole('button', { name: 'Generate Solution' });
+      expect(btn).toBeDisabled();
+    });
+
+    it('should call generateSolution API with description and starter_code, then populate solution and switch to solution tab', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def reverse(s): return s[::-1]' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Write a function that reverses a string.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Starter Code/), {
+        target: { value: 'def reverse(s):\n    pass' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      await waitFor(() => {
+        expect(generateSolution).toHaveBeenCalledWith({
+          description: 'Write a function that reverses a string.',
+          starter_code: 'def reverse(s):\n    pass',
+        });
+      });
+
+      // Should switch to solution tab and populate solution
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor-Solution Code')).toBeInTheDocument();
+        expect(screen.getByLabelText(/Solution Code/)).toHaveValue('def reverse(s): return s[::-1]');
+      });
+    });
+
+    it('should show error when generateSolution API fails', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockRejectedValue(new Error('AI generation failed'));
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('AI generation failed')).toBeInTheDocument();
+      });
+    });
+
+    it('should show generating state while API call is in progress', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Generating...' })).toBeInTheDocument();
+      });
+    });
+
+    it('should show confirmation dialog when solution already has content and cancel aborts generation', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'new solution' });
+      window.confirm = jest.fn().mockReturnValue(false); // User cancels
+
+      render(<ProblemCreator />);
+
+      // Set description
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Set existing solution content
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      fireEvent.change(screen.getByLabelText(/Solution Code/), {
+        target: { value: 'existing solution code' },
+      });
+
+      // Switch back to see the button in the tab bar
+      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      expect(window.confirm).toHaveBeenCalledWith('This will replace the existing solution. Continue?');
+      expect(generateSolution).not.toHaveBeenCalled();
+    });
+
+    it('should proceed with generation when solution has content and user confirms', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'new generated solution' });
+      window.confirm = jest.fn().mockReturnValue(true); // User confirms
+
+      render(<ProblemCreator />);
+
+      // Set description
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+
+      // Set existing solution content
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      fireEvent.change(screen.getByLabelText(/Solution Code/), {
+        target: { value: 'existing solution' },
+      });
+
+      // Switch back to starter tab
+      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      expect(window.confirm).toHaveBeenCalledWith('This will replace the existing solution. Continue?');
+
+      await waitFor(() => {
+        expect(generateSolution).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Solution Code/)).toHaveValue('new generated solution');
+      });
+    });
+
+    it('should call generateSolution with undefined starter_code when starter code is empty', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
+
+      render(<ProblemCreator />);
+
+      fireEvent.change(screen.getByLabelText('Description'), {
+        target: { value: 'Some description' },
+      });
+      // Leave starter_code empty
+
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+
+      await waitFor(() => {
+        expect(generateSolution).toHaveBeenCalledWith({
+          description: 'Some description',
+          starter_code: undefined,
+        });
       });
     });
   });

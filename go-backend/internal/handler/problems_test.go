@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
@@ -913,5 +915,149 @@ func TestListProblems_FilteredSortBy(t *testing.T) {
 	}
 	if capturedFilters.SortOrder != "desc" {
 		t.Errorf("expected SortOrder=desc, got %q", capturedFilters.SortOrder)
+	}
+}
+
+// setupGenerateSolutionHandler creates an http.Handler for GenerateSolution tests.
+func setupGenerateSolutionHandler(aiClient ai.Client) http.Handler {
+	h := NewGenerateSolutionHandler(aiClient)
+	r := chi.NewRouter()
+	r.Post("/problems/generate-solution", h.GenerateSolution)
+	return r
+}
+
+func TestGenerateSolution_Success(t *testing.T) {
+	aiClient := &mockAIClient{
+		generateSolutionFn: func(_ context.Context, req ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error) {
+			if req.ProblemDescription != "Write a function that adds two numbers" {
+				return nil, fmt.Errorf("unexpected description: %q", req.ProblemDescription)
+			}
+			if req.StarterCode != "def add(a, b):\n    pass" {
+				return nil, fmt.Errorf("unexpected starter_code: %q", req.StarterCode)
+			}
+			return &ai.GenerateSolutionResponse{Solution: "def add(a, b):\n    return a + b"}, nil
+		},
+	}
+
+	handler := setupGenerateSolutionHandler(aiClient)
+	body, _ := json.Marshal(map[string]any{
+		"description":  "Write a function that adds two numbers",
+		"starter_code": "def add(a, b):\n    pass",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp["solution"] != "def add(a, b):\n    return a + b" {
+		t.Errorf("expected solution %q, got %q", "def add(a, b):\n    return a + b", resp["solution"])
+	}
+}
+
+func TestGenerateSolution_EmptyDescription_Returns422(t *testing.T) {
+	aiClient := &mockAIClient{}
+
+	handler := setupGenerateSolutionHandler(aiClient)
+	body, _ := json.Marshal(map[string]any{
+		"description": "",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGenerateSolution_AIError_Returns500(t *testing.T) {
+	aiClient := &mockAIClient{
+		generateSolutionFn: func(_ context.Context, _ ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error) {
+			return nil, fmt.Errorf("ai: quota exceeded")
+		},
+	}
+
+	handler := setupGenerateSolutionHandler(aiClient)
+	body, _ := json.Marshal(map[string]any{
+		"description": "Write a function that adds two numbers",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGenerateSolution_NoAuth_Returns401(t *testing.T) {
+	aiClient := &mockAIClient{}
+
+	// Use the RBAC-wired handler so the RequirePermission middleware returns 401
+	// when no user is in context (mirroring production behaviour).
+	handler := setupGenerateSolutionHandlerWithRBAC(aiClient)
+	body, _ := json.Marshal(map[string]any{
+		"description": "Write a function that adds two numbers",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGenerateSolution_StarterCodeOptional(t *testing.T) {
+	var capturedReq ai.GenerateSolutionRequest
+	aiClient := &mockAIClient{
+		generateSolutionFn: func(_ context.Context, req ai.GenerateSolutionRequest) (*ai.GenerateSolutionResponse, error) {
+			capturedReq = req
+			return &ai.GenerateSolutionResponse{Solution: "def add(a, b):\n    return a + b"}, nil
+		},
+	}
+
+	handler := setupGenerateSolutionHandler(aiClient)
+	// Only description, no starter_code
+	body, _ := json.Marshal(map[string]any{
+		"description": "Write a function that adds two numbers",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/problems/generate-solution", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.StarterCode != "" {
+		t.Errorf("expected empty starter_code, got %q", capturedReq.StarterCode)
+	}
+	if capturedReq.ProblemDescription != "Write a function that adds two numbers" {
+		t.Errorf("expected description forwarded, got %q", capturedReq.ProblemDescription)
 	}
 }

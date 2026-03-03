@@ -96,6 +96,11 @@ func (g *GeminiClient) AnalyzeCode(ctx context.Context, req AnalyzeRequest) (*An
 	return &resp, nil
 }
 
+// GenerateSolution is not supported by the Gemini provider. Solution generation always uses Claude.
+func (g *GeminiClient) GenerateSolution(_ context.Context, _ GenerateSolutionRequest) (*GenerateSolutionResponse, error) {
+	return nil, fmt.Errorf("ai: solution generation is not supported by Gemini provider")
+}
+
 // buildResponseSchema returns the genai.Schema describing the expected JSON output.
 func buildResponseSchema() *genai.Schema {
 	issueSchema := &genai.Schema{

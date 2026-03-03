@@ -259,7 +259,45 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				r.With(readRL).Get("/instructor/dashboard", dashboardHandler.Dashboard)
 			})
 
-			r.Mount("/problems", handler.NewProblemHandler(sectionProblemHandler).Routes())
+			// Initialize AI clients early so they can be used by multiple handlers.
+			var geminiClient *ai.GeminiClient
+			if cfg.GeminiAPIKey != "" {
+				var geminiErr error
+				geminiClient, geminiErr = ai.NewGeminiClient(cfg.GeminiAPIKey)
+				if geminiErr != nil {
+					logger.Warn("failed to initialize Gemini client", "error", geminiErr)
+					geminiClient = nil
+				}
+			}
+
+			var claudeClient *ai.ClaudeClient
+			if cfg.AnthropicAPIKey != "" {
+				var claudeErr error
+				claudeClient, claudeErr = ai.NewClaudeClient(cfg.AnthropicAPIKey)
+				if claudeErr != nil {
+					logger.Warn("failed to initialize Claude client", "error", claudeErr)
+					claudeClient = nil
+				}
+			}
+
+			var aiClient ai.Client
+			if geminiClient == nil && claudeClient == nil {
+				aiClient = &ai.StubClient{}
+			} else {
+				aiClient = ai.NewRouterClient(geminiClient, claudeClient)
+			}
+
+			problemHandler := handler.NewProblemHandler(sectionProblemHandler)
+			r.Mount("/problems", problemHandler.Routes())
+			// Generate solution with AI (instructor+, rate-limited)
+			generateSolutionHandler := handler.NewGenerateSolutionHandler(aiClient)
+			r.Group(func(r chi.Router) {
+				r.Use(custommw.TimeoutOverride(60 * time.Second))
+				r.Use(custommw.RequirePermission(auth.PermContentManage))
+				r.With(
+					custommw.ForCategory(rl, "generateSolution", custommw.UserKey),
+				).Post("/problems/generate-solution", generateSolutionHandler.GenerateSolution)
+			})
 
 			// Student work routes
 			r.With(readRL).Get("/student-work/{id}", studentWorkHandler.Get)
@@ -351,32 +389,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Advanced session features (instructor+): AI analysis
 			// Rate limits stacked: per-user daily (most restrictive, checked first),
 			// global daily, then per-minute burst.
-			var geminiClient *ai.GeminiClient
-			if cfg.GeminiAPIKey != "" {
-				var geminiErr error
-				geminiClient, geminiErr = ai.NewGeminiClient(cfg.GeminiAPIKey)
-				if geminiErr != nil {
-					logger.Warn("failed to initialize Gemini client", "error", geminiErr)
-					geminiClient = nil
-				}
-			}
-
-			var claudeClient *ai.ClaudeClient
-			if cfg.AnthropicAPIKey != "" {
-				var claudeErr error
-				claudeClient, claudeErr = ai.NewClaudeClient(cfg.AnthropicAPIKey)
-				if claudeErr != nil {
-					logger.Warn("failed to initialize Claude client", "error", claudeErr)
-					claudeClient = nil
-				}
-			}
-
-			var aiClient ai.Client
-			if geminiClient == nil && claudeClient == nil {
-				aiClient = &ai.StubClient{}
-			} else {
-				aiClient = ai.NewRouterClient(geminiClient, claudeClient)
-			}
 			analyzeHandler := handler.NewAnalyzeHandler(aiClient)
 			r.Group(func(r chi.Router) {
 				r.Use(custommw.TimeoutOverride(120 * time.Second))

@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+func TestCategoryGenerateSolution_Properties(t *testing.T) {
+	if CategoryGenerateSolution.Name != "generateSolution" {
+		t.Errorf("CategoryGenerateSolution.Name = %q, want %q", CategoryGenerateSolution.Name, "generateSolution")
+	}
+	if CategoryGenerateSolution.Algorithm != "sliding" {
+		t.Errorf("CategoryGenerateSolution.Algorithm = %q, want %q", CategoryGenerateSolution.Algorithm, "sliding")
+	}
+	if CategoryGenerateSolution.Limit != 5 {
+		t.Errorf("CategoryGenerateSolution.Limit = %d, want %d", CategoryGenerateSolution.Limit, 5)
+	}
+	if CategoryGenerateSolution.Window != 1*time.Minute {
+		t.Errorf("CategoryGenerateSolution.Window = %v, want %v", CategoryGenerateSolution.Window, 1*time.Minute)
+	}
+}
+
 func TestCategoryClientError_Properties(t *testing.T) {
 	if CategoryClientError.Name != "clientError" {
 		t.Errorf("CategoryClientError.Name = %q, want %q", CategoryClientError.Name, "clientError")
@@ -48,6 +63,7 @@ func TestCategories_AllPresent(t *testing.T) {
 		{"read", "sliding", 100, time.Minute},
 		{"executorGlobal", "sliding", 1000, time.Minute},
 		{"clientError", "sliding", 60, time.Minute},
+		{"generateSolution", "sliding", 5, time.Minute},
 	}
 
 	if len(cats) != len(expected) {
