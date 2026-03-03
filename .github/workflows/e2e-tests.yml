@@ -23,12 +23,14 @@ on:
 
 env:
   GO_VERSION: '1.24'
-  NODE_VERSION: '20'
   EXECUTOR_REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+      options: --privileged
     permissions:
       contents: read
       id-token: write
@@ -41,11 +43,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go-backend/go.sum
 
-      - uses: actions/setup-node@v4
+      # npm cache — setup-node is not needed (Node.js is in the Playwright image)
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
 
       # Moved earlier — only needs checkout
       - uses: google-github-actions/auth@v2
@@ -65,19 +70,11 @@ jobs:
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "Executor code changed: $CHANGED"
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-
       # Run Go build and executor setup as background processes while npm ci
-      # and Playwright install run in the foreground (Playwright needs npm ci).
-      - name: "Parallel setup: npm ci + Playwright (fg), Go build + executor (bg)"
+      # runs in the foreground. Playwright browsers are already in the container image.
+      - name: "Parallel setup: npm ci (fg), Go build + executor (bg)"
         env:
           GH_TOKEN: ${{ github.token }}
-          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
           EXECUTOR_CHANGED: ${{ steps.executor-changed.outputs.changed }}
         run: |
           set -euo pipefail
@@ -144,15 +141,8 @@ jobs:
           ) &
           EXEC_PID=$!
 
-          # --- npm ci (foreground, needed before Playwright) ---
+          # --- npm ci (foreground) ---
           cd frontend && npm ci
-
-          # --- Playwright install (foreground, needs npm ci) ---
-          if [ "$PLAYWRIGHT_CACHE_HIT" = "true" ]; then
-            npx playwright install-deps chromium
-          else
-            npx playwright install --with-deps chromium
-          fi
 
           # --- Wait for background jobs ---
           FAILED=false
