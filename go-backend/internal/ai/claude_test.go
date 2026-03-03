@@ -698,3 +698,56 @@ func TestRouterClient_GenerateSolution_ErrorWhenClaudeNil(t *testing.T) {
 		t.Errorf("error message %q should contain 'Claude provider not configured'", err.Error())
 	}
 }
+
+// TestClaudeGenerateSolution_CustomInstructions_AppendedToPrompt verifies that
+// custom instructions appear in the prompt when provided.
+func TestClaudeGenerateSolution_CustomInstructions_AppendedToPrompt(t *testing.T) {
+	const customInstructions = "Only use built-in Python functions. No imports allowed."
+
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse("def solve(): pass"), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Write a sort function",
+		CustomInstructions: customInstructions,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(mock.capturedPrompt, "Additional constraints:") {
+		t.Errorf("prompt does not contain 'Additional constraints:' header")
+	}
+	if !strings.Contains(mock.capturedPrompt, customInstructions) {
+		t.Errorf("prompt does not contain custom instructions %q", customInstructions)
+	}
+}
+
+// TestClaudeGenerateSolution_NoCustomInstructions_NothingAppended verifies that
+// when custom instructions are empty, no "Additional constraints:" section is added.
+func TestClaudeGenerateSolution_NoCustomInstructions_NothingAppended(t *testing.T) {
+	mock := &mockMessageCreator{
+		fn: func(_ context.Context, _ anthropic.MessageNewParams) (*anthropic.Message, error) {
+			return makeClaudeTextResponse("def solve(): pass"), nil
+		},
+	}
+
+	c := newClaudeClientWithCreator(mock)
+
+	_, err := c.GenerateSolution(context.Background(), GenerateSolutionRequest{
+		ProblemDescription: "Write a sort function",
+		// CustomInstructions intentionally empty
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(mock.capturedPrompt, "Additional constraints:") {
+		t.Errorf("prompt should not contain 'Additional constraints:' when custom instructions are empty")
+	}
+}

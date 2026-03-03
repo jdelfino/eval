@@ -20,8 +20,9 @@ func NewGenerateSolutionHandler(aiClient ai.Client) *GenerateSolutionHandler {
 
 // generateSolutionRequest is the request body for POST /problems/generate-solution.
 type generateSolutionRequest struct {
-	Description string `json:"description" validate:"required,min=1"`
-	StarterCode string `json:"starter_code"`
+	Description        string `json:"description" validate:"required,min=1"`
+	StarterCode        string `json:"starter_code"`
+	CustomInstructions string `json:"custom_instructions"`
 }
 
 // generateSolutionResponse is the response body for POST /problems/generate-solution.
@@ -41,6 +42,7 @@ func (h *GenerateSolutionHandler) GenerateSolution(w http.ResponseWriter, r *htt
 	aiResp, err := h.aiClient.GenerateSolution(r.Context(), ai.GenerateSolutionRequest{
 		ProblemDescription: req.Description,
 		StarterCode:        req.StarterCode,
+		CustomInstructions: req.CustomInstructions,
 	})
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "AI solution generation failed")
