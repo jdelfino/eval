@@ -7,7 +7,9 @@
 if [ "$1" = "compose" ]; then
   shift
   HOST_DIR="${PWD/\/__w//home/runner/work}"
-  exec /usr/bin/docker.real compose --project-directory "$HOST_DIR" "$@"
+  # Compose reads docker-compose.yml client-side (inside the container at $PWD)
+  # but volume mounts resolve on the host (via --project-directory).
+  exec /usr/bin/docker.real compose -f "$PWD/docker-compose.yml" --project-directory "$HOST_DIR" "$@"
 else
   exec /usr/bin/docker.real "$@"
 fi
