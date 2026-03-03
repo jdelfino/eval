@@ -419,6 +419,7 @@ resource "kubernetes_config_map" "staging_app_config" {
     INVITE_BASE_URL               = var.invite_base_url
     RESEND_FROM_EMAIL             = var.resend_from_email
     FIREBASE_TENANT_ID            = google_identity_platform_tenant.staging.name
+    BOOTSTRAP_ADMIN_EMAIL         = "staging-admin@test.local"
   }
 
   depends_on = [kubernetes_namespace.staging]

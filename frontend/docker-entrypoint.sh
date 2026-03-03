@@ -25,4 +25,9 @@ replace_placeholder "__NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN__" "$NEXT_PUBLIC_FIREBAS
 replace_placeholder "__NEXT_PUBLIC_FIREBASE_PROJECT_ID__" "$NEXT_PUBLIC_FIREBASE_PROJECT_ID"
 replace_placeholder "__NEXT_PUBLIC_CENTRIFUGO_URL__" "$NEXT_PUBLIC_CENTRIFUGO_URL"
 
+# Tenant ID is optional — always replace placeholder so it becomes empty
+# string in production (falsy, so tenantId is not set on the Auth instance).
+find /app/.next -type f \( -name '*.js' -o -name '*.html' \) -exec \
+  sed -i "s|__NEXT_PUBLIC_FIREBASE_TENANT_ID__|${NEXT_PUBLIC_FIREBASE_TENANT_ID:-}|g" {} +
+
 exec "$@"

@@ -119,7 +119,7 @@ jobs:
   # Runs in-cluster test Job to validate the staging deployment.
 
   deploy-staging:
-    needs: [build-push-go-api, build-push-executor, build-push-frontend]
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, build-push-test-runner]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -162,7 +162,7 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
-      - name: Run in-cluster staging smoke test
+      - name: Run in-cluster E2E tests
         run: |
           SHA="${{ github.sha }}"
           SHORT_SHA="${SHA::7}"
@@ -170,14 +170,17 @@ jobs:
           # Clean up any previous test job
           kubectl delete job -n staging -l app=test-runner --ignore-not-found
 
-          # Create smoke test Job in the staging namespace.
+          # Read staging config values needed by the test runner.
+          # These come from the Terraform-managed ConfigMaps/Secrets.
+          TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
+          API_KEY=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.IDENTITY_PLATFORM_API_KEY}')
+          BOOTSTRAP_EMAIL=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.BOOTSTRAP_ADMIN_EMAIL}')
+
+          # Create E2E test Job in the staging namespace.
           # Runs inside the cluster so it can resolve staging services by
           # short name (http://frontend, http://go-api) without port-forward.
-          #
-          # NOTE: Full e2e tests (Playwright) require auth fixtures adapted for
-          # real IDP tenants (staging uses real Firebase, not the emulator).
-          # Until that's done, this Job runs a service-level smoke test that
-          # validates deployment health, API reachability, and basic responses.
+          # Uses the go-api service account for Workload Identity (GCP access
+          # token for IDP admin operations like setting emailVerified).
           kubectl apply -f - <<JOBEOF
           apiVersion: batch/v1
           kind: Job
@@ -188,78 +191,58 @@ jobs:
               app: test-runner
           spec:
             backoffLimit: 0
-            activeDeadlineSeconds: 120
+            activeDeadlineSeconds: 300
             ttlSecondsAfterFinished: 3600
             template:
               metadata:
                 labels:
                   app: test-runner
               spec:
+                serviceAccountName: go-api
                 restartPolicy: Never
                 containers:
-                  - name: smoke
-                    image: curlimages/curl:latest
-                    command: ["/bin/sh", "-c"]
-                    args:
-                      - |
-                        set -e
-                        echo "=== Staging smoke test ==="
-
-                        # 1. Frontend serves HTML
-                        echo -n "Frontend... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://frontend/)
-                        if [ "\$STATUS" = "200" ]; then echo "OK (\$STATUS)"; else echo "FAIL (\$STATUS)"; exit 1; fi
-
-                        # 2. Go API health
-                        echo -n "Go API /healthz... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://go-api/healthz)
-                        if [ "\$STATUS" = "200" ]; then echo "OK"; else echo "FAIL (\$STATUS)"; exit 1; fi
-
-                        # 3. Go API readiness
-                        echo -n "Go API /readyz... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://go-api/readyz)
-                        if [ "\$STATUS" = "200" ]; then echo "OK"; else echo "FAIL (\$STATUS)"; exit 1; fi
-
-                        # 4. Executor health
-                        echo -n "Executor /healthz... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://executor:8081/healthz)
-                        if [ "\$STATUS" = "200" ]; then echo "OK"; else echo "FAIL (\$STATUS)"; exit 1; fi
-
-                        # 5. Centrifugo health
-                        echo -n "Centrifugo /health... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://centrifugo:8000/health)
-                        if [ "\$STATUS" = "200" ]; then echo "OK"; else echo "FAIL (\$STATUS)"; exit 1; fi
-
-                        # 6. API returns auth error for unauthenticated request (validates middleware runs)
-                        echo -n "Go API auth gate... "
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://go-api/api/v1/auth/me)
-                        if [ "\$STATUS" = "401" ]; then echo "OK (401 as expected)"; else echo "FAIL (\$STATUS, expected 401)"; exit 1; fi
-
-                        echo "=== All staging smoke tests passed ==="
+                  - name: playwright
+                    image: $REGISTRY/test-runner:$SHA
+                    command: ["npx", "playwright", "test", "--reporter=list"]
+                    env:
+                      - name: BASE_URL
+                        value: "http://frontend"
+                      - name: API_BASE_URL
+                        value: "http://go-api"
+                      - name: FIREBASE_TENANT_ID
+                        value: "${TENANT_ID}"
+                      - name: FIREBASE_API_KEY
+                        value: "${API_KEY}"
+                      - name: FIREBASE_PROJECT_ID
+                        value: "eval-prod-485520"
+                      - name: BOOTSTRAP_ADMIN_EMAIL
+                        value: "${BOOTSTRAP_EMAIL}"
+                      - name: CI
+                        value: "true"
                     resources:
                       requests:
-                        cpu: 100m
-                        memory: 64Mi
+                        cpu: 500m
+                        memory: 1Gi
                       limits:
-                        cpu: 250m
-                        memory: 128Mi
+                        cpu: "2"
+                        memory: 2Gi
           JOBEOF
 
-          # Wait for Job completion (2 min timeout)
-          if ! kubectl wait --for=condition=complete job/staging-test-${SHORT_SHA} -n staging --timeout=120s 2>/dev/null; then
-            echo "::error::Staging smoke test failed or timed out"
-            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100 || true
+          # Wait for Job completion (5 min timeout for full E2E suite)
+          if ! kubectl wait --for=condition=complete job/staging-test-${SHORT_SHA} -n staging --timeout=300s 2>/dev/null; then
+            echo "::error::Staging E2E tests failed or timed out"
+            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=200 || true
             FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
             if [ "$FAILED" = "1" ]; then
-              echo "Smoke test job failed"
+              echo "E2E test job failed"
             else
-              echo "Smoke test job timed out"
+              echo "E2E test job timed out"
             fi
             exit 1
           fi
 
-          echo "Staging smoke test passed"
-          kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=50
+          echo "Staging E2E tests passed"
+          kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100
 
   # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
   # Only runs after staging is validated AND all unit/lint/integration tests pass.

@@ -21,17 +21,28 @@ import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
 import { bootstrapUser } from '../../src/lib/api/auth';
-import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
+import { createVerifiedTestUser, getTestToken } from './test-auth';
 import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
+
+// ── Production safety guard ─────────────────────────────────────────────────
+// Block tests from running against the production API URL.
+const PROD_URLS = ['eval.delquillan.com', 'eval-prod'];
+if (PROD_URLS.some(u => API_BASE.includes(u))) {
+  throw new Error(
+    `SAFETY: API_BASE_URL (${API_BASE}) looks like a production URL. ` +
+    'E2E tests must never run against production.'
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Initialize API clients for E2E context
 setBaseUrl(`${API_BASE}/api/v1`);
 setPublicBaseUrl(`${API_BASE}/api/v1`);
 
-// Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL set in ensure-test-api.sh
-const BOOTSTRAP_ADMIN_EMAIL = 'emulator-admin@test.local';
+// Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL on the target go-api
+const BOOTSTRAP_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
 const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
 
 /**
@@ -43,8 +54,8 @@ let cachedAdminToken: string | null = null;
 export async function getAdminToken(): Promise<string> {
   if (cachedAdminToken) return cachedAdminToken;
 
-  await createVerifiedEmulatorUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
-  const token = await getEmulatorToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+  await createVerifiedTestUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+  const token = await getTestToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
 
   // Bootstrap the admin user (idempotent — 409 means already done)
   try {
@@ -115,8 +126,8 @@ export async function registerStudent(
   password?: string
 ): Promise<User> {
   const userPassword = password || 'e2e-test-password-123'; // gitleaks:allow
-  await createVerifiedEmulatorUser(email, userPassword);
-  const token = await getEmulatorToken(email, userPassword);
+  await createVerifiedTestUser(email, userPassword);
+  const token = await getTestToken(email, userPassword);
   return withToken(token, () => apiRegisterStudent(joinCode, displayName));
 }
 

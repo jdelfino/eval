@@ -9,7 +9,7 @@
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
 import { createNamespace, createInvitation, acceptInvitation, getAdminToken } from './api-setup';
-import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
+import { createVerifiedTestUser, getTestToken } from './test-auth';
 
 // Generate unique namespace ID for each test
 function generateNamespaceId(): string {
@@ -28,7 +28,7 @@ interface LogCollector {
 
 interface TestFixtures {
   testNamespace: string;
-  // Setup an instructor user in the test namespace, returns the emulator token
+  // Setup an instructor user in the test namespace, returns the auth token
   setupInstructor: (username?: string) => Promise<{ token: string; email: string; externalId: string }>;
   // Log collector for capturing browser console logs from multiple pages
   logCollector: LogCollector;
@@ -93,9 +93,9 @@ export const test = base.extend<TestFixtures>({
       const externalId = `${username}-${testNamespace}`;
       const email = `${externalId}@test.local`;
 
-      // Create the user in the Firebase Auth Emulator with emailVerified=true
-      await createVerifiedEmulatorUser(email, DEFAULT_PASSWORD);
-      const token = await getEmulatorToken(email, DEFAULT_PASSWORD);
+      // Create the user in Firebase Auth with emailVerified=true
+      await createVerifiedTestUser(email, DEFAULT_PASSWORD);
+      const token = await getTestToken(email, DEFAULT_PASSWORD);
 
       // Get admin token for invitation creation
       const adminToken = await getAdminToken();

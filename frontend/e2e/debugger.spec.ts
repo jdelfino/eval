@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { createClass, createSection, startSession, createProblem, publishProblem, startSessionFromProblem, getOrCreateStudentWork, registerStudent } from './fixtures/api-setup';
-import { getEmulatorToken } from './fixtures/emulator-auth';
+import { getTestToken } from './fixtures/test-auth';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 /**
@@ -111,7 +111,7 @@ test.describe('Debugger', () => {
     const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
     // Get or create student work so we can navigate directly via work_id
-    const studentToken = await getEmulatorToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
+    const studentToken = await getTestToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
     const work = await getOrCreateStudentWork(studentToken, section.id, problem.id);
 
     // ===== STUDENT JOINS SESSION =====
