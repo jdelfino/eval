@@ -5,6 +5,7 @@
 #   - make (Makefile targets)
 #   - docker CLI + compose v2 (infrastructure: postgres, redis, centrifugo, executor)
 #   - psmisc (fuser, used by run-e2e-tests.sh)
+#   - postgresql-client (pg_isready, psql for migrations)
 #
 # Also includes a docker wrapper that translates container /__w paths to
 # host /home/runner/work paths for docker compose volume mounts.
@@ -21,6 +22,7 @@ RUN apt-get update \
        docker.io \
        docker-compose-v2 \
        psmisc \
+       postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # In GitHub Actions container jobs, the workspace is mounted at /__w inside
