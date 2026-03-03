@@ -13,6 +13,7 @@ import (
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
+	"github.com/jdelfino/eval/executor/internal/tracer"
 	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
@@ -512,5 +513,122 @@ func TestTrace_JavaPathPassedToSandboxConfig(t *testing.T) {
 	}
 	if cap.cfg.JavacPath != "/usr/bin/javac" {
 		t.Errorf("expected cfg.JavacPath='/usr/bin/javac', got %q", cap.cfg.JavacPath)
+	}
+}
+
+// --- Language routing tests ---
+
+// TestTrace_PythonLanguage_UsesPythonTracer verifies that an explicit python
+// language request routes through the embedded Python tracer (tracer.Script).
+func TestTrace_PythonLanguage_UsesPythonTracer(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	h := newTraceHandler(cap.run, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=5","language":"python"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	// Python path: sandbox Code must be the embedded tracer script (not student code).
+	if cap.req.Code != tracer.Script {
+		t.Errorf("expected sandbox Code to be tracer.Script for python, got something else (len=%d)", len(cap.req.Code))
+	}
+	// Language must be empty (or "python") — Python tracer runs as python.
+	if cap.req.Language != "" && cap.req.Language != "python" {
+		t.Errorf("expected sandbox Language to be '' or 'python', got %q", cap.req.Language)
+	}
+	// Args: [student_code, stdin, maxSteps]
+	if len(cap.req.Args) != 3 {
+		t.Fatalf("expected 3 args for python trace, got %d", len(cap.req.Args))
+	}
+	if cap.req.Args[0] != "x=5" {
+		t.Errorf("expected arg[0] to be student code, got %q", cap.req.Args[0])
+	}
+}
+
+// TestTrace_EmptyLanguage_UsesPythonTracer verifies that an omitted language
+// also routes through the Python tracer (default behavior).
+func TestTrace_EmptyLanguage_UsesPythonTracer(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	h := newTraceHandler(cap.run, metrics.NewNoop(), defaultTraceConfig())
+	w := doTraceRequest(h, `{"code":"x=5"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cap.req.Code != tracer.Script {
+		t.Errorf("expected sandbox Code to be tracer.Script for empty language, got len=%d", len(cap.req.Code))
+	}
+}
+
+// TestTrace_JavaLanguage_UsesJavaTracerInvocation verifies that a java language
+// request builds a sandbox.Request with Language="java", the jar invocation as
+// Code, and [student_code, stdin, maxSteps] as Args.
+func TestTrace_JavaLanguage_UsesJavaTracerInvocation(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"public class Main { public static void main(String[] a) {} }","language":"java","stdin":"hello","max_steps":200}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Sandbox Language must be "java" so the sandbox uses Java-appropriate settings.
+	if cap.req.Language != "java" {
+		t.Errorf("expected sandbox Language='java', got %q", cap.req.Language)
+	}
+
+	// Args must be [student_code, stdin, maxSteps] — same convention as Python.
+	if len(cap.req.Args) != 3 {
+		t.Fatalf("expected 3 args for java trace, got %d: %v", len(cap.req.Args), cap.req.Args)
+	}
+	if cap.req.Args[0] != "public class Main { public static void main(String[] a) {} }" {
+		t.Errorf("expected arg[0] to be student code, got %q", cap.req.Args[0])
+	}
+	if cap.req.Args[1] != "hello" {
+		t.Errorf("expected arg[1] to be stdin 'hello', got %q", cap.req.Args[1])
+	}
+	if cap.req.Args[2] != "200" {
+		t.Errorf("expected arg[2] to be '200', got %q", cap.req.Args[2])
+	}
+}
+
+// TestTrace_JavaLanguage_DefaultMaxSteps verifies default maxSteps is used
+// when max_steps is not specified for Java.
+func TestTrace_JavaLanguage_DefaultMaxSteps(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.TracerJarPath = "/usr/local/lib/java-tracer.jar"
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(cap.req.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(cap.req.Args))
+	}
+	// Default is 5000 steps.
+	if cap.req.Args[2] != "5000" {
+		t.Errorf("expected arg[2]='5000' (default max_steps), got %q", cap.req.Args[2])
+	}
+}
+
+// TestTrace_JavaLanguage_TracerJarPathInCode verifies the tracer JAR path is
+// encoded in the Code/invocation sent to the sandbox.
+func TestTrace_JavaLanguage_TracerJarPathInCode(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.TracerJarPath = "/custom/path/tracer.jar"
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"public class Main {}","language":"java"}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	// The sandbox Code must reference the JAR path so the sandbox knows what to run.
+	if !strings.Contains(cap.req.Code, "/custom/path/tracer.jar") {
+		t.Errorf("expected sandbox Code to contain jar path '/custom/path/tracer.jar', got: %q", cap.req.Code)
 	}
 }

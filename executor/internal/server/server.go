@@ -134,6 +134,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			PythonPath:              cfg.PythonPath,
 			JavaPath:                cfg.JavaPath,
 			JavacPath:               cfg.JavacPath,
+			TracerJarPath:           cfg.TracerJarPath,
 			MaxOutputBytes:          cfg.MaxOutputBytes,
 			MaxCodeBytes:            cfg.MaxCodeBytes,
 			MaxStdinBytes:           cfg.MaxStdinBytes,
