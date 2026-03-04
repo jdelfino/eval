@@ -461,7 +461,6 @@ resource "kubernetes_secret" "staging_app_secrets" {
 
   data = {
     OAUTH_CLIENT_SECRET      = module.identity_platform.oauth_client_secret
-    RESEND_API_KEY           = module.secrets.secret_values["resend-api-key"]
     DATABASE_USER            = module.cloudsql.database_user
     DATABASE_PASSWORD        = module.cloudsql.database_password
     DATABASE_URL             = "postgresql://${urlencode(module.cloudsql.database_user)}:${urlencode(module.cloudsql.database_password)}@${module.cloudsql.database_host}:5432/eval_staging"
