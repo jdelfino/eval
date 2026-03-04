@@ -90,8 +90,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go-backend/go.sum
-      - name: Warm Go build cache (race-instrumented for downstream test jobs)
-        run: go build -race ./...
+      - name: Warm Go build cache
+        run: go build ./...
         working-directory: go-backend
 
   # ── Frontend test jobs ──────────────────────────────────────────────────────
