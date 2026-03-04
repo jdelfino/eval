@@ -82,6 +82,14 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
       - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - name: Ensure base image exists
+        run: |
+          if ! docker pull $REGISTRY/test-runner-base:latest 2>/dev/null; then
+            echo "Base image not found, building..."
+            docker build -f docker/test-runner/Dockerfile.base \
+              -t $REGISTRY/test-runner-base:latest .
+            docker push $REGISTRY/test-runner-base:latest
+          fi
       - run: |
           docker build -f docker/test-runner/Dockerfile \
             --build-arg REGISTRY=$REGISTRY \
