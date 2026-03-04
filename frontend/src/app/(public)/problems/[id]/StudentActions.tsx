@@ -60,7 +60,7 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
       }
 
       const work = await getOrCreateStudentWork(targetSectionId, problem_id);
-      router.push(`/student?work_id=${work.id}`);
+      router.push(`/student?work_id=${work.id}&section_id=${targetSectionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start practice');
       setStarting(false);

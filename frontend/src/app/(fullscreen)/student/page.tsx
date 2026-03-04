@@ -26,10 +26,11 @@ function StudentPage() {
   const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
+  const sectionIdFromUrl = searchParams.get('section_id');
 
   // Core state
   const [workId] = useState<string | null>(workIdFromUrl);
-  const [sectionId, setSectionId] = useState<string | null>(null);
+  const [sectionId, setSectionId] = useState<string | null>(sectionIdFromUrl);
   const [problemId, setProblemId] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
@@ -45,6 +46,7 @@ function StudentPage() {
   const [mode, setMode] = useState<'loading' | 'practice' | 'live' | 'error'>('loading');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<Session[] | null>(null);
 
   // Execution state
   const [execution_result, setExecutionResult] = useState<any>(null);
@@ -132,36 +134,35 @@ function StudentPage() {
       });
   }, [sectionId]);
 
-  // Step 2: Check for active session matching this problem
+  // Step 2a: Fetch active sessions (starts immediately if sectionId from URL)
   useEffect(() => {
-    if (!sectionId || !problemId || mode !== 'loading') {
-      return;
-    }
+    if (!sectionId) return;
 
-    const checkActiveSession = async () => {
-      try {
-        const sessions = await getActiveSessions(sectionId);
-        const activeSession = sessions.find(
-          (s: Session) => s.status === 'active' && s.problem?.id === problemId
-        );
-
-        if (activeSession) {
-          // Active session found -> enter live mode
-          setActiveSessionId(activeSession.id);
-          setMode('live');
-        } else {
-          // No active session -> practice mode
-          setMode('practice');
-        }
-      } catch (err: any) {
+    getActiveSessions(sectionId)
+      .then(setActiveSessions)
+      .catch((err: any) => {
         console.error('Failed to check for active sessions:', err);
-        // Fall back to practice mode on error
-        setMode('practice');
-      }
-    };
+        setActiveSessions([]); // Fall back to practice mode
+      });
+  }, [sectionId]);
 
-    checkActiveSession();
-  }, [sectionId, problemId, mode]);
+  // Step 2b: Determine mode from active sessions + problem
+  useEffect(() => {
+    if (mode !== 'loading' || activeSessions === null || !problemId) return;
+
+    const activeSession = activeSessions.find(
+      (s: Session) => s.status === 'active' && s.problem?.id === problemId
+    );
+
+    if (activeSession) {
+      // Active session found -> enter live mode
+      setActiveSessionId(activeSession.id);
+      setMode('live');
+    } else {
+      // No active session -> practice mode
+      setMode('practice');
+    }
+  }, [mode, activeSessions, problemId]);
 
   // Step 3: Auto-join session in live mode
   const joinAttemptedRef = useRef<string | null>(null);
@@ -178,11 +179,6 @@ function StudentPage() {
 
     // Don't auto-join if student explicitly left
     if (sessionStorage.getItem(`left-session:${activeSessionId}`)) {
-      return;
-    }
-
-    // Wait for broadcast connection for live sessions
-    if (!isConnected && session?.status !== 'completed') {
       return;
     }
 
@@ -215,7 +211,7 @@ function StudentPage() {
     };
 
     performJoin();
-  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, isConnected, session, joinSession]);
+  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, joinSession]);
 
   // Detect session end in live mode
   useEffect(() => {
