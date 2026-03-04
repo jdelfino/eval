@@ -12,6 +12,87 @@ env:
   REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
 
 jobs:
+  # ── Inline build-push jobs ────────────────────────────────────────────────
+  # Inlined (not via workflow_call) so deploy-staging can depend on them
+  # independently of the test workflows. Images tagged with commit SHA.
+  # Harmless if tests later fail — never deployed to prod, age out via AR
+  # lifecycle policies.
+
+  build-push-go-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          docker build -f go-backend/Dockerfile -t $REGISTRY/go-api:${{ github.sha }} .
+          docker push $REGISTRY/go-api:${{ github.sha }}
+
+  build-push-executor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          docker build -f executor/Dockerfile \
+            -t $REGISTRY/executor:${{ github.sha }} \
+            -t $REGISTRY/executor:latest \
+            .
+          docker push $REGISTRY/executor:${{ github.sha }}
+          docker push $REGISTRY/executor:latest
+
+  build-push-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          docker build -f frontend/Dockerfile -t $REGISTRY/frontend:${{ github.sha }} .
+          docker push $REGISTRY/frontend:${{ github.sha }}
+
+  build-push-test-runner:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          docker build -f docker/test-runner/Dockerfile \
+            --build-arg REGISTRY=$REGISTRY \
+            -t $REGISTRY/test-runner:${{ github.sha }} \
+            .
+          docker push $REGISTRY/test-runner:${{ github.sha }}
+
+  # ── Test workflows (called in parallel, same as before) ───────────────────
+  # These run independently of the build-push jobs. deploy-prod gates on all
+  # of them passing, but deploy-staging does NOT wait for these.
+
   go-api:
     uses: ./.github/workflows/go-api.yaml
     secrets: inherit
@@ -33,55 +114,18 @@ jobs:
       contents: read
       id-token: write
 
-  deploy:
-    needs: [go-api, executor, frontend]
+  # ── Staging deploy (gates only on image availability) ─────────────────────
+  # Deploys to staging ASAP after images are pushed, before tests complete.
+  # Runs in-cluster test Job to validate the staging deployment.
+
+  deploy-staging:
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, build-push-test-runner]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-      actions: read
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for integration tests
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const sha = context.sha;
-            const workflowFiles = ['e2e-tests.yml', 'contract-tests.yml'];
-
-            for (const file of workflowFiles) {
-              const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
-                ...context.repo,
-                workflow_id: file,
-                head_sha: sha,
-              });
-
-              if (runs.length === 0) {
-                core.info(`No ${file} run found for ${sha.slice(0, 7)} — skipping`);
-                continue;
-              }
-
-              const run = runs[0];
-              core.info(`Waiting for ${file} run #${run.run_number} (${run.html_url})`);
-
-              let { status, conclusion } = run;
-              while (status !== 'completed') {
-                await new Promise(r => setTimeout(r, 15000));
-                const { data } = await github.rest.actions.getWorkflowRun({
-                  ...context.repo,
-                  run_id: run.id,
-                });
-                status = data.status;
-                conclusion = data.conclusion;
-                core.info(`  ${file}: ${status}${conclusion ? ` (${conclusion})` : ''}`);
-              }
-
-              if (conclusion !== 'success') {
-                core.setFailed(`${file} ${conclusion} for ${sha.slice(0, 7)}`);
-                return;
-              }
-              core.info(`${file} passed`);
-            }
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -104,7 +148,132 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
-      - name: Deploy
+      - name: Deploy to staging
+        run: |
+          cd k8s/overlays/staging
+          SHA="${{ github.sha }}"
+          kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
+          kustomize edit set image "executor=$REGISTRY/executor:$SHA"
+          kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
+          kubectl apply -k .
+      - name: Wait for staging rollout
+        run: |
+          kubectl rollout status deployment/go-api -n staging --timeout=120s
+          kubectl rollout status deployment/executor -n staging --timeout=120s
+          kubectl rollout status deployment/frontend -n staging --timeout=120s
+          kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+      - name: Run in-cluster E2E tests
+        run: |
+          SHA="${{ github.sha }}"
+          SHORT_SHA="${SHA::7}"
+
+          # Clean up any previous test job
+          kubectl delete job -n staging -l app=test-runner --ignore-not-found
+
+          # Read staging config values needed by the test runner.
+          # These come from the Terraform-managed ConfigMaps/Secrets.
+          TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
+          API_KEY=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.IDENTITY_PLATFORM_API_KEY}')
+          BOOTSTRAP_EMAIL=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.BOOTSTRAP_ADMIN_EMAIL}')
+
+          # Create E2E test Job in the staging namespace.
+          # Runs inside the cluster so it can resolve staging services by
+          # short name (http://frontend, http://go-api) without port-forward.
+          # Uses the go-api service account for Workload Identity (GCP access
+          # token for IDP admin operations like setting emailVerified).
+          kubectl apply -f - <<JOBEOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: staging-test-${SHORT_SHA}
+            namespace: staging
+            labels:
+              app: test-runner
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 300
+            ttlSecondsAfterFinished: 3600
+            template:
+              metadata:
+                labels:
+                  app: test-runner
+              spec:
+                serviceAccountName: go-api
+                restartPolicy: Never
+                containers:
+                  - name: playwright
+                    image: $REGISTRY/test-runner:$SHA
+                    command: ["npx", "playwright", "test", "--reporter=list"]
+                    env:
+                      - name: BASE_URL
+                        value: "http://frontend"
+                      - name: API_BASE_URL
+                        value: "http://go-api"
+                      - name: FIREBASE_TENANT_ID
+                        value: "${TENANT_ID}"
+                      - name: FIREBASE_API_KEY
+                        value: "${API_KEY}"
+                      - name: FIREBASE_PROJECT_ID
+                        value: "eval-prod-485520"
+                      - name: BOOTSTRAP_ADMIN_EMAIL
+                        value: "${BOOTSTRAP_EMAIL}"
+                      - name: CI
+                        value: "true"
+                    resources:
+                      requests:
+                        cpu: 500m
+                        memory: 1Gi
+                      limits:
+                        cpu: "2"
+                        memory: 2Gi
+          JOBEOF
+
+          # Wait for Job completion (5 min timeout for full E2E suite)
+          if ! kubectl wait --for=condition=complete job/staging-test-${SHORT_SHA} -n staging --timeout=300s 2>/dev/null; then
+            echo "::error::Staging E2E tests failed or timed out"
+            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=200 || true
+            FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
+            if [ "$FAILED" = "1" ]; then
+              echo "E2E test job failed"
+            else
+              echo "E2E test job timed out"
+            fi
+            exit 1
+          fi
+
+          echo "Staging E2E tests passed"
+          kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100
+
+  # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
+  # Only runs after staging is validated AND all unit/lint/integration tests pass.
+
+  deploy-prod:
+    needs: [deploy-staging, go-api, executor, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+          sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/google-cloud-sdk.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -qq
+          sudo apt-get install -y -qq google-cloud-cli-gke-gcloud-auth-plugin
+      - name: Get GKE credentials via Connect Gateway
+        run: |
+          for i in 1 2 3; do
+            gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
+              --project=eval-prod-485520 && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+      - name: Deploy to production
         run: |
           cd k8s/base
           SHA="${{ github.sha }}"
@@ -144,7 +313,7 @@ jobs:
           GCP_PROJECT_ID: eval-prod-485520
 
   notify-failure:
-    needs: deploy
+    needs: deploy-prod
     if: failure()
     runs-on: ubuntu-latest
     permissions:

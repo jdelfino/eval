@@ -21,9 +21,9 @@ import {
   createSection,
 } from './fixtures/api-setup';
 import {
-  createVerifiedEmulatorUser,
-  getEmulatorToken,
-} from './fixtures/emulator-auth';
+  createVerifiedTestUser,
+  getTestToken,
+} from './fixtures/test-auth';
 
 function generateNamespaceId(): string {
   return `e2e-reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -45,8 +45,8 @@ test.describe('Student Registration UI', () => {
     const invId = await createInvitation(instructorEmail, 'instructor', nsId, adminToken);
 
     const instructorPassword = 'instructor-pw-e2e'; // gitleaks:allow
-    await createVerifiedEmulatorUser(instructorEmail, instructorPassword);
-    const instructorToken = await getEmulatorToken(instructorEmail, instructorPassword);
+    await createVerifiedTestUser(instructorEmail, instructorPassword);
+    const instructorToken = await getTestToken(instructorEmail, instructorPassword);
     await acceptInvitation(invId, instructorToken, 'E2E Instructor');
 
     const cls = await createClass(instructorToken, `Registration Test Class ${nsId}`);
@@ -56,7 +56,7 @@ test.describe('Student Registration UI', () => {
     // Create student in emulator (emailVerified=true required by backend)
     const studentEmail = `student-${nsId}@test.local`;
     const studentPassword = 'student-pw-e2e'; // gitleaks:allow
-    await createVerifiedEmulatorUser(studentEmail, studentPassword);
+    await createVerifiedTestUser(studentEmail, studentPassword);
 
     // ===== STEP 1: Navigate to registration page and enter join code =====
     await page.goto('/register/student');

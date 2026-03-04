@@ -8,7 +8,7 @@ import {
   registerStudent,
   getOrCreateStudentWork,
 } from './fixtures/api-setup';
-import { getEmulatorToken } from './fixtures/emulator-auth';
+import { getTestToken } from './fixtures/test-auth';
 
 /**
  * Student Progress Review E2E Tests
@@ -53,7 +53,7 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     await registerStudent(section.join_code, studentEmail, studentDisplayName, studentPassword);
 
     // Create student work entry via API (simulates the student having started the problem)
-    const studentToken = await getEmulatorToken(studentEmail, studentPassword);
+    const studentToken = await getTestToken(studentEmail, studentPassword);
     await getOrCreateStudentWork(studentToken, section.id, problem.id);
 
     // ===== INSTRUCTOR NAVIGATES TO SECTION =====

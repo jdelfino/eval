@@ -361,3 +361,29 @@ func TestLoad_TracingCustomValues(t *testing.T) {
 		t.Errorf("TracingSampleRate = %v, want 0.5", cfg.TracingSampleRate)
 	}
 }
+
+func TestLoad_FirebaseTenantIDDefaultsToEmpty(t *testing.T) {
+	t.Setenv("FIREBASE_TENANT_ID", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.FirebaseTenantID != "" {
+		t.Errorf("FirebaseTenantID = %q, want empty string (production default, no tenant scoping)", cfg.FirebaseTenantID)
+	}
+}
+
+func TestLoad_FirebaseTenantIDCustomValue(t *testing.T) {
+	t.Setenv("FIREBASE_TENANT_ID", "staging-tenant-abc123")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() returned error: %v", err)
+	}
+
+	if cfg.FirebaseTenantID != "staging-tenant-abc123" {
+		t.Errorf("FirebaseTenantID = %q, want %q", cfg.FirebaseTenantID, "staging-tenant-abc123")
+	}
+}

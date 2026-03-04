@@ -15,7 +15,7 @@ import { test, expect, getAdminToken } from './fixtures/test-fixture';
 import { createNamespace, createInvitation } from './fixtures/api-setup';
 import { listSystemInvitations } from '../src/lib/api/system';
 import { configureTestAuth } from '../src/lib/auth-provider';
-import { createVerifiedEmulatorUser } from './fixtures/emulator-auth';
+import { createVerifiedTestUser } from './fixtures/test-auth';
 
 test.describe('Invitation Acceptance Flow', () => {
   test('Admin creates invitation, instructor accepts via email sign-in and accesses dashboard', async ({
@@ -56,7 +56,7 @@ test.describe('Invitation Acceptance Flow', () => {
     // calls acceptInvite and redirects based on role. This exercises a
     // real user-facing page with no test-specific code.
     const instructorPassword = 'test-password-123'; // gitleaks:allow
-    await createVerifiedEmulatorUser(instructorEmail, instructorPassword);
+    await createVerifiedTestUser(instructorEmail, instructorPassword);
 
     await page.goto(`/auth/signin/email?token=${encodeURIComponent(invitationId)}`);
     await page.fill('#email', instructorEmail);

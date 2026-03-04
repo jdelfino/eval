@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession } from './fixtures/api-setup';
-import { getEmulatorToken } from './fixtures/emulator-auth';
+import { getTestToken } from './fixtures/test-auth';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
@@ -43,7 +43,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT JOINS =====
       await signInAs(page, studentEmail);
-      const studentToken = await getEmulatorToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
+      const studentToken = await getTestToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
       const work1 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
       await page.goto(`/student?work_id=${work1.id}`);
       await expect(page.locator('.monaco-editor')).toBeVisible();

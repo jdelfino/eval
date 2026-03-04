@@ -1,11 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import { getPlaywrightBaseUrl } from './playwright-base-url';
 
 /**
  * Playwright configuration for E2E testing.
  *
- * Uses Firebase Auth Emulator for authentication.
- * The Go backend runs with FIREBASE_AUTH_EMULATOR_HOST set and the
- * Next.js frontend is built with NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST.
+ * Uses Firebase Auth Emulator for authentication in local/CI environments.
+ * For in-cluster staging tests, override BASE_URL env var to point at
+ * staging services (e.g. BASE_URL=http://frontend).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -31,8 +32,9 @@ export default defineConfig({
 
   /* Shared settings for all projects */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: 'http://localhost:3000',
+    /* Base URL to use in actions like `await page.goto('/')`.
+       Override with BASE_URL env var for in-cluster staging runs. */
+    baseURL: getPlaywrightBaseUrl(),
 
     /* Traces disabled — retain-on-failure causes ENOENT races with parallel
        workers writing to shared artifact dirs. Screenshots + video are enough. */

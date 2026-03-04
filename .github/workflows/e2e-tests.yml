@@ -1,15 +1,6 @@
 name: E2E Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'go-backend/**'
-      - 'frontend/**'
-      - 'executor/**'
-      - 'pkg/**'
-      - 'migrations/**'
-      - 'scripts/**'
   pull_request:
     branches: [main]
     paths:

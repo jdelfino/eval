@@ -369,3 +369,138 @@ module "centrifugo" {
 
   depends_on = [module.gke]
 }
+
+# -----------------------------------------------------------------------------
+# Staging Environment
+# -----------------------------------------------------------------------------
+
+# Staging database on same Cloud SQL instance
+resource "google_sql_database" "staging" {
+  name     = "eval_staging"
+  instance = module.cloudsql.instance_name
+}
+
+# Staging Identity Platform tenant
+resource "google_identity_platform_tenant" "staging" {
+  project               = var.project_id
+  display_name          = "staging"
+  allow_password_signup = true
+}
+
+# Staging namespace
+resource "kubernetes_namespace" "staging" {
+  metadata {
+    name = "staging"
+  }
+}
+
+# Staging app ConfigMap
+resource "kubernetes_config_map" "staging_app_config" {
+  metadata {
+    name      = "app-config"
+    namespace = "staging"
+  }
+
+  data = {
+    ENVIRONMENT                   = "staging"
+    GCP_PROJECT_ID                = var.project_id
+    GCP_REGION                    = var.region
+    IDENTITY_PLATFORM_API_KEY     = module.identity_platform.api_key
+    IDENTITY_PLATFORM_AUTH_DOMAIN = module.identity_platform.auth_domain
+    OAUTH_CLIENT_ID               = module.identity_platform.oauth_client_id
+    DATABASE_HOST                 = module.cloudsql.database_host
+    DATABASE_PORT                 = tostring(module.cloudsql.database_port)
+    DATABASE_NAME                 = "eval_staging"
+    DATABASE_MAX_CONNS            = "5"
+    CLOUDSQL_CONNECTION_NAME      = module.cloudsql.instance_connection_name
+    CENTRIFUGO_URL                = "http://centrifugo:8000"
+    EXECUTOR_URL                  = "http://executor:8081"
+    REDIS_HOST                    = "redis.staging.svc.cluster.local"
+    REDIS_PORT                    = "6379"
+    INVITE_BASE_URL               = var.invite_base_url
+    RESEND_FROM_EMAIL             = var.resend_from_email
+    FIREBASE_TENANT_ID            = google_identity_platform_tenant.staging.name
+    BOOTSTRAP_ADMIN_EMAIL         = "staging-admin@test.local"
+  }
+
+  depends_on = [kubernetes_namespace.staging]
+}
+
+# Staging app secrets (same credentials as prod)
+resource "kubernetes_secret" "staging_app_secrets" {
+  metadata {
+    name      = "app-secrets"
+    namespace = "staging"
+  }
+
+  data = {
+    OAUTH_CLIENT_SECRET      = module.identity_platform.oauth_client_secret
+    RESEND_API_KEY           = module.secrets.secret_values["resend-api-key"]
+    DATABASE_USER            = module.cloudsql.database_user
+    DATABASE_PASSWORD        = module.cloudsql.database_password
+    DATABASE_URL             = "postgresql://${urlencode(module.cloudsql.database_user)}:${urlencode(module.cloudsql.database_password)}@${module.cloudsql.database_host}:5432/eval_staging"
+    READER_DATABASE_USER     = module.cloudsql.reader_user
+    READER_DATABASE_PASSWORD = module.cloudsql.reader_password
+    CENTRIFUGO_API_KEY       = module.centrifugo_staging.api_key
+    CENTRIFUGO_TOKEN_SECRET  = module.centrifugo_staging.token_secret
+    GEMINI_API_KEY           = module.secrets.secret_values["gemini-api-key"]
+    ANTHROPIC_API_KEY        = module.secrets.secret_values["anthropic-api-key"]
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.staging]
+}
+
+# Staging frontend ConfigMap
+resource "kubernetes_config_map" "staging_frontend_config" {
+  metadata {
+    name      = "frontend-config"
+    namespace = "staging"
+  }
+
+  data = {
+    NEXT_PUBLIC_API_URL              = "/api/v1"
+    API_INTERNAL_URL                 = "http://go-api/api/v1"
+    NEXT_PUBLIC_FIREBASE_API_KEY     = module.identity_platform.api_key
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = module.identity_platform.auth_domain
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID  = var.project_id
+    NEXT_PUBLIC_CENTRIFUGO_URL       = "ws://centrifugo:8000/connection/websocket"
+    NEXT_PUBLIC_FIREBASE_TENANT_ID   = google_identity_platform_tenant.staging.name
+  }
+
+  depends_on = [kubernetes_namespace.staging]
+}
+
+# Staging Centrifugo config (namespace-relative Redis)
+module "centrifugo_staging" {
+  source = "../../modules/centrifugo"
+
+  environment  = var.environment
+  project_name = var.project_name
+  project_id   = var.project_id
+  region       = var.region
+
+  namespace       = "staging"
+  allowed_origins = []
+  redis_host      = "redis" # namespace-relative
+  redis_port      = 6379
+
+  depends_on = [module.gke, kubernetes_namespace.staging]
+}
+
+# Staging smoke-test secrets
+resource "kubernetes_secret" "staging_smoke_test_secrets" {
+  metadata {
+    name      = "smoke-test-secrets"
+    namespace = "staging"
+  }
+
+  data = {
+    SMOKE_TEST_PASSWORD = random_password.smoke_test.result
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.staging]
+}

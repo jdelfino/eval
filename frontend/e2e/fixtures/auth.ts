@@ -1,11 +1,11 @@
 import { Page, expect } from '@playwright/test';
-import { createVerifiedEmulatorUser, getEmulatorToken } from './emulator-auth';
+import { createVerifiedTestUser, getTestToken } from './test-auth';
 
 // Default password used for all E2E test users
 const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 /**
- * Ensure an E2E test user exists in the Firebase Auth Emulator and sign in.
+ * Ensure an E2E test user exists in Firebase Auth and sign in.
  *
  * Creates the user (if it doesn't already exist) with emailVerified=true, then
  * signs in via the /auth/signin/email page (the email/password sign-in form).
@@ -18,8 +18,8 @@ export async function signInAs(
   email: string,
   password: string = DEFAULT_PASSWORD
 ): Promise<void> {
-  // Ensure the user exists in the emulator with emailVerified=true
-  await createVerifiedEmulatorUser(email, password);
+  // Ensure the user exists in Firebase Auth with emailVerified=true
+  await createVerifiedTestUser(email, password);
 
   // Sign in via the email/password sign-in page
   await page.goto('/auth/signin/email');
@@ -48,8 +48,10 @@ export async function loginAsStudent(page: Page, email?: string): Promise<void> 
 // Admin password must match BOOTSTRAP_ADMIN_PASSWORD in api-setup.ts
 const ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
 
+const ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
+
 export async function loginAsSystemAdmin(page: Page, email?: string): Promise<void> {
-  return signInAs(page, email || 'emulator-admin@test.local', ADMIN_PASSWORD);
+  return signInAs(page, email || ADMIN_EMAIL, ADMIN_PASSWORD);
 }
 
 export async function signOut(page: Page): Promise<void> {
@@ -77,10 +79,9 @@ export const navigateToClasses = (page: Page) => navigateViaSidebar(page, 'Class
 export const navigateToDashboard = (page: Page) => navigateViaSidebar(page, 'Dashboard', '/instructor');
 
 /**
- * Get an emulator token for a user (creating if needed) for use in API calls.
- * This replaces the old testToken() approach for E2E API setup.
+ * Get a test token for a user (creating if needed) for use in API calls.
  */
 export async function getTokenForUser(email: string, password: string = DEFAULT_PASSWORD): Promise<string> {
-  await createVerifiedEmulatorUser(email, password);
-  return getEmulatorToken(email, password);
+  await createVerifiedTestUser(email, password);
+  return getTestToken(email, password);
 }

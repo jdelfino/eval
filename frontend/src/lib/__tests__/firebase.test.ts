@@ -3,7 +3,8 @@
  * @jest-environment jsdom
  */
 
-const mockGetAuth = jest.fn().mockReturnValue({ name: 'auth-instance' });
+const mockAuthInstance = { name: 'auth-instance', tenantId: null as string | null };
+const mockGetAuth = jest.fn().mockReturnValue(mockAuthInstance);
 const mockConnectAuthEmulator = jest.fn();
 const mockInitializeApp = jest.fn().mockReturnValue({ name: 'test-app' });
 const mockGetApps = jest.fn();
@@ -26,6 +27,8 @@ describe('firebase initialization', () => {
     jest.clearAllMocks();
     process.env = { ...originalEnv };
     mockGetApps.mockReturnValue([]);
+    mockAuthInstance.tenantId = null;
+    mockGetAuth.mockReturnValue(mockAuthInstance);
   });
 
   afterEach(() => {
@@ -111,5 +114,72 @@ describe('firebase initialization', () => {
 
     // initializeApp (or getApps) must have been called — Firebase is always initialized
     expect(mockGetAuth).toHaveBeenCalled();
+  });
+
+  it('sets tenantId on auth instance when NEXT_PUBLIC_FIREBASE_TENANT_ID is set', async () => {
+    process.env.NEXT_PUBLIC_FIREBASE_TENANT_ID = 'staging-tenant-abc123';
+    delete process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+
+    jest.mock('firebase/app', () => ({
+      initializeApp: mockInitializeApp,
+      getApps: mockGetApps,
+    }));
+    jest.mock('firebase/auth', () => ({
+      getAuth: mockGetAuth,
+      connectAuthEmulator: mockConnectAuthEmulator,
+    }));
+
+    await import('../firebase');
+
+    expect(mockAuthInstance.tenantId).toBe('staging-tenant-abc123');
+  });
+
+  it('does not set tenantId when NEXT_PUBLIC_FIREBASE_TENANT_ID is not set', async () => {
+    delete process.env.NEXT_PUBLIC_FIREBASE_TENANT_ID;
+    delete process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+
+    jest.mock('firebase/app', () => ({
+      initializeApp: mockInitializeApp,
+      getApps: mockGetApps,
+    }));
+    jest.mock('firebase/auth', () => ({
+      getAuth: mockGetAuth,
+      connectAuthEmulator: mockConnectAuthEmulator,
+    }));
+
+    await import('../firebase');
+
+    expect(mockAuthInstance.tenantId).toBeNull();
+  });
+
+  it('sets tenantId before connecting to emulator when both are set', async () => {
+    process.env.NEXT_PUBLIC_FIREBASE_TENANT_ID = 'test-tenant';
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST = 'http://localhost:9099';
+
+    const callOrder: string[] = [];
+    mockGetAuth.mockReturnValue({
+      ...mockAuthInstance,
+      set tenantId(v: string | null) {
+        callOrder.push('setTenantId');
+        mockAuthInstance.tenantId = v;
+      },
+    });
+    mockConnectAuthEmulator.mockImplementation(() => {
+      callOrder.push('connectEmulator');
+    });
+
+    jest.mock('firebase/app', () => ({
+      initializeApp: mockInitializeApp,
+      getApps: mockGetApps,
+    }));
+    jest.mock('firebase/auth', () => ({
+      getAuth: mockGetAuth,
+      connectAuthEmulator: mockConnectAuthEmulator,
+    }));
+
+    await import('../firebase');
+
+    expect(callOrder[0]).toBe('setTenantId');
+    expect(callOrder[1]).toBe('connectEmulator');
   });
 });

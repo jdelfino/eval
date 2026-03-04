@@ -141,6 +141,14 @@ check-api-imports:
 	cd frontend && npx tsx scripts/check-api-imports.ts
 
 # ──────────────────────────────────────────────
+# Migration lint
+# ──────────────────────────────────────────────
+.PHONY: test-lint-migrations
+
+test-lint-migrations:
+	bash scripts/test-lint-migrations.sh
+
+# ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
 # ──────────────────────────────────────────────
 .PHONY: smoke-test
