@@ -230,6 +230,32 @@ resource "helm_release" "keda" {
   namespace        = "keda"
   create_namespace = true
 
+  # Reduce from 100m default — actual usage is ~2-5m per pod
+  set {
+    name  = "resources.requests.cpu"
+    value = "15m"
+  }
+  set {
+    name  = "resources.requests.memory"
+    value = "64Mi"
+  }
+  set {
+    name  = "webhooks.resources.requests.cpu"
+    value = "15m"
+  }
+  set {
+    name  = "webhooks.resources.requests.memory"
+    value = "64Mi"
+  }
+  set {
+    name  = "metricsServer.resources.requests.cpu"
+    value = "15m"
+  }
+  set {
+    name  = "metricsServer.resources.requests.memory"
+    value = "64Mi"
+  }
+
   depends_on = [module.gke]
 }
 
