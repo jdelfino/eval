@@ -114,8 +114,12 @@ test.describe('Debugger', () => {
     // ===== STUDENT JOINS SESSION =====
     await signInAs(page, student.email);
     await page.goto(`/student?work_id=${work.id}`);
-    await expect(page.locator('.monaco-editor')).toBeVisible();
-    await expect(page.locator('text=Connected')).toBeVisible();
+    // Use an extended timeout: the page must load work data, check for an active
+    // session, establish a Centrifugo WebSocket connection, and complete the join
+    // API call before the editor renders. On a loaded cluster this chain of
+    // async operations regularly exceeds the default 5 s assertion timeout.
+    await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('text=Connected')).toBeVisible({ timeout: 15_000 });
 
     // Wait for initial sync
     await page.waitForTimeout(1000);

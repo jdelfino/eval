@@ -151,8 +151,12 @@ test.describe('Critical User Paths', () => {
       // Click "Join Now" to join the active session
       await joinNowButton.click();
 
-      // Verify student entered session (editor loads directly)
-      await expect(page.locator('.monaco-editor')).toBeVisible();
+      // Verify student entered session (editor loads directly).
+      // Use an extended timeout: the page must load work data, check for an active
+      // session, establish a Centrifugo WebSocket connection, and complete the join
+      // API call before the editor renders. On a loaded cluster this chain of
+      // async operations regularly exceeds the default 5 s assertion timeout.
+      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15_000 });
 
       // Verify connected status (shown in global header badge)
       await expect(page.locator('text=Connected')).toBeVisible();
@@ -271,8 +275,12 @@ test.describe('Critical User Paths', () => {
       const joinNowButton = page.locator('button:has-text("Join Now")');
       await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
-      await expect(page.locator('.monaco-editor')).toBeVisible();
-      await expect(page.locator('text=Connected')).toBeVisible();
+      // Use an extended timeout: the page must load work data, check for an active
+      // session, establish a Centrifugo WebSocket connection, and complete the join
+      // API call before the editor renders. On a loaded cluster this chain of
+      // async operations regularly exceeds the default 5 s assertion timeout.
+      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('text=Connected')).toBeVisible({ timeout: 15_000 });
 
       // Wait for initial empty code sync to complete (500ms debounce + buffer)
       // This prevents the initial empty code update from racing with our typed code
