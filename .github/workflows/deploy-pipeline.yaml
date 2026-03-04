@@ -72,9 +72,9 @@ jobs:
           gcloud artifacts docker tags add \
             $REGISTRY/executor:content-$CONTENT_HASH \
             $REGISTRY/executor:${{ github.sha }}
-          gcloud artifacts docker tags add \
-            $REGISTRY/executor:content-$CONTENT_HASH \
-            $REGISTRY/executor:latest
+          # Skip :latest — moving an existing tag requires
+          # artifactregistry.tags.delete, which the WIF SA lacks.
+          # :latest already points to the same content (cache hit).
       - name: Build and push new image (cache miss)
         if: env.CACHE_HIT == 'false'
         run: |
