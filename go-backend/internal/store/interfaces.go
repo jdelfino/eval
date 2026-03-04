@@ -66,6 +66,9 @@ type NamespaceRepository interface {
 	// UpdateNamespace updates a namespace's mutable fields and returns the updated namespace.
 	// Returns ErrNotFound if the namespace does not exist.
 	UpdateNamespace(ctx context.Context, id string, params UpdateNamespaceParams) (*Namespace, error)
+	// DeleteNamespace permanently deletes a namespace and all related records (FK CASCADE).
+	// Returns ErrNotFound if the namespace does not exist.
+	DeleteNamespace(ctx context.Context, id string) error
 }
 
 // Class represents a class (course) in the database.

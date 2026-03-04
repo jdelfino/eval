@@ -23,6 +23,7 @@ type mockNamespaceRepo struct {
 	getNamespaceFn    func(ctx context.Context, id string) (*store.Namespace, error)
 	createNamespaceFn func(ctx context.Context, params store.CreateNamespaceParams) (*store.Namespace, error)
 	updateNamespaceFn func(ctx context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error)
+	deleteNamespaceFn func(ctx context.Context, id string) error
 }
 
 func (m *mockNamespaceRepo) ListNamespaces(ctx context.Context) ([]store.Namespace, error) {
@@ -39,6 +40,10 @@ func (m *mockNamespaceRepo) CreateNamespace(ctx context.Context, params store.Cr
 
 func (m *mockNamespaceRepo) UpdateNamespace(ctx context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
 	return m.updateNamespaceFn(ctx, id, params)
+}
+
+func (m *mockNamespaceRepo) DeleteNamespace(ctx context.Context, id string) error {
+	return m.deleteNamespaceFn(ctx, id)
 }
 
 // namespaceTestRepos embeds stubRepos and overrides namespace/user methods.
@@ -61,6 +66,9 @@ func (r *namespaceTestRepos) CreateNamespace(ctx context.Context, params store.C
 }
 func (r *namespaceTestRepos) UpdateNamespace(ctx context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
 	return r.ns.UpdateNamespace(ctx, id, params)
+}
+func (r *namespaceTestRepos) DeleteNamespace(ctx context.Context, id string) error {
+	return r.ns.DeleteNamespace(ctx, id)
 }
 func (r *namespaceTestRepos) ListUsers(ctx context.Context, filters store.UserFilters) ([]store.User, error) {
 	if r.users != nil {
@@ -451,6 +459,32 @@ func TestCreateNamespace_InternalError(t *testing.T) {
 	}
 }
 
+func TestCreateNamespace_Duplicate(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		createNamespaceFn: func(_ context.Context, _ store.CreateNamespaceParams) (*store.Namespace, error) {
+			return nil, store.ErrDuplicate
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"id":           "test-ns",
+		"display_name": "Test Namespace",
+	})
+	h := NewNamespaceHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestGetNamespace_InternalError(t *testing.T) {
 	repo := &mockNamespaceRepo{
 		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {
@@ -543,18 +577,12 @@ func TestUpdateNamespace_RBACForbidden(t *testing.T) {
 }
 
 func TestDeleteNamespace_Success(t *testing.T) {
-	ns := testNamespace()
-	ns.Active = false
-
 	repo := &mockNamespaceRepo{
-		updateNamespaceFn: func(_ context.Context, id string, params store.UpdateNamespaceParams) (*store.Namespace, error) {
+		deleteNamespaceFn: func(_ context.Context, id string) error {
 			if id != "test-ns" {
 				t.Fatalf("unexpected id: %v", id)
 			}
-			if params.Active == nil || *params.Active != false {
-				t.Fatalf("expected active=false, got %v", params.Active)
-			}
-			return ns, nil
+			return nil
 		},
 	}
 
@@ -577,8 +605,8 @@ func TestDeleteNamespace_Success(t *testing.T) {
 
 func TestDeleteNamespace_InternalError(t *testing.T) {
 	repo := &mockNamespaceRepo{
-		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
-			return nil, errors.New("db error")
+		deleteNamespaceFn: func(_ context.Context, _ string) error {
+			return errors.New("db error")
 		},
 	}
 
@@ -601,8 +629,8 @@ func TestDeleteNamespace_InternalError(t *testing.T) {
 
 func TestDeleteNamespace_NotFound(t *testing.T) {
 	repo := &mockNamespaceRepo{
-		updateNamespaceFn: func(_ context.Context, _ string, _ store.UpdateNamespaceParams) (*store.Namespace, error) {
-			return nil, store.ErrNotFound
+		deleteNamespaceFn: func(_ context.Context, _ string) error {
+			return store.ErrNotFound
 		},
 	}
 

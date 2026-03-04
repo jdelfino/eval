@@ -1,16 +1,14 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { registerStudent, createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession } from './fixtures/api-setup';
-import { getTestToken } from './fixtures/test-auth';
+import { createClass, createSection, createProblem, startSessionFromProblem, publishProblem, getOrCreateStudentWork, completeSession } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
-  test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
+  test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     test.setTimeout(90000);
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentEmail = `student-${testNamespace}@test.local`;
 
     // Create class, section, and problem via API (faster than UI)
     const cls = await createClass(instructor.token, 'Lifecycle Class');
@@ -21,14 +19,14 @@ test.describe('Session Lifecycle', () => {
       starterCode: '# Write your solution\nprint("hello")\n',
     });
 
-    // Register student via API (creates emulator user and enrolls in section)
-    await registerStudent(section.join_code, studentEmail, 'E2E Student');
-
     // Publish problem to section (required for student flow via section page)
     await publishProblem(instructor.token, section.id, problem.id);
 
     // Start session from problem via API
     const session1 = await startSessionFromProblem(instructor.token, section.id, problem.id);
+
+    // Register student via the setupStudent fixture (creates emulator user and enrolls in section)
+    const student = await setupStudent(section.join_code);
 
     // ===== INSTRUCTOR OPENS SESSION VIEW =====
     const instructorContext = await browser.newContext();
@@ -42,9 +40,8 @@ test.describe('Session Lifecycle', () => {
       await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // ===== STUDENT JOINS =====
-      await signInAs(page, studentEmail);
-      const studentToken = await getTestToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
-      const work1 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+      await signInAs(page, student.email);
+      const work1 = await getOrCreateStudentWork(student.token, section.id, problem.id);
       await page.goto(`/student?work_id=${work1.id}`);
       await expect(page.locator('.monaco-editor')).toBeVisible();
       await expect(page.locator('text=Connected')).toBeVisible();
@@ -60,7 +57,7 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(1000);
 
       // ===== INSTRUCTOR VERIFIES STUDENT CODE =====
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
+      await expect(instructorPage.locator('text=E2E student')).toBeVisible();
 
       // ===== INSTRUCTOR STARTS REPLACEMENT SESSION =====
       // Start a new session via API (simulating "Replace Session")
@@ -90,7 +87,7 @@ test.describe('Session Lifecycle', () => {
         await joinNowButton.click();
       } catch {
         // Fallback: navigate directly to section page and join the new session via work_id
-        const work2 = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+        const work2 = await getOrCreateStudentWork(student.token, section.id, problem.id);
         await page.goto(`/student?work_id=${work2.id}`);
       }
 

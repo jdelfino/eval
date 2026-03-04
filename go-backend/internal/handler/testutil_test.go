@@ -406,6 +406,9 @@ func (stubRepos) CreateNamespace(context.Context, store.CreateNamespaceParams) (
 func (stubRepos) UpdateNamespace(context.Context, string, store.UpdateNamespaceParams) (*store.Namespace, error) {
 	panic("stubRepos: unexpected UpdateNamespace call")
 }
+func (stubRepos) DeleteNamespace(context.Context, string) error {
+	panic("stubRepos: unexpected DeleteNamespace call")
+}
 func (stubRepos) ListProblems(context.Context, *uuid.UUID) ([]store.Problem, error) {
 	panic("stubRepos: unexpected ListProblems call")
 }
