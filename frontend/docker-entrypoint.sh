@@ -25,9 +25,17 @@ replace_placeholder "__NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN__" "$NEXT_PUBLIC_FIREBAS
 replace_placeholder "__NEXT_PUBLIC_FIREBASE_PROJECT_ID__" "$NEXT_PUBLIC_FIREBASE_PROJECT_ID"
 replace_placeholder "__NEXT_PUBLIC_CENTRIFUGO_URL__" "$NEXT_PUBLIC_CENTRIFUGO_URL"
 
-# Tenant ID is optional — always replace placeholder so it becomes empty
-# string in production (falsy, so tenantId is not set on the Auth instance).
-find /app/.next -type f \( -name '*.js' -o -name '*.html' \) -exec \
-  sed -i "s|__NEXT_PUBLIC_FIREBASE_TENANT_ID__|${NEXT_PUBLIC_FIREBASE_TENANT_ID:-}|g" {} +
+# Tenant ID is optional. The build-time placeholder is a truthy string, so the
+# compiler removes the if-guard in firebase.ts — tenantId is always assigned.
+# When no tenant is configured (production), we must replace the quoted
+# placeholder with the JS literal null (not empty string) so Firebase uses
+# project-level auth. Empty string "" would be treated as an explicit tenant.
+if [ -n "$NEXT_PUBLIC_FIREBASE_TENANT_ID" ]; then
+  find /app/.next -type f \( -name '*.js' -o -name '*.html' \) -exec \
+    sed -i "s|__NEXT_PUBLIC_FIREBASE_TENANT_ID__|${NEXT_PUBLIC_FIREBASE_TENANT_ID}|g" {} +
+else
+  find /app/.next -type f \( -name '*.js' -o -name '*.html' \) -exec \
+    sed -i 's|"__NEXT_PUBLIC_FIREBASE_TENANT_ID__"|null|g' {} +
+fi
 
 exec "$@"
