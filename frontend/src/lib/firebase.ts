@@ -11,7 +11,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const firebaseAuth: Auth = getAuth(app);
 
 // Scope to Identity Platform tenant (e.g. staging test tenant).
-// Production: env var unset → default tenant (no change).
+// Production: env var unset → docker-entrypoint.sh replaces the build-time
+// placeholder with null (the if-guard below is removed by the SWC compiler
+// because the placeholder is a truthy string at build time).
 if (process.env.NEXT_PUBLIC_FIREBASE_TENANT_ID) {
   firebaseAuth.tenantId = process.env.NEXT_PUBLIC_FIREBASE_TENANT_ID;
 }
