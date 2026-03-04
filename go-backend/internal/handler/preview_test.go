@@ -96,9 +96,9 @@ func TestPreviewRoutes_UsesPermPreviewStudent(t *testing.T) {
 	studentUserID := uuid.New()
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return &store.PreviewStudent{
-				InstructorID:  instructorID,
+				InstructorID:  instrID,
 				StudentUserID: studentUserID,
 			}, nil
 		},
@@ -163,14 +163,18 @@ func TestEnterPreview_Success_ExistingPreviewStudent(t *testing.T) {
 		StudentUserID: studentUserID,
 	}
 
+	createCalled := false
 	enrollCalled := false
 	unenrollOtherCalled := false
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, id uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, id uuid.UUID, _ string) (*store.PreviewStudent, error) {
+			createCalled = true
 			if id != instructorID {
 				t.Fatalf("unexpected instructorID: %v", id)
 			}
+			// CreatePreviewStudent handles idempotency (ON CONFLICT DO NOTHING),
+			// returning the existing record when one already exists.
 			return existingPS, nil
 		},
 		enrollPreviewStudentFn: func(_ context.Context, stuID, secID uuid.UUID) error {
@@ -226,6 +230,9 @@ func TestEnterPreview_Success_ExistingPreviewStudent(t *testing.T) {
 		t.Errorf("section_id = %q, want %q", resp["section_id"], sectionID.String())
 	}
 
+	if !createCalled {
+		t.Error("CreatePreviewStudent should have been called")
+	}
 	if !enrollCalled {
 		t.Error("EnrollPreviewStudent should have been called")
 	}
@@ -247,9 +254,6 @@ func TestEnterPreview_Success_CreatesPreviewStudent(t *testing.T) {
 
 	createCalled := false
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, store.ErrNotFound
-		},
 		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, ns string) (*store.PreviewStudent, error) {
 			createCalled = true
 			if instrID != instructorID {
@@ -286,7 +290,7 @@ func TestEnterPreview_Success_CreatesPreviewStudent(t *testing.T) {
 	}
 
 	if !createCalled {
-		t.Error("CreatePreviewStudent should have been called when no preview student exists")
+		t.Error("CreatePreviewStudent should have been called")
 	}
 }
 
@@ -357,44 +361,11 @@ func TestEnterPreview_SectionNotVisible(t *testing.T) {
 	}
 }
 
-func TestEnterPreview_GetPreviewStudentError(t *testing.T) {
-	instructorID := uuid.New()
-	sectionID := uuid.New()
-
-	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, errors.New("db error")
-		},
-	}
-	repos := &previewTestRepos{}
-
-	h := NewPreviewHandler(repo)
-	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
-	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
-	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          instructorID,
-		Role:        auth.RoleInstructor,
-		NamespaceID: "test-ns",
-	})
-	ctx = store.WithRepos(ctx, repos)
-	req = req.WithContext(ctx)
-
-	rec := httptest.NewRecorder()
-	h.EnterPreview(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestEnterPreview_CreatePreviewStudentError(t *testing.T) {
 	instructorID := uuid.New()
 	sectionID := uuid.New()
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, store.ErrNotFound
-		},
 		createPreviewStudentFn: func(_ context.Context, _ uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return nil, errors.New("db error")
 		},
@@ -426,9 +397,9 @@ func TestEnterPreview_EnrollError(t *testing.T) {
 	studentUserID := uuid.New()
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return &store.PreviewStudent{
-				InstructorID:  instructorID,
+				InstructorID:  instrID,
 				StudentUserID: studentUserID,
 			}, nil
 		},
@@ -632,47 +603,6 @@ func TestEnterPreview_GetSectionError_LogsUnderlyingError(t *testing.T) {
 	}
 }
 
-// TestEnterPreview_GetPreviewStudentError_LogsUnderlyingError verifies that when
-// GetPreviewStudent fails, WriteInternalError is used so the error is logged.
-func TestEnterPreview_GetPreviewStudentError_LogsUnderlyingError(t *testing.T) {
-	h := &capturingSlogHandler{}
-	orig := slog.Default()
-	slog.SetDefault(slog.New(h))
-	t.Cleanup(func() { slog.SetDefault(orig) })
-
-	instructorID := uuid.New()
-	sectionID := uuid.New()
-	underlyingErr := fmt.Errorf("db: timeout from GetPreviewStudent")
-
-	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, underlyingErr
-		},
-	}
-	repos := &previewTestRepos{}
-
-	h2 := NewPreviewHandler(repo)
-	req := httptest.NewRequest(http.MethodPost, "/sections/"+sectionID.String()+"/preview", nil)
-	req = req.WithContext(withChiParam(req.Context(), "section_id", sectionID.String()))
-	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          instructorID,
-		Role:        auth.RoleInstructor,
-		NamespaceID: "test-ns",
-	})
-	ctx = store.WithRepos(ctx, repos)
-	req = req.WithContext(ctx)
-
-	rec := httptest.NewRecorder()
-	h2.EnterPreview(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !h.containsErrorAttr("timeout from GetPreviewStudent") {
-		t.Error("expected underlying error to be logged via WriteInternalError, but it was not found in slog output; use WriteInternalError instead of WriteError")
-	}
-}
-
 // TestEnterPreview_CreatePreviewStudentError_LogsUnderlyingError verifies that when
 // CreatePreviewStudent fails, WriteInternalError is used so the error is logged.
 func TestEnterPreview_CreatePreviewStudentError_LogsUnderlyingError(t *testing.T) {
@@ -686,9 +616,6 @@ func TestEnterPreview_CreatePreviewStudentError_LogsUnderlyingError(t *testing.T
 	underlyingErr := fmt.Errorf("db: disk full from CreatePreviewStudent")
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
-			return nil, store.ErrNotFound
-		},
 		createPreviewStudentFn: func(_ context.Context, _ uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return nil, underlyingErr
 		},
@@ -731,9 +658,9 @@ func TestEnterPreview_EnrollError_LogsUnderlyingError(t *testing.T) {
 	underlyingErr := fmt.Errorf("db: deadlock from EnrollPreviewStudent")
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return &store.PreviewStudent{
-				InstructorID:  instructorID,
+				InstructorID:  instrID,
 				StudentUserID: studentUserID,
 			}, nil
 		},
@@ -775,9 +702,9 @@ func TestEnterPreview_FullProfileInResponse(t *testing.T) {
 	namespaceID := "test-ns"
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return &store.PreviewStudent{
-				InstructorID:  instructorID,
+				InstructorID:  instrID,
 				StudentUserID: studentUserID,
 			}, nil
 		},
@@ -869,9 +796,9 @@ func TestEnterPreview_UnenrollOtherSectionsError_Logged(t *testing.T) {
 	unenrollErr := fmt.Errorf("db: disk full from UnenrollOtherSections")
 
 	repo := &mockPreviewRepo{
-		getPreviewStudentFn: func(_ context.Context, _ uuid.UUID) (*store.PreviewStudent, error) {
+		createPreviewStudentFn: func(_ context.Context, instrID uuid.UUID, _ string) (*store.PreviewStudent, error) {
 			return &store.PreviewStudent{
-				InstructorID:  instructorID,
+				InstructorID:  instrID,
 				StudentUserID: studentUserID,
 			}, nil
 		},
@@ -947,4 +874,3 @@ func TestExitPreview_DeleteError_Logged(t *testing.T) {
 		t.Error("expected delete error to be logged as warn, but not found in slog output")
 	}
 }
-

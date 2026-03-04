@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
-	"github.com/jdelfino/eval/go-backend/internal/store"
 	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
@@ -59,8 +59,9 @@ func (h *PreviewHandler) Routes() chi.Router {
 
 // EnterPreview handles POST /sections/{section_id}/preview.
 //
-// It looks up or creates the instructor's preview student, enrolls them in the
-// requested section, and cleans up stale memberships from other sections.
+// It creates or retrieves the instructor's preview student (idempotent via
+// ON CONFLICT DO NOTHING in the store), enrolls them in the requested section,
+// and cleans up stale memberships from other sections.
 func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 	instructor := auth.UserFromContext(r.Context())
 	if instructor == nil {
@@ -87,19 +88,13 @@ func (h *PreviewHandler) EnterPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up or create the preview student.
-	ps, err := h.previewRepo.GetPreviewStudent(r.Context(), instructor.ID)
+	// Create or retrieve the preview student. CreatePreviewStudent is idempotent:
+	// it uses ON CONFLICT DO NOTHING and returns the existing record if one already
+	// exists, eliminating the TOCTOU race condition of a Get-then-Create pattern.
+	ps, err := h.previewRepo.CreatePreviewStudent(r.Context(), instructor.ID, instructor.NamespaceID)
 	if err != nil {
-		if !errors.Is(err, store.ErrNotFound) {
-			httputil.WriteInternalError(w, r, err, "internal error")
-			return
-		}
-		// No preview student yet — create one now.
-		ps, err = h.previewRepo.CreatePreviewStudent(r.Context(), instructor.ID, instructor.NamespaceID)
-		if err != nil {
-			httputil.WriteInternalError(w, r, err, "internal error")
-			return
-		}
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
 	}
 
 	// Enroll the preview student in the target section.
