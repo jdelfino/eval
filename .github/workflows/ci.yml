@@ -562,7 +562,6 @@ jobs:
       # and Playwright install run in the foreground (Playwright needs npm ci).
       - name: "Parallel setup: npm ci + Playwright (fg), Go build + executor (bg)"
         env:
-          GH_TOKEN: ${{ github.token }}
           PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
           EXECUTOR_CHANGED: ${{ steps.executor-changed.outputs.changed }}
           NODE_CACHE_HIT: ${{ steps.node-cache.outputs.cache-hit }}
@@ -575,36 +574,9 @@ jobs:
 
           # --- Executor setup (background) ---
           (
-            # 1. Wait for executor workflow if running for this commit
-            for attempt in 1 2 3; do
-              RUN_JSON=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
-                --json status,conclusion --jq '.[0] // empty' 2>/dev/null || true)
-              if [ -z "$RUN_JSON" ]; then
-                echo "[executor] No executor workflow for this commit"
-                break
-              fi
-              STATUS=$(echo "$RUN_JSON" | jq -r '.status')
-              if [ "$STATUS" = "completed" ]; then
-                echo "[executor] Executor workflow already completed"
-                break
-              fi
-              # Still running — poll until done (executor build-push takes ~3-4 min)
-              echo "[executor] Executor workflow in progress, waiting..."
-              for i in $(seq 1 40); do
-                sleep 15
-                STATUS=$(gh run list --workflow=executor.yaml --commit=${{ github.sha }} \
-                  --json status --jq '.[0].status // "completed"' 2>/dev/null || echo "completed")
-                echo "  [$i] status: $STATUS"
-                if [ "$STATUS" = "completed" ]; then
-                  echo "[executor] Executor workflow finished"
-                  break 2
-                fi
-              done
-              echo "::warning::Timed out waiting for executor workflow — pulling whatever :latest is available"
-              break
-            done
-
-            # 2. Build from source or pull pre-built image
+            # When called from deploy-pipeline with run-all: true, the executor image
+            # is already being built by the build-push-executor job. For PR-triggered
+            # runs, pull :latest or build from source if executor code changed.
             if [ "${EXECUTOR_CHANGED}" = "true" ]; then
               echo "[executor] Building executor from source (PR changed executor code)..."
               timeout 300 docker compose up -d executor --build --wait
