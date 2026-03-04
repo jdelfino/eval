@@ -739,7 +739,7 @@ describe('EmailSignInPage', () => {
       expect(screen.getByLabelText(/join code/i)).toBeInTheDocument();
     });
 
-    it('strips non-alphanumeric characters from join code input', async () => {
+    it('normalizes join code input (strips dashes, uppercases)', async () => {
       const user = userEvent.setup();
       mockSignInWithEmailAndPassword.mockResolvedValue({
         user: { uid: 'test-uid', email: 'student@example.com' },
