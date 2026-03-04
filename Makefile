@@ -171,6 +171,13 @@ test-run-e2e-tests:
 validate-ci-workflow:
 	python3 scripts/validate-ci-workflow.py
 
+# Deploy pipeline validation
+# ──────────────────────────────────────────────
+.PHONY: validate-deploy-pipeline
+
+validate-deploy-pipeline:
+	python3 scripts/validate-deploy-pipeline.py
+
 # ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
 # ──────────────────────────────────────────────

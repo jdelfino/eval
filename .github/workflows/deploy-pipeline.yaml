@@ -46,11 +46,44 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
       - run: gcloud auth configure-docker us-east1-docker.pkg.dev
-      - run: |
+      - name: Compute content hash of executor build inputs
+        run: |
+          # Hash all files in executor/ (excluding tmp/) and pkg/ — the only
+          # repo directories COPYed into the Dockerfile. Truncate to 16 chars.
+          HASH=$(find executor/ pkg/ -type f -not -path 'executor/tmp/*' \
+            | sort | xargs sha256sum | sha256sum | cut -c1-16)
+          echo "CONTENT_HASH=$HASH" >> "$GITHUB_ENV"
+          echo "Content hash: $HASH"
+      - name: Check for existing content-addressed image
+        run: |
+          EXISTING=$(gcloud artifacts docker tags list $REGISTRY/executor \
+            --filter="tag:content-$CONTENT_HASH" \
+            --format="value(tag)" 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            echo "CACHE_HIT=true" >> "$GITHUB_ENV"
+            echo "Cache hit: $REGISTRY/executor:content-$CONTENT_HASH already exists"
+          else
+            echo "CACHE_HIT=false" >> "$GITHUB_ENV"
+            echo "Cache miss: building new image"
+          fi
+      - name: Retag existing image (cache hit)
+        if: env.CACHE_HIT == 'true'
+        run: |
+          gcloud artifacts docker tags add \
+            $REGISTRY/executor:content-$CONTENT_HASH \
+            $REGISTRY/executor:${{ github.sha }}
+          gcloud artifacts docker tags add \
+            $REGISTRY/executor:content-$CONTENT_HASH \
+            $REGISTRY/executor:latest
+      - name: Build and push new image (cache miss)
+        if: env.CACHE_HIT == 'false'
+        run: |
           docker build -f executor/Dockerfile \
+            -t $REGISTRY/executor:content-$CONTENT_HASH \
             -t $REGISTRY/executor:${{ github.sha }} \
             -t $REGISTRY/executor:latest \
             .
+          docker push $REGISTRY/executor:content-$CONTENT_HASH
           docker push $REGISTRY/executor:${{ github.sha }}
           docker push $REGISTRY/executor:latest
 
