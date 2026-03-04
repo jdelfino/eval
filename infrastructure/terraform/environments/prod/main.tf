@@ -515,6 +515,26 @@ module "centrifugo_staging" {
   depends_on = [module.gke, kubernetes_namespace.staging]
 }
 
+# Staging Workload Identity — allows the K8s go-api SA (used by the E2E test
+# runner Job) to call Identity Toolkit admin APIs for the staging tenant.
+resource "google_service_account" "staging_workload" {
+  account_id   = "staging-workload"
+  display_name = "Staging Workload Identity"
+  project      = var.project_id
+}
+
+resource "google_project_iam_member" "staging_idp_admin" {
+  project = var.project_id
+  role    = "roles/firebaseauth.admin"
+  member  = "serviceAccount:${google_service_account.staging_workload.email}"
+}
+
+resource "google_service_account_iam_member" "staging_workload_identity" {
+  service_account_id = google_service_account.staging_workload.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[staging/go-api]"
+}
+
 # Staging smoke-test secrets
 resource "kubernetes_secret" "staging_smoke_test_secrets" {
   metadata {
