@@ -55,6 +55,10 @@ gke_master_authorized_networks = [
   }
 ]
 
+# Default pool: 2x e2-standard-2 spot for headroom (prod + staging + e2e)
+gke_default_pool_min_nodes = 2
+gke_default_pool_max_nodes = 2
+
 # -----------------------------------------------------------------------------
 # Cloud SQL Configuration
 # Start small, scale up when needed.
