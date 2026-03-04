@@ -7,7 +7,9 @@ import { useState, useEffect } from 'react';
  * Returns true for desktop layout (>= 1024px), false for mobile
  */
 export function useResponsiveLayout(breakpoint: number = 1024): boolean {
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= breakpoint
+  );
 
   useEffect(() => {
     // Check if we're in the browser
@@ -60,12 +62,18 @@ export interface MobileViewportInfo {
  * - Desktop: >= 1024px
  */
 export function useMobileViewport(): MobileViewportInfo {
-  const [viewport, setViewport] = useState<MobileViewportInfo>({
-    isMobile: false,
-    isTablet: false,
-    isVerySmall: false,
-    isDesktop: false,
-    width: 0,
+  const [viewport, setViewport] = useState<MobileViewportInfo>(() => {
+    if (typeof window === 'undefined') {
+      return { isMobile: false, isTablet: false, isVerySmall: false, isDesktop: false, width: 0 };
+    }
+    const w = window.innerWidth;
+    return {
+      isMobile: w < 768,
+      isTablet: w >= 768 && w < 1024,
+      isVerySmall: w < 480,
+      isDesktop: w >= 1024,
+      width: w,
+    };
   });
 
   useEffect(() => {
