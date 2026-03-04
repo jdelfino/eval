@@ -232,27 +232,27 @@ resource "helm_release" "keda" {
 
   # Reduce from 100m default — actual usage is ~2-5m per pod
   set {
-    name  = "resources.requests.cpu"
+    name  = "resources.operator.requests.cpu"
     value = "50m"
   }
   set {
-    name  = "resources.requests.memory"
+    name  = "resources.operator.requests.memory"
     value = "64Mi"
   }
   set {
-    name  = "webhooks.resources.requests.cpu"
+    name  = "resources.webhooks.requests.cpu"
     value = "50m"
   }
   set {
-    name  = "webhooks.resources.requests.memory"
+    name  = "resources.webhooks.requests.memory"
     value = "64Mi"
   }
   set {
-    name  = "metricsServer.resources.requests.cpu"
+    name  = "resources.metricServer.requests.cpu"
     value = "50m"
   }
   set {
-    name  = "metricsServer.resources.requests.memory"
+    name  = "resources.metricServer.requests.memory"
     value = "64Mi"
   }
 
