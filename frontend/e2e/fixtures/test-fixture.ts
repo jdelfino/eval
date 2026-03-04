@@ -18,8 +18,10 @@ import { createVerifiedTestUser, getTestToken } from './test-auth';
 
 // Generate a deterministic namespace ID from the stable Playwright test ID.
 // testInfo.testId is a stable hash per test case — same across retries and runs.
+// Use the full testId to avoid collisions — testIds share structured prefixes
+// so short slices collide across tests in the same file.
 function generateNamespaceId(testId: string): string {
-  return `e2e-${testId.slice(0, 12)}`;
+  return `e2e-${testId}`;
 }
 
 // Default password for E2E test users
