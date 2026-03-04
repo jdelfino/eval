@@ -97,26 +97,14 @@ jobs:
             .
           docker push $REGISTRY/test-runner:${{ github.sha }}
 
-  # ── Test workflows (called in parallel, same as before) ───────────────────
-  # These run independently of the build-push jobs. deploy-prod gates on all
-  # of them passing, but deploy-staging does NOT wait for these.
+  # ── CI workflow (single consolidated workflow replacing go-api, executor, frontend) ──
+  # Runs all test jobs (with run-all: true, no path filtering). deploy-prod
+  # gates on this passing, but deploy-staging does NOT wait for it.
 
-  go-api:
-    uses: ./.github/workflows/go-api.yaml
-    secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
-
-  executor:
-    uses: ./.github/workflows/executor.yaml
-    secrets: inherit
-    permissions:
-      contents: read
-      id-token: write
-
-  frontend:
-    uses: ./.github/workflows/frontend-ci.yml
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      run-all: true
     secrets: inherit
     permissions:
       contents: read
@@ -256,7 +244,7 @@ jobs:
   # Only runs after staging is validated AND all unit/lint/integration tests pass.
 
   deploy-prod:
-    needs: [deploy-staging, go-api, executor, frontend]
+    needs: [deploy-staging, ci]
     runs-on: ubuntu-latest
     permissions:
       contents: read
