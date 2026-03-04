@@ -459,6 +459,32 @@ func TestCreateNamespace_InternalError(t *testing.T) {
 	}
 }
 
+func TestCreateNamespace_Duplicate(t *testing.T) {
+	repo := &mockNamespaceRepo{
+		createNamespaceFn: func(_ context.Context, _ store.CreateNamespaceParams) (*store.Namespace, error) {
+			return nil, store.ErrDuplicate
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"id":           "test-ns",
+		"display_name": "Test Namespace",
+	})
+	h := NewNamespaceHandler()
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleSystemAdmin})
+	ctx = store.WithRepos(ctx, nsRepos(repo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestGetNamespace_InternalError(t *testing.T) {
 	repo := &mockNamespaceRepo{
 		getNamespaceFn: func(_ context.Context, _ string) (*store.Namespace, error) {

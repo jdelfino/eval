@@ -92,8 +92,11 @@ export const test = base.extend<TestFixtures>({
     const nsId = generateNamespaceId(testInfo.testId);
     await createNamespace(nsId, 'E2E Test Namespace');
     await use(nsId);
-    // Delete namespace after test — FK CASCADE removes users,
-    // freeing the external_id for the next run.
+    // Brief settle time — the browser page (and its WebSocket) may still be
+    // open when this fixture tears down, since `page` and `testNamespace` have
+    // no dependency relationship. Wait for async operations (code sync, revision
+    // writes) to drain before the FK CASCADE delete removes all namespace data.
+    await new Promise(resolve => setTimeout(resolve, 1000));
     await deleteTestNamespace(nsId);
   },
 

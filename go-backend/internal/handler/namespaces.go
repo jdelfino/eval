@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -119,6 +120,11 @@ func (h *NamespaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:      &authUser.ID,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			httputil.WriteError(w, http.StatusConflict, "namespace already exists")
+			return
+		}
+		slog.ErrorContext(r.Context(), "failed to create namespace", "error", err, "namespace_id", req.ID)
 		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

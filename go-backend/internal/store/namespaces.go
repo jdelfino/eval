@@ -62,7 +62,7 @@ func (s *Store) CreateNamespace(ctx context.Context, params CreateNamespaceParam
 		params.ID, params.DisplayName, params.MaxInstructors, params.MaxStudents, params.CreatedBy,
 	))
 	if err != nil {
-		return nil, err
+		return nil, HandleDuplicate(err)
 	}
 	return ns, nil
 }
