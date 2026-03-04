@@ -489,8 +489,10 @@ type UserFilters struct {
 	Role        *string
 }
 
-// UserRepository defines the interface for user data access.
-type UserRepository interface {
+// UserReader defines the read-only lookup operations for users.
+// It is a sub-interface of UserRepository, suitable for components that
+// only need to look up users (e.g., authentication middleware adapters).
+type UserReader interface {
 	// GetUserByID retrieves a user by their primary key ID.
 	// Returns ErrNotFound if the user does not exist.
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
@@ -502,11 +504,12 @@ type UserRepository interface {
 	// GetUserByEmail retrieves a user by email address.
 	// Returns ErrNotFound if the user does not exist.
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+}
 
-	// UpdateUser updates a user's mutable fields and returns the updated user.
-	// Returns ErrNotFound if the user does not exist.
-	UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserParams) (*User, error)
-
+// UserAdmin defines the administrative operations for users.
+// It is a sub-interface of UserRepository, suitable for components that
+// only need admin-level user management (e.g., admin API handlers).
+type UserAdmin interface {
 	// ListUsers retrieves users with optional filters.
 	ListUsers(ctx context.Context, filters UserFilters) ([]User, error)
 
@@ -520,6 +523,17 @@ type UserRepository interface {
 
 	// CountUsersByRole counts users grouped by role within a namespace.
 	CountUsersByRole(ctx context.Context, namespaceID string) (map[string]int, error)
+}
+
+// UserRepository defines the full interface for user data access.
+// It composes UserReader and UserAdmin and adds user-scoped write operations.
+type UserRepository interface {
+	UserReader
+	UserAdmin
+
+	// UpdateUser updates a user's mutable fields and returns the updated user.
+	// Returns ErrNotFound if the user does not exist.
+	UpdateUser(ctx context.Context, id uuid.UUID, params UpdateUserParams) (*User, error)
 
 	// CreateUser creates a new user and returns it.
 	CreateUser(ctx context.Context, params CreateUserParams) (*User, error)

@@ -216,5 +216,7 @@ func (s *Store) UpsertUser(ctx context.Context, params CreateUserParams) (*User,
 	return u, nil
 }
 
-// Compile-time check that Store implements UserRepository.
+// Compile-time checks that Store implements all user interfaces.
+var _ UserReader = (*Store)(nil)
+var _ UserAdmin = (*Store)(nil)
 var _ UserRepository = (*Store)(nil)

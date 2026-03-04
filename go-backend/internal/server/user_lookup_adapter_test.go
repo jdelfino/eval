@@ -10,15 +10,20 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
-// mockUserRepo is a store.UserRepository stub that returns configured responses.
+// mockUserRepo is a store.UserReader stub that returns configured responses.
 // NOTE: This mock lives in the server package and cannot share the handler
 // package's StubUserRepo (test files are not importable across packages).
 // It uses a simpler design (user/err fields) since only GetUserByExternalID
 // is exercised by UserLookupAdapter.
+// Now implements store.UserReader (the narrower interface) since
+// UserLookupAdapter no longer requires the full UserRepository.
 type mockUserRepo struct {
 	user *store.User
 	err  error
 }
+
+// Compile-time check that mockUserRepo implements store.UserReader.
+var _ store.UserReader = (*mockUserRepo)(nil)
 
 func (m *mockUserRepo) GetUserByID(_ context.Context, _ uuid.UUID) (*store.User, error) {
 	return m.user, m.err
@@ -28,32 +33,7 @@ func (m *mockUserRepo) GetUserByExternalID(_ context.Context, _ string) (*store.
 	return m.user, m.err
 }
 
-func (m *mockUserRepo) UpdateUser(_ context.Context, _ uuid.UUID, _ store.UpdateUserParams) (*store.User, error) {
-	return m.user, m.err
-}
-
 func (m *mockUserRepo) GetUserByEmail(_ context.Context, _ string) (*store.User, error) {
-	return m.user, m.err
-}
-
-func (m *mockUserRepo) ListUsers(_ context.Context, _ store.UserFilters) ([]store.User, error) {
-	return nil, nil
-}
-
-func (m *mockUserRepo) UpdateUserAdmin(_ context.Context, _ uuid.UUID, _ store.UpdateUserAdminParams) (*store.User, error) {
-	return m.user, m.err
-}
-
-func (m *mockUserRepo) DeleteUser(_ context.Context, _ uuid.UUID) error {
-	return m.err
-}
-
-
-func (m *mockUserRepo) CountUsersByRole(_ context.Context, _ string) (map[string]int, error) {
-	return nil, nil
-}
-
-func (m *mockUserRepo) CreateUser(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
 	return m.user, m.err
 }
 

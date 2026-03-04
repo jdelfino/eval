@@ -7,14 +7,16 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
-// UserLookupAdapter bridges store.UserRepository to middleware.UserLookup.
+// UserLookupAdapter bridges store.UserReader to middleware.UserLookup.
 // This avoids an import cycle between middleware and store packages.
+// It accepts the narrower store.UserReader interface because only
+// GetUserByExternalID is needed for authentication lookups.
 type UserLookupAdapter struct {
-	repo store.UserRepository
+	repo store.UserReader
 }
 
-// NewUserLookupAdapter creates an adapter that wraps a store.UserRepository.
-func NewUserLookupAdapter(repo store.UserRepository) *UserLookupAdapter {
+// NewUserLookupAdapter creates an adapter that wraps a store.UserReader.
+func NewUserLookupAdapter(repo store.UserReader) *UserLookupAdapter {
 	return &UserLookupAdapter{repo: repo}
 }
 
