@@ -70,12 +70,19 @@ jobs:
       - name: Retag existing image (cache hit)
         if: env.CACHE_HIT == 'true'
         run: |
-          gcloud artifacts docker tags add \
-            $REGISTRY/executor:content-$CONTENT_HASH \
-            $REGISTRY/executor:${{ github.sha }}
-          # Skip :latest — moving an existing tag requires
+          # Check if SHA tag already exists (e.g. workflow_dispatch re-run
+          # on the same commit). Moving an existing tag requires
           # artifactregistry.tags.delete, which the WIF SA lacks.
-          # :latest already points to the same content (cache hit).
+          SHA_EXISTS=$(gcloud artifacts docker tags list $REGISTRY/executor \
+            --filter="tag:${{ github.sha }}" \
+            --format="value(tag)" 2>/dev/null || true)
+          if [ -z "$SHA_EXISTS" ]; then
+            gcloud artifacts docker tags add \
+              $REGISTRY/executor:content-$CONTENT_HASH \
+              $REGISTRY/executor:${{ github.sha }}
+          else
+            echo "SHA tag ${{ github.sha }} already exists, skipping retag"
+          fi
       - name: Build and push new image (cache miss)
         if: env.CACHE_HIT == 'false'
         run: |
