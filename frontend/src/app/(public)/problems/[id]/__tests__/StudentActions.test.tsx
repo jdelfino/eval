@@ -120,7 +120,7 @@ describe('StudentActions', () => {
     });
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-abc');
+      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-abc&section_id=sec-1');
     });
   });
 
@@ -173,7 +173,7 @@ describe('StudentActions', () => {
     });
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-xyz');
+      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-xyz&section_id=sec-2');
     });
   });
 

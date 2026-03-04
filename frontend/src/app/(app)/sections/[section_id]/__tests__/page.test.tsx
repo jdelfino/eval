@@ -567,7 +567,7 @@ describe('SectionDetailPage', () => {
 
       await waitFor(() => {
         expect(getOrCreateStudentWork).toHaveBeenCalledWith(SECTION_ID, PROBLEM_ID_2);
-        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_2}`);
+        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_2}&section_id=${SECTION_ID}`);
       });
     });
 
@@ -592,7 +592,7 @@ describe('SectionDetailPage', () => {
 
       await waitFor(() => {
         expect(getOrCreateStudentWork).toHaveBeenCalledWith(SECTION_ID, PROBLEM_ID_1);
-        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_1}`);
+        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_1}&section_id=${SECTION_ID}`);
       });
     });
 
@@ -816,7 +816,7 @@ describe('SectionDetailPage', () => {
 
       await waitFor(() => {
         expect(getOrCreateStudentWork).toHaveBeenCalledWith(SECTION_ID, PROBLEM_ID_1);
-        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_1}`);
+        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_1}&section_id=${SECTION_ID}`);
       });
     });
 
