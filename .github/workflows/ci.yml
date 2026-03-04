@@ -29,6 +29,7 @@ jobs:
       executor: ${{ inputs.run-all == true || steps.filter.outputs.executor }}
       k8s: ${{ inputs.run-all == true || steps.filter.outputs.k8s }}
       migrations: ${{ inputs.run-all == true || steps.filter.outputs.migrations }}
+      contract-data: ${{ inputs.run-all == true || steps.filter.outputs.contract-data }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -50,6 +51,9 @@ jobs:
               - 'k8s/**'
             migrations:
               - 'migrations/**'
+            contract-data:
+              - 'scripts/seed.sql'
+              - 'scripts/contract-test-seed.sql'
 
   # ── Shared build jobs ───────────────────────────────────────────────────────
   # These run once and their outputs (node_modules cache, Go module cache) are
@@ -58,7 +62,7 @@ jobs:
 
   build-frontend:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true' || needs.changes.outputs.contract-data == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +82,7 @@ jobs:
 
   build-go-api:
     needs: changes
-    if: needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true'
+    if: needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true' || needs.changes.outputs.contract-data == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -325,7 +329,8 @@ jobs:
       needs.changes.outputs.go-backend == 'true' ||
       needs.changes.outputs.frontend == 'true' ||
       needs.changes.outputs.executor == 'true' ||
-      needs.changes.outputs.migrations == 'true'
+      needs.changes.outputs.migrations == 'true' ||
+      needs.changes.outputs.contract-data == 'true'
     runs-on: ubuntu-latest
 
     services:
