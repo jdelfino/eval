@@ -47,10 +47,11 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     await publishProblem(instructor.token, section.id, problem.id);
 
     // Register a student in the section
-    const studentEmail = `student-review-${testNamespace}@test.local`;
+    const studentExternalId = `student-review-${testNamespace}`;
+    const studentEmail = `${studentExternalId}@test.local`;
     const studentPassword = 'e2e-test-password-123'; // gitleaks:allow
     const studentDisplayName = 'Review Student';
-    await registerStudent(section.join_code, studentEmail, studentDisplayName, studentPassword);
+    await registerStudent(section.join_code, studentExternalId, studentEmail, studentDisplayName, studentPassword);
 
     // Create student work entry via API (simulates the student having started the problem)
     const studentToken = await getTestToken(studentEmail, studentPassword);

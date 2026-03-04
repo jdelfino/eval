@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { registerStudent, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 /**
@@ -25,10 +25,9 @@ import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/m
  */
 
 test.describe('Critical User Paths', () => {
-  test('Complete workflow: Instructor setup and student participation', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
+  test('Complete workflow: Instructor setup and student participation', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentEmail = `student-${testNamespace}@test.local`;
 
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
@@ -116,10 +115,6 @@ test.describe('Critical User Paths', () => {
         throw new Error('Could not find join code on dashboard page');
       }
 
-      // ===== STUDENT FLOW =====
-      // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentEmail, 'E2E Student');
-
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
       const sectionId = sectionInfo.section.id;
@@ -135,6 +130,10 @@ test.describe('Critical User Paths', () => {
       await publishProblem(instructor.token, sectionId, problem.id);
       const session = await startSessionFromProblem(instructor.token, sectionId, problem.id);
 
+      // ===== STUDENT FLOW =====
+      // Register the student via fixture (worker-scoped deterministic email)
+      const student = await setupStudent(joinCode);
+
       // Navigate instructor to the session page
       await instructorPage.goto(`/instructor/session/${session.id}`);
 
@@ -142,7 +141,7 @@ test.describe('Critical User Paths', () => {
       await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
 
       // Student signs in and navigates to their section detail page
-      await signInAs(page, studentEmail);
+      await signInAs(page, student.email);
       await page.goto(`/sections/${sectionId}`);
 
       // Wait for the active session with "Join Now" button to load
@@ -170,13 +169,12 @@ test.describe('Critical User Paths', () => {
     }
   });
 
-  test('Student code sync: code changes sync to instructor and public view', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
+  test('Student code sync: code changes sync to instructor and public view', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     // Extend timeout for this multi-page test
     test.setTimeout(60000);
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentEmail = `student-${testNamespace}@test.local`;
 
     // ===== INSTRUCTOR SETUP =====
     const instructorContext = await browser.newContext();
@@ -233,10 +231,6 @@ test.describe('Critical User Paths', () => {
         throw new Error('Could not find join code');
       }
 
-      // ===== STUDENT JOINS AND WRITES CODE =====
-      // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentEmail, 'E2E Student');
-
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
       const sectionId = sectionInfo.section.id;
@@ -266,10 +260,14 @@ test.describe('Critical User Paths', () => {
       await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible();
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
-      await signInAs(page, studentEmail);
+      // ===== STUDENT JOINS AND WRITES CODE =====
+      // Register the student via fixture (worker-scoped deterministic email)
+      const student = await setupStudent(joinCode);
+
+      await signInAs(page, student.email);
       await page.goto(`/sections/${sectionId}`);
 
-      // Join active session (student is already enrolled via registerStudent)
+      // Join active session (student is already enrolled via setupStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
       await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();

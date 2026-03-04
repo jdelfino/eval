@@ -121,6 +121,7 @@ export async function startSession(token: string, sectionId: string, _sectionNam
 
 export async function registerStudent(
   joinCode: string,
+  externalId: string,
   email: string,
   displayName: string,
   password?: string
@@ -129,6 +130,30 @@ export async function registerStudent(
   await createVerifiedTestUser(email, userPassword);
   const token = await getTestToken(email, userPassword);
   return withToken(token, () => apiRegisterStudent(joinCode, displayName));
+}
+
+/**
+ * Hard-delete a test namespace via the test-only backend endpoint.
+ * CASCADE-deletes all users in the namespace, freeing the external_id
+ * for the next test in this worker.
+ * No auth required — test-mode only endpoint.
+ */
+export async function hardDeleteNamespace(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/test/namespaces/${id}`, {
+    method: 'DELETE',
+  });
+  if (res.status !== 204) {
+    console.warn(`Failed to cleanup namespace ${id}: ${res.status}`);
+  }
+}
+
+/**
+ * Create a deterministic test token for a user given their externalId and email.
+ * Used by E2E fixture setup code (not browser auth — browser auth uses Firebase).
+ * Format: test:<externalId>:<email>
+ */
+export function testToken(externalId: string, email: string): string {
+  return `test:${externalId}:${email}`;
 }
 
 export async function getSectionByJoinCode(joinCode: string): Promise<RegisterStudentInfo> {

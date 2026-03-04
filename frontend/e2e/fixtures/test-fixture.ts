@@ -8,16 +8,12 @@
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
-import { createNamespace, createInvitation, acceptInvitation, getAdminToken } from './api-setup';
-import { createVerifiedTestUser, getTestToken } from './test-auth';
+import { createNamespace, createInvitation, acceptInvitation, hardDeleteNamespace, testToken, registerStudent } from './api-setup';
 
 // Generate unique namespace ID for each test
 function generateNamespaceId(): string {
   return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-
-// Default password for E2E test users
-const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 // Shared log collection for all pages in a test
 interface LogCollector {
@@ -30,6 +26,8 @@ interface TestFixtures {
   testNamespace: string;
   // Setup an instructor user in the test namespace, returns the auth token
   setupInstructor: (username?: string) => Promise<{ token: string; email: string; externalId: string }>;
+  // Setup a student user and enroll them via join code, returns the auth token
+  setupStudent: (joinCode: string, username?: string) => Promise<{ token: string; email: string; externalId: string }>;
   // Log collector for capturing browser console logs from multiple pages
   logCollector: LogCollector;
 }
@@ -84,26 +82,33 @@ export const test = base.extend<TestFixtures>({
     const nsId = generateNamespaceId();
     await createNamespace(nsId, 'E2E Test Namespace');
     await use(nsId);
-    // Cleanup happens via DB cascade when namespace is deleted
-    // For E2E tests, we leave cleanup to the test DB reset
+    // Hard-delete the namespace to CASCADE-delete users,
+    // freeing the external_id for the next test in this worker.
+    await hardDeleteNamespace(nsId);
   },
 
-  setupInstructor: async ({ testNamespace }, use) => {
+  setupInstructor: async ({ testNamespace }, use, testInfo) => {
     const setup = async (username: string = 'e2e-instructor') => {
-      const externalId = `${username}-${testNamespace}`;
+      const workerIndex = testInfo.parallelIndex;
+      const externalId = `${username}-w${workerIndex}`;
       const email = `${externalId}@test.local`;
+      const token = testToken(externalId, email);
 
-      // Create the user in Firebase Auth with emailVerified=true
-      await createVerifiedTestUser(email, DEFAULT_PASSWORD);
-      const token = await getTestToken(email, DEFAULT_PASSWORD);
-
-      // Get admin token for invitation creation
-      const adminToken = await getAdminToken();
-
-      // Create invitation and accept it to create the user's DB record
-      const invId = await createInvitation(email, 'instructor', testNamespace, adminToken);
+      const invId = await createInvitation(email, 'instructor', testNamespace);
       await acceptInvitation(invId, token, `E2E ${username}`);
 
+      return { token, email, externalId };
+    };
+    await use(setup);
+  },
+
+  setupStudent: async ({ testNamespace }, use, testInfo) => {
+    const setup = async (joinCode: string, username: string = 'student') => {
+      const workerIndex = testInfo.parallelIndex;
+      const externalId = `${username}-w${workerIndex}`;
+      const email = `${externalId}@test.local`;
+      await registerStudent(joinCode, externalId, email, `E2E ${username}`);
+      const token = testToken(externalId, email);
       return { token, email, externalId };
     };
     await use(setup);
@@ -112,4 +117,6 @@ export const test = base.extend<TestFixtures>({
 
 export { expect } from '@playwright/test';
 // Export getAdminToken for tests that need system-level access
-export { getAdminToken };
+export { getAdminToken } from './api-setup';
+// Export testToken for spec files that need to construct tokens directly
+export { testToken } from './api-setup';
