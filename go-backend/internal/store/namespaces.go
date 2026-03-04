@@ -86,5 +86,19 @@ func (s *Store) UpdateNamespace(ctx context.Context, id string, params UpdateNam
 	return ns, nil
 }
 
+// DeleteNamespace permanently deletes a namespace.
+// Related records (users, classes, etc.) are removed by FK CASCADE.
+// Returns ErrNotFound if the namespace does not exist.
+func (s *Store) DeleteNamespace(ctx context.Context, id string) error {
+	tag, err := s.q.Exec(ctx, "DELETE FROM namespaces WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Compile-time check that Store implements NamespaceRepository.
 var _ NamespaceRepository = (*Store)(nil)

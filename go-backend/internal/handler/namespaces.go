@@ -162,15 +162,13 @@ func (h *NamespaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, ns)
 }
 
-// Delete handles DELETE /api/v1/namespaces/{id} — soft-delete a namespace (system-admin only).
+// Delete handles DELETE /api/v1/namespaces/{id} — permanently deletes a namespace (system-admin only).
+// FK CASCADE removes all related records (users, classes, sections, etc.).
 func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	repos := store.ReposFromContext(r.Context())
-	active := false
-	_, err := repos.UpdateNamespace(r.Context(), id, store.UpdateNamespaceParams{
-		Active: &active,
-	})
+	err := repos.DeleteNamespace(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
