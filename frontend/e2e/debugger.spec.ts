@@ -1,7 +1,6 @@
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { createClass, createSection, startSession, createProblem, publishProblem, startSessionFromProblem, getOrCreateStudentWork, registerStudent } from './fixtures/api-setup';
-import { getTestToken } from './fixtures/test-auth';
+import { createClass, createSection, startSession, createProblem, publishProblem, startSessionFromProblem, getOrCreateStudentWork } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 /**
@@ -16,7 +15,7 @@ import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
  */
 
 test.describe('Debugger', () => {
-  test('Instructor can debug code from Problem Setup tab', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
+  test('Instructor can debug code from Problem Setup tab', async ({ page, browser, setupInstructor, logCollector }) => {
     test.setTimeout(60000);
 
     // ===== API SETUP =====
@@ -88,12 +87,11 @@ test.describe('Debugger', () => {
     }
   });
 
-  test('Student can debug code from session editor', async ({ page, browser, testNamespace, setupInstructor, logCollector }) => {
+  test('Student can debug code from session editor', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     test.setTimeout(60000);
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentEmail = `student-${testNamespace}@test.local`;
 
     const cls = await createClass(instructor.token, 'Student Debug Class');
     const section = await createSection(instructor.token, cls.id, 'Student Debug Section');
@@ -103,19 +101,18 @@ test.describe('Debugger', () => {
       starterCode: '# Write your solution\n',
     });
 
-    // Register student (creates emulator user and enrolls in section)
-    await registerStudent(section.join_code, studentEmail, 'Debug Student');
-
     // Publish problem to section and start session from problem
     await publishProblem(instructor.token, section.id, problem.id);
     const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
+    // Register student (creates emulator user and enrolls in section)
+    const student = await setupStudent(section.join_code, 'debug-student');
+
     // Get or create student work so we can navigate directly via work_id
-    const studentToken = await getTestToken(studentEmail, 'e2e-test-password-123'); // gitleaks:allow
-    const work = await getOrCreateStudentWork(studentToken, section.id, problem.id);
+    const work = await getOrCreateStudentWork(student.token, section.id, problem.id);
 
     // ===== STUDENT JOINS SESSION =====
-    await signInAs(page, studentEmail);
+    await signInAs(page, student.email);
     await page.goto(`/student?work_id=${work.id}`);
     await expect(page.locator('.monaco-editor')).toBeVisible();
     await expect(page.locator('text=Connected')).toBeVisible();

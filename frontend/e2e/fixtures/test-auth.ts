@@ -128,9 +128,38 @@ export async function createTestUser(email: string, password: string): Promise<v
  * (e.g. POST /auth/bootstrap, POST /auth/register-student).
  *
  * Idempotent: if the user already exists, this is a no-op (returns without error).
+ *
+ * In real IDP mode (staging), users are pre-created. This function tries signIn
+ * first — if the user exists, it skips signUp to avoid rate-limit triggers. If
+ * signIn fails with EMAIL_NOT_FOUND, it falls back to signUp (handles first-time
+ * setup or emulator mode).
  */
 export async function createVerifiedTestUser(email: string, password: string): Promise<void> {
-  // First attempt sign-up via the public API; ignore EMAIL_EXISTS errors.
+  const signInUrl = `${IDP_BASE_URL}/accounts:signInWithPassword?key=${API_KEY}`;
+
+  if (!IS_EMULATOR) {
+    // Real IDP mode: try signIn first — user may be pre-created.
+    const signInRes = await fetch(signInUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withTenant({ email, password, returnSecureToken: true })),
+    });
+    if (signInRes.ok) {
+      // User already exists and credentials are correct — no signUp needed.
+      const { localId } = await signInRes.json();
+      createdUserIds.add(localId);
+      // emailVerified should already be set on pre-created users; skip update.
+      return;
+    }
+    const signInBody = await signInRes.text();
+    // Only fall through to signUp if the user doesn't exist yet.
+    if (!signInBody.includes('EMAIL_NOT_FOUND') && !signInBody.includes('INVALID_LOGIN_CREDENTIALS')) {
+      throw new Error(`Failed to sign in user for verification: ${signInRes.status} ${signInBody}`);
+    }
+    // Fall through to signUp below for first-time setup.
+  }
+
+  // Emulator mode or first-time real IDP setup: create user via signUp.
   const signUpUrl = `${IDP_BASE_URL}/accounts:signUp?key=${API_KEY}`;
   const signUpRes = await fetch(signUpUrl, {
     method: 'POST',
@@ -146,17 +175,16 @@ export async function createVerifiedTestUser(email: string, password: string): P
   }
 
   // Sign in to get the user's localId (UID) so we can update emailVerified
-  const signInUrl = `${IDP_BASE_URL}/accounts:signInWithPassword?key=${API_KEY}`;
-  const signInRes = await fetch(signInUrl, {
+  const signInRes2 = await fetch(signInUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(withTenant({ email, password, returnSecureToken: true })),
   });
-  if (!signInRes.ok) {
-    const body = await signInRes.text();
-    throw new Error(`Failed to sign in user for verification: ${signInRes.status} ${body}`);
+  if (!signInRes2.ok) {
+    const body = await signInRes2.text();
+    throw new Error(`Failed to sign in user for verification: ${signInRes2.status} ${body}`);
   }
-  const { localId } = await signInRes.json();
+  const { localId } = await signInRes2.json();
   createdUserIds.add(localId);
 
   // Set emailVerified=true via admin API.
@@ -199,43 +227,23 @@ export async function getTestToken(email: string, password: string): Promise<str
  * Deletes all test users created during this test run.
  *
  * - Emulator mode: bulk-deletes all users via the emulator admin endpoint.
- * - Real IDP mode: deletes only the users we created (tracked by UID).
+ * - Real IDP mode: users are stable and reused across runs (pre-created for staging).
+ *   Namespace deletion (FK CASCADE) removes the DB records; IDP users are kept.
  */
 export async function clearTestUsers(): Promise<void> {
-  if (IS_EMULATOR) {
-    const url = `http://${EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}/accounts`;
-    const res = await fetch(url, { method: 'DELETE' });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Failed to clear emulator users: ${res.status} ${body}`);
-    }
+  if (!IS_EMULATOR) {
+    // Real IDP: users are stable and reused — don't delete them from the IDP.
+    // Namespace teardown (deleteTestNamespace) handles DB record cleanup via CASCADE.
     createdUserIds.clear();
     return;
   }
 
-  // Real IDP: delete tracked users individually
-  if (createdUserIds.size === 0) return;
-
-  const authHeader = await getAdminAuthHeader();
-  const deleteUrl = `${IDP_BASE_URL}/accounts:delete`;
-
-  const errors: string[] = [];
-  for (const localId of createdUserIds) {
-    const res = await fetch(deleteUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(withTenant({ localId })),
-    });
-    if (!res.ok) {
-      errors.push(`${localId}: ${res.status}`);
-    }
+  // Emulator mode: bulk-delete all users
+  const url = `http://${EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}/accounts`;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to clear emulator users: ${res.status} ${body}`);
   }
   createdUserIds.clear();
-
-  if (errors.length > 0) {
-    console.warn(`Failed to delete ${errors.length} test users: ${errors.join(', ')}`);
-  }
 }

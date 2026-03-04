@@ -8,17 +8,16 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { registerStudent, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Public View Feature', () => {
-  test('Public view updates when instructor features different students', async ({ page, browser, testNamespace, setupInstructor }) => {
+  test('Public view updates when instructor features different students', async ({ page, browser, setupInstructor, setupStudent }) => {
     // Increase timeout for this multi-actor test (instructor + student + public view)
     test.setTimeout(90_000);
 
     // ===== SETUP USERS VIA API =====
     const instructor = await setupInstructor();
-    const studentEmail = `student-${testNamespace}@test.local`;
 
     const instructorContext = await browser.newContext();
     const instructorPage = await instructorContext.newPage();
@@ -77,8 +76,8 @@ test.describe('Public View Feature', () => {
       }
 
       // ===== STUDENT JOINS AND WRITES CODE =====
-      // Register the student via API (creates user + enrolls in section)
-      await registerStudent(joinCode, studentEmail, 'E2E Student');
+      // Register the student via the setupStudent fixture (creates user + enrolls in section)
+      const student = await setupStudent(joinCode);
 
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
@@ -114,10 +113,10 @@ test.describe('Public View Feature', () => {
       // Verify student list panel is visible on instructor page
       await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible();
 
-      await signInAs(page, studentEmail);
+      await signInAs(page, student.email);
       await page.goto(`/sections/${sectionId}`);
 
-      // Join active session (student is already enrolled via registerStudent)
+      // Join active session (student is already enrolled via setupStudent)
       const joinNowButton = page.locator('button:has-text("Join Now")');
       await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
@@ -134,10 +133,10 @@ test.describe('Public View Feature', () => {
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT =====
       // Wait for student to appear - via Realtime broadcast or polling fallback
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
+      await expect(instructorPage.locator('text=E2E student')).toBeVisible();
 
       // Click "Feature" button for this student
-      const studentRow = instructorPage.locator('div:has-text("E2E Student")').first();
+      const studentRow = instructorPage.locator('div:has-text("E2E student")').first();
       const featureBtn = studentRow.locator('button:has-text("Feature")');
       await featureBtn.click();
 

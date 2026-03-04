@@ -2,18 +2,24 @@
  * Extended Playwright test fixture with per-test namespace isolation
  * and automatic browser console log capture.
  *
- * Each test gets a unique namespace so tests don't interfere with each other.
- * The setupInstructor fixture creates a user in that namespace via the API.
+ * Each test gets a unique namespace derived from the stable testInfo.testId
+ * so tests don't interfere with each other across runs. The namespace is
+ * deleted after each test (FK CASCADE removes users), freeing the external_id
+ * for the next run.
+ *
+ * The setupInstructor fixture creates an instructor user in that namespace.
+ * The setupStudent fixture centralizes student email construction.
  * Browser console logs are automatically attached to test results on failure.
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
-import { createNamespace, createInvitation, acceptInvitation, getAdminToken } from './api-setup';
+import { createNamespace, createInvitation, acceptInvitation, getAdminToken, registerStudent, deleteTestNamespace } from './api-setup';
 import { createVerifiedTestUser, getTestToken } from './test-auth';
 
-// Generate unique namespace ID for each test
-function generateNamespaceId(): string {
-  return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// Generate a deterministic namespace ID from the stable Playwright test ID.
+// testInfo.testId is a stable hash per test case — same across retries and runs.
+function generateNamespaceId(testId: string): string {
+  return `e2e-${testId.slice(0, 12)}`;
 }
 
 // Default password for E2E test users
@@ -30,6 +36,8 @@ interface TestFixtures {
   testNamespace: string;
   // Setup an instructor user in the test namespace, returns the auth token
   setupInstructor: (username?: string) => Promise<{ token: string; email: string; externalId: string }>;
+  // Setup a student user and enroll them via join code, returns the auth token
+  setupStudent: (joinCode: string, username?: string) => Promise<{ token: string; email: string; externalId: string }>;
   // Log collector for capturing browser console logs from multiple pages
   logCollector: LogCollector;
 }
@@ -80,12 +88,13 @@ export const test = base.extend<TestFixtures>({
     await use(page);
   },
 
-  testNamespace: async ({}, use) => {
-    const nsId = generateNamespaceId();
+  testNamespace: async ({}, use, testInfo) => {
+    const nsId = generateNamespaceId(testInfo.testId);
     await createNamespace(nsId, 'E2E Test Namespace');
     await use(nsId);
-    // Cleanup happens via DB cascade when namespace is deleted
-    // For E2E tests, we leave cleanup to the test DB reset
+    // Delete namespace after test — FK CASCADE removes users,
+    // freeing the external_id for the next run.
+    await deleteTestNamespace(nsId);
   },
 
   setupInstructor: async ({ testNamespace }, use) => {
@@ -104,6 +113,17 @@ export const test = base.extend<TestFixtures>({
       const invId = await createInvitation(email, 'instructor', testNamespace, adminToken);
       await acceptInvitation(invId, token, `E2E ${username}`);
 
+      return { token, email, externalId };
+    };
+    await use(setup);
+  },
+
+  setupStudent: async ({ testNamespace }, use) => {
+    const setup = async (joinCode: string, username: string = 'student') => {
+      const externalId = `${username}-${testNamespace}`;
+      const email = `${externalId}@test.local`;
+      await registerStudent(joinCode, email, `E2E ${username}`);
+      const token = await getTestToken(email, DEFAULT_PASSWORD);
       return { token, email, externalId };
     };
     await use(setup);

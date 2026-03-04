@@ -5,7 +5,6 @@ import {
   createSection,
   createProblem,
   publishProblem,
-  registerStudent,
 } from './fixtures/api-setup';
 import { waitForMonacoReady, getMonacoValue } from './fixtures/monaco';
 
@@ -33,14 +32,13 @@ test.describe('Problem Publishing + Student Practice', () => {
     browser,
     testNamespace,
     setupInstructor,
+    setupStudent,
     logCollector,
   }) => {
     test.setTimeout(90000);
 
     // ===== API SETUP =====
     const instructor = await setupInstructor();
-    const studentExternalId = `student-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
 
     // Create class, section, and problem via API
     const cls = await createClass(instructor.token, `Publishing Test Class ${testNamespace}`);
@@ -51,8 +49,8 @@ test.describe('Problem Publishing + Student Practice', () => {
       starterCode: 'print("hello from practice")\n',
     });
 
-    // Register student via API
-    await registerStudent(section.join_code, studentEmail, 'E2E Student');
+    // Register student via the setupStudent fixture
+    const student = await setupStudent(section.join_code);
 
     // Publish problem to section via API with show_solution enabled
     await publishProblem(instructor.token, section.id, problem.id, true);
@@ -86,7 +84,7 @@ test.describe('Problem Publishing + Student Practice', () => {
       await expect(instructorPage.locator('button:has-text("Create Session")')).toBeVisible();
 
       // ===== PHASE 2: STUDENT SIGNS IN AND NAVIGATES TO SECTION =====
-      await signInAs(page, studentEmail);
+      await signInAs(page, student.email);
       await page.goto(`/sections/${section.id}`);
 
       // Student sees the section name
