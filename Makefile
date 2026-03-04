@@ -149,6 +149,14 @@ test-lint-migrations:
 	bash scripts/test-lint-migrations.sh
 
 # ──────────────────────────────────────────────
+# E2E user setup script tests
+# ──────────────────────────────────────────────
+.PHONY: test-setup-e2e-users
+
+test-setup-e2e-users:
+	bash scripts/test-setup-e2e-users.sh
+
+# ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
 # ──────────────────────────────────────────────
 .PHONY: smoke-test
