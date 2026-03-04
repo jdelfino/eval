@@ -84,8 +84,12 @@ export const test = base.extend<TestFixtures>({
     }
   },
 
-  // Capture browser console logs and attach on failure
-  page: async ({ page, logCollector }, use, testInfo) => {
+  // Capture browser console logs and attach on failure.
+  // Declaring testNamespace here forces Playwright's fixture teardown ordering:
+  // page tears down before testNamespace, so the browser's WebSocket closes
+  // (disconnecting async code-sync handlers) before the namespace DELETE runs.
+  // This prevents FK violations from revision writes racing the FK CASCADE.
+  page: async ({ page, logCollector, testNamespace: _testNamespace }, use, testInfo) => {
     logCollector.attachPage(page, 'default-page');
     await use(page);
   },
@@ -94,11 +98,6 @@ export const test = base.extend<TestFixtures>({
     const nsId = generateNamespaceId(testInfo.testId);
     await createNamespace(nsId, 'E2E Test Namespace');
     await use(nsId);
-    // Brief settle time — the browser page (and its WebSocket) may still be
-    // open when this fixture tears down, since `page` and `testNamespace` have
-    // no dependency relationship. Wait for async operations (code sync, revision
-    // writes) to drain before the FK CASCADE delete removes all namespace data.
-    await new Promise(resolve => setTimeout(resolve, 1000));
     await deleteTestNamespace(nsId);
   },
 

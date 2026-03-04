@@ -40,7 +40,7 @@ export default function StudentSectionView({
   const handleProblemClick = async (problemId: string) => {
     try {
       const work = await getOrCreateStudentWork(sectionId, problemId);
-      router.push(`/student?work_id=${work.id}`);
+      router.push(`/student?work_id=${work.id}&section_id=${sectionId}`);
     } catch (err) {
       console.error('Error creating student work:', err);
       setError(err instanceof Error ? err.message : 'Failed to start problem');
@@ -54,7 +54,7 @@ export default function StudentSectionView({
 
     try {
       const work = await getOrCreateStudentWork(sectionId, session.problem.id);
-      router.push(`/student?work_id=${work.id}`);
+      router.push(`/student?work_id=${work.id}&section_id=${sectionId}`);
     } catch (err) {
       console.error('Error joining session:', err);
       setError(err instanceof Error ? err.message : 'Failed to join session');
