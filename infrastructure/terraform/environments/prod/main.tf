@@ -525,7 +525,7 @@ resource "google_service_account" "staging_workload" {
 
 resource "google_project_iam_member" "staging_idp_admin" {
   project = var.project_id
-  role    = "roles/firebaseauth.admin"
+  role    = "roles/identitytoolkit.admin"
   member  = "serviceAccount:${google_service_account.staging_workload.email}"
 }
 
