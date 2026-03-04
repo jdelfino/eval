@@ -105,7 +105,7 @@ test.describe('Debugger', () => {
     await publishProblem(instructor.token, section.id, problem.id);
     const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
-    // Register student via fixture (worker-scoped deterministic email)
+    // Register student (creates emulator user and enrolls in section)
     const student = await setupStudent(section.join_code, 'debug-student');
 
     // Get or create student work so we can navigate directly via work_id

@@ -25,7 +25,7 @@ test.describe('Session Lifecycle', () => {
     // Start session from problem via API
     const session1 = await startSessionFromProblem(instructor.token, section.id, problem.id);
 
-    // Register student via fixture (worker-scoped deterministic email)
+    // Register student via the setupStudent fixture (creates emulator user and enrolls in section)
     const student = await setupStudent(section.join_code);
 
     // ===== INSTRUCTOR OPENS SESSION VIEW =====
@@ -57,7 +57,7 @@ test.describe('Session Lifecycle', () => {
       await page.waitForTimeout(1000);
 
       // ===== INSTRUCTOR VERIFIES STUDENT CODE =====
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
+      await expect(instructorPage.locator('text=E2E student')).toBeVisible();
 
       // ===== INSTRUCTOR STARTS REPLACEMENT SESSION =====
       // Start a new session via API (simulating "Replace Session")

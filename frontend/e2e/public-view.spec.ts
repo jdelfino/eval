@@ -75,6 +75,10 @@ test.describe('Public View Feature', () => {
         throw new Error('Could not find join code on dashboard page');
       }
 
+      // ===== STUDENT JOINS AND WRITES CODE =====
+      // Register the student via the setupStudent fixture (creates user + enrolls in section)
+      const student = await setupStudent(joinCode);
+
       // Look up the section ID and class ID from the join code
       const sectionInfo = await getSectionByJoinCode(joinCode);
       const sectionId = sectionInfo.section.id;
@@ -109,10 +113,6 @@ test.describe('Public View Feature', () => {
       // Verify student list panel is visible on instructor page
       await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible();
 
-      // ===== STUDENT JOINS AND WRITES CODE =====
-      // Register the student via fixture (worker-scoped deterministic email)
-      const student = await setupStudent(joinCode);
-
       await signInAs(page, student.email);
       await page.goto(`/sections/${sectionId}`);
 
@@ -133,10 +133,10 @@ test.describe('Public View Feature', () => {
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT =====
       // Wait for student to appear - via Realtime broadcast or polling fallback
-      await expect(instructorPage.locator('text=E2E Student')).toBeVisible();
+      await expect(instructorPage.locator('text=E2E student')).toBeVisible();
 
       // Click "Feature" button for this student
-      const studentRow = instructorPage.locator('div:has-text("E2E Student")').first();
+      const studentRow = instructorPage.locator('div:has-text("E2E student")').first();
       const featureBtn = studentRow.locator('button:has-text("Feature")');
       await featureBtn.click();
 

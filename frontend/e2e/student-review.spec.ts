@@ -5,10 +5,8 @@ import {
   createSection,
   createProblem,
   publishProblem,
-  registerStudent,
   getOrCreateStudentWork,
 } from './fixtures/api-setup';
-import { getTestToken } from './fixtures/test-auth';
 
 /**
  * Student Progress Review E2E Tests
@@ -28,6 +26,7 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     page,
     testNamespace,
     setupInstructor,
+    setupStudent,
   }) => {
     test.setTimeout(45000);
 
@@ -46,16 +45,12 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     // Publish problem to the section
     await publishProblem(instructor.token, section.id, problem.id);
 
-    // Register a student in the section
-    const studentExternalId = `student-review-${testNamespace}`;
-    const studentEmail = `${studentExternalId}@test.local`;
-    const studentPassword = 'e2e-test-password-123'; // gitleaks:allow
-    const studentDisplayName = 'Review Student';
-    await registerStudent(section.join_code, studentExternalId, studentEmail, studentDisplayName, studentPassword);
+    // Register a student via the setupStudent fixture
+    const student = await setupStudent(section.join_code, 'student-review');
+    const studentDisplayName = 'E2E student-review';
 
     // Create student work entry via API (simulates the student having started the problem)
-    const studentToken = await getTestToken(studentEmail, studentPassword);
-    await getOrCreateStudentWork(studentToken, section.id, problem.id);
+    await getOrCreateStudentWork(student.token, section.id, problem.id);
 
     // ===== INSTRUCTOR NAVIGATES TO SECTION =====
     await signInAs(page, instructor.email);

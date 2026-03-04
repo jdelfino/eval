@@ -131,7 +131,7 @@ test.describe('Critical User Paths', () => {
       const session = await startSessionFromProblem(instructor.token, sectionId, problem.id);
 
       // ===== STUDENT FLOW =====
-      // Register the student via fixture (worker-scoped deterministic email)
+      // Register the student via the setupStudent fixture (creates user + enrolls in section)
       const student = await setupStudent(joinCode);
 
       // Navigate instructor to the session page
@@ -261,7 +261,7 @@ test.describe('Critical User Paths', () => {
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
       // ===== STUDENT JOINS AND WRITES CODE =====
-      // Register the student via fixture (worker-scoped deterministic email)
+      // Register the student via the setupStudent fixture (creates user + enrolls in section)
       const student = await setupStudent(joinCode);
 
       await signInAs(page, student.email);
@@ -288,7 +288,7 @@ test.describe('Critical User Paths', () => {
 
       // ===== VERIFY INSTRUCTOR SEES STUDENT WITH CODE =====
       // Student should appear in the connected students list
-      const studentDisplayName = 'E2E Student';
+      const studentDisplayName = 'E2E student';
       await expect(instructorPage.locator(`text=${studentDisplayName}`)).toBeVisible();
 
       // Wait for activity badge to appear -- this confirms the code synced

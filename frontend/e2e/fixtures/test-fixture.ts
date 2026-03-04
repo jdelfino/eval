@@ -2,18 +2,28 @@
  * Extended Playwright test fixture with per-test namespace isolation
  * and automatic browser console log capture.
  *
- * Each test gets a unique namespace so tests don't interfere with each other.
- * The setupInstructor fixture creates a user in that namespace via the API.
+ * Each test gets a unique namespace derived from the stable testInfo.testId
+ * so tests don't interfere with each other across runs. The namespace is
+ * deleted after each test (FK CASCADE removes users), freeing the external_id
+ * for the next run.
+ *
+ * The setupInstructor fixture creates an instructor user in that namespace.
+ * The setupStudent fixture centralizes student email construction.
  * Browser console logs are automatically attached to test results on failure.
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
-import { createNamespace, createInvitation, acceptInvitation, hardDeleteNamespace, testToken, registerStudent } from './api-setup';
+import { createNamespace, createInvitation, acceptInvitation, getAdminToken, registerStudent, deleteTestNamespace } from './api-setup';
+import { createVerifiedTestUser, getTestToken } from './test-auth';
 
-// Generate unique namespace ID for each test
-function generateNamespaceId(): string {
-  return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// Generate a deterministic namespace ID from the stable Playwright test ID.
+// testInfo.testId is a stable hash per test case — same across retries and runs.
+function generateNamespaceId(testId: string): string {
+  return `e2e-${testId.slice(0, 12)}`;
 }
+
+// Default password for E2E test users
+const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 // Shared log collection for all pages in a test
 interface LogCollector {
@@ -78,23 +88,29 @@ export const test = base.extend<TestFixtures>({
     await use(page);
   },
 
-  testNamespace: async ({}, use) => {
-    const nsId = generateNamespaceId();
+  testNamespace: async ({}, use, testInfo) => {
+    const nsId = generateNamespaceId(testInfo.testId);
     await createNamespace(nsId, 'E2E Test Namespace');
     await use(nsId);
-    // Hard-delete the namespace to CASCADE-delete users,
-    // freeing the external_id for the next test in this worker.
-    await hardDeleteNamespace(nsId);
+    // Delete namespace after test — FK CASCADE removes users,
+    // freeing the external_id for the next run.
+    await deleteTestNamespace(nsId);
   },
 
-  setupInstructor: async ({ testNamespace }, use, testInfo) => {
+  setupInstructor: async ({ testNamespace }, use) => {
     const setup = async (username: string = 'e2e-instructor') => {
-      const workerIndex = testInfo.parallelIndex;
-      const externalId = `${username}-w${workerIndex}`;
+      const externalId = `${username}-${testNamespace}`;
       const email = `${externalId}@test.local`;
-      const token = testToken(externalId, email);
 
-      const invId = await createInvitation(email, 'instructor', testNamespace);
+      // Create the user in Firebase Auth with emailVerified=true
+      await createVerifiedTestUser(email, DEFAULT_PASSWORD);
+      const token = await getTestToken(email, DEFAULT_PASSWORD);
+
+      // Get admin token for invitation creation
+      const adminToken = await getAdminToken();
+
+      // Create invitation and accept it to create the user's DB record
+      const invId = await createInvitation(email, 'instructor', testNamespace, adminToken);
       await acceptInvitation(invId, token, `E2E ${username}`);
 
       return { token, email, externalId };
@@ -102,13 +118,12 @@ export const test = base.extend<TestFixtures>({
     await use(setup);
   },
 
-  setupStudent: async ({ testNamespace }, use, testInfo) => {
+  setupStudent: async ({ testNamespace }, use) => {
     const setup = async (joinCode: string, username: string = 'student') => {
-      const workerIndex = testInfo.parallelIndex;
-      const externalId = `${username}-w${workerIndex}`;
+      const externalId = `${username}-${testNamespace}`;
       const email = `${externalId}@test.local`;
-      await registerStudent(joinCode, externalId, email, `E2E ${username}`);
-      const token = testToken(externalId, email);
+      await registerStudent(joinCode, email, `E2E ${username}`);
+      const token = await getTestToken(email, DEFAULT_PASSWORD);
       return { token, email, externalId };
     };
     await use(setup);
@@ -117,6 +132,4 @@ export const test = base.extend<TestFixtures>({
 
 export { expect } from '@playwright/test';
 // Export getAdminToken for tests that need system-level access
-export { getAdminToken } from './api-setup';
-// Export testToken for spec files that need to construct tokens directly
-export { testToken } from './api-setup';
+export { getAdminToken };

@@ -12,7 +12,7 @@ import { configureTestAuth } from '../../src/lib/auth-provider';
 import { setBaseUrl } from '../../src/lib/api-client';
 import { setBaseUrl as setPublicBaseUrl } from '../../src/lib/public-api-client';
 import { ApiError } from '../../src/lib/api-error';
-import { createNamespace as apiCreateNamespace } from '../../src/lib/api/namespaces';
+import { createNamespace as apiCreateNamespace, deleteNamespace as apiDeleteNamespace } from '../../src/lib/api/namespaces';
 import { createSystemInvitation } from '../../src/lib/api/system';
 import { acceptInvite, getStudentRegistrationInfo, registerStudent as apiRegisterStudent } from '../../src/lib/api/registration';
 import { createClass as apiCreateClass, createSection as apiCreateSection } from '../../src/lib/api/classes';
@@ -92,6 +92,16 @@ export async function createNamespace(id: string, displayName: string, token?: s
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) return; // already exists
     throw err;
+  }
+}
+
+export async function deleteTestNamespace(id: string): Promise<void> {
+  const tok = await getAdminToken();
+  try {
+    await withToken(tok, () => apiDeleteNamespace(id));
+  } catch {
+    // Best-effort cleanup — don't fail the test if cleanup fails
+    console.warn(`Failed to cleanup namespace ${id}`);
   }
 }
 
