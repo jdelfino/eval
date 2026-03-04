@@ -508,7 +508,7 @@ module "centrifugo_staging" {
   region       = var.region
 
   namespace       = "staging"
-  allowed_origins = []
+  allowed_origins = ["http://frontend"]
   redis_host      = "redis" # namespace-relative
   redis_port      = 6379
 
