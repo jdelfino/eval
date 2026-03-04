@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# SessionStart hook: detect stale worktrees/branches and direct agent to main.
+# SessionStart hook: detect worktrees/branches and warn agent.
 #
 # When /clear runs, the session's working directory doesn't change.
 # If a previous agent was working in a worktree or feature branch,
-# the new session inherits that state. This hook detects the problem
-# and tells the agent to fix it before doing anything else.
+# the new session inherits that state. This hook warns the agent
+# so it can return to main — unless the user explicitly directs
+# it to work in the current worktree.
 
 set -euo pipefail
 
 # Derive the main repo path from git's common dir (works from any worktree).
-# git-common-dir returns the shared .git dir; its parent is the main checkout.
-# From the main repo it returns ".git" (relative), so we resolve it.
+# git-common-dir is always the .git of the main worktree.
 git_common=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
-main_repo=$(cd "$(dirname "$(git rev-parse --absolute-git-dir 2>/dev/null || git rev-parse --git-common-dir 2>/dev/null)")/../$(basename "$git_common")" 2>/dev/null && cd .. && pwd || echo "")
 
-# Simpler: git-common-dir is always the .git of the main worktree
 if [ -n "$git_common" ]; then
   # Resolve to absolute path, then strip the trailing /.git
   main_repo=$(cd "$git_common" 2>/dev/null && pwd)
@@ -32,28 +30,24 @@ fi
 
 if [ "$in_worktree" = true ]; then
   cat <<EOF
-# STALE WORKTREE DETECTED — ACTION REQUIRED
+# WARNING: session started in a worktree
 
-You are starting in a worktree from a previous session.
+You are in a worktree, likely left over from a previous session.
   Current directory: $current_dir
   Branch: $current_branch
   Main repository: $main_repo
 
-**You MUST immediately run this command before doing anything else:**
-  cd $main_repo
-
-Then confirm you are on the main branch. If not, run: git checkout main
-
-Do NOT work in, commit to, or modify this worktree. It belongs to a previous session.
+**Unless the user explicitly asks you to work in this worktree**, return to main first:
+  cd $main_repo && git checkout main
 
 EOF
 elif [ -n "$current_branch" ] && [ "$current_branch" != "main" ]; then
   cat <<EOF
-# NOT ON MAIN BRANCH — ACTION REQUIRED
+# WARNING: session started on branch '$current_branch'
 
-You are on branch '$current_branch' instead of 'main'.
+You are on a non-main branch, likely left over from a previous session.
 
-**You MUST immediately run this command before doing anything else:**
+**Unless the user explicitly asks you to work on this branch**, return to main first:
   git checkout main
 
 EOF
