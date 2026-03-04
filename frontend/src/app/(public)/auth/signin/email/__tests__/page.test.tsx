@@ -9,7 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { useRouter, useSearchParams } from 'next/navigation';
 import EmailSignInPage from '../page';
 import { useAuth } from '@/contexts/AuthContext';
-import { acceptInvite } from '@/lib/api/registration';
+import { acceptInvite, registerStudent, getStudentRegistrationInfo } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
 
 // Mock next/navigation
@@ -37,12 +37,16 @@ jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {},
 }));
 
-// Mock acceptInvite
+// Mock registration API
 jest.mock('@/lib/api/registration', () => ({
   acceptInvite: jest.fn(),
+  registerStudent: jest.fn(),
+  getStudentRegistrationInfo: jest.fn(),
 }));
 
 const mockAcceptInvite = acceptInvite as jest.Mock;
+const mockRegisterStudent = registerStudent as jest.Mock;
+const mockGetStudentRegistrationInfo = getStudentRegistrationInfo as jest.Mock;
 
 describe('EmailSignInPage', () => {
   const mockPush = jest.fn();
@@ -90,7 +94,6 @@ describe('EmailSignInPage', () => {
       render(<EmailSignInPage />);
 
       expect(screen.queryByText(/create account/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/register/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/sign up/i)).not.toBeInTheDocument();
     });
   });
@@ -487,6 +490,296 @@ describe('EmailSignInPage', () => {
         expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
       });
       expect(mockAcceptInvite).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Join code flow', () => {
+    const mockSectionId = 'section-abc-123';
+
+    beforeEach(() => {
+      const params = new URLSearchParams('code=TESTCODE');
+      (useSearchParams as jest.Mock).mockReturnValue(params);
+
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: mockSectionId, name: 'Test Section', active: true },
+        class: { id: 'class-1', name: 'Test Class' },
+      });
+      mockRegisterStudent.mockResolvedValue({ role: 'student' });
+    });
+
+    it('calls registerStudent with the join code after successful sign-in', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledWith('TESTCODE');
+      });
+    });
+
+    it('calls getStudentRegistrationInfo to get section id before redirecting', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockGetStudentRegistrationInfo).toHaveBeenCalledWith('TESTCODE');
+      });
+    });
+
+    it('redirects to the section page after successful student registration', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith(`/sections/${mockSectionId}`);
+      });
+    });
+
+    it('calls setUserProfile with registerStudent result to sync AuthContext cache before redirect', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      const registerResult = { role: 'student' };
+      mockRegisterStudent.mockResolvedValue(registerResult);
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockSetUserProfile).toHaveBeenCalledWith(registerResult);
+      });
+      // setUserProfile must be called before the redirect
+      const setProfileOrder = mockSetUserProfile.mock.invocationCallOrder[0];
+      const pushOrder = mockPush.mock.invocationCallOrder[0];
+      expect(setProfileOrder).toBeLessThan(pushOrder);
+    });
+
+    it('shows error message when join code is invalid', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid join code', 404, 'INVALID_CODE')
+      );
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/invalid.*join code|join code.*invalid/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('shows error message when section is inactive', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      mockRegisterStudent.mockRejectedValue(
+        new ApiError('Section is inactive', 400, 'SECTION_INACTIVE')
+      );
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/section.*inactive|inactive.*section/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('shows error message when section is at capacity', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      mockRegisterStudent.mockRejectedValue(
+        new ApiError('Section is at capacity', 409, 'NAMESPACE_AT_CAPACITY')
+      );
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/capacity/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('shows generic error message when registerStudent fails with unknown error', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      mockRegisterStudent.mockRejectedValue(new Error('Network error'));
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/failed|error/i)).toBeInTheDocument();
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('does NOT redirect to / when isAuthenticated becomes true (suppresses auto-redirect)', () => {
+      (useAuth as jest.Mock).mockReturnValue({
+        isAuthenticated: true,
+        refreshUser: mockRefreshUser,
+        setUserProfile: mockSetUserProfile,
+        beginAuthFlow: mockBeginAuthFlow,
+      });
+
+      render(<EmailSignInPage />);
+
+      expect(mockPush).not.toHaveBeenCalledWith('/');
+    });
+
+    it('does not call registerStudent without signing in first', () => {
+      render(<EmailSignInPage />);
+
+      expect(mockRegisterStudent).not.toHaveBeenCalled();
+    });
+
+    it('shows info banner when ?code= is in URL', () => {
+      render(<EmailSignInPage />);
+
+      // Should display some informational text indicating join code flow is active
+      expect(
+        screen.getByText(/joining.*section|section.*join|join code/i)
+      ).toBeInTheDocument();
+    });
+
+    it('does not call acceptInvite when join code is present', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalled();
+      });
+      expect(mockAcceptInvite).not.toHaveBeenCalled();
+    });
+
+    it('calls beginAuthFlow before signing in to gate onAuthStateChanged', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockBeginAuthFlow).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Join code manual input (no URL param)', () => {
+    beforeEach(() => {
+      // No code param in URL
+      (useSearchParams as jest.Mock).mockReturnValue(new URLSearchParams());
+    });
+
+    it('renders a join code input field when no ?code= param is present', () => {
+      render(<EmailSignInPage />);
+
+      expect(screen.getByLabelText(/join code/i)).toBeInTheDocument();
+    });
+
+    it('normalizes join code input (strips dashes, uppercases)', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'section-456', name: 'Test Section', active: true },
+        class: { id: 'class-1', name: 'Test Class' },
+      });
+      mockRegisterStudent.mockResolvedValue({ role: 'student' });
+
+      render(<EmailSignInPage />);
+
+      await user.type(screen.getByLabelText(/join code/i), 'TEST-CODE');
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledWith('TESTCODE');
+      });
+    });
+
+    it('does not call registerStudent when join code input is empty', async () => {
+      const user = userEvent.setup();
+      mockSignInWithEmailAndPassword.mockResolvedValue({
+        user: { uid: 'test-uid', email: 'student@example.com' },
+      });
+
+      render(<EmailSignInPage />);
+
+      // Don't fill in join code
+      await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
+      await user.type(screen.getByLabelText(/^password$/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      // Should perform plain sign-in, not student registration
+      await waitFor(() => {
+        expect(mockSignInWithEmailAndPassword).toHaveBeenCalled();
+      });
+      expect(mockRegisterStudent).not.toHaveBeenCalled();
     });
   });
 });
