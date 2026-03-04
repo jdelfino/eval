@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds and starts the Go API on a caller-specified random port.
-# Always starts a fresh instance with the latest code.
+# Builds and starts the Go API on a caller-specified port.
+# Skips the Go build if the binary already exists (cache-aware).
 # Prints the PID to stdout — the caller MUST clean up (kill) when done.
 #
 # Usage:
@@ -24,10 +24,12 @@ DB_NAME=${DATABASE_NAME:-eval}
 DB_USER=${DATABASE_USER:-eval}
 DB_PASS=${DATABASE_PASSWORD:-eval_local_password}
 
-# Always rebuild — go build is fast when nothing changed (cached),
-# and skipping the build misses source changes in local modules.
-echo "Building Go server..." >&2
-(cd go-backend && mkdir -p tmp && go build -o ./tmp/server ./cmd/server)
+if [ -f go-backend/tmp/server ]; then
+  echo "Go server binary exists, skipping build" >&2
+else
+  echo "Building Go server..." >&2
+  (cd go-backend && mkdir -p tmp && go build -o ./tmp/server ./cmd/server)
+fi
 
 # Start the server using Firebase validator.
 # The Admin SDK auto-detects FIREBASE_AUTH_EMULATOR_HOST and trusts emulator tokens.
