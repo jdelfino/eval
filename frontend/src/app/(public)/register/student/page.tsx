@@ -14,11 +14,12 @@
  * 5. On success, redirect to student dashboard
  */
 
-import React, { useState, useEffect, FormEvent, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { firebaseAuth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { SignInButtons } from '@/components/ui/SignInButtons';
 import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
@@ -77,6 +78,10 @@ function StudentRegistrationContent() {
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
   const [registrationInfo, setRegistrationInfo] = useState<RegisterStudentInfo | null>(null);
 
+  // Guard against double-registration when onAuthStateChanged fires while
+  // doRegister is already in flight (e.g., the fast path via currentUser check).
+  const registrationStartedRef = useRef(false);
+
   // Form fields
   const [join_code, setJoinCode] = useState('');
 
@@ -119,6 +124,7 @@ function StudentRegistrationContent() {
   // and from the SignInButtons onSuccess handler.
   const doRegister = useCallback(
     async (info: RegisterStudentInfo, code: string, isNewSignIn = false) => {
+      registrationStartedRef.current = true;
       setPageState({ status: 'submitting' });
       setSubmitError('');
 
@@ -161,6 +167,31 @@ function StudentRegistrationContent() {
     },
     [setUserProfile, router]
   );
+
+  // Handle late Firebase Auth hydration (auth race fix for PLAT-my3o).
+  //
+  // After page.goto(), firebaseAuth.currentUser may be null when the user
+  // clicks "Continue to Register" because Firebase Auth hasn't yet restored
+  // state from IndexedDB. In that case, handleValidateCode falls through to
+  // showing the sign-in buttons (code-valid state).
+  //
+  // This effect watches for onAuthStateChanged to fire with a user. If the
+  // page is still in code-valid state (sign-in buttons showing) and no
+  // registration has started yet, it auto-registers the user without requiring
+  // a manual re-click.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
+      if (
+        firebaseUser &&
+        !registrationStartedRef.current &&
+        pageState.status === 'code-valid' &&
+        registrationInfo !== null
+      ) {
+        void doRegister(registrationInfo, join_code);
+      }
+    });
+    return unsubscribe;
+  }, [pageState.status, registrationInfo, join_code, doRegister]);
 
   // Handle code validation
   const handleValidateCode = async (e: FormEvent) => {
@@ -216,6 +247,7 @@ function StudentRegistrationContent() {
 
   // Go back to code entry
   const handleBackToCode = () => {
+    registrationStartedRef.current = false;
     setPageState({ status: 'code-entry' });
     setRegistrationInfo(null);
     setSubmitError('');

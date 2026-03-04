@@ -63,12 +63,24 @@ jest.mock('@/components/ui/SignInButtons', () => ({
 let mockCurrentUser: { delete: jest.Mock; uid: string; email: string } | null = null;
 const mockDeleteUser = jest.fn();
 
+// Track onAuthStateChanged subscriber so tests can trigger it
+let authStateCallback: ((user: typeof mockCurrentUser) => void) | null = null;
+
 jest.mock('@/lib/firebase', () => ({
   firebaseAuth: {
     get currentUser() {
       return mockCurrentUser;
     },
   },
+}));
+
+// Mock firebase/auth to capture onAuthStateChanged subscription
+const mockOnAuthStateChangedUnsubscribe = jest.fn();
+jest.mock('firebase/auth', () => ({
+  onAuthStateChanged: jest.fn((auth: unknown, callback: (user: typeof mockCurrentUser) => void) => {
+    authStateCallback = callback;
+    return mockOnAuthStateChangedUnsubscribe;
+  }),
 }));
 
 // Mock typed registration API client functions
@@ -92,6 +104,8 @@ describe('StudentRegistrationPage', () => {
     mockRegisterStudent.mockClear();
     mockCurrentUser = null;
     mockDeleteUser.mockResolvedValue(undefined);
+    authStateCallback = null;
+    mockOnAuthStateChangedUnsubscribe.mockClear();
   });
 
   describe('Initial State', () => {
@@ -451,6 +465,110 @@ describe('StudentRegistrationPage', () => {
 
       expect(screen.getByText("If you've registered before, sign in to access your sections.")).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Sign in to your account/i })).toHaveAttribute('href', '/auth/signin');
+    });
+  });
+
+  describe('Auth Hydration Race (PLAT-my3o)', () => {
+    // Scenario: user signed in before navigating to the page, but Firebase Auth
+    // hasn't hydrated from IndexedDB yet when the button is clicked.
+    // firebaseAuth.currentUser is null at validation time, so the page shows
+    // sign-in buttons. Then auth hydrates (onAuthStateChanged fires) and the
+    // page should auto-register without requiring a manual re-click.
+
+    const setupCodeValidWithNoCurrentUser = async () => {
+      mockCurrentUser = null;
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-42', name: 'Fall Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+
+      render(<StudentRegistrationPage />);
+
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+
+      // Page is in code-valid state, showing sign-in buttons (auth not hydrated yet)
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      return user;
+    };
+
+    it('auto-registers when onAuthStateChanged fires with a user while in code-valid state', async () => {
+      const registeredUser = { id: 'user-1', role: 'student' };
+      mockRegisterStudent.mockResolvedValue(registeredUser);
+
+      await setupCodeValidWithNoCurrentUser();
+
+      // Simulate Firebase Auth hydrating: set currentUser and fire the subscriber
+      const hydratedUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'student@test.com' };
+      mockCurrentUser = hydratedUser;
+      expect(authStateCallback).not.toBeNull();
+      authStateCallback!(hydratedUser);
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC-123');
+      });
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/sections/sec-42');
+      });
+    });
+
+    it('does not auto-register when onAuthStateChanged fires with null (sign-out)', async () => {
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await setupCodeValidWithNoCurrentUser();
+
+      // Auth fires with null (signed out) — should NOT trigger registration
+      expect(authStateCallback).not.toBeNull();
+      authStateCallback!(null);
+
+      // Give it time to possibly (incorrectly) call register
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(mockRegisterStudent).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('does not double-register if auth fires while already submitting', async () => {
+      // Simulate code-valid with currentUser already set (normal fast path)
+      const existingUser = { delete: mockDeleteUser, uid: 'uid-existing', email: 'student@test.com' };
+      mockCurrentUser = existingUser;
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-42', name: 'Fall Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+
+      render(<StudentRegistrationPage />);
+
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+
+      // Already-signed-in path: registers directly, never shows sign-in buttons
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledTimes(1);
+      });
+
+      // Now auth state fires again — should NOT trigger a second registration
+      if (authStateCallback) {
+        authStateCallback!(existingUser);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      expect(mockRegisterStudent).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsubscribes from onAuthStateChanged on unmount', async () => {
+      const { unmount } = render(<StudentRegistrationPage />);
+      unmount();
+      expect(mockOnAuthStateChangedUnsubscribe).toHaveBeenCalled();
     });
   });
 
