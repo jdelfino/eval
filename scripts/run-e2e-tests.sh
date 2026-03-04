@@ -6,8 +6,9 @@ set -euo pipefail
 # Infrastructure (postgres, redis, centrifugo, executor) is shared on fixed
 # ports — started only if not already healthy.
 #
-# Go API is per-run on a random port (different branches may have different
-# code). Next.js proxies to the Go API via API_PROXY_URL.
+# Go API runs on a fixed default port (4100) — can be overridden via API_PORT.
+# Using a fixed port makes Next.js builds deterministic (API_PROXY_URL is baked
+# in at build time), enabling cache hits across CI runs.
 #
 # Always uses the Firebase Auth Emulator for real end-to-end auth testing.
 
@@ -36,15 +37,15 @@ if ! curl -sf --max-time 3 http://localhost:9099/ >/dev/null 2>&1; then
   docker compose up -d firebase-emulator --wait
 fi
 
-# --- 2. Go API on random port (builds binary if needed) ---
-export API_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+# --- 2. Go API on fixed port (builds binary if needed) ---
+export API_PORT=${API_PORT:-4100}
 
 export FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 SERVER_PID=$(./scripts/ensure-test-api.sh)
 PIDS_TO_KILL+=("$SERVER_PID")
 
 # --- 3. Next.js (production build) ---
-# Always restart — the API port changes each run so the proxy target is stale.
+# Stop any running Next.js on the port before (re)starting.
 if fuser "${NEXT_PORT}/tcp" >/dev/null 2>&1; then
   echo "Killing previous Next.js on port ${NEXT_PORT}..."
   fuser -k "${NEXT_PORT}/tcp" 2>/dev/null || true
@@ -60,16 +61,20 @@ if [ -L frontend/node_modules ]; then
   (cd frontend && npm install --prefer-offline)
 fi
 
-echo "Building Next.js..."
-(cd frontend && \
-  NEXT_PUBLIC_API_URL=/api/v1 \
-  NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
-  NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost \
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
-  NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 \
-  API_PROXY_URL="http://localhost:${API_PORT}" \
-  npm run build)
+if [ -d frontend/.next/standalone ]; then
+  echo "Next.js standalone build exists, skipping build"
+else
+  echo "Building Next.js..."
+  (cd frontend && \
+    NEXT_PUBLIC_API_URL=/api/v1 \
+    NEXT_PUBLIC_CENTRIFUGO_URL=ws://localhost:8000/connection/websocket \
+    NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=localhost \
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
+    NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=http://localhost:9099 \
+    API_PROXY_URL="http://localhost:${API_PORT}" \
+    npm run build)
+fi
 
 echo "Starting Next.js on port ${NEXT_PORT}..."
 # Copy static assets into the standalone output (required for standalone mode)

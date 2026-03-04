@@ -157,6 +157,21 @@ test-setup-e2e-users:
 	bash scripts/test-setup-e2e-users.sh
 
 # ──────────────────────────────────────────────
+# E2E script tests (cache-aware behavior)
+# ──────────────────────────────────────────────
+.PHONY: test-run-e2e-tests
+
+test-run-e2e-tests:
+	bash scripts/test-run-e2e-tests.sh
+
+# CI workflow validation
+# ──────────────────────────────────────────────
+.PHONY: validate-ci-workflow
+
+validate-ci-workflow:
+	python3 scripts/validate-ci-workflow.py
+
+# ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
 # ──────────────────────────────────────────────
 .PHONY: smoke-test
