@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /workspaces/eval/.claude/hooks/session-start.sh"
+            "command": "bash .claude/hooks/session-start.sh"
           }
         ]
       }

@@ -8,10 +8,19 @@
 
 set -euo pipefail
 
-MAIN_REPO="/workspaces/eval"
-
-# Detect if we're in a linked worktree (not the main checkout)
+# Derive the main repo path from git's common dir (works from any worktree).
+# git-common-dir returns the shared .git dir; its parent is the main checkout.
+# From the main repo it returns ".git" (relative), so we resolve it.
 git_common=$(git rev-parse --git-common-dir 2>/dev/null || echo "")
+main_repo=$(cd "$(dirname "$(git rev-parse --absolute-git-dir 2>/dev/null || git rev-parse --git-common-dir 2>/dev/null)")/../$(basename "$git_common")" 2>/dev/null && cd .. && pwd || echo "")
+
+# Simpler: git-common-dir is always the .git of the main worktree
+if [ -n "$git_common" ]; then
+  # Resolve to absolute path, then strip the trailing /.git
+  main_repo=$(cd "$git_common" 2>/dev/null && pwd)
+  main_repo="${main_repo%/.git}"
+fi
+
 git_dir=$(git rev-parse --git-dir 2>/dev/null || echo "")
 current_branch=$(git branch --show-current 2>/dev/null || echo "")
 current_dir=$(pwd)
@@ -28,28 +37,14 @@ if [ "$in_worktree" = true ]; then
 You are starting in a worktree from a previous session.
   Current directory: $current_dir
   Branch: $current_branch
-  Main repository: $MAIN_REPO
+  Main repository: $main_repo
 
 **You MUST immediately run this command before doing anything else:**
-  cd $MAIN_REPO
+  cd $main_repo
 
 Then confirm you are on the main branch. If not, run: git checkout main
 
 Do NOT work in, commit to, or modify this worktree. It belongs to a previous session.
-
-EOF
-elif [ "$current_dir" != "$MAIN_REPO" ] && [[ "$current_dir" == /workspaces/eval-* ]]; then
-  # We're in a directory that looks like a worktree but git disagrees
-  # (e.g., orphaned worktree directory)
-  cat <<EOF
-# STALE WORKING DIRECTORY DETECTED — ACTION REQUIRED
-
-You are starting in what appears to be a previous session's worktree.
-  Current directory: $current_dir
-  Main repository: $MAIN_REPO
-
-**You MUST immediately run this command before doing anything else:**
-  cd $MAIN_REPO
 
 EOF
 elif [ -n "$current_branch" ] && [ "$current_branch" != "main" ]; then
@@ -64,5 +59,5 @@ You are on branch '$current_branch' instead of 'main'.
 EOF
 fi
 
-# Always output AGENTS.md (use absolute path so it works from any directory)
-cat "$MAIN_REPO/AGENTS.md"
+# Always output AGENTS.md
+cat "$main_repo/AGENTS.md"
