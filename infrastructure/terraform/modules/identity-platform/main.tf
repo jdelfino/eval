@@ -57,6 +57,11 @@ resource "google_identity_platform_config" "main" {
     }
   }
 
+  # Enable multi-tenancy (required for staging tenant isolation)
+  multi_tenant {
+    allow_tenants = true
+  }
+
   # Authorized domains for OAuth redirects
   # Note: The project's Firebase hosting domains are automatically included
   authorized_domains = length(var.authorized_domains) > 0 ? var.authorized_domains : null
