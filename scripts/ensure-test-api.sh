@@ -15,10 +15,14 @@ set -euo pipefail
 #     validator which auto-detects this env var and accepts emulator tokens.
 #     Example: FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 #   DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
+#   DOCKER_HOST_IP — set in container jobs to reach host-side services
+
+# Docker compose services run on the host. In container jobs, use DOCKER_HOST_IP.
+HOST=${DOCKER_HOST_IP:-localhost}
 
 API_PORT=${API_PORT:?API_PORT must be set}
 FIREBASE_AUTH_EMULATOR_HOST=${FIREBASE_AUTH_EMULATOR_HOST:?FIREBASE_AUTH_EMULATOR_HOST must be set}
-DB_HOST=${DATABASE_HOST:-localhost}
+DB_HOST=${DATABASE_HOST:-${HOST}}
 DB_PORT=${DATABASE_PORT:-5432}
 DB_NAME=${DATABASE_NAME:-eval}
 DB_USER=${DATABASE_USER:-eval}
@@ -41,8 +45,9 @@ export BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local
 # FIREBASE_AUTH_EMULATOR_HOST is inherited from the caller's environment
 export DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME"
 export DATABASE_USER="$DB_USER" DATABASE_PASSWORD="$DB_PASS"
-export REDIS_URL=redis://localhost:6379
-export CENTRIFUGO_URL=http://localhost:8000
+export EXECUTOR_URL="http://${HOST}:8081"
+export REDIS_URL="redis://${HOST}:6379"
+export CENTRIFUGO_URL="http://${HOST}:8000"
 export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
 export PORT="$API_PORT"
