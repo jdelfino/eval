@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat AGENTS.md"
+            "command": "bash /workspaces/eval/.claude/hooks/session-start.sh"
           }
         ]
       }
