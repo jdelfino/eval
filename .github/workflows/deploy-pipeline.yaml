@@ -320,6 +320,10 @@ jobs:
           FIREBASE_PROJECT_ID: eval-prod-485520
           BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
           CI: 'true'
+          # Staging uses the prod LB cert which only covers eval.delquillan.com.
+          # Node.js fetch (used by E2E fixtures) rejects the staging subdomain.
+          # TODO: Add staging.eval.delquillan.com to managed cert, then remove.
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
         run: cd frontend && npx playwright test
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

@@ -45,6 +45,9 @@ export default defineConfig({
 
     /* Video only on failure */
     video: 'retain-on-failure',
+
+    /* Accept self-signed/mismatched certs (staging uses prod cert) */
+    ignoreHTTPSErrors: true,
   },
 
   /* Configure projects for Chromium only */
