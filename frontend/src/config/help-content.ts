@@ -4,6 +4,7 @@
  */
 
 import type { UserRole } from '@/types/api';
+import { isValidRole } from './roles';
 
 /** A help topic with its content and role visibility. */
 export interface HelpTopic {
@@ -16,14 +17,6 @@ export interface HelpTopic {
   /** Roles that can see this topic */
   roles: UserRole[];
 }
-
-/** Role hierarchy for permission checking */
-const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'student': 0,
-  'instructor': 1,
-  'namespace-admin': 2,
-  'system-admin': 3,
-};
 
 /** Introductory text shown at the top of the help page. */
 export const HELP_INTRO =
@@ -125,13 +118,6 @@ As an administrator, you can manage users in your organization:
     roles: ['namespace-admin', 'system-admin'],
   },
 ];
-
-/**
- * Check if a string is a valid user role.
- */
-function isValidRole(role: string): role is UserRole {
-  return role in ROLE_HIERARCHY;
-}
 
 /**
  * Get help topics visible to a given role.

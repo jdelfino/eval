@@ -6,6 +6,8 @@
 import type { UserRole } from '@/types/api';
 export type { UserRole };
 
+import { isValidRole } from './roles';
+
 /** Navigation groups for sidebar sections */
 export enum NavGroup {
   Main = 'main',
@@ -23,14 +25,6 @@ export interface NavItem {
   roles: UserRole[];
   group: NavGroup;
 }
-
-/** Role hierarchy for permission checking */
-const ROLE_HIERARCHY: Record<UserRole, number> = {
-  'student': 0,
-  'instructor': 1,
-  'namespace-admin': 2,
-  'system-admin': 3,
-};
 
 /**
  * All navigation items in the application.
@@ -150,11 +144,3 @@ export function getNavGroupsForRole(role: string): NavGroup[] {
   return orderedGroups.filter(group => groups.has(group));
 }
 
-/**
- * Check if a string is a valid user role.
- * @param role - The role to check
- * @returns true if the role is valid
- */
-function isValidRole(role: string): role is UserRole {
-  return role in ROLE_HIERARCHY;
-}

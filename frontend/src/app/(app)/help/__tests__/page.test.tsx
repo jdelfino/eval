@@ -114,9 +114,10 @@ describe('Help Page', () => {
 
     it('shows student guide content by default', () => {
       render(<HelpPage />);
-      // Student guide panel should be visible
+      // Student guide panel should be visible with actual student guide content
       const panel = screen.getByRole('tabpanel');
       expect(panel).toBeInTheDocument();
+      expect(panel).toHaveTextContent(/joining a section/i);
     });
 
     it('switches to instructor guide on tab click', async () => {
@@ -127,6 +128,9 @@ describe('Help Page', () => {
       await user.click(instructorTab);
 
       expect(instructorTab).toHaveAttribute('aria-selected', 'true');
+      // Verify instructor content is rendered in the visible panel
+      const panel = screen.getByRole('tabpanel');
+      expect(panel).toHaveTextContent(/creating classes and sections/i);
     });
   });
 

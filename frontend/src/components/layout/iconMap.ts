@@ -12,7 +12,6 @@ import {
   Users,
   Building,
   Bot,
-  HelpCircle,
   LucideIcon,
 } from 'lucide-react';
 
@@ -29,7 +28,6 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Users,
   Building,
   Bot,
-  HelpCircle,
 };
 
 /**

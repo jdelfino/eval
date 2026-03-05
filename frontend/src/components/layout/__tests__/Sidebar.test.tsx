@@ -283,6 +283,44 @@ describe('Sidebar', () => {
     });
   });
 
+  describe('help link', () => {
+    it('renders Help link for all roles', () => {
+      const roles = ['student', 'instructor', 'namespace-admin', 'system-admin'] as const;
+
+      roles.forEach(role => {
+        mockUser.mockReturnValue({
+          id: 'user1',
+          email: 'test@example.com',
+          role,
+        });
+
+        const { unmount } = render(<Sidebar />);
+        expect(screen.getByRole('link', { name: /help/i })).toBeInTheDocument();
+        unmount();
+      });
+    });
+
+    it('has correct href', () => {
+      render(<Sidebar />);
+      const helpLink = screen.getByRole('link', { name: /help/i });
+      expect(helpLink).toHaveAttribute('href', '/help');
+    });
+
+    it('shows active state when on /help', () => {
+      mockPathname.mockReturnValue('/help');
+      render(<Sidebar />);
+      const helpLink = screen.getByRole('link', { name: /help/i });
+      expect(helpLink).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('does not show active state on other pages', () => {
+      mockPathname.mockReturnValue('/instructor');
+      render(<Sidebar />);
+      const helpLink = screen.getByRole('link', { name: /help/i });
+      expect(helpLink).not.toHaveAttribute('aria-current', 'page');
+    });
+  });
+
   describe('preview mode navigation', () => {
     it('shows student nav items (My Sections) for instructor when preview is active', () => {
       mockUser.mockReturnValue({
