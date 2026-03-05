@@ -17,12 +17,12 @@ import (
 // context.WithoutCancel to strip the parent deadline first.
 func TestTimeoutOverride_AppliesFreshDeadline(t *testing.T) {
 	const (
-		outerTimeout    = 1 * time.Millisecond
-		overrideTimeout = 5 * time.Millisecond
-		handlerSleep    = 3 * time.Millisecond
+		outerTimeout    = 50 * time.Millisecond
+		overrideTimeout = 500 * time.Millisecond
+		handlerSleep    = 200 * time.Millisecond
 	)
 
-	// Build a handler that sleeps 3ms, then checks if its context is still live.
+	// Build a handler that sleeps 200ms, then checks if its context is still live.
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(handlerSleep)
 		select {
@@ -35,7 +35,7 @@ func TestTimeoutOverride_AppliesFreshDeadline(t *testing.T) {
 
 	wrapped := TimeoutOverride(overrideTimeout)(innerHandler)
 
-	// Construct a request whose context already has a 1ms deadline (simulating the
+	// Construct a request whose context already has a 50ms deadline (simulating the
 	// global API timeout being applied upstream by the outer router group).
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	shortCtx, shortCancel := context.WithTimeout(req.Context(), outerTimeout)
@@ -48,11 +48,11 @@ func TestTimeoutOverride_AppliesFreshDeadline(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	// The handler slept 3ms; the override timeout is 5ms.
-	// Despite the parent context being cancelled (1ms elapsed), the handler
+	// The handler slept 200ms; the override timeout is 500ms.
+	// Despite the parent context being cancelled (50ms elapsed), the handler
 	// should complete successfully because TimeoutOverride uses a fresh context.
 	if rr.Code != http.StatusOK {
-		t.Errorf("expected 200 (handler completed within 5ms override), got %d — TimeoutOverride did not replace parent deadline", rr.Code)
+		t.Errorf("expected 200 (handler completed within 500ms override), got %d — TimeoutOverride did not replace parent deadline", rr.Code)
 	}
 }
 
@@ -60,8 +60,8 @@ func TestTimeoutOverride_AppliesFreshDeadline(t *testing.T) {
 // deadline is still enforced (i.e. it does not create an immortal context).
 func TestTimeoutOverride_RespectsItsOwnDeadline(t *testing.T) {
 	const (
-		overrideTimeout = 1 * time.Millisecond
-		handlerSleep    = 5 * time.Millisecond
+		overrideTimeout = 50 * time.Millisecond
+		handlerSleep    = 500 * time.Millisecond
 	)
 
 	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +80,7 @@ func TestTimeoutOverride_RespectsItsOwnDeadline(t *testing.T) {
 	rr := httptest.NewRecorder()
 	wrapped.ServeHTTP(rr, req)
 
-	// Handler sleeps 5ms but override timeout is 1ms — context should be cancelled.
+	// Handler sleeps 500ms but override timeout is 50ms — context should be cancelled.
 	// The handler checks ctx.Done() and writes 504 when the deadline expires.
 	if rr.Code == http.StatusOK {
 		t.Errorf("expected non-200 (handler timed out), got 200 — TimeoutOverride not enforcing its own deadline")
