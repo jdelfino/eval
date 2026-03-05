@@ -86,7 +86,7 @@ func (h *InvitationHandler) List(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	invitations, err := repos.ListInvitations(r.Context(), filters)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if invitations == nil {
@@ -127,7 +127,7 @@ func (h *InvitationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour),
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -169,7 +169,7 @@ func (h *InvitationHandler) Get(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -216,7 +216,7 @@ func (h *InvitationHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *InvitationHandler) Resend(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *InvitationHandler) Resend(w http.ResponseWriter, r *http.Request) {
 
 	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, nsID, acceptURL); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
+		httputil.WriteInternalError(w, r, err, "failed to send email")
 		return
 	}
 
@@ -288,7 +288,7 @@ func (h *InvitationHandler) SystemList(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	invitations, err := repos.ListInvitations(r.Context(), filters)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if invitations == nil {
@@ -325,7 +325,7 @@ func (h *InvitationHandler) SystemCreate(w http.ResponseWriter, r *http.Request)
 		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour),
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -361,7 +361,7 @@ func (h *InvitationHandler) SystemGet(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -383,7 +383,7 @@ func (h *InvitationHandler) SystemRevoke(w http.ResponseWriter, r *http.Request)
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -411,7 +411,7 @@ func (h *InvitationHandler) SystemResend(w http.ResponseWriter, r *http.Request)
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -422,7 +422,7 @@ func (h *InvitationHandler) SystemResend(w http.ResponseWriter, r *http.Request)
 
 	acceptURL := fmt.Sprintf("%s?token=%s", h.baseURL, inv.ID.String())
 	if err := h.emailClient.SendInvitation(r.Context(), inv.Email, authUser.Email, inv.NamespaceID, acceptURL); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to send email")
+		httputil.WriteInternalError(w, r, err, "failed to send email")
 		return
 	}
 

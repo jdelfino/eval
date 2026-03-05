@@ -43,7 +43,7 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *MembershipHandler) Join(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusConflict, "already a member of this section")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -89,7 +89,7 @@ func (h *MembershipHandler) Leave(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "membership not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *MembershipHandler) ListMembers(w http.ResponseWriter, r *http.Request) 
 	repos := store.ReposFromContext(r.Context())
 	members, err := repos.ListMembers(r.Context(), sectionID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

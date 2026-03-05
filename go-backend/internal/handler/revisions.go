@@ -47,7 +47,7 @@ func (h *RevisionHandler) List(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	revisions, err := repos.ListRevisions(r.Context(), sessionID, userID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "student not in session")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *RevisionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StudentWorkID:   sessionStudent.StudentWorkID,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

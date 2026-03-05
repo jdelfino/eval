@@ -87,7 +87,7 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *AuthHandler) GetAcceptInvite(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -194,7 +194,7 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "invitation not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -221,12 +221,12 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		DisplayName: req.DisplayName,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to create user")
+		httputil.WriteInternalError(w, r, err, "failed to create user")
 		return
 	}
 
 	if _, err := repos.ConsumeInvitation(r.Context(), invID, user.ID); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to consume invitation")
+		httputil.WriteInternalError(w, r, err, "failed to consume invitation")
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 			httputil.WriteErrorWithCode(w, http.StatusNotFound, "INVALID_CODE", "invalid join code")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -265,7 +265,7 @@ func (h *AuthHandler) GetRegisterStudent(w http.ResponseWriter, r *http.Request)
 
 	class, err := repos.GetClass(r.Context(), section.ClassID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 			httputil.WriteErrorWithCode(w, http.StatusNotFound, "INVALID_CODE", "invalid join code")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -325,7 +325,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		DisplayName: req.DisplayName,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to create user")
+		httputil.WriteInternalError(w, r, err, "failed to create user")
 		return
 	}
 
@@ -334,7 +334,7 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		SectionID: section.ID,
 		Role:      "student",
 	}); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to create membership")
+		httputil.WriteInternalError(w, r, err, "failed to create membership")
 		return
 	}
 
@@ -373,7 +373,7 @@ func (h *AuthHandler) PostBootstrap(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusConflict, "system admin already exists")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to create user")
+		httputil.WriteInternalError(w, r, err, "failed to create user")
 		return
 	}
 

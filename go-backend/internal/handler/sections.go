@@ -131,7 +131,7 @@ func (h *SectionHandler) ListByClass(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	sections, err := repos.ListSectionsByClass(r.Context(), classID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -156,7 +156,7 @@ func (h *SectionHandler) Get(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -193,7 +193,7 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	for attempt := 0; attempt < maxJoinCodeRetries; attempt++ {
 		joinCode, err := generateJoinCode()
 		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 
@@ -210,12 +210,12 @@ func (h *SectionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if store.IsUniqueViolation(err, "sections_join_code_key") {
 			continue
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
 	if section == nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, errors.New("failed to generate unique join code after max retries"), "internal error")
 		return
 	}
 
@@ -268,7 +268,7 @@ func (h *SectionHandler) Update(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -293,7 +293,7 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "section not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -311,7 +311,7 @@ func (h *SectionHandler) MySections(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	sections, err := repos.ListMySections(r.Context(), authUser.ID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -332,7 +332,7 @@ func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	sessions, err := repos.ListSessions(r.Context(), store.SessionFilters{SectionID: &id})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -356,7 +356,7 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		joinCode, err := generateJoinCode()
 		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 
@@ -375,12 +375,12 @@ func (h *SectionHandler) RegenerateCode(w http.ResponseWriter, r *http.Request) 
 		if store.IsUniqueViolation(err, "sections_join_code_key") {
 			continue
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
 	if section == nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, errors.New("failed to generate unique join code after max retries"), "internal error")
 		return
 	}
 
@@ -397,7 +397,7 @@ func (h *SectionHandler) ListInstructors(w http.ResponseWriter, r *http.Request)
 	repos := store.ReposFromContext(r.Context())
 	instructors, err := repos.ListMembersByRole(r.Context(), sectionID, string(auth.RoleInstructor))
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -432,7 +432,7 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -455,7 +455,7 @@ func (h *SectionHandler) AddInstructor(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusConflict, "user is already an instructor for this section")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -489,7 +489,7 @@ func (h *SectionHandler) RemoveInstructor(w http.ResponseWriter, r *http.Request
 			httputil.WriteError(w, http.StatusNotFound, "instructor not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
