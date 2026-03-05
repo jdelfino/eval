@@ -265,6 +265,7 @@ resource "google_logging_metric" "error_log_entries" {
 
 # Log-based metric: client-side errors reported by the frontend through the go-api.
 # The frontend posts errors to the API which logs them with source="frontend".
+# Filtered to ERROR severity to count only actionable errors, not warnings or info.
 resource "google_logging_metric" "frontend_client_errors" {
   project = var.project_id
   name    = "${var.project_name}-${var.environment}-frontend-client-errors"
@@ -273,6 +274,7 @@ resource "google_logging_metric" "frontend_client_errors" {
     resource.type="k8s_container"
     AND resource.labels.container_name="go-api"
     AND jsonPayload.source="frontend"
+    AND severity>=ERROR
   EOT
 
   metric_descriptor {
@@ -280,6 +282,35 @@ resource "google_logging_metric" "frontend_client_errors" {
     value_type   = "INT64"
     unit         = "1"
     display_name = "Frontend Client Errors"
+  }
+}
+
+resource "google_monitoring_alert_policy" "frontend_client_error_rate" {
+  project      = var.project_id
+  display_name = "${var.project_name}-${var.environment} High Frontend Client Error Rate"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Frontend client errors > 5 in 5 minutes"
+
+    condition_threshold {
+      filter          = "metric.type=\"logging.googleapis.com/user/${var.project_name}-${var.environment}-frontend-client-errors\" AND resource.type=\"k8s_container\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 5
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  alert_strategy {
+    auto_close = "1800s"
   }
 }
 
