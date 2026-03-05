@@ -4,9 +4,12 @@
  * Reports client-side errors to the backend for centralized logging
  * via Cloud Error Reporting. Failures are swallowed silently to
  * ensure error reporting never cascades into additional errors.
+ *
+ * Uses the public (unauthenticated) API client so that errors during
+ * sign-in — before the user has an auth token — can still be reported.
  */
 
-import { apiFetch } from '@/lib/api-client';
+import { publicFetch } from '@/lib/public-api-client';
 
 /**
  * Reports a client-side error to the backend.
@@ -21,7 +24,7 @@ export async function reportError(
   context?: Record<string, string>
 ): Promise<void> {
   try {
-    await apiFetch('/client-errors', {
+    await publicFetch('/client-errors', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

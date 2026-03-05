@@ -160,6 +160,15 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			})
 		}
 
+		// Frontend error reporting — public, no authentication required.
+		// Unauthenticated users (e.g. during sign-in failures) must be able to
+		// report errors. Rate-limited by IP since there is no user ID to key on.
+		r.Group(func(r chi.Router) {
+			clientErrorRL := custommw.ForCategory(rl, "clientError", custommw.IPKey)
+			clientErrorHandler := handler.NewClientErrorHandler()
+			r.With(clientErrorRL).Post("/client-errors", clientErrorHandler.Report)
+		})
+
 		// Registration routes — GET is public, POST requires JWT (via inline middleware).
 		// No user lookup needed (new users don't have a DB profile yet).
 		if userStore != nil {
@@ -211,17 +220,11 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				readRL := custommw.ForCategory(rl, "read", custommw.UserKey)
 				// Write rate limiting for POST/PUT/PATCH/DELETE endpoints
 				writeRL := custommw.ForCategory(rl, "write", custommw.UserKey)
-				// Dedicated rate limiting for frontend error reporting (separate from the shared write bucket)
-				clientErrorRL := custommw.ForCategory(rl, "clientError", custommw.UserKey)
 
 				// Auth routes for existing users (me endpoints) — reuse authHandler from registration routes
 				meHandler := handler.NewAuthHandler(cfg.BootstrapAdminEmail)
 				r.With(readRL).Get("/auth/me", meHandler.GetMe)
 				r.With(writeRL).Put("/auth/me", meHandler.UpdateMe)
-
-				// Frontend error reporting
-				clientErrorHandler := handler.NewClientErrorHandler()
-				r.With(clientErrorRL).Post("/client-errors", clientErrorHandler.Report)
 
 				// Centrifugo realtime token endpoint
 			if cfg.CentrifugoTokenSecret != "" {

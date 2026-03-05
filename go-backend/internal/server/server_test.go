@@ -246,3 +246,30 @@ func TestAPIRoutePrefix(t *testing.T) {
 		t.Errorf("status code = %d, want %d", rr.Code, http.StatusNotFound)
 	}
 }
+
+// TestClientErrorsPublicEndpoint verifies that POST /api/v1/client-errors
+// is accessible without authentication (no JWT required).
+// Before the fix, the route was behind JWT middleware and would return 401.
+func TestClientErrorsPublicEndpoint(t *testing.T) {
+	cfg := &config.Config{Port: 8080}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	pool := &mockPool{healthStatus: db.HealthStatus{Healthy: true, Message: "OK"}}
+	// userStore is nil so JWT/UserLoader middleware is skipped; the client-errors
+	// route must still be reachable.
+	s, err := NewWithRegistry(cfg, logger, pool, nil, prometheus.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewWithRegistry() error: %v", err)
+	}
+
+	body := strings.NewReader(`{"message":"test error","severity":"error"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/client-errors", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.httpServer.Handler.ServeHTTP(rr, req)
+
+	// Should succeed with 204 No Content — no auth token needed.
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("status code = %d, want %d (endpoint must be public)", rr.Code, http.StatusNoContent)
+	}
+}
