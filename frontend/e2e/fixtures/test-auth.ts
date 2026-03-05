@@ -204,7 +204,11 @@ export async function createVerifiedTestUser(email: string, password: string): P
 
   // Set emailVerified=true via admin API.
   // Emulator uses "Bearer owner"; real IDP uses a GCP access token.
-  const updateUrl = `${IDP_BASE_URL}/accounts:update`;
+  // Multi-tenant IDP requires the project/tenant-scoped URL for admin
+  // operations — tenantId in the body is ignored with Bearer auth.
+  const updateUrl = !IS_EMULATOR && TENANT_ID
+    ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
+    : `${IDP_BASE_URL}/accounts:update`;
   const authHeader = await getAdminAuthHeader();
   const updateRes = await fetch(updateUrl, {
     method: 'POST',
@@ -212,7 +216,7 @@ export async function createVerifiedTestUser(email: string, password: string): P
       'Content-Type': 'application/json',
       Authorization: authHeader,
     },
-    body: JSON.stringify(withTenant({ localId, emailVerified: true })),
+    body: JSON.stringify({ localId, emailVerified: true }),
   });
   if (!updateRes.ok) {
     const body = await updateRes.text();
