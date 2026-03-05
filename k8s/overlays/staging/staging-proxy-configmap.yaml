@@ -30,6 +30,15 @@ data:
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         }
 
+        # Executor proxy — staging only (not exposed via production ingress)
+        location /execute {
+          proxy_pass http://executor:8081;
+        }
+
+        location /healthz/executor {
+          proxy_pass http://executor:8081/healthz;
+        }
+
         # Default backend — frontend
         location / {
           proxy_pass http://frontend:80;
