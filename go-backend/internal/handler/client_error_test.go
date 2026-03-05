@@ -203,6 +203,31 @@ func TestClientErrorHandler_Report_SeverityMappedToLogLevel(t *testing.T) {
 	}
 }
 
+func TestClientErrorHandler_Report_NoAuthContext(t *testing.T) {
+	handler := NewClientErrorHandler()
+
+	body := map[string]any{
+		"message":  "Firebase sign-in failed: auth/tenant-id-mismatch",
+		"severity": "error",
+		"context": map[string]string{
+			"type":     "firebase_sign_in",
+			"provider": "google",
+		},
+	}
+	b, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/client-errors", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	// No auth.WithUser or store.WithRepos — simulates unauthenticated request (sign-in failure)
+
+	rr := httptest.NewRecorder()
+	handler.Report(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("Report() status = %d, want %d (handler must work without auth context)", rr.Code, http.StatusNoContent)
+	}
+}
+
 func TestClientErrorHandler_Report_MessageTooLong(t *testing.T) {
 	handler := NewClientErrorHandler()
 

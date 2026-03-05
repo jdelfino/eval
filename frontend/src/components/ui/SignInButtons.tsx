@@ -95,24 +95,21 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
       onSuccess();
     } catch (error) {
       const firebaseError = error as { code?: string };
-      if (
+      const isUserCancelled =
         firebaseError.code === 'auth/popup-closed-by-user' ||
-        firebaseError.code === 'auth/cancelled-popup-request'
-      ) {
-        // Silently ignore — user cancelled or a new popup replaced the old one
-      } else if (firebaseError.code === 'auth/popup-blocked') {
-        // Report popup-blocked — indicates a browser config issue blocking all users
+        firebaseError.code === 'auth/cancelled-popup-request';
+
+      if (!isUserCancelled) {
+        // Report non-user-initiated errors to backend for monitoring
         void reportError(
           error instanceof Error ? error : new Error(String(error)),
           { type: 'firebase_sign_in', provider: providerType, code: firebaseError.code ?? 'unknown' }
         );
+      }
+
+      if (firebaseError.code === 'auth/popup-blocked') {
         setPopupBlocked(true);
-      } else {
-        // Report non-user-initiated errors to backend for monitoring before notifying parent
-        void reportError(
-          error instanceof Error ? error : new Error(String(error)),
-          { type: 'firebase_sign_in', provider: providerType, code: firebaseError.code ?? 'unknown' }
-        );
+      } else if (!isUserCancelled) {
         onError(error instanceof Error ? error : new Error(String(error)));
       }
     } finally {
