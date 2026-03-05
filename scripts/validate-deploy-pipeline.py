@@ -7,7 +7,7 @@ Checks that:
 - build-push-executor uses content-hash caching to skip unnecessary builds
 - The skip path produces a commit-SHA tag (so deploy-staging works unchanged)
 - The build path also produces commit-SHA and latest tags
-- deploy-staging runs executor sandbox validation via kubectl port-forward (not a K8s Job)
+- deploy-staging runs executor sandbox validation via in-cluster K8s Job
 
 Exit code 0 = valid, 1 = invalid.
 """
@@ -114,23 +114,19 @@ def validate(workflow_path):
         "deploy-staging needs: build-push-executor",
     )
 
-    # ── deploy-staging: executor sandbox validation via kubectl port-forward ────
-    # The K8s Job approach is replaced with a script that runs on the CI runner
-    # via kubectl port-forward to the executor service (not exposed publicly).
+    # ── deploy-staging: executor sandbox validation via in-cluster K8s Job ──────
+    # Connect Gateway blocks kubectl port-forward (SPDY upgrade), so the
+    # executor is validated via a K8s Job that runs curl from inside the cluster.
     staging_steps = staging_job.get("steps", [])
     staging_steps_str = str(staging_steps)
 
     ok &= check(
-        "validate-executor-sandbox.sh" in staging_steps_str,
-        "deploy-staging: runs validate-executor-sandbox.sh script",
+        "executor-validate" in staging_steps_str,
+        "deploy-staging: uses executor-validate K8s Job",
     )
     ok &= check(
-        "executor-validate" not in staging_steps_str,
-        "deploy-staging: no longer uses K8s executor-validate Job",
-    )
-    ok &= check(
-        "port-forward" in staging_steps_str,
-        "deploy-staging: uses kubectl port-forward to reach executor",
+        "executor.staging.svc.cluster.local" in staging_steps_str,
+        "deploy-staging: executor Job uses in-cluster FQDN",
     )
 
     # ── deploy-prod: gates on deploy-staging + ci ─────────────────────────────

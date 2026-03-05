@@ -218,19 +218,99 @@ jobs:
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
       - name: Validate executor sandbox (staging)
         run: |
-          # Access executor directly via port-forward (not exposed publicly).
-          kubectl port-forward -n staging svc/executor 8081:8081 &
-          PF_PID=$!
-          trap 'kill $PF_PID 2>/dev/null || true' EXIT
-          for i in $(seq 1 15); do
-            curl -sf --max-time 2 http://localhost:8081/healthz >/dev/null 2>&1 && break
-            if [ "$i" = "15" ]; then
-              echo "::error::Port-forward to executor not ready after 30s"
+          # Connect Gateway blocks kubectl port-forward (SPDY upgrade), so we
+          # use a K8s Job to reach the executor from inside the cluster.
+          kubectl delete job -n staging executor-validate --ignore-not-found
+          kubectl apply -f - <<'JOBEOF'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: executor-validate
+            namespace: staging
+            labels:
+              app: executor-validate
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 120
+            ttlSecondsAfterFinished: 600
+            template:
+              metadata:
+                labels:
+                  app: executor-validate
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: validate
+                    image: curlimages/curl:latest
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        set -e
+                        echo "=== Waiting for executor ==="
+                        for i in $(seq 1 15); do
+                          if curl -sf --max-time 3 http://executor.staging.svc.cluster.local:8081/healthz >/dev/null 2>&1; then
+                            echo "Executor ready after $((i * 2))s"
+                            break
+                          fi
+                          if [ "$i" = "15" ]; then
+                            echo "FAIL: executor not reachable after 30s"
+                            exit 1
+                          fi
+                          sleep 2
+                        done
+
+                        echo "=== Python execution test ==="
+                        RESULT=$(curl -sf -X POST http://executor.staging.svc.cluster.local:8081/execute \
+                          -H 'Content-Type: application/json' \
+                          -d '{"code":"print(\"sandbox-ok\")","language":"python"}')
+                        echo "$RESULT"
+                        echo "$RESULT" | grep -q '"success":true' || { echo "FAIL: Python"; exit 1; }
+
+                        echo "=== Java execution test ==="
+                        RESULT=$(curl -sf -X POST http://executor.staging.svc.cluster.local:8081/execute \
+                          -H 'Content-Type: application/json' \
+                          -d '{"code":"public class Main { public static void main(String[] args) { System.out.println(\"java-ok\"); } }","language":"java","timeout_ms":30000}')
+                        echo "$RESULT"
+                        echo "$RESULT" | grep -q '"success":true' || { echo "FAIL: Java"; exit 1; }
+
+                        echo "=== Timeout enforcement test ==="
+                        RESULT=$(curl -sf -X POST http://executor.staging.svc.cluster.local:8081/execute \
+                          -H 'Content-Type: application/json' \
+                          -d '{"code":"import time; time.sleep(60)","language":"python","timeout_ms":1000}')
+                        echo "$RESULT"
+                        echo "$RESULT" | grep -q '"success":false' || { echo "FAIL: Timeout not enforced"; exit 1; }
+
+                        echo "=== All executor sandbox tests passed ==="
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 64Mi
+                      limits:
+                        cpu: 200m
+                        memory: 128Mi
+          JOBEOF
+
+          echo "Waiting for executor-validate job..."
+          DEADLINE=$((SECONDS + 180))
+          while [ $SECONDS -lt $DEADLINE ]; do
+            SUCCEEDED=$(kubectl get job executor-validate -n staging \
+              -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
+            FAILED=$(kubectl get job executor-validate -n staging \
+              -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
+            if [ "$SUCCEEDED" = "1" ]; then
+              echo "Executor validation passed:"
+              kubectl logs job/executor-validate -n staging
+              exit 0
+            elif [ "$FAILED" = "1" ]; then
+              echo "::error::Executor validation failed"
+              kubectl logs job/executor-validate -n staging 2>/dev/null || true
               exit 1
             fi
-            sleep 2
+            sleep 5
           done
-          ./scripts/validate-executor-sandbox.sh
+          echo "::error::Executor validation timed out"
+          kubectl logs job/executor-validate -n staging 2>/dev/null || true
+          exit 1
       - name: Run staging E2E tests
         env:
           BASE_URL: https://staging.eval.delquillan.com
