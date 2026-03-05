@@ -1,20 +1,28 @@
 import { Centrifuge } from 'centrifuge';
 import { getAuthHeaders, getPreviewSectionId } from '@/lib/api-client';
 
-// When NEXT_PUBLIC_CENTRIFUGO_URL is set, use it directly.
-// When empty (e.g. staging behind nginx proxy), derive from window.location so the
-// WebSocket connects through the same host/port as the page (e.g. ws://localhost:8080/connection/websocket).
-export function getCentrifugoUrl(location?: Location): string {
-  const configured = process.env.NEXT_PUBLIC_CENTRIFUGO_URL;
-  if (configured) {
-    return configured;
-  }
-  const loc = location || window.location;
-  const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${loc.host}/connection/websocket`;
-}
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+/**
+ * Resolves the Centrifugo WebSocket URL.
+ *
+ * When NEXT_PUBLIC_CENTRIFUGO_URL is set (production/local dev), it is used as-is.
+ * When it is empty (staging), the URL is derived from the page origin so the browser
+ * connects via the nginx proxy at the same host/port rather than an internal cluster DNS name.
+ *
+ * @param protocol - override window.location.protocol (for testing)
+ * @param host     - override window.location.host (for testing)
+ */
+export function resolveCentrifugoUrl(protocol?: string, host?: string): string {
+  const configured = process.env.NEXT_PUBLIC_CENTRIFUGO_URL;
+  if (configured) return configured;
+  if (typeof window !== 'undefined') {
+    const proto = (protocol ?? window.location.protocol) === 'https:' ? 'wss:' : 'ws:';
+    const h = host ?? window.location.host;
+    return `${proto}//${h}/connection/websocket`;
+  }
+  return 'ws://localhost:8000/connection/websocket';
+}
 
 function buildHeaders(authHeaders: Record<string, string>): Record<string, string> {
   const previewSectionId = getPreviewSectionId();
@@ -25,7 +33,7 @@ function buildHeaders(authHeaders: Record<string, string>): Record<string, strin
 }
 
 export function createCentrifuge(): Centrifuge {
-  return new Centrifuge(getCentrifugoUrl(window.location), {
+  return new Centrifuge(resolveCentrifugoUrl(), {
     getToken: async () => {
       const authHeaders = await getAuthHeaders();
       const headers = buildHeaders(authHeaders);

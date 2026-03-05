@@ -75,6 +75,42 @@ function runEntrypointSed(
 // optimised away (because the build-time placeholder is truthy).
 const COMPILED_JS_WITH_PLACEHOLDER = 'o.tenantId="__NEXT_PUBLIC_FIREBASE_TENANT_ID__"';
 
+describe('docker-entrypoint.sh centrifugo URL substitution', () => {
+  it('replaces placeholder with actual URL when NEXT_PUBLIC_CENTRIFUGO_URL is set', () => {
+    const result = runEntrypointSed(
+      'var url="__NEXT_PUBLIC_CENTRIFUGO_URL__"',
+      { NEXT_PUBLIC_CENTRIFUGO_URL: 'wss://eval.example.com/connection/websocket' },
+    );
+    expect(result).toBe('var url="wss://eval.example.com/connection/websocket"');
+  });
+
+  it('replaces placeholder with empty string when NEXT_PUBLIC_CENTRIFUGO_URL is empty', () => {
+    const result = runEntrypointSed(
+      'var url="__NEXT_PUBLIC_CENTRIFUGO_URL__"',
+      { NEXT_PUBLIC_CENTRIFUGO_URL: '' },
+    );
+    // Empty string so the JS falsy check triggers auto-derive from page origin
+    expect(result).toBe('var url=""');
+  });
+
+  it('replaces placeholder with empty string when NEXT_PUBLIC_CENTRIFUGO_URL is unset', () => {
+    const result = runEntrypointSed(
+      'var url="__NEXT_PUBLIC_CENTRIFUGO_URL__"',
+      { NEXT_PUBLIC_CENTRIFUGO_URL: undefined },
+    );
+    // Unset → same as empty: auto-derive path should be triggered
+    expect(result).toBe('var url=""');
+  });
+
+  it('does not leave the literal placeholder in the bundle when NEXT_PUBLIC_CENTRIFUGO_URL is empty', () => {
+    const result = runEntrypointSed(
+      'var url="__NEXT_PUBLIC_CENTRIFUGO_URL__"',
+      { NEXT_PUBLIC_CENTRIFUGO_URL: '' },
+    );
+    expect(result).not.toContain('__NEXT_PUBLIC_CENTRIFUGO_URL__');
+  });
+});
+
 describe('docker-entrypoint.sh tenant ID substitution', () => {
   it('replaces quoted placeholder with null when NEXT_PUBLIC_FIREBASE_TENANT_ID is unset', () => {
     const result = runEntrypointSed(COMPILED_JS_WITH_PLACEHOLDER, {
