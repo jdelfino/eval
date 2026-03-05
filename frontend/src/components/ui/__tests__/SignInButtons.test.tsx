@@ -9,6 +9,12 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 // Mock auth-provider module (no isTestMode or setTestUser — they are not used by SignInButtons)
 jest.mock('@/lib/auth-provider', () => ({}));
 
+// Mock reportError — must be declared before import so jest.mock hoisting picks it up
+const mockReportError = jest.fn();
+jest.mock('@/lib/api/error-reporting', () => ({
+  reportError: (...args: unknown[]) => mockReportError(...args),
+}));
+
 // Mock firebase/auth (auto-loaded from __mocks__)
 const mockSignInWithPopup = jest.fn();
 const mockGoogleAuthProvider = jest.fn();
@@ -42,6 +48,7 @@ describe('SignInButtons', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReportError.mockResolvedValue(undefined);
   });
 
   describe('production mode', () => {
@@ -210,6 +217,128 @@ describe('SignInButtons', () => {
       await waitFor(() => {
         expect(mockOnError).toHaveBeenCalledWith(error);
         expect(mockOnSuccess).not.toHaveBeenCalled();
+      });
+    });
+
+    it('calls reportError for non-user-cancelled Firebase errors (unknown error)', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('auth/internal-error'), { code: 'auth/internal-error' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockReportError).toHaveBeenCalledWith(error, {
+          type: 'firebase_sign_in',
+          provider: 'google',
+          code: 'auth/internal-error',
+        });
+      });
+    });
+
+    it('calls reportError for auth/popup-blocked errors', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Popup blocked'), { code: 'auth/popup-blocked' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockReportError).toHaveBeenCalledWith(error, {
+          type: 'firebase_sign_in',
+          provider: 'google',
+          code: 'auth/popup-blocked',
+        });
+      });
+    });
+
+    it('does NOT call reportError for auth/popup-closed-by-user', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Popup closed'), { code: 'auth/popup-closed-by-user' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+        expect(mockOnError).not.toHaveBeenCalled();
+      });
+      expect(mockReportError).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call reportError for auth/cancelled-popup-request', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Cancelled'), { code: 'auth/cancelled-popup-request' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /github/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+        expect(mockOnError).not.toHaveBeenCalled();
+      });
+      expect(mockReportError).not.toHaveBeenCalled();
+    });
+
+    it('calls reportError with the correct provider for GitHub errors', async () => {
+      mockGithubAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('auth/network-request-failed'), {
+        code: 'auth/network-request-failed',
+      });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /github/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockReportError).toHaveBeenCalledWith(error, {
+          type: 'firebase_sign_in',
+          provider: 'github',
+          code: 'auth/network-request-failed',
+        });
+      });
+    });
+
+    it('calls reportError before onError so backend is notified even if onError throws', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Some error'), { code: 'auth/unknown' });
+      mockSignInWithPopup.mockRejectedValue(error);
+      const callOrder: string[] = [];
+      mockReportError.mockImplementation(() => {
+        callOrder.push('reportError');
+        return Promise.resolve();
+      });
+      mockOnError.mockImplementation(() => {
+        callOrder.push('onError');
+      });
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(callOrder).toEqual(['reportError', 'onError']);
       });
     });
 
