@@ -63,6 +63,7 @@ func TestReadyz_BinariesExist(t *testing.T) {
 		NsjailPath:  os.Args[0], // test binary itself
 		PythonPath:  os.Args[0],
 		JavaPath:    os.Args[0],
+		JavacPath:   os.Args[0],
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()
@@ -93,15 +94,19 @@ func TestReadyz_BinariesExist(t *testing.T) {
 	if resp.Components["java"] != "ok" {
 		t.Errorf("java component = %s, want ok", resp.Components["java"])
 	}
+	if resp.Components["javac"] != "ok" {
+		t.Errorf("javac component = %s, want ok", resp.Components["javac"])
+	}
 }
 
-func TestReadyz_JavaBinaryMissing_StillHealthy(t *testing.T) {
+func TestReadyz_JavaMissing_Unhealthy(t *testing.T) {
 	cfg := &config.Config{
 		Port:        8081,
 		Environment: "local",
 		NsjailPath:  os.Args[0], // test binary itself — present
 		PythonPath:  os.Args[0], // present
 		JavaPath:    "/nonexistent/java",
+		JavacPath:   os.Args[0], // javac present
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()
@@ -112,27 +117,55 @@ func TestReadyz_JavaBinaryMissing_StillHealthy(t *testing.T) {
 
 	srv.httpServer.Handler.ServeHTTP(rec, req)
 
-	// Java is optional — missing Java should not make the service unhealthy
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	// Missing java must make the service unhealthy (503).
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d (missing java must be unhealthy)", rec.Code, http.StatusServiceUnavailable)
 	}
 
 	var resp readyResponse
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Status != "ok" {
-		t.Errorf("status = %s, want ok", resp.Status)
+	if resp.Status != "unhealthy" {
+		t.Errorf("status = %s, want unhealthy", resp.Status)
 	}
 	if resp.Components["java"] != "unavailable" {
 		t.Errorf("java = %s, want unavailable", resp.Components["java"])
 	}
-	// nsjail and python should still be ok
-	if resp.Components["nsjail"] != "ok" {
-		t.Errorf("nsjail = %s, want ok", resp.Components["nsjail"])
+}
+
+func TestReadyz_JavacMissing_Unhealthy(t *testing.T) {
+	cfg := &config.Config{
+		Port:        8081,
+		Environment: "local",
+		NsjailPath:  os.Args[0], // present
+		PythonPath:  os.Args[0], // present
+		JavaPath:    os.Args[0], // java present
+		JavacPath:   "/nonexistent/javac",
 	}
-	if resp.Components["python"] != "ok" {
-		t.Errorf("python = %s, want ok", resp.Components["python"])
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	// Missing javac must make the service unhealthy (503).
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d (missing javac must be unhealthy)", rec.Code, http.StatusServiceUnavailable)
+	}
+
+	var resp readyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "unhealthy" {
+		t.Errorf("status = %s, want unhealthy", resp.Status)
+	}
+	if resp.Components["javac"] != "unavailable" {
+		t.Errorf("javac = %s, want unavailable", resp.Components["javac"])
 	}
 }
 

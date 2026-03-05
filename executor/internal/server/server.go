@@ -178,8 +178,16 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 
 		if _, err := os.Stat(cfg.JavaPath); err != nil {
 			components["java"] = "unavailable"
+			healthy = false
 		} else {
 			components["java"] = "ok"
+		}
+
+		if _, err := os.Stat(cfg.JavacPath); err != nil {
+			components["javac"] = "unavailable"
+			healthy = false
+		} else {
+			components["javac"] = "ok"
 		}
 
 		status := "ok"

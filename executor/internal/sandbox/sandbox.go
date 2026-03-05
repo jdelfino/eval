@@ -4,8 +4,10 @@ package sandbox
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
@@ -268,6 +270,11 @@ func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error
 		duration := time.Since(start)
 		exitCode := 1
 		timedOut := false
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) && !errors.Is(err, context.DeadlineExceeded) {
+			// Binary not found — infrastructure failure, not a code error.
+			return nil, fmt.Errorf("javac binary not found at %s: %w", cfg.JavacPath, err)
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		}
@@ -390,6 +397,11 @@ func runUnsafeJavaCommand(ctx context.Context, cfg Config, req Request) (*Result
 	timedOut := false
 
 	if err != nil {
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) && execCtx.Err() == nil && ctx.Err() == nil {
+			// Binary not found — infrastructure failure, not a code error.
+			return nil, fmt.Errorf("command binary not found: %w", err)
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else if execCtx.Err() != nil {
@@ -634,6 +646,14 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		return nil, fmt.Errorf("nsjail binary not found at %s: %w", cfg.NsjailPath, err)
 	}
 
+	// Verify javac and java binaries exist before attempting execution.
+	if _, err := os.Stat(cfg.JavacPath); err != nil {
+		return nil, fmt.Errorf("javac binary not found at %s: %w", cfg.JavacPath, err)
+	}
+	if _, err := os.Stat(cfg.JavaPath); err != nil {
+		return nil, fmt.Errorf("java binary not found at %s: %w", cfg.JavaPath, err)
+	}
+
 	// Create temp directory for code and attached files.
 	tempDir, err := os.MkdirTemp("", "sandbox-java-")
 	if err != nil {
@@ -703,6 +723,12 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		}
 		stderrStr := compilationStderr.String()
 		stderrStr = sanitizeStderrJava(stderrStr, className)
+		// If stderr is empty and exit code is non-zero, nsjail itself failed
+		// (--really_quiet suppresses its own error output). Return an error so the
+		// handler returns HTTP 500 instead of HTTP 200 with an empty error string.
+		if stderrStr == "" && !timedOut {
+			return nil, fmt.Errorf("nsjail compile step failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
+		}
 		return &Result{
 			Stdout:     "",
 			Stderr:     stderrStr,

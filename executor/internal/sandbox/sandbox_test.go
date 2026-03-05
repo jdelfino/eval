@@ -1158,6 +1158,102 @@ func TestRunUnsafeJavaIsCommandDoesNotCompile(t *testing.T) {
 	}
 }
 
+// TestRunUnsafeJava_MissingJavac_ReturnsError verifies that runUnsafeJava returns
+// a non-nil error (not a nil-error Result with empty stderr) when javac does not exist.
+// This is a regression test for the bug where exec.Error (binary not found) was
+// silently swallowed and returned as Result{ExitCode:1, Stderr:""}, nil.
+func TestRunUnsafeJava_MissingJavac_ReturnsError(t *testing.T) {
+	cfg := Config{
+		JavaPath:       "/nonexistent/java",
+		JavacPath:      "/nonexistent/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) { System.out.println("hello"); } }`,
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		// If we got a nil error, the bug is present: the error was swallowed.
+		// A nil-error result with empty stderr is the silent failure we're fixing.
+		if result != nil && result.Stderr == "" && result.ExitCode != 0 {
+			t.Fatal("runUnsafeJava swallowed binary-not-found error: got nil error with empty stderr and non-zero exit code")
+		}
+		t.Fatal("expected error when javac binary does not exist, got nil")
+	}
+	// Error returned — this is correct behavior.
+}
+
+// TestRunUnsafeJavaCommand_MissingBinary_ReturnsError verifies that runUnsafeJavaCommand
+// returns a non-nil error when the command binary does not exist.
+func TestRunUnsafeJavaCommand_MissingBinary_ReturnsError(t *testing.T) {
+	cfg := Config{
+		JavaPath:       "/nonexistent/java",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      "/nonexistent/java -version",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		if result != nil && result.Stderr == "" && result.ExitCode != 0 {
+			t.Fatal("runUnsafeJavaCommand swallowed binary-not-found error: got nil error with empty stderr and non-zero exit code")
+		}
+		t.Fatal("expected error when java binary does not exist, got nil")
+	}
+}
+
+// TestRunJava_MissingJavac_ReturnsError verifies that runJava (nsjail path) returns
+// a non-nil error when javac does not exist at the configured path.
+func TestRunJava_MissingJavac_ReturnsError(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     os.Args[0], // use test binary as fake nsjail — will fail but exist
+		JavaPath:       "/nonexistent/java",
+		JavacPath:      "/nonexistent/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) {} }`,
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when javac binary does not exist at configured path, got nil")
+	}
+	if !strings.Contains(err.Error(), "javac") {
+		t.Errorf("expected error to mention javac, got: %v", err)
+	}
+}
+
+// TestRunJava_MissingJava_ReturnsError verifies that runJava (nsjail path) returns
+// a non-nil error when the java runtime does not exist at the configured path.
+func TestRunJava_MissingJava_ReturnsError(t *testing.T) {
+	cfg := Config{
+		NsjailPath:     os.Args[0],
+		JavaPath:       "/nonexistent/java",
+		JavacPath:      "/nonexistent/javac",
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) {} }`,
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when java binary does not exist at configured path, got nil")
+	}
+}
+
 func TestTimeoutDetectionNoFalsePositive(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("test requires linux")
