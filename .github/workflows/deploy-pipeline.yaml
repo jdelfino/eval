@@ -340,11 +340,6 @@ jobs:
             echo "::warning::Staging routing may be wrong (expected 401, got $RESP)"
           fi
       - name: Run staging E2E tests
-        # TODO: Remove continue-on-error once E2E bootstrap auth is fixed.
-        # Executor validation (above) is the safety-critical gate.
-        # E2E tests are temporarily non-blocking to unblock deploys while
-        # we debug the bootstrap auth failure (FIREBASE_TENANT_ID mismatch).
-        continue-on-error: true
         id: e2e
         env:
           BASE_URL: https://staging.eval.delquillan.com
@@ -354,31 +349,24 @@ jobs:
           FIREBASE_PROJECT_ID: eval-prod-485520
           BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
           CI: 'true'
-          # Staging uses the prod LB cert which only covers eval.delquillan.com.
-          # Node.js fetch (used by E2E fixtures) rejects the staging subdomain.
-          # TODO: Add staging.eval.delquillan.com to managed cert, then remove.
-          NODE_TLS_REJECT_UNAUTHORIZED: '0'
         run: cd frontend && npx playwright test
-      - name: Warn if E2E tests failed
-        if: steps.e2e.outcome == 'failure'
-        run: echo "::warning::Staging E2E tests failed (non-blocking). See Playwright report artifact for details."
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: steps.e2e.outcome == 'failure'
+        if: failure()
         with:
           name: playwright-report-staging
           path: frontend/playwright-report/
           retention-days: 14
       - name: Upload E2E error context
         uses: actions/upload-artifact@v4
-        if: steps.e2e.outcome == 'failure'
+        if: failure()
         with:
           name: e2e-error-context-staging
           path: frontend/test-results/**/error-context.md
           retention-days: 14
           if-no-files-found: ignore
       - name: Dump staging logs
-        if: steps.e2e.outcome == 'failure'
+        if: failure()
         run: |
           echo "=== go-api logs ==="
           kubectl logs deployment/go-api -n staging --tail=500 2>/dev/null || true
