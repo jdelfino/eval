@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Button } from './Button';
 import { authProviders, type ProviderConfig } from '@/config/auth-providers';
+import { reportError } from '@/lib/api/error-reporting';
 
 /** Official provider logos rendered as inline SVGs. */
 const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
@@ -94,14 +95,21 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
       onSuccess();
     } catch (error) {
       const firebaseError = error as { code?: string };
-      if (
+      const isUserCancelled =
         firebaseError.code === 'auth/popup-closed-by-user' ||
-        firebaseError.code === 'auth/cancelled-popup-request'
-      ) {
-        // Silently ignore — user cancelled or a new popup replaced the old one
-      } else if (firebaseError.code === 'auth/popup-blocked') {
+        firebaseError.code === 'auth/cancelled-popup-request';
+
+      if (!isUserCancelled) {
+        // Report non-user-initiated errors to backend for monitoring
+        void reportError(
+          error instanceof Error ? error : new Error(String(error)),
+          { type: 'firebase_sign_in', provider: providerType, code: firebaseError.code ?? 'unknown' }
+        );
+      }
+
+      if (firebaseError.code === 'auth/popup-blocked') {
         setPopupBlocked(true);
-      } else {
+      } else if (!isUserCancelled) {
         onError(error instanceof Error ? error : new Error(String(error)));
       }
     } finally {

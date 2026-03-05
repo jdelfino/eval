@@ -128,3 +128,42 @@ run "validates_dashboard_tile_count" {
     error_message = "Dashboard must have at least 10 tiles (original 7 + 3 new tiles)"
   }
 }
+
+run "validates_frontend_error_alert_policy_configured" {
+  command = plan
+
+  assert {
+    condition     = google_monitoring_alert_policy.frontend_client_error_rate.display_name == "testproject-test High Frontend Client Error Rate"
+    error_message = "Expected frontend client error rate alert policy display name to match project and environment"
+  }
+}
+
+run "validates_frontend_error_alert_auto_close" {
+  command = plan
+
+  assert {
+    condition     = google_monitoring_alert_policy.frontend_client_error_rate.alert_strategy[0].auto_close == "1800s"
+    error_message = "Expected frontend client error rate alert policy to auto-close after 1800s"
+  }
+}
+
+run "validates_frontend_error_alert_uses_log_metric" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for cond in google_monitoring_alert_policy.frontend_client_error_rate.conditions :
+      can(cond.condition_threshold) && strcontains(cond.condition_threshold[0].filter, "frontend-client-errors")
+    ])
+    error_message = "Frontend client error alert must use the frontend-client-errors log-based metric in its condition filter"
+  }
+}
+
+run "validates_frontend_error_log_metric_filter_has_severity" {
+  command = plan
+
+  assert {
+    condition     = strcontains(google_logging_metric.frontend_client_errors.filter, "severity>=ERROR")
+    error_message = "Frontend client errors log metric filter must include severity>=ERROR to count only error-level entries"
+  }
+}
