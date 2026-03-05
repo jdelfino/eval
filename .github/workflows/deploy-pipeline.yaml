@@ -240,7 +240,7 @@ jobs:
                 containers:
                   - name: playwright
                     image: $REGISTRY/test-runner:$SHA
-                    command: ["npx", "playwright", "test", "--reporter=list"]
+                    command: ["sh", "-c", "npx playwright test --reporter=list; EC=$?; for f in test-results/**/error-context.md; do [ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done; exit $EC"]
                     env:
                       - name: BASE_URL
                         value: "http://frontend"
@@ -269,14 +269,6 @@ jobs:
           if ! kubectl wait --for=condition=complete job/staging-test-${SHORT_SHA} -n staging --timeout=300s 2>/dev/null; then
             echo "::error::Staging E2E tests failed or timed out"
             kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=200 || true
-
-            # Extract error-context.md files from the test pod before it terminates
-            POD=$(kubectl get pods -n staging -l job-name=staging-test-${SHORT_SHA} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-            if [ -n "$POD" ]; then
-              echo "=== Extracting error context files ==="
-              kubectl exec -n staging "$POD" -- find /app/test-results -name 'error-context.md' -exec echo '--- {} ---' \; -exec cat {} \; 2>/dev/null || true
-            fi
-
             FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
             if [ "$FAILED" = "1" ]; then
               echo "E2E test job failed"
