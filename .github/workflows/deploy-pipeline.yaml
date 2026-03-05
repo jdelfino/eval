@@ -367,9 +367,12 @@ jobs:
   # Redeploy: runs directly (build/CI/staging are skipped).
 
   deploy-prod:
-    needs: [deploy-staging, ci]
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci]
     if: >-
       always() &&
+      (needs.build-push-go-api.result == 'success' || needs.build-push-go-api.result == 'skipped') &&
+      (needs.build-push-executor.result == 'success' || needs.build-push-executor.result == 'skipped') &&
+      (needs.build-push-frontend.result == 'success' || needs.build-push-frontend.result == 'skipped') &&
       (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped') &&
       (needs.ci.result == 'success' || needs.ci.result == 'skipped')
     runs-on: ubuntu-latest
@@ -455,9 +458,12 @@ jobs:
           SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
 
   notify-failure:
-    needs: [deploy-staging, ci, deploy-prod]
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci, deploy-prod]
     if: >-
       always() && (
+        needs.build-push-go-api.result == 'failure' ||
+        needs.build-push-executor.result == 'failure' ||
+        needs.build-push-frontend.result == 'failure' ||
         needs.deploy-staging.result == 'failure' ||
         needs.ci.result == 'failure' ||
         needs.deploy-prod.result == 'failure'
