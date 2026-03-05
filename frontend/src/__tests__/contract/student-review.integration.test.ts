@@ -51,6 +51,7 @@ describe('Student Review API', () => {
       class_id: classId,
       tags: ['contract-student-review-test'],
       starter_code: 'print("hello from student review")',
+      language: 'python',
     });
     createdProblemId = problem.id;
 

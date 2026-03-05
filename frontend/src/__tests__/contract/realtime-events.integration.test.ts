@@ -288,6 +288,7 @@ describe('Realtime event contract tests', () => {
           description: 'A test problem',
           class_id: setupState.classId,
           starter_code: 'print("rt-test")',
+          language: 'python',
           tags: ['rt-contract'],
         }),
       });
@@ -504,6 +505,7 @@ describe('Realtime event contract tests', () => {
           description: 'A test problem for session_ended',
           class_id: classId,
           starter_code: 'pass',
+          language: 'python',
           tags: ['rt-contract-end'],
         }),
       });
@@ -583,6 +585,7 @@ describe('Realtime event contract tests', () => {
           description: 'A test problem for session_replaced',
           class_id: classId,
           starter_code: 'pass',
+          language: 'python',
           tags: ['rt-contract-replace'],
         }),
       });
@@ -620,6 +623,7 @@ describe('Realtime event contract tests', () => {
             description: 'Replacement problem',
             class_id: classId,
             starter_code: 'pass',
+            language: 'python',
             tags: ['rt-contract-replace2'],
           }),
         });

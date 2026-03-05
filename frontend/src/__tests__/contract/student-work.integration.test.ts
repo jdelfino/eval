@@ -57,6 +57,7 @@ describe('Student Work API', () => {
       class_id: classId,
       tags: ['contract-student-work-test'],
       starter_code: 'print("hello from student work")',
+      language: 'python',
     });
     createdProblemId = problem.id;
 
