@@ -339,6 +339,8 @@ jobs:
           else
             echo "::warning::Staging routing may be wrong (expected 401, got $RESP)"
           fi
+      - name: Get GCP access token for IDP admin operations
+        run: echo "GCP_ACCESS_TOKEN=$(gcloud auth print-access-token)" >> "$GITHUB_ENV"
       - name: Run staging E2E tests
         id: e2e
         env:
@@ -348,6 +350,7 @@ jobs:
           FIREBASE_API_KEY: ${{ env.API_KEY }}
           FIREBASE_PROJECT_ID: eval-prod-485520
           BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
+          GCP_ACCESS_TOKEN: ${{ env.GCP_ACCESS_TOKEN }}
           CI: 'true'
         run: cd frontend && npx playwright test
       - name: Upload Playwright report

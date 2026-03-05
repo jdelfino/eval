@@ -76,38 +76,35 @@ async function getAdminAuthHeader(): Promise<string> {
     return `Bearer ${cachedAccessToken.token}`;
   }
 
-  // Fetch access token from GKE metadata server
-  try {
-    const res = await fetch(
-      'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
-      {
-        headers: { 'Metadata-Flavor': 'Google' },
-        signal: AbortSignal.timeout(3000),
-      }
-    );
-    if (!res.ok) {
-      throw new Error(`Failed to get GCP access token: ${res.status} ${await res.text()}`);
-    }
-    const data = await res.json();
+  // Prefer explicit GCP_ACCESS_TOKEN (set by CI from WIF credentials).
+  // Falls back to the GKE metadata server (in-cluster runs).
+  const envToken = process.env.GCP_ACCESS_TOKEN;
+  if (envToken) {
     cachedAccessToken = {
-      token: data.access_token,
-      expiresAt: Date.now() + data.expires_in * 1000,
+      token: envToken,
+      // WIF tokens last ~1h; cache for the test run duration
+      expiresAt: Date.now() + 3600_000,
     };
-    return `Bearer ${data.access_token}`;
-  } catch (error) {
-    // Only swallow network/timeout errors (metadata server unreachable or timed out).
-    // Re-throw HTTP errors (e.g. 403 Forbidden) so they are not silently lost.
-    if (
-      error instanceof TypeError ||
-      (error instanceof Error && error.name === 'AbortError')
-    ) {
-      throw new Error(
-        'Cannot create new IDP user: GKE metadata server not available. ' +
-        'Pre-create the user via the staging user setup script, then re-run.'
-      );
-    }
-    throw error;
+    return `Bearer ${envToken}`;
   }
+
+  // Fetch access token from GKE metadata server
+  const res = await fetch(
+    'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+    {
+      headers: { 'Metadata-Flavor': 'Google' },
+      signal: AbortSignal.timeout(3000),
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to get GCP access token: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  cachedAccessToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  };
+  return `Bearer ${data.access_token}`;
 }
 
 /** Build the request body, adding tenantId when configured. */

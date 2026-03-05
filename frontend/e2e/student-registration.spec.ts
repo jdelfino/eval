@@ -10,52 +10,24 @@
  * Uses Firebase Auth Emulator for real token validation end-to-end.
  */
 
-import { test, expect } from '@playwright/test';
-import {
-  getAdminToken,
-  createNamespace,
-  createInvitation,
-  acceptInvitation,
-  createClass,
-  createSection,
-} from './fixtures/api-setup';
-import {
-  createVerifiedTestUser,
-  getTestToken,
-} from './fixtures/test-auth';
+import { test, expect } from './fixtures/test-fixture';
+import { createClass, createSection } from './fixtures/api-setup';
+import { createVerifiedTestUser } from './fixtures/test-auth';
 
-function generateNamespaceId(): string {
-  return `e2e-reg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
 
 test.describe('Student Registration UI', () => {
-  let adminToken: string;
-
-  test.beforeAll(async () => {
-    adminToken = await getAdminToken();
-  });
-
-  test('Student registers via join code on registration page', async ({ page }) => {
+  test('Student registers via join code on registration page', async ({ page, testNamespace, setupInstructor }) => {
     // ===== API SETUP =====
-    const nsId = generateNamespaceId();
-    await createNamespace(nsId, 'E2E Registration Test', adminToken);
+    const instructor = await setupInstructor();
 
-    const instructorEmail = `instructor-${nsId}@test.local`;
-    const invId = await createInvitation(instructorEmail, 'instructor', nsId, adminToken);
-
-    const instructorPassword = 'instructor-pw-e2e'; // gitleaks:allow
-    await createVerifiedTestUser(instructorEmail, instructorPassword);
-    const instructorToken = await getTestToken(instructorEmail, instructorPassword);
-    await acceptInvitation(invId, instructorToken, 'E2E Instructor');
-
-    const cls = await createClass(instructorToken, `Registration Test Class ${nsId}`);
-    const section = await createSection(instructorToken, cls.id, 'Fall Section');
+    const cls = await createClass(instructor.token, 'Registration Test Class');
+    const section = await createSection(instructor.token, cls.id, 'Fall Section');
     const joinCode: string = section.join_code;
 
-    // Create student in emulator (emailVerified=true required by backend)
-    const studentEmail = `student-${nsId}@test.local`;
-    const studentPassword = 'student-pw-e2e'; // gitleaks:allow
-    await createVerifiedTestUser(studentEmail, studentPassword);
+    // Create student IDP user (emailVerified=true required by backend)
+    const studentEmail = `e2e-reg-student-${testNamespace}@test.local`;
+    await createVerifiedTestUser(studentEmail, DEFAULT_PASSWORD);
 
     // ===== STEP 1: Navigate to registration page and enter join code =====
     await page.goto('/register/student');
@@ -71,22 +43,15 @@ test.describe('Student Registration UI', () => {
     await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
 
     // ===== STEP 4: Sign in via the email sign-in page with join code =====
-    // Pass the join code as a URL param so the email sign-in page handles
-    // registration inline (calls beginAuthFlow → signIn → registerStudent
-    // → redirect). This avoids a cross-page navigation race where Firebase
-    // Auth state may not restore from IndexedDB before the click handler runs.
     const codeOnly = joinCode.replace(/-/g, '');
     await page.goto(`/auth/signin/email?code=${codeOnly}`);
     await page.fill('#email', studentEmail);
-    await page.fill('#password', studentPassword);
+    await page.fill('#password', DEFAULT_PASSWORD);
     await page.click('button[type="submit"]');
 
-    // The email sign-in page registers the student and redirects to the
-    // section detail page. This can take a few seconds on slow CI runners.
     await page.waitForURL(/\/sections\//, { timeout: 15_000 });
 
     // ===== STEP 5: Verify section detail page =====
-    // Section name is h1, class name is in a paragraph below it
     await expect(page.locator('h1').filter({ hasText: 'Fall Section' })).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(`text=${cls.name}`).first()).toBeVisible();
 

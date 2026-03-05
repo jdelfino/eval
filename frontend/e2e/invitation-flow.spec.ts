@@ -12,81 +12,69 @@
  */
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
-import { createNamespace, createInvitation } from './fixtures/api-setup';
+import { createInvitation } from './fixtures/api-setup';
 import { listSystemInvitations } from '../src/lib/api/system';
 import { configureTestAuth } from '../src/lib/auth-provider';
 import { createVerifiedTestUser } from './fixtures/test-auth';
 
+const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
+
 test.describe('Invitation Acceptance Flow', () => {
   test('Admin creates invitation, instructor accepts via email sign-in and accesses dashboard', async ({
     page,
-    logCollector,
+    testNamespace,
   }) => {
     test.setTimeout(60_000);
 
     const adminToken = await getAdminToken();
 
-    // ===== STEP 1: Create test namespace via API =====
-    const namespaceId = `e2e-inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const namespaceName = 'Invitation Test Org';
-    await createNamespace(namespaceId, namespaceName, adminToken);
+    // ===== STEP 1: Create invitation for an instructor email =====
+    const instructorEmail = `e2e-invite-instructor-${testNamespace}@test.local`;
+    const invitationId = await createInvitation(instructorEmail, 'instructor', testNamespace, adminToken);
 
-    // ===== STEP 2: Create invitation for an instructor email =====
-    const instructorEmail = `instructor-${namespaceId}@example.com`;
-    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId, adminToken);
-
-    // ===== STEP 3: Verify invitation was created as pending via API =====
+    // ===== STEP 2: Verify invitation was created as pending via API =====
     configureTestAuth(adminToken);
     const invitations = await listSystemInvitations();
     const createdInvitation = invitations.find((inv) => inv.id === invitationId);
     expect(createdInvitation).toBeDefined();
     expect(createdInvitation!.status).toBe('pending');
 
-    // ===== STEP 4: Navigate to accept page — verify invitation details =====
+    // ===== STEP 3: Navigate to accept page — verify invitation details =====
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
     await page.goto(acceptUrl);
-    logCollector.attachPage(page, 'invite-page');
 
     await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Instructor', { exact: true })).toBeVisible();
     await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
 
-    // ===== STEP 5: Create user in emulator and sign in via email page =====
-    // The email sign-in page supports ?token= param — it signs in, then
-    // calls acceptInvite and redirects based on role. This exercises a
-    // real user-facing page with no test-specific code.
-    const instructorPassword = 'test-password-123'; // gitleaks:allow
-    await createVerifiedTestUser(instructorEmail, instructorPassword);
+    // ===== STEP 4: Create user in IDP and sign in via email page =====
+    await createVerifiedTestUser(instructorEmail, DEFAULT_PASSWORD);
 
     await page.goto(`/auth/signin/email?token=${encodeURIComponent(invitationId)}`);
     await page.fill('#email', instructorEmail);
-    await page.fill('#password', instructorPassword);
+    await page.fill('#password', DEFAULT_PASSWORD);
     await page.click('button[type="submit"]');
 
-    // ===== STEP 6: Verify redirect to instructor dashboard =====
+    // ===== STEP 5: Verify redirect to instructor dashboard =====
     await page.waitForURL('/instructor', { timeout: 20_000 });
-    // Fresh instructor sees the empty-state welcome heading
     await expect(page.locator('text=Welcome to the Instructor Dashboard')).toBeVisible({ timeout: 15_000 });
   });
 
   test('Accept page shows invitation details when not authenticated', async ({
     page,
-    logCollector,
+    testNamespace,
   }) => {
     test.setTimeout(60_000);
 
     const adminToken = await getAdminToken();
 
-    // Create namespace and invitation
-    const namespaceId = `e2e-inv2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    await createNamespace(namespaceId, 'Invite Details Test Org', adminToken);
-    const instructorEmail = `details-test-${namespaceId}@example.com`;
-    const invitationId = await createInvitation(instructorEmail, 'instructor', namespaceId, adminToken);
+    // Create invitation with stable email
+    const instructorEmail = `e2e-invite-details-${testNamespace}@test.local`;
+    const invitationId = await createInvitation(instructorEmail, 'instructor', testNamespace, adminToken);
 
     // Navigate to accept URL without being signed in
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
     await page.goto(acceptUrl);
-    logCollector.attachPage(page, 'invite-details-page');
 
     // Verify invitation details are displayed
     await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
