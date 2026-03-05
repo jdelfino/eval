@@ -19,7 +19,7 @@ jest.mock('@/lib/firebase', () => ({
   firebaseAuth: { currentUser: mockCurrentUser },
 }));
 
-// Mock api-client to provide getAuthHeaders
+// Mock api-client to provide getAuthHeaders and getPreviewSectionId
 jest.mock('@/lib/api-client', () => ({
   getAuthHeaders: async () => {
     const user = mockCurrentUser;
@@ -27,6 +27,7 @@ jest.mock('@/lib/api-client', () => ({
     const token = await user.getIdToken();
     return { Authorization: `Bearer ${token}` };
   },
+  getPreviewSectionId: () => null,
 }));
 
 jest.mock('centrifuge', () => ({
@@ -50,6 +51,38 @@ afterAll(() => {
 });
 
 describe('centrifugo integration', () => {
+  describe('getCentrifugoUrl URL derivation', () => {
+    it('derives ws:// URL from http location when env var is empty string', () => {
+      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
+
+      const { getCentrifugoUrl } = require('../centrifugo');
+      const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
+      const url = getCentrifugoUrl(mockLocation);
+
+      expect(url).toBe('ws://localhost:8080/connection/websocket');
+    });
+
+    it('derives wss:// URL from https location when env var is empty string', () => {
+      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
+
+      const { getCentrifugoUrl } = require('../centrifugo');
+      const mockLocation = { protocol: 'https:', host: 'app.example.com' } as Location;
+      const url = getCentrifugoUrl(mockLocation);
+
+      expect(url).toBe('wss://app.example.com/connection/websocket');
+    });
+
+    it('uses explicit NEXT_PUBLIC_CENTRIFUGO_URL when set', () => {
+      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: 'ws://rt.test/ws' };
+
+      const { getCentrifugoUrl } = require('../centrifugo');
+      const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
+      const url = getCentrifugoUrl(mockLocation);
+
+      expect(url).toBe('ws://rt.test/ws');
+    });
+  });
+
   describe('createCentrifuge getToken callback', () => {
     it('calls real fetch with auth headers to get token', async () => {
       mockGetIdToken.mockResolvedValue('fb-token');

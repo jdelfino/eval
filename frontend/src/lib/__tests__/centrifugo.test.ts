@@ -27,10 +27,12 @@ describe('centrifugo', () => {
   });
 
   describe('createCentrifuge', () => {
-    it('creates a Centrifuge instance with the default URL', () => {
+    it('creates a Centrifuge instance with URL derived from window.location (default jsdom)', () => {
       const client = createCentrifuge();
+      // When NEXT_PUBLIC_CENTRIFUGO_URL is not set (or empty), createCentrifuge derives the URL
+      // from window.location. In jsdom, the default location.host is 'localhost' (without port).
       expect(MockCentrifuge).toHaveBeenCalledWith(
-        'ws://localhost:8000/connection/websocket',
+        'ws://localhost/connection/websocket',
         expect.objectContaining({ getToken: expect.any(Function) }),
       );
     });
