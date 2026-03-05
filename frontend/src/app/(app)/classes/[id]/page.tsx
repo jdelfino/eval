@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
 import type { Class, Section } from '@/types/api';
@@ -11,7 +11,6 @@ import CreateSectionForm from '../components/CreateSectionForm';
 import { BackButton } from '@/components/ui/BackButton';
 
 export default function ClassDetailsPage() {
-  const router = useRouter();
   const params = useParams();
   const class_id = params.id as string;
   
