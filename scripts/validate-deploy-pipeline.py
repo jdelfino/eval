@@ -117,6 +117,27 @@ def validate(workflow_path):
     ok &= check("deploy-staging" in prod_needs, "deploy-prod needs: deploy-staging")
     ok &= check("ci" in prod_needs, "deploy-prod needs: ci")
 
+    # ── deploy-prod: smoke test credentials read from cluster before smoke test ─
+    prod_steps = prod_job.get("steps", [])
+    prod_steps_str = str(prod_steps)
+
+    ok &= check(
+        "FIREBASE_API_KEY" in prod_steps_str,
+        "deploy-prod: reads FIREBASE_API_KEY for smoke test",
+    )
+    ok &= check(
+        "SMOKE_TEST_PASSWORD" in prod_steps_str,
+        "deploy-prod: reads SMOKE_TEST_PASSWORD for smoke test",
+    )
+    ok &= check(
+        "frontend-config" in prod_steps_str,
+        "deploy-prod: reads FIREBASE_API_KEY from frontend-config ConfigMap",
+    )
+    ok &= check(
+        "smoke-test-secrets" in prod_steps_str,
+        "deploy-prod: reads SMOKE_TEST_PASSWORD from smoke-test-secrets Secret",
+    )
+
     return ok
 
 
