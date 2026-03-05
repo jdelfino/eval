@@ -127,16 +127,12 @@ async function setEmailVerified(localId: string): Promise<void> {
     ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
     : `${IDP_BASE_URL}/accounts:update`;
   const authHeader = await getAdminAuthHeader();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: authHeader,
-  };
-  if (!IS_EMULATOR) {
-    headers['x-goog-user-project'] = PROJECT_ID;
-  }
   const res = await fetch(updateUrl, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: authHeader,
+    },
     body: JSON.stringify({ localId, emailVerified: true }),
   });
   if (!res.ok) {
