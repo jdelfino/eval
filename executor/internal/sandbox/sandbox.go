@@ -211,7 +211,7 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 }
 
 // runUnsafeJava executes Java code directly (no nsjail) for local dev / CI.
-// It compiles with javac then runs with java.
+// Uses JEP 330 single-file source launcher to compile and run in one JVM.
 func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	tempDir, err := os.MkdirTemp("", "sandbox-java-")
 	if err != nil {
@@ -251,58 +251,12 @@ func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error
 
 	start := time.Now()
 
-	// Phase 1: Compile.
-	compileTimeoutSec := timeoutSec / 2
-	if compileTimeoutSec < 5 {
-		compileTimeoutSec = 5
-	}
-	compileCtx, compileCancel := context.WithTimeout(ctx, time.Duration(compileTimeoutSec)*time.Second)
-	defer compileCancel()
-
-	javacCmd := exec.CommandContext(compileCtx, cfg.JavacPath, mainPath)
-	javacCmd.Dir = tempDir
-
-	var compilationStderr limitedBuffer
-	compilationStderr.maxBytes = maxOut
-	javacCmd.Stderr = &compilationStderr
-
-	if err := javacCmd.Run(); err != nil {
-		duration := time.Since(start)
-		exitCode := 1
-		timedOut := false
-		var pathErr *fs.PathError
-		if errors.As(err, &pathErr) && compileCtx.Err() == nil && ctx.Err() == nil {
-			// Binary not found — infrastructure failure, not a code error.
-			return nil, fmt.Errorf("javac binary not found at %s: %w", cfg.JavacPath, err)
-		}
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		}
-		if compileCtx.Err() == context.DeadlineExceeded {
-			timedOut = true
-			exitCode = -1
-		}
-		stderrStr := compilationStderr.String()
-		stderrStr = sanitizeStderrJava(stderrStr, className)
-		return &Result{
-			Stdout:     "",
-			Stderr:     stderrStr,
-			ExitCode:   exitCode,
-			TimedOut:   timedOut,
-			DurationMs: duration.Milliseconds(),
-		}, nil
-	}
-
-	// Phase 2: Execute.
-	elapsedMs := time.Since(start).Milliseconds()
-	remainingMs := int64(timeoutSec)*1000 - elapsedMs
-	if remainingMs < 1000 {
-		remainingMs = 1000
-	}
-	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(remainingMs)*time.Millisecond)
+	// Single-phase: compile and run in one JVM using JEP 330 source launcher.
+	// This eliminates the second JVM startup that the old javac+java approach required.
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
 	defer execCancel()
 
-	javaCmd := exec.CommandContext(execCtx, cfg.JavaPath, "-cp", tempDir, className)
+	javaCmd := exec.CommandContext(execCtx, cfg.JavaPath, "-XX:TieredStopAtLevel=1", mainPath)
 	javaCmd.Dir = tempDir
 
 	if req.Stdin != "" {
@@ -628,7 +582,7 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 }
 
 // runJava executes Java code inside an nsjail sandbox.
-// Phase 1 compiles with javac; Phase 2 runs the resulting class.
+// Uses JEP 330 single-file source launcher to compile and run in one JVM.
 func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	className := extractJavaClassName(req.Code)
 	javaFile := className + ".java"
@@ -651,10 +605,7 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		return nil, fmt.Errorf("nsjail binary not found at %s: %w", cfg.NsjailPath, err)
 	}
 
-	// Verify javac and java binaries exist before attempting execution.
-	if _, err := os.Stat(cfg.JavacPath); err != nil {
-		return nil, fmt.Errorf("javac binary not found at %s: %w", cfg.JavacPath, err)
-	}
+	// Verify java binary exists before attempting execution.
 	if _, err := os.Stat(cfg.JavaPath); err != nil {
 		return nil, fmt.Errorf("java binary not found at %s: %w", cfg.JavaPath, err)
 	}
@@ -665,7 +616,7 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
-	// Java needs write access for compilation output (.class files).
+	// Java source launcher needs write access for in-memory compilation artifacts.
 	if err := os.Chmod(tempDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
 	}
@@ -697,64 +648,12 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 
 	start := time.Now()
 
-	// Phase 1: Compile.
-	compileTimeoutSec := timeoutSec / 2
-	if compileTimeoutSec < 5 {
-		compileTimeoutSec = 5
-	}
-
-	compileCtx, compileCancel := context.WithTimeout(ctx, time.Duration(compileTimeoutSec)*time.Second+2*time.Second)
-	defer compileCancel()
-
-	compileArgs := buildJavaArgsWithTimeLimit(tempDir, compileTimeoutSec, []string{cfg.JavacPath, "/tmp/work/" + javaFile})
-
-	compileCmd := exec.CommandContext(compileCtx, cfg.NsjailPath, compileArgs...)
-
-	var compilationStderr limitedBuffer
-	compilationStderr.maxBytes = maxOut
-	compileCmd.Stdin = io.NopCloser(bytes.NewReader(nil))
-	compileCmd.Stderr = &compilationStderr
-
-	if err := compileCmd.Run(); err != nil {
-		duration := time.Since(start)
-		exitCode := 1
-		timedOut := false
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		}
-		if compileCtx.Err() == context.DeadlineExceeded {
-			timedOut = true
-			exitCode = -1
-		}
-		stderrStr := compilationStderr.String()
-		stderrStr = sanitizeStderrJava(stderrStr, className)
-		// If stderr is empty and exit code is non-zero, nsjail itself failed
-		// (--really_quiet suppresses its own error output). Return an error so the
-		// handler returns HTTP 500 instead of HTTP 200 with an empty error string.
-		if stderrStr == "" && !timedOut {
-			return nil, fmt.Errorf("nsjail compile step failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
-		}
-		return &Result{
-			Stdout:     "",
-			Stderr:     stderrStr,
-			ExitCode:   exitCode,
-			TimedOut:   timedOut,
-			DurationMs: duration.Milliseconds(),
-		}, nil
-	}
-
-	// Phase 2: Execute.
-	elapsedMs := time.Since(start).Milliseconds()
-	remainingMs := int64(timeoutSec)*1000 - elapsedMs
-	if remainingMs < 1000 {
-		remainingMs = 1000
-	}
-	remainingSec := int(math.Ceil(float64(remainingMs) / 1000.0))
-
-	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(remainingSec)*time.Second+2*time.Second)
+	// Single-phase: compile and run in one JVM using JEP 330 source launcher.
+	// This eliminates the second JVM startup that the old javac+java approach required.
+	execCtx, execCancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second+2*time.Second)
 	defer execCancel()
 
-	execArgs := buildJavaArgsWithTimeLimit(tempDir, remainingSec, []string{cfg.JavaPath, "-cp", "/tmp/work", className})
+	execArgs := buildJavaArgsWithTimeLimit(tempDir, timeoutSec, []string{cfg.JavaPath, "-XX:TieredStopAtLevel=1", "/tmp/work/" + javaFile})
 
 	execCmd := exec.CommandContext(execCtx, cfg.NsjailPath, execArgs...)
 
@@ -806,7 +705,7 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// (--really_quiet suppresses its own error output). Return an error so the
 	// handler returns HTTP 500 instead of HTTP 200 with an empty error string.
 	if stderr == "" && !timedOut && exitCode != 0 {
-		return nil, fmt.Errorf("nsjail execute step failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
+		return nil, fmt.Errorf("nsjail failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
 	}
 
 	return &Result{
