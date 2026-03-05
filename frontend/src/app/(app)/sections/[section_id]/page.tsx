@@ -27,7 +27,7 @@ export default function SectionDetailPage() {
   const router = useRouter();
   const params = useParams();
   const section_id = params.section_id as string;
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { isPreview, previewSectionId, enterPreview, exitPreview } = usePreview();
   const [section, setSection] = useState<SectionDetail | null>(null);
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
@@ -38,15 +38,10 @@ export default function SectionDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/signin');
-      return;
-    }
-
     if (user && section_id) {
       loadSectionData();
     }
-  }, [user, authLoading, section_id, router]);
+  }, [user, section_id]);
 
   const userIsInstructor = user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
 
@@ -121,7 +116,7 @@ export default function SectionDetailPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-gray-600">Loading...</div>

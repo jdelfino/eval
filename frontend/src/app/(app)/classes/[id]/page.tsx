@@ -15,12 +15,12 @@ export default function ClassDetailsPage() {
   const params = useParams();
   const class_id = params.id as string;
   
-  const { user, isLoading: authLoading } = useAuth();
-  const { 
-    createSection, 
-    regenerateJoinCode, 
-    addCoInstructor, 
-    removeCoInstructor 
+  const { user } = useAuth();
+  const {
+    createSection,
+    regenerateJoinCode,
+    addCoInstructor,
+    removeCoInstructor
   } = useClasses();
   
   const [classData, setClassData] = useState<Class | null>(null);
@@ -31,15 +31,10 @@ export default function ClassDetailsPage() {
   const [sectionInstructors, setSectionInstructors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/signin');
-      return;
-    }
-
     if (user) {
       loadClassDetails();
     }
-  }, [user, authLoading, router, class_id]);
+  }, [user, class_id]);
 
   const loadClassDetails = async () => {
     try {
@@ -79,7 +74,7 @@ export default function ClassDetailsPage() {
     await loadClassDetails(); // Reload to get updated instructor list
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-gray-600">Loading...</div>

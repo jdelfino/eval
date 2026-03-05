@@ -10,16 +10,11 @@ import CreateClassForm from './components/CreateClassForm';
 
 export default function ClassesPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { classes, loading, fetchClasses, createClass } = useClasses();
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/signin');
-      return;
-    }
-
     // Allow instructor, namespace-admin, and system-admin roles
     const teachingRoles = ['instructor', 'namespace-admin', 'system-admin'];
     if (user && !teachingRoles.includes(user.role)) {
@@ -30,14 +25,14 @@ export default function ClassesPage() {
     if (user) {
       fetchClasses();
     }
-  }, [user, authLoading, router, fetchClasses]);
+  }, [user, router, fetchClasses]);
 
   const handleCreateClass = async (name: string, description: string) => {
     await createClass(name, description);
     setShowCreateForm(false);
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-gray-600">Loading...</div>
