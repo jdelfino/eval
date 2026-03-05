@@ -54,10 +54,8 @@ variable "service_account_roles" {
   type        = list(string)
   default = [
     "roles/artifactregistry.writer",
-    "roles/compute.osLogin",
     "roles/container.developer",
     "roles/gkehub.gatewayEditor",
     "roles/gkehub.viewer",
-    "roles/iap.tunnelResourceAccessor",
   ]
 }

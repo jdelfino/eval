@@ -58,3 +58,17 @@ resource "google_dns_record_set" "a" {
 
   rrdatas = [google_compute_global_address.ingress.address]
 }
+
+# -----------------------------------------------------------------------------
+# A Record: staging subdomain -> same static IP
+# -----------------------------------------------------------------------------
+
+resource "google_dns_record_set" "staging_a" {
+  name         = "staging.${var.domain_name}."
+  managed_zone = google_dns_managed_zone.this.name
+  project      = var.project_id
+  type         = "A"
+  ttl          = 300
+
+  rrdatas = [google_compute_global_address.ingress.address]
+}

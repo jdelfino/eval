@@ -14,7 +14,9 @@ spec:
       port:
         number: 80
   rules:
-    - http:
+    # Production: eval.delquillan.com
+    - host: eval.delquillan.com
+      http:
         paths:
           - path: /api/*
             pathType: ImplementationSpecific
@@ -35,5 +37,16 @@ spec:
             backend:
               service:
                 name: frontend
+                port:
+                  number: 80
+    # Staging: staging.eval.delquillan.com -> staging-ingress-proxy
+    - host: staging.eval.delquillan.com
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-ingress-proxy
                 port:
                   number: 80

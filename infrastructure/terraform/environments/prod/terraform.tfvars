@@ -76,6 +76,7 @@ cloudsql_deletion_protection = true
 
 authorized_domains = [
   "eval.delquillan.com",
+  "staging.eval.delquillan.com",
   "localhost"
 ]
 
