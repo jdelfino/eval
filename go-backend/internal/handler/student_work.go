@@ -162,8 +162,16 @@ func (h *StudentWorkHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	// Merge execution settings: problem-level + student overrides + request overrides
 	merged := mergeStudentWorkExecutionSettings(work.Problem.ExecutionSettings, work.ExecutionSettings, req.ExecutionSettings)
 
+	// Extract language from problem (error if not set)
+	lang, err := normalizeLanguage(work.Problem.Language)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "problem language is not set or invalid")
+		return
+	}
+
 	// Build executor request
 	execReq := buildExecutorRequest(req.Code, merged)
+	execReq.Language = lang
 
 	// Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)

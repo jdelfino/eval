@@ -416,6 +416,7 @@ func TestStudentWorkHandler_Execute_Success(t *testing.T) {
 			ID:                problemID,
 			Title:             "Test",
 			ExecutionSettings: json.RawMessage(`{}`),
+			Language:          "python",
 		},
 	}
 
@@ -585,7 +586,8 @@ func TestStudentWorkHandler_Execute_ExecutorError(t *testing.T) {
 			ProblemID: problemID,
 		},
 		Problem: store.Problem{
-			ID: problemID,
+			ID:       problemID,
+			Language: "python",
 		},
 	}
 
@@ -751,7 +753,8 @@ func TestStudentWorkHandler_ConstructorInjectsExecutor(t *testing.T) {
 			Code:      code,
 		},
 		Problem: store.Problem{
-			ID: problemID,
+			ID:       problemID,
+			Language: "python",
 		},
 	}
 

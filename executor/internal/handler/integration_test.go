@@ -81,7 +81,8 @@ func intPtr(n int) *int { return &n }
 func TestIntegration_HelloWorld(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `print("hello")`,
+		Code:     `print("hello")`,
+		Language: "python",
 	})
 	if !resp.Success {
 		t.Fatalf("expected success, got error: %s", resp.Error)
@@ -94,8 +95,9 @@ func TestIntegration_HelloWorld(t *testing.T) {
 func TestIntegration_Stdin(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:  "name = input()\nprint(f'hi {name}')",
-		Stdin: "Alice\n",
+		Code:     "name = input()\nprint(f'hi {name}')",
+		Stdin:    "Alice\n",
+		Language: "python",
 	})
 	if !resp.Success {
 		t.Fatalf("expected success, got error: %s", resp.Error)
@@ -110,7 +112,8 @@ func TestIntegration_Stdin(t *testing.T) {
 func TestIntegration_SyntaxError(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `print(`,
+		Code:     `print(`,
+		Language: "python",
 	})
 	if resp.Success {
 		t.Fatal("expected failure for syntax error")
@@ -123,7 +126,8 @@ func TestIntegration_SyntaxError(t *testing.T) {
 func TestIntegration_RuntimeError(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `x`,
+		Code:     `x`,
+		Language: "python",
 	})
 	if resp.Success {
 		t.Fatal("expected failure for undefined variable")
@@ -138,6 +142,7 @@ func TestIntegration_Timeout(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      "import time; time.sleep(60)",
 		TimeoutMs: intPtr(1000),
+		Language:  "python",
 	})
 	if resp.Success {
 		t.Fatal("expected failure for timeout")
@@ -153,6 +158,7 @@ func TestIntegration_RandomSeed(t *testing.T) {
 	req := executorapi.ExecuteRequest{
 		Code:       "import random; print(random.randint(1,1000))",
 		RandomSeed: &seed,
+		Language:   "python",
 	}
 	resp1 := executeRequest(t, u, req)
 	resp2 := executeRequest(t, u, req)
@@ -171,6 +177,7 @@ func TestIntegration_FileAttachment(t *testing.T) {
 		Files: []executorapi.File{
 			{Name: "data.txt", Content: "file contents here"},
 		},
+		Language: "python",
 	})
 	if !resp.Success {
 		t.Fatalf("expected success, got error: %s", resp.Error)
@@ -184,7 +191,8 @@ func TestIntegration_LargeOutputTruncation(t *testing.T) {
 	u := executorURL(t)
 	// Print ~2MB of output.
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: "print('x' * 2_000_000)",
+		Code:     "print('x' * 2_000_000)",
+		Language: "python",
 	})
 	if !resp.Success {
 		t.Fatalf("expected success, got error: %s", resp.Error)
@@ -198,7 +206,8 @@ func TestIntegration_LargeOutputTruncation(t *testing.T) {
 func TestIntegration_StderrSanitization(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: "raise ValueError('test error')",
+		Code:     "raise ValueError('test error')",
+		Language: "python",
 	})
 	if resp.Success {
 		t.Fatal("expected failure")
@@ -214,6 +223,7 @@ func TestIntegration_NetworkDisabled(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      "import socket; s = socket.socket(); s.connect(('8.8.8.8', 53))",
 		TimeoutMs: intPtr(5000),
+		Language:  "python",
 	})
 	if resp.Success {
 		// Network isolation depends on nsjail config and kernel capabilities.
@@ -230,6 +240,7 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:      fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
 		TimeoutMs: intPtr(5000),
+		Language:  "python",
 	})
 	if resp.Success {
 		t.Error("expected memory-limited code to fail")
@@ -249,6 +260,7 @@ except Exception as e:
     print("BLOCKED:" + type(e).__name__)
 `,
 		TimeoutMs: intPtr(5000),
+		Language:  "python",
 	})
 	output := strings.TrimSpace(resp.Output)
 	if strings.HasPrefix(output, "LEAKED:") {
@@ -272,6 +284,7 @@ except Exception as e:
     print("BLOCKED:" + type(e).__name__)
 `,
 		TimeoutMs: intPtr(5000),
+		Language:  "python",
 	})
 	output := strings.TrimSpace(resp.Output)
 	if strings.HasPrefix(output, "LEAKED:") {
@@ -294,6 +307,7 @@ import os
 print(json.dumps({"pi": round(math.pi, 2), "cwd": os.getcwd()}))
 `,
 		TimeoutMs: intPtr(5000),
+		Language:  "python",
 	})
 	if !resp.Success {
 		t.Fatalf("expected Python stdlib to work, got error: %s", resp.Error)
@@ -307,8 +321,9 @@ print(json.dumps({"pi": round(math.pi, 2), "cwd": os.getcwd()}))
 func TestIntegration_StdinEchoed(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:  "print('ok')",
-		Stdin: "my input",
+		Code:     "print('ok')",
+		Stdin:    "my input",
+		Language: "python",
 	})
 	if resp.Stdin != "my input" {
 		t.Errorf("expected stdin echoed back, got %q", resp.Stdin)

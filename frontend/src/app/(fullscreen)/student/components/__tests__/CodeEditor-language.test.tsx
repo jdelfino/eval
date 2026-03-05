@@ -189,7 +189,7 @@ describe('CodeEditor - Language Awareness', () => {
       });
     });
 
-    it('should fall back to python when no problem is provided', async () => {
+    it('should pass empty string when no problem is provided (no language default)', async () => {
       const { executeStandaloneCode } = require('@/lib/api/execute');
       executeStandaloneCode.mockResolvedValueOnce({
         success: true,
@@ -212,7 +212,7 @@ describe('CodeEditor - Language Awareness', () => {
       await waitFor(() => {
         expect(executeStandaloneCode).toHaveBeenCalledWith(
           "print('hello')",
-          'python',
+          '',
           expect.any(Object)
         );
       });

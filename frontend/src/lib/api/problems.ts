@@ -86,6 +86,7 @@ export async function createProblem(data: {
   class_id?: string;
   tags?: string[];
   solution?: string;
+  language: string;
 }): Promise<Problem> {
   return apiPost<Problem>('/problems', data);
 }

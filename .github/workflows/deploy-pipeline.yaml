@@ -11,6 +11,7 @@ concurrency:
 
 env:
   REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
+  GO_VERSION: '1.24'
 
 jobs:
   # ── Inline build-push jobs ────────────────────────────────────────────────
@@ -199,6 +200,32 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: executor/go.sum
+      - name: Smoke test executor (staging)
+        run: |
+          # Forward the staging executor to localhost so we can run integration
+          # tests against the real deployed container (with nsjail, Java, etc.).
+          kubectl port-forward -n staging deployment/executor 8081:8081 &
+          PF_PID=$!
+          trap "kill $PF_PID 2>/dev/null || true" EXIT
+
+          # Wait for port-forward to be ready.
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8081/healthz > /dev/null 2>&1; then
+              echo "Executor port-forward ready"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:8081/healthz > /dev/null 2>&1 || { echo "::error::Executor port-forward not ready"; exit 1; }
+
+          go test -v -race -count=1 -run Integration ./...
+        working-directory: executor
+        env:
+          EXECUTOR_TEST_URL: http://localhost:8081
       - name: Run in-cluster E2E tests
         run: |
           SHA="${{ github.sha }}"

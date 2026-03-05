@@ -140,6 +140,7 @@ export default async () => {
       description: 'Print hello',
       class_id: cls.id,
       starter_code: 'print("hello")',
+      language: 'python',
       tags: ['contract-test'],
     }),
   });

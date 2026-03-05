@@ -56,6 +56,7 @@ describe('Problems API', () => {
         tags: ['contract-test'],
         starter_code: 'print("hello")',
         solution: 'print("hello world")',
+        language: 'python',
       });
 
       createdProblemId = problem.id;
@@ -265,6 +266,7 @@ describe('Problems API', () => {
         title,
         class_id: classId,
         tags: ['contract-test-delete'],
+        language: 'python',
       });
       expect(problem.id).toBeTruthy();
 

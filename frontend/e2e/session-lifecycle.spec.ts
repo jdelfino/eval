@@ -4,6 +4,8 @@ import { createClass, createSection, createProblem, startSessionFromProblem, pub
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
+  // Uses Java to get E2E coverage of the Docker+nsjail Java execution stack.
+  // Python execution is covered by preview-mode and problem-publishing E2E tests.
   test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     test.setTimeout(90000);
 
@@ -16,7 +18,8 @@ test.describe('Session Lifecycle', () => {
     const problem = await createProblem(instructor.token, cls.id, {
       title: 'Hello World',
       description: 'Print hello world',
-      starterCode: '# Write your solution\nprint("hello")\n',
+      language: 'java',
+      starterCode: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello");\n    }\n}\n',
     });
 
     // Publish problem to section (required for student flow via section page)
@@ -51,7 +54,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT TYPES CODE =====
       await waitForMonacoReady(page);
-      await setMonacoValue(page, 'print("LIFECYCLE_TEST_1")');
+      await setMonacoValue(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("LIFECYCLE_TEST_1");\n    }\n}');
 
       // Wait for code sync (500ms debounce + network)
       await page.waitForTimeout(1000);
@@ -99,7 +102,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT TYPES IN NEW SESSION =====
       await waitForMonacoReady(page);
-      await setMonacoValue(page, 'print("LIFECYCLE_TEST_2")');
+      await setMonacoValue(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("LIFECYCLE_TEST_2");\n    }\n}');
 
       // Wait for code sync
       await page.waitForTimeout(1000);

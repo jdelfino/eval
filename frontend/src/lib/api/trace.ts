@@ -14,10 +14,11 @@ import type { ExecutionTrace } from '@/types/session';
  */
 export async function traceCode(
   code: string,
+  language: string,
   stdin?: string,
   maxSteps?: number,
 ): Promise<ExecutionTrace> {
-  const body: Record<string, unknown> = { code };
+  const body: Record<string, unknown> = { code, language };
   if (stdin !== undefined) {
     body.stdin = stdin;
   }

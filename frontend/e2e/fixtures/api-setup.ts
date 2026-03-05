@@ -146,14 +146,16 @@ export async function getSectionByJoinCode(joinCode: string): Promise<RegisterSt
 }
 
 export async function createProblem(token: string, classId: string, opts: {
-  title: string; starterCode?: string; description?: string;
+  title: string; starterCode?: string; description?: string; language?: string;
 }): Promise<Problem> {
+  const language = opts.language || 'python';
   return withToken(token, () =>
     apiCreateProblem({
       title: opts.title,
       class_id: classId,
       starter_code: opts.starterCode || '# Write your solution\n',
       description: opts.description || '',
+      language,
     })
   );
 }

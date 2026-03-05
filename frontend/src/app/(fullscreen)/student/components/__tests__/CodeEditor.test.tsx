@@ -266,7 +266,7 @@ describe('CodeEditor - API Execution', () => {
       await waitFor(() => {
         expect(executeStandaloneCode).toHaveBeenCalledWith(
           "print('API execution')",
-          'python',
+          '',
           { stdin: undefined, random_seed: undefined, attached_files: undefined }
         );
       });
@@ -336,7 +336,7 @@ describe('CodeEditor - API Execution', () => {
       fireEvent.click(screen.getByText('▶ Run Code'));
 
       await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(codeToRun, 'python', {
+        expect(executeStandaloneCode).toHaveBeenCalledWith(codeToRun, '', {
           stdin: 'test input',
           random_seed: 42,
           attached_files,

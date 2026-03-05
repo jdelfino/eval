@@ -41,6 +41,7 @@ describe('Section Problems API', () => {
       class_id: classId,
       tags: ['contract-section-problem-test'],
       starter_code: 'print("hello")',
+      language: 'python',
     });
     createdProblemId = problem.id;
   });

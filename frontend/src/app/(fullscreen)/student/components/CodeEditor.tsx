@@ -367,8 +367,8 @@ export default function CodeEditor({
     setLocalExecutionResult(null);
 
     try {
-      const language = (problem && 'language' in problem) ? problem.language : 'python';
-      const result = await executeStandaloneCode(code, language || 'python', {
+      const language = (problem && 'language' in problem) ? problem.language : '';
+      const result = await executeStandaloneCode(code, language, {
         stdin: stdin || undefined,
         random_seed,
         attached_files,
@@ -655,7 +655,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code)}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '')}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -916,7 +916,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code)}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '')}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}
@@ -965,7 +965,7 @@ export default function CodeEditor({
           >
             <Editor
               height="100%"
-              language={(problem && 'language' in problem) ? (problem.language || 'python') : 'python'}
+              language={(problem && 'language' in problem) ? problem.language : 'python'}
               value={code}
               onChange={(value) => !isReadOnly && onChange(value || '')}
               onMount={handleEditorDidMount}
