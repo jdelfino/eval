@@ -66,26 +66,17 @@ resource "google_project_iam_member" "github_actions_roles" {
 }
 
 # -----------------------------------------------------------------------------
-# Custom Role: E2E Test Auth
+# Firebase Auth Admin: E2E Test User Management
 # -----------------------------------------------------------------------------
-# Permissions for E2E tests to create Identity Platform users and set
-# emailVerified=true (required by the backend for auth flows).
-# Intentionally excludes delete and list to limit blast radius.
-
-resource "google_project_iam_custom_role" "smoke_test_auth" {
-  role_id     = "smokeTestAuth"
-  title       = "E2E Test Auth (create + update)"
-  description = "Allows creating and updating Identity Platform users for E2E tests"
-  permissions = [
-    "firebaseauth.users.create",
-    "firebaseauth.users.update",
-    "serviceusage.services.use", # required for x-goog-user-project header
-  ]
-}
+# E2E tests create Identity Platform users and set emailVerified=true in the
+# staging tenant. The predefined firebaseauth.admin role is required because
+# tenant-scoped admin operations (accounts:update with Bearer token on
+# /projects/{id}/tenants/{id}/accounts:update) fail with INSUFFICIENT_PERMISSION
+# when using a custom role with individual firebaseauth.users.* permissions.
 
 resource "google_project_iam_member" "github_actions_smoke_test" {
   project = var.project_id
-  role    = google_project_iam_custom_role.smoke_test_auth.id
+  role    = "roles/firebaseauth.admin"
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
