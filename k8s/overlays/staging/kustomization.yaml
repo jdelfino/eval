@@ -5,6 +5,9 @@ namespace: staging
 
 resources:
   - ../../base
+  - staging-proxy-configmap.yaml
+  - staging-proxy-deployment.yaml
+  - staging-proxy-service.yaml
 
 patches:
   - path: patches/resources.yaml
