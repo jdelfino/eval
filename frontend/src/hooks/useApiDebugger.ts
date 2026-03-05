@@ -21,11 +21,11 @@ export function useApiDebugger() {
     error: null
   });
 
-  const requestTrace = useCallback(async (code: string) => {
+  const requestTrace = useCallback(async (code: string, language: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const trace = await traceCode(code);
+      const trace = await traceCode(code, language);
       setState({
         trace,
         currentStep: 0,
