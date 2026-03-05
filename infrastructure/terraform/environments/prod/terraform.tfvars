@@ -52,6 +52,10 @@ gke_master_authorized_networks = [
   {
     cidr_block   = "108.26.187.103/32"
     display_name = "devcontainer"
+  },
+  {
+    cidr_block   = "129.64.0.40/32"
+    display_name = "school"
   }
 ]
 
@@ -76,6 +80,7 @@ cloudsql_deletion_protection = true
 
 authorized_domains = [
   "eval.delquillan.com",
+  "staging.eval.delquillan.com",
   "localhost"
 ]
 

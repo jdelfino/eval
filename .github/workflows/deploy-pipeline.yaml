@@ -315,54 +315,15 @@ jobs:
           echo "TENANT_ID=$TENANT_ID" >> "$GITHUB_ENV"
           echo "API_KEY=$API_KEY" >> "$GITHUB_ENV"
           echo "BOOTSTRAP_EMAIL=$BOOTSTRAP_EMAIL" >> "$GITHUB_ENV"
-      - name: Wait for staging-proxy rollout
+      - name: Apply staging ingress proxy
+        run: kubectl apply -f k8s/staging-ingress/
+      - name: Wait for staging-ingress-proxy rollout
         run: |
-          kubectl rollout status deployment/staging-proxy -n staging --timeout=120s
-      - name: Get GKE node IP
-        run: |
-          NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-          echo "NODE_IP=$NODE_IP" >> "$GITHUB_ENV"
-      - name: Start IAP tunnel to staging proxy
-        run: |
-          # Connect Gateway doesn't support kubectl port-forward (no WebSocket
-          # upgrades), so we tunnel through the NAT VM via IAP.
-          # gcloud compute ssh crashes with WIF (quote_from_bytes bug), so we
-          # use start-iap-tunnel for the TCP layer + plain ssh for port forwarding.
-          gcloud compute start-iap-tunnel eval-prod-nat 22 \
-            --zone=us-east1-b --local-host-port=localhost:2222 &
-          IAP_PID=$!
-          sleep 5
-
-          # Generate ephemeral SSH key and register via OS Login
-          ssh-keygen -t rsa -b 2048 -f /tmp/iap_key -N "" -q
-          gcloud compute os-login ssh-keys add --key-file=/tmp/iap_key.pub --ttl=30m --quiet
-
-          # Get OS Login POSIX username
-          OSLOGIN_USER=$(gcloud compute os-login describe-profile \
-            --format='value(posixAccounts[0].username)' 2>/dev/null)
-
-          # SSH through IAP tunnel for port forwarding to GKE node's NodePort
-          ssh -i /tmp/iap_key -p 2222 \
-            -L 8080:${NODE_IP}:30080 -N -f \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            "${OSLOGIN_USER}@localhost"
-      - name: Verify tunnel
-        run: |
-          echo "Waiting for tunnel to become available..."
-          for i in $(seq 1 30); do
-            if curl -sf --max-time 5 http://localhost:8080/ >/dev/null 2>&1; then
-              echo "Tunnel ready after $((i * 2))s"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::Tunnel did not become available after 60s"
-          exit 1
+          kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
       - name: Run staging E2E tests
         env:
-          BASE_URL: http://localhost:8080
-          API_BASE_URL: http://localhost:8080
+          BASE_URL: https://staging.eval.delquillan.com
+          API_BASE_URL: https://staging.eval.delquillan.com
           FIREBASE_TENANT_ID: ${{ env.TENANT_ID }}
           FIREBASE_API_KEY: ${{ env.API_KEY }}
           FIREBASE_PROJECT_ID: eval-prod-485520

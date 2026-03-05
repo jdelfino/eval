@@ -507,8 +507,8 @@ module "centrifugo_staging" {
   region       = var.region
 
   namespace       = "staging"
-  allowed_origins = ["http://frontend", "http://localhost:8080"] # http://localhost:8080: Playwright via IAP tunnel sends Origin: http://localhost:8080
-  redis_host      = "redis"                                      # namespace-relative
+  allowed_origins = ["https://staging.eval.delquillan.com"]
+  redis_host      = "redis" # namespace-relative
   redis_port      = 6379
 
   depends_on = [module.gke, kubernetes_namespace.staging]
