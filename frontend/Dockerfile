@@ -36,11 +36,6 @@ ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=__NEXT_PUBLIC_FIREBASE_PROJECT_ID__
 ENV NEXT_PUBLIC_CENTRIFUGO_URL=__NEXT_PUBLIC_CENTRIFUGO_URL__
 ENV NEXT_PUBLIC_FIREBASE_TENANT_ID=__NEXT_PUBLIC_FIREBASE_TENANT_ID__
 
-# Proxy /api/* to go-api at runtime (Next.js rewrites).
-# Harmless in production — ingress routes /api/* before it reaches the frontend.
-# Required in staging where there is no ingress.
-ENV API_PROXY_URL=http://go-api
-
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
