@@ -27,6 +27,9 @@ function PublicViewContent() {
   const [localCode, setLocalCode] = useState<string>('');
   const lastFeaturedStudentId = useRef<string | null>(null);
   const lastFeaturedCode = useRef<string | null>(null);
+  // Tracks whether the user has edited the scratch pad code.
+  // When true, we don't auto-replace with starter_code.
+  const hasUserEdited = useRef(false);
 
   const hasFeaturedSubmission = !!state?.featured_student_id;
 
@@ -72,9 +75,16 @@ function PublicViewContent() {
     if (studentChanged || codeChanged) {
       lastFeaturedStudentId.current = state?.featured_student_id || null;
       lastFeaturedCode.current = state?.featured_code ?? null;
-      setLocalCode(state?.featured_code ?? state?.problem?.starter_code ?? '');
+      setLocalCode(state?.featured_code ?? '');
+      hasUserEdited.current = false;
     }
   }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
+
+  // Track user edits to the scratch pad
+  const handleCodeChange = (code: string) => {
+    hasUserEdited.current = true;
+    setLocalCode(code);
+  };
 
   if (!session_id) {
     return (
@@ -107,6 +117,8 @@ function PublicViewContent() {
   }
 
   const problem = state.problem;
+  // Show starter_code only when the user hasn't edited the scratch pad
+  const scratchPadCode = hasUserEdited.current ? localCode : (localCode || problem?.starter_code || '');
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
@@ -130,8 +142,8 @@ function PublicViewContent() {
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
           <CodeEditor
-            code={localCode || problem?.starter_code || ''}
-            onChange={setLocalCode}
+            code={scratchPadCode}
+            onChange={handleCodeChange}
             problem={problem || null}
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
             useApiExecution={true}
