@@ -255,7 +255,6 @@ jobs:
         run: docker compose down
 
   # ── Executor test jobs ──────────────────────────────────────────────────────
-  # NO setup-java (removed in staging-deploy branch).
 
   executor-test:
     needs: changes
@@ -300,6 +299,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: executor/go.sum
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Build executor
         run: go build -o ./tmp/executor ./cmd/executor
         working-directory: executor
@@ -310,10 +313,12 @@ jobs:
             if curl -sf http://localhost:8081/healthz > /dev/null 2>&1; then break; fi
             sleep 1
           done
-          curl -sf http://localhost:8081/healthz || { echo "Executor not ready"; exit 1; }
+          curl -sf http://localhost:8081/readyz || { echo "Executor not ready"; exit 1; }
         env:
           DISABLE_SANDBOX: "true"
           PYTHON_PATH: /usr/bin/python3
+          JAVA_PATH: java
+          JAVAC_PATH: javac
       - name: Run integration tests
         env:
           EXECUTOR_TEST_URL: http://localhost:8081
