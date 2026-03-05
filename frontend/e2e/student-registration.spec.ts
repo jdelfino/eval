@@ -4,9 +4,8 @@
  * Tests the complete student registration journey:
  * 1. Enter join code → section preview shows (class name, semester)
  * 2. Verify sign-in buttons are visible (unauthenticated state)
- * 3. Sign in via /auth/signin/email (the email/password sign-in page)
- * 4. Return to registration page → auto-registers (already signed in)
- * 5. Redirect to section detail, section appears in /sections
+ * 3. Sign in via /auth/signin/email?code=XXX (handles registration inline)
+ * 4. Redirect to section detail, section appears in /sections
  *
  * Uses Firebase Auth Emulator for real token validation end-to-end.
  */
@@ -71,43 +70,27 @@ test.describe('Student Registration UI', () => {
     // ===== STEP 3: Verify sign-in buttons are visible (not yet authenticated) =====
     await expect(page.locator('button:has-text("Continue with Google")')).toBeVisible();
 
-    // ===== STEP 4: Sign in via the email sign-in page =====
-    // The student isn't in the database yet, so after Firebase sign-in
-    // /auth/me returns 401 and AuthContext won't redirect. We wait for
-    // the Firebase sign-in API response to confirm auth succeeded, then
-    // navigate back to the registration page manually.
-    await page.goto('/auth/signin/email');
+    // ===== STEP 4: Sign in via the email sign-in page with join code =====
+    // Pass the join code as a URL param so the email sign-in page handles
+    // registration inline (calls beginAuthFlow → signIn → registerStudent
+    // → redirect). This avoids a cross-page navigation race where Firebase
+    // Auth state may not restore from IndexedDB before the click handler runs.
+    const codeOnly = joinCode.replace(/-/g, '');
+    await page.goto(`/auth/signin/email?code=${codeOnly}`);
     await page.fill('#email', studentEmail);
     await page.fill('#password', studentPassword);
-    await Promise.all([
-      page.waitForResponse(
-        (resp) => resp.url().includes('identitytoolkit') && resp.status() === 200,
-        { timeout: 10_000 }
-      ),
-      page.click('button[type="submit"]'),
-    ]);
+    await page.click('button[type="submit"]');
 
-    // ===== STEP 5: Return to registration page — now signed in =====
-    // The code param pre-fills the input but doesn't auto-submit.
-    // Clicking "Continue to Register" validates the code. Since the user is
-    // now signed in (firebaseAuth.currentUser is set), the page calls
-    // registerStudent directly and redirects to the section detail page.
-    const codeOnly = joinCode.replace(/-/g, '');
-    await page.goto(`/register/student?code=${codeOnly}`);
-    await expect(page.locator('button:has-text("Continue to Register")')).toBeVisible({ timeout: 5_000 });
+    // The email sign-in page registers the student and redirects to the
+    // section detail page. This can take a few seconds on slow CI runners.
+    await page.waitForURL(/\/sections\//, { timeout: 15_000 });
 
-    await page.click('button:has-text("Continue to Register")');
-
-    // Registration POST + redirect. With refreshUser no longer blocking the
-    // redirect, this should complete in a few seconds even on slow CI runners.
-    await page.waitForURL(/\/sections\//, { timeout: 10_000 });
-
-    // ===== STEP 6: Verify section detail page =====
+    // ===== STEP 5: Verify section detail page =====
     // Section name is h1, class name is in a paragraph below it
     await expect(page.locator('h1').filter({ hasText: 'Fall Section' })).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(`text=${cls.name}`).first()).toBeVisible();
 
-    // ===== STEP 7: Verify section appears in /sections =====
+    // ===== STEP 6: Verify section appears in /sections =====
     await page.goto('/sections');
     await expect(page.locator(`text=${cls.name}`).first()).toBeVisible({ timeout: 10_000 });
   });
