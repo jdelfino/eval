@@ -259,15 +259,36 @@ jobs:
                         memory: 128Mi
           JOBEOF
 
+          # Poll for smoke test completion (Complete or Failed).
+          # Same pattern as E2E: kubectl wait doesn't detect Failed condition.
           echo "Waiting for executor-smoke job to complete..."
-          kubectl wait --for=condition=complete --timeout=120s job/executor-smoke -n staging || {
-            echo "::error::Executor smoke test job failed"
+          DEADLINE=$((SECONDS + 180))
+          SMOKE_RESULT=""
+          while [ $SECONDS -lt $DEADLINE ]; do
+            COND=$(kubectl get job executor-smoke -n staging \
+              -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
+            if [ "$COND" = "Complete" ]; then
+              SMOKE_RESULT="passed"
+              break
+            elif [ "$COND" = "Failed" ]; then
+              SMOKE_RESULT="failed"
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$SMOKE_RESULT" = "passed" ]; then
+            echo "Executor smoke test logs:"
+            kubectl logs job/executor-smoke -n staging
+          elif [ "$SMOKE_RESULT" = "failed" ]; then
+            echo "::error::Executor smoke test failed"
             kubectl logs job/executor-smoke -n staging 2>/dev/null || true
             exit 1
-          }
-
-          echo "Executor smoke test logs:"
-          kubectl logs job/executor-smoke -n staging
+          else
+            echo "::error::Executor smoke test timed out"
+            kubectl logs job/executor-smoke -n staging 2>/dev/null || true
+            exit 1
+          fi
       - name: Run in-cluster E2E tests
         run: |
           SHA="${{ github.sha }}"
