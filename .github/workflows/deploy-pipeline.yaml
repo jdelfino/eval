@@ -259,18 +259,20 @@ jobs:
                         memory: 128Mi
           JOBEOF
 
-          # Poll for smoke test completion (Complete or Failed).
-          # Same pattern as E2E: kubectl wait doesn't detect Failed condition.
+          # Poll for smoke test completion via .status.succeeded / .status.failed.
+          # Using status counters instead of conditions[].type for broad K8s compat.
           echo "Waiting for executor-smoke job to complete..."
           DEADLINE=$((SECONDS + 180))
           SMOKE_RESULT=""
           while [ $SECONDS -lt $DEADLINE ]; do
-            COND=$(kubectl get job executor-smoke -n staging \
-              -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
-            if [ "$COND" = "Complete" ]; then
+            SUCCEEDED=$(kubectl get job executor-smoke -n staging \
+              -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
+            FAILED=$(kubectl get job executor-smoke -n staging \
+              -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
+            if [ "$SUCCEEDED" = "1" ]; then
               SMOKE_RESULT="passed"
               break
-            elif [ "$COND" = "Failed" ]; then
+            elif [ "$FAILED" = "1" ]; then
               SMOKE_RESULT="failed"
               break
             fi
@@ -363,12 +365,14 @@ jobs:
           DEADLINE=$((SECONDS + 420))
           JOB_RESULT=""
           while [ $SECONDS -lt $DEADLINE ]; do
-            COND=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
-              -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
-            if [ "$COND" = "Complete" ]; then
+            SUCCEEDED=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
+              -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
+            FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
+              -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
+            if [ "$SUCCEEDED" = "1" ]; then
               JOB_RESULT="passed"
               break
-            elif [ "$COND" = "Failed" ]; then
+            elif [ "$FAILED" = "1" ]; then
               JOB_RESULT="failed"
               break
             fi
