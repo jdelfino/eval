@@ -5,3 +5,4 @@ metadata:
 spec:
   domains:
     - eval.delquillan.com
+    - staging.eval.delquillan.com
