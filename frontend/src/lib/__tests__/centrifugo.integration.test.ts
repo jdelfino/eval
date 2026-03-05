@@ -51,13 +51,13 @@ afterAll(() => {
 });
 
 describe('centrifugo integration', () => {
-  describe('getCentrifugoUrl URL derivation', () => {
+  describe('resolveCentrifugoUrl URL derivation', () => {
     it('derives ws:// URL from http location when env var is empty string', () => {
       process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
 
-      const { getCentrifugoUrl } = require('../centrifugo');
+      const { resolveCentrifugoUrl } = require('../centrifugo');
       const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
-      const url = getCentrifugoUrl(mockLocation);
+      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
 
       expect(url).toBe('ws://localhost:8080/connection/websocket');
     });
@@ -65,9 +65,9 @@ describe('centrifugo integration', () => {
     it('derives wss:// URL from https location when env var is empty string', () => {
       process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
 
-      const { getCentrifugoUrl } = require('../centrifugo');
+      const { resolveCentrifugoUrl } = require('../centrifugo');
       const mockLocation = { protocol: 'https:', host: 'app.example.com' } as Location;
-      const url = getCentrifugoUrl(mockLocation);
+      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
 
       expect(url).toBe('wss://app.example.com/connection/websocket');
     });
@@ -75,9 +75,9 @@ describe('centrifugo integration', () => {
     it('uses explicit NEXT_PUBLIC_CENTRIFUGO_URL when set', () => {
       process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: 'ws://rt.test/ws' };
 
-      const { getCentrifugoUrl } = require('../centrifugo');
+      const { resolveCentrifugoUrl } = require('../centrifugo');
       const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
-      const url = getCentrifugoUrl(mockLocation);
+      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
 
       expect(url).toBe('ws://rt.test/ws');
     });

@@ -95,10 +95,18 @@ async function getAdminAuthHeader(): Promise<string> {
     };
     return `Bearer ${data.access_token}`;
   } catch (error) {
-    throw new Error(
-      'Cannot create new IDP user: GKE metadata server not available. ' +
-      'Pre-create the user via the staging user setup script, then re-run.'
-    );
+    // Only swallow network/timeout errors (metadata server unreachable or timed out).
+    // Re-throw HTTP errors (e.g. 403 Forbidden) so they are not silently lost.
+    if (
+      error instanceof TypeError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
+      throw new Error(
+        'Cannot create new IDP user: GKE metadata server not available. ' +
+        'Pre-create the user via the staging user setup script, then re-run.'
+      );
+    }
+    throw error;
   }
 }
 
