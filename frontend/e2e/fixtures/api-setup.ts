@@ -56,8 +56,17 @@ let cachedAdminToken: string | null = null;
 export async function getAdminToken(): Promise<string> {
   if (cachedAdminToken) return cachedAdminToken;
 
+  console.warn(`[E2E bootstrap] email=${BOOTSTRAP_ADMIN_EMAIL} api=${API_BASE}`);
   await createVerifiedTestUser(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
   const token = await getTestToken(BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD);
+
+  // Log the token's email claim for debugging auth mismatches
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    console.warn(`[E2E bootstrap] token email=${payload.email} email_verified=${payload.email_verified} tenant=${payload.firebase?.tenant}`);
+  } catch {
+    console.warn('[E2E bootstrap] could not decode token');
+  }
 
   // Bootstrap the admin user (idempotent — 409 means already done)
   try {
@@ -66,6 +75,7 @@ export async function getAdminToken(): Promise<string> {
     if (err instanceof ApiError && err.status === 409) {
       // already bootstrapped — fine
     } else {
+      console.error(`[E2E bootstrap] bootstrap failed: ${err instanceof ApiError ? `status=${err.status} msg=${err.message}` : err}`);
       throw err;
     }
   }
