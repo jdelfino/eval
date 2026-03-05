@@ -17,7 +17,7 @@ test.describe('Session Lifecycle', () => {
       title: 'Hello Java',
       description: 'Print hello from Java',
       language: 'java',
-      starterCode: 'class Main {\n    public static void main(String[] args) {\n        System.out.println("hello from java");\n    }\n}\n',
+      starterCode: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello from java");\n    }\n}\n',
     });
 
     // Publish problem to section (required for student flow via section page)
@@ -38,7 +38,7 @@ test.describe('Session Lifecycle', () => {
 
     // ===== STUDENT WRITES JAVA CODE =====
     await waitForMonacoReady(page);
-    const javaCode = 'class Main {\n    public static void main(String[] args) {\n        System.out.println("JAVA_E2E_TEST_OK");\n    }\n}';
+    const javaCode = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("JAVA_E2E_TEST_OK");\n    }\n}';
     await setMonacoValue(page, javaCode);
 
     // Wait for debounced auto-save before executing (500ms debounce + buffer)
