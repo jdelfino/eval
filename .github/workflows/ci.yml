@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       cross-boundary-only:
-        description: 'Run only cross-boundary tests (contract, e2e, go-api-integration)'
+        description: 'Run only cross-boundary tests (system-contract, system-playwright, go-api-integration)'
         type: boolean
         default: false
 
@@ -292,7 +292,7 @@ jobs:
 
   # ── Cross-stack jobs ────────────────────────────────────────────────────────
 
-  contract-tests:
+  system-contract:
     needs: changes
     if: |
       needs.changes.outputs.go-backend == 'true' ||
@@ -471,7 +471,7 @@ jobs:
           docker stop executor 2>/dev/null || true
           docker rm executor 2>/dev/null || true
 
-  e2e-tests:
+  system-playwright:
     needs: changes
     if: |
       needs.changes.outputs.go-backend == 'true' ||
