@@ -13,7 +13,7 @@ export default function StudentDetailPage() {
   const section_id = params.section_id as string;
   const user_id = params.user_id as string;
 
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
 
   const [workSummaries, setWorkSummaries] = useState<StudentWorkSummary[]>([]);
   const [student, setStudent] = useState<StudentProgress | null>(null);
@@ -25,12 +25,7 @@ export default function StudentDetailPage() {
     user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
 
   useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      router.push('/auth/signin');
-      return;
-    }
+    if (!user) return;
 
     if (!isInstructor) {
       router.push('/sections');
@@ -38,7 +33,7 @@ export default function StudentDetailPage() {
     }
 
     loadData();
-  }, [user, authLoading, section_id, user_id]);
+  }, [user, section_id, user_id]);
 
   const loadData = async () => {
     try {
@@ -83,7 +78,7 @@ export default function StudentDetailPage() {
     });
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-gray-600">Loading...</div>

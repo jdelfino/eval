@@ -8,7 +8,7 @@
  * - "Not started" problems are not expandable
  * - Back button links to section page
  * - Loading and error states
- * - Non-instructor redirect
+ * - Non-instructor redirect (to /sections — layout handles unauthenticated redirect)
  */
 
 import React from 'react';
@@ -278,7 +278,7 @@ describe('StudentDetailPage', () => {
   });
 
   describe('non-instructor redirect', () => {
-    it('redirects students to signin', async () => {
+    it('redirects students to /sections (role-based guard)', async () => {
       (useAuth as jest.Mock).mockReturnValue({
         user: { id: 'student-1', email: 'student@example.com', role: 'student' },
         isLoading: false,
@@ -292,18 +292,8 @@ describe('StudentDetailPage', () => {
       });
     });
 
-    it('redirects unauthenticated users to signin', async () => {
-      (useAuth as jest.Mock).mockReturnValue({
-        user: null,
-        isLoading: false,
-      });
-
-      render(<StudentDetailPage />);
-
-      await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith('/auth/signin');
-      });
-    });
+    // Note: unauthenticated redirect (to /auth/signin) is handled by the layout,
+    // not by this page. The layout prevents rendering children when user is null.
   });
 
   describe('loading state', () => {

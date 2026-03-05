@@ -164,6 +164,27 @@ describe('SectionDetailPage', () => {
     mockExitPreview.mockResolvedValue(undefined);
   });
 
+  describe('authLoading does not contribute to page loading guard', () => {
+    it('renders content (not loading spinner) when authLoading=true but data has loaded', async () => {
+      // When authLoading is true but user is present and data is loaded,
+      // the layout already handles auth loading. The page should show content.
+      (useAuth as jest.Mock).mockReturnValue({
+        user: { id: 'user-1', email: 'test@example.com', role: 'instructor' },
+        isLoading: true, // authLoading is true
+      });
+      mockSectionData();
+
+      render(<SectionDetailPage />);
+
+      // Page should render content (section name) after data loads, not stay in loading state
+      await waitFor(() => {
+        expect(screen.getByText('Intro to CS')).toBeInTheDocument();
+      });
+      // Loading spinner should not be shown once data has loaded
+      expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    });
+  });
+
   describe('main back button (section loaded)', () => {
     it('shows "Back to Class" linking to /classes/{classId} for instructor role', async () => {
       mockUser('instructor');

@@ -1,27 +1,21 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSections } from '@/hooks/useSections';
 
 export default function MySectionsPage() {
-  const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { sections, loading, error, fetchMySections } = useSections();
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/signin');
-      return;
-    }
     if (user) {
       fetchMySections();
     }
-  }, [user, authLoading, router, fetchMySections]);
+  }, [user, fetchMySections]);
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
