@@ -42,6 +42,7 @@ test-api:
 
 lint-api:
 	cd go-backend && golangci-lint run ./...
+	cd go-backend && go run ./cmd/writeerror500lint ./...
 
 docker-build-api:
 	docker build -f go-backend/Dockerfile -t go-api:local .
