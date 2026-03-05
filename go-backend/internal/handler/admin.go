@@ -38,7 +38,7 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	stats, err := repos.AdminStats(r.Context())
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to retrieve stats")
+		httputil.WriteInternalError(w, r, err, "failed to retrieve stats")
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, stats)
@@ -73,7 +73,7 @@ func (h *AdminHandler) AuditLog(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	logs, err := repos.ListAuditLogs(r.Context(), filters)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to retrieve audit logs")
+		httputil.WriteInternalError(w, r, err, "failed to retrieve audit logs")
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, logs)
@@ -89,7 +89,7 @@ func (h *AdminHandler) ClearData(w http.ResponseWriter, r *http.Request) {
 
 	repos := store.ReposFromContext(r.Context())
 	if err := repos.ClearData(r.Context(), user.ID); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "failed to clear data")
+		httputil.WriteInternalError(w, r, err, "failed to clear data")
 		return
 	}
 

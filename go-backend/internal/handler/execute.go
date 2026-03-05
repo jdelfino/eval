@@ -74,7 +74,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	var studentRecord *store.SessionStudent
 	sr, err := repos.GetSessionStudent(r.Context(), sessionID, req.StudentID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if err == nil {

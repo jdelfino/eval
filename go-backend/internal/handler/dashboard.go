@@ -33,7 +33,7 @@ func (h *DashboardHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	classes, err := repos.InstructorDashboard(r.Context(), user.ID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

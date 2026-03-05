@@ -67,7 +67,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 	if channel == "" {
 		tok, err := h.tokens.ConnectionToken(authUser.ID.String(), h.tokenExpiry)
 		if err != nil {
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 		httputil.WriteJSON(w, http.StatusOK, tokenResponse{Token: tok})
@@ -87,7 +87,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 				httputil.WriteError(w, http.StatusForbidden, "not a participant of this session")
 				return
 			}
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 
@@ -102,7 +102,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 				httputil.WriteError(w, http.StatusForbidden, "not a member of this section")
 				return
 			}
-			httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+			httputil.WriteInternalError(w, r, err, "internal error")
 			return
 		}
 
@@ -113,7 +113,7 @@ func (h *CentrifugoHandler) GetToken(w http.ResponseWriter, r *http.Request) {
 
 	tok, err := h.tokens.SubscriptionToken(authUser.ID.String(), channel, h.tokenExpiry)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	httputil.WriteJSON(w, http.StatusOK, tokenResponse{Token: tok})

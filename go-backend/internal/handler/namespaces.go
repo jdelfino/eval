@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -61,7 +60,7 @@ func (h *NamespaceHandler) List(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	namespaces, err := repos.ListNamespaces(r.Context())
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -83,7 +82,7 @@ func (h *NamespaceHandler) Get(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -124,8 +123,7 @@ func (h *NamespaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusConflict, "namespace already exists")
 			return
 		}
-		slog.ErrorContext(r.Context(), "failed to create namespace", "error", err, "namespace_id", req.ID)
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -161,7 +159,7 @@ func (h *NamespaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -180,7 +178,7 @@ func (h *NamespaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -213,7 +211,7 @@ func (h *NamespaceHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	users, err := repos.ListUsers(r.Context(), store.UserFilters{NamespaceID: &id})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -246,13 +244,13 @@ func (h *NamespaceHandler) GetCapacity(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
 	counts, err := repos.CountUsersByRole(r.Context(), id)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -292,7 +290,7 @@ func (h *NamespaceHandler) UpdateCapacity(w http.ResponseWriter, r *http.Request
 			httputil.WriteError(w, http.StatusNotFound, "namespace not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

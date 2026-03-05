@@ -63,7 +63,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "session not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -72,7 +72,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		ID uuid.UUID `json:"id"`
 	}
 	if err := json.Unmarshal(session.Problem, &problemData); err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "invalid problem data")
+		httputil.WriteInternalError(w, r, err, "invalid problem data")
 		return
 	}
 
@@ -85,7 +85,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	// Get or create student_work
 	studentWork, err := repos.GetOrCreateStudentWork(r.Context(), authUser.NamespaceID, authUser.ID, problemData.ID, session.SectionID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		StudentWorkID: &studentWork.ID,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -145,12 +145,12 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 			httputil.WriteError(w, http.StatusNotFound, "session student not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
 	if sessionStudent.StudentWorkID == nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "student work not linked")
+		httputil.WriteInternalError(w, r, errors.New("student work not linked to session student"), "student work not linked")
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		ExecutionSettings: req.ExecutionSettings,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -194,7 +194,7 @@ func (h *SessionStudentHandler) ListStudents(w http.ResponseWriter, r *http.Requ
 	repos := store.ReposFromContext(r.Context())
 	students, err := repos.ListSessionStudents(r.Context(), sessionID)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

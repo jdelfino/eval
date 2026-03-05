@@ -99,7 +99,7 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 	var problems []store.Problem
 	problems, err := repos.ListProblemsFiltered(r.Context(), filters)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Language:          lang,
 	})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -236,7 +236,7 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "problem not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 

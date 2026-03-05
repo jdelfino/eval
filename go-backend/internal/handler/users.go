@@ -58,7 +58,7 @@ func (h *UserHandler) ListSystem(w http.ResponseWriter, r *http.Request) {
 	repos := store.ReposFromContext(r.Context())
 	users, err := repos.ListUsers(r.Context(), filters)
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *UserHandler) ListNamespace(w http.ResponseWriter, r *http.Request) {
 	nsID := authUser.NamespaceID
 	users, err := repos.ListUsers(r.Context(), store.UserFilters{NamespaceID: &nsID})
 	if err != nil {
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *UserHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -145,7 +145,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Reque
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if target.NamespaceID == nil || *target.NamespaceID != authUser.NamespaceID {
@@ -188,7 +188,7 @@ func (h *UserHandler) DeleteNamespaceScoped(w http.ResponseWriter, r *http.Reque
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 	if target.NamespaceID == nil || *target.NamespaceID != authUser.NamespaceID {
@@ -243,7 +243,7 @@ func (h *UserHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 			httputil.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		httputil.WriteError(w, http.StatusInternalServerError, "internal error")
+		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
 
