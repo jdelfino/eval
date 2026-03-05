@@ -77,19 +77,37 @@ async function getAdminAuthHeader(): Promise<string> {
   }
 
   // Fetch access token from GKE metadata server
-  const res = await fetch(
-    'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
-    { headers: { 'Metadata-Flavor': 'Google' } }
-  );
-  if (!res.ok) {
-    throw new Error(`Failed to get GCP access token: ${res.status} ${await res.text()}`);
+  try {
+    const res = await fetch(
+      'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+      {
+        headers: { 'Metadata-Flavor': 'Google' },
+        signal: AbortSignal.timeout(3000),
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to get GCP access token: ${res.status} ${await res.text()}`);
+    }
+    const data = await res.json();
+    cachedAccessToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + data.expires_in * 1000,
+    };
+    return `Bearer ${data.access_token}`;
+  } catch (error) {
+    // Only swallow network/timeout errors (metadata server unreachable or timed out).
+    // Re-throw HTTP errors (e.g. 403 Forbidden) so they are not silently lost.
+    if (
+      error instanceof TypeError ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
+      throw new Error(
+        'Cannot create new IDP user: GKE metadata server not available. ' +
+        'Pre-create the user via the staging user setup script, then re-run.'
+      );
+    }
+    throw error;
   }
-  const data = await res.json();
-  cachedAccessToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-  return `Bearer ${data.access_token}`;
 }
 
 /** Build the request body, adding tenantId when configured. */

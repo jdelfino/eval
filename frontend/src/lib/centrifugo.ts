@@ -1,8 +1,28 @@
 import { Centrifuge } from 'centrifuge';
 import { getAuthHeaders, getPreviewSectionId } from '@/lib/api-client';
 
-const CENTRIFUGO_URL = process.env.NEXT_PUBLIC_CENTRIFUGO_URL || 'ws://localhost:8000/connection/websocket';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+/**
+ * Resolves the Centrifugo WebSocket URL.
+ *
+ * When NEXT_PUBLIC_CENTRIFUGO_URL is set (production/local dev), it is used as-is.
+ * When it is empty (staging), the URL is derived from the page origin so the browser
+ * connects via the nginx proxy at the same host/port rather than an internal cluster DNS name.
+ *
+ * @param protocol - override window.location.protocol (for testing)
+ * @param host     - override window.location.host (for testing)
+ */
+export function resolveCentrifugoUrl(protocol?: string, host?: string): string {
+  const configured = process.env.NEXT_PUBLIC_CENTRIFUGO_URL;
+  if (configured) return configured;
+  if (typeof window !== 'undefined') {
+    const proto = (protocol ?? window.location.protocol) === 'https:' ? 'wss:' : 'ws:';
+    const h = host ?? window.location.host;
+    return `${proto}//${h}/connection/websocket`;
+  }
+  return 'ws://localhost:8000/connection/websocket';
+}
 
 function buildHeaders(authHeaders: Record<string, string>): Record<string, string> {
   const previewSectionId = getPreviewSectionId();
@@ -13,7 +33,7 @@ function buildHeaders(authHeaders: Record<string, string>): Record<string, strin
 }
 
 export function createCentrifuge(): Centrifuge {
-  return new Centrifuge(CENTRIFUGO_URL, {
+  return new Centrifuge(resolveCentrifugoUrl(), {
     getToken: async () => {
       const authHeaders = await getAuthHeaders();
       const headers = buildHeaders(authHeaders);

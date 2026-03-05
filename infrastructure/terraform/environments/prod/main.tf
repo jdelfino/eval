@@ -190,8 +190,9 @@ module "workload_identity_federation" {
   project_number = var.project_number
   region         = var.region
 
-  github_owner = var.github_owner
-  github_repo  = var.github_repo
+  github_owner          = var.github_owner
+  github_repo           = var.github_repo
+  service_account_roles = var.service_account_roles
 }
 
 module "monitoring" {
@@ -490,7 +491,7 @@ resource "kubernetes_config_map" "staging_frontend_config" {
     NEXT_PUBLIC_FIREBASE_API_KEY     = module.identity_platform.api_key
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = module.identity_platform.auth_domain
     NEXT_PUBLIC_FIREBASE_PROJECT_ID  = var.project_id
-    NEXT_PUBLIC_CENTRIFUGO_URL       = "ws://centrifugo:8000/connection/websocket"
+    NEXT_PUBLIC_CENTRIFUGO_URL       = "" # Empty: frontend derives WS URL from window.location for nginx proxy tunnel
     NEXT_PUBLIC_FIREBASE_TENANT_ID   = google_identity_platform_tenant.staging.name
   }
 
@@ -507,8 +508,8 @@ module "centrifugo_staging" {
   region       = var.region
 
   namespace       = "staging"
-  allowed_origins = ["http://frontend"]
-  redis_host      = "redis" # namespace-relative
+  allowed_origins = ["http://frontend", "http://localhost:8080"] # http://localhost:8080: Playwright via IAP tunnel sends Origin: http://localhost:8080
+  redis_host      = "redis"                                      # namespace-relative
   redis_port      = 6379
 
   depends_on = [module.gke, kubernetes_namespace.staging]
