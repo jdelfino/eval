@@ -216,8 +216,8 @@ jobs:
       - name: Wait for staging-ingress-proxy rollout
         run: |
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
-      - name: Smoke test executor (staging)
-        run: ./scripts/executor-smoke-test.sh
+      - name: Validate executor sandbox (staging)
+        run: ./scripts/validate-executor-sandbox.sh
         env:
           BASE_URL: https://staging.eval.delquillan.com
       - name: Run staging E2E tests

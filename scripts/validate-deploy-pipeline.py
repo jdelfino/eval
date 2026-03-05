@@ -7,7 +7,7 @@ Checks that:
 - build-push-executor uses content-hash caching to skip unnecessary builds
 - The skip path produces a commit-SHA tag (so deploy-staging works unchanged)
 - The build path also produces commit-SHA and latest tags
-- deploy-staging runs executor smoke tests via the public staging URL (not a K8s Job)
+- deploy-staging runs executor sandbox validation via the public staging URL (not a K8s Job)
 
 Exit code 0 = valid, 1 = invalid.
 """
@@ -114,7 +114,7 @@ def validate(workflow_path):
         "deploy-staging needs: build-push-executor",
     )
 
-    # ── deploy-staging: executor smoke tests via public staging URL ────────────
+    # ── deploy-staging: executor sandbox validation via public staging URL ─────
     # The K8s Job approach is replaced with a script that runs on the CI runner
     # against the public staging URL. The script must run AFTER the staging
     # ingress proxy is deployed and BEFORE E2E tests.
@@ -122,22 +122,22 @@ def validate(workflow_path):
     staging_steps_str = str(staging_steps)
 
     ok &= check(
-        "executor-smoke-test.sh" in staging_steps_str,
-        "deploy-staging: runs executor-smoke-test.sh script",
+        "validate-executor-sandbox.sh" in staging_steps_str,
+        "deploy-staging: runs validate-executor-sandbox.sh script",
     )
     ok &= check(
         "executor-validate" not in staging_steps_str,
         "deploy-staging: no longer uses K8s executor-validate Job",
     )
 
-    # Verify ordering: staging-ingress-proxy rollout must come before executor smoke test
+    # Verify ordering: staging-ingress-proxy rollout must come before executor sandbox validation
     proxy_rollout_idx = None
     executor_smoke_idx = None
     for i, step in enumerate(staging_steps):
         step_str = str(step)
         if "staging-ingress-proxy" in step_str:
             proxy_rollout_idx = i
-        if "executor-smoke-test.sh" in step_str:
+        if "validate-executor-sandbox.sh" in step_str:
             executor_smoke_idx = i
 
     ok &= check(
@@ -146,12 +146,12 @@ def validate(workflow_path):
     )
     ok &= check(
         executor_smoke_idx is not None,
-        "deploy-staging: has executor smoke test step",
+        "deploy-staging: has executor sandbox validation step",
     )
     if proxy_rollout_idx is not None and executor_smoke_idx is not None:
         ok &= check(
             proxy_rollout_idx < executor_smoke_idx,
-            "deploy-staging: executor smoke test runs after proxy rollout",
+            "deploy-staging: executor sandbox validation runs after proxy rollout",
         )
 
     # ── deploy-prod: gates on deploy-staging + ci ─────────────────────────────

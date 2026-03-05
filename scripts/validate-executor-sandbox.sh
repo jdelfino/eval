@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Executor sandbox smoke tests for staging CI pipeline.
-# Runs comprehensive sandbox validation against the executor service through
-# the staging ingress proxy (or any reachable HTTP endpoint).
+# Executor sandbox validation for staging CI pipeline.
+# Validates that the nsjail sandbox is correctly configured: execution works,
+# timeouts are enforced, network/filesystem access is blocked, and memory
+# limits hold.
 #
 # Usage:
-#   ./scripts/executor-smoke-test.sh [BASE_URL]
+#   ./scripts/validate-executor-sandbox.sh [BASE_URL]
 #
 # Environment:
 #   BASE_URL  (default: https://staging.eval.delquillan.com)  — base URL of the proxy/executor
@@ -83,7 +84,7 @@ get_field() {
 
 # --- Health check ---
 
-echo "Executor smoke tests against ${BASE_URL}"
+echo "Executor sandbox validation against ${BASE_URL}"
 echo ""
 echo "Health check..."
 
@@ -185,7 +186,7 @@ fi
 echo ""
 echo "=============================="
 PASSED=$(( TOTAL - ${#FAILURES[@]} ))
-echo "Executor smoke tests: ${PASSED} passed, ${#FAILURES[@]} failed (${TOTAL} total)"
+echo "Executor sandbox validation: ${PASSED} passed, ${#FAILURES[@]} failed (${TOTAL} total)"
 
 if [ ${#FAILURES[@]} -gt 0 ]; then
   echo "Failures:"
@@ -195,4 +196,4 @@ if [ ${#FAILURES[@]} -gt 0 ]; then
   exit 1
 fi
 
-echo "All executor smoke tests passed."
+echo "All executor sandbox checks passed."

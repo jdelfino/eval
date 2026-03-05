@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Tests for executor-smoke-test.sh structure and behavior.
-# Run from repo root: bash scripts/test-executor-smoke-test.sh
+# Tests for validate-executor-sandbox.sh structure and behavior.
+# Run from repo root: bash scripts/test-validate-executor-sandbox.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXECUTOR_SCRIPT="$SCRIPT_DIR/executor-smoke-test.sh"
+EXECUTOR_SCRIPT="$SCRIPT_DIR/validate-executor-sandbox.sh"
 
 PASS=0
 FAIL=0
@@ -49,7 +49,7 @@ assert_not_contains() {
     echo "PASS: $desc"
     PASS=$((PASS + 1))
   else
-    echo "FAIL: $desc (executor-smoke-test.sh still contains '$pattern')"
+    echo "FAIL: $desc (validate-executor-sandbox.sh still contains '$pattern')"
     FAIL=$((FAIL + 1))
   fi
 }
@@ -61,7 +61,7 @@ assert_contains() {
     echo "PASS: $desc"
     PASS=$((PASS + 1))
   else
-    echo "FAIL: $desc (executor-smoke-test.sh does not contain '$pattern')"
+    echo "FAIL: $desc (validate-executor-sandbox.sh does not contain '$pattern')"
     FAIL=$((FAIL + 1))
   fi
 }
@@ -91,7 +91,7 @@ SYSTEM_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 # ────────────────────────────────────────────────────────────────────────────
 
 file_exists \
-  "executor-smoke-test.sh exists" \
+  "validate-executor-sandbox.sh exists" \
   "$EXECUTOR_SCRIPT"
 
 # ────────────────────────────────────────────────────────────────────────────
