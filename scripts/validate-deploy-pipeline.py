@@ -7,6 +7,7 @@ Checks that:
 - build-push-executor uses content-hash caching to skip unnecessary builds
 - The skip path produces a commit-SHA tag (so deploy-staging works unchanged)
 - The build path also produces commit-SHA and latest tags
+- deploy-staging runs executor smoke tests via the public staging URL (not a K8s Job)
 
 Exit code 0 = valid, 1 = invalid.
 """
@@ -46,13 +47,17 @@ def validate(workflow_path):
         "build-push-go-api",
         "build-push-executor",
         "build-push-frontend",
-        "build-push-test-runner",
         "ci",
         "deploy-staging",
         "deploy-prod",
     ]
     for job in required_jobs:
         ok &= check(job in jobs, f"job exists: {job}")
+
+    ok &= check(
+        "build-push-test-runner" not in jobs,
+        "job removed: build-push-test-runner (replaced by public staging approach)",
+    )
 
     # ── build-push-executor: content-hash caching ─────────────────────────────
     executor_job = jobs.get("build-push-executor", {})
@@ -109,6 +114,46 @@ def validate(workflow_path):
         "deploy-staging needs: build-push-executor",
     )
 
+    # ── deploy-staging: executor smoke tests via public staging URL ────────────
+    # The K8s Job approach is replaced with a script that runs on the CI runner
+    # against the public staging URL. The script must run AFTER the staging
+    # ingress proxy is deployed and BEFORE E2E tests.
+    staging_steps = staging_job.get("steps", [])
+    staging_steps_str = str(staging_steps)
+
+    ok &= check(
+        "executor-smoke-test.sh" in staging_steps_str,
+        "deploy-staging: runs executor-smoke-test.sh script",
+    )
+    ok &= check(
+        "executor-validate" not in staging_steps_str,
+        "deploy-staging: no longer uses K8s executor-validate Job",
+    )
+
+    # Verify ordering: staging-ingress-proxy rollout must come before executor smoke test
+    proxy_rollout_idx = None
+    executor_smoke_idx = None
+    for i, step in enumerate(staging_steps):
+        step_str = str(step)
+        if "staging-ingress-proxy" in step_str:
+            proxy_rollout_idx = i
+        if "executor-smoke-test.sh" in step_str:
+            executor_smoke_idx = i
+
+    ok &= check(
+        proxy_rollout_idx is not None,
+        "deploy-staging: has staging-ingress-proxy rollout step",
+    )
+    ok &= check(
+        executor_smoke_idx is not None,
+        "deploy-staging: has executor smoke test step",
+    )
+    if proxy_rollout_idx is not None and executor_smoke_idx is not None:
+        ok &= check(
+            proxy_rollout_idx < executor_smoke_idx,
+            "deploy-staging: executor smoke test runs after proxy rollout",
+        )
+
     # ── deploy-prod: gates on deploy-staging + ci ─────────────────────────────
     prod_job = jobs.get("deploy-prod", {})
     prod_needs = prod_job.get("needs", [])
@@ -116,6 +161,27 @@ def validate(workflow_path):
         prod_needs = [prod_needs]
     ok &= check("deploy-staging" in prod_needs, "deploy-prod needs: deploy-staging")
     ok &= check("ci" in prod_needs, "deploy-prod needs: ci")
+
+    # ── deploy-prod: smoke test credentials read from cluster before smoke test ─
+    prod_steps = prod_job.get("steps", [])
+    prod_steps_str = str(prod_steps)
+
+    ok &= check(
+        "FIREBASE_API_KEY" in prod_steps_str,
+        "deploy-prod: reads FIREBASE_API_KEY for smoke test",
+    )
+    ok &= check(
+        "SMOKE_TEST_PASSWORD" in prod_steps_str,
+        "deploy-prod: reads SMOKE_TEST_PASSWORD for smoke test",
+    )
+    ok &= check(
+        "frontend-config" in prod_steps_str,
+        "deploy-prod: reads FIREBASE_API_KEY from frontend-config ConfigMap",
+    )
+    ok &= check(
+        "smoke-test-secrets" in prod_steps_str,
+        "deploy-prod: reads SMOKE_TEST_PASSWORD from smoke-test-secrets Secret",
+    )
 
     return ok
 

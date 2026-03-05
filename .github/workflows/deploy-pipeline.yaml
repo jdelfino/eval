@@ -127,7 +127,7 @@ jobs:
 
   # ── Staging deploy (gates only on image availability) ─────────────────────
   # Deploys to staging ASAP after images are pushed, before tests complete.
-  # Runs Playwright E2E tests on the CI runner via IAP SSH tunnel.
+  # Runs Playwright E2E tests against the public staging URL.
 
   deploy-staging:
     needs: [build-push-go-api, build-push-executor, build-push-frontend]
@@ -173,110 +173,6 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
-      - name: Validate executor (staging)
-        run: |
-          # Run executor validation via a Kubernetes Job (Connect Gateway blocks
-          # kubectl exec/port-forward WebSocket upgrades).
-          kubectl delete job -n staging executor-validate --ignore-not-found
-
-          kubectl apply -f - <<'JOBEOF'
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: executor-validate
-            namespace: staging
-            labels:
-              app: executor-validate
-          spec:
-            backoffLimit: 0
-            activeDeadlineSeconds: 120
-            ttlSecondsAfterFinished: 600
-            template:
-              metadata:
-                labels:
-                  app: executor-validate
-              spec:
-                restartPolicy: Never
-                containers:
-                  - name: validate
-                    image: curlimages/curl:latest
-                    command: ["/bin/sh", "-c"]
-                    args:
-                      - |
-                        set -e
-                        # Wait for executor to be ready (readiness probe may lag rollout status)
-                        echo "=== Waiting for executor ==="
-                        for i in $(seq 1 15); do
-                          if curl -sf --max-time 3 http://executor:8081/healthz >/dev/null 2>&1; then
-                            echo "Executor ready after $((i * 2))s"
-                            break
-                          fi
-                          if [ "$i" = "15" ]; then
-                            echo "FAIL: executor not reachable after 30s"
-                            exit 1
-                          fi
-                          sleep 2
-                        done
-
-                        echo "=== Health check ==="
-                        curl -sf http://executor:8081/healthz
-                        echo ""
-
-                        echo "=== Python execution test ==="
-                        PYTHON_RESULT=$(curl -sf -X POST http://executor:8081/execute \
-                          -H 'Content-Type: application/json' \
-                          -d '{"code":"print(\"hello\")","language":"python"}')
-                        echo "$PYTHON_RESULT"
-                        echo "$PYTHON_RESULT" | grep -q '"success":true' || { echo "FAIL: Python"; exit 1; }
-
-                        echo "=== Java execution test ==="
-                        JAVA_RESULT=$(curl -sf -X POST http://executor:8081/execute \
-                          -H 'Content-Type: application/json' \
-                          -d '{"code":"public class Main { public static void main(String[] args) { System.out.println(\"hello from java\"); } }","language":"java"}')
-                        echo "$JAVA_RESULT"
-                        echo "$JAVA_RESULT" | grep -q '"success":true' || { echo "FAIL: Java"; exit 1; }
-
-                        echo "=== All executor tests passed ==="
-                    resources:
-                      requests:
-                        cpu: 100m
-                        memory: 64Mi
-                      limits:
-                        cpu: 200m
-                        memory: 128Mi
-          JOBEOF
-
-          # Poll for job completion via .status.succeeded / .status.failed.
-          echo "Waiting for executor-validate job to complete..."
-          DEADLINE=$((SECONDS + 180))
-          RESULT=""
-          while [ $SECONDS -lt $DEADLINE ]; do
-            SUCCEEDED=$(kubectl get job executor-validate -n staging \
-              -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
-            FAILED=$(kubectl get job executor-validate -n staging \
-              -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
-            if [ "$SUCCEEDED" = "1" ]; then
-              RESULT="passed"
-              break
-            elif [ "$FAILED" = "1" ]; then
-              RESULT="failed"
-              break
-            fi
-            sleep 5
-          done
-
-          if [ "$RESULT" = "passed" ]; then
-            echo "Executor validation logs:"
-            kubectl logs job/executor-validate -n staging
-          elif [ "$RESULT" = "failed" ]; then
-            echo "::error::Executor validation failed"
-            kubectl logs job/executor-validate -n staging 2>/dev/null || true
-            exit 1
-          else
-            echo "::error::Executor validation timed out"
-            kubectl logs job/executor-validate -n staging 2>/dev/null || true
-            exit 1
-          fi
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -320,6 +216,10 @@ jobs:
       - name: Wait for staging-ingress-proxy rollout
         run: |
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
+      - name: Smoke test executor (staging)
+        run: ./scripts/executor-smoke-test.sh
+        env:
+          BASE_URL: https://staging.eval.delquillan.com
       - name: Run staging E2E tests
         env:
           BASE_URL: https://staging.eval.delquillan.com
@@ -417,11 +317,20 @@ jobs:
           done
           echo "::error::Ingress not ready after 300s"
           exit 1
+      - name: Read smoke test credentials
+        run: |
+          FIREBASE_API_KEY=$(kubectl get configmap frontend-config -o jsonpath='{.data.NEXT_PUBLIC_FIREBASE_API_KEY}')
+          SMOKE_TEST_PASSWORD=$(kubectl get secret smoke-test-secrets -o jsonpath='{.data.SMOKE_TEST_PASSWORD}' | base64 -d)
+          echo "FIREBASE_API_KEY=$FIREBASE_API_KEY" >> "$GITHUB_ENV"
+          echo "::add-mask::$SMOKE_TEST_PASSWORD"
+          echo "SMOKE_TEST_PASSWORD=$SMOKE_TEST_PASSWORD" >> "$GITHUB_ENV"
       - name: Smoke test
         run: ./scripts/smoke-test.sh
         env:
           SMOKE_TEST_URL: https://eval.delquillan.com
           GCP_PROJECT_ID: eval-prod-485520
+          FIREBASE_API_KEY: ${{ env.FIREBASE_API_KEY }}
+          SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
 
   notify-failure:
     needs: deploy-prod

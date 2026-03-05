@@ -3,8 +3,7 @@ set -euo pipefail
 
 # Post-deploy smoke tests for production.
 # Verifies all services are responding through the ingress, frontend config
-# is properly injected, executor sandbox is working, and authentication
-# works end-to-end.
+# is properly injected, and authentication works end-to-end.
 #
 # Usage:
 #   ./scripts/smoke-test.sh [BASE_URL]
@@ -13,9 +12,9 @@ set -euo pipefail
 #   SMOKE_TEST_URL      (default: https://eval.delquillan.com)
 #   SMOKE_TEST_TIMEOUT  (default: 90)  — max seconds to wait per check
 #   SMOKE_TEST_INTERVAL (default: 5)   — seconds between retries
-#   GCP_PROJECT_ID      — required for auth test (skipped if absent)
-#
-# Requires: kubectl configured with cluster access (Connect Gateway or direct).
+#   FIREBASE_API_KEY    — required for auth test
+#   SMOKE_TEST_PASSWORD — required for auth test
+#   GCP_PROJECT_ID      — required for smoke-test user creation (if user doesn't exist)
 
 BASE_URL="${1:-${SMOKE_TEST_URL:-https://eval.delquillan.com}}"
 TIMEOUT="${SMOKE_TEST_TIMEOUT:-90}"
@@ -24,7 +23,6 @@ MAX_ATTEMPTS=$(( TIMEOUT / INTERVAL ))
 
 TOTAL=0
 FAILURES=()
-SKIPPED=()
 
 # --- Helpers ---
 
@@ -70,15 +68,6 @@ run_check() {
     echo "  FAIL: ${description}"
     FAILURES+=("$description")
   fi
-}
-
-skip_check() {
-  local description="$1"
-  local reason="$2"
-  TOTAL=$(( TOTAL + 1 ))
-  SKIPPED+=("$description")
-  echo "Checking ${description} ..."
-  echo "  SKIP: ${reason}"
 }
 
 # --- Check functions ---
@@ -147,147 +136,6 @@ check_no_placeholders() {
   return 0
 }
 
-# --- Executor sandbox tests ---
-# Validates the nsjail sandbox is correctly configured in production.
-# These checks can ONLY run in production — CI skips them because nsjail
-# requires privileged mode + proper kernel capabilities.
-#
-# Runs a single ephemeral pod that executes all tests against the executor
-# service from inside the cluster, then reads results via kubectl logs.
-# Connect Gateway does not support the WebSocket upgrade that kubectl
-# exec/port-forward require, so we cannot use those.
-
-# Clean up any smoke-test pods on exit (covers interrupts, failures, etc.).
-cleanup_smoke_pods() {
-  kubectl delete pods -l smoke-test=executor --ignore-not-found >/dev/null 2>&1 || true
-}
-trap cleanup_smoke_pods EXIT
-
-# Python script that runs all executor sandbox tests from inside the cluster.
-# Outputs one JSON line per test: {"name": "...", "pass": bool, "detail": "..."}.
-read -r -d '' EXECUTOR_TEST_SCRIPT << 'PYEOF' || true
-import urllib.request, json, sys
-
-EXECUTOR_URL = "http://executor:8081"
-
-# Wait for the executor service to become reachable.  After a deploy with
-# strategy=Recreate, the Service endpoints may lag behind the rollout status.
-import time
-for _attempt in range(30):
-    try:
-        urllib.request.urlopen(f"{EXECUTOR_URL}/healthz", timeout=5)
-        break
-    except Exception:
-        time.sleep(2)
-
-def execute(code, timeout_ms=10000):
-    req = urllib.request.Request(f"{EXECUTOR_URL}/execute",
-        data=json.dumps({"code": code, "timeout_ms": timeout_ms}).encode(),
-        headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read().decode())
-
-def result(name, ok, detail=""):
-    print(json.dumps({"name": name, "pass": ok, "detail": detail}), flush=True)
-
-# 1. Basic execution
-try:
-    r = execute('print("sandbox-ok")')
-    ok = r.get("success") and "sandbox-ok" in r.get("output", "")
-    result("Basic execution", ok, f"success={r.get('success')} output={r.get('output','')!r}")
-except Exception as e:
-    result("Basic execution", False, str(e))
-
-# 2. Timeout enforcement
-try:
-    r = execute("import time; time.sleep(60)", timeout_ms=1000)
-    ok = r.get("success") is False
-    result("Timeout enforcement", ok, f"success={r.get('success')}")
-except Exception as e:
-    result("Timeout enforcement", False, str(e))
-
-# 3. Network isolation
-try:
-    r = execute('import socket; s=socket.socket(); s.connect(("8.8.8.8",53)); print("CONNECTED")')
-    ok = not (r.get("success") and "CONNECTED" in r.get("output", ""))
-    result("Network isolation", ok, f"success={r.get('success')} output={r.get('output','')!r}")
-except Exception as e:
-    result("Network isolation", False, str(e))
-
-# 4. Filesystem isolation
-try:
-    r = execute('print(open("/etc/passwd").read())')
-    ok = r.get("success") is False
-    result("Filesystem isolation", ok, f"success={r.get('success')}")
-except Exception as e:
-    result("Filesystem isolation", False, str(e))
-
-# 5. Memory limit
-try:
-    r = execute('x = "A" * (512 * 1024 * 1024); print("allocated")')
-    ok = not (r.get("success") and "allocated" in r.get("output", ""))
-    result("Memory limit", ok, f"success={r.get('success')} error={r.get('error','')[:80]}")
-except Exception as e:
-    result("Memory limit", False, str(e))
-PYEOF
-
-check_executor_sandbox() {
-  local pod_name="smoke-exec-$$-${RANDOM}"
-
-  # activeDeadlineSeconds: self-destruct after 120s even if nothing cleans up.
-  # The go-api label lets traffic through the executor NetworkPolicy.
-  kubectl run "$pod_name" \
-    --image=python:3.12-slim \
-    --restart=Never \
-    --labels=app=go-api,smoke-test=executor \
-    --override-type=merge \
-    --overrides='{"spec":{"activeDeadlineSeconds":120,"tolerations":[{"operator":"Exists"}]}}' \
-    -- python3 -c "$EXECUTOR_TEST_SCRIPT" >/dev/null 2>&1 || {
-    echo "  ERROR: failed to create smoke-test pod" >&2
-    return 1
-  }
-
-  # Wait for the pod to finish.
-  local phase=""
-  for i in $(seq 1 60); do
-    phase=$(kubectl get pod "$pod_name" -o jsonpath='{.status.phase}' 2>/dev/null)
-    if [[ "$phase" == "Succeeded" || "$phase" == "Failed" ]]; then
-      break
-    fi
-    sleep 2
-  done
-
-  local logs
-  logs=$(kubectl logs "$pod_name" 2>/dev/null)
-  kubectl delete pod "$pod_name" --ignore-not-found >/dev/null 2>&1
-
-  if [[ -z "$logs" ]]; then
-    echo "  ERROR: no output from smoke-test pod (phase=${phase})" >&2
-    return 1
-  fi
-
-  # Parse JSON lines from the pod output.
-  local failed=0 idx=0 total
-  total=$(echo "$logs" | wc -l)
-  while IFS= read -r line; do
-    idx=$(( idx + 1 ))
-    local name pass detail
-    name=$(echo "$line" | jq -r '.name')
-    pass=$(echo "$line" | jq -r '.pass')
-    detail=$(echo "$line" | jq -r '.detail')
-
-    echo "  [${idx}/${total}] ${name}..."
-    if [[ "$pass" == "true" ]]; then
-      echo "    OK"
-    else
-      echo "    FAILED: ${detail}"
-      failed=1
-    fi
-  done <<< "$logs"
-
-  return "$failed"
-}
-
 # --- Auth round-trip test ---
 # Validates the full authentication pipeline: Firebase API key → Identity
 # Platform sign-in → JWT → Go API middleware.
@@ -295,21 +143,29 @@ check_executor_sandbox() {
 # Uses a persistent smoke-test user (created on first run, reused forever).
 # The deploy SA only needs firebaseauth.users.create — no delete, no get,
 # no list. Password is stored in a k8s Secret managed by Terraform.
+#
+# Credentials are passed as environment variables:
+#   FIREBASE_API_KEY     — Firebase API key (from frontend-config ConfigMap)
+#   SMOKE_TEST_PASSWORD  — smoke-test user password (from smoke-test-secrets Secret)
 
 SMOKE_TEST_EMAIL="smoke-test@eval-internal.test"
 IDP_API="https://identitytoolkit.googleapis.com/v1"
 
 check_auth_roundtrip() {
-  # 1. Read credentials from the cluster
+  # 1. Read credentials from environment variables
   local api_key password
-  api_key=$(kubectl get configmap frontend-config -o jsonpath='{.data.NEXT_PUBLIC_FIREBASE_API_KEY}' 2>/dev/null) || {
-    echo "  ERROR: Could not read Firebase API key from frontend-config ConfigMap"
+
+  if [[ -z "${FIREBASE_API_KEY:-}" ]]; then
+    echo "  ERROR: FIREBASE_API_KEY env var is required but not set"
     return 1
-  }
-  password=$(kubectl get secret smoke-test-secrets -o jsonpath='{.data.SMOKE_TEST_PASSWORD}' 2>/dev/null | base64 -d) || {
-    echo "  ERROR: Could not read SMOKE_TEST_PASSWORD from smoke-test-secrets Secret"
+  fi
+  api_key="${FIREBASE_API_KEY}"
+
+  if [[ -z "${SMOKE_TEST_PASSWORD:-}" ]]; then
+    echo "  ERROR: SMOKE_TEST_PASSWORD env var is required but not set"
     return 1
-  }
+  fi
+  password="${SMOKE_TEST_PASSWORD}"
 
   # 2. Try to sign in (works if user already exists from a previous deploy)
   local signin_body signin_response signin_code
@@ -378,43 +234,30 @@ check_auth_roundtrip() {
   return 0
 }
 
-# --- Run checks ---
+# --- Run checks (only when executed directly, not sourced) ---
 
-echo "Smoke testing ${BASE_URL} (timeout ${TIMEOUT}s per check)"
-echo ""
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  echo "Smoke testing ${BASE_URL} (timeout ${TIMEOUT}s per check)"
+  echo ""
 
-retry_check "Frontend" "${BASE_URL}/" check_frontend
-run_check   "Frontend config (no placeholders)" check_no_placeholders
-retry_check "Go API" "${BASE_URL}/api/v1/auth/me" check_api
-retry_check "Centrifugo" "${BASE_URL}/connection/websocket" check_centrifugo
+  retry_check "Frontend" "${BASE_URL}/" check_frontend
+  run_check   "Frontend config (no placeholders)" check_no_placeholders
+  retry_check "Go API" "${BASE_URL}/api/v1/auth/me" check_api
+  retry_check "Centrifugo" "${BASE_URL}/connection/websocket" check_centrifugo
+  run_check   "Auth round-trip" check_auth_roundtrip
 
-# Executor sandbox and auth tests require kubectl
-if command -v kubectl &>/dev/null; then
-  run_check "Executor sandbox" check_executor_sandbox
+  echo ""
+  echo "=============================="
+  PASSED=$(( TOTAL - ${#FAILURES[@]} ))
+  echo "Smoke tests: ${PASSED} passed, ${#FAILURES[@]} failed (${TOTAL} total)"
 
-  if [[ -n "${GCP_PROJECT_ID:-}" ]] && command -v gcloud &>/dev/null; then
-    run_check "Auth round-trip" check_auth_roundtrip
-  else
-    skip_check "Auth round-trip" "requires GCP_PROJECT_ID and gcloud"
+  if [ ${#FAILURES[@]} -gt 0 ]; then
+    echo "Failures:"
+    for f in "${FAILURES[@]}"; do
+      echo "  - $f"
+    done
+    exit 1
   fi
-else
-  skip_check "Executor sandbox" "requires kubectl"
-  skip_check "Auth round-trip" "requires kubectl, GCP_PROJECT_ID, and gcloud"
+
+  echo "All smoke tests passed."
 fi
-
-# --- Summary ---
-
-echo ""
-echo "=============================="
-PASSED=$(( TOTAL - ${#FAILURES[@]} - ${#SKIPPED[@]} ))
-echo "Smoke tests: ${PASSED} passed, ${#FAILURES[@]} failed, ${#SKIPPED[@]} skipped (${TOTAL} total)"
-
-if [ ${#FAILURES[@]} -gt 0 ]; then
-  echo "Failures:"
-  for f in "${FAILURES[@]}"; do
-    echo "  - $f"
-  done
-  exit 1
-fi
-
-echo "All smoke tests passed."
