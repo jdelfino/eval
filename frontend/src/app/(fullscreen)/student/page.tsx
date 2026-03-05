@@ -64,7 +64,7 @@ function StudentPage() {
   // Realtime session hook (only used in live mode)
   const {
     session,
-    loading: realtimeLoading,
+    loading: _realtimeLoading,
     error: realtimeError,
     isConnected,
     connectionStatus,
@@ -363,14 +363,15 @@ function StudentPage() {
     );
   }
 
-  // Loading state
-  if (mode === 'loading' || (mode === 'live' && (realtimeLoading || isJoining))) {
+  // Loading state — only gate on mode determination (needs student work + active sessions).
+  // Session state load (realtimeLoading), join (isJoining), and Centrifugo connection all
+  // happen in the background while Monaco loads its JS bundle — the student's code is
+  // already available from getStudentWork().
+  if (mode === 'loading') {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">Live Coding Classroom</h1>
-        <p className="text-gray-600">
-          {realtimeLoading ? 'Loading session...' : isJoining ? 'Joining session...' : 'Loading...'}
-        </p>
+        <p className="text-gray-600">Loading...</p>
         {(realtimeError || error) && (
           <div className="mt-4 max-w-md mx-auto">
             <ErrorAlert
@@ -401,22 +402,17 @@ function StudentPage() {
     );
   }
 
-  // Live mode but not yet joined
-  if (mode === 'live' && !joined) {
+  // Live mode: join failed (not in-progress, not joined, and error present)
+  if (mode === 'live' && !joined && !isJoining && error) {
     return (
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">Live Coding Classroom</h1>
-        <p className="text-gray-600">
-          {isJoining ? 'Joining session...' : 'Loading...'}
-        </p>
-        {error && (
-          <div className="mt-4 max-w-md mx-auto">
-            <ErrorAlert
-              error={error}
-              onDismiss={() => setError(null)}
-            />
-          </div>
-        )}
+        <div className="mt-4 max-w-md mx-auto">
+          <ErrorAlert
+            error={error}
+            onDismiss={() => setError(null)}
+          />
+        </div>
       </main>
     );
   }
