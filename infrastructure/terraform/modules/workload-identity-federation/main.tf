@@ -66,18 +66,19 @@ resource "google_project_iam_member" "github_actions_roles" {
 }
 
 # -----------------------------------------------------------------------------
-# Custom Role: Smoke Test User Creation
+# Custom Role: E2E Test Auth
 # -----------------------------------------------------------------------------
-# Minimal permission for deploy smoke tests to create an Identity Platform
-# user for auth round-trip validation. Intentionally excludes delete, update,
-# and list to limit blast radius if the SA is compromised.
+# Permissions for E2E tests to create Identity Platform users and set
+# emailVerified=true (required by the backend for auth flows).
+# Intentionally excludes delete and list to limit blast radius.
 
 resource "google_project_iam_custom_role" "smoke_test_auth" {
   role_id     = "smokeTestAuth"
-  title       = "Smoke Test Auth (create-only)"
-  description = "Allows creating Identity Platform users for deploy smoke tests"
+  title       = "E2E Test Auth (create + update)"
+  description = "Allows creating and updating Identity Platform users for E2E tests"
   permissions = [
     "firebaseauth.users.create",
+    "firebaseauth.users.update",
     "serviceusage.services.use", # required for x-goog-user-project header
   ]
 }
