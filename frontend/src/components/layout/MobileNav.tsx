@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -181,17 +181,42 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
         </div>
 
         {/* Navigation content */}
-        <div className="overflow-y-auto h-[calc(100%-3.5rem)]">
-          {navGroups.map((group, index) => (
-            <MobileNavGroup
-              key={group}
-              group={group}
-              items={navItems}
-              pathname={pathname}
-              onClose={onClose}
-              isFirst={index === 0}
-            />
-          ))}
+        <div className="flex flex-col overflow-y-auto h-[calc(100%-3.5rem)]">
+          <div className="flex-1">
+            {navGroups.map((group, index) => (
+              <MobileNavGroup
+                key={group}
+                group={group}
+                items={navItems}
+                pathname={pathname}
+                onClose={onClose}
+                isFirst={index === 0}
+              />
+            ))}
+          </div>
+
+          {/* Bottom-pinned Help link */}
+          <div className="border-t border-gray-200">
+            <Link
+              href="/help"
+              prefetch={false}
+              onClick={onClose}
+              className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
+                isPathActive('/help', pathname)
+                  ? 'bg-blue-100 text-blue-700 border-l-4 border-blue-600'
+                  : 'text-gray-700 hover:bg-gray-100 border-l-4 border-transparent'
+              }`}
+              aria-current={isPathActive('/help', pathname) ? 'page' : undefined}
+            >
+              <HelpCircle
+                className={`h-5 w-5 ${
+                  isPathActive('/help', pathname) ? 'text-blue-600' : 'text-gray-500'
+                }`}
+                aria-hidden="true"
+              />
+              <span>Help</span>
+            </Link>
+          </div>
         </div>
       </div>
     </>

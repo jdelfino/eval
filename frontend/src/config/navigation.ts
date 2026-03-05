@@ -112,6 +112,7 @@ export const BREADCRUMB_HIERARCHY: Record<string, string | null> = {
   '/admin': null,
   '/system': null,
   '/system/namespaces/[id]': '/system',
+  '/help': null,
 };
 
 /**
