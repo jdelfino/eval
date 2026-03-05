@@ -112,33 +112,6 @@ jobs:
           docker build -f frontend/Dockerfile -t $REGISTRY/frontend:${{ github.sha }} .
           docker push $REGISTRY/frontend:${{ github.sha }}
 
-  build-push-test-runner:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
-      - name: Ensure base image exists
-        run: |
-          if ! docker pull $REGISTRY/test-runner-base:latest 2>/dev/null; then
-            echo "Base image not found, building..."
-            docker build -f docker/test-runner/Dockerfile.base \
-              -t $REGISTRY/test-runner-base:latest .
-            docker push $REGISTRY/test-runner-base:latest
-          fi
-      - run: |
-          docker build -f docker/test-runner/Dockerfile \
-            --build-arg REGISTRY=$REGISTRY \
-            -t $REGISTRY/test-runner:${{ github.sha }} \
-            .
-          docker push $REGISTRY/test-runner:${{ github.sha }}
-
   # ── CI workflow (single consolidated workflow replacing go-api, executor, frontend) ──
   # Runs all test jobs (with run-all: true, no path filtering). deploy-prod
   # gates on this passing, but deploy-staging does NOT wait for it.
@@ -154,10 +127,10 @@ jobs:
 
   # ── Staging deploy (gates only on image availability) ─────────────────────
   # Deploys to staging ASAP after images are pushed, before tests complete.
-  # Runs in-cluster test Job to validate the staging deployment.
+  # Runs Playwright E2E tests on the CI runner via IAP SSH tunnel.
 
   deploy-staging:
-    needs: [build-push-go-api, build-push-executor, build-push-frontend, build-push-test-runner]
+    needs: [build-push-go-api, build-push-executor, build-push-frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -291,106 +264,102 @@ jobs:
             kubectl logs job/executor-smoke -n staging 2>/dev/null || true
             exit 1
           fi
-      - name: Run in-cluster E2E tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Restore node_modules cache
+        id: node-cache
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install npm dependencies and Playwright
+        env:
+          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          NODE_CACHE_HIT: ${{ steps.node-cache.outputs.cache-hit }}
+        working-directory: frontend
         run: |
-          SHA="${{ github.sha }}"
-          SHORT_SHA="${SHA::7}"
-
-          # Clean up any previous test job
-          kubectl delete job -n staging -l app=test-runner --ignore-not-found
-
-          # Read staging config values needed by the test runner.
-          # These come from the Terraform-managed ConfigMaps/Secrets.
+          if [ "$NODE_CACHE_HIT" != "true" ]; then
+            npm ci
+          fi
+          if [ "$PLAYWRIGHT_CACHE_HIT" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+      - name: Read staging config from ConfigMaps
+        run: |
           TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
           API_KEY=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.IDENTITY_PLATFORM_API_KEY}')
           BOOTSTRAP_EMAIL=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.BOOTSTRAP_ADMIN_EMAIL}')
-
-          # Create E2E test Job in the staging namespace.
-          # Runs inside the cluster so it can resolve staging services by
-          # short name (http://frontend, http://go-api) without port-forward.
-          # Uses the go-api service account for Workload Identity (GCP access
-          # token for IDP admin operations like setting emailVerified).
-          kubectl apply -f - <<JOBEOF
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: staging-test-${SHORT_SHA}
-            namespace: staging
-            labels:
-              app: test-runner
-          spec:
-            backoffLimit: 0
-            activeDeadlineSeconds: 300
-            ttlSecondsAfterFinished: 3600
-            template:
-              metadata:
-                labels:
-                  app: test-runner
-              spec:
-                serviceAccountName: go-api
-                restartPolicy: Never
-                containers:
-                  - name: playwright
-                    image: $REGISTRY/test-runner:$SHA
-                    command: ["sh", "-c", "npx playwright test --reporter=list; EC=$?; for f in test-results/**/error-context.md; do [ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done; exit $EC"]
-                    env:
-                      - name: BASE_URL
-                        value: "http://frontend"
-                      - name: API_BASE_URL
-                        value: "http://go-api"
-                      - name: FIREBASE_TENANT_ID
-                        value: "${TENANT_ID}"
-                      - name: FIREBASE_API_KEY
-                        value: "${API_KEY}"
-                      - name: FIREBASE_PROJECT_ID
-                        value: "eval-prod-485520"
-                      - name: BOOTSTRAP_ADMIN_EMAIL
-                        value: "${BOOTSTRAP_EMAIL}"
-                      - name: CI
-                        value: "true"
-                    resources:
-                      requests:
-                        cpu: 500m
-                        memory: 1Gi
-                      limits:
-                        cpu: "2"
-                        memory: 2Gi
-          JOBEOF
-
-          # Poll for Job completion (Complete or Failed).
-          # kubectl wait --for=condition=complete doesn't detect failures — a failed
-          # Job gets condition=Failed, not Complete, so the wait blocks the full
-          # timeout. Polling catches both outcomes immediately.
-          # Outer timeout is 420s (300s activeDeadline + 2min scheduling/pull overhead).
-          DEADLINE=$((SECONDS + 420))
-          JOB_RESULT=""
-          while [ $SECONDS -lt $DEADLINE ]; do
-            SUCCEEDED=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
-              -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "")
-            FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
-              -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
-            if [ "$SUCCEEDED" = "1" ]; then
-              JOB_RESULT="passed"
-              break
-            elif [ "$FAILED" = "1" ]; then
-              JOB_RESULT="failed"
-              break
+          echo "TENANT_ID=$TENANT_ID" >> "$GITHUB_ENV"
+          echo "API_KEY=$API_KEY" >> "$GITHUB_ENV"
+          echo "BOOTSTRAP_EMAIL=$BOOTSTRAP_EMAIL" >> "$GITHUB_ENV"
+      - name: Wait for staging-proxy rollout
+        run: |
+          kubectl rollout status deployment/staging-proxy -n staging --timeout=120s
+      - name: Get GKE node IP
+        run: |
+          NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+          echo "NODE_IP=$NODE_IP" >> "$GITHUB_ENV"
+      - name: Start IAP SSH tunnel
+        run: |
+          gcloud compute ssh eval-prod-nat --zone=us-east1-b --tunnel-through-iap \
+            --ssh-flag="-L 8080:${NODE_IP}:30080" --ssh-flag="-N" --ssh-flag="-f" \
+            --ssh-flag="-o StrictHostKeyChecking=no" --quiet
+      - name: Verify tunnel
+        run: |
+          echo "Waiting for tunnel to become available..."
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 5 http://localhost:8080/ >/dev/null 2>&1; then
+              echo "Tunnel ready after $((i * 2))s"
+              exit 0
             fi
-            sleep 5
+            sleep 2
           done
-
-          if [ "$JOB_RESULT" = "passed" ]; then
-            echo "Staging E2E tests passed"
-            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100
-          elif [ "$JOB_RESULT" = "failed" ]; then
-            echo "::error::Staging E2E tests failed"
-            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=300 || true
-            exit 1
-          else
-            echo "::error::Staging E2E tests timed out"
-            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=300 || true
-            exit 1
-          fi
+          echo "::error::Tunnel did not become available after 60s"
+          exit 1
+      - name: Run staging E2E tests
+        env:
+          BASE_URL: http://localhost:8080
+          API_BASE_URL: http://localhost:8080
+          FIREBASE_TENANT_ID: ${{ env.TENANT_ID }}
+          FIREBASE_API_KEY: ${{ env.API_KEY }}
+          FIREBASE_PROJECT_ID: eval-prod-485520
+          BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
+          CI: 'true'
+        run: cd frontend && npx playwright test
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-staging
+          path: frontend/playwright-report/
+          retention-days: 14
+      - name: Upload E2E error context
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-error-context-staging
+          path: frontend/test-results/**/error-context.md
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Dump staging logs
+        if: failure()
+        run: |
+          echo "=== go-api logs ==="
+          kubectl logs deployment/go-api -n staging --tail=100 2>/dev/null || true
+          echo "=== frontend logs ==="
+          kubectl logs deployment/frontend -n staging --tail=100 2>/dev/null || true
+          echo "=== centrifugo logs ==="
+          kubectl logs deployment/centrifugo -n staging --tail=100 2>/dev/null || true
 
   # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
   # Only runs after staging is validated AND all unit/lint/integration tests pass.
