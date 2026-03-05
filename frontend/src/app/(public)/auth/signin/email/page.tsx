@@ -18,7 +18,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptInvite, registerStudent, getStudentRegistrationInfo } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
-import { normalizeJoinCode } from '@/lib/join-code';
+import { formatJoinCodeForDisplay } from '@/lib/join-code';
 
 export default function EmailSignInPage() {
   return (
@@ -50,7 +50,7 @@ function EmailSignInContent() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || searchParams.get('token');
   const urlJoinCode = searchParams.get('code') || null;
-  const joinCode = normalizeJoinCode(urlJoinCode || joinCodeInput) || null;
+  const joinCode = formatJoinCodeForDisplay(urlJoinCode || joinCodeInput) || null;
   const { isAuthenticated, setUserProfile, beginAuthFlow } = useAuth();
 
   // Redirect when authenticated (AuthContext picks up Firebase user).
