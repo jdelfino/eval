@@ -155,14 +155,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	}
 }
 
-// readyzHandler returns an HTTP handler that checks if nsjail and python3 binaries are accessible.
-// Java is reported but not required for readiness (optional language support).
+// readyzHandler returns an HTTP handler that checks if required binaries are accessible.
+// nsjail is only checked when sandboxing is enabled. Python, java, and javac are always required.
 func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		components := map[string]string{}
 		healthy := true
 
-		if _, err := os.Stat(cfg.NsjailPath); err != nil {
+		if cfg.DisableSandbox {
+			components["nsjail"] = "disabled"
+		} else if _, err := os.Stat(cfg.NsjailPath); err != nil {
 			components["nsjail"] = "unavailable"
 			healthy = false
 		} else {
@@ -178,8 +180,16 @@ func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 
 		if _, err := os.Stat(cfg.JavaPath); err != nil {
 			components["java"] = "unavailable"
+			healthy = false
 		} else {
 			components["java"] = "ok"
+		}
+
+		if _, err := os.Stat(cfg.JavacPath); err != nil {
+			components["javac"] = "unavailable"
+			healthy = false
+		} else {
+			components["javac"] = "ok"
 		}
 
 		status := "ok"
