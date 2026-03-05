@@ -739,7 +739,7 @@ describe('EmailSignInPage', () => {
       expect(screen.getByLabelText(/join code/i)).toBeInTheDocument();
     });
 
-    it('normalizes join code input (strips dashes, uppercases)', async () => {
+    it('formats join code input as XXX-XXX for API calls', async () => {
       const user = userEvent.setup();
       mockSignInWithEmailAndPassword.mockResolvedValue({
         user: { uid: 'test-uid', email: 'student@example.com' },
@@ -752,13 +752,13 @@ describe('EmailSignInPage', () => {
 
       render(<EmailSignInPage />);
 
-      await user.type(screen.getByLabelText(/join code/i), 'TEST-CODE');
+      await user.type(screen.getByLabelText(/join code/i), 'abc123');
       await user.type(screen.getByLabelText(/email address/i), 'student@example.com');
       await user.type(screen.getByLabelText(/^password$/i), 'password123');
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(mockRegisterStudent).toHaveBeenCalledWith('TESTCODE');
+        expect(mockRegisterStudent).toHaveBeenCalledWith('ABC-123');
       });
     });
 
