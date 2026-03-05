@@ -202,6 +202,38 @@ func TestReadyz_BinariesMissing(t *testing.T) {
 	}
 }
 
+func TestReadyz_DisableSandbox_SkipsNsjail(t *testing.T) {
+	cfg := &config.Config{
+		Port:           8081,
+		Environment:    "local",
+		DisableSandbox: true,
+		NsjailPath:     "/nonexistent/nsjail", // missing — should not matter
+		PythonPath:     os.Args[0],
+		JavaPath:       os.Args[0],
+		JavacPath:      os.Args[0],
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reg := prometheus.NewRegistry()
+	srv := NewWithRegistry(cfg, logger, reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d (nsjail should be skipped when sandbox disabled)", rec.Code, http.StatusOK)
+	}
+
+	var resp readyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Components["nsjail"] != "disabled" {
+		t.Errorf("nsjail = %s, want disabled", resp.Components["nsjail"])
+	}
+}
+
 func TestExecuteRoute(t *testing.T) {
 	srv := newTestServer(t)
 
