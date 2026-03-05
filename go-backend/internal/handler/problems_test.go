@@ -604,7 +604,7 @@ func TestCreateProblem_InternalError(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"title": "Two Sum"})
+	body, _ := json.Marshal(map[string]any{"title": "Two Sum", "language": "python"})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

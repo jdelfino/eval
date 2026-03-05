@@ -115,8 +115,12 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	merged := mergeExecutionSettings(session.Problem, studentRecord, req.ExecutionSettings)
 
-	// 6. Extract language from problem JSON (defaults to "python" if absent)
-	lang := extractLanguageFromProblem(session.Problem)
+	// 6. Extract language from problem JSON (error if absent)
+	lang, err := extractLanguageFromProblem(session.Problem)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "problem language is not set or invalid")
+		return
+	}
 
 	// 7. Build executor request
 	execReq := buildExecutorRequest(req.Code, merged)
@@ -210,10 +214,10 @@ var languageAliases = map[string]string{
 }
 
 // normalizeLanguage returns the normalized language string.
-// Empty string defaults to "python". Returns an error for unsupported languages.
+// Returns an error for empty or unsupported languages.
 func normalizeLanguage(lang string) (string, error) {
 	if lang == "" {
-		return "python", nil
+		return "", fmt.Errorf("language is required: must be one of python, java")
 	}
 	if canonical, ok := languageAliases[lang]; ok {
 		return canonical, nil
@@ -222,22 +226,25 @@ func normalizeLanguage(lang string) (string, error) {
 }
 
 // extractLanguageFromProblem extracts the language field from a problem JSON blob.
-// Returns "python" if the field is absent, empty, the JSON is malformed, or the
-// stored value is not a recognized language.
-func extractLanguageFromProblem(problemJSON json.RawMessage) string {
+// Returns an error if the field is absent, empty, the JSON is malformed, or the
+// stored value is not a recognized language. Every problem must specify a language.
+func extractLanguageFromProblem(problemJSON json.RawMessage) (string, error) {
 	if len(problemJSON) == 0 {
-		return "python"
+		return "", fmt.Errorf("problem has no language field")
 	}
 	var problem struct {
 		Language string `json:"language"`
 	}
-	if err := json.Unmarshal(problemJSON, &problem); err != nil || problem.Language == "" {
-		return "python"
+	if err := json.Unmarshal(problemJSON, &problem); err != nil {
+		return "", fmt.Errorf("problem JSON is malformed: %w", err)
+	}
+	if problem.Language == "" {
+		return "", fmt.Errorf("problem has no language field")
 	}
 	if _, ok := languageAliases[problem.Language]; !ok {
-		return "python"
+		return "", fmt.Errorf("problem has unsupported language %q: must be one of python, java", problem.Language)
 	}
-	return problem.Language
+	return problem.Language, nil
 }
 
 // mergeExecutionSettings merges execution settings with priority:

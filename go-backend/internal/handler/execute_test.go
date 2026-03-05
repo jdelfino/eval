@@ -59,7 +59,7 @@ func activeSession() *store.Session {
 		CreatorID:    testCreatorID,
 		Participants: []uuid.UUID{testStudentID},
 		Status:       "active",
-		Problem:      json.RawMessage(`{"title":"Test"}`),
+		Problem:      json.RawMessage(`{"title":"Test","language":"python"}`),
 	}
 }
 
@@ -554,7 +554,8 @@ func TestStandaloneExecute_MinimalRequest(t *testing.T) {
 	}
 
 	handler := setupStandaloneExecuteHandler(execClient)
-	body, _ := json.Marshal(map[string]any{"code": "x"})
+	// Language is now required — provide "python" explicitly.
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "python"})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
@@ -621,7 +622,7 @@ func TestStandaloneExecute_500ExecutorError(t *testing.T) {
 	}
 
 	handler := setupStandaloneExecuteHandler(execClient)
-	body, _ := json.Marshal(map[string]any{"code": "x"})
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "python"})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
@@ -694,17 +695,11 @@ func TestStandaloneExecute_LanguagePassedToExecutor(t *testing.T) {
 	}
 }
 
-func TestStandaloneExecute_EmptyLanguageDefaultsPython(t *testing.T) {
-	var capturedReq executor.ExecuteRequest
-	execClient := &mockExecutorClient{
-		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
-		},
-	}
+func TestStandaloneExecute_EmptyLanguageReturns400(t *testing.T) {
+	execClient := &mockExecutorClient{}
 
 	handler := setupStandaloneExecuteHandler(execClient)
-	// No language field — should default to "python"
+	// No language field — must now return 400 (no python default).
 	body, _ := json.Marshal(map[string]any{"code": "print('hi')"})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -714,11 +709,8 @@ func TestStandaloneExecute_EmptyLanguageDefaultsPython(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if capturedReq.Language != "python" {
-		t.Fatalf("expected language 'python' as default, got %q", capturedReq.Language)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing language, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -783,9 +775,9 @@ func TestSessionExecute_LanguageFromProblemJSON(t *testing.T) {
 	}
 }
 
-func TestSessionExecute_EmptyLanguageInProblemDefaultsPython(t *testing.T) {
-	// Problem JSON has no language field — should default to "python"
-	problemJSON := json.RawMessage(`{"title":"Python Problem"}`)
+func TestSessionExecute_EmptyLanguageInProblemReturns400(t *testing.T) {
+	// Problem JSON has no language field — must now return 400 (no python default).
+	problemJSON := json.RawMessage(`{"title":"No Language Problem"}`)
 
 	sessRepo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
@@ -799,14 +791,7 @@ func TestSessionExecute_EmptyLanguageInProblemDefaultsPython(t *testing.T) {
 			return nil, store.ErrNotFound
 		},
 	}
-
-	var capturedReq executor.ExecuteRequest
-	execClient := &mockExecutorClient{
-		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			capturedReq = req
-			return &executor.ExecuteResponse{Success: true}, nil
-		},
-	}
+	execClient := &mockExecutorClient{}
 
 	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
 	body := newExecuteReq(testStudentID, "print('hi')")
@@ -818,54 +803,207 @@ func TestSessionExecute_EmptyLanguageInProblemDefaultsPython(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if capturedReq.Language != "python" {
-		t.Fatalf("expected language 'python' as default when missing in problem, got %q", capturedReq.Language)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when problem has no language, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestExtractLanguageFromProblem_ReturnsLanguageField(t *testing.T) {
-	got := extractLanguageFromProblem(json.RawMessage(`{"language":"java","title":"test"}`))
-	if got != "java" {
-		t.Errorf("expected 'java', got %q", got)
+	got, err := extractLanguageFromProblem(json.RawMessage(`{"language":"java","title":"test"}`))
+	if err != nil || got != "java" {
+		t.Errorf("expected 'java', got %q, err %v", got, err)
 	}
 }
 
-func TestExtractLanguageFromProblem_MissingFieldDefaultsPython(t *testing.T) {
-	got := extractLanguageFromProblem(json.RawMessage(`{"title":"test"}`))
-	if got != "python" {
-		t.Errorf("expected 'python', got %q", got)
+// --- New behavior tests: no defaults to python ---
+
+func TestNormalizeLanguage_EmptyReturnsError(t *testing.T) {
+	_, err := normalizeLanguage("")
+	if err == nil {
+		t.Error("expected error for empty language, got nil")
 	}
 }
 
-func TestExtractLanguageFromProblem_EmptyLanguageValueDefaultsPython(t *testing.T) {
-	got := extractLanguageFromProblem(json.RawMessage(`{"language":""}`))
-	if got != "python" {
-		t.Errorf("expected 'python', got %q", got)
+// TestExtractLanguageFromProblem_NewBehavior tests the new error-returning behavior.
+// These tests exercise the new (string, error) signature after implementation.
+// Before implementation, extractLanguageFromProblem returns (string) — these tests
+// are placeholders that will be populated to the correct form during implementation.
+func TestExtractLanguageFromProblem_MissingFieldReturnsError(t *testing.T) {
+	lang, err := extractLanguageFromProblem(json.RawMessage(`{"title":"test"}`))
+	if err == nil {
+		t.Errorf("expected error when language field is missing, got lang=%q and nil error", lang)
 	}
 }
 
-func TestExtractLanguageFromProblem_MalformedJSONDefaultsPython(t *testing.T) {
-	got := extractLanguageFromProblem(json.RawMessage(`{not valid`))
-	if got != "python" {
-		t.Errorf("expected 'python', got %q", got)
+func TestExtractLanguageFromProblem_EmptyLanguageValueReturnsError(t *testing.T) {
+	lang, err := extractLanguageFromProblem(json.RawMessage(`{"language":""}`))
+	if err == nil {
+		t.Errorf("expected error for empty language value, got lang=%q and nil error", lang)
 	}
 }
 
-func TestExtractLanguageFromProblem_NilJSONDefaultsPython(t *testing.T) {
-	got := extractLanguageFromProblem(nil)
-	if got != "python" {
-		t.Errorf("expected 'python', got %q", got)
+func TestExtractLanguageFromProblem_MalformedJSONReturnsError(t *testing.T) {
+	lang, err := extractLanguageFromProblem(json.RawMessage(`{not valid`))
+	if err == nil {
+		t.Errorf("expected error for malformed JSON, got lang=%q and nil error", lang)
 	}
 }
 
-func TestExtractLanguageFromProblem_InvalidLanguageDefaultsPython(t *testing.T) {
-	// If an invalid language value was somehow stored, it should fall back to "python".
-	got := extractLanguageFromProblem(json.RawMessage(`{"language":"ruby"}`))
-	if got != "python" {
-		t.Errorf("expected 'python' for invalid stored language, got %q", got)
+func TestExtractLanguageFromProblem_NilJSONReturnsError(t *testing.T) {
+	lang, err := extractLanguageFromProblem(nil)
+	if err == nil {
+		t.Errorf("expected error for nil JSON, got lang=%q and nil error", lang)
+	}
+}
+
+func TestExtractLanguageFromProblem_InvalidLanguageReturnsError(t *testing.T) {
+	lang, err := extractLanguageFromProblem(json.RawMessage(`{"language":"ruby"}`))
+	if err == nil {
+		t.Errorf("expected error for invalid language 'ruby', got lang=%q and nil error", lang)
+	}
+}
+
+func TestSessionExecute_MissingLanguageInProblemReturns400(t *testing.T) {
+	// Problem JSON has no language field — should now return 400
+	problemJSON := json.RawMessage(`{"title":"No Language Problem"}`)
+
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			s := activeSession()
+			s.Problem = problemJSON
+			return s, nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+	execClient := &mockExecutorClient{}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	body := newExecuteReq(testStudentID, "print('hi')")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when problem has no language, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestStudentWorkExecute_LanguageSetFromProblem(t *testing.T) {
+	workID := uuid.New()
+	userID := uuid.New()
+	problemID := uuid.New()
+	namespaceID := "test-ns"
+	code := "class Main { public static void main(String[] args) {} }"
+
+	reqBody := executeStudentWorkRequest{
+		Code: code,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	work := &store.StudentWorkWithProblem{
+		StudentWork: store.StudentWork{
+			ID:        workID,
+			UserID:    userID,
+			ProblemID: problemID,
+			Code:      code,
+		},
+		Problem: store.Problem{
+			ID:       problemID,
+			Title:    "Java Problem",
+			Language: "java",
+		},
+	}
+
+	swRepo := &mockStudentWorkRepo{
+		getStudentWorkFn: func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	h := NewStudentWorkHandler(execClient)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", workID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: namespaceID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Execute(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Language != "java" {
+		t.Fatalf("expected language 'java' set from problem, got %q", capturedReq.Language)
+	}
+}
+
+func TestStudentWorkExecute_MissingLanguageReturns400(t *testing.T) {
+	workID := uuid.New()
+	userID := uuid.New()
+	problemID := uuid.New()
+	namespaceID := "test-ns"
+	code := "print('hi')"
+
+	reqBody := executeStudentWorkRequest{
+		Code: code,
+	}
+	body, _ := json.Marshal(reqBody)
+
+	work := &store.StudentWorkWithProblem{
+		StudentWork: store.StudentWork{
+			ID:        workID,
+			UserID:    userID,
+			ProblemID: problemID,
+			Code:      code,
+		},
+		Problem: store.Problem{
+			ID:       problemID,
+			Title:    "No Language Problem",
+			Language: "", // no language set
+		},
+	}
+
+	swRepo := &mockStudentWorkRepo{
+		getStudentWorkFn: func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	h := NewStudentWorkHandler(nil)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", workID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: namespaceID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Execute(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when problem has no language, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -883,10 +1021,11 @@ func TestNormalizeLanguage_JavaReturnsAsIs(t *testing.T) {
 	}
 }
 
-func TestNormalizeLanguage_EmptyDefaultsPython(t *testing.T) {
-	got, err := normalizeLanguage("")
-	if err != nil || got != "python" {
-		t.Errorf("expected 'python', got %q, err %v", got, err)
+func TestNormalizeLanguage_EmptyReturnsErrorDuplicate(t *testing.T) {
+	// Verify empty string returns error (covered also by TestNormalizeLanguage_EmptyReturnsError above).
+	_, err := normalizeLanguage("")
+	if err == nil {
+		t.Error("expected error for empty language, got nil")
 	}
 }
 
@@ -906,7 +1045,7 @@ func TestNormalizeLanguage_InvalidReturnsError(t *testing.T) {
 
 func TestExecute_MergesExecutionSettings(t *testing.T) {
 	seed42 := 42
-	problemJSON := json.RawMessage(`{"title":"Test","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)
+	problemJSON := json.RawMessage(`{"title":"Test","language":"python","execution_settings":{"stdin":"problem-stdin","random_seed":10}}`)
 
 	sessRepo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {

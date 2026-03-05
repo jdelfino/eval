@@ -99,7 +99,7 @@ func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
 
 func TestExecute_Success(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print('hello')"}`)
+	w := doRequest(h, `{"code":"print('hello')","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -122,7 +122,7 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_CodeFailure(t *testing.T) {
 	h := newHandler(failRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(x)"}`)
+	w := doRequest(h, `{"code":"print(x)","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -142,7 +142,7 @@ func TestExecute_CodeFailure(t *testing.T) {
 
 func TestExecute_Timeout(t *testing.T) {
 	h := newHandler(timeoutRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"while True: pass"}`)
+	w := doRequest(h, `{"code":"while True: pass","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -162,7 +162,7 @@ func TestExecute_Timeout(t *testing.T) {
 
 func TestExecute_InternalError(t *testing.T) {
 	h := newHandler(errorRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
@@ -208,7 +208,7 @@ func TestExecute_CodeTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxCodeBytes = 10
 	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"print('this is way too long')"}`)
+	w := doRequest(h, `{"code":"print('this is way too long')","language":"python"}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -219,7 +219,7 @@ func TestExecute_StdinTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxStdinBytes = 5
 	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","stdin":"toolarge"}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -230,7 +230,7 @@ func TestExecute_TooManyFiles(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxFiles = 1
 	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	w := doRequest(h, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -242,7 +242,7 @@ func TestExecute_FileTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxFileBytes = 5
 	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"toolarge"}]}`
 	w := doRequest(h, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -252,7 +252,7 @@ func TestExecute_FileTooLarge(t *testing.T) {
 
 func TestExecute_EmptyFileName(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","files":[{"name":"","content":"data"}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"","content":"data"}]}`
 	w := doRequest(h, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -262,7 +262,7 @@ func TestExecute_EmptyFileName(t *testing.T) {
 
 func TestExecute_EmptyFileContent(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","files":[{"name":"a.txt","content":""}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":""}]}`
 	w := doRequest(h, body)
 
 	if w.Code != http.StatusBadRequest {
@@ -272,7 +272,7 @@ func TestExecute_EmptyFileContent(t *testing.T) {
 
 func TestExecute_NegativeTimeout(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","timeout_ms":-1}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":-1}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -281,7 +281,7 @@ func TestExecute_NegativeTimeout(t *testing.T) {
 
 func TestExecute_TimeoutTooLarge(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","timeout_ms":99999}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":99999}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -290,7 +290,7 @@ func TestExecute_TimeoutTooLarge(t *testing.T) {
 
 func TestExecute_StdinEchoed(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","stdin":"my input"}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","stdin":"my input"}`)
 
 	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -304,7 +304,7 @@ func TestExecute_StdinEchoed(t *testing.T) {
 func TestExecute_CustomTimeout(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","timeout_ms":5000}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":5000}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -317,7 +317,7 @@ func TestExecute_CustomTimeout(t *testing.T) {
 func TestExecute_DefaultTimeout(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1"}`)
+	w := doRequest(h, `{"code":"x=1","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -330,7 +330,7 @@ func TestExecute_DefaultTimeout(t *testing.T) {
 func TestExecute_FilesPassedToSandbox(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","files":[{"name":"data.txt","content":"hello"}],"random_seed":42}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"data.txt","content":"hello"}],"random_seed":42}`
 	w := doRequest(h, body)
 
 	if w.Code != http.StatusOK {
@@ -389,7 +389,7 @@ func getGaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 func TestExecute_MetricsSuccess(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(successRunner, m, defaultConfig())
-	w := doRequest(h, `{"code":"print('hello')"}`)
+	w := doRequest(h, `{"code":"print('hello')","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -407,7 +407,7 @@ func TestExecute_MetricsSuccess(t *testing.T) {
 func TestExecute_MetricsFailure(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(failRunner, m, defaultConfig())
-	doRequest(h, `{"code":"print(x)"}`)
+	doRequest(h, `{"code":"print(x)","language":"python"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "failure"); v != 1 {
 		t.Errorf("expected executions_total{status=failure}=1, got %v", v)
@@ -417,7 +417,7 @@ func TestExecute_MetricsFailure(t *testing.T) {
 func TestExecute_MetricsTimeout(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(timeoutRunner, m, defaultConfig())
-	doRequest(h, `{"code":"while True: pass"}`)
+	doRequest(h, `{"code":"while True: pass","language":"python"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "timeout"); v != 1 {
 		t.Errorf("expected executions_total{status=timeout}=1, got %v", v)
@@ -427,7 +427,7 @@ func TestExecute_MetricsTimeout(t *testing.T) {
 func TestExecute_MetricsError(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(errorRunner, m, defaultConfig())
-	doRequest(h, `{"code":"print(1)"}`)
+	doRequest(h, `{"code":"print(1)","language":"python"}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "error"); v != 1 {
 		t.Errorf("expected executions_total{status=error}=1, got %v", v)
@@ -439,7 +439,7 @@ func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxCodeBytes = 10
 	h := newHandler(successRunner, m, cfg)
-	doRequest(h, `{"code":"print('this is way too long')"}`)
+	doRequest(h, `{"code":"print('this is way too long')","language":"python"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "code_too_large"); v != 1 {
 		t.Errorf("expected validation_errors_total{reason=code_too_large}=1, got %v", v)
@@ -461,7 +461,7 @@ func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxStdinBytes = 5
 	h := newHandler(successRunner, m, cfg)
-	doRequest(h, `{"code":"x=1","stdin":"toolarge"}`)
+	doRequest(h, `{"code":"x=1","language":"python","stdin":"toolarge"}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "stdin_too_large"); v != 1 {
 		t.Errorf("expected validation_errors_total{reason=stdin_too_large}=1, got %v", v)
@@ -473,7 +473,7 @@ func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxFiles = 1
 	h := newHandler(successRunner, m, cfg)
-	body := `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
 	doRequest(h, body)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "too_many_files"); v != 1 {
@@ -486,7 +486,7 @@ func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxFileBytes = 5
 	h := newHandler(successRunner, m, cfg)
-	body := `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`
+	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"toolarge"}]}`
 	doRequest(h, body)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "file_too_large"); v != 1 {
@@ -512,7 +512,7 @@ func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
 	var firstStatus int
 	go func() {
 		defer wg.Done()
-		w := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+		w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
 		firstStatus = w.Code
 	}()
 
@@ -538,14 +538,14 @@ func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
 	wg2.Add(1)
 	go func() {
 		defer wg2.Done()
-		doRequest(h2.ServeHTTP, `{"code":"x=1"}`)
+		doRequest(h2.ServeHTTP, `{"code":"x=1","language":"python"}`)
 	}()
 
 	// Wait for first request to enter runner.
 	<-entryCh
 
 	// Second request should be rejected.
-	w := doRequest(h2.ServeHTTP, `{"code":"x=1"}`)
+	w := doRequest(h2.ServeHTTP, `{"code":"x=1","language":"python"}`)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", w.Code)
 	}
@@ -574,13 +574,13 @@ func TestExecute_ConcurrencyLimit_AllowsAfterRelease(t *testing.T) {
 	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
 
 	// First request succeeds (acquires and releases).
-	w1 := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	w1 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
 	if w1.Code != http.StatusOK {
 		t.Fatalf("first request: expected 200, got %d", w1.Code)
 	}
 
 	// Second request should also succeed since first released the slot.
-	w2 := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	w2 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("second request: expected 200, got %d", w2.Code)
 	}
@@ -591,7 +591,7 @@ func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
 	cfg.MaxConcurrentExecutions = 0
 	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
 
-	w := doRequest(h.ServeHTTP, `{"code":"x=1"}`)
+	w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
@@ -599,11 +599,12 @@ func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
 
 // --- Language validation tests ---
 
-func TestExecute_ValidateLanguage_EmptyIsOk(t *testing.T) {
+func TestExecute_ValidateLanguage_EmptyIsRejected(t *testing.T) {
+	// Empty language must now be rejected — every request must specify a language explicitly.
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
 	w := doRequest(h, `{"code":"print(1)"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for empty language, got %d", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty language, got %d", w.Code)
 	}
 }
 
@@ -660,7 +661,7 @@ func TestExecute_JavaPathPassedToSandboxConfig(t *testing.T) {
 	cfg.JavaPath = "/usr/bin/java"
 	cfg.JavacPath = "/usr/bin/javac"
 	h := newHandler(cap.run, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"print(1)"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)

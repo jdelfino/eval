@@ -85,7 +85,7 @@ RUN echo "${JAVA_HOME}/lib" > /etc/ld.so.conf.d/jdk.conf && ldconfig
 # is remounted read-only before bind mounts are applied.
 RUN mkdir -p /sandbox-root/usr/bin /sandbox-root/usr/lib /sandbox-root/lib \
     /sandbox-root/lib64 /sandbox-root/dev /sandbox-root/tmp \
-    /sandbox-root/usr/lib/jvm /sandbox-root/etc \
+    /sandbox-root/usr/lib/jvm /sandbox-root/etc /sandbox-root/etc/alternatives \
  && touch /sandbox-root/etc/ld.so.cache
 
 # NOTE: The executor process must run as root so nsjail can create namespaces

@@ -228,8 +228,8 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 			return "invalid_request", fmt.Sprintf("timeout_ms exceeds maximum of %d", maxTimeoutMs)
 		}
 	}
-	if req.Language != "" && req.Language != "python" && req.Language != "java" {
-		return "invalid_request", fmt.Sprintf("unsupported language %q: must be empty, \"python\", or \"java\"", req.Language)
+	if req.Language != "python" && req.Language != "java" {
+		return "invalid_request", fmt.Sprintf("language is required: must be \"python\" or \"java\", got %q", req.Language)
 	}
 	return "", ""
 }

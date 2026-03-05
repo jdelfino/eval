@@ -30,7 +30,8 @@ func setupStandaloneTraceHandler(tracer TracerClient) *TraceHandler {
 
 func newStandaloneTraceReq(code string) []byte {
 	b, _ := json.Marshal(map[string]any{
-		"code": code,
+		"code":     code,
+		"language": "python",
 	})
 	return b
 }
@@ -172,23 +173,11 @@ func TestStandaloneTrace_LanguagePassedToExecutor(t *testing.T) {
 	}
 }
 
-func TestStandaloneTrace_EmptyLanguageDefaultsPython(t *testing.T) {
-	var capturedReq executor.TraceRequest
-	tracer := &mockTracerClient{
-		traceFn: func(_ context.Context, req executor.TraceRequest) (*executor.TraceResponse, error) {
-			capturedReq = req
-			return &executor.TraceResponse{
-				Steps:      []executor.TraceStep{},
-				TotalSteps: 0,
-				ExitCode:   0,
-			}, nil
-		},
-	}
-
-	h := setupStandaloneTraceHandler(tracer)
+func TestStandaloneTrace_EmptyLanguageReturns400(t *testing.T) {
+	h := setupStandaloneTraceHandler(&mockTracerClient{})
 	router := traceRouter(h)
-	// No language field — should default to "python"
-	body := newStandaloneTraceReq("x = 1")
+	// No language field — must now return 400 (no python default).
+	body, _ := json.Marshal(map[string]any{"code": "x = 1"})
 	req := httptest.NewRequest(http.MethodPost, "/trace", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
@@ -197,11 +186,8 @@ func TestStandaloneTrace_EmptyLanguageDefaultsPython(t *testing.T) {
 
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if capturedReq.Language != "python" {
-		t.Fatalf("expected language 'python' as default, got %q", capturedReq.Language)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing language, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
