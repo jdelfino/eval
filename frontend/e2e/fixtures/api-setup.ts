@@ -28,8 +28,10 @@ const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
 
 // ── Production safety guard ─────────────────────────────────────────────────
 // Block tests from running against the production API URL.
+// Staging (staging.eval.delquillan.com) is allowed.
 const PROD_URLS = ['eval.delquillan.com', 'eval-prod'];
-if (PROD_URLS.some(u => API_BASE.includes(u))) {
+const STAGING_URLS = ['staging.eval.delquillan.com'];
+if (PROD_URLS.some(u => API_BASE.includes(u)) && !STAGING_URLS.some(u => API_BASE.includes(u))) {
   throw new Error(
     `SAFETY: API_BASE_URL (${API_BASE}) looks like a production URL. ` +
     'E2E tests must never run against production.'
