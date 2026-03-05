@@ -98,9 +98,14 @@ file_exists \
 # Structure: no K8s dependencies
 # ────────────────────────────────────────────────────────────────────────────
 
-assert_not_contains \
-  "does not use kubectl" \
-  "kubectl"
+# Check that kubectl is not used in executable lines (comments are fine)
+if ! grep -v '^[[:space:]]*#' "$EXECUTOR_SCRIPT" | grep -qE 'kubectl' 2>/dev/null; then
+  echo "PASS: does not use kubectl (in executable code)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: does not use kubectl (in executable code)"
+  FAIL=$((FAIL + 1))
+fi
 
 assert_not_contains \
   "does not reference K8s Jobs" \
@@ -119,8 +124,8 @@ assert_contains \
   "BASE_URL"
 
 assert_contains \
-  "defaults BASE_URL to https://staging.eval.delquillan.com" \
-  "staging.eval.delquillan.com"
+  "defaults BASE_URL to http://localhost:8081" \
+  "localhost:8081"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Structure: includes required test cases
@@ -159,11 +164,11 @@ assert_contains \
   "/execute"
 
 assert_contains \
-  "sends requests to /healthz/executor endpoint" \
-  "/healthz/executor"
+  "sends requests to /healthz endpoint" \
+  "/healthz"
 
 # ────────────────────────────────────────────────────────────────────────────
-# Behavior: missing BASE_URL still uses default (https://staging.eval.delquillan.com)
+# Behavior: missing BASE_URL still uses default (https://localhost:8081)
 # The script should not require BASE_URL — it has a sensible default
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -174,7 +179,7 @@ cat > "$MOCK_DIR_DEFAULT/curl" <<'EOF'
 #!/usr/bin/env bash
 # Capture args to detect which endpoint is being called
 for arg in "$@"; do
-  if [[ "$arg" == *"staging.eval.delquillan.com"* ]]; then
+  if [[ "$arg" == *"localhost:8081"* ]]; then
     # Confirm default URL is used
     printf '{"success":false,"error":"mock-fail"}' > /tmp/mock-body-default 2>/dev/null || true
     printf '200'
@@ -186,7 +191,7 @@ exit 0
 EOF
 chmod +x "$MOCK_DIR_DEFAULT/curl"
 
-# Run the script without BASE_URL — expect it to try staging.eval.delquillan.com
+# Run the script without BASE_URL — expect it to try localhost:8081
 default_url_output=$(
   env -i \
     PATH="${MOCK_DIR_DEFAULT}:${SYSTEM_PATH}" \
@@ -194,11 +199,11 @@ default_url_output=$(
     bash "$EXECUTOR_SCRIPT" 2>&1
 ) || true
 
-if echo "$default_url_output" | grep -qE "staging.eval.delquillan.com|localhost"; then
-  echo "PASS: script uses staging.eval.delquillan.com as default BASE_URL"
+if echo "$default_url_output" | grep -qE "localhost:8081|localhost"; then
+  echo "PASS: script uses localhost:8081 as default BASE_URL"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: script did not use staging.eval.delquillan.com as default BASE_URL"
+  echo "FAIL: script did not use localhost:8081 as default BASE_URL"
   echo "  Output was: $default_url_output"
   FAIL=$((FAIL + 1))
 fi
@@ -243,7 +248,7 @@ down_output=$(
   env -i \
     PATH="${MOCK_DIR_DOWN}:${SYSTEM_PATH}" \
     HOME="${HOME:-/root}" \
-    BASE_URL=https://staging.eval.delquillan.com \
+    BASE_URL=https://localhost:8081 \
     bash "$EXECUTOR_SCRIPT" 2>&1
 ) || down_exit=$?
 
@@ -287,7 +292,7 @@ for arg in "${args[@]}"; do
   if [[ "$arg" == http* ]]; then url="$arg"; break; fi
 done
 
-if [[ "$url" == *"/healthz/executor"* ]]; then
+if [[ "$url" == *"/healthz"* ]]; then
   [[ -n "$output_file" ]] && printf '%s' 'ok' > "$output_file"
   printf '%s' '200'
 elif [[ "$url" == *"/execute"* ]]; then
@@ -326,7 +331,7 @@ success_output=$(
   env -i \
     PATH="${MOCK_DIR_SUCCESS}:${SYSTEM_PATH}" \
     HOME="${HOME:-/root}" \
-    BASE_URL=https://staging.eval.delquillan.com \
+    BASE_URL=https://localhost:8081 \
     bash "$EXECUTOR_SCRIPT" 2>&1
 ) || success_exit=$?
 
@@ -379,7 +384,7 @@ for arg in "${args[@]}"; do
   if [[ "$arg" == http* ]]; then url="$arg"; break; fi
 done
 
-if [[ "$url" == *"/healthz/executor"* ]]; then
+if [[ "$url" == *"/healthz"* ]]; then
   [[ -n "$output_file" ]] && printf '%s' 'ok' > "$output_file"
   printf '%s' '200'
 elif [[ "$url" == *"/execute"* ]]; then
@@ -408,7 +413,7 @@ fail_output=$(
   env -i \
     PATH="${MOCK_DIR_FAIL}:${SYSTEM_PATH}" \
     HOME="${HOME:-/root}" \
-    BASE_URL=https://staging.eval.delquillan.com \
+    BASE_URL=https://localhost:8081 \
     bash "$EXECUTOR_SCRIPT" 2>&1
 ) || fail_exit=$?
 

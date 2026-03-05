@@ -217,9 +217,20 @@ jobs:
         run: |
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
       - name: Validate executor sandbox (staging)
-        run: ./scripts/validate-executor-sandbox.sh
-        env:
-          BASE_URL: https://staging.eval.delquillan.com
+        run: |
+          # Access executor directly via port-forward (not exposed publicly).
+          kubectl port-forward -n staging svc/executor 8081:8081 &
+          PF_PID=$!
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 15); do
+            curl -sf --max-time 2 http://localhost:8081/healthz >/dev/null 2>&1 && break
+            if [ "$i" = "15" ]; then
+              echo "::error::Port-forward to executor not ready after 30s"
+              exit 1
+            fi
+            sleep 2
+          done
+          ./scripts/validate-executor-sandbox.sh
       - name: Run staging E2E tests
         env:
           BASE_URL: https://staging.eval.delquillan.com

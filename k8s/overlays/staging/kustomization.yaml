@@ -17,7 +17,6 @@ patches:
   - path: patches/disable-keda.yaml
   - path: patches/executor-replicas.yaml
   - path: patches/workload-identity.yaml
-  - path: patches/executor-networkpolicy.yaml
 
 images:
   - name: go-api

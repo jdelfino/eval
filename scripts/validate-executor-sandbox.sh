@@ -10,11 +10,14 @@ set -euo pipefail
 #   ./scripts/validate-executor-sandbox.sh [BASE_URL]
 #
 # Environment:
-#   BASE_URL  (default: https://staging.eval.delquillan.com)  — base URL of the proxy/executor
+#   BASE_URL  (default: http://localhost:8081)  — executor URL (via kubectl port-forward)
 #
-# The executor is reached via:
-#   BASE_URL/execute        — code execution endpoint
-#   BASE_URL/healthz/executor — executor health check (proxied from /healthz)
+# The executor is reached directly (not through a proxy):
+#   BASE_URL/execute   — code execution endpoint
+#   BASE_URL/healthz   — executor health check
+#
+# In CI, the executor is accessed via kubectl port-forward to avoid
+# exposing it publicly through the staging ingress.
 #
 # Tests included:
 #   - Basic Python execution
@@ -24,9 +27,9 @@ set -euo pipefail
 #   - Filesystem isolation
 #   - Memory limits
 
-BASE_URL="${1:-${BASE_URL:-https://staging.eval.delquillan.com}}"
+BASE_URL="${1:-${BASE_URL:-http://localhost:8081}}"
 EXECUTE_URL="${BASE_URL}/execute"
-HEALTH_URL="${BASE_URL}/healthz/executor"
+HEALTH_URL="${BASE_URL}/healthz"
 
 TIMEOUT_CURL=30   # seconds for each curl call
 TOTAL=0
