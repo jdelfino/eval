@@ -309,11 +309,25 @@ jobs:
         run: |
           NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
           echo "NODE_IP=$NODE_IP" >> "$GITHUB_ENV"
-      - name: Start IAP SSH tunnel
+      - name: Start IAP tunnel to NAT VM
         run: |
-          gcloud compute ssh eval-prod-nat --zone=us-east1-b --tunnel-through-iap \
-            --ssh-flag="-L 8080:${NODE_IP}:30080" --ssh-flag="-N" --ssh-flag="-f" \
-            --ssh-flag="-o StrictHostKeyChecking=no" --quiet
+          # Use start-iap-tunnel instead of gcloud compute ssh because
+          # the SSH path crashes with WIF credentials (quote_from_bytes bug).
+          # Step 1: IAP TCP tunnel to NAT VM's SSH port
+          gcloud compute start-iap-tunnel eval-prod-nat 22 \
+            --zone=us-east1-b --local-host-port=localhost:2222 &
+          sleep 5
+          # Step 2: Generate temp SSH key and register via OS Login
+          ssh-keygen -t rsa -b 2048 -f /tmp/iap_key -N "" -q
+          gcloud compute os-login ssh-keys add --key-file=/tmp/iap_key.pub --ttl=30m --quiet
+          # Step 3: Get the OS Login POSIX username
+          OSLOGIN_USER=$(gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)' 2>/dev/null)
+          # Step 4: SSH through the IAP tunnel for port forwarding
+          ssh -i /tmp/iap_key -p 2222 \
+            -L 8080:${NODE_IP}:30080 -N -f \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            "${OSLOGIN_USER}@localhost"
       - name: Verify tunnel
         run: |
           echo "Waiting for tunnel to become available..."
