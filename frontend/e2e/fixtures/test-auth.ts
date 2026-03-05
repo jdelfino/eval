@@ -123,17 +123,14 @@ function withTenant<T extends Record<string, unknown>>(body: T): T {
  * x-goog-user-project header for quota attribution.
  */
 async function setEmailVerified(localId: string): Promise<void> {
-  const updateUrl = !IS_EMULATOR && TENANT_ID
-    ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
-    : `${IDP_BASE_URL}/accounts:update`;
   const authHeader = await getAdminAuthHeader();
-  const res = await fetch(updateUrl, {
+  const res = await fetch(`${IDP_BASE_URL}/accounts:update`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: authHeader,
     },
-    body: JSON.stringify({ localId, emailVerified: true }),
+    body: JSON.stringify(withTenant({ localId, emailVerified: true })),
   });
   if (!res.ok) {
     const body = await res.text();
