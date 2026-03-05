@@ -69,10 +69,10 @@ resource "google_project_iam_member" "github_actions_roles" {
 # Firebase Auth Admin: E2E Test User Management
 # -----------------------------------------------------------------------------
 # E2E tests create Identity Platform users and set emailVerified=true in the
-# staging tenant. The predefined firebaseauth.admin role is required because
-# tenant-scoped admin operations (accounts:update with Bearer token on
-# /projects/{id}/tenants/{id}/accounts:update) fail with INSUFFICIENT_PERMISSION
-# when using a custom role with individual firebaseauth.users.* permissions.
+# staging tenant. The identitytoolkit.admin role is required because tenant-
+# scoped admin operations (accounts:update on /projects/{id}/tenants/{id}/...)
+# need identitytoolkit.tenants.* permissions for tenant resolution.
+# roles/firebaseauth.admin does NOT include these — it lacks tenant permissions.
 #
 # The serviceUsageConsumer role is also required because WIF-issued tokens
 # (unlike in-cluster Workload Identity) need the x-goog-user-project header
@@ -80,7 +80,7 @@ resource "google_project_iam_member" "github_actions_roles" {
 
 resource "google_project_iam_member" "github_actions_smoke_test" {
   project = var.project_id
-  role    = "roles/firebaseauth.admin"
+  role    = "roles/identitytoolkit.admin"
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
