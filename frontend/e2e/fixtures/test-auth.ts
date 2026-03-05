@@ -116,6 +116,36 @@ function withTenant<T extends Record<string, unknown>>(body: T): T {
 }
 
 /**
+ * Set emailVerified=true on a user via the Identity Toolkit admin API.
+ *
+ * Multi-tenant IDP requires the project/tenant-scoped URL — tenantId in the
+ * body is ignored with Bearer auth. WIF tokens also require the
+ * x-goog-user-project header for quota attribution.
+ */
+async function setEmailVerified(localId: string): Promise<void> {
+  const updateUrl = !IS_EMULATOR && TENANT_ID
+    ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
+    : `${IDP_BASE_URL}/accounts:update`;
+  const authHeader = await getAdminAuthHeader();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: authHeader,
+  };
+  if (!IS_EMULATOR) {
+    headers['x-goog-user-project'] = PROJECT_ID;
+  }
+  const res = await fetch(updateUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ localId, emailVerified: true }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Failed to set emailVerified on user ${localId}: ${res.status} ${body}`);
+  }
+}
+
+/**
  * Creates a new user account in Firebase Auth.
  */
 export async function createTestUser(email: string, password: string): Promise<void> {
@@ -163,25 +193,9 @@ export async function createVerifiedTestUser(email: string, password: string): P
       // User already exists and credentials are correct — no signUp needed.
       const data = await signInRes.json();
       createdUserIds.add(data.localId);
-      if (data.registered && !data.emailVerified) {
+      if (!data.emailVerified) {
         // User exists but emailVerified was never set (e.g. previous failed run).
-        // Fall through to the admin update below.
-      } else {
-        return;
-      }
-      // Set emailVerified via admin API for this existing user.
-      const updateUrl = TENANT_ID
-        ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
-        : `${IDP_BASE_URL}/accounts:update`;
-      const authHeader = await getAdminAuthHeader();
-      const updateRes = await fetch(updateUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: authHeader },
-        body: JSON.stringify({ localId: data.localId, emailVerified: true }),
-      });
-      if (!updateRes.ok) {
-        const body = await updateRes.text();
-        throw new Error(`Failed to set emailVerified on existing user: ${updateRes.status} ${body}`);
+        await setEmailVerified(data.localId);
       }
       return;
     }
@@ -222,25 +236,7 @@ export async function createVerifiedTestUser(email: string, password: string): P
   createdUserIds.add(localId);
 
   // Set emailVerified=true via admin API.
-  // Emulator uses "Bearer owner"; real IDP uses a GCP access token.
-  // Multi-tenant IDP requires the project/tenant-scoped URL for admin
-  // operations — tenantId in the body is ignored with Bearer auth.
-  const updateUrl = !IS_EMULATOR && TENANT_ID
-    ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
-    : `${IDP_BASE_URL}/accounts:update`;
-  const authHeader = await getAdminAuthHeader();
-  const updateRes = await fetch(updateUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: authHeader,
-    },
-    body: JSON.stringify({ localId, emailVerified: true }),
-  });
-  if (!updateRes.ok) {
-    const body = await updateRes.text();
-    throw new Error(`Failed to set emailVerified on user: ${updateRes.status} ${body}`);
-  }
+  await setEmailVerified(localId);
 }
 
 /**
