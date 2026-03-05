@@ -244,17 +244,6 @@ variable "github_repo" {
   type        = string
 }
 
-variable "service_account_roles" {
-  description = "IAM roles to grant to the GitHub Actions service account"
-  type        = list(string)
-  default = [
-    "roles/artifactregistry.writer",
-    "roles/container.developer",
-    "roles/gkehub.gatewayEditor",
-    "roles/gkehub.viewer"
-  ]
-}
-
 # -----------------------------------------------------------------------------
 # Centrifugo Variables
 # -----------------------------------------------------------------------------

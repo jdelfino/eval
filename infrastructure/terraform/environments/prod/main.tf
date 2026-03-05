@@ -190,9 +190,8 @@ module "workload_identity_federation" {
   project_number = var.project_number
   region         = var.region
 
-  github_owner          = var.github_owner
-  github_repo           = var.github_repo
-  service_account_roles = var.service_account_roles
+  github_owner = var.github_owner
+  github_repo  = var.github_repo
 }
 
 module "monitoring" {

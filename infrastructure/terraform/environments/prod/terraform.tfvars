@@ -97,17 +97,6 @@ project_number = "580381260766"
 github_owner   = "jdelfino"
 github_repo    = "eval"
 
-# Explicit role list (module defaults + IAP tunnel and OS Login for staging E2E).
-# iap.tunnelResourceAccessor: establish IAP TCP tunnel to NAT VM
-# compute.osLogin: SSH via OS Login (NAT VM has enable-oslogin=TRUE)
-service_account_roles = [
-  "roles/artifactregistry.writer",
-  "roles/container.developer",
-  "roles/gkehub.gatewayEditor",
-  "roles/gkehub.viewer",
-  "roles/iap.tunnelResourceAccessor",
-  "roles/compute.osLogin",
-]
 
 # -----------------------------------------------------------------------------
 # Centrifugo Configuration
