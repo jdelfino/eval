@@ -334,24 +334,38 @@ jobs:
                         memory: 2Gi
           JOBEOF
 
-          # Wait for Job completion (5 min timeout for full E2E suite)
-          if ! kubectl wait --for=condition=complete job/staging-test-${SHORT_SHA} -n staging --timeout=300s 2>/dev/null; then
-            echo "::error::Staging E2E tests failed or timed out"
-            # Error context is dumped by the container command (sh -c wrapper)
-            # before exit, so it appears in the pod logs automatically.
-            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=300 || true
-
-            FAILED=$(kubectl get job staging-test-${SHORT_SHA} -n staging -o jsonpath='{.status.failed}' 2>/dev/null || echo "")
-            if [ "$FAILED" = "1" ]; then
-              echo "E2E test job failed"
-            else
-              echo "E2E test job timed out"
+          # Poll for Job completion (Complete or Failed).
+          # kubectl wait --for=condition=complete doesn't detect failures — a failed
+          # Job gets condition=Failed, not Complete, so the wait blocks the full
+          # timeout. Polling catches both outcomes immediately.
+          # Outer timeout is 420s (300s activeDeadline + 2min scheduling/pull overhead).
+          DEADLINE=$((SECONDS + 420))
+          JOB_RESULT=""
+          while [ $SECONDS -lt $DEADLINE ]; do
+            COND=$(kubectl get job staging-test-${SHORT_SHA} -n staging \
+              -o jsonpath='{.status.conditions[0].type}' 2>/dev/null || echo "")
+            if [ "$COND" = "Complete" ]; then
+              JOB_RESULT="passed"
+              break
+            elif [ "$COND" = "Failed" ]; then
+              JOB_RESULT="failed"
+              break
             fi
+            sleep 5
+          done
+
+          if [ "$JOB_RESULT" = "passed" ]; then
+            echo "Staging E2E tests passed"
+            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100
+          elif [ "$JOB_RESULT" = "failed" ]; then
+            echo "::error::Staging E2E tests failed"
+            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=300 || true
+            exit 1
+          else
+            echo "::error::Staging E2E tests timed out"
+            kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=300 || true
             exit 1
           fi
-
-          echo "Staging E2E tests passed"
-          kubectl logs job/staging-test-${SHORT_SHA} -n staging --tail=100
 
   # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
   # Only runs after staging is validated AND all unit/lint/integration tests pass.
