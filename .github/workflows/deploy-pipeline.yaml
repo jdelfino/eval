@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      redeploy:
+        description: 'Redeploy current live images without rebuilding (skip build, CI, staging)'
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-prod
@@ -21,6 +26,7 @@ jobs:
   # lifecycle policies.
 
   build-push-go-api:
+    if: inputs.redeploy != true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,6 +43,7 @@ jobs:
           docker push $REGISTRY/go-api:${{ github.sha }}
 
   build-push-executor:
+    if: inputs.redeploy != true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -97,6 +104,7 @@ jobs:
           docker push $REGISTRY/executor:latest
 
   build-push-frontend:
+    if: inputs.redeploy != true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -112,14 +120,17 @@ jobs:
           docker build -f frontend/Dockerfile -t $REGISTRY/frontend:${{ github.sha }} .
           docker push $REGISTRY/frontend:${{ github.sha }}
 
-  # ── CI workflow (single consolidated workflow replacing go-api, executor, frontend) ──
-  # Runs all test jobs (with run-all: true, no path filtering). deploy-prod
-  # gates on this passing, but deploy-staging does NOT wait for it.
+  # ── CI workflow (cross-boundary tests only) ───────────────────────────────
+  # Runs contract tests, E2E tests, and go-api integration (no lint/unit tests
+  # — those already passed on the PR). deploy-prod gates on this passing, but
+  # deploy-staging does NOT wait for it.
 
   ci:
+    if: inputs.redeploy != true
     uses: ./.github/workflows/ci.yml
     with:
       run-all: true
+      cross-boundary-only: true
     secrets: inherit
     permissions:
       contents: read
@@ -130,6 +141,7 @@ jobs:
   # Runs Playwright E2E tests against the public staging URL.
 
   deploy-staging:
+    if: inputs.redeploy != true
     needs: [build-push-go-api, build-push-executor, build-push-frontend]
     runs-on: ubuntu-latest
     permissions:
@@ -327,7 +339,7 @@ jobs:
         run: cd frontend && npx playwright test
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
           name: playwright-report-staging
           path: frontend/playwright-report/
@@ -351,10 +363,18 @@ jobs:
           kubectl logs deployment/centrifugo -n staging --tail=100 2>/dev/null || true
 
   # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
-  # Only runs after staging is validated AND all unit/lint/integration tests pass.
+  # Normal: runs after staging is validated AND cross-boundary tests pass.
+  # Redeploy: runs directly (build/CI/staging are skipped).
 
   deploy-prod:
-    needs: [deploy-staging, ci]
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci]
+    if: >-
+      always() &&
+      (needs.build-push-go-api.result == 'success' || needs.build-push-go-api.result == 'skipped') &&
+      (needs.build-push-executor.result == 'success' || needs.build-push-executor.result == 'skipped') &&
+      (needs.build-push-frontend.result == 'success' || needs.build-push-frontend.result == 'skipped') &&
+      (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped') &&
+      (needs.ci.result == 'success' || needs.ci.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -382,10 +402,20 @@ jobs:
       - name: Deploy to production
         run: |
           cd k8s/base
-          SHA="${{ github.sha }}"
-          kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
-          kustomize edit set image "executor=$REGISTRY/executor:$SHA"
-          kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
+          if [ "${{ inputs.redeploy }}" = "true" ]; then
+            # Redeploy: reuse current live images (no rebuild)
+            API_IMG=$(kubectl get deploy go-api -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+            EXE_IMG=$(kubectl get deploy executor -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+            FE_IMG=$(kubectl get deploy frontend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+            [ -n "$API_IMG" ] && kustomize edit set image "go-api=$API_IMG"
+            [ -n "$EXE_IMG" ] && kustomize edit set image "executor=$EXE_IMG"
+            [ -n "$FE_IMG" ] && kustomize edit set image "frontend=$FE_IMG"
+          else
+            SHA="${{ github.sha }}"
+            kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
+            kustomize edit set image "executor=$REGISTRY/executor:$SHA"
+            kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
+          fi
           kubectl apply -k .
       - name: Wait for rollout
         run: |
@@ -428,8 +458,16 @@ jobs:
           SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
 
   notify-failure:
-    needs: deploy-prod
-    if: failure()
+    needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci, deploy-prod]
+    if: >-
+      always() && (
+        needs.build-push-go-api.result == 'failure' ||
+        needs.build-push-executor.result == 'failure' ||
+        needs.build-push-frontend.result == 'failure' ||
+        needs.deploy-staging.result == 'failure' ||
+        needs.ci.result == 'failure' ||
+        needs.deploy-prod.result == 'failure'
+      )
     runs-on: ubuntu-latest
     permissions:
       issues: write
