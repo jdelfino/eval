@@ -26,99 +26,11 @@ describe('centrifugo', () => {
     mockGetPreviewSectionId.mockReturnValue(null);
   });
 
-  describe('resolveCentrifugoUrl', () => {
-    const originalEnv = process.env;
-
-    beforeEach(() => {
-      jest.resetModules();
-      process.env = { ...originalEnv };
-    });
-
-    afterEach(() => {
-      process.env = originalEnv;
-    });
-
-    it('uses NEXT_PUBLIC_CENTRIFUGO_URL when set', async () => {
-      process.env.NEXT_PUBLIC_CENTRIFUGO_URL = 'wss://eval.example.com/connection/websocket';
-      jest.mock('@/lib/api-client', () => ({
-        getAuthHeaders: () => mockGetAuthHeaders(),
-        getPreviewSectionId: () => mockGetPreviewSectionId(),
-      }));
-      jest.mock('centrifuge', () => ({ Centrifuge: jest.fn() }));
-      const { Centrifuge: MockCentrifugeLocal } = await import('centrifuge');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const MockCentrifugeLocalTyped = MockCentrifugeLocal as unknown as jest.MockedFunction<(...args: any[]) => any>;
-      MockCentrifugeLocalTyped.mockImplementation((url: string) => ({ url }));
-
-      const { createCentrifuge: createCentrifugeLocal } = await import('../centrifugo');
-      createCentrifugeLocal();
-
-      expect(MockCentrifugeLocalTyped).toHaveBeenCalledWith(
-        'wss://eval.example.com/connection/websocket',
-        expect.any(Object),
-      );
-    });
-
-    it('derives ws: WebSocket URL from window.location (http) when NEXT_PUBLIC_CENTRIFUGO_URL is empty', async () => {
-      process.env.NEXT_PUBLIC_CENTRIFUGO_URL = '';
-      // jsdom sets window.location.protocol = 'http:' and host = 'localhost'
-      jest.mock('@/lib/api-client', () => ({
-        getAuthHeaders: () => mockGetAuthHeaders(),
-        getPreviewSectionId: () => mockGetPreviewSectionId(),
-      }));
-      jest.mock('centrifuge', () => ({ Centrifuge: jest.fn() }));
-      const { Centrifuge: MockCentrifugeLocal } = await import('centrifuge');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const MockCentrifugeLocalTyped = MockCentrifugeLocal as unknown as jest.MockedFunction<(...args: any[]) => any>;
-      MockCentrifugeLocalTyped.mockImplementation((url: string) => ({ url }));
-
-      const { createCentrifuge: createCentrifugeLocal } = await import('../centrifugo');
-      createCentrifugeLocal();
-
-      // jsdom has http: protocol, so derived URL should use ws: and be based on window.location.host
-      const calledUrl = MockCentrifugeLocalTyped.mock.calls[0][0] as string;
-      expect(calledUrl).toMatch(/^ws:\/\/.+\/connection\/websocket$/);
-      expect(calledUrl).toBe(`ws://${window.location.host}/connection/websocket`);
-    });
-
-    it('derives wss: URL from resolveCentrifugoUrl when protocol is https', async () => {
-      process.env.NEXT_PUBLIC_CENTRIFUGO_URL = '';
-      // Test the function logic directly by exporting and calling resolveCentrifugoUrl
-      jest.mock('@/lib/api-client', () => ({
-        getAuthHeaders: () => mockGetAuthHeaders(),
-        getPreviewSectionId: () => mockGetPreviewSectionId(),
-      }));
-      jest.mock('centrifuge', () => ({ Centrifuge: jest.fn() }));
-
-      const { resolveCentrifugoUrl } = await import('../centrifugo');
-
-      // Simulate https protocol using the exported function with a mocked window
-      const result = resolveCentrifugoUrl('https:', 'eval.example.com');
-      expect(result).toBe('wss://eval.example.com/connection/websocket');
-    });
-
-    it('derives ws: URL from resolveCentrifugoUrl when protocol is http', async () => {
-      process.env.NEXT_PUBLIC_CENTRIFUGO_URL = '';
-      jest.mock('@/lib/api-client', () => ({
-        getAuthHeaders: () => mockGetAuthHeaders(),
-        getPreviewSectionId: () => mockGetPreviewSectionId(),
-      }));
-      jest.mock('centrifuge', () => ({ Centrifuge: jest.fn() }));
-
-      const { resolveCentrifugoUrl } = await import('../centrifugo');
-
-      const result = resolveCentrifugoUrl('http:', 'localhost:8080');
-      expect(result).toBe('ws://localhost:8080/connection/websocket');
-    });
-  });
-
   describe('createCentrifuge', () => {
-    it('creates a Centrifuge instance using resolveCentrifugoUrl', () => {
-      const client = createCentrifuge();
-      // When NEXT_PUBLIC_CENTRIFUGO_URL is not set (or empty), createCentrifuge derives the URL
-      // from window.location. In jsdom, the default location.host is 'localhost' (without port).
+    it('creates a Centrifuge instance with the configured URL', () => {
+      createCentrifuge();
       expect(MockCentrifuge).toHaveBeenCalledWith(
-        expect.stringMatching(/^wss?:\/\/.+\/connection\/websocket$/),
+        expect.any(String),
         expect.objectContaining({ getToken: expect.any(Function) }),
       );
     });

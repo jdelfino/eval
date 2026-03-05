@@ -24,15 +24,7 @@ replace_placeholder "__NEXT_PUBLIC_FIREBASE_API_KEY__" "$NEXT_PUBLIC_FIREBASE_AP
 replace_placeholder "__NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN__" "$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
 replace_placeholder "__NEXT_PUBLIC_FIREBASE_PROJECT_ID__" "$NEXT_PUBLIC_FIREBASE_PROJECT_ID"
 
-# Centrifugo URL: when set, substitute the placeholder with the configured value.
-# When empty (staging), replace the placeholder with an empty string so the JS falsy
-# check in centrifugo.ts triggers the auto-derive-from-page-origin path.
-if [ -n "$NEXT_PUBLIC_CENTRIFUGO_URL" ]; then
-  replace_placeholder "__NEXT_PUBLIC_CENTRIFUGO_URL__" "$NEXT_PUBLIC_CENTRIFUGO_URL"
-else
-  find /app/.next -type f \( -name '*.js' -o -name '*.html' \) -exec \
-    sed -i 's|__NEXT_PUBLIC_CENTRIFUGO_URL__||g' {} +
-fi
+replace_placeholder "__NEXT_PUBLIC_CENTRIFUGO_URL__" "$NEXT_PUBLIC_CENTRIFUGO_URL"
 
 # Tenant ID is optional. The build-time placeholder is a truthy string, so the
 # compiler removes the if-guard in firebase.ts — tenantId is always assigned.

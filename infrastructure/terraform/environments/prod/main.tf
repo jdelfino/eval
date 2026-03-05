@@ -490,7 +490,7 @@ resource "kubernetes_config_map" "staging_frontend_config" {
     NEXT_PUBLIC_FIREBASE_API_KEY     = module.identity_platform.api_key
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = module.identity_platform.auth_domain
     NEXT_PUBLIC_FIREBASE_PROJECT_ID  = var.project_id
-    NEXT_PUBLIC_CENTRIFUGO_URL       = "" # Empty: frontend derives WS URL from window.location for nginx proxy tunnel
+    NEXT_PUBLIC_CENTRIFUGO_URL       = "wss://staging.eval.delquillan.com/connection/websocket"
     NEXT_PUBLIC_FIREBASE_TENANT_ID   = google_identity_platform_tenant.staging.name
   }
 

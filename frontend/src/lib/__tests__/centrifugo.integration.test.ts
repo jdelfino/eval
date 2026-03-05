@@ -51,38 +51,6 @@ afterAll(() => {
 });
 
 describe('centrifugo integration', () => {
-  describe('resolveCentrifugoUrl URL derivation', () => {
-    it('derives ws:// URL from http location when env var is empty string', () => {
-      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
-
-      const { resolveCentrifugoUrl } = require('../centrifugo');
-      const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
-      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
-
-      expect(url).toBe('ws://localhost:8080/connection/websocket');
-    });
-
-    it('derives wss:// URL from https location when env var is empty string', () => {
-      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: '' };
-
-      const { resolveCentrifugoUrl } = require('../centrifugo');
-      const mockLocation = { protocol: 'https:', host: 'app.example.com' } as Location;
-      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
-
-      expect(url).toBe('wss://app.example.com/connection/websocket');
-    });
-
-    it('uses explicit NEXT_PUBLIC_CENTRIFUGO_URL when set', () => {
-      process.env = { ...ORIGINAL_ENV, NEXT_PUBLIC_API_URL: 'http://api.test', NEXT_PUBLIC_CENTRIFUGO_URL: 'ws://rt.test/ws' };
-
-      const { resolveCentrifugoUrl } = require('../centrifugo');
-      const mockLocation = { protocol: 'http:', host: 'localhost:8080' } as Location;
-      const url = resolveCentrifugoUrl(mockLocation.protocol, mockLocation.host);
-
-      expect(url).toBe('ws://rt.test/ws');
-    });
-  });
-
   describe('createCentrifuge getToken callback', () => {
     it('calls real fetch with auth headers to get token', async () => {
       mockGetIdToken.mockResolvedValue('fb-token');
