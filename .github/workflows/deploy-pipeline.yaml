@@ -121,7 +121,7 @@ jobs:
           docker push $REGISTRY/frontend:${{ github.sha }}
 
   # ── CI workflow (cross-boundary tests only) ───────────────────────────────
-  # Runs contract tests, E2E tests, and go-api integration (no lint/unit tests
+  # Runs system-contract, system-playwright, and go-api-integration (no lint/unit tests
   # — those already passed on the PR). deploy-prod gates on this passing, but
   # deploy-staging does NOT wait for it.
 
