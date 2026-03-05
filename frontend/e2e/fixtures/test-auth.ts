@@ -161,9 +161,28 @@ export async function createVerifiedTestUser(email: string, password: string): P
     });
     if (signInRes.ok) {
       // User already exists and credentials are correct — no signUp needed.
-      const { localId } = await signInRes.json();
-      createdUserIds.add(localId);
-      // emailVerified should already be set on pre-created users; skip update.
+      const data = await signInRes.json();
+      createdUserIds.add(data.localId);
+      if (data.registered && !data.emailVerified) {
+        // User exists but emailVerified was never set (e.g. previous failed run).
+        // Fall through to the admin update below.
+      } else {
+        return;
+      }
+      // Set emailVerified via admin API for this existing user.
+      const updateUrl = TENANT_ID
+        ? `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`
+        : `${IDP_BASE_URL}/accounts:update`;
+      const authHeader = await getAdminAuthHeader();
+      const updateRes = await fetch(updateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+        body: JSON.stringify({ localId: data.localId, emailVerified: true }),
+      });
+      if (!updateRes.ok) {
+        const body = await updateRes.text();
+        throw new Error(`Failed to set emailVerified on existing user: ${updateRes.status} ${body}`);
+      }
       return;
     }
     const signInBody = await signInRes.text();
