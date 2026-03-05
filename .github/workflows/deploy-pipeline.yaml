@@ -423,11 +423,21 @@ jobs:
           done
           echo "::error::Ingress not ready after 300s"
           exit 1
+      - name: Read smoke test credentials
+        run: |
+          FIREBASE_API_KEY=$(kubectl get configmap frontend-config \
+            -o jsonpath='{.data.NEXT_PUBLIC_FIREBASE_API_KEY}')
+          SMOKE_TEST_PASSWORD=$(kubectl get secret smoke-test-secrets \
+            -o jsonpath='{.data.SMOKE_TEST_PASSWORD}' | base64 -d)
+          echo "FIREBASE_API_KEY=${FIREBASE_API_KEY}" >> "$GITHUB_ENV"
+          echo "SMOKE_TEST_PASSWORD=${SMOKE_TEST_PASSWORD}" >> "$GITHUB_ENV"
       - name: Smoke test
         run: ./scripts/smoke-test.sh
         env:
           SMOKE_TEST_URL: https://eval.delquillan.com
           GCP_PROJECT_ID: eval-prod-485520
+          FIREBASE_API_KEY: ${{ env.FIREBASE_API_KEY }}
+          SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
 
   notify-failure:
     needs: deploy-prod
