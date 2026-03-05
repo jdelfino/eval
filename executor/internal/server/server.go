@@ -156,7 +156,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 }
 
 // readyzHandler returns an HTTP handler that checks if nsjail and python3 binaries are accessible.
-// Java is reported but not required for readiness (optional language support).
+// Java and javac are required for readiness.
 func readyzHandler(cfg *config.Config, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		components := map[string]string{}

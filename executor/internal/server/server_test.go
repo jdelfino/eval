@@ -29,6 +29,7 @@ func newTestServer(t *testing.T) *Server {
 		NsjailPath:  "/usr/bin/nsjail",
 		PythonPath:  "/usr/bin/python3",
 		JavaPath:    "/usr/bin/java",
+		JavacPath:   os.Args[0],
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	reg := prometheus.NewRegistry()

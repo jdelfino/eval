@@ -271,7 +271,7 @@ func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error
 		exitCode := 1
 		timedOut := false
 		var pathErr *fs.PathError
-		if errors.As(err, &pathErr) && !errors.Is(err, context.DeadlineExceeded) {
+		if errors.As(err, &pathErr) && compileCtx.Err() == nil && ctx.Err() == nil {
 			// Binary not found — infrastructure failure, not a code error.
 			return nil, fmt.Errorf("javac binary not found at %s: %w", cfg.JavacPath, err)
 		}
@@ -322,6 +322,11 @@ func runUnsafeJava(ctx context.Context, cfg Config, req Request) (*Result, error
 	timedOut := false
 
 	if runErr != nil {
+		var pathErr *fs.PathError
+		if errors.As(runErr, &pathErr) && execCtx.Err() == nil && ctx.Err() == nil {
+			// Binary not found — infrastructure failure, not a code error.
+			return nil, fmt.Errorf("java binary not found at %s: %w", cfg.JavaPath, runErr)
+		}
 		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else if execCtx.Err() != nil {
@@ -797,6 +802,13 @@ func runJava(ctx context.Context, cfg Config, req Request) (*Result, error) {
 
 	stderr = sanitizeStderrJava(stderr, className)
 
+	// If stderr is empty and exit code is non-zero, nsjail itself failed
+	// (--really_quiet suppresses its own error output). Return an error so the
+	// handler returns HTTP 500 instead of HTTP 200 with an empty error string.
+	if stderr == "" && !timedOut && exitCode != 0 {
+		return nil, fmt.Errorf("nsjail execute step failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
+	}
+
 	return &Result{
 		Stdout:     stdout,
 		Stderr:     stderr,
@@ -891,6 +903,13 @@ func runJavaCommand(ctx context.Context, cfg Config, req Request) (*Result, erro
 	}
 	if stderrBuf.truncated {
 		stderr += truncationSuffix
+	}
+
+	// If stderr is empty and exit code is non-zero, nsjail itself failed
+	// (--really_quiet suppresses its own error output). Return an error so the
+	// handler returns HTTP 500 instead of HTTP 200 with an empty error string.
+	if stderr == "" && !timedOut && exitCode != 0 {
+		return nil, fmt.Errorf("nsjail execute step failed with exit code %d (no stderr — likely nsjail infrastructure failure)", exitCode)
 	}
 
 	return &Result{

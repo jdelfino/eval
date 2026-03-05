@@ -1235,11 +1235,13 @@ func TestRunJava_MissingJavac_ReturnsError(t *testing.T) {
 
 // TestRunJava_MissingJava_ReturnsError verifies that runJava (nsjail path) returns
 // a non-nil error when the java runtime does not exist at the configured path.
+// JavacPath is set to os.Args[0] (exists) so the test exercises the java binary
+// check rather than the javac check.
 func TestRunJava_MissingJava_ReturnsError(t *testing.T) {
 	cfg := Config{
 		NsjailPath:     os.Args[0],
 		JavaPath:       "/nonexistent/java",
-		JavacPath:      "/nonexistent/javac",
+		JavacPath:      os.Args[0], // exists — exercise the java check, not the javac check
 		MaxOutputBytes: MaxOutputBytes,
 	}
 	req := Request{
@@ -1251,6 +1253,114 @@ func TestRunJava_MissingJava_ReturnsError(t *testing.T) {
 	_, err := Run(context.Background(), cfg, req)
 	if err == nil {
 		t.Fatal("expected error when java binary does not exist at configured path, got nil")
+	}
+	if !strings.Contains(err.Error(), "java") {
+		t.Errorf("expected error to mention java, got: %v", err)
+	}
+}
+
+// TestRunUnsafeJava_MissingJava_Phase2_ReturnsError verifies that runUnsafeJava
+// returns a non-nil error when javac succeeds but the java binary does not exist.
+// This is a regression test for the bug where a *fs.PathError from exec.Command
+// in Phase 2 was silently swallowed as Result{ExitCode:0, Stderr:""}, nil.
+func TestRunUnsafeJava_MissingJava_Phase2_ReturnsError(t *testing.T) {
+	javacPath, err := exec.LookPath("javac")
+	if err != nil {
+		t.Skip("javac not found — cannot exercise Phase 2")
+	}
+
+	cfg := Config{
+		JavaPath:       "/nonexistent/java",
+		JavacPath:      javacPath,
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) { System.out.println("hello"); } }`,
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err == nil {
+		// Bug is present: PathError was swallowed, returned as silent success.
+		if result != nil && result.Stderr == "" && result.ExitCode == 0 {
+			t.Fatal("runUnsafeJava swallowed java binary-not-found error: got nil error with empty stderr and exit code 0")
+		}
+		t.Fatalf("expected error when java binary does not exist, got nil (result=%+v)", result)
+	}
+	if !strings.Contains(err.Error(), "java binary not found") {
+		t.Errorf("expected error to mention 'java binary not found', got: %v", err)
+	}
+}
+
+// TestRunJava_NsjailEmptyStderr_ReturnsError verifies that runJava (nsjail path)
+// returns a non-nil error when nsjail exits non-zero with empty stderr, indicating
+// an infrastructure failure rather than a user code error.
+// This exercises the empty-stderr guard in the runJava pipeline. The test uses
+// "false" as the nsjail binary, which exits with code 1 and produces no stderr.
+// The guard must fire (at compile or execute phase) and return an error rather
+// than a nil-error Result with empty Stderr.
+func TestRunJava_NsjailEmptyStderr_ReturnsError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("test requires linux")
+	}
+
+	falsePath, lookErr := exec.LookPath("false")
+	if lookErr != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := Config{
+		NsjailPath:     falsePath,
+		JavaPath:       os.Args[0],
+		JavacPath:      os.Args[0],
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      `public class Main { public static void main(String[] args) {} }`,
+		Language:  "java",
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when nsjail fails with empty stderr, got nil")
+	}
+	if !strings.Contains(err.Error(), "nsjail") {
+		t.Errorf("expected error to mention nsjail, got: %v", err)
+	}
+}
+
+// TestRunJavaCommand_NsjailEmptyStderr_ReturnsError verifies that runJavaCommand
+// returns a non-nil error when nsjail produces empty stderr with a non-zero exit code.
+func TestRunJavaCommand_NsjailEmptyStderr_ReturnsError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("test requires linux")
+	}
+
+	falsePath, lookErr := exec.LookPath("false")
+	if lookErr != nil {
+		t.Skip("false not found")
+	}
+
+	cfg := Config{
+		NsjailPath:     falsePath,
+		JavaPath:       os.Args[0],
+		MaxOutputBytes: MaxOutputBytes,
+	}
+	req := Request{
+		Code:      os.Args[0] + " -version",
+		Language:  "java",
+		IsCommand: true,
+		TimeoutMs: 5000,
+	}
+
+	_, err := Run(context.Background(), cfg, req)
+	if err == nil {
+		t.Fatal("expected error when nsjail exits with non-zero code and empty stderr, got nil")
+	}
+	if !strings.Contains(err.Error(), "nsjail") {
+		t.Errorf("expected error to mention nsjail, got: %v", err)
 	}
 }
 
