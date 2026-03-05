@@ -131,7 +131,7 @@ test.describe('Session Lifecycle', () => {
 
       // Wait for successful execution result — practice mode must actually work
       const outputArea = page.locator('[data-testid="output-area"]');
-      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 30000 });
+      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
       await expect(outputArea.locator('text=LIFECYCLE_TEST_2')).toBeVisible();
 
     } finally {
