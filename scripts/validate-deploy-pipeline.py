@@ -7,6 +7,7 @@ Checks that:
 - build-push-executor uses content-hash caching to skip unnecessary builds
 - The skip path produces a commit-SHA tag (so deploy-staging works unchanged)
 - The build path also produces commit-SHA and latest tags
+- deploy-staging runs executor smoke tests via IAP tunnel (not a K8s Job)
 
 Exit code 0 = valid, 1 = invalid.
 """
@@ -42,17 +43,23 @@ def validate(workflow_path):
     jobs = wf.get("jobs", {})
 
     # ── Required jobs ──────────────────────────────────────────────────────────
+    # Note: build-push-test-runner was removed in PLAT-rgqe.7 (in-cluster E2E
+    # Job replaced with Playwright on CI runner via IAP tunnel).
     required_jobs = [
         "build-push-go-api",
         "build-push-executor",
         "build-push-frontend",
-        "build-push-test-runner",
         "ci",
         "deploy-staging",
         "deploy-prod",
     ]
     for job in required_jobs:
         ok &= check(job in jobs, f"job exists: {job}")
+
+    ok &= check(
+        "build-push-test-runner" not in jobs,
+        "job removed: build-push-test-runner (replaced by IAP tunnel approach)",
+    )
 
     # ── build-push-executor: content-hash caching ─────────────────────────────
     executor_job = jobs.get("build-push-executor", {})
@@ -108,6 +115,50 @@ def validate(workflow_path):
         "build-push-executor" in staging_needs,
         "deploy-staging needs: build-push-executor",
     )
+
+    # ── deploy-staging: executor smoke tests via IAP tunnel ───────────────────
+    # The K8s Job approach is replaced with a script that runs on the CI runner
+    # via the IAP SSH tunnel (http://localhost:8080). The script must run AFTER
+    # tunnel verification and BEFORE E2E tests.
+    staging_steps = staging_job.get("steps", [])
+    staging_steps_str = str(staging_steps)
+
+    ok &= check(
+        "executor-smoke-test.sh" in staging_steps_str,
+        "deploy-staging: runs executor-smoke-test.sh script",
+    )
+    ok &= check(
+        "executor-smoke" not in staging_steps_str
+        or "executor-smoke-test" in staging_steps_str,
+        "deploy-staging: no longer uses K8s executor-smoke Job",
+    )
+
+    # Verify ordering: tunnel verification step must come before executor smoke test
+    # We check that "Verify tunnel" step name appears before executor-smoke-test.sh
+    verify_tunnel_idx = None
+    executor_smoke_idx = None
+    for i, step in enumerate(staging_steps):
+        step_str = str(step)
+        if "Verify tunnel" in step_str or (
+            isinstance(step, dict) and step.get("name") == "Verify tunnel"
+        ):
+            verify_tunnel_idx = i
+        if "executor-smoke-test.sh" in step_str:
+            executor_smoke_idx = i
+
+    ok &= check(
+        verify_tunnel_idx is not None,
+        "deploy-staging: has 'Verify tunnel' step",
+    )
+    ok &= check(
+        executor_smoke_idx is not None,
+        "deploy-staging: has executor smoke test step",
+    )
+    if verify_tunnel_idx is not None and executor_smoke_idx is not None:
+        ok &= check(
+            verify_tunnel_idx < executor_smoke_idx,
+            "deploy-staging: executor smoke test runs after tunnel verification",
+        )
 
     # ── deploy-prod: gates on deploy-staging + ci ─────────────────────────────
     prod_job = jobs.get("deploy-prod", {})

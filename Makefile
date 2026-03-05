@@ -182,13 +182,19 @@ validate-deploy-pipeline:
 # ──────────────────────────────────────────────
 # Smoke tests (post-deploy)
 # ──────────────────────────────────────────────
-.PHONY: smoke-test test-smoke-test
+.PHONY: smoke-test test-smoke-test executor-smoke-test test-executor-smoke-test
 
 smoke-test:
 	./scripts/smoke-test.sh
 
 test-smoke-test:
 	bash scripts/test-smoke-test.sh
+
+executor-smoke-test:
+	./scripts/executor-smoke-test.sh
+
+test-executor-smoke-test:
+	bash scripts/test-executor-smoke-test.sh
 
 # ──────────────────────────────────────────────
 # Local development
