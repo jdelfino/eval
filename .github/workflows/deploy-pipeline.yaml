@@ -320,7 +320,7 @@ jobs:
           kubectl rollout status deployment/staging-proxy -n staging --timeout=120s
       - name: Port-forward to staging proxy
         run: |
-          kubectl port-forward -n staging svc/staging-proxy 8080:8080 &
+          kubectl port-forward -n staging svc/staging-proxy 8080:80 &
       - name: Verify tunnel
         run: |
           echo "Waiting for tunnel to become available..."
