@@ -4,66 +4,8 @@ import { createClass, createSection, createProblem, startSessionFromProblem, pub
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
 
 test.describe('Session Lifecycle', () => {
-  test('Java code execution: student runs Java code and sees output', async ({ page, setupInstructor, setupStudent }) => {
-    test.setTimeout(90000);
-
-    // ===== API SETUP =====
-    const instructor = await setupInstructor();
-
-    // Create class, section, and Java problem via API
-    const cls = await createClass(instructor.token, 'Java Lifecycle Class');
-    const section = await createSection(instructor.token, cls.id, 'Java Lifecycle Section');
-    const problem = await createProblem(instructor.token, cls.id, {
-      title: 'Hello Java',
-      description: 'Print hello from Java',
-      language: 'java',
-      starterCode: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello from java");\n    }\n}\n',
-    });
-
-    // Publish problem to section (required for student flow via section page)
-    await publishProblem(instructor.token, section.id, problem.id);
-
-    // Start session from problem via API
-    const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
-
-    // Register student via the setupStudent fixture (creates emulator user and enrolls in section)
-    const student = await setupStudent(section.join_code);
-
-    // ===== STUDENT OPENS PRACTICE WORKSPACE =====
-    await signInAs(page, student.email);
-    const work = await getOrCreateStudentWork(student.token, section.id, problem.id);
-    await page.goto(`/student?work_id=${work.id}`);
-    await expect(page.locator('.monaco-editor')).toBeVisible();
-    await expect(page.locator('text=Connected')).toBeVisible();
-
-    // ===== STUDENT WRITES JAVA CODE =====
-    await waitForMonacoReady(page);
-    const javaCode = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("JAVA_E2E_TEST_OK");\n    }\n}';
-    await setMonacoValue(page, javaCode);
-
-    // Wait for debounced auto-save before executing (500ms debounce + buffer)
-    await page.waitForTimeout(1000);
-
-    // ===== STUDENT RUNS JAVA CODE =====
-    // End the session so student enters practice mode where Run Code is available
-    await completeSession(instructor.token, session.id);
-
-    // Student should see the session ended notification
-    await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible();
-
-    // Run Code button should be available in practice mode
-    const runButton = page.locator('button:has-text("Run Code")');
-    await expect(runButton).toBeVisible();
-
-    // Click Run Code — exercises the full Docker+nsjail Java execution stack
-    await runButton.click();
-
-    // ===== VERIFY SUCCESSFUL JAVA EXECUTION OUTPUT =====
-    const outputArea = page.locator('[data-testid="output-area"]');
-    await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 30000 });
-    await expect(outputArea.locator('text=JAVA_E2E_TEST_OK')).toBeVisible();
-  });
-
+  // Uses Java to get E2E coverage of the Docker+nsjail Java execution stack.
+  // Python execution is covered by preview-mode and problem-publishing E2E tests.
   test('Full session lifecycle: create, join, replace, end, practice', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     test.setTimeout(90000);
 
@@ -76,7 +18,8 @@ test.describe('Session Lifecycle', () => {
     const problem = await createProblem(instructor.token, cls.id, {
       title: 'Hello World',
       description: 'Print hello world',
-      starterCode: '# Write your solution\nprint("hello")\n',
+      language: 'java',
+      starterCode: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello");\n    }\n}\n',
     });
 
     // Publish problem to section (required for student flow via section page)
@@ -111,7 +54,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT TYPES CODE =====
       await waitForMonacoReady(page);
-      await setMonacoValue(page, 'print("LIFECYCLE_TEST_1")');
+      await setMonacoValue(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("LIFECYCLE_TEST_1");\n    }\n}');
 
       // Wait for code sync (500ms debounce + network)
       await page.waitForTimeout(1000);
@@ -159,7 +102,7 @@ test.describe('Session Lifecycle', () => {
 
       // ===== STUDENT TYPES IN NEW SESSION =====
       await waitForMonacoReady(page);
-      await setMonacoValue(page, 'print("LIFECYCLE_TEST_2")');
+      await setMonacoValue(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("LIFECYCLE_TEST_2");\n    }\n}');
 
       // Wait for code sync
       await page.waitForTimeout(1000);
@@ -188,7 +131,7 @@ test.describe('Session Lifecycle', () => {
 
       // Wait for successful execution result — practice mode must actually work
       const outputArea = page.locator('[data-testid="output-area"]');
-      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
+      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 30000 });
       await expect(outputArea.locator('text=LIFECYCLE_TEST_2')).toBeVisible();
 
     } finally {
