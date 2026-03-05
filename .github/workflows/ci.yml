@@ -9,6 +9,10 @@ on:
         description: 'Run all jobs regardless of path changes (used by deploy-pipeline)'
         type: boolean
         default: false
+      cross-boundary-only:
+        description: 'Run only cross-boundary tests (contract, e2e, go-api-integration)'
+        type: boolean
+        default: false
 
 env:
   GO_VERSION: '1.24'
@@ -55,51 +59,11 @@ jobs:
               - 'scripts/seed.sql'
               - 'scripts/contract-test-seed.sql'
 
-  # ── Shared build jobs ───────────────────────────────────────────────────────
-  # These run once and their outputs (node_modules cache, Go module cache) are
-  # consumed by all downstream test jobs. Eliminates duplicate npm ci (5x→1x)
-  # and Go module downloads (3x→1x).
-
-  build-frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true' || needs.changes.outputs.contract-data == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Cache node_modules
-        id: node-cache
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-      - name: Install dependencies
-        if: steps.node-cache.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: frontend
-
-  build-go-api:
-    needs: changes
-    if: needs.changes.outputs.go-backend == 'true' || needs.changes.outputs.executor == 'true' || needs.changes.outputs.contract-data == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: go-backend/go.sum
-      - name: Warm Go build cache
-        run: go build ./...
-        working-directory: go-backend
-
-  # ── Frontend test jobs ──────────────────────────────────────────────────────
-  # Each restores node_modules from cache (with npm ci fallback).
+  # ── Frontend jobs ─────────────────────────────────────────────────────────────
 
   frontend-typecheck:
-    needs: [changes, build-frontend]
-    if: needs.changes.outputs.frontend == 'true'
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,9 +84,9 @@ jobs:
         run: npx tsc --noEmit
         working-directory: frontend
 
-  frontend-test:
-    needs: [changes, build-frontend]
-    if: needs.changes.outputs.frontend == 'true'
+  frontend-build-test:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -144,8 +108,8 @@ jobs:
         working-directory: frontend
 
   frontend-lint:
-    needs: [changes, build-frontend]
-    if: needs.changes.outputs.frontend == 'true'
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -167,8 +131,8 @@ jobs:
         working-directory: frontend
 
   frontend-contract-coverage:
-    needs: [changes, build-frontend]
-    if: needs.changes.outputs.frontend == 'true'
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -192,11 +156,11 @@ jobs:
         run: npx tsx scripts/check-contract-coverage.ts
         working-directory: frontend
 
-  # ── Go API test jobs ────────────────────────────────────────────────────────
+  # ── Go API jobs ───────────────────────────────────────────────────────────────
 
-  go-api-test:
-    needs: [changes, build-go-api]
-    if: needs.changes.outputs.go-backend == 'true'
+  go-api-build-test:
+    needs: changes
+    if: needs.changes.outputs.go-backend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -204,13 +168,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: go-backend/go.sum
-      - name: Test
+      - name: Build and test
         run: go test -v -race -timeout 5m ./...
         working-directory: go-backend
 
   go-api-lint:
-    needs: [changes, build-go-api]
-    if: needs.changes.outputs.go-backend == 'true'
+    needs: changes
+    if: needs.changes.outputs.go-backend == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -225,7 +189,7 @@ jobs:
           args: --timeout=3m
 
   go-api-integration:
-    needs: [changes, build-go-api]
+    needs: changes
     if: needs.changes.outputs.go-backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -254,11 +218,11 @@ jobs:
         if: always()
         run: docker compose down
 
-  # ── Executor test jobs ──────────────────────────────────────────────────────
+  # ── Executor jobs ─────────────────────────────────────────────────────────────
 
   executor-test:
     needs: changes
-    if: needs.changes.outputs.executor == 'true'
+    if: needs.changes.outputs.executor == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -275,7 +239,7 @@ jobs:
 
   executor-lint:
     needs: changes
-    if: needs.changes.outputs.executor == 'true'
+    if: needs.changes.outputs.executor == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -291,7 +255,7 @@ jobs:
 
   executor-integration:
     needs: changes
-    if: needs.changes.outputs.executor == 'true'
+    if: needs.changes.outputs.executor == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -329,7 +293,7 @@ jobs:
   # ── Cross-stack jobs ────────────────────────────────────────────────────────
 
   contract-tests:
-    needs: [changes, build-frontend, build-go-api]
+    needs: changes
     if: |
       needs.changes.outputs.go-backend == 'true' ||
       needs.changes.outputs.frontend == 'true' ||
@@ -508,7 +472,7 @@ jobs:
           docker rm executor 2>/dev/null || true
 
   e2e-tests:
-    needs: [changes, build-frontend, build-go-api]
+    needs: changes
     if: |
       needs.changes.outputs.go-backend == 'true' ||
       needs.changes.outputs.frontend == 'true' ||
@@ -660,7 +624,7 @@ jobs:
 
   validate-manifests:
     needs: changes
-    if: needs.changes.outputs.k8s == 'true'
+    if: needs.changes.outputs.k8s == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -671,7 +635,7 @@ jobs:
 
   migration-lint:
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true'
+    if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true' && inputs.cross-boundary-only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

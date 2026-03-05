@@ -165,13 +165,6 @@ test-setup-e2e-users:
 test-run-e2e-tests:
 	bash scripts/test-run-e2e-tests.sh
 
-# CI workflow validation
-# ──────────────────────────────────────────────
-.PHONY: validate-ci-workflow
-
-validate-ci-workflow:
-	python3 scripts/validate-ci-workflow.py
-
 # Deploy pipeline validation
 # ──────────────────────────────────────────────
 .PHONY: validate-deploy-pipeline
