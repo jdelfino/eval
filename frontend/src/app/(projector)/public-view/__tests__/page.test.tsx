@@ -225,6 +225,49 @@ describe('PublicInstructorView', () => {
     expect(lastCodeEditorProps.readOnly).toBeFalsy();
   });
 
+  test('does not restore starter code when editor is cleared', async () => {
+    lastCodeEditorProps = null;
+
+    const mockState = {
+      session_id: 'test-session-id',
+      join_code: 'ABC-123',
+      problem: {
+        title: 'Test Problem',
+        description: 'A test problem',
+        starter_code: 'def solve():\n    pass',
+      },
+      featured_student_id: null,
+      featured_code: null,
+      hasFeaturedSubmission: false,
+    };
+    // Provide mock for both initial load and any polling
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => mockState,
+    });
+
+    const PublicInstructorView = require('../page').default;
+    await act(async () => {
+      render(<PublicInstructorView />);
+    });
+
+    // Should initially show starter code
+    await waitFor(() => {
+      expect(screen.getByTestId('code-content')).toHaveTextContent('def solve():');
+    });
+
+    // Simulate user editing then clearing all code via onChange
+    await act(async () => {
+      lastCodeEditorProps.onChange('some code');
+    });
+    await act(async () => {
+      lastCodeEditorProps.onChange('');
+    });
+
+    // Should show empty editor, not starter code
+    expect(screen.getByTestId('code-content').textContent).toBe('');
+  });
+
   test('shows error state when API fails', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
