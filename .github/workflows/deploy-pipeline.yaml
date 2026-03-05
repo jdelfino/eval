@@ -202,32 +202,72 @@ jobs:
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
       - name: Smoke test executor (staging)
         run: |
-          # Run integration tests inside the cluster via a temporary Go pod.
-          # Connect Gateway does not support kubectl port-forward, so we run
-          # the tests from a pod that can reach the executor service directly.
-          EXECUTOR_POD=$(kubectl get pod -n staging -l app=executor -o jsonpath='{.items[0].metadata.name}')
-          echo "Executor pod: $EXECUTOR_POD"
+          # Run smoke tests via a Kubernetes Job (Connect Gateway blocks
+          # kubectl exec/port-forward WebSocket upgrades).
+          kubectl delete job -n staging executor-smoke --ignore-not-found
 
-          # Quick health check via exec into the executor pod itself.
-          kubectl exec -n staging "$EXECUTOR_POD" -- \
-            wget -q -O- http://localhost:8081/healthz || { echo "::error::Executor health check failed"; exit 1; }
-          echo "Executor health check passed"
+          kubectl apply -f - <<'JOBEOF'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: executor-smoke
+            namespace: staging
+            labels:
+              app: executor-smoke
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 120
+            ttlSecondsAfterFinished: 600
+            template:
+              metadata:
+                labels:
+                  app: executor-smoke
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: smoke
+                    image: curlimages/curl:latest
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        set -e
+                        echo "=== Health check ==="
+                        curl -sf http://executor:8081/healthz
+                        echo ""
 
-          # Run Python smoke test.
-          PYTHON_RESULT=$(kubectl exec -n staging "$EXECUTOR_POD" -- \
-            wget -q -O- --post-data='{"code":"print(\"hello\")","language":"python"}' \
-            --header='Content-Type: application/json' http://localhost:8081/execute)
-          echo "Python result: $PYTHON_RESULT"
-          echo "$PYTHON_RESULT" | grep -q '"success":true' || { echo "::error::Python execution failed: $PYTHON_RESULT"; exit 1; }
+                        echo "=== Python smoke test ==="
+                        PYTHON_RESULT=$(curl -sf -X POST http://executor:8081/execute \
+                          -H 'Content-Type: application/json' \
+                          -d '{"code":"print(\"hello\")","language":"python"}')
+                        echo "$PYTHON_RESULT"
+                        echo "$PYTHON_RESULT" | grep -q '"success":true' || { echo "FAIL: Python"; exit 1; }
 
-          # Run Java smoke test — validates nsjail, JDK bind mounts, /etc/alternatives.
-          JAVA_CODE='public class Main { public static void main(String[] args) { System.out.println("hello from java"); } }'
-          JAVA_RESULT=$(kubectl exec -n staging "$EXECUTOR_POD" -- \
-            wget -q -O- --post-data="{\"code\":\"$JAVA_CODE\",\"language\":\"java\"}" \
-            --header='Content-Type: application/json' http://localhost:8081/execute)
-          echo "Java result: $JAVA_RESULT"
-          echo "$JAVA_RESULT" | grep -q '"success":true' || { echo "::error::Java execution failed: $JAVA_RESULT"; exit 1; }
-          echo "Executor smoke tests passed (Python + Java)"
+                        echo "=== Java smoke test ==="
+                        JAVA_RESULT=$(curl -sf -X POST http://executor:8081/execute \
+                          -H 'Content-Type: application/json' \
+                          -d '{"code":"public class Main { public static void main(String[] args) { System.out.println(\"hello from java\"); } }","language":"java"}')
+                        echo "$JAVA_RESULT"
+                        echo "$JAVA_RESULT" | grep -q '"success":true' || { echo "FAIL: Java"; exit 1; }
+
+                        echo "=== All smoke tests passed ==="
+                    resources:
+                      requests:
+                        cpu: 100m
+                        memory: 64Mi
+                      limits:
+                        cpu: 200m
+                        memory: 128Mi
+          JOBEOF
+
+          echo "Waiting for executor-smoke job to complete..."
+          kubectl wait --for=condition=complete --timeout=120s job/executor-smoke -n staging || {
+            echo "::error::Executor smoke test job failed"
+            kubectl logs job/executor-smoke -n staging 2>/dev/null || true
+            exit 1
+          }
+
+          echo "Executor smoke test logs:"
+          kubectl logs job/executor-smoke -n staging
       - name: Run in-cluster E2E tests
         run: |
           SHA="${{ github.sha }}"
