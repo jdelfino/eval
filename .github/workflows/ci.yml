@@ -317,8 +317,8 @@ jobs:
         env:
           DISABLE_SANDBOX: "true"
           PYTHON_PATH: /usr/bin/python3
-          JAVA_PATH: java
-          JAVAC_PATH: javac
+          JAVA_PATH: ${{ env.JAVA_HOME }}/bin/java
+          JAVAC_PATH: ${{ env.JAVA_HOME }}/bin/javac
       - name: Run integration tests
         env:
           EXECUTOR_TEST_URL: http://localhost:8081
