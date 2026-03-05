@@ -124,13 +124,29 @@ function withTenant<T extends Record<string, unknown>>(body: T): T {
  */
 async function setEmailVerified(localId: string): Promise<void> {
   const authHeader = await getAdminAuthHeader();
-  const res = await fetch(`${IDP_BASE_URL}/accounts:update`, {
+
+  // Multi-tenant: use the project/tenant-scoped URL so the admin API
+  // routes to the correct tenant. The generic /v1/accounts:update with
+  // tenantId in the body does NOT work with Bearer auth.
+  let url = `${IDP_BASE_URL}/accounts:update`;
+  if (!IS_EMULATOR && TENANT_ID) {
+    url = `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update`;
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: authHeader,
+  };
+  // WIF tokens require x-goog-user-project for quota attribution.
+  // The SA needs roles/serviceusage.serviceUsageConsumer for this.
+  if (!IS_EMULATOR) {
+    headers['x-goog-user-project'] = PROJECT_ID;
+  }
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: authHeader,
-    },
-    body: JSON.stringify(withTenant({ localId, emailVerified: true })),
+    headers,
+    body: JSON.stringify({ localId, emailVerified: true }),
   });
   if (!res.ok) {
     const body = await res.text();

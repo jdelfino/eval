@@ -73,10 +73,20 @@ resource "google_project_iam_member" "github_actions_roles" {
 # tenant-scoped admin operations (accounts:update with Bearer token on
 # /projects/{id}/tenants/{id}/accounts:update) fail with INSUFFICIENT_PERMISSION
 # when using a custom role with individual firebaseauth.users.* permissions.
+#
+# The serviceUsageConsumer role is also required because WIF-issued tokens
+# (unlike in-cluster Workload Identity) need the x-goog-user-project header
+# for quota attribution, which requires serviceusage.services.use.
 
 resource "google_project_iam_member" "github_actions_smoke_test" {
   project = var.project_id
   role    = "roles/firebaseauth.admin"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
+
+resource "google_project_iam_member" "github_actions_service_usage" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
