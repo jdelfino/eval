@@ -6,7 +6,7 @@
  * (not wrapped), so these functions return the response directly.
  */
 
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/lib/api-client';
 import { publicGet } from '@/lib/public-api-client';
 import type { Problem, PublicProblem } from '@/types/api';
 
@@ -142,5 +142,50 @@ export async function generateSolution(data: {
   custom_instructions?: string;
 }): Promise<{ solution: string }> {
   return apiPost<{ solution: string }>('/problems/generate-solution', data);
+}
+
+/**
+ * Export problems as a JSON file download.
+ * @param filters - Optional filters for class_id and tags
+ * @returns Promise that resolves when download is triggered
+ */
+export async function exportProblems(filters?: {
+  class_id?: string;
+  tags?: string[];
+}): Promise<void> {
+  // Build query parameters from filters
+  const params = new URLSearchParams();
+  if (filters?.class_id) {
+    params.set('class_id', filters.class_id);
+  }
+  if (filters?.tags && filters.tags.length > 0) {
+    filters.tags.forEach(tag => params.append('tags', tag));
+  }
+  const query = params.toString();
+  const path = query ? `/problems/export?${query}` : '/problems/export';
+
+  // Get the response with auth headers
+  const response = await apiFetch(path);
+
+  // Extract filename from Content-Disposition header
+  const contentDisposition = response.headers.get('Content-Disposition');
+  let filename = 'problems-export.json';
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="?([^"]+)"?/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Create blob and trigger download
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }
 

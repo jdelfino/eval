@@ -19,7 +19,9 @@ import {
   createProblem,
   updateProblem,
   deleteProblem,
+  exportProblems,
 } from '@/lib/api/problems';
+import { apiFetch } from '@/lib/api-client';
 import {
   expectSnakeCaseKeys,
   } from './validators';
@@ -275,6 +277,85 @@ describe('Problems API', () => {
 
       // Verify the problem is no longer retrievable
       await expect(getProblem(problem.id)).rejects.toThrow();
+    });
+  });
+
+  describe('exportProblems()', () => {
+    it('returns export envelope with correct shape and no internal fields', async () => {
+      expect(createdProblemId).toBeTruthy();
+
+      // Use apiFetch directly to validate the raw wire format
+      const response = await apiFetch('/problems/export');
+      expect(response.ok).toBe(true);
+
+      // Validate Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      expect(contentDisposition).toBeTruthy();
+      expect(contentDisposition).toMatch(/^attachment/);
+      expect(contentDisposition).toMatch(/filename=/);
+
+      // Parse the JSON envelope
+      const envelope = await response.json();
+
+      // Validate envelope structure
+      expect(typeof envelope.exported_at).toBe('string');
+      expect(Array.isArray(envelope.problems)).toBe(true);
+      expect(envelope.problems.length).toBeGreaterThan(0);
+      expectSnakeCaseKeys(envelope, 'ExportEnvelope');
+
+      // Validate each problem in the export
+      for (const problem of envelope.problems) {
+        expectSnakeCaseKeys(problem, 'ExportedProblem');
+
+        // Validate required fields are present
+        expect(typeof problem.title).toBe('string');
+        expect(typeof problem.language).toBe('string');
+        expect(typeof problem.created_at).toBe('string');
+        expect(typeof problem.updated_at).toBe('string');
+
+        // Validate nullable string fields
+        expect(problem.description === null || typeof problem.description === 'string').toBe(true);
+        expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
+        expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
+
+        // Validate array fields
+        expect(Array.isArray(problem.tags)).toBe(true);
+
+        // Validate complex fields can be null or present
+        expect('test_cases' in problem).toBe(true);
+        expect('execution_settings' in problem).toBe(true);
+
+        // CRITICAL: Verify NO internal fields are present
+        expect(problem).not.toHaveProperty('id');
+        expect(problem).not.toHaveProperty('namespace_id');
+        expect(problem).not.toHaveProperty('author_id');
+        expect(problem).not.toHaveProperty('class_id');
+      }
+    });
+
+    it('filters export by class_id when provided', async () => {
+      const classId = state.classId;
+      expect(classId).toBeTruthy();
+
+      // Export with class filter
+      const response = await apiFetch(`/problems/export?class_id=${classId}`);
+      expect(response.ok).toBe(true);
+
+      const envelope = await response.json();
+      expect(Array.isArray(envelope.problems)).toBe(true);
+
+      // Should have at least one problem from our test class
+      expect(envelope.problems.length).toBeGreaterThan(0);
+    });
+
+    it('returns empty array when no problems match filters', async () => {
+      // Use a non-existent class ID
+      const response = await apiFetch('/problems/export?class_id=00000000-0000-0000-0000-000000000000');
+      expect(response.ok).toBe(true);
+
+      const envelope = await response.json();
+      expect(Array.isArray(envelope.problems)).toBe(true);
+      expect(envelope.problems).toEqual([]);
     });
   });
 
