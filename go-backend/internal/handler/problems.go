@@ -344,12 +344,13 @@ func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 
-	// Write JSON with pretty-printing
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(envelope); err != nil {
+	// Marshal to bytes first so errors are caught before writing to the response
+	data, err := json.MarshalIndent(envelope, "", "  ")
+	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
+	data = append(data, '\n')
+	_, _ = w.Write(data)
 }
 

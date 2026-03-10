@@ -159,7 +159,7 @@ export async function exportProblems(filters?: {
     params.set('class_id', filters.class_id);
   }
   if (filters?.tags && filters.tags.length > 0) {
-    filters.tags.forEach(tag => params.append('tags', tag));
+    params.set('tags', filters.tags.join(','));
   }
   const query = params.toString();
   const path = query ? `/problems/export?${query}` : '/problems/export';

@@ -1150,6 +1150,27 @@ func TestExportProblems_StoreError(t *testing.T) {
 	}
 }
 
+func TestExportProblems_RBACForbidden(t *testing.T) {
+	repo := &mockProblemRepo{}
+	h := NewProblemHandler(nil)
+	router := h.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:   uuid.New(),
+		Role: auth.RoleStudent,
+	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student GET /export, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // setupGenerateSolutionHandler creates an http.Handler for GenerateSolution tests.
 func setupGenerateSolutionHandler(aiClient ai.Client) http.Handler {
 	h := NewGenerateSolutionHandler(aiClient)
