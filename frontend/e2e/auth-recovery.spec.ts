@@ -3,23 +3,33 @@
  *
  * Regression test for PLAT-tetn (auth loop when backend user doesn't exist).
  *
- * Scenario:
- * 1. Create a user with both a Firebase Auth account AND a backend DB record.
- * 2. Sign in via the app UI so the browser has a valid Firebase session.
- * 3. Delete the backend user record so Firebase user exists but backend user doesn't.
- * 4. Reload the page — onAuthStateChanged fires with a valid Firebase user,
- *    fetchUserProfile returns 404, bootstrap returns 403.
- * 5. Assert: the fix signs out Firebase and redirects to signin (no auth loop).
+ * Real-world scenario:
+ * 1. Student signs in successfully (Firebase session + backend record + profile cache).
+ * 2. Something goes wrong — backend user record is deleted or mismatched.
+ * 3. Profile cache expires or gets cleared (by a failing API call returning 403, or
+ *    by opening a new tab where sessionStorage is empty).
+ * 4. Page reload → onAuthStateChanged fires with a valid Firebase user,
+ *    fetchUserProfile fails (401 → bootstrap → 403).
  *
- * Without the fix, the app loops forever: Firebase persists the auth state to
- * IndexedDB, so each reload hits the same dead end (404 → 403 → catch → loop).
- * With the fix (sign out on 403/404), Firebase is cleared and the user sees signin.
+ * WITHOUT the fix: catch block sets user=null and the app redirects to /auth/signin,
+ * but Firebase keeps the user in IndexedDB. Every subsequent page load fires
+ * onAuthStateChanged with the stale Firebase user, triggering more failing API calls.
+ * The user is "stuck" — they appear to reach /auth/signin but can't cleanly sign in
+ * with a different account because the stale Firebase user interferes.
+ *
+ * WITH the fix (PLAT-tetn): on 403/404, the catch block signs out Firebase before
+ * redirecting. The stale Firebase user is removed from IndexedDB. Subsequent page
+ * loads have no Firebase user → no failing API calls → clean signin page.
+ *
+ * TDD assertion: After recovery, reload /auth/signin and verify that NO request is
+ * made to /auth/me. This proves Firebase was signed out. Without the fix, the
+ * persisted Firebase user would trigger fetchUserProfile → /auth/me → fail.
  */
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
 
 test.describe('Auth loop recovery', () => {
-  test('redirects to signin when Firebase user has no backend record', async ({
+  test('signs out Firebase when backend user does not exist, preventing stale auth loop', async ({
     page,
     setupInstructor,
   }) => {
@@ -32,11 +42,9 @@ test.describe('Auth loop recovery', () => {
     await page.fill('#password', 'e2e-test-password-123');
     await page.click('button[type="submit"]');
 
-    // Wait for the full redirect chain to complete: signin → / → /instructor (or similar app route).
-    // The public root page (/) briefly appears before redirecting authenticated users to their dashboard.
-    // We must wait for a stable app route under (app)/layout.tsx, which handles the redirect to
-    // /auth/signin when the user becomes unauthenticated. Matching on "not /auth/" would resolve
-    // too early at the intermediate "/" URL.
+    // Wait for the full redirect chain to complete: signin → / → /instructor.
+    // Must wait for a stable app route under (app)/layout.tsx — the public root
+    // page (/) briefly appears before redirecting authenticated users to their dashboard.
     await page.waitForURL(
       (url) => {
         const path = new URL(url).pathname;
@@ -52,9 +60,6 @@ test.describe('Auth loop recovery', () => {
     );
 
     // ===== STEP 2: Delete the backend user record (Firebase user still exists) =====
-    // Use the system-admin token to look up and delete the user.
-    // /admin/users is scoped to the caller's namespace (useless for system-admin).
-    // /system/users lists all users across namespaces (system-admin only).
     const adminToken = await getAdminToken();
     const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
 
@@ -70,7 +75,6 @@ test.describe('Auth loop recovery', () => {
       throw new Error(`Could not find user with email ${instructor.email} in system users`);
     }
 
-    // Delete via system-admin endpoint
     const deleteRes = await fetch(`${API_BASE}/api/v1/system/users/${targetUser.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}` },
@@ -79,27 +83,49 @@ test.describe('Auth loop recovery', () => {
       throw new Error(`Failed to delete user: ${deleteRes.status} ${await deleteRes.text()}`);
     }
 
-    // ===== STEP 3: Reload the page — Firebase user exists, backend user doesn't =====
-    // Clear the sessionStorage profile cache so that onAuthStateChanged actually
-    // calls fetchUserProfile (instead of serving the cached profile and skipping
-    // the API call entirely). This simulates a real-world scenario where the user
-    // opens the app in a new tab or sessionStorage was cleared (e.g. different tab).
+    // ===== STEP 3: Clear profile cache and trigger auth recovery =====
+    // Clear the sessionStorage profile cache. This simulates the real scenario where
+    // the cache was cleared by a failing API call (apiFetch clears on 403), or the
+    // user opened a new tab (sessionStorage is per-tab).
     await page.evaluate(() => {
       sessionStorage.removeItem('eval:user-profile');
     });
 
-    // The fix (PLAT-tetn) should:
-    // 1. onAuthStateChanged fires with valid Firebase user
-    // 2. No sessionStorage cache → fetchUserProfile → GET /auth/me → 404
-    // 3. bootstrapUser → POST /auth/bootstrap → 403 (not admin)
-    // 4. catch block sees status=403 → sign out Firebase
-    // 5. onAuthStateChanged fires again with null → setUser(null) → redirect to signin
+    // Reload the page. The auth recovery flow runs:
+    // 1. onAuthStateChanged fires with valid Firebase user (still in IndexedDB)
+    // 2. No cache → fetchUserProfile → GET /auth/me → 401 (user deleted)
+    // 3. Fallback: bootstrapUser → POST /auth/bootstrap → 403 (not admin)
+    // 4. With fix: catch block sees status=403 → signs out Firebase → return
+    // 5. onAuthStateChanged fires again with null → setUser(null) → redirect
     await page.reload();
 
-    // ===== STEP 4: Assert redirect to signin (fix works) =====
-    // With the fix: Firebase signed out → app redirects to /auth/signin
-    // Without the fix: app would loop forever (stuck loading or on same page)
-    await page.waitForURL(/\/auth\/signin/, { timeout: 10_000 });
-    await expect(page).toHaveURL(/\/auth\/signin/);
+    // Wait for redirect to /auth/signin. Both pre-fix and post-fix code redirect
+    // here (pre-fix via setUser(null) + layout redirect, post-fix via Firebase
+    // signOut → onAuthStateChanged(null) → layout redirect).
+    await page.waitForURL(/\/auth\/signin/, { timeout: 15_000 });
+
+    // ===== STEP 4: Verify Firebase was signed out (the TDD-critical assertion) =====
+    // This is what distinguishes the fix from the pre-fix behavior:
+    // - WITH fix: Firebase signed out → no user in IndexedDB → reload is clean
+    // - WITHOUT fix: Firebase user persists → reload triggers failing API calls
+    //
+    // We verify by reloading /auth/signin and checking whether any request is made
+    // to /auth/me. If Firebase was signed out, onAuthStateChanged fires with null
+    // and no API call is made. If Firebase still has a user, fetchUserProfile is
+    // called, hitting /auth/me (which fails).
+
+    let authMeRequested = false;
+    page.on('request', (req) => {
+      if (req.url().includes('/api/v1/auth/me')) {
+        authMeRequested = true;
+      }
+    });
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // With the fix: Firebase was signed out → no auth/me request → PASS
+    // Without the fix: Firebase user persists → auth/me called → FAIL
+    expect(authMeRequested).toBe(false);
   });
 });
