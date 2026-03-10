@@ -164,6 +164,22 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
             // acceptInvite or registerStudent) has written a valid profile
             // to the cache while this fetch was in flight.
             const fallback = readProfileCache();
+            if (!fallback) {
+              // On a deterministic failure (403/404), the user genuinely has no
+              // backend record. Sign out of Firebase to break the auth loop —
+              // otherwise Firebase persists the auth state to IndexedDB and every
+              // page reload hits the same dead end.
+              // Do NOT sign out on transient errors (network errors have no status),
+              // otherwise API downtime would mass-sign-out all reloading users.
+              const status = (error as { status?: number }).status;
+              if (status === 403 || status === 404) {
+                clearProfileCache();
+                const { signOut: firebaseSignOut } = await import('firebase/auth');
+                const { firebaseAuth: auth } = await import('@/lib/firebase');
+                await firebaseSignOut(auth);
+                return; // onAuthStateChanged will fire again with null user
+              }
+            }
             setUser(fallback);
           }
         } else {
