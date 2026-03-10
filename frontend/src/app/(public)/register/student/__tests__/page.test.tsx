@@ -363,6 +363,50 @@ describe('StudentRegistrationPage', () => {
         expect(mockDeleteUser).toHaveBeenCalled();
       });
     });
+
+    it('still shows error message when delete() throws during error recovery', async () => {
+      mockCurrentUser = null;
+      mockDeleteUser.mockRejectedValue(new Error('auth/requires-recent-login'));
+      // Use a non-ApiError so error path sets 'Registration failed' message
+      mockRegisterStudent.mockRejectedValue(new Error('network failure'));
+
+      await validateCode();
+
+      // Simulate sign-in sets currentUser before registerStudent is called
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
+
+      // Error recovery flow must still run even though delete() threw
+      await waitFor(() => {
+        expect(screen.getByText('Registration failed')).toBeInTheDocument();
+      });
+    });
+
+    it('logs error when delete() throws during error recovery', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockCurrentUser = null;
+      const deleteError = new Error('auth/requires-recent-login');
+      mockDeleteUser.mockRejectedValue(deleteError);
+      mockRegisterStudent.mockRejectedValue(new ApiError('Internal error', 500, 'INTERNAL'));
+
+      await validateCode();
+
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
+
+      await waitFor(() => {
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('delete'),
+          deleteError
+        );
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('Step 2: Already Signed In', () => {
