@@ -229,11 +229,19 @@ describe('AuthContext', () => {
       expect(mockFirebaseUser.getIdTokenResult).not.toHaveBeenCalled();
     });
 
-    it('sets user to null and loading to false when bootstrap returns 403', async () => {
+    it('signs out of Firebase and sets user to null when bootstrap returns 403', async () => {
+      // When bootstrap returns 403 (user genuinely has no backend record),
+      // the fix signs out of Firebase. The re-entrant onAuthStateChanged
+      // fires with null user, setting user=null and isLoading=false.
       const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
       mockGetCurrentUser.mockRejectedValue(notFoundError);
       const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
       mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      // Simulate onAuthStateChanged re-firing with null after Firebase signOut
+      mockSignOut.mockImplementation(async () => {
+        authStateCallback!(null);
+      });
 
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -250,6 +258,8 @@ describe('AuthContext', () => {
         expect(result.current.isAuthenticated).toBe(false);
         expect(result.current.isLoading).toBe(false);
       });
+
+      expect(mockSignOut).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -466,6 +476,153 @@ describe('AuthContext', () => {
 
       // Preview session storage key must be cleared before Firebase signOut
       expect(sessionStorage.getItem(PREVIEW_SECTION_KEY)).toBeNull();
+    });
+  });
+
+  describe('auth loop recovery (sign out on deterministic failure)', () => {
+    it('signs out of Firebase when fetchUserProfile fails with 403 and no cached fallback', async () => {
+      // Simulate onAuthStateChanged re-firing with null after Firebase signOut
+      mockSignOut.mockImplementation(async () => {
+        authStateCallback!(null);
+      });
+
+      // fetchUserProfile: getCurrentUser throws 404 → bootstrap throws 403
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
+      mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      sessionStorage.clear(); // no cached fallback
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(mockSignOut).toHaveBeenCalled();
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it('signs out of Firebase when fetchUserProfile fails with 404 and no cached fallback', async () => {
+      // Simulate onAuthStateChanged re-firing with null after Firebase signOut
+      mockSignOut.mockImplementation(async () => {
+        authStateCallback!(null);
+      });
+
+      // fetchUserProfile: getCurrentUser 404 → bootstrap 404 (still deterministic)
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      mockBootstrapUser.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }));
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      sessionStorage.clear();
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(mockSignOut).toHaveBeenCalled();
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it('does NOT sign out of Firebase on network error (no status) — avoids mass sign-out on API downtime', async () => {
+      mockSignOut.mockResolvedValue(undefined);
+
+      // Network error: no status property
+      const networkError = new Error('Network error');
+      mockGetCurrentUser.mockRejectedValue(networkError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      sessionStorage.clear();
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockSignOut).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('does NOT sign out when cached fallback is present — uses fallback instead', async () => {
+      const CACHE_KEY = 'eval:user-profile';
+      mockSignOut.mockResolvedValue(undefined);
+
+      // Seed a fresh cache entry
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
+
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
+      mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+
+      expect(mockSignOut).not.toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
+
+    it('clears profile cache before signing out on 403', async () => {
+      const CACHE_KEY = 'eval:user-profile';
+      // Simulate onAuthStateChanged re-firing with null after Firebase signOut
+      mockSignOut.mockImplementation(async () => {
+        authStateCallback!(null);
+      });
+
+      const notFoundError = Object.assign(new Error('Not Found'), { status: 404 });
+      mockGetCurrentUser.mockRejectedValue(notFoundError);
+      const forbiddenError = Object.assign(new Error('Forbidden'), { status: 403 });
+      mockBootstrapUser.mockRejectedValue(forbiddenError);
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      sessionStorage.clear();
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(mockSignOut).toHaveBeenCalled();
+      });
+
+      // Profile cache must be cleared so the re-entrant onAuthStateChanged doesn't loop
+      expect(sessionStorage.getItem(CACHE_KEY)).toBeNull();
+
+      consoleSpy.mockRestore();
     });
   });
 
