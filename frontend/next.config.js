@@ -16,6 +16,14 @@ const nextConfig = {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin-allow-popups',
           },
+          {
+            // Prevent browsers from serving stale HTML that references old JS
+            // chunk URLs after a deploy. 'no-cache' revalidates with the server
+            // (using ETags) before using any cached copy, without disabling
+            // caching entirely.
+            key: 'Cache-Control',
+            value: 'no-cache',
+          },
         ],
       },
     ];
