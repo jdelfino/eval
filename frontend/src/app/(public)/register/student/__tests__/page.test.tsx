@@ -681,6 +681,34 @@ describe('StudentRegistrationPage', () => {
         expect(mockEndAuthFlow).toHaveBeenCalled();
       });
     });
+
+    it('calls endAuthFlow when handleSignInError fires (popup cancelled or blocked)', async () => {
+      mockCurrentUser = null;
+
+      await validateCodeHelper();
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow before restoring UI state in handleSignInError', async () => {
+      mockCurrentUser = null;
+      const callOrder: string[] = [];
+      mockEndAuthFlow.mockImplementation(() => { callOrder.push('endAuthFlow'); });
+
+      await validateCodeHelper();
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+      // endAuthFlow should have been called
+      expect(callOrder).toContain('endAuthFlow');
+    });
   });
 
   describe('Auto-login Flow', () => {

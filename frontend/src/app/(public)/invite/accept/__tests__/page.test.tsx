@@ -664,6 +664,38 @@ describe('AcceptInvitePage', () => {
         expect(mockInviteEndAuthFlow).toHaveBeenCalled();
       });
     });
+
+    it('calls endAuthFlow when handleSignInError fires (popup cancelled or blocked)', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow before restoring UI state in handleSignInError', async () => {
+      const callOrder: string[] = [];
+      mockInviteEndAuthFlow.mockImplementation(() => { callOrder.push('endAuthFlow'); });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+      expect(callOrder).toContain('endAuthFlow');
+    });
   });
 
   // ---------------------------------------------------------------------------

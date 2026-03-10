@@ -246,11 +246,16 @@ function StudentRegistrationContent() {
 
   // Sign-in error handler
   const handleSignInError = useCallback((error: Error) => {
+    // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+    // beginAuthFlow was called via onBeforeSignIn before the popup opened; if
+    // the popup is cancelled, blocked, or errors out we must release the gate
+    // here because doRegister never runs to release it.
+    endAuthFlow();
     setSubmitError(error.message || 'Sign in failed. Please try again.');
     if (registrationInfo) {
       setPageState({ status: 'code-valid', info: registrationInfo });
     }
-  }, [registrationInfo]);
+  }, [endAuthFlow, registrationInfo]);
 
   // Go back to code entry
   const handleBackToCode = () => {
