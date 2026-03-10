@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/store"
@@ -487,6 +488,186 @@ func TestRegisterStudentPost_CreateUserError(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{
 		"join_code": section.JoinCode,
 	})
+	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostRegisterStudent(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestRegisterStudentPost_DuplicateUser verifies that when CreateUser returns a
+// duplicate-key error, the handler looks up the existing user and returns 200.
+func TestRegisterStudentPost_DuplicateUser(t *testing.T) {
+	section := testSection()
+	nsID := section.NamespaceID
+	extID := "firebase-uid-456"
+	existingUser := &store.User{
+		ID:          uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+		ExternalID:  &extID,
+		Email:       "student@example.com",
+		Role:        "student",
+		NamespaceID: &nsID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	membership := &store.SectionMembership{
+		ID:        uuid.New(),
+		UserID:    existingUser.ID,
+		SectionID: section.ID,
+		Role:      "student",
+		JoinedAt:  time.Now(),
+	}
+
+	membershipRepo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return section, nil
+		},
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			return membership, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "users_external_id_key"}
+		},
+		GetUserByExternalIDFn: func(_ context.Context, externalID string) (*store.User, error) {
+			if externalID != "firebase-uid-456" {
+				t.Fatalf("unexpected external_id: %s", externalID)
+			}
+			return existingUser, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	authRepos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{"join_code": section.JoinCode})
+	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostRegisterStudent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got store.User
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != existingUser.ID {
+		t.Errorf("expected user ID %v, got %v", existingUser.ID, got.ID)
+	}
+}
+
+// TestRegisterStudentPost_DuplicateUserAndMembership verifies that when both
+// CreateUser and CreateMembership return duplicate errors, the handler returns 200
+// with the existing user (fully idempotent retry).
+func TestRegisterStudentPost_DuplicateUserAndMembership(t *testing.T) {
+	section := testSection()
+	nsID := section.NamespaceID
+	extID2 := "firebase-uid-456"
+	existingUser := &store.User{
+		ID:          uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+		ExternalID:  &extID2,
+		Email:       "student@example.com",
+		Role:        "student",
+		NamespaceID: &nsID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	membershipRepo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return section, nil
+		},
+		createMembershipFn: func(_ context.Context, _ store.CreateMembershipParams) (*store.SectionMembership, error) {
+			// Store layer maps 23505 to ErrDuplicate for memberships
+			return nil, store.ErrDuplicate
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "users_external_id_key"}
+		},
+		GetUserByExternalIDFn: func(_ context.Context, _ string) (*store.User, error) {
+			return existingUser, nil
+		},
+	}
+
+	h := NewAuthHandler("")
+	authRepos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{"join_code": section.JoinCode})
+	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, authRepos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostRegisterStudent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var got store.User
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != existingUser.ID {
+		t.Errorf("expected user ID %v, got %v", existingUser.ID, got.ID)
+	}
+}
+
+// TestRegisterStudentPost_DuplicateUser_LookupError verifies that when CreateUser
+// returns a duplicate error but GetUserByExternalID also fails, the handler returns 500.
+func TestRegisterStudentPost_DuplicateUser_LookupError(t *testing.T) {
+	section := testSection()
+
+	membershipRepo := &mockMembershipRepo{
+		getSectionByJoinCodeFn: func(_ context.Context, _ string) (*store.Section, error) {
+			return section, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "users_external_id_key"}
+		},
+		GetUserByExternalIDFn: func(_ context.Context, _ string) (*store.User, error) {
+			return nil, errors.New("db error during lookup")
+		},
+	}
+
+	h := NewAuthHandler("")
+	authRepos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        &mockInvitationRepo{},
+		membershipRepo: membershipRepo,
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{"join_code": section.JoinCode})
 	req := httptest.NewRequest(http.MethodPost, "/register-student", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	claims := &auth.Claims{Subject: "firebase-uid-456", Email: "student@example.com", EmailVerified: true}

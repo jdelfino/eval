@@ -72,7 +72,7 @@ export default function StudentRegistrationPage() {
 function StudentRegistrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUserProfile } = useAuth();
+  const { setUserProfile, beginAuthFlow, endAuthFlow } = useAuth();
 
   // Page state
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
@@ -138,10 +138,17 @@ function StudentRegistrationContent() {
         setUserProfile(user);
         router.push(`/sections/${info.section.id}`);
       } catch (backendError) {
+        // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+        endAuthFlow();
+
         // Only clean up Firebase account if the user signed in during this flow
         // (not if they were already signed in before visiting this page)
         if (isNewSignIn) {
-          await firebaseAuth.currentUser?.delete();
+          try {
+            await firebaseAuth.currentUser?.delete();
+          } catch (deleteError) {
+            console.error('[StudentRegistration] Failed to delete Firebase account during error recovery:', deleteError);
+          }
         }
 
         if (backendError instanceof ApiError) {
@@ -165,7 +172,7 @@ function StudentRegistrationContent() {
         setPageState({ status: 'code-valid', info });
       }
     },
-    [setUserProfile, router]
+    [setUserProfile, endAuthFlow, router]
   );
 
   // Handle late Firebase Auth hydration (auth race fix for PLAT-my3o).
@@ -239,11 +246,16 @@ function StudentRegistrationContent() {
 
   // Sign-in error handler
   const handleSignInError = useCallback((error: Error) => {
+    // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+    // beginAuthFlow was called via onBeforeSignIn before the popup opened; if
+    // the popup is cancelled, blocked, or errors out we must release the gate
+    // here because doRegister never runs to release it.
+    endAuthFlow();
     setSubmitError(error.message || 'Sign in failed. Please try again.');
     if (registrationInfo) {
       setPageState({ status: 'code-valid', info: registrationInfo });
     }
-  }, [registrationInfo]);
+  }, [endAuthFlow, registrationInfo]);
 
   // Go back to code entry
   const handleBackToCode = () => {
@@ -398,6 +410,7 @@ function StudentRegistrationContent() {
                 label={`Sign in to join ${registrationInfo.class.name}`}
                 onSuccess={handleSignIn}
                 onError={handleSignInError}
+                onBeforeSignIn={beginAuthFlow}
                 disabled={pageState.status === 'submitting'}
               />
             </div>

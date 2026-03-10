@@ -19,6 +19,7 @@ import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { firebaseAuth } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { SignInButtons } from '@/components/ui/SignInButtons';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
@@ -139,6 +140,7 @@ export default function AcceptInvitePage() {
 function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { beginAuthFlow, endAuthFlow } = useAuth();
   const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -166,10 +168,17 @@ function AcceptInviteContent() {
         setPageState({ status: 'success' });
         redirectBasedOnRole(data.role);
       } catch (backendError) {
+        // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+        endAuthFlow();
+
         // Only clean up Firebase account if the user signed in during this flow
         // (not if they were already signed in before visiting this page)
         if (isNewSignIn) {
-          await firebaseAuth.currentUser?.delete();
+          try {
+            await firebaseAuth.currentUser?.delete();
+          } catch (deleteError) {
+            console.error('[AcceptInvite] Failed to delete Firebase account during error recovery:', deleteError);
+          }
         }
 
         if (backendError instanceof ApiError) {
@@ -178,6 +187,12 @@ function AcceptInviteContent() {
             return;
           } else if (backendError.code === 'INVITATION_EXPIRED') {
             setPageState({ status: 'error', error: 'invitation_expired' });
+            return;
+          } else if (backendError.code === 'ALREADY_REGISTERED') {
+            // User is already registered — redirect to sign in instead of showing
+            // a raw error. PLAT-xntd: backend returns 409/ALREADY_REGISTERED when
+            // the user has already accepted a previous invite.
+            router.push('/auth/signin');
             return;
           }
           setSubmitError(backendError.message);
@@ -189,7 +204,7 @@ function AcceptInviteContent() {
         setPageState({ status: 'ready', invitation: inv });
       }
     },
-    [redirectBasedOnRole]
+    [redirectBasedOnRole, endAuthFlow, router]
   );
 
   // Ref to access doAccept from effects without adding it as a dependency
@@ -245,11 +260,16 @@ function AcceptInviteContent() {
 
   // Sign-in error handler
   const handleSignInError = useCallback((error: Error) => {
+    // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+    // beginAuthFlow was called via onBeforeSignIn before the popup opened; if
+    // the popup is cancelled, blocked, or errors out we must release the gate
+    // here because doAccept never runs to release it.
+    endAuthFlow();
     setSubmitError(error.message || 'Sign in failed. Please try again.');
     if (invitation) {
       setPageState({ status: 'ready', invitation });
     }
-  }, [invitation]);
+  }, [endAuthFlow, invitation]);
 
   // Handle retry for network errors
   const handleRetry = () => {
@@ -420,6 +440,7 @@ function AcceptInviteContent() {
           label="Sign in to accept invitation"
           onSuccess={handleSignIn}
           onError={handleSignInError}
+          onBeforeSignIn={beginAuthFlow}
           disabled={pageState.status === 'submitting'}
         />
       </div>

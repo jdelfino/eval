@@ -221,6 +221,12 @@ func (h *AuthHandler) PostAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		DisplayName: req.DisplayName,
 	})
 	if err != nil {
+		if errors.Is(store.HandleDuplicate(err), store.ErrDuplicate) {
+			// A user with this external_id already exists — they are already
+			// registered. Return 409 so the client can redirect to sign-in.
+			httputil.WriteErrorWithCode(w, http.StatusConflict, "ALREADY_REGISTERED", "user is already registered")
+			return
+		}
 		httputil.WriteInternalError(w, r, err, "failed to create user")
 		return
 	}
@@ -324,9 +330,21 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		NamespaceID: &section.NamespaceID,
 		DisplayName: req.DisplayName,
 	})
+	statusCode := http.StatusCreated
 	if err != nil {
-		httputil.WriteInternalError(w, r, err, "failed to create user")
-		return
+		if errors.Is(store.HandleDuplicate(err), store.ErrDuplicate) {
+			// User already exists (e.g., retrying after a partial failure).
+			// Look up the existing user and proceed idempotently.
+			user, err = repos.GetUserByExternalID(r.Context(), claims.Subject)
+			if err != nil {
+				httputil.WriteInternalError(w, r, err, "failed to look up existing user")
+				return
+			}
+			statusCode = http.StatusOK
+		} else {
+			httputil.WriteInternalError(w, r, err, "failed to create user")
+			return
+		}
 	}
 
 	if _, err := repos.CreateMembership(r.Context(), store.CreateMembershipParams{
@@ -334,11 +352,15 @@ func (h *AuthHandler) PostRegisterStudent(w http.ResponseWriter, r *http.Request
 		SectionID: section.ID,
 		Role:      "student",
 	}); err != nil {
-		httputil.WriteInternalError(w, r, err, "failed to create membership")
-		return
+		if !errors.Is(err, store.ErrDuplicate) {
+			httputil.WriteInternalError(w, r, err, "failed to create membership")
+			return
+		}
+		// Membership already exists — fully idempotent.
+		statusCode = http.StatusOK
 	}
 
-	httputil.WriteJSON(w, http.StatusCreated, user)
+	httputil.WriteJSON(w, statusCode, user)
 }
 
 // PostBootstrap creates the initial system-admin user for the first deploy.

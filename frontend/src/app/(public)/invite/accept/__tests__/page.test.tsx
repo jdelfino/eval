@@ -24,21 +24,37 @@ jest.mock('next/navigation', () => ({
 }));
 
 // Mock SignInButtons so tests don't depend on Firebase popup flow
+const mockInviteSignInButtonsOnBeforeSignIn = jest.fn();
 jest.mock('@/components/ui/SignInButtons', () => ({
-  SignInButtons: ({ onSuccess, onError, label }: any) => (
-    <div data-testid="sign-in-buttons">
-      {label && <p data-testid="sign-in-label">{label}</p>}
-      <button onClick={onSuccess} data-testid="mock-sign-in-success">
-        Mock Sign In
-      </button>
-      <button
-        onClick={() => onError(new Error('Sign in failed'))}
-        data-testid="mock-sign-in-error"
-      >
-        Mock Sign In Error
-      </button>
-    </div>
-  ),
+  SignInButtons: ({ onSuccess, onError, onBeforeSignIn, label }: any) => {
+    if (onBeforeSignIn) {
+      mockInviteSignInButtonsOnBeforeSignIn.mockImplementation(onBeforeSignIn);
+    }
+    return (
+      <div data-testid="sign-in-buttons">
+        {label && <p data-testid="sign-in-label">{label}</p>}
+        <button onClick={onSuccess} data-testid="mock-sign-in-success">
+          Mock Sign In
+        </button>
+        <button
+          onClick={() => onError(new Error('Sign in failed'))}
+          data-testid="mock-sign-in-error"
+        >
+          Mock Sign In Error
+        </button>
+      </div>
+    );
+  },
+}));
+
+// Mock AuthContext
+const mockInviteBeginAuthFlow = jest.fn();
+const mockInviteEndAuthFlow = jest.fn();
+jest.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    beginAuthFlow: mockInviteBeginAuthFlow,
+    endAuthFlow: mockInviteEndAuthFlow,
+  }),
 }));
 
 // Track current user for "already signed in" tests
@@ -97,6 +113,9 @@ describe('AcceptInvitePage', () => {
     mockSearchParams = new URLSearchParams();
     mockCurrentUser = null;
     mockDeleteUser.mockResolvedValue(undefined);
+    mockInviteBeginAuthFlow.mockClear();
+    mockInviteEndAuthFlow.mockClear();
+    mockInviteSignInButtonsOnBeforeSignIn.mockClear();
   });
 
   // ---------------------------------------------------------------------------
@@ -462,6 +481,53 @@ describe('AcceptInvitePage', () => {
       // Should still show SignInButtons for retry
       expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
     });
+
+    it('still shows error message when delete() throws during error recovery', async () => {
+      mockCurrentUser = null;
+      mockDeleteUser.mockRejectedValue(new Error('auth/requires-recent-login'));
+      mockAcceptInvite.mockRejectedValue(makeApiError('Internal error', 500));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Simulate sign-in sets currentUser before onSuccess fires
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      // Error recovery flow must still run even though delete() threw
+      await waitFor(() => {
+        expect(screen.getByText('Internal error')).toBeInTheDocument();
+      });
+    });
+
+    it('logs error when delete() throws during error recovery', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockCurrentUser = null;
+      const deleteError = new Error('auth/requires-recent-login');
+      mockDeleteUser.mockRejectedValue(deleteError);
+      mockAcceptInvite.mockRejectedValue(makeApiError('Internal error', 500));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('delete'),
+          deleteError
+        );
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -538,6 +604,146 @@ describe('AcceptInvitePage', () => {
       await waitFor(() => {
         expect(screen.getByText('Something broke')).toBeInTheDocument();
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Auth Flow Gating (PLAT-6nzj)
+  // ---------------------------------------------------------------------------
+
+  describe('Auth Flow Gating (PLAT-6nzj)', () => {
+    beforeEach(() => {
+      setSearchParams({ token: VALID_TOKEN });
+      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
+      mockCurrentUser = null;
+    });
+
+    it('passes onBeforeSignIn to SignInButtons that calls beginAuthFlow', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // onBeforeSignIn should be registered — call it to verify it calls beginAuthFlow
+      expect(mockInviteSignInButtonsOnBeforeSignIn).toBeDefined();
+      mockInviteSignInButtonsOnBeforeSignIn();
+      expect(mockInviteBeginAuthFlow).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls endAuthFlow when doAccept encounters a backend error (new sign-in)', async () => {
+      mockAcceptInvite.mockRejectedValue(new Error('unexpected error'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow when doAccept encounters INVITATION_EXPIRED error', async () => {
+      mockAcceptInvite.mockRejectedValue(makeApiError('Invitation expired', 410, 'INVITATION_EXPIRED'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow when handleSignInError fires (popup cancelled or blocked)', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow before restoring UI state in handleSignInError', async () => {
+      const callOrder: string[] = [];
+      mockInviteEndAuthFlow.mockImplementation(() => { callOrder.push('endAuthFlow'); });
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
+      });
+      expect(callOrder).toContain('endAuthFlow');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ALREADY_REGISTERED handling (PLAT-xntd)
+  // ---------------------------------------------------------------------------
+
+  describe('ALREADY_REGISTERED handling (PLAT-xntd)', () => {
+    beforeEach(() => {
+      setSearchParams({ token: VALID_TOKEN });
+      mockGetInvitationDetails.mockResolvedValue(mockInvitation);
+      mockCurrentUser = null;
+    });
+
+    it('redirects to /auth/signin when acceptInvite returns ALREADY_REGISTERED (409)', async () => {
+      mockAcceptInvite.mockRejectedValue(makeApiError('Already registered', 409, 'ALREADY_REGISTERED'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/auth/signin');
+      });
+    });
+
+    it('does not show raw error message when ALREADY_REGISTERED is returned', async () => {
+      mockAcceptInvite.mockRejectedValue(makeApiError('Already registered', 409, 'ALREADY_REGISTERED'));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/auth/signin');
+      });
+
+      // Should NOT show a raw error message
+      expect(screen.queryByText('Already registered')).not.toBeInTheDocument();
     });
   });
 

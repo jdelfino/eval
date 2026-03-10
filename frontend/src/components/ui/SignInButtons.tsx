@@ -40,6 +40,12 @@ export interface SignInButtonsProps {
   label?: string;
   /** Disable all buttons (e.g. while a backend call is in flight) */
   disabled?: boolean;
+  /**
+   * Called immediately before signInWithPopup fires.
+   * Use this to set auth flow gating (beginAuthFlow) so that onAuthStateChanged
+   * in AuthContext does not race with the registration/accept flow that follows.
+   */
+  onBeforeSignIn?: () => void;
 }
 
 /**
@@ -83,7 +89,7 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
  * <SignInButtons label="Sign in to join CS101" onSuccess={handleSuccess} onError={handleError} />
  * ```
  */
-export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled }: SignInButtonsProps) {
+export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled, onBeforeSignIn }: SignInButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
 
@@ -91,6 +97,7 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
     setLoadingProvider(providerId);
     setPopupBlocked(false);
     try {
+      onBeforeSignIn?.();
       await signInWithProvider(providerType);
       onSuccess();
     } catch (error) {

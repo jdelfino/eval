@@ -28,20 +28,26 @@ jest.mock('next/navigation', () => ({
 const mockRefreshUser = jest.fn();
 const mockSetUserProfile = jest.fn();
 const mockBeginAuthFlow = jest.fn();
+const mockEndAuthFlow = jest.fn();
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     refreshUser: mockRefreshUser,
     setUserProfile: mockSetUserProfile,
     beginAuthFlow: mockBeginAuthFlow,
+    endAuthFlow: mockEndAuthFlow,
   }),
 }));
 
 // Mock SignInButtons so tests don't depend on Firebase popup flow
 const mockSignInButtonsOnSuccess = jest.fn();
+const mockSignInButtonsOnBeforeSignIn = jest.fn();
 jest.mock('@/components/ui/SignInButtons', () => ({
-  SignInButtons: ({ onSuccess, onError, label }: any) => {
+  SignInButtons: ({ onSuccess, onError, onBeforeSignIn, label }: any) => {
     // Store callbacks for test control
     mockSignInButtonsOnSuccess.mockImplementation(onSuccess);
+    if (onBeforeSignIn) {
+      mockSignInButtonsOnBeforeSignIn.mockImplementation(onBeforeSignIn);
+    }
     return (
       <div data-testid="sign-in-buttons">
         {label && <p data-testid="sign-in-label">{label}</p>}
@@ -98,6 +104,8 @@ describe('StudentRegistrationPage', () => {
     mockRefreshUser.mockClear();
     mockRefreshUser.mockResolvedValue(undefined);
     mockSetUserProfile.mockClear();
+    mockBeginAuthFlow.mockClear();
+    mockEndAuthFlow.mockClear();
     mockSearchParams.delete('code');
     mockDeleteUser.mockClear();
     mockGetStudentRegistrationInfo.mockClear();
@@ -363,6 +371,50 @@ describe('StudentRegistrationPage', () => {
         expect(mockDeleteUser).toHaveBeenCalled();
       });
     });
+
+    it('still shows error message when delete() throws during error recovery', async () => {
+      mockCurrentUser = null;
+      mockDeleteUser.mockRejectedValue(new Error('auth/requires-recent-login'));
+      // Use a non-ApiError so error path sets 'Registration failed' message
+      mockRegisterStudent.mockRejectedValue(new Error('network failure'));
+
+      await validateCode();
+
+      // Simulate sign-in sets currentUser before registerStudent is called
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
+
+      // Error recovery flow must still run even though delete() threw
+      await waitFor(() => {
+        expect(screen.getByText('Registration failed')).toBeInTheDocument();
+      });
+    });
+
+    it('logs error when delete() throws during error recovery', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockCurrentUser = null;
+      const deleteError = new Error('auth/requires-recent-login');
+      mockDeleteUser.mockRejectedValue(deleteError);
+      mockRegisterStudent.mockRejectedValue(new ApiError('Internal error', 500, 'INTERNAL'));
+
+      await validateCode();
+
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+
+      const signInButton = screen.getByTestId('mock-sign-in-success');
+      fireEvent.click(signInButton);
+
+      await waitFor(() => {
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('delete'),
+          deleteError
+        );
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   describe('Step 2: Already Signed In', () => {
@@ -569,6 +621,93 @@ describe('StudentRegistrationPage', () => {
       const { unmount } = render(<StudentRegistrationPage />);
       unmount();
       expect(mockOnAuthStateChangedUnsubscribe).toHaveBeenCalled();
+    });
+  });
+
+  describe('Auth Flow Gating (PLAT-6nzj)', () => {
+    const validateCodeHelper = async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+      render(<StudentRegistrationPage />);
+      const codeInput = screen.getByPlaceholderText('ABC-123');
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+      return user;
+    };
+
+    it('passes onBeforeSignIn prop to SignInButtons that calls beginAuthFlow', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      await validateCodeHelper();
+
+      // onBeforeSignIn should have been registered
+      expect(mockSignInButtonsOnBeforeSignIn).toBeDefined();
+      // Invoke it to check it calls beginAuthFlow
+      mockSignInButtonsOnBeforeSignIn();
+      expect(mockBeginAuthFlow).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls endAuthFlow when doRegister encounters a backend error (new sign-in)', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockRejectedValue(new Error('unexpected error'));
+
+      await validateCodeHelper();
+
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow when doRegister encounters NAMESPACE_AT_CAPACITY error', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockRejectedValue(new Error('API error: NAMESPACE_AT_CAPACITY'));
+
+      await validateCodeHelper();
+
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'test@example.com' };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow when handleSignInError fires (popup cancelled or blocked)', async () => {
+      mockCurrentUser = null;
+
+      await validateCodeHelper();
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+    });
+
+    it('calls endAuthFlow before restoring UI state in handleSignInError', async () => {
+      mockCurrentUser = null;
+      const callOrder: string[] = [];
+      mockEndAuthFlow.mockImplementation(() => { callOrder.push('endAuthFlow'); });
+
+      await validateCodeHelper();
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-error'));
+
+      await waitFor(() => {
+        expect(mockEndAuthFlow).toHaveBeenCalled();
+      });
+      // endAuthFlow should have been called
+      expect(callOrder).toContain('endAuthFlow');
     });
   });
 
