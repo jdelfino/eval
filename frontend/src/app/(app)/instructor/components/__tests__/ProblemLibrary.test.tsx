@@ -8,7 +8,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ProblemLibrary from '../ProblemLibrary';
 import { useAuth } from '@/contexts/AuthContext';
 import { listClasses } from '@/lib/api/classes';
-import { listProblems, deleteProblem } from '@/lib/api/problems';
+import { listProblems, deleteProblem, exportProblems } from '@/lib/api/problems';
 
 // Mock the AuthContext
 jest.mock('@/contexts/AuthContext', () => ({
@@ -36,6 +36,7 @@ jest.mock('@/lib/api/classes', () => ({
 jest.mock('@/lib/api/problems', () => ({
   listProblems: jest.fn(),
   deleteProblem: jest.fn(),
+  exportProblems: jest.fn(),
 }));
 
 // Mock the child components
@@ -98,6 +99,7 @@ describe('ProblemLibrary', () => {
     (listClasses as jest.Mock).mockResolvedValue([]);
     (listProblems as jest.Mock).mockResolvedValue(mockProblems);
     (deleteProblem as jest.Mock).mockResolvedValue(undefined);
+    (exportProblems as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -453,6 +455,89 @@ describe('ProblemLibrary', () => {
       const headerContainer = screen.getByTestId('problem-library-header');
       // Should have gap classes to space wrapped rows
       expect(headerContainer.className).toMatch(/gap-/);
+    });
+  });
+
+  describe('Export button', () => {
+    it('renders Export button in toolbar', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      expect(exportButton).toBeInTheDocument();
+    });
+
+    it('disables Export button when no problems are available', async () => {
+      (listProblems as jest.Mock).mockResolvedValue([]);
+
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      expect(exportButton).toBeDisabled();
+    });
+
+    it('calls exportProblems with current filters when clicked', async () => {
+      const mockClasses = [
+        { id: 'class-1', name: 'Class 1' },
+        { id: 'class-2', name: 'Class 2' },
+      ];
+      (listClasses as jest.Mock).mockResolvedValue(mockClasses);
+
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      expect(exportButton).not.toBeDisabled();
+
+      fireEvent.click(exportButton);
+
+      await waitFor(() => {
+        expect(exportProblems).toHaveBeenCalledWith({
+          class_id: 'class-1',
+          tags: undefined,
+        });
+      });
+    });
+
+    it('shows loading state while exporting', async () => {
+      let resolveExport: () => void;
+      const exportPromise = new Promise<void>((resolve) => {
+        resolveExport = resolve;
+      });
+      (exportProblems as jest.Mock).mockReturnValue(exportPromise);
+
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
+
+      // Button should be disabled while exporting
+      await waitFor(() => {
+        expect(exportButton).toBeDisabled();
+      });
+
+      // Resolve the export
+      resolveExport!();
+      await exportPromise;
+
+      // Button should be enabled again
+      await waitFor(() => {
+        expect(exportButton).not.toBeDisabled();
+      });
     });
   });
 });

@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,6 +30,26 @@ func NewProblemHandler(sectionProblemHandler *SectionProblemHandler) *ProblemHan
 	}
 }
 
+// ExportProblem represents a problem in the export format (excludes internal IDs).
+type ExportProblem struct {
+	Title             string          `json:"title"`
+	Description       *string         `json:"description"`
+	StarterCode       *string         `json:"starter_code"`
+	TestCases         json.RawMessage `json:"test_cases"`
+	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	Tags              []string        `json:"tags"`
+	Solution          *string         `json:"solution"`
+	Language          string          `json:"language"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// ProblemsExport is the envelope for exported problems.
+type ProblemsExport struct {
+	ExportedAt time.Time       `json:"exported_at"`
+	Problems   []ExportProblem `json:"problems"`
+}
+
 // Routes returns a chi.Router with problem routes mounted.
 func (h *ProblemHandler) Routes() chi.Router {
 	r := chi.NewRouter()
@@ -41,27 +63,28 @@ func (h *ProblemHandler) Routes() chi.Router {
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
+		r.Get("/export", h.Export)
 		r.Get("/{id}/sections", h.sectionProblemHandler.ListSectionsForProblem)
 	})
 
 	return r
 }
 
-// List handles GET /api/v1/problems — returns all problems visible to the user.
-// Supports query params: class_id, author_id, tags (comma-separated), include_public, sort_by, sort_order.
-func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
+// parseFilters extracts and validates ProblemFilters from query parameters.
+// Writes error responses internally and returns (filters, false) on validation failure.
+func parseFilters(w http.ResponseWriter, r *http.Request) (store.ProblemFilters, bool) {
 	q := r.URL.Query()
 
 	sortBy := q.Get("sort_by")
 	if sortBy != "" && sortBy != "created_at" && sortBy != "title" && sortBy != "updated_at" {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid sort_by: must be one of created_at, title, updated_at")
-		return
+		return store.ProblemFilters{}, false
 	}
 
 	sortOrder := q.Get("sort_order")
 	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid sort_order: must be asc or desc")
-		return
+		return store.ProblemFilters{}, false
 	}
 
 	filters := store.ProblemFilters{
@@ -73,7 +96,7 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		parsed, err := uuid.Parse(classIDStr)
 		if err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid class_id")
-			return
+			return store.ProblemFilters{}, false
 		}
 		filters.ClassID = &parsed
 	}
@@ -82,7 +105,7 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 		parsed, err := uuid.Parse(authorIDStr)
 		if err != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid author_id")
-			return
+			return store.ProblemFilters{}, false
 		}
 		filters.AuthorID = &parsed
 	}
@@ -93,6 +116,17 @@ func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	if q.Get("public_only") == "true" {
 		filters.PublicOnly = true
+	}
+
+	return filters, true
+}
+
+// List handles GET /api/v1/problems — returns all problems visible to the user.
+// Supports query params: class_id, author_id, tags (comma-separated), include_public, sort_by, sort_order.
+func (h *ProblemHandler) List(w http.ResponseWriter, r *http.Request) {
+	filters, ok := parseFilters(w, r)
+	if !ok {
+		return
 	}
 
 	repos := store.ReposFromContext(r.Context())
@@ -262,5 +296,61 @@ func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Export handles GET /api/v1/problems/export — returns a JSON file download of problems.
+func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
+	filters, ok := parseFilters(w, r)
+	if !ok {
+		return
+	}
+
+	repos := store.ReposFromContext(r.Context())
+	problems, err := repos.ListProblemsFiltered(r.Context(), filters)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
+	// Map to export format (omit internal IDs)
+	exportProblems := make([]ExportProblem, 0, len(problems))
+	for _, p := range problems {
+		exportProblems = append(exportProblems, ExportProblem{
+			Title:             p.Title,
+			Description:       p.Description,
+			StarterCode:       p.StarterCode,
+			TestCases:         p.TestCases,
+			ExecutionSettings: p.ExecutionSettings,
+			Tags:              p.Tags,
+			Solution:          p.Solution,
+			Language:          p.Language,
+			CreatedAt:         p.CreatedAt,
+			UpdatedAt:         p.UpdatedAt,
+		})
+	}
+
+	// Ensure empty array instead of null
+	if exportProblems == nil {
+		exportProblems = []ExportProblem{}
+	}
+
+	envelope := ProblemsExport{
+		ExportedAt: time.Now().UTC(),
+		Problems:   exportProblems,
+	}
+
+	// Set headers for file download
+	filename := fmt.Sprintf("problems-export-%s.json", time.Now().UTC().Format("2006-01-02"))
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+	// Marshal to bytes first so errors are caught before writing to the response
+	data, err := json.MarshalIndent(envelope, "", "  ")
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+	data = append(data, '\n')
+	_, _ = w.Write(data)
 }
 
