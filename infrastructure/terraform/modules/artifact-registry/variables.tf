@@ -69,3 +69,21 @@ variable "cleanup_policy_dry_run" {
   type        = bool
   default     = false
 }
+
+variable "cleanup_keep_count" {
+  description = "Number of most recent versions to keep per package"
+  type        = number
+  default     = 3
+}
+
+variable "cleanup_untagged_max_age" {
+  description = "Max age for untagged images before deletion (e.g. 86400s = 1 day)"
+  type        = string
+  default     = "86400s"
+}
+
+variable "cleanup_tagged_max_age" {
+  description = "Max age for tagged images before deletion (e.g. 604800s = 7 days)"
+  type        = string
+  default     = "604800s"
+}
