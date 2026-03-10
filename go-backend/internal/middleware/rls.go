@@ -129,6 +129,15 @@ func registrationMiddlewareWithAcquirer(acquirer ConnAcquirer) func(http.Handler
 				return
 			}
 
+			// Clear any stale user-specific session variables from connection reuse.
+			// releaseClean normally handles this, but if it failed silently on a
+			// previous request, leftover app.user_id or app.namespace_id could
+			// widen the registration context beyond what the registration role intends.
+			if _, err := conn.Exec(ctx, "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)"); err != nil {
+				http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
 			// Set only app.role = 'registration'; no user_id or namespace_id.
 			// is_local=false so the setting persists across statements on this connection.
 			if _, err := conn.Exec(ctx, "SELECT set_config('app.role', $1, false)", "registration"); err != nil {

@@ -584,6 +584,71 @@ func TestRegistrationStoreMiddleware_SetConfigError(t *testing.T) {
 	}
 }
 
+// TestRegistrationStoreMiddleware_ClearsStaleSessionVars verifies that stale
+// app.user_id and app.namespace_id are cleared on each registration request.
+// Without this, a connection reused from an authenticated request could carry
+// over user-specific session variables into the registration context.
+func TestRegistrationStoreMiddleware_ClearsStaleSessionVars(t *testing.T) {
+	mock := &mockConn{}
+	acquirer := &testAcquirer{conn: mock}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Status code = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	queries := mock.getExecQueries()
+
+	// After SET ROLE, the second exec must clear stale user-specific vars.
+	if len(queries) < 2 {
+		t.Fatalf("Expected at least 2 exec calls (SET ROLE + clear stale vars), got %d: %v", len(queries), queries)
+	}
+	clearQuery := "SELECT set_config('app.user_id', '', false), set_config('app.namespace_id', '', false)"
+	if queries[1] != clearQuery {
+		t.Errorf("Second exec should clear stale vars, got %q", queries[1])
+	}
+}
+
+// TestRegistrationStoreMiddleware_ClearVarsError verifies that if clearing stale
+// session variables fails, the middleware returns 503 and releases the connection.
+func TestRegistrationStoreMiddleware_ClearVarsError(t *testing.T) {
+	// SET ROLE eval_app succeeds (call 0), clear stale vars fails (call 1) → 503.
+	mock := &mockConnFailAfter{failAfter: 1}
+	acquirer := &testAcquirer{conn: mock}
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	mw := registrationMiddlewareWithAcquirer(acquirer)
+	wrapped := mw(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register-student", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if handlerCalled {
+		t.Error("Handler should not be called when clearing stale vars fails")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+	}
+	if !mock.wasReleased() {
+		t.Error("Connection should be released even on error")
+	}
+}
+
 func TestRegistrationStoreMiddleware_NoAuthRequired(t *testing.T) {
 	// Verify the registration middleware works without any auth user in context
 	mock := &mockConn{}
