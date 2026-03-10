@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/store"
@@ -28,6 +29,9 @@ type mockAuthRepos struct {
 // Delegate to the appropriate mock repo for user methods.
 func (m *mockAuthRepos) GetUserByID(ctx context.Context, id uuid.UUID) (*store.User, error) {
 	return m.userRepo.GetUserByID(ctx, id)
+}
+func (m *mockAuthRepos) GetUserByExternalID(ctx context.Context, externalID string) (*store.User, error) {
+	return m.userRepo.GetUserByExternalID(ctx, externalID)
 }
 func (m *mockAuthRepos) CreateUser(ctx context.Context, params store.CreateUserParams) (*store.User, error) {
 	return m.userRepo.CreateUser(ctx, params)
@@ -579,5 +583,53 @@ func TestAcceptInvitePost_CreateUserError(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAcceptInvitePost_DuplicateUser verifies that when CreateUser returns a
+// duplicate-key error (same external_id already exists), the handler returns
+// 409 with code ALREADY_REGISTERED.
+func TestAcceptInvitePost_DuplicateUser(t *testing.T) {
+	inv := testInvitation("test-ns")
+	invRepo := &mockInvitationRepo{
+		getInvitationFn: func(_ context.Context, _ uuid.UUID) (*store.Invitation, error) {
+			return inv, nil
+		},
+	}
+	userRepo := &StubUserRepo{
+		CreateUserFn: func(_ context.Context, _ store.CreateUserParams) (*store.User, error) {
+			return nil, &pgconn.PgError{Code: "23505", ConstraintName: "users_external_id_key"}
+		},
+	}
+
+	h := NewAuthHandler("")
+	repos := &mockAuthRepos{
+		userRepo:       userRepo,
+		invRepo:        invRepo,
+		membershipRepo: &mockMembershipRepo{},
+		classRepo:      &mockClassRepo{},
+	}
+	body, _ := json.Marshal(map[string]string{
+		"token": inv.ID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/accept-invite", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	claims := &auth.Claims{Subject: "firebase-uid-123", Email: inv.Email, EmailVerified: true}
+	ctx := auth.WithClaims(req.Context(), claims)
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.PostAcceptInvite(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var respBody map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&respBody); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if respBody["code"] != "ALREADY_REGISTERED" {
+		t.Errorf("expected code ALREADY_REGISTERED, got %q", respBody["code"])
 	}
 }
