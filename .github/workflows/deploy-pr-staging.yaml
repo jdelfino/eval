@@ -33,17 +33,22 @@ jobs:
         id: get-sha
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
         run: |
-          SHA=$(gh pr view ${{ inputs.pr }} \
-            --repo ${{ github.repository }} \
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid PR number: $PR_NUMBER"
+            exit 1
+          fi
+          SHA=$(gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
             --json headRefOid \
             --jq '.headRefOid')
           if [ -z "$SHA" ]; then
-            echo "::error::Could not resolve HEAD SHA for PR ${{ inputs.pr }}"
+            echo "::error::Could not resolve HEAD SHA for PR $PR_NUMBER"
             exit 1
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Resolved PR ${{ inputs.pr }} to SHA: $SHA"
+          echo "Resolved PR $PR_NUMBER to SHA: $SHA"
 
   # ── Parallel build-push jobs ──────────────────────────────────────────────
   # Build and push all three images tagged with the PR branch HEAD SHA.
@@ -207,8 +212,8 @@ jobs:
   # and a link to this run. Always runs (success or failure).
 
   comment-on-pr:
-    needs: [resolve-ref, deploy-staging]
-    if: always()
+    needs: [resolve-ref, build-push-go-api, build-push-executor, build-push-frontend, deploy-staging]
+    if: always() && needs.resolve-ref.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -217,12 +222,13 @@ jobs:
         env:
           SHA: ${{ needs.resolve-ref.outputs.sha }}
           DEPLOY_RESULT: ${{ needs.deploy-staging.result }}
+          PR_NUMBER: ${{ inputs.pr }}
         with:
           script: |
             const sha = process.env.SHA;
             const deployResult = process.env.DEPLOY_RESULT;
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const prNumber = parseInt('${{ inputs.pr }}', 10);
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
 
             let body;
             if (deployResult === 'success') {
