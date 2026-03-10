@@ -237,6 +237,26 @@ logs:
 	docker compose logs -f
 
 # ──────────────────────────────────────────────
+# Staging management
+# ──────────────────────────────────────────────
+.PHONY: staging-down staging-up staging-status
+
+STAGING_NS := eval-staging
+STAGING_DEPLOYMENTS := api executor centrifugo
+
+staging-down:
+	kubectl -n $(STAGING_NS) scale deploy $(STAGING_DEPLOYMENTS) --replicas=0
+
+staging-up:
+	kubectl -n $(STAGING_NS) scale deploy $(STAGING_DEPLOYMENTS) --replicas=1
+	@for d in $(STAGING_DEPLOYMENTS); do \
+		kubectl -n $(STAGING_NS) rollout status deploy/$$d --timeout=120s; \
+	done
+
+staging-status:
+	kubectl -n $(STAGING_NS) get deployments
+
+# ──────────────────────────────────────────────
 # Production database access
 # ──────────────────────────────────────────────
 .PHONY: db-proxy db-prod
