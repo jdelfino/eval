@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -972,6 +973,180 @@ func TestListProblems_FilteredSortBy(t *testing.T) {
 	}
 	if capturedFilters.SortOrder != "desc" {
 		t.Errorf("expected SortOrder=desc, got %q", capturedFilters.SortOrder)
+	}
+}
+
+func TestExportProblems_Success(t *testing.T) {
+	p1 := testProblem()
+	p2 := testProblem()
+	p2.ID = uuid.MustParse("22222222-3333-4444-5555-666666666666")
+	p2.Title = "Three Sum"
+
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			return []store.Problem{*p1, *p2}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify Content-Type and Content-Disposition headers
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+	cd := rec.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, "problems-export-") {
+		t.Errorf("expected Content-Disposition with attachment and filename, got %q", cd)
+	}
+
+	// Verify envelope structure
+	var envelope map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if _, ok := envelope["exported_at"]; !ok {
+		t.Error("expected exported_at field in envelope")
+	}
+
+	// Verify problems array
+	var problems []map[string]any
+	if err := json.Unmarshal(envelope["problems"], &problems); err != nil {
+		t.Fatalf("decode problems: %v", err)
+	}
+	if len(problems) != 2 {
+		t.Fatalf("expected 2 problems, got %d", len(problems))
+	}
+
+	// Verify first problem has expected fields
+	prob := problems[0]
+	if prob["title"] != "Two Sum" {
+		t.Errorf("expected title Two Sum, got %v", prob["title"])
+	}
+	// Verify internal fields are NOT present
+	if _, ok := prob["id"]; ok {
+		t.Error("expected id to be omitted from export")
+	}
+	if _, ok := prob["namespace_id"]; ok {
+		t.Error("expected namespace_id to be omitted from export")
+	}
+	if _, ok := prob["author_id"]; ok {
+		t.Error("expected author_id to be omitted from export")
+	}
+	if _, ok := prob["class_id"]; ok {
+		t.Error("expected class_id to be omitted from export")
+	}
+
+	// Verify expected fields ARE present
+	expectedFields := []string{"title", "description", "starter_code", "test_cases",
+		"execution_settings", "tags", "solution", "language", "created_at", "updated_at"}
+	for _, field := range expectedFields {
+		if _, ok := prob[field]; !ok {
+			t.Errorf("expected field %q to be present", field)
+		}
+	}
+}
+
+func TestExportProblems_WithFilters(t *testing.T) {
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	p := testProblem()
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export?class_id="+classID.String()+"&tags=go,algorithms", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify filters were passed through
+	if capturedFilters.ClassID == nil || *capturedFilters.ClassID != classID {
+		t.Errorf("expected ClassID filter %v, got %v", classID, capturedFilters.ClassID)
+	}
+	if len(capturedFilters.Tags) != 2 || capturedFilters.Tags[0] != "go" || capturedFilters.Tags[1] != "algorithms" {
+		t.Errorf("expected tags [go, algorithms], got %v", capturedFilters.Tags)
+	}
+}
+
+func TestExportProblems_EmptyResult(t *testing.T) {
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
+			return nil, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+
+	// Verify problems is an empty array, not null
+	var problems []map[string]any
+	if err := json.Unmarshal(envelope["problems"], &problems); err != nil {
+		t.Fatalf("decode problems: %v", err)
+	}
+	if problems == nil {
+		t.Error("expected empty array, got nil")
+	}
+	if len(problems) != 0 {
+		t.Errorf("expected 0 problems, got %d", len(problems))
+	}
+}
+
+func TestExportProblems_StoreError(t *testing.T) {
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
 	}
 }
 
