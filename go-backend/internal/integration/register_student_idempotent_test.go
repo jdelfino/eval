@@ -31,14 +31,34 @@ func (h *testHarness) createEmulatorUserVerified(t *testing.T, email, password s
 	resp := h.emulatorPost(t, signUpURL, signUpBody)
 	firebaseUID = resp["localId"].(string)
 
-	// Step 2: Set emailVerified=true via the admin update endpoint.
-	updateURL := fmt.Sprintf("%s/identitytoolkit.googleapis.com/v1/accounts:update?key=%s",
-		h.emulatorURL, h.apiKey)
+	// Step 2: Set emailVerified=true via the emulator admin endpoint.
+	// The client-side accounts:update (?key=) does NOT support setting localId +
+	// emailVerified — that's an admin operation requiring "Bearer owner" auth.
+	updateURL := fmt.Sprintf("%s/identitytoolkit.googleapis.com/v1/accounts:update",
+		h.emulatorURL)
 	updateBody := map[string]any{
 		"localId":       firebaseUID,
 		"emailVerified": true,
 	}
-	h.emulatorPost(t, updateURL, updateBody)
+	data, err := json.Marshal(updateBody)
+	if err != nil {
+		t.Fatalf("marshal update body: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, updateURL, bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("create update request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer owner")
+	updateResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("emulator admin POST %s: %v", updateURL, err)
+	}
+	defer func() { _ = updateResp.Body.Close() }()
+	if updateResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(updateResp.Body)
+		t.Fatalf("emulator admin POST %s: status %d, body: %s", updateURL, updateResp.StatusCode, body)
+	}
 
 	// Step 3: Sign in to get a fresh token (with emailVerified=true in the claim).
 	signInURL := fmt.Sprintf("%s/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=%s",
