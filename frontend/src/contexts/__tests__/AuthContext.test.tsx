@@ -354,6 +354,62 @@ describe('AuthContext', () => {
     });
   });
 
+  describe('beginAuthFlow / endAuthFlow', () => {
+    it('exposes beginAuthFlow as a function', () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      expect(typeof result.current.beginAuthFlow).toBe('function');
+    });
+
+    it('exposes endAuthFlow as a function', () => {
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      expect(typeof result.current.endAuthFlow).toBe('function');
+    });
+
+    it('skips onAuthStateChanged processing while auth flow is active (beginAuthFlow called)', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      // Activate the auth flow gate
+      act(() => {
+        result.current.beginAuthFlow();
+      });
+
+      // onAuthStateChanged fires with a Firebase user — should be skipped
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      // User should still be null; API was not called
+      expect(result.current.user).toBeNull();
+      expect(mockGetCurrentUser).not.toHaveBeenCalled();
+    });
+
+    it('resumes onAuthStateChanged processing after endAuthFlow is called', async () => {
+      mockGetCurrentUser.mockResolvedValue(mockUser);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitForAuthSetup();
+
+      // Activate then deactivate the gate
+      act(() => {
+        result.current.beginAuthFlow();
+        result.current.endAuthFlow();
+      });
+
+      // Now onAuthStateChanged should process normally
+      await act(async () => {
+        authStateCallback!({ getIdToken: jest.fn().mockResolvedValue('token') });
+      });
+
+      await waitFor(() => {
+        expect(result.current.user).toEqual(mockUser);
+      });
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+    });
+  });
+
   describe('setUserProfile', () => {
     it('is exposed on AuthContextType', () => {
       const { result } = renderHook(() => useAuth(), { wrapper });

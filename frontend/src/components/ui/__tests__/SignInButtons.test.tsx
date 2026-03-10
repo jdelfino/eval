@@ -370,4 +370,75 @@ describe('SignInButtons', () => {
       expect(screen.getByRole('button', { name: /microsoft/i })).toBeInTheDocument();
     });
   });
+
+  describe('onBeforeSignIn prop', () => {
+    it('calls onBeforeSignIn before signInWithPopup when provided', async () => {
+      const mockOnBeforeSignIn = jest.fn();
+      mockGoogleAuthProvider.mockReturnValue({});
+      mockSignInWithPopup.mockResolvedValue({ user: { uid: 'abc' } });
+
+      const callOrder: string[] = [];
+      mockOnBeforeSignIn.mockImplementation(() => { callOrder.push('onBeforeSignIn'); });
+      mockSignInWithPopup.mockImplementation(() => {
+        callOrder.push('signInWithPopup');
+        return Promise.resolve({ user: { uid: 'abc' } });
+      });
+
+      render(
+        <SignInButtons
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          onBeforeSignIn={mockOnBeforeSignIn}
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnSuccess).toHaveBeenCalled();
+      });
+
+      expect(callOrder).toEqual(['onBeforeSignIn', 'signInWithPopup']);
+    });
+
+    it('does not throw when onBeforeSignIn is not provided', async () => {
+      mockGoogleAuthProvider.mockReturnValue({});
+      mockSignInWithPopup.mockResolvedValue({ user: { uid: 'abc' } });
+
+      // Should not throw
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnSuccess).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('still calls onBeforeSignIn for GitHub button', async () => {
+      const mockOnBeforeSignIn = jest.fn();
+      mockGithubAuthProvider.mockReturnValue({});
+      mockSignInWithPopup.mockResolvedValue({ user: { uid: 'abc' } });
+
+      render(
+        <SignInButtons
+          onSuccess={mockOnSuccess}
+          onError={mockOnError}
+          onBeforeSignIn={mockOnBeforeSignIn}
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /github/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnBeforeSignIn).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
 });

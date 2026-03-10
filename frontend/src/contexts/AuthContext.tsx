@@ -86,6 +86,12 @@ interface AuthContextType {
    * Cleared automatically by setUserProfile.
    */
   beginAuthFlow: () => void;
+  /**
+   * Clears the auth flow gate without calling setUserProfile.
+   * Call this in error paths of explicit auth flows (doRegister, doAccept)
+   * so that subsequent onAuthStateChanged events are processed normally.
+   */
+  endAuthFlow: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -234,6 +240,10 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     authFlowActiveRef.current = true;
   }, []);
 
+  const endAuthFlow = useCallback(() => {
+    authFlowActiveRef.current = false;
+  }, []);
+
   const value = useMemo<AuthContextType>(() => ({
     user,
     isAuthenticated: !!user,
@@ -242,7 +252,8 @@ function FirebaseAuthProvider({ children }: AuthProviderProps) {
     refreshUser,
     setUserProfile,
     beginAuthFlow,
-  }), [user, isLoading, signOut, refreshUser, setUserProfile, beginAuthFlow]);
+    endAuthFlow,
+  }), [user, isLoading, signOut, refreshUser, setUserProfile, beginAuthFlow, endAuthFlow]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

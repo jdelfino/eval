@@ -72,7 +72,7 @@ export default function StudentRegistrationPage() {
 function StudentRegistrationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUserProfile } = useAuth();
+  const { setUserProfile, beginAuthFlow, endAuthFlow } = useAuth();
 
   // Page state
   const [pageState, setPageState] = useState<PageState>({ status: 'code-entry' });
@@ -138,6 +138,9 @@ function StudentRegistrationContent() {
         setUserProfile(user);
         router.push(`/sections/${info.section.id}`);
       } catch (backendError) {
+        // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+        endAuthFlow();
+
         // Only clean up Firebase account if the user signed in during this flow
         // (not if they were already signed in before visiting this page)
         if (isNewSignIn) {
@@ -169,7 +172,7 @@ function StudentRegistrationContent() {
         setPageState({ status: 'code-valid', info });
       }
     },
-    [setUserProfile, router]
+    [setUserProfile, endAuthFlow, router]
   );
 
   // Handle late Firebase Auth hydration (auth race fix for PLAT-my3o).
@@ -402,6 +405,7 @@ function StudentRegistrationContent() {
                 label={`Sign in to join ${registrationInfo.class.name}`}
                 onSuccess={handleSignIn}
                 onError={handleSignInError}
+                onBeforeSignIn={beginAuthFlow}
                 disabled={pageState.status === 'submitting'}
               />
             </div>
