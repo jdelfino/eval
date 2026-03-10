@@ -61,7 +61,13 @@ test-executor:
 lint-executor:
 	cd executor && golangci-lint run ./...
 
-test-integration-executor:
+# Rebuild executor image only when source files change
+EXECUTOR_SOURCES := $(shell find executor/ pkg/ -name '*.go' -o -name '*.policy' -o -name '*.java' -o -name 'Dockerfile' -o -name 'go.mod' -o -name 'go.sum' 2>/dev/null)
+.executor-image: $(EXECUTOR_SOURCES)
+	docker compose build executor
+	@touch $@
+
+test-integration-executor: .executor-image
 	./scripts/ensure-test-postgres.sh
 	docker compose up -d executor --wait
 	cd executor && EXECUTOR_TEST_URL=http://localhost:8081 go test -v -race -count=1 ./... -run Integration
