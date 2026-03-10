@@ -32,17 +32,24 @@ test.describe('Auth loop recovery', () => {
     await page.fill('#password', 'e2e-test-password-123');
     await page.click('button[type="submit"]');
 
-    // Wait for successful authentication and redirect away from auth pages
+    // Wait for the full redirect chain to complete: signin → / → /instructor (or similar app route).
+    // The public root page (/) briefly appears before redirecting authenticated users to their dashboard.
+    // We must wait for a stable app route under (app)/layout.tsx, which handles the redirect to
+    // /auth/signin when the user becomes unauthenticated. Matching on "not /auth/" would resolve
+    // too early at the intermediate "/" URL.
     await page.waitForURL(
       (url) => {
         const path = new URL(url).pathname;
-        return path !== '/auth/signin/email' && !path.startsWith('/auth/');
+        return (
+          path.startsWith('/instructor') ||
+          path.startsWith('/classes') ||
+          path.startsWith('/sections') ||
+          path.startsWith('/admin') ||
+          path.startsWith('/system')
+        );
       },
       { timeout: 15_000 }
     );
-
-    // Confirm we are authenticated (on a non-auth page)
-    await expect(page).not.toHaveURL(/\/auth\//);
 
     // ===== STEP 2: Delete the backend user record (Firebase user still exists) =====
     // Use the system-admin token to look up and delete the user.
