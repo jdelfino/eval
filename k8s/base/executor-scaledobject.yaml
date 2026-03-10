@@ -6,7 +6,7 @@ spec:
   scaleTargetRef:
     name: executor
   # Scale to zero when no executions are pending. The GMP query frontend
-  # (gmp-frontend.yaml) exposes Prometheus-compatible metrics from GMP.
+  # (k8s/cluster/gmp-frontend.yaml) exposes Prometheus-compatible metrics from GMP.
   minReplicaCount: 0
   maxReplicaCount: 10
   cooldownPeriod: 60
@@ -14,7 +14,7 @@ spec:
   triggers:
     - type: prometheus
       metadata:
-        # GMP query frontend deployed via gmp-frontend.yaml in gmp-system namespace.
+        # GMP query frontend deployed via k8s/cluster/gmp-frontend.yaml in gmp-system namespace.
         serverAddress: http://frontend.gmp-system.svc:9090
         metricName: executor_active_executions
         query: sum(executor_active_executions)
