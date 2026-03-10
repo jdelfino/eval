@@ -141,7 +141,11 @@ function StudentRegistrationContent() {
         // Only clean up Firebase account if the user signed in during this flow
         // (not if they were already signed in before visiting this page)
         if (isNewSignIn) {
-          await firebaseAuth.currentUser?.delete();
+          try {
+            await firebaseAuth.currentUser?.delete();
+          } catch (deleteError) {
+            console.error('[StudentRegistration] Failed to delete Firebase account during error recovery:', deleteError);
+          }
         }
 
         if (backendError instanceof ApiError) {

@@ -462,6 +462,53 @@ describe('AcceptInvitePage', () => {
       // Should still show SignInButtons for retry
       expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
     });
+
+    it('still shows error message when delete() throws during error recovery', async () => {
+      mockCurrentUser = null;
+      mockDeleteUser.mockRejectedValue(new Error('auth/requires-recent-login'));
+      mockAcceptInvite.mockRejectedValue(makeApiError('Internal error', 500));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Simulate sign-in sets currentUser before onSuccess fires
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      // Error recovery flow must still run even though delete() threw
+      await waitFor(() => {
+        expect(screen.getByText('Internal error')).toBeInTheDocument();
+      });
+    });
+
+    it('logs error when delete() throws during error recovery', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockCurrentUser = null;
+      const deleteError = new Error('auth/requires-recent-login');
+      mockDeleteUser.mockRejectedValue(deleteError);
+      mockAcceptInvite.mockRejectedValue(makeApiError('Internal error', 500));
+
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('delete'),
+          deleteError
+        );
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   // ---------------------------------------------------------------------------
