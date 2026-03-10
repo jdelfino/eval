@@ -10,6 +10,7 @@ resources:
   - executor-configmap.yaml
   - executor-scaledobject.yaml
   - executor-pod-monitoring.yaml
+  - gmp-frontend.yaml
   - executor-networkpolicy.yaml
   - redis-deployment.yaml
   - redis-service.yaml
