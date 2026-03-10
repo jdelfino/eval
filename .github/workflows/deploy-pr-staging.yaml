@@ -1,0 +1,253 @@
+name: Deploy PR to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'PR number to deploy to staging'
+        type: string
+        required: true
+
+concurrency:
+  group: deploy-pr-staging
+  cancel-in-progress: true
+
+env:
+  REGISTRY: us-east1-docker.pkg.dev/eval-prod-485520/go-api
+
+jobs:
+  # ── Resolve PR branch HEAD SHA ────────────────────────────────────────────
+  # workflow_dispatch uses the ref selected in the UI (usually main), not the
+  # PR branch. We use `gh pr view` to get the actual branch HEAD SHA so that
+  # all downstream jobs build and deploy the correct commit.
+
+  resolve-ref:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.get-sha.outputs.sha }}
+    steps:
+      - name: Get PR branch HEAD SHA
+        id: get-sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(gh pr view ${{ inputs.pr }} \
+            --repo ${{ github.repository }} \
+            --json headRefOid \
+            --jq '.headRefOid')
+          if [ -z "$SHA" ]; then
+            echo "::error::Could not resolve HEAD SHA for PR ${{ inputs.pr }}"
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Resolved PR ${{ inputs.pr }} to SHA: $SHA"
+
+  # ── Parallel build-push jobs ──────────────────────────────────────────────
+  # Build and push all three images tagged with the PR branch HEAD SHA.
+  # Executor uses content-hash caching to avoid rebuilding unchanged images.
+
+  build-push-go-api:
+    needs: resolve-ref
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          SHA="${{ needs.resolve-ref.outputs.sha }}"
+          docker build -f go-backend/Dockerfile -t $REGISTRY/go-api:$SHA .
+          docker push $REGISTRY/go-api:$SHA
+
+  build-push-executor:
+    needs: resolve-ref
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - name: Compute content hash of executor build inputs
+        run: |
+          # Hash all files in executor/ (excluding tmp/) and pkg/ — the only
+          # repo directories COPYed into the Dockerfile. Truncate to 16 chars.
+          HASH=$(find executor/ pkg/ -type f -not -path 'executor/tmp/*' \
+            | sort | xargs sha256sum | sha256sum | cut -c1-16)
+          echo "CONTENT_HASH=$HASH" >> "$GITHUB_ENV"
+          echo "Content hash: $HASH"
+      - name: Check for existing content-addressed image
+        run: |
+          EXISTING=$(gcloud artifacts docker tags list $REGISTRY/executor \
+            --filter="tag:content-$CONTENT_HASH" \
+            --format="value(tag)" 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            echo "CACHE_HIT=true" >> "$GITHUB_ENV"
+            echo "Cache hit: $REGISTRY/executor:content-$CONTENT_HASH already exists"
+          else
+            echo "CACHE_HIT=false" >> "$GITHUB_ENV"
+            echo "Cache miss: building new image"
+          fi
+      - name: Retag existing image (cache hit)
+        if: env.CACHE_HIT == 'true'
+        run: |
+          SHA="${{ needs.resolve-ref.outputs.sha }}"
+          # Check if SHA tag already exists (e.g. workflow re-run on the same commit).
+          # Moving an existing tag requires artifactregistry.tags.delete, which the WIF SA lacks.
+          SHA_EXISTS=$(gcloud artifacts docker tags list $REGISTRY/executor \
+            --filter="tag:$SHA" \
+            --format="value(tag)" 2>/dev/null || true)
+          if [ -z "$SHA_EXISTS" ]; then
+            gcloud artifacts docker tags add \
+              $REGISTRY/executor:content-$CONTENT_HASH \
+              $REGISTRY/executor:$SHA
+          else
+            echo "SHA tag $SHA already exists, skipping retag"
+          fi
+      - name: Build and push new image (cache miss)
+        if: env.CACHE_HIT == 'false'
+        run: |
+          SHA="${{ needs.resolve-ref.outputs.sha }}"
+          docker build -f executor/Dockerfile \
+            -t $REGISTRY/executor:content-$CONTENT_HASH \
+            -t $REGISTRY/executor:$SHA \
+            .
+          docker push $REGISTRY/executor:content-$CONTENT_HASH
+          docker push $REGISTRY/executor:$SHA
+
+  build-push-frontend:
+    needs: resolve-ref
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      - run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      - run: |
+          SHA="${{ needs.resolve-ref.outputs.sha }}"
+          docker build -f frontend/Dockerfile -t $REGISTRY/frontend:$SHA .
+          docker push $REGISTRY/frontend:$SHA
+
+  # ── Staging deploy ────────────────────────────────────────────────────────
+  # Deploy to staging after all images are available. No E2E tests —
+  # manual testing against staging is expected after deployment.
+
+  deploy-staging:
+    needs: [resolve-ref, build-push-go-api, build-push-executor, build-push-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-ref.outputs.sha }}
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+      # setup-gcloud@v2 downloads a full ~500MB SDK even though gcloud is
+      # pre-installed on the runner. The runner's apt-managed gcloud disables
+      # the component manager and the Google Cloud apt source is removed, so
+      # we re-add the source and install the plugin directly (~8s vs ~58s).
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+          sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/google-cloud-sdk.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" -qq
+          sudo apt-get install -y -qq google-cloud-cli-gke-gcloud-auth-plugin
+      - name: Get GKE credentials via Connect Gateway
+        run: |
+          for i in 1 2 3; do
+            gcloud container fleet memberships get-credentials ${{ secrets.GKE_CLUSTER }} \
+              --project=eval-prod-485520 && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+      - name: Deploy to staging
+        run: |
+          cd k8s/overlays/staging
+          SHA="${{ needs.resolve-ref.outputs.sha }}"
+          kustomize edit set image "go-api=$REGISTRY/go-api:$SHA"
+          kustomize edit set image "executor=$REGISTRY/executor:$SHA"
+          kustomize edit set image "frontend=$REGISTRY/frontend:$SHA"
+          kubectl apply -k .
+      - name: Wait for staging rollout
+        run: |
+          kubectl rollout status deployment/go-api -n staging --timeout=120s
+          kubectl rollout status deployment/executor -n staging --timeout=120s
+          kubectl rollout status deployment/frontend -n staging --timeout=120s
+          kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+
+  # ── Comment on PR ─────────────────────────────────────────────────────────
+  # Post a comment on the PR with the staging URL, deployed commit SHA,
+  # and a link to this run. Always runs (success or failure).
+
+  comment-on-pr:
+    needs: [resolve-ref, deploy-staging]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          SHA: ${{ needs.resolve-ref.outputs.sha }}
+          DEPLOY_RESULT: ${{ needs.deploy-staging.result }}
+        with:
+          script: |
+            const sha = process.env.SHA;
+            const deployResult = process.env.DEPLOY_RESULT;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const prNumber = parseInt('${{ inputs.pr }}', 10);
+
+            let body;
+            if (deployResult === 'success') {
+              body = [
+                '### Staging deployment complete',
+                '',
+                `**Staging URL:** https://staging.eval.delquillan.com`,
+                `**Commit:** \`${sha.slice(0, 7)}\` (${sha})`,
+                `**Run:** [View workflow run](${runUrl})`,
+                '',
+                'Migrations run automatically on go-api startup.',
+              ].join('\n');
+            } else {
+              body = [
+                '### Staging deployment failed',
+                '',
+                `**Commit:** \`${sha ? sha.slice(0, 7) : 'unknown'}\``,
+                `**Run:** [View workflow run](${runUrl})`,
+                '',
+                `Deploy result: \`${deployResult}\``,
+              ].join('\n');
+            }
+
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: prNumber,
+              body,
+            });
