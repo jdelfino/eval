@@ -185,6 +185,32 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+      - name: Dump staging cluster diagnostics
+        if: failure()
+        run: |
+          echo "=== Pod status ==="
+          kubectl get pods -n staging -o wide 2>/dev/null || true
+          echo ""
+          echo "=== Warning/Error events (last 30) ==="
+          kubectl get events -n staging --sort-by=.lastTimestamp \
+            --field-selector type!=Normal 2>/dev/null | tail -30 || true
+          echo ""
+          echo "=== Non-running pod details ==="
+          for pod in $(kubectl get pods -n staging --no-headers 2>/dev/null \
+            | awk '$3 != "Running" && $3 != "Completed" {print $1}'); do
+            echo "--- $pod ---"
+            kubectl describe pod "$pod" -n staging 2>/dev/null | tail -20
+            echo ""
+          done
+          echo "=== Node status ==="
+          kubectl get nodes -o wide 2>/dev/null || true
+          echo ""
+          echo "=== Node allocated resources ==="
+          for node in $(kubectl get nodes --no-headers 2>/dev/null | awk '{print $1}'); do
+            echo "--- $node ---"
+            kubectl describe node "$node" 2>/dev/null | sed -n '/Allocated resources/,/Events/p' | head -20
+            echo ""
+          done
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -439,6 +465,32 @@ jobs:
           kubectl rollout status deployment/executor --timeout=120s
           kubectl rollout status deployment/frontend --timeout=120s
           kubectl rollout status deployment/centrifugo --timeout=120s
+      - name: Dump cluster diagnostics
+        if: failure()
+        run: |
+          echo "=== Pod status ==="
+          kubectl get pods -o wide 2>/dev/null || true
+          echo ""
+          echo "=== Warning/Error events (last 30) ==="
+          kubectl get events --sort-by=.lastTimestamp \
+            --field-selector type!=Normal 2>/dev/null | tail -30 || true
+          echo ""
+          echo "=== Non-running pod details ==="
+          for pod in $(kubectl get pods --no-headers 2>/dev/null \
+            | awk '$3 != "Running" && $3 != "Completed" {print $1}'); do
+            echo "--- $pod ---"
+            kubectl describe pod "$pod" 2>/dev/null | tail -20
+            echo ""
+          done
+          echo "=== Node status ==="
+          kubectl get nodes -o wide 2>/dev/null || true
+          echo ""
+          echo "=== Node allocated resources ==="
+          for node in $(kubectl get nodes --no-headers 2>/dev/null | awk '{print $1}'); do
+            echo "--- $node ---"
+            kubectl describe node "$node" 2>/dev/null | sed -n '/Allocated resources/,/Events/p' | head -20
+            echo ""
+          done
       - name: Wait for ingress
         run: |
           # After pods are ready, the GKE NEG (Network Endpoint Group) can
