@@ -19,6 +19,7 @@ const FONT_SIZE_MAX = 48;
 function PublicViewContent() {
   const searchParams = useSearchParams();
   const session_id = searchParams.get('session_id');
+  const section_id = searchParams.get('section_id');
   const { setHeaderSlot } = useHeaderSlot();
 
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -48,13 +49,18 @@ function PublicViewContent() {
     });
   };
 
-  // Real-time session state via Centrifugo websocket
+  // Real-time session state via Centrifugo websocket.
+  // Supports both session_id and section_id modes.
   const {
     state,
     loading,
     error,
     connectionStatus,
-  } = useRealtimePublicView({ session_id: session_id || '' });
+    activeSessionId,
+  } = useRealtimePublicView({
+    session_id: session_id ?? undefined,
+    section_id: section_id ?? undefined,
+  });
 
   // Local code state for editing (changes don't propagate back to student)
   const [localCode, setLocalCode] = useState<string>('');
@@ -68,7 +74,8 @@ function PublicViewContent() {
 
   // Show connection status and join code in the global header
   useEffect(() => {
-    if (session_id && state) {
+    const hasIdentifier = session_id || section_id;
+    if (hasIdentifier && state) {
       setHeaderSlot(
         <div className="flex items-center gap-3">
           <span className="text-lg font-bold font-mono text-blue-600">
@@ -80,7 +87,7 @@ function PublicViewContent() {
           />
         </div>
       );
-    } else if (session_id) {
+    } else if (hasIdentifier) {
       setHeaderSlot(
         <ConnectionStatus
           status={connectionStatus}
@@ -89,7 +96,7 @@ function PublicViewContent() {
       );
     }
     return () => setHeaderSlot(null);
-  }, [session_id, state?.join_code, connectionStatus, setHeaderSlot]);
+  }, [session_id, section_id, state?.join_code, connectionStatus, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
@@ -119,12 +126,12 @@ function PublicViewContent() {
     setLocalCode(code);
   };
 
-  if (!session_id) {
+  if (!session_id && !section_id) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-gray-300 rounded">
           <h1 className="text-xl font-bold mb-4">No Session</h1>
-          <p className="text-gray-500">Please provide a session_id in the URL.</p>
+          <p className="text-gray-500">Please provide a session_id or section_id in the URL.</p>
         </div>
       </div>
     );
@@ -138,12 +145,35 @@ function PublicViewContent() {
     );
   }
 
-  if (error || !state) {
+  if (error) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-red-300 rounded">
           <h1 className="text-xl font-bold mb-4 text-red-600">Error</h1>
-          <p className="text-gray-500">{error || 'Failed to load session state'}</p>
+          <p className="text-gray-500">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Section mode: show waiting state when no active session
+  if (section_id && !activeSessionId) {
+    return (
+      <div className="h-full bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 border border-gray-300 rounded text-center">
+          <h1 className="text-xl font-bold mb-4">Waiting for session...</h1>
+          <p className="text-gray-500">This tab will automatically display the next session that starts in this section.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="h-full bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 border border-red-300 rounded">
+          <h1 className="text-xl font-bold mb-4 text-red-600">Error</h1>
+          <p className="text-gray-500">Failed to load session state</p>
         </div>
       </div>
     );
