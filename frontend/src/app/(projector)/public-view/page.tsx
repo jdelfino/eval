@@ -10,10 +10,43 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import type { ExecutionSettings } from '@/types/problem';
 
+const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
+const DEFAULT_FONT_SIZE = 24;
+const FONT_SIZE_STEP = 2;
+const FONT_SIZE_MIN = 12;
+const FONT_SIZE_MAX = 48;
+
 function PublicViewContent() {
   const searchParams = useSearchParams();
   const session_id = searchParams.get('session_id');
   const { setHeaderSlot } = useHeaderSlot();
+
+  const [fontSize, setFontSize] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+      if (stored !== null) {
+        const parsed = Number(stored);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    return DEFAULT_FONT_SIZE;
+  });
+
+  const handleIncreaseFontSize = () => {
+    setFontSize(prev => {
+      const next = Math.min(prev + FONT_SIZE_STEP, FONT_SIZE_MAX);
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
+  const handleDecreaseFontSize = () => {
+    setFontSize(prev => {
+      const next = Math.max(prev - FONT_SIZE_STEP, FONT_SIZE_MIN);
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
 
   // Real-time session state via Centrifugo websocket
   const {
@@ -122,6 +155,26 @@ function PublicViewContent() {
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
+      {/* Font size controls */}
+      <div className="flex items-center gap-1 mb-1 self-end">
+        <button
+          type="button"
+          onClick={handleDecreaseFontSize}
+          aria-label="Decrease font size"
+          className="px-2 py-1 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+        >
+          −
+        </button>
+        <span className="text-sm text-gray-400 w-12 text-center">{fontSize}px</span>
+        <button
+          type="button"
+          onClick={handleIncreaseFontSize}
+          aria-label="Increase font size"
+          className="px-2 py-1 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+        >
+          +
+        </button>
+      </div>
       {/* Featured Submission or Solution */}
       {hasFeaturedSubmission ? (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -135,7 +188,7 @@ function PublicViewContent() {
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
-            fontSize={24}
+            fontSize={fontSize}
             outputCollapsible={true}
           />
         </div>
@@ -150,7 +203,7 @@ function PublicViewContent() {
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
-            fontSize={24}
+            fontSize={fontSize}
             outputCollapsible={true}
           />
         </div>

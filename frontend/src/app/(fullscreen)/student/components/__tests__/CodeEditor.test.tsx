@@ -1604,3 +1604,187 @@ describe('CodeEditor - outputCollapsible prop', () => {
     expect(style).toContain('width');
   });
 });
+
+// ===========================================================================
+// Font Size Scaling (prose/title classes)
+// ===========================================================================
+
+describe('CodeEditor - Font Size Scaling', () => {
+  const problem = {
+    id: 'problem-1',
+    author_id: 'instructor-1',
+    title: 'Test Problem',
+    description: 'A test problem description.',
+    starter_code: '',
+    execution_settings: {},
+    created_at: new Date(),
+    updated_at: new Date(),
+    language: 'python',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    localStorage.clear();
+    setDesktopLayout();
+    const actual = jest.requireActual('@/hooks/useResponsiveLayout');
+    getLayoutMock().useSidebarSection.mockImplementation(actual.useSidebarSection);
+  });
+
+  describe('Desktop problem panel title', () => {
+    it('uses text-xl for title when fontSize is below 20', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={14} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      expect(titleEl.className).toContain('text-xl');
+      expect(titleEl.className).not.toContain('text-3xl');
+    });
+
+    it('uses text-3xl for title when fontSize is 20 or above', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={24} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      expect(titleEl.className).toContain('text-3xl');
+      expect(titleEl.className).not.toContain('text-xl');
+    });
+
+    it('uses prose-sm for description when fontSize is below 20', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={14} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      // The prose container wraps the description
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      expect(proseContainer!.className).toContain('prose-sm');
+      expect(proseContainer!.className).not.toContain('prose-lg');
+    });
+
+    it('uses prose-lg for description when fontSize is 20 or above', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={24} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      // The prose container wraps the description
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      expect(proseContainer!.className).toContain('prose-lg');
+      expect(proseContainer!.className).not.toContain('prose-sm');
+    });
+
+    it('uses text-xl and prose-sm when fontSize is not provided', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      expect(titleEl.className).toContain('text-xl');
+      expect(titleEl.className).not.toContain('text-3xl');
+
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      expect(proseContainer!.className).toContain('prose-sm');
+      expect(proseContainer!.className).not.toContain('prose-lg');
+    });
+  });
+
+  describe('Mobile problem panel title', () => {
+    beforeEach(() => {
+      setMobileLayout();
+    });
+
+    it('uses text-xl for title in mobile view when fontSize is below 20', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={14} />
+      );
+
+      const problemButton = screen.getByRole('button', { name: 'Toggle Problem' });
+      await act(async () => { problemButton.click(); });
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      expect(titleEl.className).toContain('text-xl');
+      expect(titleEl.className).not.toContain('text-3xl');
+    });
+
+    it('uses text-3xl for title in mobile view when fontSize is 20 or above', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={24} />
+      );
+
+      const problemButton = screen.getByRole('button', { name: 'Toggle Problem' });
+      await act(async () => { problemButton.click(); });
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      expect(titleEl.className).toContain('text-3xl');
+      expect(titleEl.className).not.toContain('text-xl');
+    });
+
+    it('uses prose-sm in mobile view when fontSize is below 20', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={14} />
+      );
+
+      const problemButton = screen.getByRole('button', { name: 'Toggle Problem' });
+      await act(async () => { problemButton.click(); });
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      expect(proseContainer!.className).toContain('prose-sm');
+      expect(proseContainer!.className).not.toContain('prose-lg');
+    });
+
+    it('uses prose-lg in mobile view when fontSize is 20 or above', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={24} />
+      );
+
+      const problemButton = screen.getByRole('button', { name: 'Toggle Problem' });
+      await act(async () => { problemButton.click(); });
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      expect(proseContainer!.className).toContain('prose-lg');
+      expect(proseContainer!.className).not.toContain('prose-sm');
+    });
+  });
+});
