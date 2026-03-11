@@ -19,8 +19,7 @@ resource "google_artifact_registry_repository" "this" {
     id     = "keep-recent"
     action = "KEEP"
     most_recent_versions {
-      package_name_prefixes = [""]
-      keep_count            = var.cleanup_keep_count
+      keep_count = var.cleanup_keep_count
     }
   }
 
