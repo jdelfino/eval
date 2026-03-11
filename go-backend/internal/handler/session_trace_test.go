@@ -208,6 +208,60 @@ func TestStandaloneTrace_400InvalidLanguage(t *testing.T) {
 	}
 }
 
+func TestStandaloneTrace_FilesAndRandomSeedForwarded(t *testing.T) {
+	var capturedReq executor.TraceRequest
+	tracer := &mockTracerClient{
+		traceFn: func(_ context.Context, req executor.TraceRequest) (*executor.TraceResponse, error) {
+			capturedReq = req
+			return &executor.TraceResponse{
+				Steps:      []executor.TraceStep{},
+				TotalSteps: 0,
+				ExitCode:   0,
+			}, nil
+		},
+	}
+
+	h := setupStandaloneTraceHandler(tracer)
+	router := traceRouter(h)
+	seed := 42
+	body, _ := json.Marshal(map[string]any{
+		"code":        "import random",
+		"language":    "python",
+		"stdin":       "test-input",
+		"files":       []map[string]string{{"name": "data.txt", "content": "hello"}},
+		"random_seed": seed,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/trace", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if capturedReq.Stdin != "test-input" {
+		t.Errorf("expected stdin 'test-input', got %q", capturedReq.Stdin)
+	}
+	if len(capturedReq.Files) != 1 {
+		t.Fatalf("expected 1 file forwarded, got %d", len(capturedReq.Files))
+	}
+	if capturedReq.Files[0].Name != "data.txt" {
+		t.Errorf("expected file name 'data.txt', got %q", capturedReq.Files[0].Name)
+	}
+	if capturedReq.Files[0].Content != "hello" {
+		t.Errorf("expected file content 'hello', got %q", capturedReq.Files[0].Content)
+	}
+	if capturedReq.RandomSeed == nil {
+		t.Fatal("expected RandomSeed to be set, got nil")
+	}
+	if *capturedReq.RandomSeed != 42 {
+		t.Errorf("expected RandomSeed=42, got %d", *capturedReq.RandomSeed)
+	}
+}
+
 func TestStandaloneTrace_500ExecutorError(t *testing.T) {
 	tracer := &mockTracerClient{
 		traceFn: func(_ context.Context, _ executor.TraceRequest) (*executor.TraceResponse, error) {

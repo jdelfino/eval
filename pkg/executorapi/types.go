@@ -28,10 +28,12 @@ type ExecuteResponse struct {
 
 // TraceRequest is the JSON request body for step-through debugger tracing.
 type TraceRequest struct {
-	Code     string `json:"code"`
-	Stdin    string `json:"stdin,omitempty"`
-	MaxSteps *int   `json:"max_steps,omitempty"`
-	Language string `json:"language,omitempty"`
+	Code       string `json:"code"`
+	Stdin      string `json:"stdin,omitempty"`
+	Files      []File `json:"files,omitempty"`
+	RandomSeed *int   `json:"random_seed,omitempty"`
+	MaxSteps   *int   `json:"max_steps,omitempty"`
+	Language   string `json:"language,omitempty"`
 }
 
 // TraceResponse is the JSON response for debugger tracing.

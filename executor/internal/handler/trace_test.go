@@ -648,6 +648,103 @@ func TestTrace_PythonLanguage_DoesNotSetIsCommand(t *testing.T) {
 	}
 }
 
+// TestTrace_FilesForwardedToSandbox verifies that files from the request
+// are converted to sandbox.File and included in the sandbox request.
+func TestTrace_FilesForwardedToSandbox(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 10000
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1","files":[{"name":"data.txt","content":"hello"}]}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(cap.req.Files) != 1 {
+		t.Fatalf("expected 1 file in sandbox request, got %d", len(cap.req.Files))
+	}
+	if cap.req.Files[0].Name != "data.txt" {
+		t.Errorf("expected file name 'data.txt', got %q", cap.req.Files[0].Name)
+	}
+	if cap.req.Files[0].Content != "hello" {
+		t.Errorf("expected file content 'hello', got %q", cap.req.Files[0].Content)
+	}
+}
+
+// TestTrace_RandomSeedForwardedToSandbox verifies that random_seed from the
+// request is forwarded to the sandbox request.
+func TestTrace_RandomSeedForwardedToSandbox(t *testing.T) {
+	cap := &traceCaptureRunner{}
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 10000
+	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"import random\nprint(random.random())","random_seed":42}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cap.req.RandomSeed == nil {
+		t.Fatal("expected RandomSeed to be set, got nil")
+	}
+	if *cap.req.RandomSeed != 42 {
+		t.Errorf("expected RandomSeed=42, got %d", *cap.req.RandomSeed)
+	}
+}
+
+// TestTrace_TooManyFilesRejected verifies that exceeding MaxFiles is rejected.
+func TestTrace_TooManyFilesRejected(t *testing.T) {
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 1
+	cfg.MaxFileBytes = 10000
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestTrace_FileTooLargeRejected verifies that a file exceeding MaxFileBytes is rejected.
+func TestTrace_FileTooLargeRejected(t *testing.T) {
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 5
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1","files":[{"name":"a.txt","content":"toolarge"}]}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestTrace_EmptyFileNameRejected verifies that a file with empty name is rejected.
+func TestTrace_EmptyFileNameRejected(t *testing.T) {
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 10000
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1","files":[{"name":"","content":"data"}]}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestTrace_EmptyFileContentRejected verifies that a file with empty content is rejected.
+func TestTrace_EmptyFileContentRejected(t *testing.T) {
+	cfg := defaultTraceConfig()
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 10000
+	h := newTraceHandler(traceSuccessRunner, metrics.NewNoop(), cfg)
+	w := doTraceRequest(h, `{"code":"x=1","files":[{"name":"a.txt","content":""}]}`)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 // TestTrace_JavaLanguage_TracerJarPathInCode verifies the tracer JAR path is
 // encoded in the Code/invocation sent to the sandbox.
 func TestTrace_JavaLanguage_TracerJarPathInCode(t *testing.T) {

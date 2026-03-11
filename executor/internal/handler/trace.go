@@ -38,6 +38,8 @@ type TraceHandlerConfig struct {
 	MaxOutputBytes          int
 	MaxCodeBytes            int
 	MaxStdinBytes           int
+	MaxFiles                int
+	MaxFileBytes            int
 	MaxConcurrentExecutions int
 }
 
@@ -114,6 +116,12 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		maxSteps = *req.MaxSteps
 	}
 
+	// Convert request files to sandbox files.
+	files := make([]sandbox.File, len(req.Files))
+	for i, f := range req.Files {
+		files[i] = sandbox.File{Name: f.Name, Content: f.Content}
+	}
+
 	// Build the sandbox request based on language.
 	// Both Python and Java tracers accept the same Args convention:
 	//   [student_code, stdin, maxSteps]
@@ -135,21 +143,25 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			javaPath = "/usr/bin/java"
 		}
 		sandboxReq = sandbox.Request{
-			Code:      fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
-			Stdin:     "", // tracer reads stdin via argv, not actual stdin
-			TimeoutMs: traceTimeoutMs,
-			Args:      tracerArgs,
-			Language:  "java",
-			IsCommand: true,
+			Code:       fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
+			Stdin:      "", // tracer reads stdin via argv, not actual stdin
+			Files:      files,
+			RandomSeed: req.RandomSeed,
+			TimeoutMs:  traceTimeoutMs,
+			Args:       tracerArgs,
+			Language:   "java",
+			IsCommand:  true,
 		}
 	} else {
 		// Python path (default): the tracer script becomes main.py,
 		// and the student code, stdin, and maxSteps are passed as arguments.
 		sandboxReq = sandbox.Request{
-			Code:      tracer.Script,
-			Stdin:     "", // tracer reads stdin via argv, not actual stdin
-			TimeoutMs: traceTimeoutMs,
-			Args:      tracerArgs,
+			Code:       tracer.Script,
+			Stdin:      "", // tracer reads stdin via argv, not actual stdin
+			Files:      files,
+			RandomSeed: req.RandomSeed,
+			TimeoutMs:  traceTimeoutMs,
+			Args:       tracerArgs,
 		}
 	}
 
@@ -237,6 +249,20 @@ func (h *TraceHandler) validateRequest(req *executorapi.TraceRequest) (string, s
 	}
 	if len(req.Stdin) > h.cfg.MaxStdinBytes {
 		return "stdin_too_large", fmt.Sprintf("stdin exceeds maximum size of %d bytes", h.cfg.MaxStdinBytes)
+	}
+	if len(req.Files) > h.cfg.MaxFiles {
+		return "too_many_files", fmt.Sprintf("too many files: maximum is %d", h.cfg.MaxFiles)
+	}
+	for _, f := range req.Files {
+		if f.Name == "" {
+			return "invalid_request", "file name must not be empty"
+		}
+		if f.Content == "" {
+			return "invalid_request", "file content must not be empty"
+		}
+		if len(f.Content) > h.cfg.MaxFileBytes {
+			return "file_too_large", fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, h.cfg.MaxFileBytes)
+		}
 	}
 	if req.MaxSteps != nil {
 		if *req.MaxSteps <= 0 {
