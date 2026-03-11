@@ -655,7 +655,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '')}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -916,7 +916,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '')}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}

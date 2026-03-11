@@ -17,10 +17,12 @@ type TracerClient interface {
 
 // standaloneTraceRequest is the request body for POST /trace.
 type standaloneTraceRequest struct {
-	Code     string `json:"code" validate:"required"`
-	Language string `json:"language,omitempty"`
-	Stdin    string `json:"stdin"`
-	MaxSteps *int   `json:"max_steps,omitempty"`
+	Code       string             `json:"code" validate:"required"`
+	Language   string             `json:"language,omitempty"`
+	Stdin      string             `json:"stdin"`
+	Files      []executor.File `json:"files,omitempty"`
+	RandomSeed *int               `json:"random_seed,omitempty"`
+	MaxSteps   *int               `json:"max_steps,omitempty"`
 }
 
 // TraceHandler handles debugger trace requests.
@@ -57,10 +59,12 @@ func (h *TraceHandler) StandaloneTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{
-		Code:     req.Code,
-		Language: lang,
-		Stdin:    req.Stdin,
-		MaxSteps: req.MaxSteps,
+		Code:       req.Code,
+		Language:   lang,
+		Stdin:      req.Stdin,
+		Files:      req.Files,
+		RandomSeed: req.RandomSeed,
+		MaxSteps:   req.MaxSteps,
 	})
 	if err != nil {
 		writeExecutorError(w, r, err, "trace execution failed")
