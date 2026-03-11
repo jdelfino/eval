@@ -20,6 +20,8 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   const [showModal, setShowModal] = useState(false);
   const [starting, setStarting] = useState(false);
   const [autoStartError, setAutoStartError] = useState<string | null>(null);
+  // Trampoline mode: after auto-starting, show "close this tab" instead of navigating
+  const [showCloseTab, setShowCloseTab] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoStartAttempted = useRef(false);
@@ -44,7 +46,10 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
         const channel = new BroadcastChannel('instructor-session-created');
         channel.postMessage({ session_id: session.id, problem_title });
         channel.close();
-        router.push(`/public-view?session_id=${session.id}`);
+        // Trampoline behavior: show "close this tab" instead of navigating.
+        // The projector tab at /public-view?section_id=X will auto-follow
+        // the new session via the section channel.
+        setShowCloseTab(true);
       } catch (err) {
         setAutoStartError(err instanceof Error ? err.message : 'Failed to create session');
       }
@@ -54,6 +59,16 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   if (isLoading) return null;
   if (!isInstructor) return null;
   if (!class_id) return null;
+
+  // Show trampoline UI after auto-start
+  if (showCloseTab) {
+    return (
+      <div className="flex flex-col items-start gap-3 mb-6">
+        <p className="text-sm text-green-700 font-medium">Session started successfully.</p>
+        <p className="text-sm text-gray-600">You may close this tab.</p>
+      </div>
+    );
+  }
 
   const handleSessionCreated = (session_id: string) => {
     const channel = new BroadcastChannel('instructor-session-created');
