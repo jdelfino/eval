@@ -655,9 +655,9 @@ export default function CodeEditor({
         {!isDesktop && !mobileProblemCollapsed && problem && (
           <div className="bg-gray-800 text-gray-200 border-b border-gray-700 flex-shrink-0">
             <div className="p-4">
-              <h2 className="text-xl font-bold mb-4 text-gray-100">{problem.title}</h2>
+              <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4 text-gray-100`}>{problem.title}</h2>
               {problem.description && (
-                <div className="prose prose-invert prose-sm max-w-none">
+                <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`}>
                   <MarkdownContent content={problem.description} darkTheme={true} />
                 </div>
               )}
@@ -868,9 +868,9 @@ export default function CodeEditor({
                   ) : (
                     /* Read-only problem view for student */
                     <>
-                      <h2 className="text-xl font-bold mb-4">{problem.title}</h2>
+                      <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4`}>{problem.title}</h2>
                       {problem.description && (
-                        <div className="prose prose-invert prose-sm max-w-none">
+                        <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`}>
                           <MarkdownContent content={problem.description} darkTheme={true} />
                         </div>
                       )}
