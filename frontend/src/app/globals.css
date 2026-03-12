@@ -28,3 +28,15 @@ code {
   height: 100%;
   margin-left: 3px;
 }
+
+/* Error line highlighting */
+.error-line-highlight {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.error-line-glyph {
+  background-color: rgba(239, 68, 68, 0.4);
+  width: 10px !important;
+  height: 100%;
+  margin-left: 3px;
+}

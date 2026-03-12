@@ -21,8 +21,10 @@ let mockEditorInstance: any = null;
 
 jest.mock('@monaco-editor/react', () => {
   return function MockEditor({ value, onChange, onMount }: any) {
+    const mountedRef = React.useRef(false);
     React.useEffect(() => {
-      if (onMount) {
+      if (onMount && !mountedRef.current) {
+        mountedRef.current = true;
         mockEditorInstance = {
           focus: jest.fn(),
           trigger: jest.fn(),
@@ -1602,5 +1604,215 @@ describe('CodeEditor - outputCollapsible prop', () => {
     const style = getByTestId('output-area').getAttribute('style') || '';
     expect(style).not.toContain('width: 0');
     expect(style).toContain('width');
+  });
+});
+
+// ===========================================================================
+// Error Line Highlighting
+// ===========================================================================
+
+describe('CodeEditor - Error Line Highlighting', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: true,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('applies error-line-highlight decoration when execution result has error', () => {
+    render(
+      <CodeEditor
+        code={'x = 1\ny = x + undefined_var\nprint(y)'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: false,
+          output: '',
+          error: 'Traceback (most recent call last):\n  File "<student code>", line 2, in <module>\nNameError: name \'undefined_var\' is not defined',
+          execution_time_ms: 50,
+        }}
+      />
+    );
+
+    expect(mockEditorInstance.deltaDecorations).toHaveBeenCalled();
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    const lastCall = allCalls[allCalls.length - 1];
+    const decorations = lastCall[1];
+
+    expect(decorations).toHaveLength(1);
+    expect(decorations[0]).toMatchObject({
+      range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 },
+      options: {
+        isWholeLine: true,
+        className: 'error-line-highlight',
+        glyphMarginClassName: 'error-line-glyph',
+      },
+    });
+  });
+
+  it('applies error highlight on last line of multi-frame traceback', () => {
+    const multiFrameError = [
+      'Traceback (most recent call last):',
+      '  File "<student code>", line 10, in <module>',
+      '    foo()',
+      '  File "<student code>", line 3, in foo',
+      '    raise ValueError("bad")',
+      'ValueError: bad',
+    ].join('\n');
+
+    render(
+      <CodeEditor
+        code={'def foo():\n    raise ValueError("bad")\n\nfoo()'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: false,
+          output: '',
+          error: multiFrameError,
+          execution_time_ms: 50,
+        }}
+      />
+    );
+
+    expect(mockEditorInstance.deltaDecorations).toHaveBeenCalled();
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    const lastCall = allCalls[allCalls.length - 1];
+    const decorations = lastCall[1];
+
+    expect(decorations).toHaveLength(1);
+    expect(decorations[0].range.startLineNumber).toBe(3);
+  });
+
+  it('clears error decorations when execution result becomes null', () => {
+    const errorResult = {
+      success: false,
+      output: '',
+      error: 'File "<student code>", line 3\nNameError: name "x" is not defined',
+      execution_time_ms: 50,
+    };
+    const { rerender } = render(
+      <CodeEditor
+        code={'print("hello")'}
+        onChange={jest.fn()}
+        execution_result={errorResult}
+      />
+    );
+
+    // First verify the error decoration was applied
+    const callsAfterError = mockEditorInstance.deltaDecorations.mock.calls.length;
+    expect(callsAfterError).toBeGreaterThan(0);
+
+    // Now clear the execution result
+    rerender(
+      <CodeEditor
+        code={'print("hello")'}
+        onChange={jest.fn()}
+        execution_result={null}
+      />
+    );
+
+    // After clearing, there should be an additional call that cleared decorations
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    expect(allCalls.length).toBeGreaterThan(callsAfterError);
+    const lastCall = allCalls[allCalls.length - 1];
+    expect(lastCall[1]).toHaveLength(0);
+  });
+
+  it('clears error decorations when execution result becomes successful', () => {
+    const errorResult = {
+      success: false,
+      output: '',
+      error: 'File "<student code>", line 2\nNameError: name "x" is not defined',
+      execution_time_ms: 50,
+    };
+    const { rerender } = render(
+      <CodeEditor
+        code={'print("hello")'}
+        onChange={jest.fn()}
+        execution_result={errorResult}
+      />
+    );
+
+    const callsAfterError = mockEditorInstance.deltaDecorations.mock.calls.length;
+    expect(callsAfterError).toBeGreaterThan(0);
+
+    rerender(
+      <CodeEditor
+        code={'print("hello")'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: true,
+          output: 'hello\n',
+          error: '',
+          execution_time_ms: 50,
+        }}
+      />
+    );
+
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    expect(allCalls.length).toBeGreaterThan(callsAfterError);
+    const lastCall = allCalls[allCalls.length - 1];
+    expect(lastCall[1]).toHaveLength(0);
+  });
+
+  it('does not apply error decorations when error text has no parseable line number', () => {
+    render(
+      <CodeEditor
+        code={'print("hello")'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: false,
+          output: '',
+          error: 'Killed: execution timeout',
+          execution_time_ms: 10000,
+        }}
+      />
+    );
+
+    // deltaDecorations should NOT be called (no decorations to add or remove)
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    const errorHighlightCalls = allCalls.filter((call: any[]) =>
+      call[1].some((dec: any) => dec?.options?.className === 'error-line-highlight')
+    );
+    expect(errorHighlightCalls).toHaveLength(0);
+  });
+
+  it('clears error decorations when debugger activates', () => {
+    const activeDebugger = makeActiveDebugger();
+    const { rerender } = render(
+      <CodeEditor
+        code={'x = undefined_var'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: false,
+          output: '',
+          error: 'File "<student code>", line 1\nNameError: ...',
+          execution_time_ms: 50,
+        }}
+      />
+    );
+
+    // Now activate debugger — error decorations should be cleared
+    rerender(
+      <CodeEditor
+        code={'x = undefined_var'}
+        onChange={jest.fn()}
+        execution_result={{
+          success: false,
+          output: '',
+          error: 'File "<student code>", line 1\nNameError: ...',
+          execution_time_ms: 50,
+        }}
+        debugger={activeDebugger}
+      />
+    );
+
+    const allCalls = mockEditorInstance.deltaDecorations.mock.calls;
+    // After debugger activates, there should be at least one call that cleared decorations
+    // (empty decoration array), meaning the error decorations were cleared
+    const hasEmptyDecCall = allCalls.some((call: any[]) => call[1].length === 0);
+    expect(hasEmptyDecCall).toBe(true);
   });
 });
