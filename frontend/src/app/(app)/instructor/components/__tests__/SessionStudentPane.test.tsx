@@ -735,5 +735,25 @@ describe('SessionStudentPane', () => {
       const pane = screen.getByTestId('session-student-pane');
       expect(pane).not.toHaveClass('lg:flex-row');
     });
+
+    it('applies w-2/5 unconditionally on left panel when forceDesktop=true (viewport below lg breakpoint)', () => {
+      // When forceDesktop=true the browser is zoomed for projector display, shrinking
+      // the CSS viewport below the lg breakpoint. The left panel must use 'w-2/5' without
+      // a responsive prefix so the two-column layout still applies.
+      render(<SessionStudentPane {...defaultProps} forceDesktop />);
+      const pane = screen.getByTestId('session-student-pane');
+      // The left panel is the first direct child div
+      const leftPanel = pane.firstElementChild as HTMLElement;
+      expect(leftPanel).toHaveClass('w-2/5');
+      expect(leftPanel).not.toHaveClass('lg:w-2/5');
+    });
+
+    it('applies lg:w-2/5 on left panel when forceDesktop=false (default responsive)', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      const pane = screen.getByTestId('session-student-pane');
+      const leftPanel = pane.firstElementChild as HTMLElement;
+      expect(leftPanel).toHaveClass('lg:w-2/5');
+      expect(leftPanel).not.toHaveClass('w-2/5');
+    });
   });
 });

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, render } from '@testing-library/react';
 import {
   LayoutConfigProvider,
   useLayoutConfig,
@@ -93,25 +93,48 @@ describe('LayoutConfigContext', () => {
     });
 
     it('resets forceDesktop to false after cleanup on unmount', () => {
-      // Render a combined hook and unmount it to test cleanup
-      const { result, unmount } = renderHook(
-        () => {
-          useForceDesktopLayout();
-          return useLayoutConfig();
-        },
-        { wrapper: LayoutConfigProvider }
+      // Use a persistent observer component that remains mounted after the
+      // useForceDesktopLayout consumer unmounts so we can verify the context reset.
+      //
+      // Architecture: LayoutConfigProvider wraps both ForceDesktopChild (which calls
+      // useForceDesktopLayout) and a persistent Observer (which reads forceDesktop).
+      // We render the tree, verify forceDesktop is true, then rerender without
+      // ForceDesktopChild so its cleanup runs, and assert forceDesktop returns to false.
+      let observedForceDesktop: boolean | undefined;
+
+      function Observer() {
+        const { forceDesktop } = useLayoutConfig();
+        observedForceDesktop = forceDesktop;
+        return null;
+      }
+
+      function ForceDesktopChild() {
+        useForceDesktopLayout();
+        return null;
+      }
+
+      // Render the full tree: provider + observer + force-desktop child
+      const { rerender } = render(
+        <LayoutConfigProvider>
+          <Observer />
+          <ForceDesktopChild />
+        </LayoutConfigProvider>
       );
 
-      // Should be forced while mounted
-      expect(result.current.forceDesktop).toBe(true);
+      // ForceDesktopChild mounted → forceDesktop should be true
+      expect(observedForceDesktop).toBe(true);
 
-      // Unmount should trigger cleanup — forceDesktop resets to false
+      // Unmount ForceDesktopChild by re-rendering without it
       act(() => {
-        unmount();
+        rerender(
+          <LayoutConfigProvider>
+            <Observer />
+          </LayoutConfigProvider>
+        );
       });
 
-      // After unmount the result is stale — the hook cleaned up correctly if no error thrown
-      // The real validation is that the effect cleanup calls setForceDesktop(false)
+      // ForceDesktopChild unmounted → cleanup runs → forceDesktop resets to false
+      expect(observedForceDesktop).toBe(false);
     });
   });
 });

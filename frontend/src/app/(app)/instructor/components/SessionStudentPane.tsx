@@ -187,7 +187,7 @@ export function SessionStudentPane({
   return (
     <div className={`flex ${forceDesktop ? 'flex-row' : 'flex-col lg:flex-row'} gap-4`} data-testid="session-student-pane">
       {/* Student List - Left Panel */}
-      <div className="lg:w-2/5 flex-shrink-0">
+      <div className={`${forceDesktop ? 'w-2/5' : 'lg:w-2/5'} flex-shrink-0`}>
         {/* Analyze button */}
         <div className="mb-3">
           {analysisState === 'error' ? (
