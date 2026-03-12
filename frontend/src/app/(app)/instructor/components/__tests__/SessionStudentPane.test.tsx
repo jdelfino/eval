@@ -714,4 +714,26 @@ describe('SessionStudentPane', () => {
       expect(screen.getByText('XYZ789')).toBeInTheDocument();
     });
   });
+
+  describe('forceDesktop prop', () => {
+    it('uses flex-col lg:flex-row layout by default (responsive)', () => {
+      render(<SessionStudentPane {...defaultProps} />);
+      const pane = screen.getByTestId('session-student-pane');
+      expect(pane).toHaveClass('flex-col');
+      expect(pane).toHaveClass('lg:flex-row');
+    });
+
+    it('uses flex-row layout without responsive prefix when forceDesktop=true', () => {
+      render(<SessionStudentPane {...defaultProps} forceDesktop />);
+      const pane = screen.getByTestId('session-student-pane');
+      expect(pane).toHaveClass('flex-row');
+      expect(pane).not.toHaveClass('flex-col');
+    });
+
+    it('does not apply lg:flex-row responsive class when forceDesktop=true', () => {
+      render(<SessionStudentPane {...defaultProps} forceDesktop />);
+      const pane = screen.getByTestId('session-student-pane');
+      expect(pane).not.toHaveClass('lg:flex-row');
+    });
+  });
 });

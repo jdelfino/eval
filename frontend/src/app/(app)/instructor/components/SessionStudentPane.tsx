@@ -66,6 +66,11 @@ interface SessionStudentPaneProps {
   onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<ExecutionResult | undefined>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
+  /**
+   * Force desktop layout regardless of viewport width.
+   * Use when browser zoom for projector display would otherwise collapse the layout.
+   */
+  forceDesktop?: boolean;
 }
 
 /**
@@ -86,6 +91,7 @@ export function SessionStudentPane({
   onViewHistory,
   onExecuteCode,
   featured_student_id,
+  forceDesktop = false,
 }: SessionStudentPaneProps) {
   // Local state for student selection and code
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -179,7 +185,7 @@ export function SessionStudentPane({
       : `Analyze ${students.length} Submissions`;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4" data-testid="session-student-pane">
+    <div className={`flex ${forceDesktop ? 'flex-row' : 'flex-col lg:flex-row'} gap-4`} data-testid="session-student-pane">
       {/* Student List - Left Panel */}
       <div className="lg:w-2/5 flex-shrink-0">
         {/* Analyze button */}

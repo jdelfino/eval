@@ -24,6 +24,7 @@ import { Problem, ExecutionSettings } from '@/types/problem';
 import { reopenSession } from '@/lib/api/sessions';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
 
 /**
  * Extended session state from API that includes section info
@@ -42,6 +43,10 @@ export default function InstructorSessionPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { setHeaderSlot } = useHeaderSlot();
   const session_id = params.id as string;
+
+  // Force desktop layout so browser zoom for projector display does not
+  // collapse the sidebar and session layout to mobile breakpoints.
+  useForceDesktopLayout();
 
   // Local state
   const [error, setError] = useState<string | null>(null);
@@ -312,6 +317,7 @@ export default function InstructorSessionPage() {
           onClearPublicView={handleClearPublicView}
           executeCode={handleExecuteCode}
           featured_student_id={realtimeSession?.featured_student_id}
+          forceDesktop
         />
       )}
     </div>
