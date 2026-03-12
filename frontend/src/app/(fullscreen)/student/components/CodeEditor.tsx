@@ -12,6 +12,7 @@ import { executeStandaloneCode } from '@/lib/api/execute';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
+import { parseErrorLineNumber } from '@/lib/parse-error-line';
 
 interface CodeEditorProps {
   code: string;
@@ -76,6 +77,7 @@ export default function CodeEditor({
   const [localIsRunning, setLocalIsRunning] = useState(false);
   const [localExecutionResult, setLocalExecutionResult] = useState<ExecutionResult | null>(null);
   const decorationsRef = useRef<string[]>([]);
+  const errorDecorationsRef = useRef<string[]>([]);
 
   // Compute effective read-only state: either explicitly readOnly or debugger is active
   const isReadOnly = readOnly || (debuggerHook?.hasTrace ?? false);
@@ -243,6 +245,14 @@ export default function CodeEditor({
   const effectiveIsRunning = useApiExecution ? localIsRunning : isRunning;
   const effectiveResult = useApiExecution ? localExecutionResult : execution_result;
 
+  // Compute whether error decorations should be shown
+  const hasErrorDecoration =
+    !debuggerHook?.hasTrace &&
+    !!effectiveResult &&
+    !effectiveResult.success &&
+    !!effectiveResult.error &&
+    parseErrorLineNumber(effectiveResult.error) !== null;
+
   // Auto-grow output section when results appear (up to 40%)
   // Skip auto-grow for right-positioned output to avoid jarring width changes
   useEffect(() => {
@@ -323,6 +333,48 @@ export default function CodeEditor({
     ]);
     decorationsRef.current = newDecorations;
   }, [debuggerHook?.hasTrace, debuggerHook?.currentStep]);
+
+  // Update error line highlighting when execution result changes
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    const editor = editorRef.current as Monaco.editor.IStandaloneCodeEditor;
+
+    // Determine the error line to highlight (null = no highlight)
+    let errorLine: number | null = null;
+    if (
+      !debuggerHook?.hasTrace &&
+      effectiveResult &&
+      !effectiveResult.success &&
+      effectiveResult.error
+    ) {
+      errorLine = parseErrorLineNumber(effectiveResult.error);
+    }
+
+    if (errorLine !== null) {
+      // Add error decoration for the error line
+      const newDecorations = editor.deltaDecorations(errorDecorationsRef.current, [
+        {
+          range: {
+            startLineNumber: errorLine,
+            startColumn: 1,
+            endLineNumber: errorLine,
+            endColumn: 1,
+          },
+          options: {
+            isWholeLine: true,
+            className: 'error-line-highlight',
+            glyphMarginClassName: 'error-line-glyph',
+          },
+        },
+      ]);
+      errorDecorationsRef.current = newDecorations;
+    } else if (errorDecorationsRef.current.length > 0) {
+      // Only clear decorations if there are any to clear (avoids spurious deltaDecorations calls)
+      const newDecorations = editor.deltaDecorations(errorDecorationsRef.current, []);
+      errorDecorationsRef.current = newDecorations;
+    }
+  }, [effectiveResult, debuggerHook?.hasTrace]);
 
   // Cleanup __TEST_EDITORS on unmount
   useEffect(() => {
@@ -984,12 +1036,12 @@ export default function CodeEditor({
                 readOnlyMessage: debuggerHook?.hasTrace
                   ? { value: 'Exit debug mode to edit code' }
                   : undefined,
-                // Only show glyph margin when debugging (used for debugger line indicator)
-                glyphMargin: !!debuggerHook?.hasTrace && !mobileViewport.isVerySmall,
+                // Show glyph margin when debugging or when error decorations are active
+                glyphMargin: (!!debuggerHook?.hasTrace || hasErrorDecoration) && !mobileViewport.isVerySmall,
                 // Disable folding gutter and reduce gutter width; add small right padding after line numbers
                 folding: false,
                 lineNumbersMinChars: 2,
-                lineDecorationsWidth: debuggerHook?.hasTrace ? 10 : 8,
+                lineDecorationsWidth: (debuggerHook?.hasTrace || hasErrorDecoration) ? 10 : 8,
                 // Enable word wrap on mobile for better readability
                 wordWrap: mobileViewport.isMobile || mobileViewport.isTablet ? 'on' : 'off',
                 // Improve touch scrolling
