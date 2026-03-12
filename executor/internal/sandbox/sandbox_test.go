@@ -514,7 +514,7 @@ func TestPrepareCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := prepareCode(tt.code, tt.stdin, tt.randomSeed, "")
+			got, _ := prepareCode(tt.code, tt.stdin, tt.randomSeed, "")
 
 			// Must always end with the original code.
 			if !strings.HasSuffix(got, tt.code) {
@@ -535,6 +535,33 @@ func TestPrepareCode(t *testing.T) {
 			}
 			if !tt.wantSeed && hasSeed {
 				t.Errorf("did not expect random seed injection, got %q", got)
+			}
+		})
+	}
+}
+
+// TestPrepareCodePreambleLineCount verifies that prepareCode returns the correct
+// number of preamble lines prepended to the user's code.
+func TestPrepareCodePreambleLineCount(t *testing.T) {
+	seed := 42
+	tests := []struct {
+		name      string
+		stdin     string
+		seed      *int
+		language  string
+		wantLines int
+	}{
+		{"no preamble", "", nil, "", 0},
+		{"input echo preamble only", "hello\n", nil, "", 5},
+		{"seed only", "", &seed, "", 2},
+		{"input echo + seed", "hello\n", &seed, "", 7},
+		{"java no preamble", "hello\n", &seed, "java", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, lines := prepareCode("print('hi')", tt.stdin, tt.seed, tt.language)
+			if lines != tt.wantLines {
+				t.Errorf("preambleLines = %d, want %d", lines, tt.wantLines)
 			}
 		})
 	}
@@ -645,7 +672,7 @@ func TestPrepareCodeLanguageGuard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := prepareCode("print('hi')", tt.stdin, tt.randomSeed, tt.language)
+			got, _ := prepareCode("print('hi')", tt.stdin, tt.randomSeed, tt.language)
 
 			hasPreamble := strings.Contains(got, "_original_input = input")
 			if tt.wantPreamble && !hasPreamble {
@@ -1285,6 +1312,106 @@ func TestRunJavaCommand_NsjailEmptyStderr_ReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nsjail") {
 		t.Errorf("expected error to mention nsjail, got: %v", err)
+	}
+}
+
+// TestAdjustPythonLineNumbers verifies that preamble line offsets are correctly
+// subtracted from Python traceback line numbers, and that helper file references
+// are left untouched.
+func TestAdjustPythonLineNumbers(t *testing.T) {
+	tests := []struct {
+		name          string
+		stderr        string
+		preambleLines int
+		want          string
+	}{
+		{
+			name:          "standard traceback offset 5",
+			stderr:        `Traceback (most recent call last):` + "\n" + `  File "/tmp/work/main.py", line 8, in <module>` + "\n" + `NameError: name 'x' is not defined`,
+			preambleLines: 5,
+			want:          `Traceback (most recent call last):` + "\n" + `  File "/tmp/work/main.py", line 3, in <module>` + "\n" + `NameError: name 'x' is not defined`,
+		},
+		{
+			name:          "SyntaxError format",
+			stderr:        `  File "/tmp/work/main.py", line 7` + "\n" + `    print("hi"` + "\n" + `         ^` + "\n" + `SyntaxError: invalid syntax`,
+			preambleLines: 5,
+			want:          `  File "/tmp/work/main.py", line 2` + "\n" + `    print("hi"` + "\n" + `         ^` + "\n" + `SyntaxError: invalid syntax`,
+		},
+		{
+			name: "multi-frame traceback",
+			stderr: `Traceback (most recent call last):` + "\n" +
+				`  File "/tmp/work/main.py", line 8, in <module>` + "\n" +
+				`  File "/tmp/work/main.py", line 12, in foo` + "\n" +
+				`ZeroDivisionError: division by zero`,
+			preambleLines: 5,
+			want: `Traceback (most recent call last):` + "\n" +
+				`  File "/tmp/work/main.py", line 3, in <module>` + "\n" +
+				`  File "/tmp/work/main.py", line 7, in foo` + "\n" +
+				`ZeroDivisionError: division by zero`,
+		},
+		{
+			name:          "offset 0 no change",
+			stderr:        `  File "/tmp/work/main.py", line 3, in <module>`,
+			preambleLines: 0,
+			want:          `  File "/tmp/work/main.py", line 3, in <module>`,
+		},
+		{
+			name:          "clamp to 1 when offset exceeds line number",
+			stderr:        `  File "/tmp/work/main.py", line 2, in <module>`,
+			preambleLines: 5,
+			want:          `  File "/tmp/work/main.py", line 1, in <module>`,
+		},
+		{
+			name:          "helper file reference unchanged",
+			stderr:        `  File "/tmp/work/helper.py", line 3, in foo` + "\n" + `  File "/tmp/work/main.py", line 8, in <module>`,
+			preambleLines: 5,
+			want:          `  File "/tmp/work/helper.py", line 3, in foo` + "\n" + `  File "/tmp/work/main.py", line 3, in <module>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := adjustPythonLineNumbers(tt.stderr, tt.preambleLines)
+			if got != tt.want {
+				t.Errorf("adjustPythonLineNumbers(%q, %d)\ngot  %q\nwant %q", tt.stderr, tt.preambleLines, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunUnsafeLineNumberAdjustment verifies that RunUnsafe corrects traceback
+// line numbers when stdin preamble is injected, so that user-visible line numbers
+// match the source code the user wrote.
+func TestRunUnsafeLineNumberAdjustment(t *testing.T) {
+	pythonPath, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found")
+	}
+
+	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
+
+	// User code: line 1 calls input(), line 3 has the error (NameError).
+	// With the 5-line input echo preamble prepended, Python sees the error
+	// at line 8 (5 + 3). After adjustment it must report line 3.
+	req := Request{
+		Code:      "x = input('Enter: ')\ny = x + 1\n",
+		Stdin:     "hello\n",
+		TimeoutMs: 5000,
+	}
+
+	result, err := RunUnsafe(context.Background(), cfg, req)
+	if err != nil {
+		t.Fatalf("RunUnsafe error: %v", err)
+	}
+	if result.ExitCode == 0 {
+		t.Fatal("expected non-zero exit code (TypeError)")
+	}
+	// After adjustment the error must reference line 2 (the y = x + 1 line).
+	if strings.Contains(result.Stderr, "line 7") || strings.Contains(result.Stderr, "line 8") {
+		t.Errorf("stderr still contains preamble-shifted line number: %q", result.Stderr)
+	}
+	if !strings.Contains(result.Stderr, "line 2") {
+		t.Errorf("expected adjusted line 2 in stderr, got: %q", result.Stderr)
 	}
 }
 

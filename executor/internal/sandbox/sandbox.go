@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -102,7 +103,8 @@ type Result struct {
 // prepareCode prepends the input echo preamble (when stdin is provided) and
 // random seed injection to the student's code. Preambles are Python-specific
 // and are skipped when language is "java".
-func prepareCode(code string, stdin string, randomSeed *int, language string) string {
+// It returns the prepared code and the number of preamble lines prepended.
+func prepareCode(code string, stdin string, randomSeed *int, language string) (string, int) {
 	// Preambles only apply to Python (empty language defaults to Python).
 	if language == "" || language == "python" {
 		var prefix string
@@ -112,9 +114,40 @@ func prepareCode(code string, stdin string, randomSeed *int, language string) st
 		if randomSeed != nil {
 			prefix += fmt.Sprintf("import random\nrandom.seed(%d)\n", *randomSeed)
 		}
-		return prefix + code
+		return prefix + code, strings.Count(prefix, "\n")
 	}
-	return code
+	return code, 0
+}
+
+// adjustPythonLineNumbers subtracts preambleLines from every line number in
+// Python traceback lines that reference main.py.  Other files (helper modules,
+// stdlib) are left untouched.  Line numbers are clamped to a minimum of 1.
+//
+// The regex matches the nsjail sandbox path (/tmp/work/main.py) used by Run as
+// well as any absolute path ending with /main.py used by RunUnsafe (temp dirs
+// vary).
+var mainPyLineRe = regexp.MustCompile(`(File ".*?/main\.py", line )(\d+)`)
+
+func adjustPythonLineNumbers(stderr string, preambleLines int) string {
+	if preambleLines == 0 {
+		return stderr
+	}
+	return mainPyLineRe.ReplaceAllStringFunc(stderr, func(match string) string {
+		m := mainPyLineRe.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		prefix := m[1]
+		lineNum, err := strconv.Atoi(m[2])
+		if err != nil {
+			return match
+		}
+		adjusted := lineNum - preambleLines
+		if adjusted < 1 {
+			adjusted = 1
+		}
+		return fmt.Sprintf("%s%d", prefix, adjusted)
+	})
 }
 
 // RunUnsafe executes code directly without nsjail sandboxing.
@@ -134,7 +167,7 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	code := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
+	code, preambleLines := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
 
 	mainPath := filepath.Join(tempDir, "main.py")
 	if err := os.WriteFile(mainPath, []byte(code), 0644); err != nil {
@@ -201,9 +234,11 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		timedOut = true
 	}
 
+	stderr := adjustPythonLineNumbers(stderrBuf.String(), preambleLines)
+
 	return &Result{
 		Stdout:     stdoutBuf.String(),
-		Stderr:     stderrBuf.String(),
+		Stderr:     stderr,
 		ExitCode:   exitCode,
 		TimedOut:   timedOut,
 		DurationMs: duration.Milliseconds(),
@@ -430,7 +465,7 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 
 	// Prepare code with input echo preamble and optional random seed.
-	code := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
+	code, preambleLines := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
 
 	// Write main.py.
 	mainPath := filepath.Join(tempDir, "main.py")
@@ -568,6 +603,9 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if stderrBuf.truncated {
 		stderr += truncationSuffix
 	}
+
+	// Adjust Python traceback line numbers to account for the preamble.
+	stderr = adjustPythonLineNumbers(stderr, preambleLines)
 
 	// Sanitize stderr.
 	stderr = sanitizeStderr(stderr)
