@@ -15,6 +15,7 @@ jest.mock('../SessionControls', () => {
     join_code,
     connectedStudentCount,
     onEndSession,
+    problemTitle,
   }: any) {
     return (
       <div data-testid="session-controls">
@@ -22,6 +23,7 @@ jest.mock('../SessionControls', () => {
         <span data-testid="section-name">{section_name}</span>
         <span data-testid="join-code">{join_code}</span>
         <span data-testid="student-count">{connectedStudentCount}</span>
+        <span data-testid="problem-title-prop">{problemTitle}</span>
         <button onClick={onEndSession} data-testid="end-session-btn">End Session</button>
       </div>
     );
@@ -261,6 +263,20 @@ describe('SessionView', () => {
       expect(defaultProps.onUpdateProblem).toHaveBeenCalledWith(
         { title: 'Updated', description: '', starter_code: '' }
       );
+    });
+  });
+
+  describe('problem title passthrough', () => {
+    it('passes problemTitle to SessionControls', () => {
+      render(<SessionView {...defaultProps} />);
+
+      expect(screen.getByTestId('problem-title-prop')).toHaveTextContent('Test Problem');
+    });
+
+    it('passes undefined problemTitle when sessionProblem is null', () => {
+      render(<SessionView {...defaultProps} sessionProblem={null} />);
+
+      expect(screen.getByTestId('problem-title-prop')).toHaveTextContent('');
     });
   });
 
