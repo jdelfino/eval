@@ -164,6 +164,43 @@ describe('PublicInstructorView', () => {
     expect(screen.getByTestId('debugger-present')).toBeInTheDocument();
   });
 
+  test('shows featured code editor when featured_code is set but featured_student_id is null (Show Solution)', async () => {
+    // When instructor clicks "Show Solution", the state has featured_code set but
+    // featured_student_id is null (no specific student). The projector must display
+    // the solution code using the "Featured Code" editor, not the scratch pad.
+    lastCodeEditorProps = null;
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        session_id: 'test-session-id',
+        join_code: 'ABC-123',
+        problem: {
+          title: 'Test Problem',
+          description: 'A test problem',
+          starter_code: 'def solve():\n    pass',
+        },
+        featured_student_id: null,
+        featured_code: 'def solution():\n    return 42',
+        hasFeaturedSubmission: false,
+      }),
+    });
+
+    const PublicInstructorView = require('../page').default;
+    await act(async () => {
+      render(<PublicInstructorView />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    });
+
+    // Should show the solution code (not starter code)
+    expect(screen.getByTestId('code-content')).toHaveTextContent('def solution():');
+    // Should use the "Featured Code" title, not "Starter Code" or "Scratch Pad"
+    expect(screen.getByTestId('code-title')).toHaveTextContent('Featured Code');
+  });
+
   test('shows empty editor when no featured submission and no starter code', async () => {
     lastCodeEditorProps = null;
 

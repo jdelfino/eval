@@ -290,6 +290,29 @@ describe('useRealtimePublicView', () => {
       expect(result.current.state?.featured_code).toBeNull();
     });
 
+    it('should set featured_code when Show Solution sends empty user_id with solution code', async () => {
+      // When instructor clicks "Show Solution", the backend sends user_id: "" with
+      // the solution code. The hook must NOT discard the code just because user_id is empty.
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        simulatePublication('featured_student_changed', {
+          user_id: '',
+          code: 'def solution():\n    return 42',
+        });
+      });
+
+      // featured_student_id should be null (no student) but featured_code must be set
+      expect(result.current.state?.featured_student_id).toBeNull();
+      expect(result.current.state?.featured_code).toBe('def solution():\n    return 42');
+    });
+
     it('should handle session_ended event', async () => {
       const { result } = renderHook(() =>
         useRealtimePublicView({ session_id: 'session-1' })

@@ -103,8 +103,11 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
       switch (parsed.type) {
         case 'featured_student_changed': {
           // data: FeaturedStudentChangedData{user_id, code, execution_settings?}
+          // Show Solution sends user_id: "" with code set — code presence determines
+          // whether to show featured content, not userId presence.
           const { user_id, code, execution_settings } = parsed.data;
           const userId = user_id || null;
+          const hasCode = typeof code === 'string' && code.length > 0;
           setState(prev => {
             if (!prev) {
               console.warn('[useRealtimePublicView] Dropping featured_student_changed event: state not yet initialized');
@@ -113,8 +116,8 @@ export function useRealtimePublicView({ session_id }: UseRealtimePublicViewOptio
             return {
               ...prev,
               featured_student_id: userId,
-              featured_code: userId ? (code ?? '') : null,
-              featured_execution_settings: userId ? (execution_settings ?? null) : null,
+              featured_code: hasCode ? code : (userId ? '' : null),
+              featured_execution_settings: (hasCode || userId) ? (execution_settings ?? null) : null,
             };
           });
           break;
