@@ -1390,9 +1390,9 @@ func TestRunUnsafeLineNumberAdjustment(t *testing.T) {
 
 	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
 
-	// User code: line 1 calls input(), line 3 has the error (NameError).
+	// User code: line 1 calls input(), line 2 has the error (TypeError).
 	// With the 5-line input echo preamble prepended, Python sees the error
-	// at line 8 (5 + 3). After adjustment it must report line 3.
+	// at line 7 (5 + 2). After adjustment it must report line 2.
 	req := Request{
 		Code:      "x = input('Enter: ')\ny = x + 1\n",
 		Stdin:     "hello\n",
