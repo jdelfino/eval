@@ -47,6 +47,7 @@ test.describe('Problem Publishing + Student Practice', () => {
       title: `Publishing Test Problem ${testNamespace}`,
       description: 'A problem for publishing and practice testing',
       starterCode: 'print("hello from practice")\n',
+      solution: 'print("solution code here")\n',
     });
 
     // Register student via the setupStudent fixture
@@ -149,6 +150,13 @@ test.describe('Problem Publishing + Student Practice', () => {
 
       // "View Solution" button should be visible because show_solution=true
       await expect(page.locator('button:has-text("View Solution")')).toBeVisible({ timeout: 10000 });
+
+      // Click "View Solution" and verify solution modal appears with solution code
+      await page.locator('button:has-text("View Solution")').click();
+
+      // A dialog/modal should appear with the solution code
+      await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('[role="dialog"]').locator('text=solution code here')).toBeVisible({ timeout: 5000 });
 
     } finally {
       try {

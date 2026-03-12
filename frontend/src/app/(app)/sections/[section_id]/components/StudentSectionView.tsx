@@ -36,6 +36,7 @@ export default function StudentSectionView({
   });
   const [filter, setFilter] = useState<'all' | 'worked' | 'unstarted'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [solutionModal, setSolutionModal] = useState<{ title: string; solution: string } | null>(null);
 
   const handleProblemClick = async (problemId: string) => {
     try {
@@ -227,8 +228,11 @@ export default function StudentSectionView({
                         >
                           {problem.student_work?.id ? 'Continue' : 'Practice'}
                         </button>
-                        {problem.show_solution && (
-                          <button className="px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                        {problem.show_solution && problem.problem.solution && (
+                          <button
+                            onClick={() => setSolutionModal({ title: problem.problem.title, solution: problem.problem.solution! })}
+                            className="px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                          >
                             View Solution
                           </button>
                         )}
@@ -256,6 +260,39 @@ export default function StudentSectionView({
           </div>
         )}
       </div>
+
+      {/* Solution Modal */}
+      {solutionModal && (
+        <dialog
+          role="dialog"
+          open
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 w-full h-full"
+          onClick={(e) => { if (e.target === e.currentTarget) setSolutionModal(null); }}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Solution</h2>
+                <p className="text-sm text-gray-500 mt-1">{solutionModal.title}</p>
+              </div>
+              <button
+                onClick={() => setSolutionModal(null)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-auto">
+              <pre className="bg-gray-50 rounded-lg p-4 text-sm font-mono text-gray-800 overflow-x-auto whitespace-pre-wrap">
+                <code>{solutionModal.solution}</code>
+              </pre>
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 }

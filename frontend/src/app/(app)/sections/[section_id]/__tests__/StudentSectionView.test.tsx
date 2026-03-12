@@ -117,7 +117,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       author_id: 'user-1',
       class_id: null,
       tags: ['loops', 'conditionals'],
-      solution: null,
+      solution: 'print("fizzbuzz solution")',
       language: 'python',
       created_at: '2025-01-01T00:00:00Z',
       updated_at: '2025-01-01T00:00:00Z',
@@ -713,6 +713,110 @@ describe('StudentSectionView', () => {
 
       // Banner should not appear because the hook returned empty sessions
       expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('View Solution modal', () => {
+    const problemWithSolution: PublishedProblemWithStatus[] = [
+      {
+        id: 'sp-1',
+        section_id: SECTION_ID,
+        problem_id: PROBLEM_ID_1,
+        published_by: 'user-1',
+        show_solution: true,
+        published_at: '2025-01-01T00:00:00Z',
+        problem: {
+          id: PROBLEM_ID_1,
+          namespace_id: 'ns-1',
+          title: 'FizzBuzz',
+          description: 'Write a FizzBuzz solution',
+          starter_code: null,
+          test_cases: [],
+          execution_settings: {},
+          author_id: 'user-1',
+          class_id: null,
+          tags: [],
+          solution: 'for i in range(1, 101):\n    print(i)',
+          language: 'python',
+          created_at: '2025-01-01T00:00:00Z',
+          updated_at: '2025-01-01T00:00:00Z',
+        },
+        student_work: {
+          id: WORK_ID_1,
+          user_id: 'user-1',
+          section_id: SECTION_ID,
+          problem_id: PROBLEM_ID_1,
+          code: '',
+          execution_settings: {},
+          last_update: '2026-02-20T10:00:00Z',
+          created_at: '2026-02-20T10:00:00Z',
+        },
+      },
+    ];
+
+    it('clicking "View Solution" opens a modal showing the solution code', async () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={problemWithSolution}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // Modal should not be visible initially
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      // Click "View Solution"
+      const viewSolutionBtn = screen.getByRole('button', { name: 'View Solution' });
+      await userEvent.click(viewSolutionBtn);
+
+      // Modal/dialog should now appear
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+
+      // Solution code should be visible (use container query since code block has multiline text)
+      const codeBlock = screen.getByRole('dialog').querySelector('code');
+      expect(codeBlock).not.toBeNull();
+      expect(codeBlock!.textContent).toContain('for i in range(1, 101):');
+    });
+
+    it('modal shows problem title in the header', async () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={problemWithSolution}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'View Solution' }));
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+      // The modal should show a "Solution" header
+      expect(screen.getByRole('heading', { name: /Solution/i })).toBeInTheDocument();
+    });
+
+    it('modal can be closed with a close button', async () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={problemWithSolution}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'View Solution' }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      // Click the close button
+      const closeBtn = screen.getByRole('button', { name: /close/i });
+      await userEvent.click(closeBtn);
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 
