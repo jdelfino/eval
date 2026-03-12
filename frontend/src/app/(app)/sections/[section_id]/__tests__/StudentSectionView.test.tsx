@@ -25,7 +25,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import StudentSectionView from '../components/StudentSectionView';
@@ -797,6 +797,66 @@ describe('StudentSectionView', () => {
       expect(dialog).toBeInTheDocument();
       // The modal should show a "Solution" header
       expect(screen.getByRole('heading', { name: /Solution/i })).toBeInTheDocument();
+      // The modal should also show the problem title "FizzBuzz"
+      expect(within(dialog).getByText('FizzBuzz')).toBeInTheDocument();
+    });
+
+    it('does not show View Solution when show_solution is true but solution is null', () => {
+      const problemShowSolutionNoContent: PublishedProblemWithStatus[] = [
+        {
+          id: 'sp-null',
+          section_id: SECTION_ID,
+          problem_id: PROBLEM_ID_1,
+          published_by: 'user-1',
+          show_solution: true,
+          published_at: '2025-01-01T00:00:00Z',
+          problem: {
+            id: PROBLEM_ID_1,
+            namespace_id: 'ns-1',
+            title: 'FizzBuzz',
+            description: 'Write a FizzBuzz solution',
+            starter_code: null,
+            test_cases: [],
+            execution_settings: {},
+            author_id: 'user-1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            language: 'python',
+            created_at: '2025-01-01T00:00:00Z',
+            updated_at: '2025-01-01T00:00:00Z',
+          },
+        },
+      ];
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={problemShowSolutionNoContent}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: 'View Solution' })).not.toBeInTheDocument();
+    });
+
+    it('modal can be closed with Escape key', async () => {
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          publishedProblems={problemWithSolution}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'View Solution' }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     it('modal can be closed with a close button', async () => {

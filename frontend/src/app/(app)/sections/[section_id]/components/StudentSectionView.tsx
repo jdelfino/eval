@@ -1,12 +1,105 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Session, PublishedProblemWithStatus } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import { BackButton } from '@/components/ui/BackButton';
 import { useSectionEvents } from '@/hooks/useSectionEvents';
 import type { SectionDetail } from '../page';
+
+interface SolutionModalProps {
+  modal: { title: string; solution: string } | null;
+  onClose: () => void;
+}
+
+function SolutionModal({ modal, onClose }: SolutionModalProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  useEffect(() => {
+    if (modal) {
+      // Store the previously focused element
+      previousActiveElement.current = document.activeElement;
+
+      // Add keyboard listener
+      document.addEventListener('keydown', handleKeyDown);
+
+      // Focus the close button
+      const timer = setTimeout(() => {
+        closeButtonRef.current?.focus();
+      }, 0);
+
+      // Prevent body scroll
+      document.body.style.overflow = 'hidden';
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        clearTimeout(timer);
+        document.body.style.overflow = '';
+
+        // Restore focus to the previously focused element
+        if (previousActiveElement.current instanceof HTMLElement) {
+          previousActiveElement.current.focus();
+        }
+      };
+    }
+  }, [modal, handleKeyDown]);
+
+  if (!modal) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="solution-modal-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Dialog content */}
+      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div>
+            <h2 id="solution-modal-title" className="text-xl font-bold text-gray-900">Solution</h2>
+            <p className="text-sm text-gray-500 mt-1">{modal.title}</p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        <div className="p-6 overflow-auto">
+          <pre className="bg-gray-50 rounded-lg p-4 text-sm font-mono text-gray-800 overflow-x-auto whitespace-pre-wrap">
+            <code>{modal.solution}</code>
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface StudentSectionViewProps {
   section: SectionDetail;
@@ -262,37 +355,10 @@ export default function StudentSectionView({
       </div>
 
       {/* Solution Modal */}
-      {solutionModal && (
-        <dialog
-          role="dialog"
-          open
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 w-full h-full"
-          onClick={(e) => { if (e.target === e.currentTarget) setSolutionModal(null); }}
-        >
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Solution</h2>
-                <p className="text-sm text-gray-500 mt-1">{solutionModal.title}</p>
-              </div>
-              <button
-                onClick={() => setSolutionModal(null)}
-                aria-label="Close"
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-6 overflow-auto">
-              <pre className="bg-gray-50 rounded-lg p-4 text-sm font-mono text-gray-800 overflow-x-auto whitespace-pre-wrap">
-                <code>{solutionModal.solution}</code>
-              </pre>
-            </div>
-          </div>
-        </dialog>
-      )}
+      <SolutionModal
+        modal={solutionModal}
+        onClose={() => setSolutionModal(null)}
+      />
     </div>
   );
 }
