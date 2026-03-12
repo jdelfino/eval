@@ -474,7 +474,7 @@ describe('SectionDetailPage', () => {
           author_id: 'user-1',
           class_id: null,
           tags: ['loops', 'conditionals'],
-          solution: null,
+          solution: 'print("fizzbuzz solution")',
           created_at: '2025-01-01T00:00:00Z',
           updated_at: '2025-01-01T00:00:00Z',
         },
