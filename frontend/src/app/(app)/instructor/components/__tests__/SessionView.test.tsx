@@ -34,9 +34,10 @@ jest.mock('../SessionStudentPane', () => ({
     students,
     onShowOnPublicView,
     onViewHistory,
+    forceDesktop,
   }: any) {
     return (
-      <div data-testid="session-student-pane">
+      <div data-testid="session-student-pane" data-force-desktop={forceDesktop ? 'true' : 'false'}>
         <span data-testid="student-pane-session-id">{session_id}</span>
         <span data-testid="student-count-pane">{students.length}</span>
         <button
@@ -281,6 +282,20 @@ describe('SessionView', () => {
       render(<SessionView {...defaultProps} sessionProblem={null} />);
 
       expect(screen.getByTestId('problem-title')).toHaveTextContent('No problem');
+    });
+  });
+
+  describe('forceDesktop prop', () => {
+    it('does not pass forceDesktop to SessionStudentPane by default', () => {
+      render(<SessionView {...defaultProps} />);
+      const pane = screen.getByTestId('session-student-pane');
+      expect(pane).toHaveAttribute('data-force-desktop', 'false');
+    });
+
+    it('passes forceDesktop=true to SessionStudentPane when set', () => {
+      render(<SessionView {...defaultProps} forceDesktop />);
+      const pane = screen.getByTestId('session-student-pane');
+      expect(pane).toHaveAttribute('data-force-desktop', 'true');
     });
   });
 });

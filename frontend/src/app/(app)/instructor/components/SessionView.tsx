@@ -64,6 +64,11 @@ interface SessionViewProps {
   ) => Promise<ExecutionResult>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
+  /**
+   * Force desktop layout regardless of viewport width.
+   * Use when browser zoom for projector display would otherwise collapse the layout.
+   */
+  forceDesktop?: boolean;
 }
 
 type SessionTab = 'students' | 'problem';
@@ -90,6 +95,7 @@ export function SessionView({
   onClearPublicView,
   executeCode,
   featured_student_id,
+  forceDesktop = false,
 }: SessionViewProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<SessionTab>('students');
@@ -171,6 +177,7 @@ export function SessionView({
             onViewHistory={handleViewRevisions}
             onExecuteCode={handleExecuteCode}
             featured_student_id={featured_student_id}
+            forceDesktop={forceDesktop}
           />
         </Tabs.Panel>
 
