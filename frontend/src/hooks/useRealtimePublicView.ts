@@ -61,6 +61,9 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
   // For section mode: the currently-tracked session ID
   const [activeSessionId, setActiveSessionId] = useState<string | null>(session_id ?? null);
 
+  // Ref mirror of activeSessionId so event handlers can read it without stale closures.
+  const activeSessionIdRef = useRef<string | null>(session_id ?? null);
+
   // For section mode: cleanup function for session channel subscription
   const sessionCleanupRef = useRef<(() => void) | null>(null);
 
@@ -320,9 +323,11 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
         setLoading(true);
         setError(null);
 
-        const activeSessions = await getActiveSessions(section_id);
+        const allSessions = await getActiveSessions(section_id);
+        const activeSessions = allSessions.filter(s => s.status === 'active');
         if (activeSessions.length > 0) {
           const sessionId = activeSessions[0].id;
+          activeSessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
           const data = await getSessionPublicState(sessionId);
           setState(data);
@@ -368,6 +373,7 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
           }
 
           // Start tracking the new session
+          activeSessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
           getSessionPublicState(sessionId).then(data => {
             setState(data);
@@ -384,16 +390,24 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
 
         case 'session_ended_in_section': {
           const { session_id: endedSessionId } = parsed.data;
+          // Read activeSessionId outside the updater to keep the updater pure.
+          // React updaters must be side-effect-free (they may run multiple times).
           setActiveSessionId(prev => {
             if (prev !== endedSessionId) return prev;
-            // Clean up session subscription
+            return null;
+          });
+          // Perform side effects outside the updater.
+          // We check the ref directly; if the ended session matches we clean up.
+          // The ref tracks the current session regardless of render cycle.
+          const currentId = activeSessionIdRef.current;
+          if (currentId === endedSessionId) {
+            activeSessionIdRef.current = null;
             if (sessionCleanupRef.current) {
               sessionCleanupRef.current();
               sessionCleanupRef.current = null;
             }
             setState(null);
-            return null;
-          });
+          }
           break;
         }
       }

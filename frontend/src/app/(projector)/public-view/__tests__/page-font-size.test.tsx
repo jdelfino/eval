@@ -139,7 +139,7 @@ describe('PublicInstructorView font size controls', () => {
       screen.getByLabelText('Increase font size').click();
     });
 
-    expect(lastCodeEditorProps.fontSize).toBeGreaterThan(24);
+    expect(lastCodeEditorProps.fontSize).toBe(26);
   });
 
   test('decreases fontSize when - button is clicked', async () => {
@@ -152,7 +152,7 @@ describe('PublicInstructorView font size controls', () => {
       screen.getByLabelText('Decrease font size').click();
     });
 
-    expect(lastCodeEditorProps.fontSize).toBeLessThan(24);
+    expect(lastCodeEditorProps.fontSize).toBe(22);
   });
 
   test('persists fontSize to localStorage when changed', async () => {
@@ -165,7 +165,7 @@ describe('PublicInstructorView font size controls', () => {
 
     const stored = localStorage.getItem('publicView_fontSize');
     expect(stored).not.toBeNull();
-    expect(Number(stored)).toBeGreaterThan(24);
+    expect(Number(stored)).toBe(26);
   });
 
   test('loads fontSize from localStorage on mount', () => {

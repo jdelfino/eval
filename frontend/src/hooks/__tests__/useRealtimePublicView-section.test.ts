@@ -177,6 +177,48 @@ describe('useRealtimePublicView — section mode', () => {
       expect(result.current.error).toBe('Network error');
       expect(result.current.state).toBeNull();
     });
+
+    it('ignores completed sessions returned by getActiveSessions and waits for an active one', async () => {
+      // getActiveSessions returns ALL sessions (active + completed). The hook must
+      // filter by status === 'active' so a stale completed session is not subscribed to.
+      mockGetActiveSessions.mockResolvedValue([
+        { id: 'session-old', status: 'completed' },
+      ]);
+
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ section_id: 'section-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Completed session must NOT be tracked
+      expect(result.current.activeSessionId).toBeNull();
+      expect(result.current.state).toBeNull();
+      expect(mockGetSessionPublicState).not.toHaveBeenCalled();
+    });
+
+    it('picks the active session when both completed and active sessions are returned', async () => {
+      mockGetActiveSessions.mockResolvedValue([
+        { id: 'session-old', status: 'completed' },
+        { id: 'session-new', status: 'active' },
+      ]);
+      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'ACTIVE-123' });
+
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ section_id: 'section-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.activeSessionId).toBe('session-new');
+      expect(result.current.state?.join_code).toBe('ACTIVE-123');
+      expect(mockGetSessionPublicState).toHaveBeenCalledWith('session-new');
+      expect(mockGetSessionPublicState).not.toHaveBeenCalledWith('session-old');
+    });
   });
 
   describe('Section channel subscription', () => {
@@ -360,6 +402,41 @@ describe('useRealtimePublicView — section mode', () => {
         expect(result.current.state).toBeNull();
         expect(result.current.activeSessionId).toBeNull();
       });
+    });
+
+    it('cleans up session channel subscription when active session ends (no React purity violation)', async () => {
+      // Regression test for React purity violation: session_ended_in_section handler
+      // must not call sessionCleanupRef.current() and setState(null) inside the
+      // setActiveSessionId updater function. Side-effects inside React updaters are
+      // called twice in StrictMode and cause incorrect behavior.
+      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
+      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
+
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ section_id: 'section-1' })
+      );
+
+      await waitFor(() => {
+        expect(createdSubs).toHaveLength(2); // section + session subscriptions
+        expect(result.current.activeSessionId).toBe('session-1');
+      });
+
+      const sessionSub = createdSubs[1]; // session channel subscription
+      const sectionSub = createdSubs[0];
+
+      act(() => {
+        simulateSectionPublication(sectionSub, 'session_ended_in_section', {
+          session_id: 'session-1',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.activeSessionId).toBeNull();
+        expect(result.current.state).toBeNull();
+      });
+
+      // Session channel subscription must be cleaned up exactly once
+      expect(sessionSub.unsubscribe).toHaveBeenCalledTimes(1);
     });
 
     it('does not clear state when a different session ends', async () => {
