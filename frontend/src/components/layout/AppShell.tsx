@@ -12,6 +12,7 @@ import { MobileNav } from './MobileNav';
 import { RightPanelContainer } from './RightPanelContainer';
 import { PreviewBanner } from '@/components/preview/PreviewBanner';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
+import { useLayoutConfig } from '@/contexts/LayoutConfigContext';
 
 interface AppShellProps {
   /** Main page content */
@@ -24,6 +25,12 @@ interface AppShellProps {
   rightPanels?: ReactNode;
   /** Fullscreen mode: no padding, no scroll on main content area */
   fullscreen?: boolean;
+  /**
+   * Force desktop layout regardless of viewport width.
+   * Use for instructor pages where browser zoom for projector display
+   * should not collapse the sidebar to mobile layout.
+   */
+  forceDesktop?: boolean;
 }
 
 export function AppShell({
@@ -32,12 +39,17 @@ export function AppShell({
   showRightPanels = true,
   rightPanels,
   fullscreen = false,
+  forceDesktop: forceDesktopProp = false,
 }: AppShellProps) {
   const [storedCollapsed, , toggleCollapsed] = useSidebarCollapsed();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { forceDesktop: forceDesktopContext } = useLayoutConfig();
 
   // Use prop override if provided, otherwise use stored state
   const sidebarCollapsed = sidebarCollapsedProp ?? storedCollapsed;
+
+  // forceDesktop can be set via prop (for direct usage) or context (set by instructor pages)
+  const forceDesktop = forceDesktopProp || forceDesktopContext;
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -49,8 +61,8 @@ export function AppShell({
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop sidebar */}
-        <div className="hidden lg:block h-full">
+        {/* Desktop sidebar — always visible when forceDesktop=true to prevent zoom collapse */}
+        <div className={`${forceDesktop ? 'block' : 'hidden lg:block'} h-full`}>
           <Suspense fallback={<div className={`bg-white border-r border-gray-200 h-full ${sidebarCollapsed ? 'w-16' : 'w-64'}`} />}>
             <Sidebar
               collapsed={sidebarCollapsed}
