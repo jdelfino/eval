@@ -461,10 +461,10 @@ jobs:
           kubectl apply -k .
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/go-api --timeout=120s
-          kubectl rollout status deployment/executor --timeout=120s
-          kubectl rollout status deployment/frontend --timeout=120s
-          kubectl rollout status deployment/centrifugo --timeout=120s
+          kubectl rollout status deployment/go-api --timeout=180s
+          kubectl rollout status deployment/executor --timeout=180s
+          kubectl rollout status deployment/frontend --timeout=180s
+          kubectl rollout status deployment/centrifugo --timeout=180s
       - name: Dump cluster diagnostics
         if: failure()
         run: |

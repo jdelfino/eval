@@ -23,6 +23,7 @@ resources:
   - centrifugo-backend-config.yaml
   - frontend-config.yaml
   - managed-certificate.yaml
+  - pdb.yaml
 
 images:
   - name: go-api

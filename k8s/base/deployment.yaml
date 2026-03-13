@@ -5,9 +5,12 @@ metadata:
   labels:
     app: go-api
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: go-api
@@ -18,6 +21,17 @@ spec:
     spec:
       serviceAccountName: go-api
       enableServiceLinks: false
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: ["go-api"]
+                topologyKey: topology.kubernetes.io/zone
       containers:
         - name: go-api
           image: go-api

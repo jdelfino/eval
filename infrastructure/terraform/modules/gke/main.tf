@@ -116,14 +116,15 @@ resource "google_container_cluster" "main" {
 # -----------------------------------------------------------------------------
 
 resource "google_container_node_pool" "default" {
-  name     = "default"
-  project  = var.project_id
-  location = var.zone
-  cluster  = google_container_cluster.main.name
+  name           = "default"
+  project        = var.project_id
+  location       = var.zone
+  cluster        = google_container_cluster.main.name
+  node_locations = length(var.node_locations) > 0 ? var.node_locations : null
 
   autoscaling {
-    min_node_count = var.default_pool_min_nodes
-    max_node_count = var.default_pool_max_nodes
+    total_min_node_count = var.default_pool_min_nodes
+    total_max_node_count = var.default_pool_max_nodes
   }
 
   node_config {
@@ -150,14 +151,15 @@ resource "google_container_node_pool" "default" {
 # -----------------------------------------------------------------------------
 
 resource "google_container_node_pool" "executor" {
-  name     = "executor"
-  project  = var.project_id
-  location = var.zone
-  cluster  = google_container_cluster.main.name
+  name           = "executor"
+  project        = var.project_id
+  location       = var.zone
+  cluster        = google_container_cluster.main.name
+  node_locations = length(var.node_locations) > 0 ? var.node_locations : null
 
   autoscaling {
-    min_node_count = var.executor_pool_min_nodes
-    max_node_count = var.executor_pool_max_nodes
+    total_min_node_count = var.executor_pool_min_nodes
+    total_max_node_count = var.executor_pool_max_nodes
   }
 
   node_config {
