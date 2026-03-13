@@ -70,7 +70,7 @@ function PublicViewContent() {
   // When true, we don't auto-replace with starter_code.
   const hasUserEdited = useRef(false);
 
-  const hasFeaturedSubmission = !!state?.featured_student_id;
+  const hasFeaturedSubmission = !!state?.featured_student_id || !!state?.featured_code;
 
   // Show connection status and join code in the global header
   useEffect(() => {
