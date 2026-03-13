@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -1099,5 +1103,199 @@ func TestExecute_MergesExecutionSettings(t *testing.T) {
 	// random_seed should come from request (layer 3 overrides all)
 	if capturedReq.RandomSeed == nil || *capturedReq.RandomSeed != 42 {
 		t.Fatalf("expected random_seed 42, got %v", capturedReq.RandomSeed)
+	}
+}
+
+// --- isConnectionError tests ---
+
+func TestIsConnectionError_URLErrorWithNetOpError_ReturnsTrue(t *testing.T) {
+	// Simulates the error path from http.Client.Do when the executor is unreachable:
+	// fmt.Errorf("executor: send request: %w", &url.Error{...})
+	inner := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: syscall.ECONNREFUSED,
+	}
+	urlErr := &url.Error{
+		Op:  "Post",
+		URL: "http://executor:8080/execute",
+		Err: inner,
+	}
+	wrapped := fmt.Errorf("executor: send request: %w", urlErr)
+	if !isConnectionError(wrapped) {
+		t.Error("expected isConnectionError=true for wrapped *url.Error with *net.OpError")
+	}
+}
+
+func TestIsConnectionError_DNSError_ReturnsTrue(t *testing.T) {
+	// DNS failure when no executor pods are running.
+	dnsErr := &net.DNSError{
+		Err:  "no such host",
+		Name: "executor",
+	}
+	wrapped := fmt.Errorf("executor: send request: %w", dnsErr)
+	if !isConnectionError(wrapped) {
+		t.Error("expected isConnectionError=true for wrapped *net.DNSError")
+	}
+}
+
+func TestIsConnectionError_ContextDeadlineExceeded_ReturnsTrue(t *testing.T) {
+	wrapped := fmt.Errorf("executor: send request: %w", context.DeadlineExceeded)
+	if !isConnectionError(wrapped) {
+		t.Error("expected isConnectionError=true for wrapped context.DeadlineExceeded")
+	}
+}
+
+func TestIsConnectionError_StatusError_ReturnsFalse(t *testing.T) {
+	// A non-200 response from executor is not a connection error.
+	statusErr := &executor.StatusError{Code: http.StatusInternalServerError, Body: "internal error"}
+	if isConnectionError(statusErr) {
+		t.Error("expected isConnectionError=false for *executor.StatusError")
+	}
+}
+
+func TestIsConnectionError_PlainError_ReturnsFalse(t *testing.T) {
+	if isConnectionError(fmt.Errorf("some other error")) {
+		t.Error("expected isConnectionError=false for a plain error")
+	}
+}
+
+// --- writeExecutorError 503 behavior tests ---
+
+func TestWriteExecutorError_ConnectionError_Returns503(t *testing.T) {
+	urlErr := &url.Error{
+		Op:  "Post",
+		URL: "http://executor:8080/execute",
+		Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED},
+	}
+	wrapped := fmt.Errorf("executor: send request: %w", urlErr)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	writeExecutorError(w, r, wrapped, "execution failed")
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !strings.Contains(resp["error"], "executor is starting up") {
+		t.Errorf("expected 'executor is starting up' in error message, got %q", resp["error"])
+	}
+}
+
+func TestWriteExecutorError_DNSError_Returns503(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no such host", Name: "executor"}
+	wrapped := fmt.Errorf("executor: send request: %w", dnsErr)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	writeExecutorError(w, r, wrapped, "execution failed")
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWriteExecutorError_429StillPropagated(t *testing.T) {
+	err := &executor.StatusError{Code: http.StatusTooManyRequests, Body: "rate limit exceeded"}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	writeExecutorError(w, r, err, "execution failed")
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWriteExecutorError_OtherErrorStill500(t *testing.T) {
+	err := fmt.Errorf("some unexpected internal error")
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
+	writeExecutorError(w, r, err, "execution failed")
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestExecute_503OnConnectionError verifies the full handler path returns 503
+// when the executor is unreachable (simulating cold-start / scaled-to-zero).
+func TestExecute_503OnConnectionError(t *testing.T) {
+	sessRepo := &mockSessionRepo{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return activeSession(), nil
+		},
+	}
+	studentRepo := &execMockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			// Simulate the error that executor.Client.Execute wraps when the
+			// underlying http.Client.Do fails with a connection-refused error.
+			urlErr := &url.Error{
+				Op:  "Post",
+				URL: "http://executor:8080/execute",
+				Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED},
+			}
+			return nil, fmt.Errorf("executor: send request: %w", urlErr)
+		},
+	}
+
+	handler := setupExecuteHandler(sessRepo, studentRepo, execClient)
+	body := newExecuteReq(testStudentID, "code")
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/sessions/%s/execute", testSessionID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !strings.Contains(resp["error"], "executor is starting up") {
+		t.Errorf("expected 'executor is starting up' in error message, got %q", resp["error"])
+	}
+}
+
+// TestStandaloneExecute_503OnConnectionError verifies StandaloneExecute also returns 503
+// when the executor is unreachable.
+func TestStandaloneExecute_503OnConnectionError(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			urlErr := &url.Error{
+				Op:  "Post",
+				URL: "http://executor:8080/execute",
+				Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED},
+			}
+			return nil, fmt.Errorf("executor: send request: %w", urlErr)
+		},
+	}
+
+	handler := setupStandaloneExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
