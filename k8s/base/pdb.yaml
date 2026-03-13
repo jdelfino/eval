@@ -1,0 +1,39 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: go-api-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: go-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: centrifugo-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: centrifugo
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: executor-pdb
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: executor
