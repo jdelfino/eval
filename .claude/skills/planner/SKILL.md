@@ -44,11 +44,12 @@ This is collaborative. Do NOT silently make decisions — discuss with the user.
    - Tradeoffs (simplicity vs. flexibility, etc.)
 4. Point out risks and tradeoffs proactively — don't wait to be asked
 5. Iterate until you and the user agree on the approach
-6. Write the agreed plan to the plan file, then use ExitPlanMode for approval
 
 ### Phase 3 — File Issues
 
-After the user approves the plan:
+Present the agreed approach as a concise summary and use AskUserQuestion to confirm before filing. **Do NOT use EnterPlanMode or ExitPlanMode** — those trigger Claude Code's built-in plan execution behavior.
+
+After the user approves:
 
 1. Create the epic if one doesn't exist:
    ```bash
@@ -106,7 +107,7 @@ The reviewer checks the filed issues against the codebase for architectural issu
 - Iterate: update, create, or close issues as needed
 - Re-run reviewer if significant changes were made
 
-**Output**: An epic with subtasks ready for `/work <epic-id>`. Tell the user the epic ID and suggest running `/work <epic-id>` to start implementation.
+**Output**: Tell the user the epic ID and that it's ready for `/work <epic-id>` in a separate session. **Stop here** — do NOT start implementation.
 
 ## Your Constraints
 
@@ -124,3 +125,5 @@ The reviewer checks the filed issues against the codebase for architectural issu
 - ❌ File issues before the user approves the plan
 - ❌ Skip codebase exploration (guessing at patterns leads to bad plans)
 - ❌ Create vague subtasks ("implement the feature") — be specific
+- ❌ Use EnterPlanMode/ExitPlanMode (triggers unwanted auto-implementation)
+- ❌ Start implementation after filing issues — stop and let the user `/work` separately
