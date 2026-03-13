@@ -147,9 +147,6 @@ export function SessionView({
         connectedStudentCount={students.length}
         onEndSession={onEndSession}
         onClearPublicView={onClearPublicView}
-        featured_student_id={featured_student_id}
-        problemSolution={sessionProblem?.solution}
-        onShowSolution={handleShowSolution}
         problemTitle={sessionProblem?.title}
       />
 

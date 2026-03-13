@@ -22,13 +22,15 @@ describe('SessionControls', () => {
   it('should render session controls', () => {
     render(<SessionControls {...defaultProps} />);
 
-    expect(screen.getByText('Active Session')).toBeInTheDocument();
+    // No "Active Session" heading — compact layout has no heading
+    expect(screen.queryByText('Active Session')).not.toBeInTheDocument();
+    // End Session button always present
+    expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
   });
 
   it('should display section name when provided', () => {
     render(<SessionControls {...defaultProps} section_name="Section A - MWF 10am" />);
 
-    expect(screen.getByText('Active Session')).toBeInTheDocument();
     expect(screen.getByText('Section A - MWF 10am')).toBeInTheDocument();
   });
 
@@ -51,6 +53,66 @@ describe('SessionControls', () => {
     const buttonContainer = container.querySelector('.flex.gap-2');
     expect(buttonContainer).toBeInTheDocument();
     expect(buttonContainer).toHaveClass('flex-wrap');
+  });
+
+  describe('compact layout', () => {
+    it('should use compact padding (px-4 py-2) instead of large padding (p-6)', () => {
+      const { container } = render(<SessionControls {...defaultProps} />);
+
+      const outerDiv = container.firstChild as HTMLElement;
+      expect(outerDiv).toHaveClass('px-4');
+      expect(outerDiv).toHaveClass('py-2');
+      expect(outerDiv).not.toHaveClass('p-6');
+    });
+
+    it('should not render "Active Session" heading', () => {
+      render(<SessionControls {...defaultProps} />);
+
+      expect(screen.queryByRole('heading', { name: /Active Session/ })).not.toBeInTheDocument();
+    });
+
+    it('should render join code badge when join_code is provided', () => {
+      render(<SessionControls {...defaultProps} join_code="ABC123" />);
+
+      expect(screen.getByText(/Join Code: ABC123/)).toBeInTheDocument();
+    });
+
+    it('should render problem title when provided', () => {
+      render(<SessionControls {...defaultProps} problemTitle="Two Sum" />);
+
+      expect(screen.getByText('Two Sum')).toBeInTheDocument();
+    });
+
+    it('should render section name when provided', () => {
+      render(<SessionControls {...defaultProps} section_name="Section B" />);
+
+      expect(screen.getByText('Section B')).toBeInTheDocument();
+    });
+
+    it('should render exactly 3 action buttons when onClearPublicView is provided', () => {
+      render(
+        <SessionControls
+          {...defaultProps}
+          onClearPublicView={jest.fn()}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Open Public View/ })).toBeInTheDocument();
+      expect(screen.getByTestId('clear-public-view-button')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
+    });
+
+    it('should not render Show Solution button', () => {
+      render(<SessionControls {...defaultProps} />);
+
+      expect(screen.queryByTestId('show-solution-button')).not.toBeInTheDocument();
+    });
+
+    it('should not render View Solution button', () => {
+      render(<SessionControls {...defaultProps} />);
+
+      expect(screen.queryByTestId('view-solution-button')).not.toBeInTheDocument();
+    });
   });
 
   describe('End Session confirmation dialog', () => {
@@ -155,12 +217,11 @@ describe('SessionControls', () => {
       expect(mockOnEndSession).not.toHaveBeenCalled();
     });
 
-    it('should show Clear Public View button when featured_student_id is set', () => {
+    it('should show Clear Public View button when onClearPublicView is provided', () => {
       const mockOnClearPublicView = jest.fn();
       render(
         <SessionControls
           {...defaultProps}
-          featured_student_id="student-1"
           onClearPublicView={mockOnClearPublicView}
         />
       );
@@ -171,7 +232,7 @@ describe('SessionControls', () => {
       expect(mockOnClearPublicView).toHaveBeenCalledTimes(1);
     });
 
-    it('should show Clear Public View button when onClearPublicView is provided', () => {
+    it('should show Clear Public View button when onClearPublicView is provided (no featured_student_id needed)', () => {
       render(
         <SessionControls
           {...defaultProps}
@@ -192,58 +253,6 @@ describe('SessionControls', () => {
       expect(screen.queryByTestId('clear-public-view-button')).not.toBeInTheDocument();
     });
 
-    it('should not show Show Solution button when no problem solution exists', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution={undefined}
-        />
-      );
-
-      expect(screen.queryByTestId('show-solution-button')).not.toBeInTheDocument();
-    });
-
-    it('should not show Show Solution button when solution is empty string', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution=""
-        />
-      );
-
-      expect(screen.queryByTestId('show-solution-button')).not.toBeInTheDocument();
-    });
-
-    it('should show Show Solution button when problem has a solution and onShowSolution is provided', () => {
-      const mockOnShowSolution = jest.fn();
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={mockOnShowSolution}
-        />
-      );
-
-      const btn = screen.getByTestId('show-solution-button');
-      expect(btn).toBeInTheDocument();
-      expect(btn).toHaveTextContent('Show Solution');
-    });
-
-    it('should call onShowSolution on click', () => {
-      const mockOnShowSolution = jest.fn();
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={mockOnShowSolution}
-        />
-      );
-
-      const btn = screen.getByTestId('show-solution-button');
-      fireEvent.click(btn);
-      expect(mockOnShowSolution).toHaveBeenCalled();
-    });
-
   });
 
   describe('problem title display', () => {
@@ -257,100 +266,6 @@ describe('SessionControls', () => {
       render(<SessionControls {...defaultProps} />);
 
       expect(screen.queryByText('Two Sum')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('View Solution modal', () => {
-    it('should show View Solution button when solution exists', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={jest.fn()}
-        />
-      );
-
-      expect(screen.getByTestId('view-solution-button')).toBeInTheDocument();
-    });
-
-    it('should not show View Solution button when no solution', () => {
-      render(<SessionControls {...defaultProps} />);
-
-      expect(screen.queryByTestId('view-solution-button')).not.toBeInTheDocument();
-    });
-
-    it('should open solution viewer modal when View Solution clicked', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={jest.fn()}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-    });
-
-    it('should display solution code in the modal', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={jest.fn()}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-
-      expect(screen.getByText("print('answer')")).toBeInTheDocument();
-    });
-
-    it('should close modal when Close button clicked', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={jest.fn()}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
-    });
-
-    it('should close modal on Escape key', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={jest.fn()}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-
-      fireEvent.keyDown(document, { key: 'Escape' });
-      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
-    });
-
-    it('should not call onShowSolution when View Solution is clicked (private view only)', () => {
-      const mockOnShowSolution = jest.fn();
-      render(
-        <SessionControls
-          {...defaultProps}
-          problemSolution="print('answer')"
-          onShowSolution={mockOnShowSolution}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(mockOnShowSolution).not.toHaveBeenCalled();
     });
   });
 
