@@ -8,9 +8,10 @@
  * database persistence. Uses Monaco editor and supports execution settings.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
+import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 
@@ -76,6 +77,9 @@ export default function SessionProblemEditor({
     initialExecutionSettings?.attached_files
   ]);
 
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
   const handleCloseSolutionViewer = useCallback(() => {
     setShowSolutionViewer(false);
   }, []);
@@ -83,13 +87,28 @@ export default function SessionProblemEditor({
   useEffect(() => {
     if (!showSolutionViewer) return;
 
+    previousActiveElement.current = document.activeElement;
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleCloseSolutionViewer();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+
+    const timer = setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 0);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timer);
+      document.body.style.overflow = '';
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    };
   }, [showSolutionViewer, handleCloseSolutionViewer]);
 
   const handleUpdate = () => {
@@ -188,38 +207,12 @@ export default function SessionProblemEditor({
       </div>
 
       {/* Tab bar for Starter Code / Solution */}
-      <div role="tablist" style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        borderBottom: '1px solid #dee2e6',
-        backgroundColor: '#fff',
-      }}>
-        {(['starter', 'solution'] as const).map((tab) => {
-          const label = tab === 'starter' ? 'Starter Code' : 'Solution';
-          const isActive = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '0.5rem 1rem',
-                fontSize: '0.875rem',
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? '#0d6efd' : '#495057',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: isActive ? '2px solid #0d6efd' : '2px solid transparent',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
+        <Tabs.List>
+          <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
+          <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
 
       {/* Full-width code editor */}
       <EditorContainer variant="flex">
@@ -249,13 +242,22 @@ export default function SessionProblemEditor({
       {/* Solution viewer modal */}
       {showSolutionViewer && solution && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="solution-viewer-title"
           data-testid="solution-viewer-modal"
         >
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={handleCloseSolutionViewer}
+            aria-hidden="true"
+          />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center px-6 py-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">Solution</h3>
+              <h3 id="solution-viewer-title" className="text-lg font-semibold text-gray-900">Solution</h3>
               <button
+                ref={closeButtonRef}
                 onClick={handleCloseSolutionViewer}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
               >

@@ -575,6 +575,40 @@ describe('SessionProblemEditor', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
       expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
     });
+
+    it('solution viewer modal has proper accessibility attributes', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('view-solution-button'));
+
+      const modal = screen.getByTestId('solution-viewer-modal');
+      expect(modal).toHaveAttribute('role', 'dialog');
+      expect(modal).toHaveAttribute('aria-modal', 'true');
+      expect(modal).toHaveAttribute('aria-labelledby', 'solution-viewer-title');
+      expect(document.getElementById('solution-viewer-title')).toHaveTextContent('Solution');
+    });
+
+    it('closes solution viewer modal when clicking backdrop', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('view-solution-button'));
+      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
+
+      // Click the backdrop (first child of the modal container)
+      const backdrop = screen.getByTestId('solution-viewer-modal').querySelector('[aria-hidden="true"]')!;
+      fireEvent.click(backdrop);
+      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
+    });
   });
 
   describe('Feature Solution button', () => {
