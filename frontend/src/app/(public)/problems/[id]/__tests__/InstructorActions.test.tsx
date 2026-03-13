@@ -78,7 +78,9 @@ describe('InstructorActions auto-start from query params', () => {
 
     await waitFor(() => {
       expect(mockSetLastUsedSection).toHaveBeenCalledWith('section-1', 'class-1');
-      expect(mockPush).toHaveBeenCalledWith('/public-view?session_id=session-123');
+      // Trampoline behavior: shows "close this tab" instead of navigating
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(screen.getByText(/close this tab/i)).toBeInTheDocument();
       expect(mockPostMessage).toHaveBeenCalledWith({
         session_id: 'session-123',
         problem_title: 'Test Problem',

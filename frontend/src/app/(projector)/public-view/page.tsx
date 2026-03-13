@@ -10,18 +10,57 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import type { ExecutionSettings } from '@/types/problem';
 
+const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
+const DEFAULT_FONT_SIZE = 24;
+const FONT_SIZE_STEP = 2;
+const FONT_SIZE_MIN = 12;
+const FONT_SIZE_MAX = 48;
+
 function PublicViewContent() {
   const searchParams = useSearchParams();
   const session_id = searchParams.get('session_id');
+  const section_id = searchParams.get('section_id');
   const { setHeaderSlot } = useHeaderSlot();
 
-  // Real-time session state via Centrifugo websocket
+  const [fontSize, setFontSize] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+      if (stored !== null) {
+        const parsed = Number(stored);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    return DEFAULT_FONT_SIZE;
+  });
+
+  const handleIncreaseFontSize = () => {
+    setFontSize(prev => {
+      const next = Math.min(prev + FONT_SIZE_STEP, FONT_SIZE_MAX);
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
+  const handleDecreaseFontSize = () => {
+    setFontSize(prev => {
+      const next = Math.max(prev - FONT_SIZE_STEP, FONT_SIZE_MIN);
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
+  // Real-time session state via Centrifugo websocket.
+  // Supports both session_id and section_id modes.
   const {
     state,
     loading,
     error,
     connectionStatus,
-  } = useRealtimePublicView({ session_id: session_id || '' });
+    activeSessionId,
+  } = useRealtimePublicView({
+    session_id: session_id ?? undefined,
+    section_id: section_id ?? undefined,
+  });
 
   // Local code state for editing (changes don't propagate back to student)
   const [localCode, setLocalCode] = useState<string>('');
@@ -35,7 +74,8 @@ function PublicViewContent() {
 
   // Show connection status and join code in the global header
   useEffect(() => {
-    if (session_id && state) {
+    const hasIdentifier = session_id || section_id;
+    if (hasIdentifier && state) {
       setHeaderSlot(
         <div className="flex items-center gap-3">
           <span className="text-lg font-bold font-mono text-blue-600">
@@ -47,7 +87,7 @@ function PublicViewContent() {
           />
         </div>
       );
-    } else if (session_id) {
+    } else if (hasIdentifier) {
       setHeaderSlot(
         <ConnectionStatus
           status={connectionStatus}
@@ -56,7 +96,7 @@ function PublicViewContent() {
       );
     }
     return () => setHeaderSlot(null);
-  }, [session_id, state?.join_code, connectionStatus, setHeaderSlot]);
+  }, [session_id, section_id, state?.join_code, connectionStatus, setHeaderSlot]);
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
@@ -86,12 +126,12 @@ function PublicViewContent() {
     setLocalCode(code);
   };
 
-  if (!session_id) {
+  if (!session_id && !section_id) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-gray-300 rounded">
           <h1 className="text-xl font-bold mb-4">No Session</h1>
-          <p className="text-gray-500">Please provide a session_id in the URL.</p>
+          <p className="text-gray-500">Please provide a session_id or section_id in the URL.</p>
         </div>
       </div>
     );
@@ -105,12 +145,35 @@ function PublicViewContent() {
     );
   }
 
-  if (error || !state) {
+  if (error) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 border border-red-300 rounded">
           <h1 className="text-xl font-bold mb-4 text-red-600">Error</h1>
-          <p className="text-gray-500">{error || 'Failed to load session state'}</p>
+          <p className="text-gray-500">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Section mode: show waiting state when no active session
+  if (section_id && !activeSessionId) {
+    return (
+      <div className="h-full bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 border border-gray-300 rounded text-center">
+          <h1 className="text-xl font-bold mb-4">Waiting for session...</h1>
+          <p className="text-gray-500">This tab will automatically display the next session that starts in this section.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="h-full bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 border border-red-300 rounded">
+          <h1 className="text-xl font-bold mb-4 text-red-600">Error</h1>
+          <p className="text-gray-500">Failed to load session state</p>
         </div>
       </div>
     );
@@ -122,6 +185,26 @@ function PublicViewContent() {
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
+      {/* Font size controls */}
+      <div className="flex items-center gap-1 mb-1 self-end">
+        <button
+          type="button"
+          onClick={handleDecreaseFontSize}
+          aria-label="Decrease font size"
+          className="px-2 py-1 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+        >
+          −
+        </button>
+        <span className="text-sm text-gray-400 w-12 text-center">{fontSize}px</span>
+        <button
+          type="button"
+          onClick={handleIncreaseFontSize}
+          aria-label="Increase font size"
+          className="px-2 py-1 text-sm bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+        >
+          +
+        </button>
+      </div>
       {/* Featured Submission or Solution */}
       {hasFeaturedSubmission ? (
         <div className="flex-1 min-h-0 flex flex-col">
@@ -135,7 +218,7 @@ function PublicViewContent() {
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
-            fontSize={24}
+            fontSize={fontSize}
             outputCollapsible={true}
           />
         </div>
@@ -150,7 +233,7 @@ function PublicViewContent() {
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
-            fontSize={24}
+            fontSize={fontSize}
             outputCollapsible={true}
           />
         </div>
