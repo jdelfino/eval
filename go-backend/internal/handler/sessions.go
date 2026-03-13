@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -20,8 +22,15 @@ import (
 
 // SessionHandler handles session management routes.
 type SessionHandler struct {
-	publisher realtime.SessionPublisher
-	revBuffer *revision.RevisionBuffer
+	publisher  realtime.SessionPublisher
+	revBuffer  *revision.RevisionBuffer
+	activation ActivationService
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *SessionHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // NewSessionHandler creates a new SessionHandler.
@@ -210,6 +219,16 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Notify section subscribers that a new session has started.
 	_ = h.publisher.SessionStartedInSection(r.Context(), req.SectionID.String(), newSessionID, session.Problem)
 
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "session.Create", "error", err)
+			}
+		}()
+	}
+
 	httputil.WriteJSON(w, http.StatusCreated, session)
 }
 
@@ -385,6 +404,16 @@ func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
 
 	// Notify section subscribers that the session has been reopened.
 	_ = h.publisher.SessionStartedInSection(r.Context(), existing.SectionID.String(), newSessionID, session.Problem)
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "session.Reopen", "error", err)
+			}
+		}()
+	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

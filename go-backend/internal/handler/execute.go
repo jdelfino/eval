@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -27,7 +28,8 @@ type ExecutorClient interface {
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	executor ExecutorClient
+	executor   ExecutorClient
+	activation ActivationService
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
@@ -35,6 +37,12 @@ func NewExecuteHandler(exec ExecutorClient) *ExecuteHandler {
 	return &ExecuteHandler{
 		executor: exec,
 	}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *ExecuteHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // executeRequest is the request body for POST /sessions/{id}/execute.
@@ -129,7 +137,17 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	execReq := buildExecutorRequest(req.Code, merged)
 	execReq.Language = lang
 
-	// 8. Call executor
+	// 8. Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "execute.Execute", "error", err)
+			}
+		}()
+	}
+
+	// 9. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
 		writeExecutorError(w, r, err, "execution failed")
@@ -172,6 +190,16 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 		Stdin:    req.Stdin,
 		Files:    req.Files,
 		Language: lang,
+	}
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "execute.StandaloneExecute", "error", err)
+			}
+		}()
 	}
 
 	execResp, err := h.executor.Execute(r.Context(), execReq)

@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/jdelfino/eval/go-backend/internal/activation"
 	"github.com/jdelfino/eval/go-backend/internal/ai"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/config"
@@ -115,6 +116,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	memLimiter := ratelimit.NewMemoryLimiter(cats)
 	memLimiter.Start()
 	var rl ratelimit.Limiter
+	var activationSvc *activation.Service
 	if cfg.RedisHost != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
@@ -124,8 +126,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			memLimiter,
 			logger,
 		)
+		activationSvc = activation.NewService(redisClient, time.Hour)
 	} else {
 		rl = memLimiter
+		// activationSvc remains nil — no-op in handlers
 	}
 
 	var revBuffer *revision.RevisionBuffer
@@ -247,6 +251,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			sectionProblemHandler := handler.NewSectionProblemHandler()
 			studentWorkHandler := handler.NewStudentWorkHandler(execClient)
+			if activationSvc != nil {
+				studentWorkHandler.SetActivation(activationSvc)
+			}
 			studentReviewHandler := handler.NewStudentReviewHandler()
 
 			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler, studentReviewHandler).WithRateLimiting(readRL, writeRL)
@@ -349,6 +356,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			revBuffer.Start()
 
 			sessionHandler := handler.NewSessionHandlerWithBuffer(sessionPub, revBuffer)
+			if activationSvc != nil {
+				sessionHandler.SetActivation(activationSvc)
+			}
 			r.Route("/sessions", func(r chi.Router) {
 				r.With(readRL).Get("/", sessionHandler.List)
 				r.With(readRL).Get("/history", sessionHandler.History)
@@ -377,6 +387,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(writeRL).Post("/sessions/{sessionID}/revisions", revisionHandler.Create)
 
 			executeHandler := handler.NewExecuteHandler(execClient)
+			if activationSvc != nil {
+				executeHandler.SetActivation(activationSvc)
+			}
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/execute", executeHandler.Execute)
 
 			// Standalone code execution (instructor+) — no session context
@@ -387,7 +400,18 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// Standalone trace (any authenticated user) — no session context
 			traceHandler := handler.NewTraceHandler(execClient)
+			if activationSvc != nil {
+				traceHandler.SetActivation(activationSvc)
+			}
 			r.With(custommw.ForCategory(rl, "trace", custommw.UserKey)).Post("/trace", traceHandler.StandaloneTrace)
+
+			// Proactive executor warming (any authenticated user) — signals demand before code is run
+			var warmActivation handler.ActivationService
+			if activationSvc != nil {
+				warmActivation = activationSvc
+			}
+			warmHandler := handler.NewWarmHandler(warmActivation)
+			r.With(writeRL).Post("/executor/warm", warmHandler.Warm)
 
 			// Advanced session features (instructor+): AI analysis
 			// Rate limits stacked: per-user daily (most restrictive, checked first),
