@@ -86,15 +86,16 @@ gh pr merge <number> --squash|--merge  # per Step 4
    ```bash
    bd close <id> --reason "Merged in PR #<number>" --json
    ```
-3. Remove worktree if it exists:
+3. Note any `Closes #<number>` lines — GitHub auto-closes those issues on merge. Include them in the summary.
+4. Remove worktree if it exists:
    ```bash
    git worktree remove ../<project>-<branch-name> 2>/dev/null
    ```
-4. Delete feature branch:
+5. Delete feature branch:
    ```bash
    git branch -d feature/<branch-name> 2>/dev/null
    ```
-5. Pull main:
+6. Pull main:
    ```bash
    git pull origin main
    ```
@@ -188,7 +189,7 @@ After processing all PRs, output a summary:
 
 ```
 Merge Queue Summary:
-- PR #12: Merged (closed bd-abc, bd-def)
+- PR #12: Merged (closed bd-abc, bd-def, GitHub #45)
 - PR #15: CI passing, awaiting your review
 - PR #18: Rebased, CI re-running
 - PR #20: CI failing — filed bd-xyz

@@ -215,6 +215,8 @@ gh pr create --title "<type>: <title>" --body "$(cat <<'EOF'
 - [ ] Tests pass
 - [ ] <manual verification steps if any>
 
+<if any beads issue description contains "GitHub: #<number>", add a line: "Closes #<number>" for each>
+
 Beads: <comma-separated list of all beads issue IDs included in this PR>
 
 Generated with Claude Code
