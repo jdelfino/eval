@@ -17,6 +17,7 @@ export type ErrorCategory =
   | 'notFound'
   | 'conflict'
   | 'server'
+  | 'warming-up'
   | 'unknown';
 
 /**
@@ -182,6 +183,18 @@ const errorPatterns: Array<{
     isRetryable: false,
     recoveryActions: [],
     helpText: 'Choose a different value that is not already in use.',
+  },
+  // Executor cold-start / warming-up (503 from scale-to-zero) — must come before generic server errors
+  {
+    patterns: [
+      /executor is starting up/i,
+      /starting up/i,
+    ],
+    category: 'warming-up',
+    userMessage: 'The code runner is starting up. This may take up to a minute. Please try again shortly.',
+    isRetryable: true,
+    recoveryActions: [{ label: 'Try Again', type: 'retry' }],
+    helpText: 'The code runner scales down when idle and needs a moment to restart.',
   },
   // Server errors
   {

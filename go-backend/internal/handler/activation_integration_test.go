@@ -271,6 +271,59 @@ func TestTraceHandler_SignalsDemandOnStandaloneTrace(t *testing.T) {
 	svc.waitForCalls(t, 1)
 }
 
+// --- StudentWorkHandler activation ---
+
+func TestStudentWorkHandler_Execute_SignalsDemand(t *testing.T) {
+	svc := &countingActivationService{}
+	workID := uuid.New()
+	userID := uuid.New()
+	problemID := uuid.New()
+
+	work := &store.StudentWorkWithProblem{
+		StudentWork: store.StudentWork{
+			ID:        workID,
+			UserID:    userID,
+			ProblemID: problemID,
+			Code:      "print('hi')",
+		},
+		Problem: store.Problem{
+			ID:       problemID,
+			Language: "python",
+		},
+	}
+
+	swRepo := &mockStudentWorkRepo{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{Success: true}, nil
+		},
+	}
+
+	h := NewStudentWorkHandler(execClient)
+	h.SetActivation(svc)
+
+	body, _ := json.Marshal(map[string]any{"code": "print('hi')"})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+workID.String()+"/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
+	ctx = withChiParam(ctx, "id", workID.String())
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	h.Execute(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Execute() status = %d, want 200: %s", rr.Code, rr.Body.String())
+	}
+
+	svc.waitForCalls(t, 1)
+}
+
 // --- No activation without SetActivation (nil safety) ---
 
 func TestExecuteHandler_NoActivationWithoutSetter(t *testing.T) {
