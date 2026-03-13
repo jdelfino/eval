@@ -296,6 +296,23 @@ describe('SessionView', () => {
       expect(screen.getByTestId('feature-solution-btn')).toBeInTheDocument();
     });
 
+    it('does not pass onFeatureSolution when onClearPublicView is not provided', () => {
+      const problemWithSolution = {
+        ...defaultProps.sessionProblem,
+        solution: 'def solution(): pass',
+      };
+
+      render(
+        <SessionView
+          {...defaultProps}
+          sessionProblem={problemWithSolution}
+          onClearPublicView={undefined}
+        />
+      );
+
+      expect(screen.queryByTestId('feature-solution-btn')).not.toBeInTheDocument();
+    });
+
     it('does not pass onFeatureSolution to ProblemSetupPanel when problem has no solution', () => {
       const problemWithoutSolution = {
         ...defaultProps.sessionProblem,

@@ -106,14 +106,14 @@ export function SessionView({
     studentName: string;
   } | null>(null);
   const handleShowSolution = useCallback(async () => {
-    if (!sessionProblem?.solution || !onClearPublicView) return;
+    if (!sessionProblem?.solution) return;
 
     try {
       await featureCode(session_id, sessionProblem.solution);
     } catch (error) {
       console.error('Failed to show solution:', error);
     }
-  }, [session_id, sessionProblem?.solution, onClearPublicView]);
+  }, [session_id, sessionProblem?.solution]);
 
   // Handlers for student pane
   const handleViewRevisions = useCallback((studentId: string, studentName: string) => {
@@ -186,7 +186,7 @@ export function SessionView({
             initialProblem={sessionProblem}
             initialExecutionSettings={sessionExecutionSettings}
             isFullWidth
-            onFeatureSolution={sessionProblem?.solution ? handleShowSolution : undefined}
+            onFeatureSolution={sessionProblem?.solution && onClearPublicView ? handleShowSolution : undefined}
           />
         </Tabs.Panel>
 

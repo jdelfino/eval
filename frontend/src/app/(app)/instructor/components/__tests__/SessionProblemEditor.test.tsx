@@ -36,6 +36,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
   return function MockCodeEditor({
     code,
     onChange,
+    readOnly,
     onStdinChange,
     onRandomSeedChange,
     onAttachedFilesChange,
@@ -45,12 +46,13 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
     editableProblem
   }: any) {
     return (
-      <div data-testid="code-editor">
+      <div data-testid="code-editor" data-readonly={readOnly ? 'true' : 'false'}>
         <div>{title}</div>
         <textarea
           data-testid="code-textarea"
           value={code}
-          onChange={(e) => onChange(e.target.value)}
+          readOnly={readOnly}
+          onChange={(e) => onChange?.(e.target.value)}
         />
         <input
           data-testid="stdin-input"
@@ -400,6 +402,29 @@ describe('SessionProblemEditor', () => {
 
       // Default tab is Starter Code, should show starter_code
       expect(screen.getByTestId('code-textarea')).toHaveValue('starter code here');
+    });
+
+    it('solution tab is read-only', () => {
+      const initialProblem = {
+        title: 'Test',
+        description: 'Test',
+        starter_code: 'starter code here',
+        solution: 'solution code here',
+      } as any;
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Starter Code tab should not be read-only
+      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'false');
+
+      // Switch to Solution tab — should be read-only
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'true');
     });
 
     it('shows solution code in editor on Solution tab', () => {

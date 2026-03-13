@@ -8,7 +8,7 @@
  * database persistence. Uses Monaco editor and supports execution settings.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Problem } from '@/types/problem';
@@ -41,7 +41,8 @@ export default function SessionProblemEditor({
   const [title, setTitle] = useState(initialProblem?.title || '');
   const [description, setDescription] = useState(initialProblem?.description || '');
   const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
-  const [solution, setSolution] = useState<string>((initialProblem as Problem | null)?.solution || '');
+  const initialSolution = useMemo(() => (initialProblem as Problem | null)?.solution ?? '', [initialProblem]);
+  const [solution, setSolution] = useState<string>(initialSolution);
   const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = (initialProblem as Problem | null)?.language ?? 'python';
@@ -59,9 +60,9 @@ export default function SessionProblemEditor({
       setTitle(initialProblem.title || '');
       setDescription(initialProblem.description || '');
       setStarterCode(initialProblem.starter_code || '');
-      setSolution((initialProblem as Problem | null)?.solution || '');
+      setSolution(initialSolution);
     }
-  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, (initialProblem as Problem | null)?.solution]);
+  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
 
   useEffect(() => {
     if (initialExecutionSettings) {
@@ -224,7 +225,8 @@ export default function SessionProblemEditor({
       <EditorContainer variant="flex">
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
-          onChange={activeTab === 'starter' ? setStarterCode : setSolution}
+          onChange={activeTab === 'starter' ? setStarterCode : () => {}}
+          readOnly={activeTab === 'solution'}
           useApiExecution={true}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           exampleInput={stdin}
