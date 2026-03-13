@@ -138,7 +138,7 @@ test.describe('Critical User Paths', () => {
       await instructorPage.goto(`/instructor/session/${session.id}`);
 
       // Verify session view loaded
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
+      await expect(instructorPage.locator('[data-testid="active-session-header"]')).toBeVisible();
 
       // Student signs in and navigates to their section detail page
       await signInAs(page, student.email);
@@ -247,7 +247,7 @@ test.describe('Critical User Paths', () => {
 
       // Navigate instructor to the session page
       await instructorPage.goto(`/instructor/session/${session.id}`);
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
+      await expect(instructorPage.locator('[data-testid="active-session-header"]')).toBeVisible();
 
       // ===== OPEN PUBLIC VIEW =====
       // Open public view in a new tab

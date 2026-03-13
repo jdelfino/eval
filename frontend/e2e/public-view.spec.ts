@@ -98,7 +98,7 @@ test.describe('Public View Feature', () => {
       await instructorPage.goto(`/instructor/session/${session.id}`);
 
       // Verify session view loaded
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
+      await expect(instructorPage.locator('[data-testid="active-session-header"]')).toBeVisible();
 
       // ===== OPEN PUBLIC VIEW =====
       [publicViewPage] = await Promise.all([

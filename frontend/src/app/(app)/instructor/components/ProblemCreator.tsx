@@ -17,6 +17,7 @@ import { getProblem, createProblem, updateProblem, generateSolution } from '@/li
 import type { Class } from '@/types/api';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
+import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 
 interface ProblemCreatorProps {
@@ -436,57 +437,20 @@ export default function ProblemCreator({
       </div>}
 
       {/* Tab bar for Starter Code / Solution */}
-      {!isLoading && <div role="tablist" style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        borderBottom: '1px solid #dee2e6',
-        backgroundColor: '#fff',
-      }}>
-        {(['starter', 'solution'] as const).map((tab) => {
-          const label = tab === 'starter' ? 'Starter Code' : 'Solution';
-          const isActive = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '0.5rem 1rem',
-                fontSize: '0.875rem',
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? '#0d6efd' : '#495057',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: isActive ? '2px solid #0d6efd' : '2px solid transparent',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          onClick={handleOpenGenerateModal}
-          disabled={!description.trim() || isGenerating || isSubmitting}
-          style={{
-            marginLeft: 'auto',
-            marginRight: '0.5rem',
-            padding: '0.25rem 0.75rem',
-            fontSize: '0.8rem',
-            color: '#0d6efd',
-            backgroundColor: 'transparent',
-            border: '1px solid #0d6efd',
-            borderRadius: '0.25rem',
-            cursor: (!description.trim() || isGenerating || isSubmitting) ? 'not-allowed' : 'pointer',
-            opacity: (!description.trim() || isGenerating || isSubmitting) ? 0.5 : 1,
-          }}
-        >
-          Generate Solution
-        </button>
-      </div>}
+      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
+        <Tabs.List className="items-center">
+          <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
+          <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
+          <button
+            type="button"
+            onClick={handleOpenGenerateModal}
+            disabled={!description.trim() || isGenerating || isSubmitting}
+            className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Generate Solution
+          </button>
+        </Tabs.List>
+      </Tabs>}
 
       {/* Full-width code editor */}
       {!isLoading && <EditorContainer variant="flex">
