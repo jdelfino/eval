@@ -32,7 +32,7 @@ test.describe('Debugger', () => {
     try {
       await signInAs(instructorPage, instructor.email);
       await instructorPage.goto(`/instructor/session/${session.id}`);
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
+      await expect(instructorPage.locator('[data-testid="active-session-header"]')).toBeVisible();
 
       // ===== NAVIGATE TO PROBLEM SETUP TAB =====
       await instructorPage.locator('button:has-text("Problem Setup")').click();

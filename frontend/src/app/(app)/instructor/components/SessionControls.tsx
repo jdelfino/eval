@@ -30,7 +30,7 @@ export default function SessionControls({
   };
 
   return (
-    <div className="bg-white border border-blue-200 rounded-lg shadow-sm px-4 py-2">
+    <div className="bg-white border border-blue-200 rounded-lg shadow-sm px-4 py-2" data-testid="active-session-header">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           {join_code && (

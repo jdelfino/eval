@@ -40,7 +40,7 @@ test.describe('Session Lifecycle', () => {
       await signInAs(instructorPage, instructor.email);
       // Navigate directly to session page
       await instructorPage.goto(`/instructor/session/${session1.id}`);
-      await expect(instructorPage.locator('h2:has-text("Active Session")')).toBeVisible();
+      await expect(instructorPage.locator('[data-testid="active-session-header"]')).toBeVisible();
 
       // ===== STUDENT JOINS =====
       await signInAs(page, student.email);
