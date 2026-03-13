@@ -1872,6 +1872,35 @@ describe('CodeEditor - Font Size Scaling', () => {
       expect(titleEl.className).not.toContain('text-xl');
     });
 
+    it('applies inline fontSize to title proportional to fontSize prop', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={30} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const titleEl = screen.getByText('Test Problem');
+      // titleFontSize = Math.round(30 * 1.3) = 39
+      expect(titleEl.style.fontSize).toBe('39px');
+    });
+
+    it('applies inline fontSize to description proportional to fontSize prop', async () => {
+      const { container } = render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={30} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Problem')).toBeInTheDocument();
+      });
+
+      const proseContainer = container.querySelector('.prose');
+      expect(proseContainer).not.toBeNull();
+      // descFontSize = Math.round(30 * 0.85) = 26
+      expect((proseContainer as HTMLElement).style.fontSize).toBe('26px');
+    });
+
     it('uses prose-sm for description when fontSize is below 20', async () => {
       const { container } = render(
         <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={14} />
@@ -1916,11 +1945,50 @@ describe('CodeEditor - Font Size Scaling', () => {
       const titleEl = screen.getByText('Test Problem');
       expect(titleEl.className).toContain('text-xl');
       expect(titleEl.className).not.toContain('text-3xl');
+      // No inline fontSize when prop is not provided
+      expect(titleEl.style.fontSize).toBe('');
 
       const proseContainer = container.querySelector('.prose');
       expect(proseContainer).not.toBeNull();
       expect(proseContainer!.className).toContain('prose-sm');
       expect(proseContainer!.className).not.toContain('prose-lg');
+      expect((proseContainer as HTMLElement).style.fontSize).toBe('');
+    });
+  });
+
+  describe('Output panel scaling', () => {
+    it('applies inline fontSize to output container when fontSize is set', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} fontSize={30} />
+      );
+
+      await waitFor(() => {
+        // The placeholder text should be visible
+        expect(screen.getByText(/No output yet/)).toBeInTheDocument();
+      });
+
+      const placeholderEl = screen.getByText(/No output yet/);
+      const outputContainer = placeholderEl.closest('[style]');
+      expect(outputContainer).not.toBeNull();
+      // outputFontSize = Math.round(30 * 0.85) = 26
+      expect((outputContainer as HTMLElement).style.fontSize).toBe('26px');
+    });
+
+    it('does not apply inline fontSize to output when fontSize is not set', async () => {
+      render(
+        <CodeEditor code="" onChange={jest.fn()} problem={problem} />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/No output yet/)).toBeInTheDocument();
+      });
+
+      const placeholderEl = screen.getByText(/No output yet/);
+      // No inline fontSize should be set on any parent
+      const parentWithStyle = placeholderEl.closest('[style]');
+      if (parentWithStyle) {
+        expect((parentWithStyle as HTMLElement).style.fontSize).toBe('');
+      }
     });
   });
 
