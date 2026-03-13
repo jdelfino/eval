@@ -19,9 +19,16 @@ type WarmHandler struct {
 	activation ActivationService
 }
 
-// NewWarmHandler creates a new WarmHandler. If svc is nil, SignalDemand is skipped.
-func NewWarmHandler(svc ActivationService) *WarmHandler {
-	return &WarmHandler{activation: svc}
+// NewWarmHandler creates a new WarmHandler with no activation service.
+// Call SetActivation to attach one before the handler serves requests.
+func NewWarmHandler() *WarmHandler {
+	return &WarmHandler{}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *WarmHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // Warm handles POST /api/v1/executor/warm.

@@ -29,7 +29,8 @@ func (m *mockActivationService) SignalDemand(ctx context.Context) error {
 
 func TestWarmHandler_200WithBody(t *testing.T) {
 	svc := &mockActivationService{}
-	h := NewWarmHandler(svc)
+	h := NewWarmHandler()
+	h.SetActivation(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/executor/warm", bytes.NewReader(nil))
 	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
@@ -55,8 +56,7 @@ func TestWarmHandler_200WithBody(t *testing.T) {
 }
 
 func TestWarmHandler_RequiresAuthentication(t *testing.T) {
-	svc := &mockActivationService{}
-	h := NewWarmHandler(svc)
+	h := NewWarmHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/executor/warm", bytes.NewReader(nil))
 	// No auth context — unauthenticated request.
@@ -77,7 +77,8 @@ func TestWarmHandler_CallsSignalDemand(t *testing.T) {
 			return nil
 		},
 	}
-	h := NewWarmHandler(svc)
+	h := NewWarmHandler()
+	h.SetActivation(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/executor/warm", bytes.NewReader(nil))
 	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
@@ -106,7 +107,8 @@ func TestWarmHandler_SignalDemandErrorStillReturns200(t *testing.T) {
 			return errors.New("redis connection refused")
 		},
 	}
-	h := NewWarmHandler(svc)
+	h := NewWarmHandler()
+	h.SetActivation(svc)
 
 	req := httptest.NewRequest(http.MethodPost, "/executor/warm", bytes.NewReader(nil))
 	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
@@ -125,9 +127,9 @@ func TestWarmHandler_SignalDemandErrorStillReturns200(t *testing.T) {
 	}
 }
 
-func TestWarmHandler_NilActivationService(t *testing.T) {
-	// NewWarmHandler with nil service — must not panic, should still return 200.
-	h := NewWarmHandler(nil)
+func TestWarmHandler_NoActivationWithoutSetter(t *testing.T) {
+	// NewWarmHandler with no SetActivation call — must not panic, should still return 200.
+	h := NewWarmHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/executor/warm", bytes.NewReader(nil))
 	req = req.WithContext(auth.WithUser(req.Context(), &auth.User{
@@ -142,6 +144,6 @@ func TestWarmHandler_NilActivationService(t *testing.T) {
 	h.Warm(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Fatalf("Warm() status = %d, want %d (nil service should be no-op)", rr.Code, http.StatusOK)
+		t.Fatalf("Warm() status = %d, want %d (no activation should be no-op)", rr.Code, http.StatusOK)
 	}
 }

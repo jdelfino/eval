@@ -111,12 +111,13 @@ func TestSignalDemand_ConcurrentCallsDontInterfere(t *testing.T) {
 		}
 	}
 
+	// After trimming, list must be exactly 1 item.
 	length, err := client.LLen(ctx, activation.DemandKey).Result()
 	if err != nil {
 		t.Fatalf("LLen error: %v", err)
 	}
-	if length < n {
-		t.Fatalf("expected at least %d items in list, got %d", n, length)
+	if length != 1 {
+		t.Fatalf("expected list length == 1 after concurrent calls (LTRIM keeps it bounded), got %d", length)
 	}
 
 	// TTL must still be positive.
@@ -129,7 +130,7 @@ func TestSignalDemand_ConcurrentCallsDontInterfere(t *testing.T) {
 	}
 }
 
-func TestSignalDemand_AppendNotReplace(t *testing.T) {
+func TestSignalDemand_ListBoundedToOne(t *testing.T) {
 	client := getRedisClient(t)
 	ctx := context.Background()
 
@@ -138,20 +139,19 @@ func TestSignalDemand_AppendNotReplace(t *testing.T) {
 
 	svc := activation.NewService(client, time.Hour)
 
-	// Call twice; the list should grow, not be replaced.
-	if err := svc.SignalDemand(ctx); err != nil {
-		t.Fatalf("first SignalDemand error: %v", err)
-	}
-	if err := svc.SignalDemand(ctx); err != nil {
-		t.Fatalf("second SignalDemand error: %v", err)
+	// Call multiple times; the list must stay at exactly 1 item (LTRIM 0 0).
+	for i := range 5 {
+		if err := svc.SignalDemand(ctx); err != nil {
+			t.Fatalf("SignalDemand call %d error: %v", i+1, err)
+		}
 	}
 
 	length, err := client.LLen(ctx, activation.DemandKey).Result()
 	if err != nil {
 		t.Fatalf("LLen error: %v", err)
 	}
-	if length < 2 {
-		t.Fatalf("expected list length >= 2 after two calls, got %d (must append, not replace)", length)
+	if length != 1 {
+		t.Fatalf("expected list length == 1 after multiple calls (LTRIM must keep list bounded), got %d", length)
 	}
 }
 

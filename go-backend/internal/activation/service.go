@@ -43,6 +43,7 @@ func (s *Service) SignalDemand(ctx context.Context) error {
 	pipe := s.redis.Pipeline()
 	pipe.LPush(ctx, DemandKey, "1")
 	pipe.Expire(ctx, DemandKey, s.ttl)
+	pipe.LTrim(ctx, DemandKey, 0, 0)
 	_, err := pipe.Exec(ctx)
 	return err
 }

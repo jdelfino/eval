@@ -406,11 +406,10 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(custommw.ForCategory(rl, "trace", custommw.UserKey)).Post("/trace", traceHandler.StandaloneTrace)
 
 			// Proactive executor warming (any authenticated user) — signals demand before code is run
-			var warmActivation handler.ActivationService
+			warmHandler := handler.NewWarmHandler()
 			if activationSvc != nil {
-				warmActivation = activationSvc
+				warmHandler.SetActivation(activationSvc)
 			}
-			warmHandler := handler.NewWarmHandler(warmActivation)
 			r.With(writeRL).Post("/executor/warm", warmHandler.Warm)
 
 			// Advanced session features (instructor+): AI analysis
