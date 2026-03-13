@@ -342,4 +342,266 @@ describe('SessionProblemEditor', () => {
     expect(editor).toBeInTheDocument();
     expect(screen.getByTestId('code-textarea')).toHaveValue('test code');
   });
+
+  describe('tab rendering', () => {
+    it('renders Starter Code and Solution tabs', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+        />
+      );
+
+      expect(screen.getByRole('tab', { name: 'Starter Code' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Solution' })).toBeInTheDocument();
+    });
+
+    it('defaults to Starter Code tab', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+        />
+      );
+
+      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
+      expect(starterTab).toHaveAttribute('aria-selected', 'true');
+      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
+      expect(solutionTab).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('switches to Solution tab when clicked', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+        />
+      );
+
+      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
+      fireEvent.click(solutionTab);
+
+      expect(solutionTab).toHaveAttribute('aria-selected', 'true');
+      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
+      expect(starterTab).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('shows starter code in editor on Starter Code tab', () => {
+      const initialProblem = {
+        title: 'Test',
+        description: 'Test',
+        starter_code: 'starter code here',
+        solution: 'solution code here',
+      } as any;
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Default tab is Starter Code, should show starter_code
+      expect(screen.getByTestId('code-textarea')).toHaveValue('starter code here');
+    });
+
+    it('shows solution code in editor on Solution tab', () => {
+      const initialProblem = {
+        title: 'Test',
+        description: 'Test',
+        starter_code: 'starter code here',
+        solution: 'solution code here',
+      } as any;
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Switch to Solution tab
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+    });
+  });
+
+  describe('solution state', () => {
+    it('initializes solution from initialProblem.solution', () => {
+      const initialProblem = {
+        id: 'p1',
+        title: 'Test',
+        description: 'Test',
+        starter_code: 'starter',
+        solution: 'the solution code',
+        namespace_id: 'ns1',
+        author_id: 'a1',
+        class_id: null,
+        tags: [],
+        test_cases: null,
+        execution_settings: null,
+        language: 'python',
+        created_at: new Date(),
+        updated_at: new Date(),
+      } as any;
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Switch to Solution tab to see solution
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('the solution code');
+    });
+
+    it('syncs solution when initialProblem changes', () => {
+      const { rerender } = render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{
+            title: 'Initial',
+            description: 'Initial desc',
+            starter_code: 'initial code',
+            solution: 'initial solution',
+          } as any}
+        />
+      );
+
+      rerender(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{
+            title: 'Updated',
+            description: 'Updated desc',
+            starter_code: 'updated code',
+            solution: 'updated solution',
+          } as any}
+        />
+      );
+
+      // Switch to Solution tab to check updated solution
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('updated solution');
+    });
+  });
+
+  describe('View Solution button', () => {
+    it('does not show View Solution button when no solution exists', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '' }}
+        />
+      );
+
+      expect(screen.queryByTestId('view-solution-button')).not.toBeInTheDocument();
+    });
+
+    it('shows View Solution button when solution exists', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'solution code' } as any}
+        />
+      );
+
+      expect(screen.getByTestId('view-solution-button')).toBeInTheDocument();
+    });
+
+    it('opens solution viewer modal when View Solution is clicked', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('view-solution-button'));
+
+      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
+    });
+
+    it('closes solution viewer modal when Close button is clicked', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('view-solution-button'));
+      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Close'));
+      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
+    });
+
+    it('closes solution viewer modal on Escape key', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('view-solution-button'));
+      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Feature Solution button', () => {
+    it('does not show Feature Solution button when no solution exists', () => {
+      const mockOnFeatureSolution = jest.fn();
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          onFeatureSolution={mockOnFeatureSolution}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '' }}
+        />
+      );
+
+      expect(screen.queryByTestId('feature-solution-button')).not.toBeInTheDocument();
+    });
+
+    it('does not show Feature Solution button when callback not provided', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+        />
+      );
+
+      expect(screen.queryByTestId('feature-solution-button')).not.toBeInTheDocument();
+    });
+
+    it('shows Feature Solution button when solution exists and callback provided', () => {
+      const mockOnFeatureSolution = jest.fn();
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          onFeatureSolution={mockOnFeatureSolution}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+        />
+      );
+
+      expect(screen.getByTestId('feature-solution-button')).toBeInTheDocument();
+    });
+
+    it('calls onFeatureSolution when Feature Solution button is clicked', () => {
+      const mockOnFeatureSolution = jest.fn();
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          onFeatureSolution={mockOnFeatureSolution}
+          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('feature-solution-button'));
+      expect(mockOnFeatureSolution).toHaveBeenCalledTimes(1);
+    });
+  });
 });

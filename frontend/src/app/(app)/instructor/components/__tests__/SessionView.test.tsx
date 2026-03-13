@@ -63,6 +63,7 @@ jest.mock('../ProblemSetupPanel', () => ({
   ProblemSetupPanel: function MockProblemSetupPanel({
     onUpdateProblem,
     initialProblem,
+    onFeatureSolution,
   }: any) {
     return (
       <div data-testid="problem-setup-panel">
@@ -73,6 +74,14 @@ jest.mock('../ProblemSetupPanel', () => ({
         >
           Update Problem
         </button>
+        {onFeatureSolution && (
+          <button
+            onClick={onFeatureSolution}
+            data-testid="feature-solution-btn"
+          >
+            Feature Solution
+          </button>
+        )}
       </div>
     );
   },
@@ -264,6 +273,43 @@ describe('SessionView', () => {
       expect(defaultProps.onUpdateProblem).toHaveBeenCalledWith(
         { title: 'Updated', description: '', starter_code: '' }
       );
+    });
+  });
+
+  describe('feature solution wiring', () => {
+    it('passes onFeatureSolution to ProblemSetupPanel when problem has solution', () => {
+      const problemWithSolution = {
+        ...defaultProps.sessionProblem,
+        solution: 'def solution(): pass',
+      };
+      const mockOnClearPublicView = jest.fn().mockResolvedValue(undefined);
+
+      render(
+        <SessionView
+          {...defaultProps}
+          sessionProblem={problemWithSolution}
+          onClearPublicView={mockOnClearPublicView}
+        />
+      );
+
+      // The feature solution button should be present (passed from SessionView via ProblemSetupPanel)
+      expect(screen.getByTestId('feature-solution-btn')).toBeInTheDocument();
+    });
+
+    it('does not pass onFeatureSolution to ProblemSetupPanel when problem has no solution', () => {
+      const problemWithoutSolution = {
+        ...defaultProps.sessionProblem,
+        solution: null,
+      };
+
+      render(
+        <SessionView
+          {...defaultProps}
+          sessionProblem={problemWithoutSolution}
+        />
+      );
+
+      expect(screen.queryByTestId('feature-solution-btn')).not.toBeInTheDocument();
     });
   });
 

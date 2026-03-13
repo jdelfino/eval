@@ -34,6 +34,8 @@ interface ProblemSetupPanelProps {
   isLoading?: boolean;
   /** Whether to render in full-width mode (no panel wrapper) */
   isFullWidth?: boolean;
+  /** Callback to feature the solution on the public view */
+  onFeatureSolution?: () => void;
 }
 
 /**
@@ -47,6 +49,7 @@ export function ProblemSetupPanel({
   initialExecutionSettings,
   isLoading = false,
   isFullWidth = false,
+  onFeatureSolution,
 }: ProblemSetupPanelProps) {
   // Full-width mode: render editor in a card without panel chrome
   if (isFullWidth) {
@@ -57,6 +60,7 @@ export function ProblemSetupPanel({
             onUpdateProblem={onUpdateProblem}
             initialProblem={initialProblem}
             initialExecutionSettings={initialExecutionSettings}
+            onFeatureSolution={onFeatureSolution}
           />
         </Card>
       </PanelErrorBoundary>
@@ -77,6 +81,7 @@ export function ProblemSetupPanel({
         onUpdateProblem={onUpdateProblem}
         initialProblem={initialProblem}
         initialExecutionSettings={initialExecutionSettings}
+        onFeatureSolution={onFeatureSolution}
       />
     </div>
   );

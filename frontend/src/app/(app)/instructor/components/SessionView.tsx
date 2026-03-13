@@ -186,6 +186,7 @@ export function SessionView({
             initialProblem={sessionProblem}
             initialExecutionSettings={sessionExecutionSettings}
             isFullWidth
+            onFeatureSolution={sessionProblem?.solution ? handleShowSolution : undefined}
           />
         </Tabs.Panel>
 
