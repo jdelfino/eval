@@ -5,7 +5,7 @@
  * clean, typed interfaces.
  */
 
-import { apiPost } from '@/lib/api-client';
+import { apiFetch, apiPost } from '@/lib/api-client';
 import type { ExecutionResult } from '@/types/api';
 
 /**
@@ -45,4 +45,16 @@ export async function executeStandaloneCode(
   }
 
   return apiPost<ExecutionResult>('/execute', body);
+}
+
+/**
+ * Signal executor demand to warm it up before code is submitted.
+ * Fire-and-forget from the caller's perspective — errors should be silently ignored.
+ *
+ * Calls POST /api/v1/executor/warm. Uses apiFetch directly (not apiPost) because
+ * apiPost calls response.json() and the /warm endpoint returns {} which is fine,
+ * but apiFetch is lighter for this fire-and-forget use case.
+ */
+export async function warmExecutor(): Promise<void> {
+  await apiFetch('/executor/warm', { method: 'POST' });
 }
