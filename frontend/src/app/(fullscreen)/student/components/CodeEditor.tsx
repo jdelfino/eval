@@ -70,8 +70,13 @@ export default function CodeEditor({
   fontSize,
 }: CodeEditorProps) {
   const largeOutput = fontSize && fontSize >= 20;
-  const outputTextSm = largeOutput ? 'text-base' : 'text-sm';
-  const outputTextXs = largeOutput ? 'text-sm' : 'text-xs';
+  // When fontSize is set, scale all text proportionally via inline styles.
+  // When not set, fall back to Tailwind preset classes.
+  const titleFontSize = fontSize ? Math.round(fontSize * 1.3) : undefined;
+  const descFontSize = fontSize ? Math.round(fontSize * 0.85) : undefined;
+  const outputFontSize = fontSize ? Math.round(fontSize * 0.85) : undefined;
+  const outputTextSm = fontSize ? '' : (largeOutput ? 'text-base' : 'text-sm');
+  const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
   const [stdin, setStdin] = useState('');
   const [localIsRunning, setLocalIsRunning] = useState(false);
@@ -655,9 +660,9 @@ export default function CodeEditor({
         {!isDesktop && !mobileProblemCollapsed && problem && (
           <div className="bg-gray-800 text-gray-200 border-b border-gray-700 flex-shrink-0">
             <div className="p-4">
-              <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4 text-gray-100`}>{problem.title}</h2>
+              <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4 text-gray-100`} style={titleFontSize ? { fontSize: titleFontSize } : undefined}>{problem.title}</h2>
               {problem.description && (
-                <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`}>
+                <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`} style={descFontSize ? { fontSize: descFontSize } : undefined}>
                   <MarkdownContent content={problem.description} darkTheme={true} />
                 </div>
               )}
@@ -868,9 +873,9 @@ export default function CodeEditor({
                   ) : (
                     /* Read-only problem view for student */
                     <>
-                      <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4`}>{problem.title}</h2>
+                      <h2 className={`${largeOutput ? 'text-3xl' : 'text-xl'} font-bold mb-4`} style={titleFontSize ? { fontSize: titleFontSize } : undefined}>{problem.title}</h2>
                       {problem.description && (
-                        <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`}>
+                        <div className={`prose prose-invert ${largeOutput ? 'prose-lg' : 'prose-sm'} max-w-none`} style={descFontSize ? { fontSize: descFontSize } : undefined}>
                           <MarkdownContent content={problem.description} darkTheme={true} />
                         </div>
                       )}
@@ -1179,7 +1184,7 @@ export default function CodeEditor({
               /* Show normal output when not debugging */
               <div className={`p-4 h-full ${
                 effectiveResult.success ? 'bg-gray-900' : 'bg-gray-900'
-              }`}>
+              }`} style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
                 <div className="flex justify-between items-center mb-2">
                   <span className={`font-bold ${
                     effectiveResult.success ? 'text-green-400' : 'text-red-400'
@@ -1218,7 +1223,7 @@ export default function CodeEditor({
                 )}
               </div>
             ) : (
-              <div className="p-4 bg-gray-900 h-full flex flex-col items-center justify-center">
+              <div className="p-4 bg-gray-900 h-full flex flex-col items-center justify-center" style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
                 {!problem ? (
                   <>
                     <p className={`text-gray-400 ${outputTextSm} italic mb-2`}>
