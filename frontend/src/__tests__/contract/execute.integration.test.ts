@@ -9,7 +9,7 @@
  * with omitempty on output/error/stdin.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
-import { executeStandaloneCode } from '@/lib/api/execute';
+import { executeStandaloneCode, warmExecutor } from '@/lib/api/execute';
 import { expectSnakeCaseKeys } from './validators';
 
 describe('executeStandaloneCode()', () => {
@@ -48,6 +48,13 @@ describe('executeStandaloneCode()', () => {
 
     // No PascalCase leaks
     expectSnakeCaseKeys(result, 'ExecutionResult');
+  });
+
+  it('warmExecutor() calls POST /executor/warm without error', async () => {
+    // The /warm endpoint signals executor demand and returns 200 with {}.
+    // This is a fire-and-forget call; the contract test just verifies it
+    // completes without throwing.
+    await expect(warmExecutor()).resolves.toBeUndefined();
   });
 
   it('passes stdin option through to executor', async () => {
