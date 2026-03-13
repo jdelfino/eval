@@ -79,6 +79,12 @@ variable "gke_zone" {
   type        = string
 }
 
+variable "gke_node_locations" {
+  description = "List of zones in which nodes are created (multi-zone spread)"
+  type        = list(string)
+  default     = []
+}
+
 variable "gke_release_channel" {
   description = "Release channel for GKE upgrades (RAPID, REGULAR, STABLE)"
   type        = string

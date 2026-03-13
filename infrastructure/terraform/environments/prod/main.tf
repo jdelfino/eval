@@ -109,7 +109,8 @@ module "gke" {
   pods_range_name     = module.vpc.gke_pods_range_name
   services_range_name = module.vpc.gke_services_range_name
 
-  zone = var.gke_zone
+  zone           = var.gke_zone
+  node_locations = var.gke_node_locations
 
   release_channel            = var.gke_release_channel
   deletion_protection        = var.gke_deletion_protection

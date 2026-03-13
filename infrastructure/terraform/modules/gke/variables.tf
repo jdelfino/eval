@@ -159,6 +159,16 @@ variable "node_network_tags" {
 }
 
 # -----------------------------------------------------------------------------
+# Node Locations (Multi-Zone Spread)
+# -----------------------------------------------------------------------------
+
+variable "node_locations" {
+  description = "List of zones in which nodes are created (multi-zone spread). Empty list uses cluster default."
+  type        = list(string)
+  default     = []
+}
+
+# -----------------------------------------------------------------------------
 # Default Node Pool
 # -----------------------------------------------------------------------------
 
@@ -169,13 +179,13 @@ variable "default_pool_machine_type" {
 }
 
 variable "default_pool_min_nodes" {
-  description = "Minimum number of nodes in the default pool (must be >= 1 for system pods)"
+  description = "Minimum total number of nodes in the default pool across all zones"
   type        = number
   default     = 1
 }
 
 variable "default_pool_max_nodes" {
-  description = "Maximum number of nodes in the default pool"
+  description = "Maximum total number of nodes in the default pool across all zones"
   type        = number
   default     = 3
 }
@@ -203,13 +213,13 @@ variable "executor_pool_machine_type" {
 }
 
 variable "executor_pool_min_nodes" {
-  description = "Minimum number of nodes in the executor pool (0 for scale-to-zero)"
+  description = "Minimum total number of nodes in the executor pool across all zones (0 for scale-to-zero)"
   type        = number
   default     = 0
 }
 
 variable "executor_pool_max_nodes" {
-  description = "Maximum number of nodes in the executor pool"
+  description = "Maximum total number of nodes in the executor pool across all zones"
   type        = number
   default     = 5
 }

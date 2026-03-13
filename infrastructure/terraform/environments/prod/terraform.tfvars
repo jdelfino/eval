@@ -44,6 +44,7 @@ nat_zone = "us-east1-b"
 # -----------------------------------------------------------------------------
 
 gke_zone                   = "us-east1-b"
+gke_node_locations         = ["us-east1-b", "us-east1-c"]
 gke_release_channel        = "REGULAR"
 gke_deletion_protection    = true
 gke_master_ipv4_cidr_block = "172.16.0.0/28"
@@ -59,9 +60,12 @@ gke_master_authorized_networks = [
   }
 ]
 
-# Default pool: 2x e2-standard-2 spot for headroom (prod + staging + e2e)
+# Default pool: 2 total across zones, e2-standard-2 spot for headroom (prod + staging + e2e)
 gke_default_pool_min_nodes = 2
 gke_default_pool_max_nodes = 2
+
+# Executor pool: at least 1 node total across zones
+gke_executor_pool_min_nodes = 1
 
 # -----------------------------------------------------------------------------
 # Cloud SQL Configuration
