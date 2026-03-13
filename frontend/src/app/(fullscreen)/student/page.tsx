@@ -10,6 +10,8 @@ import { ExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import { getStudentWork, updateStudentWork, executeStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
+import { warmExecutor } from '@/lib/api/execute';
+import { ApiError } from '@/lib/api-error';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -52,6 +54,10 @@ function StudentPage() {
   const [execution_result, setExecutionResult] = useState<any>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True when executor returned 503 (cold-starting) — shown as a distinct warming-up banner
+  const [warmingUp, setWarmingUp] = useState(false);
+  // Last execution settings used, to support retry from the warming-up banner
+  const lastExecutionSettingsRef = useRef<ExecutionSettings | null>(null);
 
   // Join state
   const [joined, setJoined] = useState(false);
@@ -161,6 +167,10 @@ function StudentPage() {
     } else {
       // No active session -> practice mode
       setMode('practice');
+      // Proactively warm the executor so it's ready when the student runs code
+      warmExecutor().catch(() => {
+        // Fire-and-forget: ignore errors, don't block the user
+      });
     }
   }, [mode, activeSessions, problemId]);
 
@@ -308,7 +318,9 @@ function StudentPage() {
       return;
     }
 
+    lastExecutionSettingsRef.current = execution_settings;
     setError(null);
+    setWarmingUp(false);
     setIsRunning(true);
     setExecutionResult(null);
 
@@ -317,7 +329,11 @@ function StudentPage() {
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
-      setError(err.message || 'Code execution failed');
+      if (err instanceof ApiError && err.status === 503) {
+        setWarmingUp(true);
+      } else {
+        setError(err.message || 'Code execution failed');
+      }
       setIsRunning(false);
     }
   };
@@ -336,7 +352,9 @@ function StudentPage() {
       return;
     }
 
+    lastExecutionSettingsRef.current = execution_settings;
     setError(null);
+    setWarmingUp(false);
     setIsRunning(true);
     setExecutionResult(null);
 
@@ -345,7 +363,11 @@ function StudentPage() {
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
-      setError(err.message || 'Code execution failed');
+      if (err instanceof ApiError && err.status === 503) {
+        setWarmingUp(true);
+      } else {
+        setError(err.message || 'Code execution failed');
+      }
       setIsRunning(false);
     }
   };
@@ -434,6 +456,19 @@ function StudentPage() {
         <ErrorAlert
           error={connectionError}
           variant="warning"
+          className="mx-3 my-1 flex-shrink-0"
+        />
+      )}
+      {warmingUp && (
+        <ErrorAlert
+          error="The code runner is starting up. This may take up to a minute. Please try again shortly."
+          title="Code Runner Starting Up"
+          variant="warning"
+          onDismiss={() => setWarmingUp(false)}
+          onRetry={lastExecutionSettingsRef.current !== null
+            ? () => handleRunCode(lastExecutionSettingsRef.current!)
+            : undefined}
+          isRetrying={isRunning}
           className="mx-3 my-1 flex-shrink-0"
         />
       )}
