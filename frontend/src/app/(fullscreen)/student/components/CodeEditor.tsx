@@ -4,14 +4,17 @@ import Editor from '@monaco-editor/react';
 import React, { useEffect, useRef, useState } from 'react';
 import ExecutionSettingsComponent from './ExecutionSettings';
 import { DebuggerSidebar } from './DebuggerSidebar';
+import { CasesPanel } from './CasesPanel';
+import { CaseResultDisplay } from './CaseResultDisplay';
 import MarkdownContent from '@/components/MarkdownContent';
-import type { ExecutionSettings } from '@/types/problem';
+import type { ExecutionSettings, IOTestCase } from '@/types/problem';
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
 import { parseErrorLineNumber } from '@/lib/parse-error-line';
+import type { CaseRunnerResult } from '@/hooks/useCaseRunner';
 
 interface CodeEditorProps {
   code: string;
@@ -32,6 +35,11 @@ interface CodeEditorProps {
   onLoadStarterCode?: (starter_code: string) => void;
   externalEditorRef?: React.MutableRefObject<any>;
   debugger?: ReturnType<typeof import('@/hooks/useApiDebugger').useApiDebugger>;
+  caseRunner?: CaseRunnerResult;
+  /** Instructor-defined test cases from the problem. */
+  instructorCases?: IOTestCase[];
+  /** Student-defined test cases from student_work. */
+  studentCases?: IOTestCase[];
   onProblemEdit?: (updates: { title?: string; description?: string }) => void;
   editableProblem?: boolean;
   forceDesktop?: boolean;
@@ -59,6 +67,9 @@ export default function CodeEditor({
   onLoadStarterCode,
   externalEditorRef,
   debugger: debuggerHook,
+  caseRunner,
+  instructorCases = [],
+  studentCases = [],
   onProblemEdit,
   editableProblem = false,
   forceDesktop = false,
@@ -87,14 +98,16 @@ export default function CodeEditor({
   const _mobileViewport = useMobileViewport();
   const isDesktop = forceDesktop ? true : _isDesktop;
   const mobileViewport = forceDesktop ? { isMobile: false, isTablet: false, isVerySmall: false, isDesktop: true, width: 1920 } : _mobileViewport;
-  const { isCollapsed: isSettingsCollapsed, toggle: toggleSettings, setCollapsed: setSettingsCollapsed } = useSidebarSection('execution-settings', false);
+  const { isCollapsed: isSettingsCollapsed, toggle: toggleSettings, setCollapsed: setSettingsCollapsed } = useSidebarSection('execution-settings', true);
   const { isCollapsed: isProblemCollapsed, toggle: toggleProblem, setCollapsed: setProblemCollapsed } = useSidebarSection('problem-panel', false);
   const { isCollapsed: isDebuggerCollapsed, toggle: toggleDebugger, setCollapsed: setDebuggerCollapsed } = useSidebarSection('debugger-panel', true);
+  const { isCollapsed: isCasesCollapsed, toggle: toggleCases, setCollapsed: setCasesCollapsed } = useSidebarSection('cases-panel', true);
 
   // Mobile-specific state (separate from desktop sidebar state)
   const [mobileProblemCollapsed, setMobileProblemCollapsed] = useState(true);
   const [mobileSettingsCollapsed, setMobileSettingsCollapsed] = useState(true);
   const [mobileDebuggerCollapsed, setMobileDebuggerCollapsed] = useState(true);
+  const [mobileCasesCollapsed, setMobileCasesCollapsed] = useState(true);
 
   // Mobile view toggle: 'code' | 'output'
   const [mobileView, setMobileView] = useState<'code' | 'output'>('code');
@@ -180,7 +193,8 @@ export default function CodeEditor({
       const openPanels = [
         !isSettingsCollapsed,
         !isProblemCollapsed,
-        !isDebuggerCollapsed
+        !isDebuggerCollapsed,
+        !isCasesCollapsed,
       ].filter(Boolean).length;
 
       if (openPanels > 1) {
@@ -189,18 +203,25 @@ export default function CodeEditor({
           // Prioritize debugger if active
           setSettingsCollapsed(true);
           setProblemCollapsed(true);
+          setCasesCollapsed(true);
         } else if (problem && !isProblemCollapsed) {
           // Then problem if it exists
           setSettingsCollapsed(true);
+          setDebuggerCollapsed(true);
+          setCasesCollapsed(true);
+        } else if (!isCasesCollapsed) {
+          setSettingsCollapsed(true);
+          setProblemCollapsed(true);
           setDebuggerCollapsed(true);
         } else {
           // Otherwise keep settings
           setProblemCollapsed(true);
           setDebuggerCollapsed(true);
+          setCasesCollapsed(true);
         }
       }
     }
-  }, [isSettingsCollapsed, isProblemCollapsed, isDebuggerCollapsed, problem, debuggerHook?.hasTrace, setSettingsCollapsed, setProblemCollapsed, setDebuggerCollapsed]);
+  }, [isSettingsCollapsed, isProblemCollapsed, isDebuggerCollapsed, isCasesCollapsed, problem, debuggerHook?.hasTrace, setSettingsCollapsed, setProblemCollapsed, setDebuggerCollapsed, setCasesCollapsed]);
 
   // Ensure only one sidebar is open at a time
   const handleToggleProblem = () => {
@@ -208,6 +229,7 @@ export default function CodeEditor({
       // Opening problem panel - close others
       setSettingsCollapsed(true);
       setDebuggerCollapsed(true);
+      setCasesCollapsed(true);
     }
     toggleProblem();
   };
@@ -217,6 +239,7 @@ export default function CodeEditor({
       // Opening settings panel - close others
       setProblemCollapsed(true);
       setDebuggerCollapsed(true);
+      setCasesCollapsed(true);
     }
     toggleSettings();
   };
@@ -226,8 +249,19 @@ export default function CodeEditor({
       // Opening debugger panel - close others
       setProblemCollapsed(true);
       setSettingsCollapsed(true);
+      setCasesCollapsed(true);
     }
     toggleDebugger();
+  };
+
+  const handleToggleCases = () => {
+    if (isCasesCollapsed) {
+      // Opening cases panel - close others
+      setProblemCollapsed(true);
+      setSettingsCollapsed(true);
+      setDebuggerCollapsed(true);
+    }
+    toggleCases();
   };
 
   // Wrapper to call both internal state and parent callback
@@ -294,8 +328,9 @@ export default function CodeEditor({
       // Close other sidebars
       setSettingsCollapsed(true);
       setProblemCollapsed(true);
+      setCasesCollapsed(true);
     }
-  }, [debuggerHook?.hasTrace, isDesktop, setDebuggerCollapsed, setSettingsCollapsed, setProblemCollapsed]);
+  }, [debuggerHook?.hasTrace, isDesktop, setDebuggerCollapsed, setSettingsCollapsed, setProblemCollapsed, setCasesCollapsed]);
 
   // Update line highlighting when debugging
   useEffect(() => {
@@ -594,6 +629,20 @@ export default function CodeEditor({
               >
                 Settings
               </button>
+              {caseRunner && (instructorCases.length > 0 || studentCases.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => setMobileCasesCollapsed(!mobileCasesCollapsed)}
+                  className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                    !mobileCasesCollapsed
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                  }`}
+                  aria-label="Toggle Cases"
+                >
+                  Cases
+                </button>
+              )}
               {debuggerHook && (
                 <button
                   type="button"
@@ -648,6 +697,26 @@ export default function CodeEditor({
               exampleInput={exampleInput}
               readOnly={readOnly}
               inSidebar={true}
+              darkTheme={true}
+            />
+          </div>
+        )}
+
+        {/* Mobile: Cases Section */}
+        {!isDesktop && !mobileCasesCollapsed && caseRunner && (
+          <div className="bg-gray-800 border-b border-gray-700 flex-shrink-0" style={{ maxHeight: '40vh', overflowY: 'auto' }}>
+            <CasesPanel
+              instructorCases={instructorCases}
+              studentCases={studentCases}
+              caseResults={caseRunner.caseResults}
+              selectedCase={caseRunner.selectedCase}
+              isRunning={caseRunner.isRunning}
+              onSelectCase={caseRunner.selectCase}
+              onRunCase={caseRunner.runCase}
+              onRunAll={caseRunner.runAllCases}
+              onAddCase={() => {}}
+              onUpdateStudentCase={() => {}}
+              onDeleteStudentCase={() => {}}
               darkTheme={true}
             />
           </div>
@@ -709,6 +778,28 @@ export default function CodeEditor({
                     <line x1="16" y1="13" x2="8" y2="13" />
                     <line x1="16" y1="17" x2="8" y2="17" />
                     <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Cases icon (beaker/flask) — shown when problem has test cases */}
+              {(instructorCases.length > 0 || studentCases.length > 0 || caseRunner) && (
+                <button
+                  type="button"
+                  onClick={handleToggleCases}
+                  className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                    !isCasesCollapsed
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                  aria-label="Test Cases"
+                  title="Test Cases"
+                  data-testid="cases-panel-toggle"
+                >
+                  {/* Beaker/Flask icon */}
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 3H15M9 3V13L4 20H20L15 13V3M9 3H15" />
+                    <line x1="9" y1="9" x2="15" y2="9" />
                   </svg>
                 </button>
               )}
@@ -886,6 +977,50 @@ export default function CodeEditor({
                     exampleInput={exampleInput}
                     readOnly={readOnly}
                     inSidebar={true}
+                  />
+                </div>
+                {/* Resize handle */}
+                <div
+                  onMouseDown={handleMouseDown}
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors"
+                  style={{
+                    background: isResizing ? '#3b82f6' : 'transparent',
+                  }}
+                  title="Drag to resize"
+                />
+              </div>
+            )}
+
+            {!isCasesCollapsed && caseRunner && (
+              <div
+                className="bg-gray-800 text-gray-200 border-r border-gray-700 flex flex-col flex-shrink-0 relative"
+                style={{ width: `${sidebarWidth}px`, maxHeight: '100%', height: '100%' }}
+              >
+                <div className="px-4 py-2 bg-gray-900 border-b border-gray-700 font-bold flex items-center justify-between flex-shrink-0">
+                  <span>Test Cases</span>
+                  <button
+                    type="button"
+                    onClick={toggleCases}
+                    className="text-gray-400 hover:text-gray-100 text-xl leading-none"
+                    aria-label="Close panel"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <CasesPanel
+                    instructorCases={instructorCases}
+                    studentCases={studentCases}
+                    caseResults={caseRunner.caseResults}
+                    selectedCase={caseRunner.selectedCase}
+                    isRunning={caseRunner.isRunning}
+                    onSelectCase={caseRunner.selectCase}
+                    onRunCase={caseRunner.runCase}
+                    onRunAll={caseRunner.runAllCases}
+                    onAddCase={() => {/* student case addition handled externally */}}
+                    onUpdateStudentCase={() => {/* student case update handled externally */}}
+                    onDeleteStudentCase={() => {/* student case delete handled externally */}}
+                    darkTheme={true}
                   />
                 </div>
                 {/* Resize handle */}
@@ -1078,7 +1213,16 @@ export default function CodeEditor({
               />
             ) : null}
 
-            {debuggerHook?.hasTrace ? (
+            {caseRunner && caseRunner.selectedCase ? (
+              /* Show case result when a case is selected */
+              <CaseResultDisplay
+                result={caseRunner.caseResults[caseRunner.selectedCase] ?? null}
+                caseName={caseRunner.selectedCase}
+                isRunning={caseRunner.isRunning}
+                allResults={caseRunner.caseResults}
+                totalCases={instructorCases.length + studentCases.length}
+              />
+            ) : debuggerHook?.hasTrace ? (
               /* Show debugger output when debugging */
               <div className="p-4 h-full bg-gray-900 overflow-y-auto">
                 <div className="flex justify-between items-center mb-2">
