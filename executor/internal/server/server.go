@@ -145,6 +145,22 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 	)
 	r.With(globalRL).Post("/trace", traceHandler.ServeHTTP)
 
+	// Test endpoint (I/O test runner).
+	testHandler := handler.NewTestHandler(
+		logger, runner, m,
+		handler.TestHandlerConfig{
+			NsjailPath:              cfg.NsjailPath,
+			PythonPath:              cfg.PythonPath,
+			JavaPath:                cfg.JavaPath,
+			JavacPath:               cfg.JavacPath,
+			MaxOutputBytes:          cfg.MaxOutputBytes,
+			DefaultTimeoutMs:        cfg.DefaultTimeoutMS,
+			MaxCodeBytes:            cfg.MaxCodeBytes,
+			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
+		},
+	)
+	r.With(globalRL).Post("/test", testHandler.ServeHTTP)
+
 	return &Server{
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
