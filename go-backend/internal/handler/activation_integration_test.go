@@ -219,6 +219,129 @@ func TestTraceHandler_SignalsDemandOnStandaloneTrace(t *testing.T) {
 	svc.waitForCalls(t, 1)
 }
 
+// --- TestExecution handler activation ---
+
+func TestTestExecutionHandler_SignalsDemandOnStudentWorkTest(t *testing.T) {
+	svc := &countingActivationService{}
+
+	runnerClient := &mockTestRunnerClient{
+		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
+			return &executor.TestResponse{
+				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.TestSummary{Total: 1, Passed: 1},
+			}, nil
+		},
+	}
+	h := NewTestExecutionHandler(runnerClient)
+	h.SetActivation(svc)
+
+	work := testStudentWorkWithProblem("")
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Post("/student-work/{id}/test", h.StudentWorkTest)
+
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("StudentWorkTest() status = %d, want 200: %s", rr.Code, rr.Body.String())
+	}
+
+	svc.waitForCalls(t, 1)
+}
+
+func TestTestExecutionHandler_SignalsDemandOnSessionTest(t *testing.T) {
+	svc := &countingActivationService{}
+
+	runnerClient := &mockTestRunnerClient{
+		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
+			return &executor.TestResponse{
+				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.TestSummary{Total: 1, Passed: 1},
+			}, nil
+		},
+	}
+	h := NewTestExecutionHandler(runnerClient)
+	h.SetActivation(svc)
+
+	tcJSON := `[{"name":"case1","input":"1\n","expected_output":"1","match_type":"exact","order":0}]`
+	session := testSessionWithProblem(tcJSON)
+	repos := &testExecSessionRepos{
+		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
+			return session, nil
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Post("/sessions/{id}/test", h.SessionTest)
+
+	body, _ := json.Marshal(map[string]any{"code": "print(input())"})
+	req := httptest.NewRequest(http.MethodPost, "/sessions/"+testSessionID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("SessionTest() status = %d, want 200: %s", rr.Code, rr.Body.String())
+	}
+
+	svc.waitForCalls(t, 1)
+}
+
+func TestTestExecutionHandler_NoActivationWithoutSetter_StudentWork(t *testing.T) {
+	// Verifies that TestExecutionHandler without SetActivation called does not panic.
+	runnerClient := &mockTestRunnerClient{
+		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
+			return &executor.TestResponse{
+				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.TestSummary{Total: 1, Passed: 1},
+			}, nil
+		},
+	}
+	h := NewTestExecutionHandler(runnerClient)
+	// No SetActivation call.
+
+	work := testStudentWorkWithProblem("")
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Post("/student-work/{id}/test", h.StudentWorkTest)
+
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req) // must not panic
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("StudentWorkTest() without activation status = %d, want 200", rr.Code)
+	}
+}
+
 // --- No activation without SetActivation (nil safety) ---
 
 func TestExecuteHandler_NoActivationWithoutSetter(t *testing.T) {
