@@ -16,13 +16,8 @@ type StudentWorkHandler struct {
 }
 
 // NewStudentWorkHandler creates a new StudentWorkHandler.
-func NewStudentWorkHandler(exec ExecutorClient) *StudentWorkHandler {
+func NewStudentWorkHandler() *StudentWorkHandler {
 	return &StudentWorkHandler{}
-}
-
-// SetActivation attaches an ActivationService to the handler.
-// Kept for compatibility; StudentWorkHandler no longer executes code.
-func (h *StudentWorkHandler) SetActivation(svc ActivationService) {
 }
 
 // updateStudentWorkRequest is the request body for PATCH /student-work/{id}.

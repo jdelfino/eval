@@ -197,7 +197,7 @@ func TestStudentWorkHandler_GetOrCreate_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -236,7 +236,7 @@ func TestStudentWorkHandler_GetOrCreate_ProblemNotPublished(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -281,7 +281,7 @@ func TestStudentWorkHandler_Get_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", workID.String())
@@ -319,7 +319,7 @@ func TestStudentWorkHandler_Get_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", workID.String())
@@ -370,7 +370,7 @@ func TestStudentWorkHandler_Update_Success(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
@@ -402,7 +402,7 @@ func TestStudentWorkHandler_GetOrCreate_EmptyNamespaceID(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", sectionID.String())
@@ -437,7 +437,7 @@ func TestStudentWorkHandler_Update_NotFound(t *testing.T) {
 		},
 	}
 
-	h := NewStudentWorkHandler(nil)
+	h := NewStudentWorkHandler()
 	req := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	rctx := chi.NewRouteContext()
