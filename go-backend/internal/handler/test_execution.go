@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
@@ -21,12 +22,19 @@ type TestRunnerClient interface {
 
 // TestExecutionHandler handles I/O test execution requests.
 type TestExecutionHandler struct {
-	runner TestRunnerClient
+	runner     TestRunnerClient
+	activation ActivationService
 }
 
 // NewTestExecutionHandler creates a new TestExecutionHandler.
 func NewTestExecutionHandler(runner TestRunnerClient) *TestExecutionHandler {
 	return &TestExecutionHandler{runner: runner}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *TestExecutionHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // testRunRequest is the request body for test execution endpoints.
@@ -104,6 +112,16 @@ func (h *TestExecutionHandler) StudentWorkTest(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "test_execution.StudentWorkTest", "error", err)
+			}
+		}()
 	}
 
 	testResp, err := h.runner.RunTests(r.Context(), executor.TestRequest{
@@ -189,6 +207,16 @@ func (h *TestExecutionHandler) SessionTest(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "test_execution.SessionTest", "error", err)
+			}
+		}()
 	}
 
 	testResp, err := h.runner.RunTests(r.Context(), executor.TestRequest{
