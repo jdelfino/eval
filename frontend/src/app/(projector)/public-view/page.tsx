@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
+import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
@@ -69,6 +70,31 @@ function PublicViewContent() {
   // Tracks whether the user has edited the scratch pad code.
   // When true, we don't auto-replace with starter_code.
   const hasUserEdited = useRef(false);
+
+  // Execution state for code editor
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+
+  const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
+    const language = (state?.problem as any)?.language || 'python';
+    const options: ExecuteOptions = {};
+    if (execution_settings.stdin) options.stdin = execution_settings.stdin;
+    if (execution_settings.random_seed !== undefined) options.random_seed = execution_settings.random_seed;
+    if (execution_settings.attached_files) options.attached_files = execution_settings.attached_files;
+    setIsRunning(true);
+    setExecutionResult(null);
+    executeCode(codeToRun, language, options)
+      .then(setExecutionResult)
+      .catch((err) => {
+        setExecutionResult({
+          success: false,
+          output: '',
+          error: err.message || 'Execution failed',
+          execution_time_ms: 0,
+        });
+      })
+      .finally(() => setIsRunning(false));
+  };
 
   const hasFeaturedSubmission = !!state?.featured_student_id || !!state?.featured_code;
 
@@ -214,7 +240,9 @@ function PublicViewContent() {
             problem={problem || null}
             title="Featured Code"
             exampleInput={featuredStdin}
-            useApiExecution={true}
+            onRun={handleRunCode(localCode)}
+            isRunning={isRunning}
+            execution_result={executionResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
@@ -229,7 +257,9 @@ function PublicViewContent() {
             onChange={handleCodeChange}
             problem={problem || null}
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
-            useApiExecution={true}
+            onRun={handleRunCode(scratchPadCode)}
+            isRunning={isRunning}
+            execution_result={executionResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"

@@ -56,7 +56,7 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 
 // Mock the API execute module
 jest.mock('@/lib/api/execute', () => ({
-  executeStandaloneCode: jest.fn(),
+  executeCode: jest.fn(),
 }));
 
 describe('CodeEditor - Language Awareness', () => {
@@ -126,96 +126,52 @@ describe('CodeEditor - Language Awareness', () => {
     });
   });
 
-  describe('API execute calls with language', () => {
-    it('should pass python language to executeStandaloneCode when problem.language is python', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      executeStandaloneCode.mockResolvedValueOnce({
-        success: true,
-        output: 'Hello\n',
-        error: '',
-        execution_time_ms: 100,
-      });
-
+  describe('onRun callback with execution settings', () => {
+    it('should call onRun with correct stdin and seed when run button clicked', () => {
+      const mockOnRun = jest.fn();
       const pythonProblem = { ...baseProblem, language: 'python' };
 
       render(
         <CodeEditor
           code="print('hello')"
           onChange={jest.fn()}
-          useApiExecution={true}
+          onRun={mockOnRun}
+          exampleInput="my input"
+          random_seed={42}
           problem={pythonProblem}
         />
       );
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(
-          "print('hello')",
-          'python',
-          expect.any(Object)
-        );
-      });
-    });
-
-    it('should pass java language to executeStandaloneCode when problem.language is java', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      executeStandaloneCode.mockResolvedValueOnce({
-        success: true,
-        output: '',
-        error: '',
-        execution_time_ms: 100,
-      });
-
-      const javaProblem = { ...baseProblem, language: 'java' };
-
-      render(
-        <CodeEditor
-          code="public class Main { public static void main(String[] args) {} }"
-          onChange={jest.fn()}
-          useApiExecution={true}
-          problem={javaProblem}
-        />
+      expect(mockOnRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stdin: 'my input',
+          random_seed: 42,
+        })
       );
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(
-          'public class Main { public static void main(String[] args) {} }',
-          'java',
-          expect.any(Object)
-        );
-      });
     });
 
-    it('should pass empty string when no problem is provided (no language default)', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      executeStandaloneCode.mockResolvedValueOnce({
-        success: true,
-        output: 'Hello\n',
-        error: '',
-        execution_time_ms: 100,
-      });
+    it('should call onRun with attached_files when provided', () => {
+      const mockOnRun = jest.fn();
+      const files = [{ name: 'data.txt', content: 'content' }];
 
       render(
         <CodeEditor
           code="print('hello')"
           onChange={jest.fn()}
-          useApiExecution={true}
-          problem={null}
+          onRun={mockOnRun}
+          attached_files={files}
         />
       );
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(
-          "print('hello')",
-          '',
-          expect.any(Object)
-        );
-      });
+      expect(mockOnRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attached_files: files,
+        })
+      );
     });
   });
 });

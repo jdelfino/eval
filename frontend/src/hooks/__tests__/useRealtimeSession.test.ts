@@ -57,7 +57,6 @@ jest.mock('@/lib/centrifugo', () => ({
 // Mock the typed API module
 const mockGetSessionState = jest.fn();
 const mockUpdateCode = jest.fn();
-const mockExecuteCode = jest.fn();
 const mockFeatureStudent = jest.fn();
 const mockClearFeatured = jest.fn();
 const mockJoinSession = jest.fn();
@@ -65,7 +64,6 @@ const mockJoinSession = jest.fn();
 jest.mock('@/lib/api/realtime', () => ({
   getSessionState: (...args: any[]) => mockGetSessionState(...args),
   updateCode: (...args: any[]) => mockUpdateCode(...args),
-  executeCode: (...args: any[]) => mockExecuteCode(...args),
   featureStudent: (...args: any[]) => mockFeatureStudent(...args),
   clearFeatured: (...args: any[]) => mockClearFeatured(...args),
   joinSession: (...args: any[]) => mockJoinSession(...args),
@@ -124,7 +122,6 @@ describe('useRealtimeSession', () => {
     resetMocks();
     mockGetSessionState.mockReset();
     mockUpdateCode.mockReset();
-    mockExecuteCode.mockReset();
     mockFeatureStudent.mockReset();
     mockClearFeatured.mockReset();
     mockJoinSession.mockReset();
@@ -298,76 +295,6 @@ describe('useRealtimeSession', () => {
 
       const student = result.current.students.find(s => s.user_id === 'student-1');
       expect(student?.code).toBe('print("new code")');
-    });
-  });
-
-  describe('executeCode action', () => {
-    it('should execute code and return result', async () => {
-      mockGetSessionState.mockResolvedValueOnce({
-        session: {},
-        students: [],
-        join_code: '',
-      });
-
-      const { result } = renderHook(() =>
-        useRealtimeSession({
-          session_id: 'session-1',
-          user_id: 'user-1',
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      const mockResult = {
-        success: true,
-        output: 'Hello, World!',
-        error: '',
-        execution_time_ms: 123,
-      };
-
-      mockExecuteCode.mockResolvedValueOnce(mockResult);
-
-      let execResult;
-      await act(async () => {
-        execResult = await result.current.executeCode('student-1', 'print("Hello, World!")');
-      });
-
-      expect(execResult).toEqual(mockResult);
-      expect(mockExecuteCode).toHaveBeenCalledWith(
-        'session-1',
-        'student-1',
-        'print("Hello, World!")',
-        undefined
-      );
-    });
-
-    it('should throw error on execute failure', async () => {
-      mockGetSessionState.mockResolvedValueOnce({
-        session: {},
-        students: [],
-        join_code: '',
-      });
-
-      const { result } = renderHook(() =>
-        useRealtimeSession({
-          session_id: 'session-1',
-          user_id: 'user-1',
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      mockExecuteCode.mockRejectedValueOnce(new Error('Execution failed'));
-
-      await act(async () => {
-        await expect(
-          result.current.executeCode('student-1', 'invalid code')
-        ).rejects.toThrow('Execution failed');
-      });
     });
   });
 

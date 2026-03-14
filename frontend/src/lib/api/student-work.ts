@@ -6,8 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPatch } from '@/lib/api-client';
-import type { StudentWork, StudentWorkWithProblem, ExecutionResult } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { StudentWork, StudentWorkWithProblem } from '@/types/api';
 
 /**
  * Get or create student work for a problem in a section.
@@ -40,26 +39,8 @@ export async function updateStudentWork(
   workId: string,
   data: {
     code?: string;
-    execution_settings?: ExecutionSettings;
+    execution_settings?: Record<string, unknown>;
   }
 ): Promise<void> {
   await apiPatch(`/student-work/${workId}`, data);
-}
-
-/**
- * Execute code for student work.
- * @param workId - The student_work ID
- * @param code - The code to execute
- * @param executionSettings - Optional execution settings
- * @returns The execution result
- */
-export async function executeStudentWork(
-  workId: string,
-  code: string,
-  executionSettings?: ExecutionSettings
-): Promise<ExecutionResult> {
-  return apiPost<ExecutionResult>(`/student-work/${workId}/execute`, {
-    code,
-    execution_settings: executionSettings,
-  });
 }

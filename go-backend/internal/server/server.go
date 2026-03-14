@@ -250,10 +250,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			r.With(custommw.ForCategory(rl, "join", custommw.IPKey)).Post("/sections/join", membershipHandler.Join)
 
 			sectionProblemHandler := handler.NewSectionProblemHandler()
-			studentWorkHandler := handler.NewStudentWorkHandler(execClient)
-			if activationSvc != nil {
-				studentWorkHandler.SetActivation(activationSvc)
-			}
+			studentWorkHandler := handler.NewStudentWorkHandler()
 			studentReviewHandler := handler.NewStudentReviewHandler()
 
 			sectionHandler := handler.NewSectionHandler(membershipHandler, sectionProblemHandler, studentWorkHandler, studentReviewHandler).WithRateLimiting(readRL, writeRL)
@@ -312,7 +309,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Student work routes
 			r.With(readRL).Get("/student-work/{id}", studentWorkHandler.Get)
 			r.With(writeRL).Patch("/student-work/{id}", studentWorkHandler.Update)
-			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/student-work/{id}/execute", studentWorkHandler.Execute)
 
 			// Admin routes (system-admin only)
 			adminHandler := handler.NewAdminHandler()
@@ -390,13 +386,8 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			if activationSvc != nil {
 				executeHandler.SetActivation(activationSvc)
 			}
-			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/execute", executeHandler.Execute)
-
-			// Standalone code execution (instructor+) — no session context
-			r.Group(func(r chi.Router) {
-				r.Use(custommw.RequirePermission(auth.PermSessionManage))
-				r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/execute", executeHandler.StandaloneExecute)
-			})
+			// Unified execute endpoint — any authenticated user, no session context
+			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/execute", executeHandler.Execute)
 
 			// Standalone trace (any authenticated user) — no session context
 			traceHandler := handler.NewTraceHandler(execClient)

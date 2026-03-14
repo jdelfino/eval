@@ -8,7 +8,6 @@ import MarkdownContent from '@/components/MarkdownContent';
 import type { ExecutionSettings } from '@/types/problem';
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { Problem } from '@/types/problem';
-import { executeStandaloneCode } from '@/lib/api/execute';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
@@ -27,7 +26,6 @@ interface CodeEditorProps {
   onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
   readOnly?: boolean;
   execution_result?: ExecutionResult | null;
-  useApiExecution?: boolean;
   title?: string;
   showRunButton?: boolean;
   problem?: Problem | SessionPublicProblem | null;
@@ -55,7 +53,6 @@ export default function CodeEditor({
   onAttachedFilesChange,
   readOnly = false,
   execution_result = null,
-  useApiExecution = false,
   title = 'Your Code',
   showRunButton = true,
   problem = null,
@@ -79,8 +76,6 @@ export default function CodeEditor({
   const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
   const [stdin, setStdin] = useState('');
-  const [localIsRunning, setLocalIsRunning] = useState(false);
-  const [localExecutionResult, setLocalExecutionResult] = useState<ExecutionResult | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const errorDecorationsRef = useRef<string[]>([]);
 
@@ -247,23 +242,20 @@ export default function CodeEditor({
   };
 
   // Use local state for API execution, or passed props for WebSocket execution
-  const effectiveIsRunning = useApiExecution ? localIsRunning : isRunning;
-  const effectiveResult = useApiExecution ? localExecutionResult : execution_result;
-
   // Compute whether error decorations should be shown
   const hasErrorDecoration =
     !debuggerHook?.hasTrace &&
-    !!effectiveResult &&
-    !effectiveResult.success &&
-    !!effectiveResult.error &&
-    parseErrorLineNumber(effectiveResult.error) !== null;
+    !!execution_result &&
+    !execution_result.success &&
+    !!execution_result.error &&
+    parseErrorLineNumber(execution_result.error) !== null;
 
   // Auto-grow output section when results appear (up to 40%)
   // Skip auto-grow for right-positioned output to avoid jarring width changes
   useEffect(() => {
     if (outputPosition === 'right') return;
 
-    if (effectiveResult && outputResizeRef.current) {
+    if (execution_result && outputResizeRef.current) {
       const container = outputResizeRef.current.parentElement;
       if (!container) return;
 
@@ -271,22 +263,22 @@ export default function CodeEditor({
       const maxHeight = containerHeight * 0.8;
 
       // Estimate needed height based on content
-      const hasOutput = effectiveResult.output && effectiveResult.output.length > 0;
-      const hasError = effectiveResult.error && effectiveResult.error.length > 0;
+      const hasOutput = execution_result.output && execution_result.output.length > 0;
+      const hasError = execution_result.error && execution_result.error.length > 0;
 
       let targetHeight = 150; // Minimum
       if (hasOutput || hasError) {
         // Grow to accommodate content, up to 80%
-        const contentLines = (effectiveResult.output || effectiveResult.error || '').split('\n').length;
+        const contentLines = (execution_result.output || execution_result.error || '').split('\n').length;
         targetHeight = Math.min(150 + (contentLines * 20), maxHeight);
       }
 
       setOutputHeight(Math.min(targetHeight, maxHeight));
-    } else if (!effectiveResult) {
+    } else if (!execution_result) {
       // Reset to initial size when no results
       setOutputHeight(150);
     }
-  }, [effectiveResult, outputPosition]);
+  }, [execution_result, outputPosition]);
 
   // Initialize stdin with example input if provided
   useEffect(() => {
@@ -349,11 +341,11 @@ export default function CodeEditor({
     let errorLine: number | null = null;
     if (
       !debuggerHook?.hasTrace &&
-      effectiveResult &&
-      !effectiveResult.success &&
-      effectiveResult.error
+      execution_result &&
+      !execution_result.success &&
+      execution_result.error
     ) {
-      errorLine = parseErrorLineNumber(effectiveResult.error);
+      errorLine = parseErrorLineNumber(execution_result.error);
     }
 
     if (errorLine !== null) {
@@ -379,7 +371,7 @@ export default function CodeEditor({
       const newDecorations = editor.deltaDecorations(errorDecorationsRef.current, []);
       errorDecorationsRef.current = newDecorations;
     }
-  }, [effectiveResult, debuggerHook?.hasTrace]);
+  }, [execution_result, debuggerHook?.hasTrace]);
 
   // Cleanup __TEST_EDITORS on unmount
   useEffect(() => {
@@ -409,44 +401,8 @@ export default function CodeEditor({
     }
   };
 
-  const handleRunViaApi = async () => {
-    if (!code || code.trim().length === 0) {
-      setLocalExecutionResult({
-        success: false,
-        output: '',
-        error: 'Please write some code before running',
-        execution_time_ms: 0,
-      });
-      return;
-    }
-
-    setLocalIsRunning(true);
-    setLocalExecutionResult(null);
-
-    try {
-      const language = (problem && 'language' in problem) ? problem.language : '';
-      const result = await executeStandaloneCode(code, language, {
-        stdin: stdin || undefined,
-        random_seed,
-        attached_files,
-      });
-      setLocalExecutionResult(result);
-    } catch (error: any) {
-      setLocalExecutionResult({
-        success: false,
-        output: '',
-        error: error.message || 'Failed to execute code',
-        execution_time_ms: 0,
-      });
-    } finally {
-      setLocalIsRunning(false);
-    }
-  };
-
   const handleRun = () => {
-    if (useApiExecution) {
-      handleRunViaApi();
-    } else if (onRun) {
+    if (onRun) {
       onRun({ stdin: stdin || undefined, random_seed, attached_files });
     }
   };
@@ -560,14 +516,14 @@ export default function CodeEditor({
                 <button
                   type="button"
                   onClick={handleRun}
-                  disabled={effectiveIsRunning}
+                  disabled={isRunning}
                   className={`px-4 py-2 rounded text-white ${
-                    effectiveIsRunning
+                    isRunning
                       ? 'bg-gray-500 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700 cursor-pointer'
                   }`}
                 >
-                  {effectiveIsRunning ? '⏳ Running...' : '▶ Run Code'}
+                  {isRunning ? '⏳ Running...' : '▶ Run Code'}
                 </button>
               )}
             </>
@@ -1180,44 +1136,44 @@ export default function CodeEditor({
                   💡 Step through your code to see how output is generated. Variables and call stack are in the sidebar.
                 </div>
               </div>
-            ) : effectiveResult ? (
+            ) : execution_result ? (
               /* Show normal output when not debugging */
               <div className={`p-4 h-full ${
-                effectiveResult.success ? 'bg-gray-900' : 'bg-gray-900'
+                execution_result.success ? 'bg-gray-900' : 'bg-gray-900'
               }`} style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
                 <div className="flex justify-between items-center mb-2">
                   <span className={`font-bold ${
-                    effectiveResult.success ? 'text-green-400' : 'text-red-400'
+                    execution_result.success ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {effectiveResult.success ? '✓ Success' : '✗ Error'}
+                    {execution_result.success ? '✓ Success' : '✗ Error'}
                   </span>
                   <span className={`${outputTextSm} ${
-                    effectiveResult.success ? 'text-green-300' : 'text-red-300'
+                    execution_result.success ? 'text-green-300' : 'text-red-300'
                   }`}>
-                    Execution time: {effectiveResult.execution_time_ms}ms
+                    Execution time: {execution_result.execution_time_ms}ms
                   </span>
                 </div>
 
-                {effectiveResult.output && (
+                {execution_result.output && (
                   <div className="mt-2">
                     <div className={`font-bold ${outputTextSm} ${
-                      effectiveResult.success ? 'text-green-300' : 'text-red-300'
+                      execution_result.success ? 'text-green-300' : 'text-red-300'
                     }`}>
                       Output:
                     </div>
                     <pre className={`bg-gray-800 text-gray-200 p-2 rounded border border-gray-700 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words`}>
-                      {effectiveResult.output}
+                      {execution_result.output}
                     </pre>
                   </div>
                 )}
 
-                {effectiveResult.error && (
+                {execution_result.error && (
                   <div className="mt-2">
                     <div className={`font-bold ${outputTextSm} text-red-400`}>
                       Error:
                     </div>
                     <pre className={`bg-gray-800 p-2 rounded border border-red-900 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words text-red-300`}>
-                      {effectiveResult.error}
+                      {execution_result.error}
                     </pre>
                   </div>
                 )}

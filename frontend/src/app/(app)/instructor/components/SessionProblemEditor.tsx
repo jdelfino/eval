@@ -14,6 +14,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
+import { executeCode } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (
@@ -54,6 +55,10 @@ export default function SessionProblemEditor({
   const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
     initialExecutionSettings?.attached_files || []
   );
+
+  // Execution state for code editor
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded)
   useEffect(() => {
@@ -220,7 +225,25 @@ export default function SessionProblemEditor({
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : () => {}}
           readOnly={activeTab === 'solution'}
-          useApiExecution={true}
+          onRun={(execution_settings) => {
+            const codeToRun = activeTab === 'starter' ? starter_code : solution;
+            setIsRunning(true);
+            setExecutionResult(null);
+            executeCode(codeToRun, language, {
+              stdin: execution_settings.stdin,
+              random_seed: execution_settings.random_seed,
+              attached_files: execution_settings.attached_files,
+            }).then(setExecutionResult).catch((err) => {
+              setExecutionResult({
+                success: false,
+                output: '',
+                error: err.message || 'Execution failed',
+                execution_time_ms: 0,
+              });
+            }).finally(() => setIsRunning(false));
+          }}
+          isRunning={isRunning}
+          execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           exampleInput={stdin}
           onStdinChange={setStdin}

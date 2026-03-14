@@ -1,25 +1,21 @@
 /**
  * Contract tests for real-time session API functions.
- * Covers: updateCode, executeCode, featureStudent, clearFeatured, joinSession.
+ * Covers: updateCode, featureStudent, clearFeatured, joinSession.
  *
  * Many of these operations require an active session with a joined student.
  * The test creates a student identity, joins the session, then exercises each function.
- * Operations that depend on external services (e.g., executor for code execution)
- * are wrapped in try/catch so failures due to missing infrastructure are tolerated.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getVerifiedEmulatorToken } from './emulator-token';
 import { state } from './shared-state';
 import {
   updateCode,
-  executeCode,
   featureStudent,
   clearFeatured,
   joinSession,
 } from '@/lib/api/realtime';
 import {
   validateSessionStudentShape,
-  validateExecutionResultShape,
 } from './validators';
 
 // Student identity for joining the session
@@ -111,26 +107,6 @@ describe('Realtime Session API', () => {
         console.warn(`updateCode failed with status ${status}`);
         throw error;
       }
-    });
-  });
-
-  describe('executeCode()', () => {
-    beforeAll(() => {
-      configureTestAuth(INSTRUCTOR_TOKEN);
-    });
-
-    afterAll(() => {
-      resetAuthProvider();
-    });
-
-    it('executes code and returns ExecutionResult with correct snake_case shape', async () => {
-      const sessionId = state.sessionId;
-      expect(sessionId).toBeTruthy();
-      expect(joinedStudentId).toBeTruthy();
-
-      const result = await executeCode(sessionId, joinedStudentId!, 'print("hello")');
-
-      validateExecutionResultShape(result, 'ExecutionResult (executeCode)');
     });
   });
 

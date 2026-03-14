@@ -81,7 +81,6 @@ describe('Student Page - Leave Session', () => {
     connectionError: null,
     isBroadcastConnected: true,
     updateCode: jest.fn(),
-    executeCode: jest.fn(),
     featureStudent: jest.fn(),
     joinSession: mockJoinSession,
     featuredStudent: {},

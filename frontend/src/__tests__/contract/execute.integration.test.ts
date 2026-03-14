@@ -1,5 +1,5 @@
 /**
- * Integration test: executeStandaloneCode()
+ * Integration test: executeCode()
  * Validates that the typed API function works correctly against the real backend.
  *
  * Requires the executor service to be running. The contract test CI workflow
@@ -9,10 +9,10 @@
  * with omitempty on output/error/stdin.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
-import { executeStandaloneCode, warmExecutor } from '@/lib/api/execute';
+import { executeCode, warmExecutor } from '@/lib/api/execute';
 import { expectSnakeCaseKeys } from './validators';
 
-describe('executeStandaloneCode()', () => {
+describe('executeCode()', () => {
   beforeAll(() => {
     configureTestAuth(INSTRUCTOR_TOKEN);
   });
@@ -22,7 +22,7 @@ describe('executeStandaloneCode()', () => {
   });
 
   it('returns ExecutionResult with correct snake_case shape', async () => {
-    const result = await executeStandaloneCode('print("hello")', 'python3');
+    const result = await executeCode('print("hello")', 'python3');
 
     // Validate required fields
     expect(typeof result.success).toBe('boolean');
@@ -58,7 +58,7 @@ describe('executeStandaloneCode()', () => {
   });
 
   it('passes stdin option through to executor', async () => {
-    const result = await executeStandaloneCode(
+    const result = await executeCode(
       'import sys; print(sys.stdin.read().strip())',
       'python3',
       { stdin: 'contract-test-input' }

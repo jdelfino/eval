@@ -9,7 +9,7 @@ import { apiFetch, apiPost } from '@/lib/api-client';
 import type { ExecutionResult } from '@/types/api';
 
 /**
- * Options for standalone code execution.
+ * Options for code execution.
  */
 export interface ExecuteOptions {
   /** Optional stdin input */
@@ -21,13 +21,13 @@ export interface ExecuteOptions {
 }
 
 /**
- * Execute code standalone (not in a session context).
+ * Execute code via the unified POST /api/v1/execute endpoint.
  * @param code - The code to execute
  * @param language - The programming language
  * @param options - Optional execution parameters (stdin, random_seed, attached_files)
  * @returns ExecutionResult with output and status
  */
-export async function executeStandaloneCode(
+export async function executeCode(
   code: string,
   language: string,
   options?: ExecuteOptions
@@ -40,8 +40,9 @@ export async function executeStandaloneCode(
   if (options?.random_seed !== undefined) {
     body.random_seed = options.random_seed;
   }
+  // Backend uses "files" (not "attached_files") per the executeRequest struct JSON tag
   if (options?.attached_files !== undefined) {
-    body.attached_files = options.attached_files;
+    body.files = options.attached_files;
   }
 
   return apiPost<ExecutionResult>('/execute', body);

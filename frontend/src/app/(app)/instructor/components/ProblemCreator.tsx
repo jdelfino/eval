@@ -11,7 +11,6 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { ProblemInput } from '@/types/problem';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
@@ -19,6 +18,7 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
+import { executeCode } from '@/lib/api/execute';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -64,6 +64,10 @@ export default function ProblemCreator({
   const [stdin, setStdin] = useState('');
   const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
   const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
+
+  // Execution state for code editor
+  const [isRunning, setIsRunning] = useState(false);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
 
   const isEditMode = !!problem_id;
 
@@ -457,7 +461,25 @@ export default function ProblemCreator({
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          useApiExecution={true}
+          onRun={(execution_settings) => {
+            const codeToRun = activeTab === 'starter' ? starter_code : solution;
+            setIsRunning(true);
+            setExecutionResult(null);
+            executeCode(codeToRun, language, {
+              stdin: execution_settings.stdin,
+              random_seed: execution_settings.random_seed,
+              attached_files: execution_settings.attached_files,
+            }).then(setExecutionResult).catch((err) => {
+              setExecutionResult({
+                success: false,
+                output: '',
+                error: err.message || 'Execution failed',
+                execution_time_ms: 0,
+              });
+            }).finally(() => setIsRunning(false));
+          }}
+          isRunning={isRunning}
+          execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           exampleInput={stdin}
           onStdinChange={setStdin}

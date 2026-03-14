@@ -98,11 +98,18 @@ jest.mock('@/components/ui/Spinner', () => ({
   },
 }));
 
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 10 }),
+}));
+
+jest.mock('@/lib/api/sessions', () => ({
+  reopenSession: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe('InstructorSessionPage', () => {
   const mockPush = jest.fn();
   const mockEndSession = jest.fn();
   const mockUpdateProblem = jest.fn();
-  const mockExecuteCode = jest.fn();
   const mockFeatureStudent = jest.fn();
 
   const mockUser = {
@@ -145,7 +152,6 @@ describe('InstructorSessionPage', () => {
     isConnected: true,
     connectionStatus: 'Connected',
     connectionError: null,
-    executeCode: mockExecuteCode,
     featureStudent: mockFeatureStudent,
     clearFeaturedStudent: mockClearFeaturedStudent,
     replacementInfo: null,
@@ -278,7 +284,7 @@ describe('InstructorSessionPage', () => {
     });
 
     it('calls reopen API when reopen button is clicked', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+      const { reopenSession: mockReopenSession } = require('@/lib/api/sessions');
 
       (useRealtimeSession as jest.Mock).mockReturnValue({
         ...defaultRealtimeSessionReturn,
@@ -290,9 +296,7 @@ describe('InstructorSessionPage', () => {
       fireEvent.click(screen.getByTestId('reopen-session-btn'));
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/sessions/session-123/reopen', expect.objectContaining({
-          method: 'POST',
-        }));
+        expect(mockReopenSession).toHaveBeenCalledWith('session-123');
       });
     });
   });

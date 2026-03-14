@@ -2,20 +2,17 @@
 
 import React from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
+import type { ExecutionResult } from '@/types/api';
 
 interface CodeViewerProps {
   code: string;
   studentName?: string;
-  execution_result?: {
-    success: boolean;
-    output: string;
-    error: string;
-    execution_time_ms: number;
-  };
-  onRunCode: () => void;
+  execution_result?: ExecutionResult;
+  onRun?: (execution_settings: import('@/types/problem').ExecutionSettings) => void;
+  isRunning?: boolean;
 }
 
-export default function CodeViewer({ code, studentName, execution_result, onRunCode }: CodeViewerProps) {
+export default function CodeViewer({ code, studentName, execution_result, onRun, isRunning }: CodeViewerProps) {
   if (!code) {
     return (
       <div style={{ padding: '1rem', border: '1px solid #ccc' }}>
@@ -29,11 +26,11 @@ export default function CodeViewer({ code, studentName, execution_result, onRunC
       code={code}
       onChange={() => {}} // No-op since readOnly=true
       readOnly={true}
-      useApiExecution={true}
       execution_result={execution_result}
+      isRunning={isRunning}
       title={studentName ? `${studentName}'s Code` : "Student's Code"}
       showRunButton={true}
-      onRun={onRunCode}
+      onRun={onRun}
     />
   );
 }

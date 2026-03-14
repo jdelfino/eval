@@ -68,7 +68,7 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 
 // Mock CodeEditor component
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, onChange, title, useApiExecution, problem, onProblemEdit, editableProblem }: any) {
+  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem }: any) {
     return (
       <div data-testid={`code-editor-${title}`}>
         {/* Show editable problem fields if in edit mode */}
@@ -94,7 +94,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
           aria-label={title}
           value={code}
           onChange={(e) => onChange(e.target.value)}
-          data-use-api={useApiExecution}
+          data-has-run={!!onRun}
         />
       </div>
     );

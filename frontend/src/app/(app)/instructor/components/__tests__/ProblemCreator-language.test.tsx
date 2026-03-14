@@ -72,7 +72,7 @@ let capturedOnLoadStarterCode: ((code: string) => void) | undefined;
 
 // Mock CodeEditor component - exposes problem and language props for testing
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, onChange, title, useApiExecution, problem, onProblemEdit, editableProblem, onLoadStarterCode }: any) {
+  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem, onLoadStarterCode }: any) {
     capturedStarterCode = code;
     capturedOnLoadStarterCode = onLoadStarterCode;
     return (
@@ -99,7 +99,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
           aria-label={title}
           value={code}
           onChange={(e) => onChange(e.target.value)}
-          data-use-api={useApiExecution}
+          data-has-run={!!onRun}
         />
       </div>
     );

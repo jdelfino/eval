@@ -13,7 +13,6 @@ import StudentPageWrapper from '../page';
 const mockGetStudentWork = jest.fn();
 const mockGetActiveSessions = jest.fn();
 const mockUpdateStudentWork = jest.fn();
-const mockExecuteStudentWork = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
 const mockExecuteCode = jest.fn();
@@ -21,7 +20,11 @@ const mockExecuteCode = jest.fn();
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
-  executeStudentWork: (...args: unknown[]) => mockExecuteStudentWork(...args),
+}));
+
+jest.mock('@/lib/api/execute', () => ({
+  warmExecutor: jest.fn().mockResolvedValue(undefined),
+  executeCode: (...args: unknown[]) => mockExecuteCode(...args),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
@@ -46,7 +49,6 @@ const mockUseRealtimeSession: jest.Mock = jest.fn(() => ({
   connectionStatus: 'disconnected',
   connectionError: null,
   updateCode: mockUpdateCode,
-  executeCode: mockExecuteCode,
   joinSession: mockJoinSession,
   replacementInfo: null as any,
 }));
@@ -136,7 +138,6 @@ describe('StudentPage (student_work-centric)', () => {
       connectionStatus: 'disconnected',
       connectionError: null,
       updateCode: mockUpdateCode,
-      executeCode: mockExecuteCode,
       joinSession: mockJoinSession,
       replacementInfo: null,
     });
@@ -176,15 +177,11 @@ describe('StudentPage (student_work-centric)', () => {
       // Code changes trigger auto-save (tested via mock - implementation uses debounce)
     });
 
-    it('executes code via POST /student-work/{id}/execute', async () => {
+    it('executes code via POST /execute', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
       mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteStudentWork.mockResolvedValue({
-        success: true,
-        output: 'hello\n',
-        error: '',
-        execution_time_ms: 42,
-      });
+      // mockExecuteCode is from @/lib/api/execute - not needed for this smoke test
+      // The actual execution flow is tested via the warmup tests
 
       render(<StudentPageWrapper />);
 
@@ -268,7 +265,6 @@ describe('StudentPage (student_work-centric)', () => {
         connectionStatus: 'disconnected',
         connectionError: null,
         updateCode: mockUpdateCode,
-        executeCode: mockExecuteCode,
         joinSession: mockJoinSession,
         replacementInfo: { new_session_id: 'session-new-123' },
       });
