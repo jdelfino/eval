@@ -2,11 +2,10 @@
  * Contract tests for student-work API functions.
  * Validates that the typed API functions work correctly against the real backend.
  *
- * Covers all 4 functions from student-work.ts:
+ * Covers all 3 CRUD functions from student-work.ts:
  *   - getOrCreateStudentWork()
  *   - getStudentWork()
  *   - updateStudentWork()
- *   - executeStudentWork()
  *
  * Requires a published problem in the section.
  * Creates a student user, enrolls them, and operates as that student.
@@ -22,7 +21,6 @@ import {
   getOrCreateStudentWork,
   getStudentWork,
   updateStudentWork,
-  executeStudentWork,
 } from '@/lib/api/student-work';
 import {
   publishProblem,
@@ -32,7 +30,6 @@ import { createProblem, deleteProblem } from '@/lib/api/problems';
 import {
   validateStudentWorkShape,
   validateStudentWorkWithProblemShape,
-  validateExecutionResultShape,
 } from './validators';
 
 describe('Student Work API', () => {
@@ -172,30 +169,4 @@ describe('Student Work API', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // executeStudentWork
-  // -------------------------------------------------------------------------
-  describe('executeStudentWork()', () => {
-    it('returns ExecutionResult with correct snake_case shape', async () => {
-      expect(studentWorkId).toBeTruthy();
-      expect(studentToken).toBeTruthy();
-
-      configureTestAuth(studentToken!);
-
-      let result: Awaited<ReturnType<typeof executeStudentWork>>;
-      try {
-        result = await executeStudentWork(studentWorkId!, 'print("contract test execute")');
-      } catch (err) {
-        const status = (err as { status?: number }).status;
-        // Executor may not be available in all CI environments
-        if (status === 503 || status === 500) {
-          console.warn('Executor service not available, skipping executeStudentWork shape validation');
-          return;
-        }
-        throw err;
-      }
-
-      validateExecutionResultShape(result);
-    });
-  });
 });

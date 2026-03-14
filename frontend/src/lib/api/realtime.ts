@@ -6,7 +6,7 @@
  */
 
 import { apiGet, apiPost, apiFetch } from '@/lib/api-client';
-import type { SessionStudent, SessionState, ExecutionResult } from '@/types/api';
+import type { SessionStudent, SessionState } from '@/types/api';
 import type { ExecutionSettings } from '@/types/problem';
 
 /**
@@ -43,27 +43,6 @@ export async function updateCode(
     }),
   });
   return response.json();
-}
-
-/**
- * Execute code in a session.
- * @param sessionId - The session ID
- * @param studentId - The student's user ID
- * @param code - The code to execute
- * @param executionSettings - Optional execution settings
- * @returns The execution result
- */
-export async function executeCode(
-  sessionId: string,
-  studentId: string,
-  code: string,
-  executionSettings?: ExecutionSettings
-): Promise<ExecutionResult> {
-  return apiPost<ExecutionResult>(`/sessions/${sessionId}/execute`, {
-    student_id: studentId,
-    code,
-    execution_settings: executionSettings,
-  });
 }
 
 /**

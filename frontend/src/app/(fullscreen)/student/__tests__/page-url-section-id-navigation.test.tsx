@@ -25,7 +25,6 @@ jest.mock('@/lib/api/student-work', () => ({
   getOrCreateStudentWork: jest.fn(),
   getStudentWork: jest.fn(),
   updateStudentWork: jest.fn(),
-  executeStudentWork: jest.fn(),
 }));
 
 const mockUseSectionEvents = jest.fn();

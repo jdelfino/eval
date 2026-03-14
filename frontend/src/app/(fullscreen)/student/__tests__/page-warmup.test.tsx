@@ -16,16 +16,14 @@ import { ApiError } from '@/lib/api-error';
 const mockGetStudentWork = jest.fn();
 const mockGetActiveSessions = jest.fn();
 const mockUpdateStudentWork = jest.fn();
-const mockExecuteStudentWork = jest.fn();
 const mockWarmExecutor = jest.fn();
+const mockExecuteCode = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
-const mockExecuteCode = jest.fn();
 
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
-  executeStudentWork: (...args: unknown[]) => mockExecuteStudentWork(...args),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
@@ -38,7 +36,7 @@ jest.mock('@/lib/api/sections', () => ({
 
 jest.mock('@/lib/api/execute', () => ({
   warmExecutor: (...args: unknown[]) => mockWarmExecutor(...args),
-  executeStandaloneCode: jest.fn(),
+  executeCode: (...args: unknown[]) => mockExecuteCode(...args),
 }));
 
 const mockUseRealtimeSession = jest.fn();
@@ -110,6 +108,7 @@ const fakeStudentWork = {
     title: 'Test Problem',
     description: 'Test description',
     starter_code: '',
+    language: 'python',
     test_cases: null,
     execution_settings: {},
     author_id: 'instructor-1',
@@ -129,7 +128,6 @@ const defaultRealtimeSession = {
   connectionStatus: 'disconnected',
   connectionError: null,
   updateCode: mockUpdateCode,
-  executeCode: mockExecuteCode,
   joinSession: mockJoinSession,
   replacementInfo: null,
 };
@@ -207,7 +205,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
     it('shows warming-up message when execute returns 503', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteStudentWork.mockRejectedValue(
+      mockExecuteCode.mockRejectedValue(
         new ApiError('executor is starting up, please retry', 503)
       );
 
@@ -233,7 +231,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
     it('shows generic error message for non-503 errors', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteStudentWork.mockRejectedValue(
+      mockExecuteCode.mockRejectedValue(
         new ApiError('internal server error', 500)
       );
 

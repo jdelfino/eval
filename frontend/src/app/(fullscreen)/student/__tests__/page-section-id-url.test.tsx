@@ -23,7 +23,11 @@ const mockExecuteCode = jest.fn();
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
-  executeStudentWork: jest.fn(),
+}));
+
+jest.mock('@/lib/api/execute', () => ({
+  warmExecutor: jest.fn().mockResolvedValue(undefined),
+  executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 10 }),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
@@ -42,7 +46,6 @@ const mockUseRealtimeSession = jest.fn(() => ({
   connectionStatus: 'disconnected',
   connectionError: null,
   updateCode: mockUpdateCode,
-  executeCode: mockExecuteCode,
   joinSession: mockJoinSession,
   replacementInfo: null,
 }));
@@ -134,7 +137,6 @@ describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
       connectionStatus: 'disconnected',
       connectionError: null,
       updateCode: mockUpdateCode,
-      executeCode: mockExecuteCode,
       joinSession: mockJoinSession,
       replacementInfo: null,
     });

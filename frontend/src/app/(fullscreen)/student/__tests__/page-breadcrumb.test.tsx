@@ -18,15 +18,17 @@ const mockGetStudentWork = jest.fn();
 const mockGetActiveSessions = jest.fn();
 const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
-const mockExecuteStudentWork = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
-const mockExecuteCode = jest.fn();
 
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
-  executeStudentWork: (...args: unknown[]) => mockExecuteStudentWork(...args),
+}));
+
+jest.mock('@/lib/api/execute', () => ({
+  warmExecutor: jest.fn().mockResolvedValue(undefined),
+  executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 10 }),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
@@ -42,7 +44,6 @@ const mockUseRealtimeSession = jest.fn(() => ({
   connectionStatus: 'disconnected',
   connectionError: null,
   updateCode: mockUpdateCode,
-  executeCode: mockExecuteCode,
   joinSession: mockJoinSession,
   replacementInfo: null as any,
 }));
@@ -140,7 +141,6 @@ describe('StudentPage breadcrumb', () => {
       connectionStatus: 'disconnected',
       connectionError: null,
       updateCode: mockUpdateCode,
-      executeCode: mockExecuteCode,
       joinSession: mockJoinSession,
       replacementInfo: null,
     });

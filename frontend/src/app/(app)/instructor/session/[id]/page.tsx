@@ -22,6 +22,7 @@ import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem, ExecutionSettings } from '@/types/problem';
 import { reopenSession } from '@/lib/api/sessions';
+import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
@@ -67,7 +68,6 @@ export default function InstructorSessionPage() {
     error: sessionError,
     connectionStatus,
     connectionError,
-    executeCode,
     featureStudent,
     clearFeaturedStudent,
     replacementInfo,
@@ -210,12 +210,17 @@ export default function InstructorSessionPage() {
   }, [session_id, clearFeaturedStudent]);
 
   const handleExecuteCode = useCallback(async (
-    studentId: string,
+    _studentId: string,
     code: string,
     execution_settings: ExecutionSettings
   ) => {
-    return executeCode(studentId, code, execution_settings);
-  }, [executeCode]);
+    const language = sessionProblem?.language || 'python';
+    return apiExecuteCode(code, language, {
+      stdin: execution_settings.stdin,
+      random_seed: execution_settings.random_seed,
+      attached_files: execution_settings.attached_files,
+    });
+  }, [sessionProblem?.language]);
 
   // Loading state
   if (authLoading || sessionLoading) {

@@ -8,9 +8,9 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
-import { getStudentWork, updateStudentWork, executeStudentWork } from '@/lib/api/student-work';
+import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor } from '@/lib/api/execute';
+import { warmExecutor, executeCode } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
@@ -72,11 +72,10 @@ function StudentPage() {
     session,
     loading: _realtimeLoading,
     error: realtimeError,
-    isConnected,
+    isConnected: _isConnected,
     connectionStatus,
     connectionError,
     updateCode: realtimeUpdateCode,
-    executeCode: realtimeExecuteCode,
     joinSession,
     replacementInfo,
   } = useRealtimeSession({
@@ -308,13 +307,13 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  const handleRunCodePractice = async (execution_settings: ExecutionSettings) => {
+  const handleRunCode = async (execution_settings: ExecutionSettings) => {
     if (!code || code.trim().length === 0) {
       setError('Please write some code before running');
       return;
     }
-    if (!workId) {
-      setError('Student work ID not available');
+    if (!problem?.language) {
+      setError('Problem language not available');
       return;
     }
 
@@ -325,41 +324,11 @@ function StudentPage() {
     setExecutionResult(null);
 
     try {
-      const result = await executeStudentWork(workId, code, execution_settings);
-      setExecutionResult(result);
-      setIsRunning(false);
-    } catch (err: any) {
-      if (err instanceof ApiError && err.status === 503) {
-        setWarmingUp(true);
-      } else {
-        setError(err.message || 'Code execution failed');
-      }
-      setIsRunning(false);
-    }
-  };
-
-  const handleRunCodeLive = async (execution_settings: ExecutionSettings) => {
-    if (!isConnected) {
-      setError('Not connected to server. Cannot run code.');
-      return;
-    }
-    if (!code || code.trim().length === 0) {
-      setError('Please write some code before running');
-      return;
-    }
-    if (!user?.id) {
-      setError('Student ID not available');
-      return;
-    }
-
-    lastExecutionSettingsRef.current = execution_settings;
-    setError(null);
-    setWarmingUp(false);
-    setIsRunning(true);
-    setExecutionResult(null);
-
-    try {
-      const result = await realtimeExecuteCode(user.id, code, execution_settings);
+      const result = await executeCode(code, problem.language, {
+        stdin: execution_settings.stdin,
+        random_seed: execution_settings.random_seed,
+        attached_files: execution_settings.attached_files,
+      });
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
@@ -440,7 +409,6 @@ function StudentPage() {
   }
 
   const sessionExecutionSettings = problem?.execution_settings || {};
-  const handleRunCode = mode === 'live' && !sessionEnded ? handleRunCodeLive : handleRunCodePractice;
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">

@@ -73,7 +73,7 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 }));
 
 jest.mock('@/lib/api/execute', () => ({
-  executeStandaloneCode: jest.fn(),
+  executeCode: jest.fn(),
 }));
 
 describe('CodeEditor window.__TEST_EDITORS registration', () => {

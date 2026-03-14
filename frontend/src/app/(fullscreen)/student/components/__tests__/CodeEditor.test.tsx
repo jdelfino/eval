@@ -88,7 +88,7 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 }));
 
 jest.mock('@/lib/api/execute', () => ({
-  executeStandaloneCode: jest.fn(),
+  executeCode: jest.fn(),
 }));
 
 jest.mock('lucide-react', () => ({
@@ -249,125 +249,6 @@ describe('CodeEditor - API Execution', () => {
     });
   });
 
-  describe('API Execution Mode', () => {
-    it('executes code via API when useApiExecution is true', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      executeStandaloneCode.mockResolvedValueOnce({
-        success: true,
-        output: 'API execution result\n',
-        error: '',
-        execution_time_ms: 150,
-      });
-
-      render(
-        <CodeEditor code="print('API execution')" onChange={jest.fn()} useApiExecution={true} />
-      );
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(
-          "print('API execution')",
-          '',
-          { stdin: undefined, random_seed: undefined, attached_files: undefined }
-        );
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText('✓ Success')).toBeInTheDocument();
-        expect(screen.getByText('API execution result')).toBeInTheDocument();
-      });
-    });
-
-    it('displays error when API execution fails', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      executeStandaloneCode.mockRejectedValueOnce(new Error('Execution failed'));
-
-      render(
-        <CodeEditor code="print('test')" onChange={jest.fn()} useApiExecution={true} />
-      );
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(screen.getByText('✗ Error')).toBeInTheDocument();
-        expect(screen.getByText(/Execution failed/)).toBeInTheDocument();
-      });
-    });
-
-    it('displays error when code is empty', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-
-      render(<CodeEditor code="" onChange={jest.fn()} useApiExecution={true} />);
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(screen.getByText('✗ Error')).toBeInTheDocument();
-        expect(screen.getByText(/Please write some code before running/)).toBeInTheDocument();
-      });
-
-      expect(executeStandaloneCode).not.toHaveBeenCalled();
-    });
-
-    it('includes execution settings in API request', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      const attached_files = [{ name: 'data.txt', content: 'test data' }];
-      const codeToRun = 'import random\nprint(random.randint(1, 100))';
-
-      executeStandaloneCode.mockResolvedValueOnce({
-        success: true,
-        output: '42\n',
-        error: '',
-        execution_time_ms: 125,
-      });
-
-      render(
-        <CodeEditor
-          code={codeToRun}
-          onChange={jest.fn()}
-          useApiExecution={true}
-          random_seed={42}
-          onRandomSeedChange={jest.fn()}
-          attached_files={attached_files}
-          onAttachedFilesChange={jest.fn()}
-          exampleInput="test input"
-        />
-      );
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(executeStandaloneCode).toHaveBeenCalledWith(codeToRun, '', {
-          stdin: 'test input',
-          random_seed: 42,
-          attached_files,
-        });
-      });
-    });
-
-    it('shows running state during API execution', async () => {
-      const { executeStandaloneCode } = require('@/lib/api/execute');
-      let resolvePromise: any;
-      const promise = new Promise((resolve) => { resolvePromise = resolve; });
-      executeStandaloneCode.mockReturnValueOnce(promise);
-
-      render(<CodeEditor code="print('test')" onChange={jest.fn()} useApiExecution={true} />);
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      await waitFor(() => {
-        expect(screen.getByText('⏳ Running...')).toBeInTheDocument();
-      });
-
-      resolvePromise({ success: true, output: 'Done\n', error: '', execution_time_ms: 100 });
-
-      await waitFor(() => {
-        expect(screen.getByText('▶ Run Code')).toBeInTheDocument();
-        expect(screen.getByText('✓ Success')).toBeInTheDocument();
-      });
-    });
-  });
 
   describe('Props and customization', () => {
     it('uses custom title when provided', () => {

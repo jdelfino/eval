@@ -6,12 +6,11 @@ import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import {
   getSessionState,
   updateCode as apiUpdateCode,
-  executeCode as apiExecuteCode,
   featureStudent as apiFeatureStudent,
   clearFeatured as apiClearFeatured,
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
-import { Session, Student, ExecutionResult } from '@/types/session';
+import { Session, Student } from '@/types/session';
 import { ExecutionSettings } from '@/types/problem';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
@@ -464,22 +463,6 @@ export function useRealtimeSession({
   }, [updateCode]);
 
   /**
-   * Execute code
-   */
-  const executeCode = useCallback(async (
-    studentId: string,
-    code: string,
-    execution_settings?: ExecutionSettings
-  ): Promise<ExecutionResult> => {
-    try {
-      return await apiExecuteCode(session_id, studentId, code, execution_settings);
-    } catch (e: unknown) {
-      console.error('[useRealtimeSession] Failed to execute code:', e);
-      throw e;
-    }
-  }, [session_id]);
-
-  /**
    * Feature a student's code
    */
   const featureStudent = useCallback(async (studentId: string) => {
@@ -546,7 +529,6 @@ export function useRealtimeSession({
 
     // Actions
     updateCode,
-    executeCode,
     featureStudent,
     clearFeaturedStudent,
     joinSession,
