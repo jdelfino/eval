@@ -389,6 +389,11 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			// Unified execute endpoint — any authenticated user, no session context
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/execute", executeHandler.Execute)
 
+			// I/O test execution endpoints
+			testHandler := handler.NewTestExecutionHandler(execClient)
+			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/student-work/{id}/test", testHandler.StudentWorkTest)
+			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/test", testHandler.SessionTest)
+
 			// Standalone trace (any authenticated user) — no session context
 			traceHandler := handler.NewTraceHandler(execClient)
 			if activationSvc != nil {
