@@ -391,6 +391,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 
 			// I/O test execution endpoints
 			testHandler := handler.NewTestExecutionHandler(execClient)
+			if activationSvc != nil {
+				testHandler.SetActivation(activationSvc)
+			}
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/student-work/{id}/test", testHandler.StudentWorkTest)
 			r.With(custommw.ForCategory(rl, "execute", custommw.UserKey)).Post("/sessions/{id}/test", testHandler.SessionTest)
 
