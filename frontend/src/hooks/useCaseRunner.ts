@@ -80,7 +80,7 @@ export function useCaseRunner({
     try {
       let response;
       if (sessionId && studentId && code !== undefined) {
-        response = await runSessionTests(sessionId, studentId, code, caseName);
+        response = await runSessionTests(sessionId, code, caseName);
       } else if (workId) {
         response = await runTests(workId, caseName);
       } else {
@@ -114,7 +114,7 @@ export function useCaseRunner({
       for (const tc of allCases) {
         let response;
         if (sessionId && studentId && code !== undefined) {
-          response = await runSessionTests(sessionId, studentId, code, tc.name);
+          response = await runSessionTests(sessionId, code, tc.name);
         } else if (workId) {
           response = await runTests(workId, tc.name);
         } else {
