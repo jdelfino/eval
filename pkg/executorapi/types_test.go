@@ -92,6 +92,9 @@ func TestIOTestDef_OptionalExpectedOutput(t *testing.T) {
 	}
 
 	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal to raw: %v", err)
+	}
 	if _, ok := raw["expected_output"]; ok {
 		t.Errorf("expected expected_output to be omitted when empty")
 	}

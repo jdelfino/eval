@@ -249,7 +249,6 @@ describe('runSessionTests()', () => {
 
     const resp = await runSessionTests(
       sessionId!,
-      state.instructorUserId,
       PASS_CODE
     );
 
@@ -277,7 +276,6 @@ describe('runSessionTests()', () => {
 
     const resp = await runSessionTests(
       sessionId!,
-      state.instructorUserId,
       PASS_CODE,
       'uppercase-world'
     );
