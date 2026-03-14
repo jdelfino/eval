@@ -4,8 +4,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProblemDisplay from '../ProblemDisplay';
-import { Problem } from '@/types/problem';
-import { TestCase } from '@/types/problem';
+import { Problem, IOTestCase } from '@/types/problem';
 
 // Helper to create a minimal problem
 function createProblem(overrides: Partial<Problem> = {}): Problem {
@@ -195,26 +194,20 @@ factorial(5)  # Returns 120
 
   describe('Test cases section', () => {
     it('toggles test cases visibility', () => {
-      const test_cases: TestCase[] = [
+      const test_cases: IOTestCase[] = [
         {
-          id: 'tc1',
-          problem_id: 'test-problem-1',
           name: 'Test 1',
-          type: 'input-output',
-          description: 'Test adding 1 and 2',
-          visible: true,
-          order: 1,
-          config: { type: 'input-output', data: { input: '1 2', expected_output: '3', match_type: 'exact' } },
+          input: '1 2',
+          expected_output: '3',
+          match_type: 'exact',
+          order: 0,
         },
         {
-          id: 'tc2',
-          problem_id: 'test-problem-1',
           name: 'Test 2',
-          type: 'input-output',
-          description: 'Test adding 0 and 0',
-          visible: true,
-          order: 2,
-          config: { type: 'input-output', data: { input: '0 0', expected_output: '0', match_type: 'exact' } },
+          input: '0 0',
+          expected_output: '0',
+          match_type: 'exact',
+          order: 1,
         },
       ];
       const problem = createProblem({ test_cases });
@@ -231,6 +224,29 @@ factorial(5)  # Returns 120
       // Click to hide
       fireEvent.click(screen.getByText('Test Cases (2)'));
       expect(screen.queryByText('Test 1')).not.toBeInTheDocument();
+    });
+
+    it('shows TEST badge for cases with expected output', () => {
+      const test_cases: IOTestCase[] = [
+        {
+          name: 'With Expected',
+          input: 'hello',
+          expected_output: 'hello',
+          match_type: 'exact',
+          order: 0,
+        },
+        {
+          name: 'Run Only',
+          input: 'hello',
+          match_type: 'exact',
+          order: 1,
+        },
+      ];
+      const problem = createProblem({ test_cases });
+      render(<ProblemDisplay problem={problem} />);
+      fireEvent.click(screen.getByText('Test Cases (2)'));
+      expect(screen.getByText('TEST')).toBeInTheDocument();
+      expect(screen.getByText('RUN-ONLY')).toBeInTheDocument();
     });
   });
 
