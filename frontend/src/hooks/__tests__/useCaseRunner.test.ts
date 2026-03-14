@@ -303,7 +303,7 @@ describe('useCaseRunner', () => {
         await result.current.runCase('case1');
       });
 
-      expect(mockRunSessionTests).toHaveBeenCalledWith('session-1', 'student-1', 'print("hi")', 'case1');
+      expect(mockRunSessionTests).toHaveBeenCalledWith('session-1', 'print("hi")', 'case1');
       expect(result.current.caseResults['case1']).toEqual(mockPassResult.results[0]);
     });
   });
