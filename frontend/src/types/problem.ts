@@ -20,46 +20,53 @@ export interface ExecutionSettings {
 }
 
 // ---------------------------------------------------------------------------
-// Test case types (kept lightweight for client-side usage)
+// I/O test case types
 // ---------------------------------------------------------------------------
 
-export type TestCaseType = 'input-output' | 'pytest' | 'property-based';
+/** Supported output match strategies for I/O test cases. */
+export type MatchType = 'exact' | 'contains' | 'regex';
 
-export type OutputMatchType = 'exact' | 'contains' | 'regex';
-
-export interface InputOutputTestConfig {
-  input: string;
-  expected_output: string;
-  match_type: OutputMatchType;
-  ignore_whitespace?: boolean;
-}
-
-export interface PyTestConfig {
-  test_code: string;
-  target_function?: string;
-  timeout?: number;
-}
-
-export interface PropertyTestConfig {
-  property_code: string;
-  strategy_config?: Record<string, unknown>;
-  max_examples?: number;
-}
-
-export type TestConfig =
-  | { type: 'input-output'; data: InputOutputTestConfig }
-  | { type: 'pytest'; data: PyTestConfig }
-  | { type: 'property-based'; data: PropertyTestConfig };
-
-export interface TestCase {
-  id: string;
-  problem_id: string;
-  type: TestCaseType;
+/**
+ * IOTestCase represents a single I/O test case stored as JSONB.
+ * Used in both Problem.test_cases (instructor-defined) and
+ * StudentWork.test_cases (student-defined).
+ *
+ * A case with expected_output set is a proper test (pass/fail comparison).
+ * A case without expected_output is "run-only" — it runs the code and shows
+ * output without asserting correctness.
+ */
+export interface IOTestCase {
   name: string;
-  description: string;
-  visible: boolean;
+  input: string;
+  expected_output?: string;
+  match_type: MatchType;
+  random_seed?: number;
+  attached_files?: Array<{ name: string; content: string }>;
   order: number;
-  config: TestConfig;
+}
+
+// ---------------------------------------------------------------------------
+// Test result types (returned by executor /test endpoint)
+// ---------------------------------------------------------------------------
+
+/** Status of a single test case execution. */
+export type TestStatus = 'passed' | 'failed' | 'error';
+
+/**
+ * TestResult holds the outcome of a single test case run.
+ * Returned by the executor POST /test endpoint.
+ * input, expected, actual, stderr are optional — absent when not applicable
+ * (e.g. for run-only cases or error-status results with no output).
+ */
+export interface TestResult {
+  name: string;
+  type: 'io';
+  status: TestStatus;
+  input?: string;
+  expected?: string;
+  actual?: string;
+  stderr?: string;
+  time_ms: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,7 +79,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: TestCase[] | null;
+  test_cases: IOTestCase[] | null;
   execution_settings: ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
@@ -88,7 +95,7 @@ export interface StudentProblem {
   title: string;
   description: string;
   starter_code?: string;
-  test_cases: TestCase[];
+  test_cases: IOTestCase[];
 }
 
 export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
@@ -103,7 +110,7 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
-    test_cases: api.test_cases as TestCase[] | null,
+    test_cases: api.test_cases as IOTestCase[] | null,
     execution_settings: api.execution_settings as ExecutionSettings | null,
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),

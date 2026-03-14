@@ -14,11 +14,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
+import type { IOTestCase } from '@/types/problem';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
+import IOCaseForm from './IOCaseForm';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -44,7 +46,7 @@ export default function ProblemCreator({
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
   const [language, setLanguage] = useState('python');
-  const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
+  const [activeTab, setActiveTab] = useState<'starter' | 'solution' | 'cases'>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
@@ -64,6 +66,9 @@ export default function ProblemCreator({
   const [stdin, setStdin] = useState('');
   const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
   const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
+
+  // I/O test cases
+  const [test_cases, setTestCases] = useState<IOTestCase[]>([]);
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
@@ -113,6 +118,9 @@ export default function ProblemCreator({
       setStdin(execSettings?.stdin || '');
       setRandomSeed(execSettings?.random_seed);
       setAttachedFiles(execSettings?.attached_files || []);
+
+      // Load I/O test cases
+      setTestCases((problem.test_cases as IOTestCase[]) || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -167,7 +175,7 @@ export default function ProblemCreator({
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
         language,
-        test_cases: [] as unknown[], // Test cases added separately
+        test_cases: test_cases as unknown[],
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
         ...(Object.keys(execSettings).length > 0 && { execution_settings: execSettings }),
@@ -192,6 +200,7 @@ export default function ProblemCreator({
         setAttachedFiles([]);
         setTags([]);
         setTagInput('');
+        setTestCases([]);
       }
 
       // Notify parent
@@ -440,24 +449,38 @@ export default function ProblemCreator({
         </div>
       </div>}
 
-      {/* Tab bar for Starter Code / Solution */}
-      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
+      {/* Tab bar for Starter Code / Solution / Cases */}
+      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution' | 'cases')} className="flex-shrink-0">
         <Tabs.List className="items-center">
           <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
           <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
-          <button
-            type="button"
-            onClick={handleOpenGenerateModal}
-            disabled={!description.trim() || isGenerating || isSubmitting}
-            className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Generate Solution
-          </button>
+          <Tabs.Tab tabId="cases">Cases</Tabs.Tab>
+          {activeTab !== 'cases' && (
+            <button
+              type="button"
+              onClick={handleOpenGenerateModal}
+              disabled={!description.trim() || isGenerating || isSubmitting}
+              className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Generate Solution
+            </button>
+          )}
         </Tabs.List>
       </Tabs>}
 
-      {/* Full-width code editor */}
-      {!isLoading && <EditorContainer variant="flex">
+      {/* Cases tab content */}
+      {!isLoading && activeTab === 'cases' && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem' }}>
+          <IOCaseForm
+            cases={test_cases}
+            onChange={setTestCases}
+            label="I/O Test Cases"
+          />
+        </div>
+      )}
+
+      {/* Full-width code editor — shown for starter and solution tabs */}
+      {!isLoading && activeTab !== 'cases' && <EditorContainer variant="flex">
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
