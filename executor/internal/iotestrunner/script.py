@@ -32,6 +32,7 @@ Outputs a JSON array of TestResult objects to stdout:
 
 import sys
 import json
+import re
 import subprocess
 import time
 import os
@@ -42,6 +43,25 @@ import os
 PER_TEST_TIMEOUT_SEC = 10
 
 
+def matches(actual, expected, match_type):
+    """Return True if actual matches expected according to match_type.
+
+    match_type values:
+      "exact"    — strip trailing newlines, compare strings (default)
+      "contains" — check if expected appears as a substring of actual
+      "regex"    — compile expected as a regular expression and search actual
+    """
+    if match_type == "contains":
+        return expected in actual
+    if match_type == "regex":
+        try:
+            return bool(re.search(expected, actual))
+        except re.error:
+            return False
+    # Default: "exact" — strip trailing newlines and compare.
+    return actual.rstrip("\n") == expected.rstrip("\n")
+
+
 def run_test(code_path, test, language):
     """Run a single test case against the student code.
 
@@ -50,6 +70,7 @@ def run_test(code_path, test, language):
     name = test.get("name", "")
     stdin_input = test.get("input", "")
     expected_output = test.get("expected_output", None)  # None = run-only
+    match_type = test.get("match_type", "exact")
 
     start = time.monotonic()
     try:
@@ -105,7 +126,7 @@ def run_test(code_path, test, language):
             result["status"] = "passed"
         else:
             expected_normalized = expected_output.rstrip("\n")
-            if actual_normalized == expected_normalized:
+            if matches(actual_normalized, expected_normalized, match_type):
                 result["status"] = "passed"
                 result["expected"] = expected_normalized
             else:
