@@ -53,17 +53,15 @@ export async function runTests(
  * Calls POST /api/v1/sessions/{id}/test.
  *
  * @param sessionId - The session ID
- * @param studentId - The student user ID (used as context for test execution)
  * @param code - The student's current code (required for session-mode execution)
  * @param testName - Optional test name. If omitted, all tests are run.
  */
 export async function runSessionTests(
   sessionId: string,
-  studentId: string,
   code: string,
   testName?: string
 ): Promise<TestResponse> {
-  const body: Record<string, unknown> = { code, student_id: studentId };
+  const body: Record<string, unknown> = { code };
   if (testName !== undefined) {
     body.test_name = testName;
   }

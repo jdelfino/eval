@@ -86,11 +86,10 @@ describe('runSessionTests', () => {
     };
     mockApiPost.mockResolvedValue(mockResponse);
 
-    const result = await runSessionTests('session-123', 'student-456', 'print("hi")');
+    const result = await runSessionTests('session-123', 'print("hi")');
 
     expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-123/test', {
       code: 'print("hi")',
-      student_id: 'student-456',
     });
     expect(result).toEqual(mockResponse);
   });
@@ -101,11 +100,10 @@ describe('runSessionTests', () => {
       summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
     });
 
-    await runSessionTests('session-123', 'student-456', 'print("hi")', 'my_test');
+    await runSessionTests('session-123', 'print("hi")', 'my_test');
 
     expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-123/test', {
       code: 'print("hi")',
-      student_id: 'student-456',
       test_name: 'my_test',
     });
   });
@@ -114,7 +112,7 @@ describe('runSessionTests', () => {
     mockApiPost.mockRejectedValue(new Error('Unauthorized'));
 
     await expect(
-      runSessionTests('session-x', 'student-y', 'code')
+      runSessionTests('session-x', 'code')
     ).rejects.toThrow('Unauthorized');
   });
 });
