@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jdelfino/eval/executor/internal/handler"
@@ -388,6 +389,154 @@ func TestTest_InvalidRunnerOutput(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 for bad runner output, got %d", w.Code)
+	}
+}
+
+// --- match_type tests ---
+
+func TestTest_MatchTypeContainsForwardedToSandbox(t *testing.T) {
+	// Verify the handler serializes match_type="contains" into the io_tests.json
+	// attached file, so the Python runner receives it.
+	var capturedFiles []sandbox.File
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedFiles = req.Files
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newTestHandler(runner, metrics.NewNoop(), defaultTestConfig())
+	body := `{"code":"print('hello world')","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"hello","match_type":"contains"}]}`
+	w := doTestRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Find io_tests.json among the files passed to sandbox.
+	var testsJSON string
+	for _, f := range capturedFiles {
+		if f.Name == "io_tests.json" {
+			testsJSON = f.Content
+			break
+		}
+	}
+	if testsJSON == "" {
+		t.Fatal("io_tests.json not found in sandbox files")
+	}
+	// Verify match_type="contains" is present in the serialized test definitions.
+	if !strings.Contains(testsJSON, `"match_type":"contains"`) {
+		t.Errorf("expected match_type=contains in io_tests.json, got: %s", testsJSON)
+	}
+}
+
+func TestTest_MatchTypeRegexForwardedToSandbox(t *testing.T) {
+	// Verify the handler serializes match_type="regex" into the io_tests.json
+	// attached file, so the Python runner receives it.
+	var capturedFiles []sandbox.File
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedFiles = req.Files
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newTestHandler(runner, metrics.NewNoop(), defaultTestConfig())
+	body := `{"code":"print(42)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"\\d+","match_type":"regex"}]}`
+	w := doTestRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var testsJSON string
+	for _, f := range capturedFiles {
+		if f.Name == "io_tests.json" {
+			testsJSON = f.Content
+			break
+		}
+	}
+	if testsJSON == "" {
+		t.Fatal("io_tests.json not found in sandbox files")
+	}
+	if !strings.Contains(testsJSON, `"match_type":"regex"`) {
+		t.Errorf("expected match_type=regex in io_tests.json, got: %s", testsJSON)
+	}
+}
+
+// --- concurrency limit tests ---
+
+func TestTest_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
+	// blockCh controls when the runner completes.
+	// Set MaxConcurrentExecutions=1, occupy the slot, then verify a second request
+	// gets 429 Too Many Requests.
+	entryCh := make(chan struct{})
+	blockCh := make(chan struct{})
+	blockingRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		close(entryCh)
+		<-blockCh
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 1}, nil
+	}
+
+	cfg := defaultTestConfig()
+	cfg.MaxConcurrentExecutions = 1
+	h := handler.NewTestHandler(noopLogger(), blockingRunner, metrics.NewNoop(), cfg)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		doTestRequest(h.ServeHTTP, `{"code":"print(1)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"1","match_type":"exact"}]}`)
+	}()
+
+	// Wait for first request to enter the runner (slot occupied).
+	<-entryCh
+
+	// Second request should be rejected with 429.
+	w := doTestRequest(h.ServeHTTP, `{"code":"print(1)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"1","match_type":"exact"}]}`)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatal(err)
+	}
+	if errResp["error"] != "too many concurrent executions" {
+		t.Errorf("unexpected error message: %q", errResp["error"])
+	}
+
+	// Unblock.
+	close(blockCh)
+	wg.Wait()
+}
+
+func TestTest_ConcurrencyLimit_AllowsAfterRelease(t *testing.T) {
+	cfg := defaultTestConfig()
+	cfg.MaxConcurrentExecutions = 1
+	runner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 1}, nil
+	}
+	h := handler.NewTestHandler(noopLogger(), runner, metrics.NewNoop(), cfg)
+
+	// First request succeeds (acquires and releases).
+	w1 := doTestRequest(h.ServeHTTP, `{"code":"print(1)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"1","match_type":"exact"}]}`)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", w1.Code)
+	}
+
+	// Second request should also succeed since first released the slot.
+	w2 := doTestRequest(h.ServeHTTP, `{"code":"print(1)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"1","match_type":"exact"}]}`)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("second request: expected 200, got %d", w2.Code)
+	}
+}
+
+func TestTest_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
+	cfg := defaultTestConfig()
+	cfg.MaxConcurrentExecutions = 0
+	runner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 1}, nil
+	}
+	h := handler.NewTestHandler(noopLogger(), runner, metrics.NewNoop(), cfg)
+
+	w := doTestRequest(h.ServeHTTP, `{"code":"print(1)","language":"python","io_tests":[{"name":"t1","input":"","expected_output":"1","match_type":"exact"}]}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
 
