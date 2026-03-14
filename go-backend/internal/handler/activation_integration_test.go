@@ -6,13 +6,13 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
+	"context"
+	"sync/atomic"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -54,58 +54,6 @@ func (s *countingActivationService) waitForCalls(t *testing.T, n int64) {
 
 func TestExecuteHandler_SignalsDemandOnExecute(t *testing.T) {
 	svc := &countingActivationService{}
-
-	sessionRepo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return activeSession(), nil
-		},
-	}
-	studentRepo := &execMockSessionStudentRepo{
-		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
-			return nil, store.ErrNotFound
-		},
-	}
-	execClient := &mockExecutorClient{
-		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true}, nil
-		},
-	}
-
-	h := NewExecuteHandler(execClient)
-	h.SetActivation(svc)
-
-	router := setupExecuteHandler(sessionRepo, studentRepo, execClient)
-	// Override handler with activation-enabled version.
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			repos := &executeTestRepos{sessions: sessionRepo, students: studentRepo}
-			next.ServeHTTP(w, req.WithContext(store.WithRepos(req.Context(), repos)))
-		})
-	})
-	r.With(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
-			next.ServeHTTP(w, req.WithContext(ctx))
-		})
-	}).Post("/sessions/{id}/execute", h.Execute)
-	_ = router // unused but allocated above
-
-	body := newExecuteReq(testStudentID, "print('hi')")
-	req := httptest.NewRequest(http.MethodPost, "/sessions/"+testSessionID.String()+"/execute", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Execute() status = %d, want 200: %s", rr.Code, rr.Body.String())
-	}
-
-	svc.waitForCalls(t, 1)
-}
-
-func TestExecuteHandler_SignalsDemandOnStandaloneExecute(t *testing.T) {
-	svc := &countingActivationService{}
 	h := NewExecuteHandler(&mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			return &executor.ExecuteResponse{Success: true}, nil
@@ -116,14 +64,14 @@ func TestExecuteHandler_SignalsDemandOnStandaloneExecute(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"code": "print('hi')", "language": "python"})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
-	h.StandaloneExecute(rr, req)
+	h.Execute(rr, req)
 
 	if rr.Code != http.StatusOK {
-		t.Fatalf("StandaloneExecute() status = %d, want 200: %s", rr.Code, rr.Body.String())
+		t.Fatalf("Execute() status = %d, want 200: %s", rr.Code, rr.Body.String())
 	}
 
 	svc.waitForCalls(t, 1)
@@ -271,59 +219,6 @@ func TestTraceHandler_SignalsDemandOnStandaloneTrace(t *testing.T) {
 	svc.waitForCalls(t, 1)
 }
 
-// --- StudentWorkHandler activation ---
-
-func TestStudentWorkHandler_Execute_SignalsDemand(t *testing.T) {
-	svc := &countingActivationService{}
-	workID := uuid.New()
-	userID := uuid.New()
-	problemID := uuid.New()
-
-	work := &store.StudentWorkWithProblem{
-		StudentWork: store.StudentWork{
-			ID:        workID,
-			UserID:    userID,
-			ProblemID: problemID,
-			Code:      "print('hi')",
-		},
-		Problem: store.Problem{
-			ID:       problemID,
-			Language: "python",
-		},
-	}
-
-	swRepo := &mockStudentWorkRepo{
-		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
-			return work, nil
-		},
-	}
-	execClient := &mockExecutorClient{
-		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true}, nil
-		},
-	}
-
-	h := NewStudentWorkHandler(execClient)
-	h.SetActivation(svc)
-
-	body, _ := json.Marshal(map[string]any{"code": "print('hi')"})
-	req := httptest.NewRequest(http.MethodPost, "/student-work/"+workID.String()+"/execute", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
-	ctx = store.WithRepos(ctx, swRepos(nil, swRepo, nil))
-	ctx = withChiParam(ctx, "id", workID.String())
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	h.Execute(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Execute() status = %d, want 200: %s", rr.Code, rr.Body.String())
-	}
-
-	svc.waitForCalls(t, 1)
-}
-
 // --- No activation without SetActivation (nil safety) ---
 
 func TestExecuteHandler_NoActivationWithoutSetter(t *testing.T) {
@@ -342,9 +237,9 @@ func TestExecuteHandler_NoActivationWithoutSetter(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
-	h.StandaloneExecute(rr, req) // must not panic
+	h.Execute(rr, req) // must not panic
 
 	if rr.Code != http.StatusOK {
-		t.Fatalf("StandaloneExecute() without activation status = %d, want 200", rr.Code)
+		t.Fatalf("Execute() without activation status = %d, want 200", rr.Code)
 	}
 }

@@ -506,6 +506,26 @@ func (stubRepos) ListStudentWorkForReview(context.Context, uuid.UUID, uuid.UUID)
 // Compile-time check that stubRepos implements store.Repos.
 var _ store.Repos = stubRepos{}
 
+// --- Shared session test fixtures used by multiple test files ---
+
+// testSessionID is a stable UUID used by execute and session-analyze tests.
+var testSessionID = uuid.MustParse("11111111-2222-3333-4444-555555555555")
+
+// testOutsiderID is a UUID for a user that is not a session participant.
+var testOutsiderID = uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+// activeSession returns a session in "active" status with testSessionID.
+func activeSession() *store.Session {
+	return &store.Session{
+		ID:           testSessionID,
+		NamespaceID:  "test-ns",
+		CreatorID:    uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+		Participants: []uuid.UUID{uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")},
+		Status:       "active",
+		Problem:      json.RawMessage(`{"title":"Test","language":"python"}`),
+	}
+}
+
 // --- Mock token generator ---
 
 type mockTokenGenerator struct {
