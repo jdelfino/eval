@@ -402,3 +402,142 @@ func TestExecute_RequestFields(t *testing.T) {
 		t.Error("expected success")
 	}
 }
+
+// --- RunTests tests ---
+
+func TestRunTests_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/test" {
+			t.Errorf("expected /test, got %s", r.URL.Path)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Errorf("expected application/json content-type, got %s", ct)
+		}
+
+		var req TestRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Code != "print(input())" {
+			t.Errorf("unexpected code: %q", req.Code)
+		}
+		if req.Language != "python" {
+			t.Errorf("unexpected language: %q", req.Language)
+		}
+		if len(req.IOTests) != 1 || req.IOTests[0].Name != "case1" {
+			t.Errorf("unexpected io_tests: %+v", req.IOTests)
+		}
+
+		resp := TestResponse{
+			Results: []TestResult{
+				{Name: "case1", Type: "io", Status: "passed", TimeMs: 12},
+			},
+			Summary: TestSummary{Total: 1, Passed: 1, TimeMs: 12},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	resp, err := client.RunTests(context.Background(), TestRequest{
+		Code:     "print(input())",
+		Language: "python",
+		IOTests: []IOTestDef{
+			{Name: "case1", Input: "hello\n", ExpectedOutput: "hello", MatchType: "exact"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Summary.Total != 1 {
+		t.Errorf("expected total=1, got %d", resp.Summary.Total)
+	}
+	if resp.Summary.Passed != 1 {
+		t.Errorf("expected passed=1, got %d", resp.Summary.Passed)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Status != "passed" {
+		t.Errorf("unexpected results: %+v", resp.Results)
+	}
+}
+
+func TestRunTests_SomeFail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := TestResponse{
+			Results: []TestResult{
+				{Name: "case1", Type: "io", Status: "passed", TimeMs: 10},
+				{Name: "case2", Type: "io", Status: "failed", Expected: "2", Actual: "3", TimeMs: 11},
+			},
+			Summary: TestSummary{Total: 2, Passed: 1, Failed: 1, TimeMs: 21},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	resp, err := client.RunTests(context.Background(), TestRequest{
+		Code:     "print(input())",
+		Language: "python",
+		IOTests: []IOTestDef{
+			{Name: "case1", Input: "1\n", ExpectedOutput: "1", MatchType: "exact"},
+			{Name: "case2", Input: "2\n", ExpectedOutput: "2", MatchType: "exact"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Summary.Total != 2 {
+		t.Errorf("expected total=2, got %d", resp.Summary.Total)
+	}
+	if resp.Summary.Failed != 1 {
+		t.Errorf("expected failed=1, got %d", resp.Summary.Failed)
+	}
+}
+
+func TestRunTests_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "internal error")
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.RunTests(context.Background(), TestRequest{Code: "x", Language: "python"})
+	if err == nil {
+		t.Fatal("expected error for HTTP 500")
+	}
+
+	var statusErr *StatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("expected StatusError, got %T: %v", err, err)
+	}
+	if statusErr.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", statusErr.Code)
+	}
+}
+
+func TestRunTests_PropagatesRequestID(t *testing.T) {
+	const reqID = "test-run-request-id"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Request-ID")
+		if got != reqID {
+			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
+		}
+		resp := TestResponse{}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	ctx := context.WithValue(context.Background(), chimiddleware.RequestIDKey, reqID)
+	client := NewClient(srv.URL, 5*time.Second)
+	_, err := client.RunTests(ctx, TestRequest{Code: "x", Language: "python"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
