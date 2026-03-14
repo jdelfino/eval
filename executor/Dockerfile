@@ -60,7 +60,7 @@ RUN CGO_ENABLED=0 go build \
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 ca-certificates \
+    python3 python3-pytest ca-certificates \
     libprotobuf32 libnl-3-200 libnl-route-3-200 \
   && rm -rf /var/lib/apt/lists/*
 
