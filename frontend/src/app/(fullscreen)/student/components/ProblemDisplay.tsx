@@ -81,17 +81,17 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
             {showTestCases && (
               <div className="mt-2 space-y-2">
                 {problem.test_cases!.map((testCase, index) => (
-                  <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
+                  <div key={testCase.name || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">
                         {testCase.name || `Test ${index + 1}`}
                       </span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                        {testCase.type.toUpperCase()}
+                        {testCase.expected_output !== undefined ? 'TEST' : 'RUN-ONLY'}
                       </span>
                     </div>
-                    {testCase.description && (
-                      <p className="text-sm text-gray-600 mt-1">{testCase.description}</p>
+                    {testCase.input && (
+                      <p className="text-sm text-gray-600 mt-1 font-mono">Input: {testCase.input}</p>
                     )}
                   </div>
                 ))}

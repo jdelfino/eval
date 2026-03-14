@@ -122,7 +122,38 @@ type ClassRepository interface {
 	ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 }
 
+// IOTestCase represents a single I/O test case stored as JSONB in the database.
+// It is used in both problems.test_cases (instructor-defined cases) and
+// student_work.test_cases (student-defined cases).
+//
+// A case with ExpectedOutput set is a proper test (pass/fail comparison).
+// A case without ExpectedOutput is a "run-only" case that shows output without asserting correctness.
+//
+// IOTestCase subsumes ExecutionSettings for problems using the cases model:
+// a case carries its own Input (stdin), RandomSeed, and AttachedFiles.
+// The existing execution_settings column on problems and student_work remains for
+// backward compatibility; problems with test_cases use the cases model instead.
+type IOTestCase struct {
+	Name           string `json:"name"`
+	Input          string `json:"input"`
+	ExpectedOutput string `json:"expected_output,omitempty"`
+	MatchType      string `json:"match_type"`
+	RandomSeed     *int   `json:"random_seed,omitempty"`
+	AttachedFiles  []File `json:"attached_files,omitempty"`
+	Order          int    `json:"order"`
+}
+
+// File represents an auxiliary file attached to a test case or execution environment.
+// Mirrors executorapi.File so the store layer has no dependency on the executorapi package.
+type File struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
 // Problem represents a coding exercise in the database.
+// test_cases stores a JSONB array of IOTestCase definitions for I/O test cases.
+// Problems with test_cases use the cases model for execution; problems without
+// test_cases fall back to the execution_settings column.
 type Problem struct {
 	ID                uuid.UUID       `json:"id"`
 	NamespaceID       string          `json:"namespace_id"`
@@ -669,6 +700,8 @@ type SectionProblemRepository interface {
 }
 
 // StudentWork represents persistent student work for a problem in a section.
+// test_cases stores student-defined I/O test cases as a JSONB array of IOTestCase.
+// Nil when no student-defined cases exist.
 type StudentWork struct {
 	ID                uuid.UUID       `json:"id"`
 	NamespaceID       string          `json:"namespace_id"`
@@ -677,6 +710,7 @@ type StudentWork struct {
 	SectionID         uuid.UUID       `json:"section_id"`
 	Code              string          `json:"code"`
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	TestCases         json.RawMessage `json:"test_cases"`
 	CreatedAt         time.Time       `json:"created_at"`
 	LastUpdate        time.Time       `json:"last_update"`
 }
@@ -691,6 +725,7 @@ type StudentWorkWithProblem struct {
 type UpdateStudentWorkParams struct {
 	Code              *string
 	ExecutionSettings json.RawMessage // nil means don't update
+	TestCases         json.RawMessage // nil means don't update
 }
 
 // StudentProgress holds progress summary for a single student in a section.
