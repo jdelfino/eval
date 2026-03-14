@@ -5,8 +5,6 @@ metadata:
 spec:
   scaleTargetRef:
     name: executor
-  # Scale to zero when no executions are pending. The GMP query frontend
-  # (k8s/cluster/gmp-frontend.yaml) exposes Prometheus-compatible metrics from GMP.
   minReplicaCount: 0
   maxReplicaCount: 10
   cooldownPeriod: 60
@@ -14,20 +12,12 @@ spec:
   triggers:
     # Redis trigger: activates (0→1) when executor:demand list is non-empty.
     # go-api pushes to this list via the activation service (PLAT-6nij.1).
-    # listLength is set high to prevent Redis from driving scale-out beyond 1;
-    # the Prometheus trigger handles scale-out based on active executions.
     # activationListLength: "1" means KEDA scales from 0 when list has ≥1 item.
     # The key has a 1-hour TTL; LLEN returns 0 for nonexistent keys (safe no-op).
+    # Scale-out beyond 1 replica is tracked in PLAT-omak (requires GMP query frontend).
     - type: redis
       metadata:
         address: redis.default.svc.cluster.local:6379
         listName: executor:demand
         listLength: "10000"
         activationListLength: "1"
-    - type: prometheus
-      metadata:
-        # GMP query frontend deployed via k8s/cluster/gmp-frontend.yaml in gmp-system namespace.
-        serverAddress: http://frontend.gmp-system.svc:9090
-        metricName: executor_active_executions
-        query: sum(executor_active_executions)
-        threshold: "3"
