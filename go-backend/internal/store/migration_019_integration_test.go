@@ -16,11 +16,27 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 )
+
+// assertJSONEqual compares two JSON byte slices semantically (key order independent).
+func assertJSONEqual(t *testing.T, field string, got, want json.RawMessage) {
+	t.Helper()
+	var gotVal, wantVal interface{}
+	if err := json.Unmarshal(got, &gotVal); err != nil {
+		t.Fatalf("%s: unmarshal got: %v", field, err)
+	}
+	if err := json.Unmarshal(want, &wantVal); err != nil {
+		t.Fatalf("%s: unmarshal want: %v", field, err)
+	}
+	if !reflect.DeepEqual(gotVal, wantVal) {
+		t.Errorf("%s: got %s, want %s", field, string(got), string(want))
+	}
+}
 
 func TestIntegration_Migration019_StudentWorkTestCasesColumn(t *testing.T) {
 	t.Parallel()
@@ -109,18 +125,19 @@ func TestIntegration_Migration019_StudentWorkTestCasesRLS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("UpdateStudentWork with test_cases: %v", err)
 		}
-		if string(updated.TestCases) != string(testCasesJSON) {
-			t.Errorf("test_cases: got %s, want %s", string(updated.TestCases), string(testCasesJSON))
-		}
+		assertJSONEqual(t, "test_cases", updated.TestCases, testCasesJSON)
 	})
 
 	t.Run("instructor can read test_cases on student work in their section", func(t *testing.T) {
-		// Insert student work with test_cases directly
+		// Use a separate problem to avoid unique constraint with the student subtest above.
+		instrProblemID := uuid.New()
+		db.createProblem(ctx, t, instrProblemID, nsID, "Problem 019-instr", instructorID, nil, nil)
+
 		swID := uuid.New()
 		_, err := db.pool.Exec(ctx,
 			`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code, test_cases)
 			 VALUES ($1, $2, $3, $4, $5, '', $6)`,
-			swID, nsID, studentID, problemID, sectionID, testCasesJSON)
+			swID, nsID, studentID, instrProblemID, sectionID, testCasesJSON)
 		if err != nil {
 			t.Fatalf("insert student_work with test_cases: %v", err)
 		}
@@ -132,9 +149,7 @@ func TestIntegration_Migration019_StudentWorkTestCasesRLS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetStudentWork as instructor: %v", err)
 		}
-		if string(sw.TestCases) != string(testCasesJSON) {
-			t.Errorf("test_cases: got %s, want %s", string(sw.TestCases), string(testCasesJSON))
-		}
+		assertJSONEqual(t, "test_cases", sw.TestCases, testCasesJSON)
 	})
 
 	t.Run("test_cases defaults to null when not set", func(t *testing.T) {
