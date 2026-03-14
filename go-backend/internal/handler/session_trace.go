@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
@@ -27,7 +28,8 @@ type standaloneTraceRequest struct {
 
 // TraceHandler handles debugger trace requests.
 type TraceHandler struct {
-	tracer TracerClient
+	tracer     TracerClient
+	activation ActivationService
 }
 
 // NewTraceHandler creates a new TraceHandler.
@@ -36,6 +38,12 @@ func NewTraceHandler(tracer TracerClient) *TraceHandler {
 	return &TraceHandler{
 		tracer: tracer,
 	}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *TraceHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // StandaloneTrace handles POST /api/v1/trace.
@@ -56,6 +64,16 @@ func (h *TraceHandler) StandaloneTrace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "trace.StandaloneTrace", "error", err)
+			}
+		}()
 	}
 
 	traceResp, err := h.tracer.Trace(r.Context(), executor.TraceRequest{

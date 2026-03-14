@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
@@ -13,12 +15,19 @@ import (
 
 // StudentWorkHandler handles student work CRUD and execution.
 type StudentWorkHandler struct {
-	executor ExecutorClient
+	executor   ExecutorClient
+	activation ActivationService
 }
 
 // NewStudentWorkHandler creates a new StudentWorkHandler with the given executor client.
 func NewStudentWorkHandler(exec ExecutorClient) *StudentWorkHandler {
 	return &StudentWorkHandler{executor: exec}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *StudentWorkHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // updateStudentWorkRequest is the request body for PATCH /student-work/{id}.
@@ -172,6 +181,16 @@ func (h *StudentWorkHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	// Build executor request
 	execReq := buildExecutorRequest(req.Code, merged)
 	execReq.Language = lang
+
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "studentwork.Execute", "error", err)
+			}
+		}()
+	}
 
 	// Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)

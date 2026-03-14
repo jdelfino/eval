@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"syscall"
 
 	"github.com/google/uuid"
 
@@ -24,7 +28,8 @@ type ExecutorClient interface {
 
 // ExecuteHandler handles code execution requests.
 type ExecuteHandler struct {
-	executor ExecutorClient
+	executor   ExecutorClient
+	activation ActivationService
 }
 
 // NewExecuteHandler creates a new ExecuteHandler.
@@ -32,6 +37,12 @@ func NewExecuteHandler(exec ExecutorClient) *ExecuteHandler {
 	return &ExecuteHandler{
 		executor: exec,
 	}
+}
+
+// SetActivation attaches an ActivationService to the handler.
+// Must be called before the handler serves requests.
+func (h *ExecuteHandler) SetActivation(svc ActivationService) {
+	h.activation = svc
 }
 
 // executeRequest is the request body for POST /sessions/{id}/execute.
@@ -126,7 +137,17 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	execReq := buildExecutorRequest(req.Code, merged)
 	execReq.Language = lang
 
-	// 8. Call executor
+	// 8. Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "execute.Execute", "error", err)
+			}
+		}()
+	}
+
+	// 9. Call executor
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
 		writeExecutorError(w, r, err, "execution failed")
@@ -171,6 +192,16 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 		Language: lang,
 	}
 
+	// Signal executor demand so KEDA can scale from zero.
+	if h.activation != nil {
+		ctx := context.WithoutCancel(r.Context())
+		go func() {
+			if err := h.activation.SignalDemand(ctx); err != nil {
+				slog.Error("activation: SignalDemand failed", "handler", "execute.StandaloneExecute", "error", err)
+			}
+		}()
+	}
+
 	execResp, err := h.executor.Execute(r.Context(), execReq)
 	if err != nil {
 		writeExecutorError(w, r, err, "execution failed")
@@ -180,10 +211,41 @@ func (h *ExecuteHandler) StandaloneExecute(w http.ResponseWriter, r *http.Reques
 	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
+// isConnectionError reports whether err is a network-layer connection failure,
+// indicating the executor service is unreachable (e.g. scaled to zero, cold-starting).
+// The executor client wraps transport errors with fmt.Errorf("executor: send request: %w", err).
+func isConnectionError(err error) bool {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return true
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return true
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return false
+}
+
 // writeExecutorError writes the appropriate HTTP error for an executor client error.
-// If the executor returned 429 (rate limit / concurrency), it propagates 429 to the caller.
+// If the executor is unreachable (connection-class error), it returns 503 so the
+// frontend can distinguish a cold-start from a real error and retry.
+// If the executor returned 429 (rate limit / concurrency), it propagates 429.
 // Otherwise it writes a 500.
 func writeExecutorError(w http.ResponseWriter, r *http.Request, err error, message string) {
+	if isConnectionError(err) {
+		httputil.WriteError(w, http.StatusServiceUnavailable, "executor is starting up, please retry")
+		return
+	}
 	var statusErr *executor.StatusError
 	if errors.As(err, &statusErr) && statusErr.Code == http.StatusTooManyRequests {
 		httputil.WriteError(w, http.StatusTooManyRequests, "execution service busy, try again later")

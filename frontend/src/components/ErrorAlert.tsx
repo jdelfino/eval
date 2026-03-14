@@ -42,6 +42,7 @@ const categoryTitles: Record<ErrorCategory, string> = {
   notFound: 'Not Found',
   conflict: 'Conflict',
   server: 'Server Error',
+  'warming-up': 'Code Runner Starting Up',
   unknown: 'Error',
 };
 

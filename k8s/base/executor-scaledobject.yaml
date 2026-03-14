@@ -12,6 +12,18 @@ spec:
   cooldownPeriod: 60
   pollingInterval: 15
   triggers:
+    # Redis trigger: activates (0→1) when executor:demand list is non-empty.
+    # go-api pushes to this list via the activation service (PLAT-6nij.1).
+    # listLength is set high to prevent Redis from driving scale-out beyond 1;
+    # the Prometheus trigger handles scale-out based on active executions.
+    # activationListLength: "1" means KEDA scales from 0 when list has ≥1 item.
+    # The key has a 1-hour TTL; LLEN returns 0 for nonexistent keys (safe no-op).
+    - type: redis
+      metadata:
+        address: redis.default.svc.cluster.local:6379
+        listName: executor:demand
+        listLength: "10000"
+        activationListLength: "1"
     - type: prometheus
       metadata:
         # GMP query frontend deployed via k8s/cluster/gmp-frontend.yaml in gmp-system namespace.
