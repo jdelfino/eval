@@ -1949,3 +1949,122 @@ describe('CodeEditor - Font Size Scaling', () => {
     });
   });
 });
+
+// ===========================================================================
+// Cases Panel Integration
+// ===========================================================================
+
+describe('CodeEditor - Cases Panel Integration', () => {
+  const instructorCases = [
+    { name: 'case1', input: 'hello', expected_output: 'HELLO', match_type: 'exact' as const, order: 0 },
+  ];
+
+  const mockCaseRunner = {
+    caseResults: {},
+    selectedCase: null,
+    isRunning: false,
+    error: null,
+    selectCase: jest.fn(),
+    runCase: jest.fn(),
+    runAllCases: jest.fn(),
+    clearResults: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: true,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('shows Test Cases activity bar button when instructorCases provided', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={mockCaseRunner}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Test Cases' })).toBeInTheDocument();
+  });
+
+  it('shows Test Cases activity bar button when caseRunner provided without cases', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={[]}
+        studentCases={[]}
+        caseRunner={mockCaseRunner}
+      />
+    );
+
+    // caseRunner alone (no cases) still shows the button per our logic
+    expect(screen.getByRole('button', { name: 'Test Cases' })).toBeInTheDocument();
+  });
+
+  it('does not show Test Cases button when no caseRunner and no cases', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={[]}
+        studentCases={[]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Test Cases' })).not.toBeInTheDocument();
+  });
+
+  it('shows CaseResultDisplay in output pane when a case is selected', () => {
+    // Use a result with expected output so the Pass badge renders
+    const passResult = {
+      name: 'case1',
+      type: 'io' as const,
+      status: 'passed' as const,
+      input: 'hello',
+      expected: 'HELLO',
+      actual: 'HELLO',
+      time_ms: 10,
+    };
+    const caseRunnerWithSelected = {
+      ...mockCaseRunner,
+      selectedCase: 'case1',
+      caseResults: { case1: passResult },
+    };
+
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={caseRunnerWithSelected}
+      />
+    );
+
+    // CaseResultDisplay is rendered — confirms case result output pane is shown
+    expect(screen.getByText('Pass')).toBeInTheDocument();
+  });
+
+  it('shows normal output pane when no case is selected', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={mockCaseRunner}
+        problem={{ id: 'p1', title: 'Test', description: null, starter_code: null, test_cases: null, execution_settings: null, author_id: 'u1', class_id: null, tags: [], solution: null, language: 'python', created_at: new Date(), updated_at: new Date() }}
+        execution_result={null}
+      />
+    );
+
+    // No case selected: shows normal output pane placeholder
+    expect(screen.getByText('No output yet.')).toBeInTheDocument();
+  });
+});
