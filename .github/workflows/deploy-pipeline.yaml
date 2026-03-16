@@ -171,6 +171,8 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+      - name: Apply cluster-level manifests
+        run: kubectl apply -f k8s/cluster/
       - name: Deploy to staging
         run: |
           cd k8s/overlays/staging
@@ -441,6 +443,8 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+      - name: Apply cluster-level manifests
+        run: kubectl apply -f k8s/cluster/
       - name: Deploy to production
         run: |
           cd k8s/base
