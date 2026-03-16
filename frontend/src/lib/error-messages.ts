@@ -187,11 +187,11 @@ const errorPatterns: Array<{
   // Executor cold-start / warming-up (503 from scale-to-zero) — must come before generic server errors
   {
     patterns: [
-      /executor is starting up/i,
-      /starting up/i,
+      /code execution is warming up/i,
+      /warming up/i,
     ],
     category: 'warming-up',
-    userMessage: 'The code runner is starting up. This may take up to a minute. Please try again shortly.',
+    userMessage: 'Code execution is warming up, please try again in a few moments.',
     isRetryable: true,
     recoveryActions: [{ label: 'Try Again', type: 'retry' }],
     helpText: 'The code runner scales down when idle and needs a moment to restart.',
