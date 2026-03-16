@@ -14,7 +14,8 @@ spec:
   triggers:
     # Redis trigger: activates (0→1) when executor:demand list is non-empty.
     # go-api pushes to this list via the activation service (PLAT-6nij.1).
-    # activationListLength: "1" means KEDA scales from 0 when list has ≥1 item.
+    # activationListLength: "0" means KEDA activates when LLEN > 0 (any items).
+    # KEDA uses strict greater-than, so "1" would require 2+ items — wrong.
     # The key has a 1-hour TTL; LLEN returns 0 for nonexistent keys (safe no-op).
     # listLength is set high to prevent Redis from driving scale-out beyond 1;
     # the Prometheus trigger handles scale-out based on active executions.
@@ -23,7 +24,7 @@ spec:
         address: redis.default.svc.cluster.local:6379
         listName: executor:demand
         listLength: "10000"
-        activationListLength: "1"
+        activationListLength: "0"
     # Prometheus trigger: scales out beyond 1 replica based on active executions.
     # Queries the GMP query frontend (k8s/cluster/gmp-frontend.yaml) for the
     # executor_active_executions gauge scraped via PodMonitoring.
