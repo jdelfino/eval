@@ -429,8 +429,8 @@ function StudentPage() {
       )}
       {warmingUp && (
         <ErrorAlert
-          error="The code runner is starting up. This may take up to a minute. Please try again shortly."
-          title="Code Runner Starting Up"
+          error="Code execution is warming up, please try again in a few moments."
+          title="Code Execution Warming Up"
           variant="warning"
           onDismiss={() => setWarmingUp(false)}
           onRetry={lastExecutionSettingsRef.current !== null

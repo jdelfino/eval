@@ -138,14 +138,14 @@ describe('error-messages', () => {
 
     describe('warming-up errors', () => {
       it.each([
-        ['executor is starting up, please retry'],
-        ['The code runner is starting up. This may take up to a minute. Please try again shortly.'],
-        ['starting up'],
+        ['Code execution is warming up, please try again in a few moments'],
+        ['Code execution is warming up, please try again in a few moments.'],
+        ['warming up'],
       ])('should classify "%s" as warming-up error', (message) => {
         const result = classifyError(new Error(message));
         expect(result.category).toBe('warming-up');
         expect(result.userMessage).toBe(
-          'The code runner is starting up. This may take up to a minute. Please try again shortly.'
+          'Code execution is warming up, please try again in a few moments.'
         );
         expect(result.isRetryable).toBe(true);
       });

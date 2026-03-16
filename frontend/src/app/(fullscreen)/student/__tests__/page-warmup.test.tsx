@@ -206,7 +206,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
       mockExecuteCode.mockRejectedValue(
-        new ApiError('executor is starting up, please retry', 503)
+        new ApiError('Code execution is warming up, please try again in a few moments', 503)
       );
 
       render(<StudentPageWrapper />);
@@ -225,7 +225,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       });
 
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toMatch(/starting up/i);
+      expect(alert.textContent).toMatch(/warming up/i);
     });
 
     it('shows generic error message for non-503 errors', async () => {
@@ -251,7 +251,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
 
       const alert = screen.getByRole('alert');
       // Should not show warming-up message for 500 errors
-      expect(alert.textContent).not.toMatch(/starting up/i);
+      expect(alert.textContent).not.toMatch(/warming up/i);
     });
   });
 });

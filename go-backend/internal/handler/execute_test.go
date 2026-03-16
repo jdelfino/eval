@@ -476,8 +476,8 @@ func TestWriteExecutorError_ConnectionError_Returns503(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !strings.Contains(resp["error"], "executor is starting up") {
-		t.Errorf("expected 'executor is starting up' in error message, got %q", resp["error"])
+	if !strings.Contains(resp["error"], "Code execution is warming up") {
+		t.Errorf("expected 'Code execution is warming up' in error message, got %q", resp["error"])
 	}
 }
 

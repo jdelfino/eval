@@ -134,7 +134,7 @@ func isConnectionError(err error) bool {
 // Otherwise it writes a 500.
 func writeExecutorError(w http.ResponseWriter, r *http.Request, err error, message string) {
 	if isConnectionError(err) {
-		httputil.WriteError(w, http.StatusServiceUnavailable, "executor is starting up, please retry")
+		httputil.WriteError(w, http.StatusServiceUnavailable, "Code execution is warming up, please try again in a few moments")
 		return
 	}
 	var statusErr *executor.StatusError
