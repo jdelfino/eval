@@ -61,16 +61,6 @@ jest.mock('@monaco-editor/react', () => {
 // Other shared mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../ExecutionSettings', () => {
-  return function MockExecutionSettings({ inSidebar }: { inSidebar?: boolean }) {
-    return (
-      <div data-testid="execution-settings" data-in-sidebar={inSidebar}>
-        Execution Settings {inSidebar ? '(Sidebar)' : '(Bottom)'}
-      </div>
-    );
-  };
-});
-
 jest.mock('@/hooks/useResponsiveLayout', () => ({
   useResponsiveLayout: jest.fn(() => true), // default: desktop
   useSidebarSection: jest.fn((section_id: string, defaultCollapsed: boolean) => ({
@@ -199,11 +189,7 @@ describe('CodeEditor - API Execution', () => {
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      expect(mockOnRun).toHaveBeenCalledWith({
-        stdin: undefined,
-        random_seed: undefined,
-        attached_files: undefined,
-      });
+      expect(mockOnRun).toHaveBeenCalledWith();
     });
 
     it('displays execution results when provided', () => {
@@ -708,22 +694,6 @@ describe('CodeEditor - Form Interaction', () => {
 
     const problemToggleButton = screen.getByLabelText('Problem');
     await act(async () => { fireEvent.click(problemToggleButton); });
-
-    expect(handleSubmit).not.toHaveBeenCalled();
-  });
-
-  it('does not submit parent form when clicking Settings toggle button', async () => {
-    const handleSubmit = jest.fn((e) => e.preventDefault());
-
-    render(
-      <form onSubmit={handleSubmit}>
-        <CodeEditor code="print('test')" onChange={jest.fn()} problem={mockProblem} />
-        <button type="submit">Submit Form</button>
-      </form>
-    );
-
-    const settingsToggleButton = screen.getByLabelText('Execution Settings');
-    await act(async () => { fireEvent.click(settingsToggleButton); });
 
     expect(handleSubmit).not.toHaveBeenCalled();
   });

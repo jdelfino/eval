@@ -62,11 +62,6 @@ export default function ProblemCreator({
   const [tagInput, setTagInput] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  // Execution settings
-  const [stdin, setStdin] = useState('');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
-  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
-
   // I/O test cases
   const [test_cases, setTestCases] = useState<IOTestCase[]>([]);
 
@@ -113,11 +108,6 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // TODO(PLAT-oztv.7): execution_settings removed; test cases shown in CasesPanel
-      setStdin('');
-      setRandomSeed(undefined);
-      setAttachedFiles([]);
-
       // Load I/O test cases
       setTestCases((problem.test_cases as IOTestCase[]) || []);
     } catch (err: any) {
@@ -162,7 +152,6 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // TODO(PLAT-oztv.7): Remove execution_settings from problem creation
       const problemInput = {
         title: title.trim(),
         description: description.trim() || null,
@@ -188,9 +177,6 @@ export default function ProblemCreator({
         setStarterCode('');
         setSolution('');
         setLanguage('python');
-        setStdin('');
-        setRandomSeed(undefined);
-        setAttachedFiles([]);
         setTags([]);
         setTagInput('');
         setTestCases([]);
@@ -480,8 +466,7 @@ export default function ProblemCreator({
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(_execution_settings) => {
-            // TODO(PLAT-oztv.7): Wire to test cases
+          onRun={() => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
             setExecutionResult(null);
@@ -497,12 +482,6 @@ export default function ProblemCreator({
           isRunning={isRunning}
           execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          exampleInput={stdin}
-          onStdinChange={setStdin}
-          random_seed={random_seed}
-          onRandomSeedChange={setRandomSeed}
-          attached_files={attached_files}
-          onAttachedFilesChange={setAttachedFiles}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}

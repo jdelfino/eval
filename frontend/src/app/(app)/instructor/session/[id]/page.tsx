@@ -21,8 +21,6 @@ import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem } from '@/types/problem';
-// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
-type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -55,11 +53,6 @@ export default function InstructorSessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [reopening, setReopening] = useState(false);
   const [sessionProblem, setSessionProblem] = useState<Problem | null>(null);
-  const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  }>({});
 
   // Realtime session hook
   const {
@@ -124,8 +117,6 @@ export default function InstructorSessionPage() {
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    // TODO(PLAT-oztv.7): Wire sessionExecutionSettings to test_cases
-    setSessionExecutionSettings({});
   }, [realtimeSession]);
 
   // Show connection status in the global header
@@ -172,13 +163,7 @@ export default function InstructorSessionPage() {
   }, [session_id, apiEndSession, router]);
 
   const handleUpdateProblem = useCallback(async (
-    problem: { title: string; description: string; starter_code: string },
-    // TODO(PLAT-oztv.7): Replace execution_settings with test_cases
-    _execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
+    problem: { title: string; description: string; starter_code: string }
   ) => {
     if (!session_id) return;
 
@@ -211,9 +196,7 @@ export default function InstructorSessionPage() {
 
   const handleExecuteCode = useCallback(async (
     _studentId: string,
-    code: string,
-    // TODO(PLAT-oztv.7): Replace execution_settings with test_cases
-    _execution_settings: ExecutionSettings
+    code: string
   ) => {
     const language = sessionProblem?.language || 'python';
     return apiExecuteCode(code, language);
@@ -312,7 +295,6 @@ export default function InstructorSessionPage() {
           students={students}
           realtimeStudents={mappedRealtimeStudents}
           sessionProblem={sessionProblem}
-          sessionExecutionSettings={sessionExecutionSettings}
           onEndSession={handleEndSession}
           onUpdateProblem={handleUpdateProblem}
           onFeatureStudent={handleFeatureStudent}

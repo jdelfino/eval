@@ -66,9 +66,13 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
   })
 }));
 
+// Capture CodeEditor props for assertion
+let lastProblemCreatorCodeEditorProps: any = null;
+
 // Mock CodeEditor component
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem }: any) {
+  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem, exampleInput, random_seed, attached_files }: any) {
+    lastProblemCreatorCodeEditorProps = { exampleInput, random_seed, attached_files };
     return (
       <div data-testid={`code-editor-${title}`}>
         {/* Show editable problem fields if in edit mode */}
@@ -431,7 +435,21 @@ describe('ProblemCreator Component', () => {
     });
   });
 
-  describe('Execution Settings', () => {
+  describe('Execution Settings (removed)', () => {
+    it('does not pass exampleInput, random_seed, or attached_files to CodeEditor', () => {
+      lastProblemCreatorCodeEditorProps = null;
+      render(<ProblemCreator />);
+
+      // Verify CodeEditor component is rendered
+      expect(screen.getByTestId('code-editor-Starter Code')).toBeInTheDocument();
+
+      // After removing execution_settings state, these props must not be passed
+      expect(lastProblemCreatorCodeEditorProps).not.toBeNull();
+      expect(lastProblemCreatorCodeEditorProps.exampleInput).toBeUndefined();
+      expect(lastProblemCreatorCodeEditorProps.random_seed).toBeUndefined();
+      expect(lastProblemCreatorCodeEditorProps.attached_files).toBeUndefined();
+    });
+
     it('should pass execution settings to CodeEditor components', () => {
       render(<ProblemCreator />);
 

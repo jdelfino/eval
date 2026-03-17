@@ -14,8 +14,6 @@ import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
-// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
-type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
@@ -37,22 +35,11 @@ interface SessionViewProps {
   realtimeStudents: RealtimeStudent[];
   /** Current session problem */
   sessionProblem: Problem | null;
-  /** Session execution settings */
-  sessionExecutionSettings: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
   /** Callback to end the session */
   onEndSession: () => Promise<void>;
   /** Callback to update problem */
   onUpdateProblem: (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
+    problem: { title: string; description: string; starter_code: string }
   ) => Promise<void>;
   /** Callback to feature a student on public view */
   onFeatureStudent: (studentId: string) => Promise<void>;
@@ -61,8 +48,7 @@ interface SessionViewProps {
   /** Callback to execute student code */
   executeCode: (
     studentId: string,
-    code: string,
-    execution_settings: ExecutionSettings
+    code: string
   ) => Promise<ExecutionResult>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
@@ -90,7 +76,6 @@ export function SessionView({
   students,
   realtimeStudents,
   sessionProblem,
-  sessionExecutionSettings,
   onEndSession,
   onUpdateProblem,
   onFeatureStudent,
@@ -128,11 +113,10 @@ export function SessionView({
 
   const handleExecuteCode = useCallback(async (
     studentId: string,
-    code: string,
-    settings: ExecutionSettings
+    code: string
   ): Promise<ExecutionResult | undefined> => {
     try {
-      return await executeCode(studentId, code, settings);
+      return await executeCode(studentId, code);
     } catch (error) {
       console.error('Error executing code:', error);
       return undefined;
@@ -170,7 +154,6 @@ export function SessionView({
             students={students}
             realtimeStudents={realtimeStudents}
             sessionProblem={sessionProblem}
-            sessionExecutionSettings={sessionExecutionSettings}
             join_code={join_code || undefined}
             onShowOnPublicView={onFeatureStudent}
             onClearPublicView={onClearPublicView}
@@ -186,7 +169,6 @@ export function SessionView({
           <ProblemSetupPanel
             onUpdateProblem={onUpdateProblem}
             initialProblem={sessionProblem}
-            initialExecutionSettings={sessionExecutionSettings}
             isFullWidth
             onFeatureSolution={sessionProblem?.solution && onClearPublicView ? handleShowSolution : undefined}
           />

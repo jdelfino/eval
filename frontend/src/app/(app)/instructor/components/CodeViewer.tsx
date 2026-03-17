@@ -8,8 +8,7 @@ interface CodeViewerProps {
   code: string;
   studentName?: string;
   execution_result?: ExecutionResult;
-  // TODO(PLAT-oztv.7): Remove after component is updated to use test cases
-  onRun?: (execution_settings: { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> }) => void;
+  onRun?: () => void;
   isRunning?: boolean;
 }
 
