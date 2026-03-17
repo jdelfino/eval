@@ -116,7 +116,7 @@ type studentJoinedCall struct {
 }
 type codeUpdatedCall struct {
 	sessionID, userID, code string
-	executionSettings       json.RawMessage
+	testCases               json.RawMessage
 }
 type sessionEndedCall struct {
 	sessionID, reason string
@@ -126,7 +126,7 @@ type sessionReplacedCall struct {
 }
 type featuredStudentChangedCall struct {
 	sessionID, userID, code string
-	executionSettings       json.RawMessage
+	testCases               json.RawMessage
 }
 type problemUpdatedCall struct {
 	sessionID, problemID string
@@ -166,9 +166,9 @@ func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userI
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	m.mu.Lock()
-	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code, executionSettings})
+	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code, testCases})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err
@@ -187,9 +187,9 @@ func (m *mockSessionPublisher) SessionReplaced(_ context.Context, oldSessionID, 
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	m.mu.Lock()
-	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code, executionSettings})
+	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code, testCases})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err
