@@ -212,10 +212,11 @@ func (h *ExecuteHandler) runCases(
 	//   argv[1]: path to student code file (relative inside sandbox)
 	//   argv[2]: path to test definitions JSON file
 	//   argv[3]: language
-	sandboxWorkDir := "/tmp/work"
+	// Use relative filenames so they work with both nsjail (CWD=/tmp/work) and
+	// RunUnsafe mode (CWD=tempDir), where files are written to the working directory.
 	args := []string{
-		fmt.Sprintf("%s/%s", sandboxWorkDir, codeFilename),
-		fmt.Sprintf("%s/io_tests.json", sandboxWorkDir),
+		codeFilename,
+		"io_tests.json",
 		req.Language,
 	}
 
