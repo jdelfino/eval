@@ -1,17 +1,66 @@
 // Package executorapi defines the shared request/response types for the executor service API.
 package executorapi
 
+// CaseDef defines a single test case sent to the executor.
+// Type is "io" for I/O test cases (the only supported type currently).
+// ExpectedOutput is optional — when absent the case is "run-only" (no assertion).
+type CaseDef struct {
+	Name           string `json:"name"`
+	Type           string `json:"type"`                    // "io"
+	Input          string `json:"input"`
+	ExpectedOutput string `json:"expected_output,omitempty"`
+	MatchType      string `json:"match_type,omitempty"`
+	RandomSeed     *int   `json:"random_seed,omitempty"`
+	Files          []File `json:"files,omitempty"`
+}
+
+// CaseResult holds the outcome of a single case execution.
+// Status is one of "passed", "failed", "error", or "run" (run-only, no assertion).
+type CaseResult struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`              // "io"
+	Status   string `json:"status"`            // "passed" | "failed" | "error" | "run"
+	Input    string `json:"input,omitempty"`
+	Expected string `json:"expected,omitempty"`
+	Actual   string `json:"actual,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+	TimeMs   int64  `json:"time_ms"`
+}
+
+// CaseSummary aggregates counts and total elapsed time across all case results.
+type CaseSummary struct {
+	Total  int   `json:"total"`
+	Passed int   `json:"passed"`
+	Failed int   `json:"failed"`
+	Errors int   `json:"errors"`
+	Run    int   `json:"run"`
+	TimeMs int64 `json:"time_ms"`
+}
+
 // ExecuteRequest is the JSON request body for code execution.
+// Cases is a required list of test cases to run against the code.
 type ExecuteRequest struct {
-	Code       string `json:"code"`
-	Stdin      string `json:"stdin,omitempty"`
-	Files      []File `json:"files,omitempty"`
-	RandomSeed *int   `json:"random_seed,omitempty"`
-	TimeoutMs  *int   `json:"timeout_ms,omitempty"`
-	Language   string `json:"language,omitempty"`
+	Code      string    `json:"code"`
+	Language  string    `json:"language,omitempty"`
+	TimeoutMs *int      `json:"timeout_ms,omitempty"`
+	Cases     []CaseDef `json:"cases,omitempty"`
+}
+
+// ExecuteResponse is the JSON response for code execution.
+// Always returns Results and Summary regardless of whether cases have expected output.
+type ExecuteResponse struct {
+	Results []CaseResult `json:"results"`
+	Summary CaseSummary  `json:"summary"`
+}
+
+// File represents an auxiliary file provided to the execution environment.
+type File struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 // TestRequest is the JSON request body for running I/O test cases.
+// Deprecated: use ExecuteRequest with Cases instead.
 type TestRequest struct {
 	Code      string      `json:"code"`
 	Language  string      `json:"language"`
@@ -20,7 +69,7 @@ type TestRequest struct {
 }
 
 // IOTestDef defines a single I/O test case sent to the executor.
-// ExpectedOutput is optional — when absent the test is "run-only" (no assertion on output).
+// Deprecated: use CaseDef instead.
 type IOTestDef struct {
 	Name           string `json:"name"`
 	Input          string `json:"input"`
@@ -29,15 +78,14 @@ type IOTestDef struct {
 }
 
 // TestResponse is the JSON response for running I/O test cases.
+// Deprecated: use ExecuteResponse instead.
 type TestResponse struct {
 	Results []TestResult `json:"results"`
 	Summary TestSummary  `json:"summary"`
 }
 
 // TestResult holds the outcome of a single test case execution.
-// Status is one of "passed", "failed", or "error".
-// Input, Expected, Actual, and Stderr are omitted when empty (e.g. for error-status tests
-// where no output was produced).
+// Deprecated: use CaseResult instead.
 type TestResult struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`    // always "io" for I/O tests
@@ -50,27 +98,13 @@ type TestResult struct {
 }
 
 // TestSummary aggregates counts and total elapsed time across all test results.
+// Deprecated: use CaseSummary instead.
 type TestSummary struct {
 	Total  int   `json:"total"`
 	Passed int   `json:"passed"`
 	Failed int   `json:"failed"`
 	Errors int   `json:"errors"`
 	TimeMs int64 `json:"time_ms"`
-}
-
-// File represents an auxiliary file provided to the execution environment.
-type File struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
-// ExecuteResponse is the JSON response for code execution.
-type ExecuteResponse struct {
-	Success         bool   `json:"success"`
-	Output          string `json:"output,omitempty"`
-	Error           string `json:"error,omitempty"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
-	Stdin           string `json:"stdin,omitempty"`
 }
 
 // TraceRequest is the JSON request body for step-through debugger tracing.
