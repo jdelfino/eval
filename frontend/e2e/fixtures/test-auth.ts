@@ -161,6 +161,47 @@ async function setEmailVerified(localId: string): Promise<void> {
 }
 
 /**
+ * Delete a user by email via the admin API.
+ * Used to clean up stale users with wrong passwords from previous runs.
+ */
+async function deleteUserByEmail(email: string): Promise<void> {
+  const authHeader = await getAdminAuthHeader();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: authHeader,
+  };
+  if (!IS_EMULATOR) {
+    headers['x-goog-user-project'] = PROJECT_ID;
+  }
+
+  // Look up localId by email
+  let lookupUrl = `${IDP_BASE_URL}/accounts:lookup`;
+  if (!IS_EMULATOR && TENANT_ID) {
+    lookupUrl = `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:lookup`;
+  }
+  const lookupRes = await fetch(lookupUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ email: [email] }),
+  });
+  if (!lookupRes.ok) return; // Can't look up — skip deletion
+  const lookupData = await lookupRes.json();
+  const localId = lookupData.users?.[0]?.localId;
+  if (!localId) return;
+
+  // Delete the user
+  let deleteUrl = `${IDP_BASE_URL}/accounts:delete`;
+  if (!IS_EMULATOR && TENANT_ID) {
+    deleteUrl = `https://identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:delete`;
+  }
+  await fetch(deleteUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ localId }),
+  });
+}
+
+/**
  * Creates a new user account in Firebase Auth.
  */
 export async function createTestUser(email: string, password: string): Promise<void> {
@@ -215,8 +256,12 @@ export async function createVerifiedTestUser(email: string, password: string): P
       return;
     }
     const signInBody = await signInRes.text();
-    // Only fall through to signUp if the user doesn't exist yet.
-    if (!signInBody.includes('EMAIL_NOT_FOUND') && !signInBody.includes('INVALID_LOGIN_CREDENTIALS')) {
+    if (signInBody.includes('INVALID_PASSWORD')) {
+      // User exists with a different password (stale from previous run).
+      // Delete and recreate with the correct password.
+      await deleteUserByEmail(email);
+      // Fall through to signUp below.
+    } else if (!signInBody.includes('EMAIL_NOT_FOUND') && !signInBody.includes('INVALID_LOGIN_CREDENTIALS')) {
       throw new Error(`Failed to sign in user for verification: ${signInRes.status} ${signInBody}`);
     }
     // Fall through to signUp below for first-time setup.

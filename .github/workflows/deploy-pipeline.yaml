@@ -227,7 +227,6 @@ jobs:
           echo "API_KEY=$API_KEY" >> "$GITHUB_ENV"
           echo "BOOTSTRAP_EMAIL=$BOOTSTRAP_EMAIL" >> "$GITHUB_ENV"
       - name: Seed staging data
-        continue-on-error: true
         env:
           PROJECT_ID: eval-prod-485520
           TENANT_ID: ${{ env.TENANT_ID }}

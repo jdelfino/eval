@@ -131,7 +131,7 @@ def validate(workflow_path):
 
     # ── deploy-staging: seed staging data after rollout ───────────────────────
     # The seed step must run after rollout completes and before E2E tests.
-    # It is non-blocking (continue-on-error: true) so failures don't block prod.
+    # Seed failures should block the pipeline — E2E tests depend on seed data.
     step_names = [s.get("name", "") for s in staging_steps]
 
     seed_step = next((s for s in staging_steps if s.get("name") == "Seed staging data"), None)
@@ -142,8 +142,8 @@ def validate(workflow_path):
 
     if seed_step is not None:
         ok &= check(
-            seed_step.get("continue-on-error") is True,
-            "deploy-staging: 'Seed staging data' uses continue-on-error: true",
+            seed_step.get("continue-on-error") is not True,
+            "deploy-staging: 'Seed staging data' does not use continue-on-error",
         )
         seed_run = seed_step.get("run", "")
         ok &= check(
