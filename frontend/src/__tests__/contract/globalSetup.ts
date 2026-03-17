@@ -156,10 +156,11 @@ export default async () => {
   const prob = await problemRes.json();
 
   // Publish the problem to the section so students can create student work.
+  // Endpoint: POST /api/v1/sections/{sectionId}/problems with problem_id in body.
   const pubRes = await contractFetch(
-    `/api/v1/sections/${sec.id}/problems/${prob.id}`,
+    `/api/v1/sections/${sec.id}/problems`,
     instructorToken,
-    { method: 'POST', body: JSON.stringify({}) },
+    { method: 'POST', body: JSON.stringify({ problem_id: prob.id }) },
   );
   if (pubRes.status !== 201 && pubRes.status !== 409) {
     throw new Error(`Failed to publish problem to section: ${pubRes.status}`);

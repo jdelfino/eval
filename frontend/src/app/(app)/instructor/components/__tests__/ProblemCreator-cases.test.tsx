@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
@@ -108,9 +108,10 @@ describe('ProblemCreator — Cases Section', () => {
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
-    it('should show IOCaseForm within Cases tab', () => {
+    it('should show IOCaseForm within Cases tab', async () => {
+      const user = userEvent.setup();
       render(<ProblemCreator />);
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      await user.click(screen.getByRole('tab', { name: /cases/i }));
       // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
     });
@@ -129,11 +130,11 @@ describe('ProblemCreator — Cases Section', () => {
       await user.type(screen.getByLabelText('Title *'), 'Test Problem');
 
       // Navigate to Cases tab and add a case
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
-      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
+      await user.click(screen.getByRole('tab', { name: /cases/i }));
+      await user.click(screen.getByRole('button', { name: /add case/i }));
 
       // Submit (title is committed, button is enabled)
-      fireEvent.click(screen.getByText('Create Problem'));
+      await user.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -161,7 +162,7 @@ describe('ProblemCreator — Cases Section', () => {
       // Use userEvent so title state is committed reliably in React 18
       await user.type(screen.getByLabelText('Title *'), 'Test');
 
-      fireEvent.click(screen.getByText('Create Problem'));
+      await user.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -201,8 +202,9 @@ describe('ProblemCreator — Cases Section', () => {
         expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
       });
 
+      const user = userEvent.setup();
       // Switch to Cases tab
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      await user.click(screen.getByRole('tab', { name: /cases/i }));
 
       expect(screen.getByDisplayValue('Greet World')).toBeInTheDocument();
     });
@@ -229,8 +231,9 @@ describe('ProblemCreator — Cases Section', () => {
         expect(screen.getByRole('button', { name: /update problem/i })).not.toBeDisabled();
       });
 
+      const user = userEvent.setup();
       // Submit
-      fireEvent.click(screen.getByText('Update Problem'));
+      await user.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
         expect(updateProblem).toHaveBeenCalledWith(
@@ -257,14 +260,14 @@ describe('ProblemCreator — Cases Section', () => {
       await user.type(screen.getByLabelText('Title *'), 'Test');
 
       // Add a case
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
-      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
+      await user.click(screen.getByRole('tab', { name: /cases/i }));
+      await user.click(screen.getByRole('button', { name: /add case/i }));
 
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
 
       // Submit (title is committed, button is enabled)
-      fireEvent.click(screen.getByText('Create Problem'));
+      await user.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalled();
