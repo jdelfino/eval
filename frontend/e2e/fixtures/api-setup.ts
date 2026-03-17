@@ -21,7 +21,7 @@ import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
 import { bootstrapUser } from '../../src/lib/api/auth';
-import { createVerifiedTestUser, getTestToken, IS_EMULATOR } from './test-auth';
+import { createVerifiedTestUser, getTestToken, IS_EMULATOR, DEFAULT_PASSWORD } from './test-auth';
 import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
@@ -150,9 +150,7 @@ export async function registerStudent(
   displayName: string,
   password?: string
 ): Promise<User> {
-  const userPassword = password || (IS_EMULATOR
-    ? 'e2e-test-password-123' // gitleaks:allow
-    : process.env.E2E_PASSWORD!);
+  const userPassword = password || DEFAULT_PASSWORD;
   await createVerifiedTestUser(email, userPassword);
   const token = await getTestToken(email, userPassword);
   return withToken(token, () => apiRegisterStudent(joinCode, displayName));

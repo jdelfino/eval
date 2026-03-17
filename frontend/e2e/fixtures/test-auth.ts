@@ -18,6 +18,11 @@
  */
 
 export const IS_EMULATOR = !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
+
+/** Default password for E2E test accounts. Emulator uses a fixed string; staging uses E2E_PASSWORD from env. */
+export const DEFAULT_PASSWORD = IS_EMULATOR
+  ? 'e2e-test-password-123' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 const EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
 
 // ── Production safety guards ────────────────────────────────────────────────

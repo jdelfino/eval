@@ -27,11 +27,7 @@
  */
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
-import { IS_EMULATOR } from './fixtures/test-auth';
-
-const DEFAULT_PASSWORD = IS_EMULATOR
-  ? 'e2e-test-password-123' // gitleaks:allow
-  : process.env.E2E_PASSWORD!;
+import { DEFAULT_PASSWORD } from './fixtures/test-auth';
 
 test.describe('Auth loop recovery', () => {
   test('signs out Firebase when backend user does not exist, preventing stale auth loop', async ({
