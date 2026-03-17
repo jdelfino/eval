@@ -42,6 +42,11 @@ import os
 # safeguard to prevent a single test from consuming the whole budget.
 PER_TEST_TIMEOUT_SEC = 10
 
+# Maximum bytes of student output to include in a single test result.
+# Output beyond this limit is truncated before JSON encoding so the runner's
+# own stdout (a JSON array of results) stays well within the sandbox output cap.
+MAX_CASE_OUTPUT_BYTES = 1024 * 1024  # 1 MB
+
 
 def matches(actual, expected, match_type):
     """Return True if actual matches expected according to match_type.
@@ -110,6 +115,8 @@ def run_test(code_path, test, language):
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         actual_stdout = proc.stdout
+        if len(actual_stdout) > MAX_CASE_OUTPUT_BYTES:
+            actual_stdout = actual_stdout[:MAX_CASE_OUTPUT_BYTES] + "\n... [output truncated]"
         stderr_output = proc.stderr
 
         if proc.returncode != 0:

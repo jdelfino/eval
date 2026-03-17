@@ -235,16 +235,27 @@ func (h *ExecuteHandler) runCases(
 		}
 	}
 
+	// The io_test_runner wrapper is always a Python script; the student's language
+	// is passed via Args[2] so the runner can invoke the right interpreter.
+	// Do NOT forward req.Language here: setting Language:"java" would cause the
+	// sandbox to compile the Python runner script as Java source.
 	sandboxReq := sandbox.Request{
 		Code:      iotestrunner.Script,
 		Stdin:     "",
 		Files:     files,
 		TimeoutMs: timeoutMs,
 		Args:      args,
-		Language:  req.Language,
+		Language:  "python",
 	}
 
-	result, err := h.runner(ctx, sandboxCfg, sandboxReq)
+	// The io_test_runner JSON output can be larger than the student's raw output
+	// (JSON encoding overhead, multiple cases). Use a larger sandbox output limit
+	// so the JSON is never truncated by the sandbox itself; truncation is handled
+	// per-case inside the runner script.
+	ioRunnerCfg := sandboxCfg
+	ioRunnerCfg.MaxOutputBytes = 10 * 1024 * 1024 // 10 MB
+
+	result, err := h.runner(ctx, ioRunnerCfg, sandboxReq)
 	if err != nil {
 		return nil, false, err
 	}

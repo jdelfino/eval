@@ -528,6 +528,29 @@ func TestExecute_LanguagePassedToSandbox(t *testing.T) {
 	}
 }
 
+// TestExecute_JavaRequestSandboxLanguageIsPython verifies that even for Java student
+// code, the sandbox Language is always "python" (since req.Code is the Python
+// io_test_runner wrapper). The student language is passed via Args, not Language.
+// Regression test for a bug where Language:"java" caused the sandbox to attempt
+// to compile the Python runner script as Java source, returning HTTP 500.
+func TestExecute_JavaRequestSandboxLanguageIsPython(t *testing.T) {
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"public class Main {}","language":"java","cases":[{"name":"run","type":"io","input":""}]}`)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	// Sandbox must always receive Language:"python" regardless of student language.
+	if cap.req.Language != "python" {
+		t.Errorf("expected sandbox req.Language='python' (io_test_runner is Python), got %q", cap.req.Language)
+	}
+	// Student language is communicated via Args[2].
+	if len(cap.req.Args) < 3 || cap.req.Args[2] != "java" {
+		t.Errorf("expected Args[2]='java', got %v", cap.req.Args)
+	}
+}
+
 func TestExecute_JavaPathPassedToSandboxConfig(t *testing.T) {
 	cap := &captureRunner{}
 	cfg := defaultConfig()

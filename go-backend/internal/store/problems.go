@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -136,9 +137,16 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 		language = "python"
 	}
 
+	// Default to empty array: test_cases is NOT NULL and passing nil would
+	// bypass the DB column default and violate the constraint.
+	testCases := params.TestCases
+	if testCases == nil {
+		testCases = json.RawMessage("[]")
+	}
+
 	p, err := scanProblem(s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.Title, params.Description, params.StarterCode,
-		params.TestCases, params.AuthorID, params.ClassID,
+		testCases, params.AuthorID, params.ClassID,
 		params.Tags, params.Solution, language,
 	))
 	if err != nil {
