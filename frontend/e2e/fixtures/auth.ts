@@ -1,10 +1,5 @@
 import { Page, expect } from '@playwright/test';
-import { createVerifiedTestUser, getTestToken, IS_EMULATOR } from './test-auth';
-
-// Emulator uses hardcoded passwords; staging uses E2E_PASSWORD from env.
-const DEFAULT_PASSWORD = IS_EMULATOR
-  ? 'e2e-test-password-123' // gitleaks:allow
-  : process.env.E2E_PASSWORD!;
+import { createVerifiedTestUser, getTestToken, IS_EMULATOR, DEFAULT_PASSWORD } from './test-auth';
 
 /**
  * Ensure an E2E test user exists in Firebase Auth and sign in.

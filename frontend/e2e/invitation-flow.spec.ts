@@ -15,9 +15,7 @@ import { test, expect, getAdminToken } from './fixtures/test-fixture';
 import { createInvitation } from './fixtures/api-setup';
 import { listSystemInvitations } from '../src/lib/api/system';
 import { configureTestAuth } from '../src/lib/auth-provider';
-import { createVerifiedTestUser } from './fixtures/test-auth';
-
-const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
+import { createVerifiedTestUser, DEFAULT_PASSWORD } from './fixtures/test-auth';
 
 test.describe('Invitation Acceptance Flow', () => {
   test('Admin creates invitation, instructor accepts via email sign-in and accesses dashboard', async ({

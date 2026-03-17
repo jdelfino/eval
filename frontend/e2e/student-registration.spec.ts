@@ -12,9 +12,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { createClass, createSection } from './fixtures/api-setup';
-import { createVerifiedTestUser } from './fixtures/test-auth';
-
-const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
+import { createVerifiedTestUser, DEFAULT_PASSWORD } from './fixtures/test-auth';
 
 test.describe('Student Registration UI', () => {
   test('Student registers via join code on registration page', async ({ page, testNamespace, setupInstructor }) => {
