@@ -78,12 +78,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         {/* Show editable problem fields if in edit mode */}
         {editableProblem && problem && onProblemEdit && (
           <div data-testid="editable-problem-sidebar">
-            <label htmlFor="problem-title">Title *</label>
-            <input
-              id="problem-title"
-              value={problem.title || ''}
-              onChange={(e) => onProblemEdit({ title: e.target.value })}
-            />
             <label htmlFor="problem-description">Description</label>
             <textarea
               id="problem-description"
