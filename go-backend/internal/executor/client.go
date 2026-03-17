@@ -47,6 +47,15 @@ func NewClient(baseURL string, timeout time.Duration) *Client {
 // ExecuteRequest is an alias for the shared request type.
 type ExecuteRequest = executorapi.ExecuteRequest
 
+// CaseDef is an alias for the shared case definition type.
+type CaseDef = executorapi.CaseDef
+
+// CaseResult is an alias for the shared case result type.
+type CaseResult = executorapi.CaseResult
+
+// CaseSummary is an alias for the shared case summary type.
+type CaseSummary = executorapi.CaseSummary
+
 // File is an alias for the shared file type.
 type File = executorapi.File
 
