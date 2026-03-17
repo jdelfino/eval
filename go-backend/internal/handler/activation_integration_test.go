@@ -56,7 +56,10 @@ func TestExecuteHandler_SignalsDemandOnExecute(t *testing.T) {
 	svc := &countingActivationService{}
 	h := NewExecuteHandler(&mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	})
 	h.SetActivation(svc)
@@ -348,7 +351,10 @@ func TestExecuteHandler_NoActivationWithoutSetter(t *testing.T) {
 	// Verifies that a handler without SetActivation called does not panic.
 	h := NewExecuteHandler(&mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	})
 	// No SetActivation call.
