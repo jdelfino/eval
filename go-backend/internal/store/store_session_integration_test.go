@@ -910,19 +910,17 @@ func TestIntegration_CreateProblem(t *testing.T) {
 		starter := "def two_sum(nums, target):"
 		solution := "return [0, 1]"
 		testCases := json.RawMessage(`[{"input":[1,2],"output":3}]`)
-		execSettings := json.RawMessage(`{"timeout":5}`)
 
 		p, err := s.CreateProblem(ctx, CreateProblemParams{
-			NamespaceID:       nsID,
-			Title:             "Two Sum",
-			Description:       &desc,
-			StarterCode:       &starter,
-			TestCases:         testCases,
-			ExecutionSettings: execSettings,
-			AuthorID:          authorID,
-			ClassID:           &classID,
-			Tags:              []string{"easy", "arrays"},
-			Solution:          &solution,
+			NamespaceID: nsID,
+			Title:       "Two Sum",
+			Description: &desc,
+			StarterCode: &starter,
+			TestCases:   testCases,
+			AuthorID:    authorID,
+			ClassID:     &classID,
+			Tags:        []string{"easy", "arrays"},
+			Solution:    &solution,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

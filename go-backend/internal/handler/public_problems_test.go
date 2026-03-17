@@ -220,7 +220,7 @@ func TestGetPublicProblem_NoSensitiveFields(t *testing.T) {
 	}
 
 	// Must NOT include sensitive fields from Problem
-	for _, forbidden := range []string{"test_cases", "execution_settings", "author_id", "namespace_id"} {
+	for _, forbidden := range []string{"test_cases", "author_id", "namespace_id"} {
 		if _, ok := rawResponse[forbidden]; ok {
 			t.Errorf("response should not include field %q", forbidden)
 		}

@@ -273,16 +273,15 @@ func TestJoinSession_InternalError(t *testing.T) {
 
 // --- UpdateCode tests ---
 
-func TestUpdateCode_WithExecutionSettings(t *testing.T) {
+func TestUpdateCode_UpdatesCodeAndReturnsTestCases(t *testing.T) {
 	ss := testSessionStudent()
 	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	ss.StudentWorkID = &studentWorkID
-	execSettings := json.RawMessage(`{"stdin":"hello","random_seed":42}`)
 	ss.Code = "print('hello')"
-	ss.ExecutionSettings = execSettings
+	testCases := json.RawMessage(`[{"name":"My Case","input":"hello","match_type":"exact","order":0}]`)
 	userID := ss.UserID
 
-	var capturedExecSettings json.RawMessage
+	var capturedCode string
 	studentRepo := &mockSessionStudentRepo{
 		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
 			if sessID != ss.SessionID || uID != userID {
@@ -294,16 +293,16 @@ func TestUpdateCode_WithExecutionSettings(t *testing.T) {
 
 	workRepo := &mockStudentWorkRepo{
 		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
-			capturedExecSettings = params.ExecutionSettings
+			capturedCode = *params.Code
 			return &store.StudentWork{
-				ID:                id,
-				Code:              *params.Code,
-				ExecutionSettings: params.ExecutionSettings,
+				ID:        id,
+				Code:      *params.Code,
+				TestCases: testCases,
 			}, nil
 		},
 	}
 
-	body := []byte(`{"code":"print('hello')","execution_settings":{"stdin":"hello","random_seed":42}}`)
+	body := []byte(`{"code":"print('hello')"}`)
 	h := NewSessionStudentHandler(noopPublisher())
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -319,46 +318,30 @@ func TestUpdateCode_WithExecutionSettings(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify execution_settings was forwarded to the store
-	if capturedExecSettings == nil {
-		t.Fatal("expected execution_settings to be passed to store, got nil")
-	}
-	// Compare JSON structurally (key order may differ)
-	var capturedMap, expectedMap map[string]any
-	if err := json.Unmarshal(capturedExecSettings, &capturedMap); err != nil {
-		t.Fatalf("unmarshal captured: %v", err)
-	}
-	if err := json.Unmarshal(execSettings, &expectedMap); err != nil {
-		t.Fatalf("unmarshal expected: %v", err)
-	}
-	if len(capturedMap) != len(expectedMap) {
-		t.Errorf("execution_settings key count mismatch: got %d, want %d", len(capturedMap), len(expectedMap))
-	}
-	for k, v := range expectedMap {
-		if fmt.Sprintf("%v", capturedMap[k]) != fmt.Sprintf("%v", v) {
-			t.Errorf("execution_settings[%q]: got %v, want %v", k, capturedMap[k], v)
-		}
+	// Verify code was forwarded to the store.
+	if capturedCode != "print('hello')" {
+		t.Errorf("expected code %q forwarded to store, got %q", "print('hello')", capturedCode)
 	}
 
-	// Verify execution_settings appears in the response
+	// Verify test_cases from student_work appears in the response.
 	var got store.SessionStudent
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if string(got.ExecutionSettings) != string(execSettings) {
-		t.Errorf("expected execution_settings %s in response, got %s", execSettings, got.ExecutionSettings)
+	if string(got.TestCases) != string(testCases) {
+		t.Errorf("expected test_cases %s in response, got %s", testCases, got.TestCases)
 	}
 }
 
-func TestUpdateCode_NilExecutionSettings(t *testing.T) {
+func TestUpdateCode_OnlyCodeInRequest(t *testing.T) {
 	ss := testSessionStudent()
 	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	ss.StudentWorkID = &studentWorkID
 	ss.Code = "x = 1"
 	userID := ss.UserID
 
-	var capturedExecSettings json.RawMessage
-	var capturedExecSettingsCalled bool
+	var capturedParams store.UpdateStudentWorkParams
+	var updateCalled bool
 	studentRepo := &mockSessionStudentRepo{
 		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
 			if sessID != ss.SessionID || uID != userID {
@@ -370,8 +353,8 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 
 	workRepo := &mockStudentWorkRepo{
 		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
-			capturedExecSettings = params.ExecutionSettings
-			capturedExecSettingsCalled = true
+			capturedParams = params
+			updateCalled = true
 			return &store.StudentWork{
 				ID:   id,
 				Code: *params.Code,
@@ -379,7 +362,6 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 		},
 	}
 
-	// Send request without execution_settings — should pass nil/null to store
 	body, _ := json.Marshal(map[string]any{"code": "x = 1"})
 	h := NewSessionStudentHandler(noopPublisher())
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
@@ -396,11 +378,12 @@ func TestUpdateCode_NilExecutionSettings(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if !capturedExecSettingsCalled {
+	if !updateCalled {
 		t.Fatal("expected updateStudentWorkFn to be called")
 	}
-	if capturedExecSettings != nil {
-		t.Errorf("expected nil execution_settings when omitted, got %s", capturedExecSettings)
+	// Only code is sent — TestCases should be nil in params (not updated).
+	if capturedParams.TestCases != nil {
+		t.Errorf("expected nil TestCases in UpdateStudentWorkParams, got %s", capturedParams.TestCases)
 	}
 }
 
@@ -1062,15 +1045,14 @@ func TestUpdateCode_PublishesCodeUpdated(t *testing.T) {
 	}
 }
 
-// TestUpdateCode_PublishesExecutionSettings verifies that execution_settings from
-// the request body are forwarded to the CodeUpdated publisher call.
-func TestUpdateCode_PublishesExecutionSettings(t *testing.T) {
+// TestUpdateCode_PublishesCodeUpdatedEvent verifies that a CodeUpdated event is
+// published with the correct session ID, user ID, and code when UpdateCode is called.
+func TestUpdateCode_PublishesCodeUpdatedEvent(t *testing.T) {
 	ss := testSessionStudent()
 	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	ss.StudentWorkID = &studentWorkID
 	ss.Code = "x = 1"
 	userID := ss.UserID
-	execSettings := json.RawMessage(`{"stdin":"hello inputs"}`)
 
 	studentRepo := &mockSessionStudentRepo{
 		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
@@ -1081,9 +1063,8 @@ func TestUpdateCode_PublishesExecutionSettings(t *testing.T) {
 	workRepo := &mockStudentWorkRepo{
 		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
 			return &store.StudentWork{
-				ID:                studentWorkID,
-				Code:              *params.Code,
-				ExecutionSettings: params.ExecutionSettings,
+				ID:   studentWorkID,
+				Code: *params.Code,
 			}, nil
 		},
 	}
@@ -1091,7 +1072,8 @@ func TestUpdateCode_PublishesExecutionSettings(t *testing.T) {
 	pub := newMockPublisher()
 	h := NewSessionStudentHandler(pub)
 
-	body := []byte(`{"code":"x = 1","execution_settings":{"stdin":"hello inputs"}}`)
+	newCode := "x = 2"
+	body, _ := json.Marshal(map[string]any{"code": newCode})
 	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
@@ -1112,18 +1094,14 @@ func TestUpdateCode_PublishesExecutionSettings(t *testing.T) {
 		t.Fatalf("expected 1 CodeUpdated call, got %d", len(pub.codeUpdatedCalls))
 	}
 	call := pub.codeUpdatedCalls[0]
-	if call.executionSettings == nil {
-		t.Fatal("expected execution_settings to be forwarded to publisher, got nil")
+	if call.sessionID != ss.SessionID.String() {
+		t.Errorf("expected sessionID %q in publisher call, got %q", ss.SessionID.String(), call.sessionID)
 	}
-	var gotMap, wantMap map[string]any
-	if err := json.Unmarshal(call.executionSettings, &gotMap); err != nil {
-		t.Fatalf("unmarshal got: %v", err)
+	if call.userID != userID.String() {
+		t.Errorf("expected userID %q in publisher call, got %q", userID.String(), call.userID)
 	}
-	if err := json.Unmarshal(execSettings, &wantMap); err != nil {
-		t.Fatalf("unmarshal want: %v", err)
-	}
-	if gotMap["stdin"] != wantMap["stdin"] {
-		t.Errorf("execution_settings.stdin: got %v, want %v", gotMap["stdin"], wantMap["stdin"])
+	if call.code != newCode {
+		t.Errorf("expected code %q in publisher call, got %q", newCode, call.code)
 	}
 }
 

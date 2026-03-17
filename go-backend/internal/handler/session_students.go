@@ -103,7 +103,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 
 	// Return student's code from student_work
 	student.Code = studentWork.Code
-	student.ExecutionSettings = studentWork.ExecutionSettings
+	student.TestCases = studentWork.TestCases
 
 	_ = h.publisher.StudentJoined(r.Context(), sessionID.String(), authUser.ID.String(), req.Name)
 
@@ -114,8 +114,7 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // Code is not validated as required because empty code is valid
 // (e.g., student just joined and hasn't typed anything yet).
 type updateCodeRequest struct {
-	Code              string          `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
+	Code string `json:"code"`
 }
 
 // UpdateCode handles PUT /api/v1/sessions/{id}/code — student updates their code.
@@ -156,8 +155,7 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 
 	// Update student_work instead of session_students
 	studentWork, err := repos.UpdateStudentWork(r.Context(), *sessionStudent.StudentWorkID, store.UpdateStudentWorkParams{
-		Code:              &req.Code,
-		ExecutionSettings: req.ExecutionSettings,
+		Code: &req.Code,
 	})
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
@@ -170,11 +168,11 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		h.revBuffer.Record(r.Context(), nsID, *sessionStudent.StudentWorkID, &sessionID, authUser.ID, req.Code)
 	}
 
-	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code, req.ExecutionSettings)
+	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code, nil)
 
 	// Build response using student_work data
 	sessionStudent.Code = studentWork.Code
-	sessionStudent.ExecutionSettings = studentWork.ExecutionSettings
+	sessionStudent.TestCases = studentWork.TestCases
 
 	httputil.WriteJSON(w, http.StatusOK, sessionStudent)
 }

@@ -26,7 +26,6 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 	var workProblemID *uuid.UUID
 	var workSectionID *uuid.UUID
 	var workCode *string
-	var workExecutionSettings []byte
 	var workCreatedAt *time.Time
 	var workLastUpdate *time.Time
 
@@ -35,12 +34,12 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 		&p.ID, &p.SectionID, &p.ProblemID, &p.PublishedBy, &p.ShowSolution, &p.PublishedAt,
 		// Problem fields
 		&p.Problem.ID, &p.Problem.NamespaceID, &p.Problem.Title, &p.Problem.Description,
-		&p.Problem.StarterCode, &p.Problem.TestCases, &p.Problem.ExecutionSettings,
+		&p.Problem.StarterCode, &p.Problem.TestCases,
 		&p.Problem.AuthorID, &p.Problem.ClassID, &p.Problem.Tags, &p.Problem.Solution,
 		&p.Problem.Language, &p.Problem.CreatedAt, &p.Problem.UpdatedAt,
 		// StudentWork fields (nullable)
 		&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
-		&workCode, &workExecutionSettings, &workCreatedAt, &workLastUpdate,
+		&workCode, &workCreatedAt, &workLastUpdate,
 	)
 	if err != nil {
 		return nil, err
@@ -55,9 +54,6 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 			ProblemID:   *workProblemID,
 			SectionID:   *workSectionID,
 			Code:        *workCode,
-		}
-		if workExecutionSettings != nil {
-			p.StudentWork.ExecutionSettings = workExecutionSettings
 		}
 		if workCreatedAt != nil {
 			p.StudentWork.CreatedAt = *workCreatedAt
@@ -74,10 +70,10 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 func (s *Store) ListSectionProblems(ctx context.Context, sectionID, userID uuid.UUID) ([]PublishedProblemWithStatus, error) {
 	query := `SELECT
 		sp.id, sp.section_id, sp.problem_id, sp.published_by, sp.show_solution, sp.published_at,
-		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
+		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases,
 		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.execution_settings, sw.created_at, sw.last_update
+		sw.code, sw.created_at, sw.last_update
 		FROM section_problems sp
 		LEFT JOIN problems p ON sp.problem_id = p.id
 		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id

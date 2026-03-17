@@ -111,10 +111,10 @@ func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
 		t.Fatal("student_work table does not exist")
 	}
 
-	// Verify columns
+	// Verify columns (execution_settings was removed by migration 020).
 	expectedColumns := []string{
 		"id", "namespace_id", "user_id", "problem_id", "section_id",
-		"code", "execution_settings", "created_at", "last_update",
+		"code", "created_at", "last_update",
 	}
 	for _, col := range expectedColumns {
 		var colExists bool

@@ -245,13 +245,13 @@ func testSession() *store.Session {
 
 func testSessionStudent() *store.SessionStudent {
 	return &store.SessionStudent{
-		ID:                uuid.MustParse("11111111-1111-1111-1111-111111111111"),
-		SessionID:         uuid.MustParse("22222222-2222-2222-2222-222222222222"),
-		UserID:            uuid.MustParse("33333333-3333-3333-3333-333333333333"),
-		Name:              "Alice",
-		Code:              "",
-		ExecutionSettings: json.RawMessage(`null`),
-		JoinedAt:          time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		ID:        uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+		SessionID: uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+		UserID:    uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+		Name:      "Alice",
+		Code:      "",
+		TestCases: json.RawMessage(`[{"name":"Case 1","input":"","match_type":"exact","order":0}]`),
+		JoinedAt:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
 
