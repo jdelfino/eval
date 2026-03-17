@@ -79,7 +79,6 @@ export interface Problem {
   description: string | null;
   starter_code: string | null;
   test_cases: import('./problem').IOTestCase[] | null;
-  execution_settings: import('./problem').ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -97,7 +96,7 @@ export interface Session {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases?: import('./problem').IOTestCase[] | null;
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -112,7 +111,7 @@ export interface SessionStudent {
   user_id: string;
   name: string;
   code: string;
-  execution_settings: unknown;
+  test_cases: import('./problem').IOTestCase[] | null;
   joined_at: string;
 }
 
@@ -168,7 +167,7 @@ export interface SessionPublicState {
   problem: SessionPublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases?: import('./problem').IOTestCase[] | null;
   join_code: string;
   status: string;
 }
@@ -221,7 +220,7 @@ export interface StudentWork {
   section_id: string;
   problem_id: string;
   code: string;
-  execution_settings: unknown;
+  test_cases: import('./problem').IOTestCase[] | null;
   last_update: string;
   created_at: string;
 }

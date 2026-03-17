@@ -113,11 +113,10 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings
-      const execSettings = problem.execution_settings;
-      setStdin(execSettings?.stdin || '');
-      setRandomSeed(execSettings?.random_seed);
-      setAttachedFiles(execSettings?.attached_files || []);
+      // TODO(PLAT-oztv.7): execution_settings removed; test cases shown in CasesPanel
+      setStdin('');
+      setRandomSeed(undefined);
+      setAttachedFiles([]);
 
       // Load I/O test cases
       setTestCases((problem.test_cases as IOTestCase[]) || []);
@@ -163,12 +162,7 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // Only include execution_settings if at least one field is set
-      const execSettings: Record<string, unknown> = {};
-      if (stdin.trim()) execSettings.stdin = stdin.trim();
-      if (random_seed !== undefined) execSettings.random_seed = random_seed;
-      if (attached_files.length > 0) execSettings.attached_files = attached_files;
-
+      // TODO(PLAT-oztv.7): Remove execution_settings from problem creation
       const problemInput = {
         title: title.trim(),
         description: description.trim() || null,
@@ -178,7 +172,6 @@ export default function ProblemCreator({
         test_cases: test_cases as unknown[],
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
-        ...(Object.keys(execSettings).length > 0 && { execution_settings: execSettings }),
       };
 
       let result;
@@ -487,15 +480,12 @@ export default function ProblemCreator({
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(execution_settings) => {
+          onRun={(_execution_settings) => {
+            // TODO(PLAT-oztv.7): Wire to test cases
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
             setExecutionResult(null);
-            executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err) => {
+            executeCode(codeToRun, language).then(setExecutionResult).catch((err) => {
               setExecutionResult({
                 success: false,
                 output: '',

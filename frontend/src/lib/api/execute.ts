@@ -9,22 +9,36 @@ import { apiFetch, apiPost } from '@/lib/api-client';
 import type { ExecutionResult } from '@/types/api';
 
 /**
+ * A single test case definition sent to the execute endpoint.
+ */
+export interface CaseDef {
+  /** Display name for the test case. */
+  name: string;
+  /** Standard input for the program. */
+  input: string;
+  /** Output match strategy. */
+  match_type: 'exact' | 'contains' | 'regex';
+  /** Expected output — if omitted, case is run-only (no pass/fail assertion). */
+  expected_output?: string;
+  /** Optional random seed for reproducible execution. */
+  random_seed?: number;
+  /** Optional files to attach for the execution context. */
+  files?: Array<{ name: string; content: string }>;
+}
+
+/**
  * Options for code execution.
  */
 export interface ExecuteOptions {
-  /** Optional stdin input */
-  stdin?: string;
-  /** Optional random seed for reproducible execution */
-  random_seed?: number;
-  /** Optional files to attach for the execution context */
-  attached_files?: Array<{ name: string; content: string }>;
+  /** Test cases to run. */
+  cases?: CaseDef[];
 }
 
 /**
  * Execute code via the unified POST /api/v1/execute endpoint.
  * @param code - The code to execute
  * @param language - The programming language
- * @param options - Optional execution parameters (stdin, random_seed, attached_files)
+ * @param options - Optional execution parameters (cases[])
  * @returns ExecutionResult with output and status
  */
 export async function executeCode(
@@ -34,15 +48,8 @@ export async function executeCode(
 ): Promise<ExecutionResult> {
   const body: Record<string, unknown> = { code, language };
 
-  if (options?.stdin !== undefined) {
-    body.stdin = options.stdin;
-  }
-  if (options?.random_seed !== undefined) {
-    body.random_seed = options.random_seed;
-  }
-  // Backend uses "files" (not "attached_files") per the executeRequest struct JSON tag
-  if (options?.attached_files !== undefined) {
-    body.files = options.attached_files;
+  if (options?.cases !== undefined) {
+    body.cases = options.cases;
   }
 
   return apiPost<ExecutionResult>('/execute', body);

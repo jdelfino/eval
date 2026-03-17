@@ -93,7 +93,7 @@ export function validateSessionStudentShape(obj: SessionStudent, label = 'Sessio
   expect(typeof obj.user_id).toBe('string');
   expect(typeof obj.name).toBe('string');
   expect('code' in obj).toBe(true);
-  expect('execution_settings' in obj).toBe(true);
+  expect('test_cases' in obj).toBe(true);
   expect(typeof obj.joined_at).toBe('string');
   expectSnakeCaseKeys(obj, label);
 }
@@ -151,8 +151,8 @@ export function validateStudentWorkShape(obj: StudentWork, label = 'StudentWork'
   expect(typeof obj.section_id).toBe('string');
   expect(typeof obj.problem_id).toBe('string');
   expect(typeof obj.code).toBe('string');
-  // execution_settings is nullable (null or object)
-  expect(obj.execution_settings === null || typeof obj.execution_settings === 'object').toBe(true);
+  // test_cases is an array or null
+  expect(obj.test_cases === null || Array.isArray(obj.test_cases)).toBe(true);
   expect(typeof obj.last_update).toBe('string');
   expect(typeof obj.created_at).toBe('string');
   expectSnakeCaseKeys(obj, label);
@@ -213,9 +213,9 @@ export function validateStudentJoinedShape(obj: StudentJoinedData) {
 export function validateStudentCodeUpdatedShape(obj: StudentCodeUpdatedData) {
   expect(typeof obj.user_id).toBe('string');
   expect(typeof obj.code).toBe('string');
-  // execution_settings is optional (omitempty) — if present, not undefined
-  if ('execution_settings' in obj) {
-    expect(obj.execution_settings !== undefined).toBe(true);
+  // test_cases is optional (omitempty) — if present, not undefined
+  if ('test_cases' in obj) {
+    expect(obj.test_cases !== undefined).toBe(true);
   }
   expectSnakeCaseKeys(obj, 'StudentCodeUpdatedData');
 }
@@ -239,8 +239,8 @@ export function validateSessionReplacedShape(obj: SessionReplacedData) {
 export function validateFeaturedStudentChangedShape(obj: FeaturedStudentChangedData) {
   expect(typeof obj.user_id).toBe('string');
   expect(typeof obj.code).toBe('string');
-  if ('execution_settings' in obj) {
-    expect(obj.execution_settings !== undefined).toBe(true);
+  if ('test_cases' in obj) {
+    expect(obj.test_cases !== undefined).toBe(true);
   }
   expectSnakeCaseKeys(obj, 'FeaturedStudentChangedData');
 }

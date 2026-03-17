@@ -46,7 +46,7 @@ export interface StudentJoinedData {
 export interface StudentCodeUpdatedData {
   user_id: string;
   code: string;
-  execution_settings?: unknown; // json.RawMessage, omitempty
+  test_cases?: unknown; // json.RawMessage, omitempty
 }
 
 /** Payload for session_ended — matches Go SessionEndedData. */
@@ -64,7 +64,7 @@ export interface SessionReplacedData {
 export interface FeaturedStudentChangedData {
   user_id: string;
   code: string;
-  execution_settings?: unknown; // json.RawMessage, omitempty
+  test_cases?: unknown; // json.RawMessage, omitempty
 }
 
 /** Payload for problem_updated — matches Go ProblemUpdatedData. */

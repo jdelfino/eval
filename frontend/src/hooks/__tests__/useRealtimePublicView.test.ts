@@ -66,6 +66,7 @@ const mockPublicState = {
   problem: { title: 'Test Problem', description: 'A test', starter_code: 'print("hi")', language: 'python' },
   featured_student_id: null,
   featured_code: null,
+  featured_test_cases: null,
   join_code: 'ABC-123',
   status: 'active',
 };
@@ -311,6 +312,31 @@ describe('useRealtimePublicView', () => {
       // featured_student_id should be null (no student) but featured_code must be set
       expect(result.current.state?.featured_student_id).toBeNull();
       expect(result.current.state?.featured_code).toBe('def solution():\n    return 42');
+    });
+
+    it('should update featured_test_cases from featured_student_changed event', async () => {
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ session_id: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      const testCases = [{ name: 'Case 1', input: 'hello', match_type: 'exact', order: 0 }];
+      act(() => {
+        simulatePublication('featured_student_changed', {
+          user_id: 'student-1',
+          code: 'print("featured")',
+          test_cases: testCases,
+        });
+      });
+
+      expect(result.current.state?.featured_student_id).toBe('student-1');
+      expect(result.current.state?.featured_code).toBe('print("featured")');
+      expect(result.current.state?.featured_test_cases).toEqual(testCases);
+      // Must NOT have featured_execution_settings
+      expect('featured_execution_settings' in (result.current.state ?? {})).toBe(false);
     });
 
     it('should handle session_ended event', async () => {

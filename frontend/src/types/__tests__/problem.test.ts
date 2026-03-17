@@ -8,7 +8,7 @@
  * - IOTestCase and TestResult types have the correct shape
  */
 import type { Problem as ApiProblem } from '../api';
-import type { Problem as ClientProblem, IOTestCase, TestResult } from '../problem';
+import type { IOTestCase, TestResult } from '../problem';
 import { mapApiProblem } from '../problem';
 
 // A minimal IOTestCase for use in wire-format test data.
@@ -28,7 +28,6 @@ describe('Problem type hierarchy', () => {
     description: 'Find two numbers',
     starter_code: 'def solve():',
     test_cases: [sampleIOTestCase],
-    execution_settings: { stdin: 'hello' },
     author_id: 'u-1',
     class_id: 'c-1',
     tags: ['arrays'],
@@ -71,19 +70,12 @@ describe('Problem type hierarchy', () => {
     expect(tc.order).toBe(0);
   });
 
-  it('mapApiProblem types execution_settings as ExecutionSettings', () => {
-    const client = mapApiProblem(apiProblem);
-    expect(client.execution_settings).toBeDefined();
-    expect(client.execution_settings!.stdin).toBe('hello');
-  });
-
   it('mapApiProblem handles null optional fields', () => {
     const minimal: ApiProblem = {
       ...apiProblem,
       description: null,
       starter_code: null,
       test_cases: null,
-      execution_settings: null,
       class_id: null,
       solution: null,
     };
@@ -91,9 +83,14 @@ describe('Problem type hierarchy', () => {
     expect(client.description).toBeNull();
     expect(client.starter_code).toBeNull();
     expect(client.test_cases).toBeNull();
-    expect(client.execution_settings).toBeNull();
     expect(client.class_id).toBeNull();
     expect(client.solution).toBeNull();
+  });
+
+  it('mapApiProblem does not include execution_settings on client Problem', () => {
+    const client = mapApiProblem(apiProblem);
+    // execution_settings should not be a field on the client Problem type
+    expect('execution_settings' in client).toBe(false);
   });
 
   it('mapApiProblem passes through language field', () => {

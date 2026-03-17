@@ -132,13 +132,13 @@ describe('InstructorSessionPage', () => {
       title: 'Test Problem',
       description: 'A test problem',
       starter_code: 'print("Hello")',
-      execution_settings: { stdin: 'test' },
+      test_cases: null,
     },
   };
 
   const mockStudents = [
-    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', execution_settings: {} },
-    { user_id: 'student-2', name: 'Bob', code: '', execution_settings: {} },
+    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', test_cases: [] },
+    { user_id: 'student-2', name: 'Bob', code: '', test_cases: [] },
   ];
 
   const mockClearFeaturedStudent = jest.fn();
@@ -401,8 +401,7 @@ describe('InstructorSessionPage', () => {
       await waitFor(() => {
         expect(mockUpdateProblem).toHaveBeenCalledWith(
           'session-123',
-          { title: 'Updated', description: '', starter_code: '' },
-          undefined
+          { title: 'Updated', description: '', starter_code: '' }
         );
       });
     });
@@ -507,7 +506,7 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
-          execution_settings: { stdin: 'test input', random_seed: 42 },
+          test_cases: [],
         },
       ];
 
@@ -529,7 +528,7 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
-          execution_settings: {},
+          test_cases: [],
           last_update: lastUpdate,
         },
       ];
