@@ -111,9 +111,12 @@ export async function deleteTestNamespace(id: string): Promise<void> {
   const tok = await getAdminToken();
   try {
     await withToken(tok, () => apiDeleteNamespace(id));
-  } catch {
+  } catch (err) {
     // Best-effort cleanup — don't fail the test if cleanup fails
-    console.warn(`Failed to cleanup namespace ${id}`);
+    const detail = err instanceof ApiError
+      ? `status=${err.status} msg=${err.message}`
+      : err instanceof Error ? err.message : String(err);
+    console.warn(`Failed to cleanup namespace ${id}: ${detail}`);
   }
 }
 
