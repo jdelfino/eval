@@ -47,9 +47,9 @@ func (a *AsyncSessionPublisher) StudentJoined(ctx context.Context, sessionID, us
 	return nil
 }
 
-func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	a.runAsync(ctx, "CodeUpdated", func(ctx context.Context) error {
-		return a.inner.CodeUpdated(ctx, sessionID, userID, code, executionSettings)
+		return a.inner.CodeUpdated(ctx, sessionID, userID, code, testCases)
 	})
 	return nil
 }
@@ -68,9 +68,9 @@ func (a *AsyncSessionPublisher) SessionReplaced(ctx context.Context, oldSessionI
 	return nil
 }
 
-func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	a.runAsync(ctx, "FeaturedStudentChanged", func(ctx context.Context) error {
-		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code, executionSettings)
+		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code, testCases)
 	})
 	return nil
 }

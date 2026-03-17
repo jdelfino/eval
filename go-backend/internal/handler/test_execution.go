@@ -15,9 +15,9 @@ import (
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
-// TestRunnerClient is the interface for sending test requests to the executor service.
+// TestRunnerClient is the interface for sending test execution requests to the executor service.
 type TestRunnerClient interface {
-	RunTests(ctx context.Context, req executor.TestRequest) (*executor.TestResponse, error)
+	Execute(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error)
 }
 
 // TestExecutionHandler handles I/O test execution requests.
@@ -124,17 +124,17 @@ func (h *TestExecutionHandler) StudentWorkTest(w http.ResponseWriter, r *http.Re
 		}()
 	}
 
-	testResp, err := h.runner.RunTests(r.Context(), executor.TestRequest{
+	execResp, err := h.runner.Execute(r.Context(), executor.ExecuteRequest{
 		Code:     work.Code,
 		Language: lang,
-		IOTests:  ioTests,
+		Cases:    ioTests,
 	})
 	if err != nil {
 		writeExecutorError(w, r, err, "test execution failed")
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, testResp)
+	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
 // SessionTest handles POST /api/v1/sessions/{id}/test.
@@ -219,17 +219,17 @@ func (h *TestExecutionHandler) SessionTest(w http.ResponseWriter, r *http.Reques
 		}()
 	}
 
-	testResp, err := h.runner.RunTests(r.Context(), executor.TestRequest{
+	execResp, err := h.runner.Execute(r.Context(), executor.ExecuteRequest{
 		Code:     req.Code,
 		Language: lang,
-		IOTests:  ioTests,
+		Cases:    ioTests,
 	})
 	if err != nil {
 		writeExecutorError(w, r, err, "test execution failed")
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, testResp)
+	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
 // parseIOTestCases unmarshals a JSONB test_cases column into a slice of IOTestCase.
@@ -245,20 +245,27 @@ func parseIOTestCases(rawJSON json.RawMessage) ([]store.IOTestCase, error) {
 	return cases, nil
 }
 
-// filterTestCases converts store.IOTestCase to executorapi.IOTestDef for the executor.
+// filterTestCases converts store.IOTestCase to executorapi.CaseDef for the executor.
 // If testName is non-empty, only the matching case is returned.
 // Returns (nil, true) if testName is specified but no matching case is found.
-func filterTestCases(cases []store.IOTestCase, testName string) ([]executorapi.IOTestDef, bool) {
-	defs := make([]executorapi.IOTestDef, 0, len(cases))
+func filterTestCases(cases []store.IOTestCase, testName string) ([]executorapi.CaseDef, bool) {
+	defs := make([]executorapi.CaseDef, 0, len(cases))
 	for _, tc := range cases {
 		if testName != "" && tc.Name != testName {
 			continue
 		}
-		defs = append(defs, executorapi.IOTestDef{
+		var files []executorapi.File
+		for _, f := range tc.AttachedFiles {
+			files = append(files, executorapi.File{Name: f.Name, Content: f.Content})
+		}
+		defs = append(defs, executorapi.CaseDef{
 			Name:           tc.Name,
+			Type:           "io",
 			Input:          tc.Input,
 			ExpectedOutput: tc.ExpectedOutput,
 			MatchType:      tc.MatchType,
+			RandomSeed:     tc.RandomSeed,
+			Files:          files,
 		})
 	}
 	if testName != "" && len(defs) == 0 {
