@@ -1,8 +1,10 @@
 import { Page, expect } from '@playwright/test';
-import { createVerifiedTestUser, getTestToken } from './test-auth';
+import { createVerifiedTestUser, getTestToken, IS_EMULATOR } from './test-auth';
 
-// Default password used for all E2E test users
-const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
+// Emulator uses hardcoded passwords; staging uses E2E_PASSWORD from env.
+const DEFAULT_PASSWORD = IS_EMULATOR
+  ? 'e2e-test-password-123' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 
 /**
  * Ensure an E2E test user exists in Firebase Auth and sign in.
@@ -45,8 +47,10 @@ export async function loginAsStudent(page: Page, email?: string): Promise<void> 
   return signInAs(page, email || 'student@test.local');
 }
 
-// Admin password must match BOOTSTRAP_ADMIN_PASSWORD in api-setup.ts
-const ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
+// Emulator uses a dedicated admin password; staging uses the shared E2E_PASSWORD.
+const ADMIN_PASSWORD = IS_EMULATOR
+  ? 'emulator-admin-password-e2e' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 
 const ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
 

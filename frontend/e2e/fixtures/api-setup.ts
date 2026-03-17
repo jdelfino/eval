@@ -21,7 +21,7 @@ import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
 import { bootstrapUser } from '../../src/lib/api/auth';
-import { createVerifiedTestUser, getTestToken } from './test-auth';
+import { createVerifiedTestUser, getTestToken, IS_EMULATOR } from './test-auth';
 import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
@@ -45,7 +45,10 @@ setPublicBaseUrl(`${API_BASE}/api/v1`);
 
 // Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL on the target go-api
 const BOOTSTRAP_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
-const BOOTSTRAP_ADMIN_PASSWORD = 'emulator-admin-password-e2e'; // gitleaks:allow
+// Emulator uses a dedicated admin password; staging uses the shared E2E_PASSWORD.
+const BOOTSTRAP_ADMIN_PASSWORD = IS_EMULATOR
+  ? 'emulator-admin-password-e2e' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 
 /**
  * Get (or create and bootstrap) the admin token for API setup calls.
@@ -147,7 +150,9 @@ export async function registerStudent(
   displayName: string,
   password?: string
 ): Promise<User> {
-  const userPassword = password || 'e2e-test-password-123'; // gitleaks:allow
+  const userPassword = password || (IS_EMULATOR
+    ? 'e2e-test-password-123' // gitleaks:allow
+    : process.env.E2E_PASSWORD!);
   await createVerifiedTestUser(email, userPassword);
   const token = await getTestToken(email, userPassword);
   return withToken(token, () => apiRegisterStudent(joinCode, displayName));

@@ -400,6 +400,7 @@ jobs:
           FIREBASE_PROJECT_ID: eval-prod-485520
           BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
           GCP_ACCESS_TOKEN: ${{ env.GCP_ACCESS_TOKEN }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           CI: 'true'
         run: cd frontend && npx playwright test
       - name: Upload Playwright report

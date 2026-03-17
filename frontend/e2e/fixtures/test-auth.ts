@@ -17,7 +17,7 @@
  * @see https://firebase.google.com/docs/reference/rest/auth
  */
 
-const IS_EMULATOR = !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
+export const IS_EMULATOR = !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
 const EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
 
 // ── Production safety guards ────────────────────────────────────────────────
@@ -34,6 +34,12 @@ if (!IS_EMULATOR && !process.env.FIREBASE_TENANT_ID) {
 if (!IS_EMULATOR && !process.env.FIREBASE_API_KEY) {
   throw new Error(
     'SAFETY: Real IDP mode requires FIREBASE_API_KEY to be set.'
+  );
+}
+if (!IS_EMULATOR && !process.env.E2E_PASSWORD) {
+  throw new Error(
+    'Real IDP mode requires E2E_PASSWORD to be set. ' +
+    'This is the password used for all E2E test accounts in staging.'
   );
 }
 // ─────────────────────────────────────────────────────────────────────────────
