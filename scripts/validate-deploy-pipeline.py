@@ -129,6 +129,52 @@ def validate(workflow_path):
         "deploy-staging: executor Job uses in-cluster FQDN",
     )
 
+    # ── deploy-staging: seed staging data after rollout ───────────────────────
+    # The seed step must run after rollout completes and before E2E tests.
+    # It is non-blocking (continue-on-error: true) so failures don't block prod.
+    step_names = [s.get("name", "") for s in staging_steps]
+
+    seed_step = next((s for s in staging_steps if s.get("name") == "Seed staging data"), None)
+    ok &= check(
+        seed_step is not None,
+        "deploy-staging: has 'Seed staging data' step",
+    )
+
+    if seed_step is not None:
+        ok &= check(
+            seed_step.get("continue-on-error") is True,
+            "deploy-staging: 'Seed staging data' uses continue-on-error: true",
+        )
+        seed_run = seed_step.get("run", "")
+        ok &= check(
+            "seed-staging.sh" in seed_run,
+            "deploy-staging: 'Seed staging data' runs scripts/seed-staging.sh",
+        )
+        seed_env = seed_step.get("env", {})
+        ok &= check(
+            "E2E_PASSWORD" in seed_env,
+            "deploy-staging: 'Seed staging data' passes E2E_PASSWORD",
+        )
+
+    # "Read staging config from ConfigMaps" must come before "Setup Node.js"
+    # (i.e., it was moved earlier in the job, before npm/playwright setup)
+    if "Read staging config from ConfigMaps" in step_names and "Setup Node.js" in step_names:
+        config_idx = step_names.index("Read staging config from ConfigMaps")
+        node_idx = step_names.index("Setup Node.js")
+        ok &= check(
+            config_idx < node_idx,
+            "deploy-staging: 'Read staging config from ConfigMaps' moved before 'Setup Node.js'",
+        )
+
+    # "Seed staging data" must come before "Setup Node.js"
+    if seed_step is not None and "Setup Node.js" in step_names:
+        seed_idx = step_names.index("Seed staging data")
+        node_idx = step_names.index("Setup Node.js")
+        ok &= check(
+            seed_idx < node_idx,
+            "deploy-staging: 'Seed staging data' runs before 'Setup Node.js' (before E2E tests)",
+        )
+
     # ── deploy-prod: gates on deploy-staging + ci ─────────────────────────────
     prod_job = jobs.get("deploy-prod", {})
     prod_needs = prod_job.get("needs", [])
