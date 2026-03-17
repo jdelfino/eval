@@ -30,13 +30,6 @@ jest.mock('@monaco-editor/react', () => {
   };
 });
 
-// Mock ExecutionSettings
-jest.mock('@/app/(fullscreen)/student/components/ExecutionSettings', () => {
-  return function MockExecutionSettings() {
-    return <div data-testid="execution-settings">Settings</div>;
-  };
-});
-
 // Mock useResponsiveLayout hook
 jest.mock('@/hooks/useResponsiveLayout', () => ({
   useResponsiveLayout: jest.fn(() => true), // Desktop

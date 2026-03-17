@@ -9,8 +9,6 @@ import { executeCode } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
-type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -76,8 +74,7 @@ function PublicViewContent() {
   const [isRunning, setIsRunning] = useState(false);
   const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
 
-  const handleRunCode = (codeToRun: string) => (_execution_settings: ExecutionSettings) => {
-    // TODO(PLAT-oztv.7): Wire to featured_test_cases instead of execution_settings
+  const handleRunCode = (codeToRun: string) => () => {
     const language = (state?.problem as any)?.language || 'python';
     setIsRunning(true);
     setExecutionResult(null);
@@ -124,13 +121,6 @@ function PublicViewContent() {
 
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
-
-  // Derive featured stdin for the CodeEditor
-  // TODO(PLAT-oztv.7): Use featured_test_cases instead of inferring stdin
-  const featuredStdin = (() => {
-    const testCases = state?.featured_test_cases;
-    return testCases?.[0]?.input;
-  })();
 
   // Reset local code when featured student or their code changes
   useEffect(() => {
@@ -238,7 +228,6 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
-            exampleInput={featuredStdin}
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
             execution_result={executionResult}
