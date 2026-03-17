@@ -136,6 +136,11 @@ describe('ProblemCreator — Cases Section', () => {
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
+      // Wait for title state to flush so button is enabled before clicking
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
+
       // Submit
       fireEvent.click(screen.getByText('Create Problem'));
 
@@ -162,6 +167,12 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+
+      // Wait for title state to flush so button is enabled before clicking
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
+
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
@@ -197,8 +208,9 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator problem_id="p-edit" />);
 
+      // Wait for loading to finish (tabs appear only when !isLoading)
       await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
       });
 
       // Switch to Cases tab
@@ -224,8 +236,9 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator problem_id="p-edit" />);
 
+      // Wait for loading to finish (button is enabled when !isLoading and title is set)
       await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /update problem/i })).not.toBeDisabled();
       });
 
       // Submit
@@ -259,6 +272,11 @@ describe('ProblemCreator — Cases Section', () => {
 
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
+
+      // Wait for title state to flush so button is enabled before clicking
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
 
       // Submit
       fireEvent.click(screen.getByText('Create Problem'));
