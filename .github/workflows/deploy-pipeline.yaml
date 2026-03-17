@@ -203,18 +203,18 @@ jobs:
       - name: Wait for staging-ingress-proxy rollout
         run: |
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
-      - name: Wait for staging API to be reachable
+      - name: Wait for staging to be reachable
         run: |
-          echo "Waiting for staging API to be reachable via external URL..."
+          echo "Waiting for staging to be reachable via external URL..."
           for i in $(seq 1 30); do
-            if curl -sf --max-time 5 "https://staging.eval.delquillan.com/api/v1/healthz" >/dev/null 2>&1; then
-              echo "Staging API is reachable"
+            if curl -sf --max-time 5 "https://staging.eval.delquillan.com/healthz" >/dev/null 2>&1; then
+              echo "Staging is reachable"
               break
             fi
             echo "  attempt $i/30..."
             sleep 2
           done
-          curl -sf --max-time 5 "https://staging.eval.delquillan.com/api/v1/healthz" >/dev/null || { echo "Staging API not reachable after 60s"; exit 1; }
+          curl -sf --max-time 5 "https://staging.eval.delquillan.com/healthz" >/dev/null || { echo "Staging not reachable after 60s"; exit 1; }
       - name: Read staging config from ConfigMaps
         run: |
           TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
