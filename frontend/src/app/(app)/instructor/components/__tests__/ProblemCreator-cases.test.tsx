@@ -13,6 +13,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 import type { IOTestCase } from '@/types/problem';
@@ -117,25 +118,21 @@ describe('ProblemCreator — Cases Section', () => {
 
   describe('Cases submitted on create', () => {
     it('should include test_cases in create payload', async () => {
+      const user = userEvent.setup();
       const onProblemCreated = jest.fn();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Fill title
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      // Fill title using userEvent so the state update is committed reliably in React 18
+      await user.type(screen.getByLabelText('Title *'), 'Test Problem');
 
       // Navigate to Cases tab and add a case
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
-      // Wait for title state to flush so button is enabled before clicking
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
-
-      // Submit
+      // Submit (title is committed, button is enabled)
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
@@ -155,17 +152,14 @@ describe('ProblemCreator — Cases Section', () => {
     });
 
     it('should submit empty test_cases array when no cases defined', async () => {
+      const user = userEvent.setup();
       const onProblemCreated = jest.fn();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-2' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      // Wait for title state to flush so button is enabled before clicking
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
+      // Use userEvent so title state is committed reliably in React 18
+      await user.type(screen.getByLabelText('Title *'), 'Test');
 
       fireEvent.click(screen.getByText('Create Problem'));
 
@@ -253,12 +247,14 @@ describe('ProblemCreator — Cases Section', () => {
 
   describe('Reset after create', () => {
     it('should reset test_cases to empty after successful create', async () => {
+      const user = userEvent.setup();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
 
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      // Use userEvent so title state is committed reliably in React 18
+      await user.type(screen.getByLabelText('Title *'), 'Test');
 
       // Add a case
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
@@ -267,12 +263,7 @@ describe('ProblemCreator — Cases Section', () => {
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
 
-      // Wait for title state to flush so button is enabled before clicking
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
-
-      // Submit
+      // Submit (title is committed, button is enabled)
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
