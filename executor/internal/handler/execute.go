@@ -237,15 +237,18 @@ func (h *ExecuteHandler) runCases(
 
 	// The io_test_runner wrapper is always a Python script; the student's language
 	// is passed via Args[2] so the runner can invoke the right interpreter.
-	// Do NOT forward req.Language here: setting Language:"java" would cause the
-	// sandbox to compile the Python runner script as Java source.
+	// Do NOT set Language:"java" here — that would cause the sandbox to treat the
+	// Python runner script as Java source. Instead, set InnerLanguage so the
+	// sandbox can configure appropriate resource limits and bind mounts for the
+	// subprocesses the runner will spawn (e.g. the JVM for Java problems).
 	sandboxReq := sandbox.Request{
-		Code:      iotestrunner.Script,
-		Stdin:     "",
-		Files:     files,
-		TimeoutMs: timeoutMs,
-		Args:      args,
-		Language:  "python",
+		Code:          iotestrunner.Script,
+		Stdin:         "",
+		Files:         files,
+		TimeoutMs:     timeoutMs,
+		Args:          args,
+		Language:      "python",
+		InnerLanguage: req.Language,
 	}
 
 	// The io_test_runner JSON output can be larger than the student's raw output
