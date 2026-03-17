@@ -64,7 +64,7 @@ IDP_BASE="https://identitytoolkit.googleapis.com/v1"
 ensure_idp_user() {
   local email="$1"
 
-  # Try sign-in to check existence
+  # Try sign-in to check if user exists with correct password
   local signin_response
   signin_response="$(mktemp)"
   local signin_body
@@ -79,40 +79,101 @@ ensure_idp_user() {
     -X POST -H "Content-Type: application/json" \
     -d "$signin_body" \
     "${IDP_BASE}/accounts:signInWithPassword?key=${IDP_API_KEY}")"
-  rm -f "$signin_response"
 
   if [[ "$signin_code" == "200" ]]; then
+    rm -f "$signin_response"
     echo "    IDP user exists: ${email}"
     return 0
   fi
 
-  # Create via admin API
-  local access_token
-  access_token="$(gcloud auth print-access-token)"
-  local create_response
-  create_response="$(mktemp)"
-  local create_body
-  create_body="$(jq -n \
+  local signin_text
+  signin_text="$(cat "$signin_response")"
+  rm -f "$signin_response"
+
+  # If user exists but password is wrong, delete and recreate
+  if echo "$signin_text" | grep -q "INVALID_PASSWORD"; then
+    echo "    IDP user exists with wrong password, recreating: ${email}"
+    local access_token
+    access_token="$(gcloud auth print-access-token)"
+
+    # Look up localId via admin API
+    local lookup_body
+    lookup_body="$(jq -n --arg email "$email" '{email: [$email]}')"
+    local lookup_response
+    lookup_response="$(mktemp)"
+    curl -s -o "$lookup_response" \
+      -X POST \
+      -H "Authorization: Bearer ${access_token}" \
+      -H "Content-Type: application/json" \
+      -d "$lookup_body" \
+      "${IDP_BASE}/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:lookup"
+    local local_id
+    local_id="$(jq -r '.users[0].localId // empty' "$lookup_response")"
+    rm -f "$lookup_response"
+
+    if [[ -n "$local_id" ]]; then
+      # Delete the existing user
+      curl -s -o /dev/null \
+        -X POST \
+        -H "Authorization: Bearer ${access_token}" \
+        -H "Content-Type: application/json" \
+        -d "$(jq -n --arg id "$local_id" '{localId: $id}')" \
+        "${IDP_BASE}/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:delete"
+    fi
+    # Fall through to create below
+  fi
+
+  # Create user via public signUp (correctly sets password hash)
+  local signup_response
+  signup_response="$(mktemp)"
+  local signup_body
+  signup_body="$(jq -n \
     --arg email "$email" \
     --arg password "$E2E_PASSWORD" \
-    '{email: $email, password: $password, emailVerified: true}')"
+    --arg tenant "$TENANT_ID" \
+    '{email: $email, password: $password, returnSecureToken: true, tenantId: $tenant}')"
 
-  local create_code
-  create_code="$(curl -s -o "$create_response" -w '%{http_code}' \
+  local signup_code
+  signup_code="$(curl -s -o "$signup_response" -w '%{http_code}' \
+    -X POST -H "Content-Type: application/json" \
+    -d "$signup_body" \
+    "${IDP_BASE}/accounts:signUp?key=${IDP_API_KEY}")"
+
+  local local_id
+  if [[ "$signup_code" -ge 200 && "$signup_code" -lt 300 ]]; then
+    local_id="$(jq -r '.localId' "$signup_response")"
+  else
+    local signup_text
+    signup_text="$(cat "$signup_response")"
+    rm -f "$signup_response"
+    # EMAIL_EXISTS means user was just created by a concurrent call — sign in to get localId
+    if echo "$signup_text" | grep -q "EMAIL_EXISTS"; then
+      local signin2_response
+      signin2_response="$(mktemp)"
+      curl -s -o "$signin2_response" \
+        -X POST -H "Content-Type: application/json" \
+        -d "$signin_body" \
+        "${IDP_BASE}/accounts:signInWithPassword?key=${IDP_API_KEY}"
+      local_id="$(jq -r '.localId // empty' "$signin2_response")"
+      rm -f "$signin2_response"
+    else
+      echo "ERROR: Failed to create IDP user ${email} (HTTP ${signup_code}): ${signup_text}" >&2
+      return 1
+    fi
+  fi
+  rm -f "$signup_response"
+
+  # Set emailVerified=true via admin API
+  local access_token
+  access_token="${access_token:-$(gcloud auth print-access-token)}"
+  curl -s -o /dev/null \
     -X POST \
     -H "Authorization: Bearer ${access_token}" \
     -H "Content-Type: application/json" \
-    -d "$create_body" \
-    "${IDP_BASE}/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts")"
+    -d "$(jq -n --arg id "$local_id" '{localId: $id, emailVerified: true}')" \
+    "${IDP_BASE}/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts:update"
 
-  if [[ "$create_code" -ge 200 && "$create_code" -lt 300 ]]; then
-    echo "    IDP user created: ${email}"
-  else
-    echo "ERROR: Failed to create IDP user ${email} (HTTP ${create_code}): $(cat "$create_response")" >&2
-    rm -f "$create_response"
-    return 1
-  fi
-  rm -f "$create_response"
+  echo "    IDP user created: ${email}"
 }
 
 # idp_sign_in <email> → prints idToken on stdout, exits non-zero on failure
