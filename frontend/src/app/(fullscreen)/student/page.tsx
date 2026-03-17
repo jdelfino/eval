@@ -444,18 +444,17 @@ function StudentPage() {
         <CodeEditor
           code={code}
           onChange={setCode}
-          onRun={instructorCases.length === 0 ? handleRunCode : undefined}
+          onRun={handleRunCode}
           isRunning={isRunning || caseRunner.isRunning}
           caseRunner={caseRunner}
           instructorCases={instructorCases}
           studentCases={studentCases}
-          execution_result={instructorCases.length === 0 ? execution_result : null}
+          execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
           externalEditorRef={editorRef}
           debugger={debuggerHook}
           readOnly={false}
-          showRunButton={instructorCases.length === 0}
         />
       </EditorContainer>
 
