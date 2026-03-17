@@ -14,7 +14,7 @@
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
 import { createNamespace, createInvitation, acceptInvitation, getAdminToken, registerStudent, deleteTestNamespace } from './api-setup';
-import { createVerifiedTestUser, getTestToken } from './test-auth';
+import { createVerifiedTestUser, getTestToken, IS_EMULATOR } from './test-auth';
 
 // Generate a deterministic namespace ID from the stable Playwright test ID.
 // testInfo.testId is a stable hash per test case — same across retries and runs.
@@ -24,8 +24,13 @@ function generateNamespaceId(testId: string): string {
   return `e2e-${testId}`;
 }
 
-// Default password for E2E test users
-const DEFAULT_PASSWORD = 'e2e-test-password-123'; // gitleaks:allow
+// Emulator uses hardcoded passwords; staging uses E2E_PASSWORD from env.
+// Must match the password in auth.ts signInAs() — otherwise
+// createVerifiedTestUser deletes/recreates the IDP user with a new UID,
+// breaking the link between the DB external_id and the browser's Firebase UID.
+const DEFAULT_PASSWORD = IS_EMULATOR
+  ? 'e2e-test-password-123' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 
 // Shared log collection for all pages in a test
 interface LogCollector {
