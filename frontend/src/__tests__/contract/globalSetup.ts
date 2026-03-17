@@ -132,22 +132,38 @@ export default async () => {
   }
   const sec = await sectionRes.json();
 
-  // Create problem (required for session join to work — Join handler needs a real problem UUID)
+  // Create problem (required for session join and I/O test execution).
+  // Include test_cases so tests.integration.test.ts can reuse this problem
+  // without creating its own (to stay within write rate limits).
   const problemRes = await contractFetch('/api/v1/problems', instructorToken, {
     method: 'POST',
     body: JSON.stringify({
       title: 'Contract Test Problem',
-      description: 'Print hello',
+      description: 'Uppercase the input',
       class_id: cls.id,
-      starter_code: 'print("hello")',
+      starter_code: 'print(input().upper())',
       language: 'python',
       tags: ['contract-test'],
+      test_cases: [
+        { name: 'uppercase-hello', input: 'hello', expected_output: 'HELLO', match_type: 'exact', order: 0 },
+        { name: 'uppercase-world', input: 'world', expected_output: 'WORLD', match_type: 'exact', order: 1 },
+      ],
     }),
   });
   if (problemRes.status !== 201) {
     throw new Error(`Failed to create problem: ${problemRes.status}`);
   }
   const prob = await problemRes.json();
+
+  // Publish the problem to the section so students can create student work.
+  const pubRes = await contractFetch(
+    `/api/v1/sections/${sec.id}/problems/${prob.id}`,
+    instructorToken,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  if (pubRes.status !== 201 && pubRes.status !== 409) {
+    throw new Error(`Failed to publish problem to section: ${pubRes.status}`);
+  }
 
   // Create session from problem
   const sessionRes = await contractFetch('/api/v1/sessions', instructorToken, {
@@ -171,6 +187,7 @@ export default async () => {
     instructorUserId: user.id,
     classId: cls.id,
     sectionId: sec.id,
+    problemId: prob.id,
     sessionId: sess.id,
     joinCode: sec.join_code,
     instructorExternalId: INSTRUCTOR_EXTERNAL_ID,

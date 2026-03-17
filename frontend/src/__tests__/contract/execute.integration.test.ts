@@ -30,7 +30,8 @@ describe('executeCode()', () => {
 
     // Verify code actually executed successfully (not just shape validation)
     expect(result.success).toBe(true);
-    expect(result.output).toBe('hello\n');
+    // The io_test_runner normalizes output by stripping trailing newlines.
+    expect(result.output).toBe('hello');
 
     // output and error use omitempty — only present when non-empty
     const raw = result as unknown as Record<string, unknown>;
