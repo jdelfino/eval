@@ -327,6 +327,25 @@ export default function ProblemCreator({
         gap: '1.5rem',
         flexWrap: 'wrap',
       }}>
+        {/* Title input */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+          <label htmlFor="creator-title" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Title *</label>
+          <input
+            id="creator-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Problem title..."
+            style={{
+              flex: 1,
+              padding: '0.375rem 0.5rem',
+              fontSize: '0.875rem',
+              border: '1px solid #ced4da',
+              borderRadius: '0.25rem',
+            }}
+          />
+        </div>
+
         {/* Class selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <label htmlFor="problem-class" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Class *</label>
