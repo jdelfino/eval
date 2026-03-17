@@ -12,8 +12,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 import type { IOTestCase } from '@/types/problem';
@@ -110,7 +109,11 @@ describe('ProblemCreator — Cases Section', () => {
 
     it('should show IOCaseForm within Cases tab', async () => {
       render(<ProblemCreator />);
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      // Use act() to flush initial async effects (listClasses mock resolution)
+      // so any concurrent re-renders don't interfere with the click.
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      });
       // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
     });
@@ -124,15 +127,23 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Use fireEvent.change (synchronous) to set title — matches established pattern
-      // in ProblemCreator.test.tsx and avoids React 18 async batching issues in CI.
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-
-      // Navigate to Cases tab and add a case
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
-      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
-
-      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      // Use act(async) to dispatch events and flush all pending React state updates.
+      // In React 18 concurrent mode (jsdom), state updates from fireEvent are not
+      // committed synchronously — act() ensures they are committed before proceeding.
+      // This also flushes the listClasses() async mock so it doesn't cause
+      // "not wrapped in act" warnings on subsequent renders.
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /add case/i }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      });
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -157,10 +168,13 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Use fireEvent.change (synchronous) to set title
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      // Flush title change and pending state before clicking create.
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      });
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -201,7 +215,9 @@ describe('ProblemCreator — Cases Section', () => {
       });
 
       // Switch to Cases tab
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      });
 
       expect(screen.getByDisplayValue('Greet World')).toBeInTheDocument();
     });
@@ -228,7 +244,9 @@ describe('ProblemCreator — Cases Section', () => {
         expect(screen.getByRole('button', { name: /update problem/i })).not.toBeDisabled();
       });
 
-      fireEvent.click(screen.getByText('Update Problem'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Update Problem'));
+      });
 
       await waitFor(() => {
         expect(updateProblem).toHaveBeenCalledWith(
@@ -250,17 +268,25 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator />);
 
-      // Use fireEvent.change (synchronous) to set title
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      // Flush title change
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      });
 
-      // Add a case
-      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
-      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
+      // Add a case (split into separate acts so the tab re-render completes first)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /add case/i }));
+      });
 
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
 
-      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
+      });
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalled();
