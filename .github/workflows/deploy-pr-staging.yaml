@@ -192,6 +192,17 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+      - name: Reset staging database
+        run: |
+          DB_HOST=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.DATABASE_HOST}')
+          DB_NAME=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.DATABASE_NAME}')
+          DB_USER=$(kubectl get secret app-secrets -n staging -o jsonpath='{.data.DATABASE_USER}' | base64 -d)
+          DB_PASS=$(kubectl get secret app-secrets -n staging -o jsonpath='{.data.DATABASE_PASSWORD}' | base64 -d)
+          kubectl run reset-staging-db -n staging --rm -i --restart=Never \
+            --image=postgres:16-alpine \
+            --env="PGPASSWORD=$DB_PASS" \
+            -- psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c \
+            "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO $DB_USER;"
       - name: Deploy to staging
         run: |
           cd k8s/overlays/staging
