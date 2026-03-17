@@ -144,6 +144,7 @@ jobs:
     if: inputs.redeploy != true
     needs: [build-push-go-api, build-push-executor, build-push-frontend]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -441,6 +442,53 @@ jobs:
           kubectl logs deployment/staging-ingress-proxy --tail=100 2>/dev/null || true
           echo "=== frontend logs ==="
           kubectl logs deployment/frontend -n staging --tail=100 2>/dev/null || true
+      - name: Cleanup staging E2E namespaces
+        if: always() && steps.e2e.outcome != 'skipped'
+        run: |
+          kubectl delete job -n staging e2e-cleanup --ignore-not-found
+          kubectl apply -f - <<'JOBEOF'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: e2e-cleanup
+            namespace: staging
+          spec:
+            backoffLimit: 1
+            activeDeadlineSeconds: 30
+            ttlSecondsAfterFinished: 120
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: cleanup
+                    image: postgres:16-alpine
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        psql "$DATABASE_URL" -c "DELETE FROM namespaces WHERE id LIKE 'e2e-%';"
+                    env:
+                      - name: DATABASE_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: app-secrets
+                            key: DATABASE_URL
+                    resources:
+                      requests:
+                        cpu: 50m
+                        memory: 32Mi
+                      limits:
+                        cpu: 100m
+                        memory: 64Mi
+          JOBEOF
+
+          echo "Waiting for e2e-cleanup job..."
+          if kubectl wait --for=condition=complete job/e2e-cleanup -n staging --timeout=60s 2>/dev/null; then
+            echo "E2E namespace cleanup succeeded:"
+            kubectl logs job/e2e-cleanup -n staging 2>/dev/null || true
+          else
+            echo "::warning::E2E namespace cleanup failed or timed out"
+            kubectl logs job/e2e-cleanup -n staging 2>/dev/null || true
+          fi
 
   # ── Production deploy (gates on EVERYTHING) ───────────────────────────────
   # Normal: runs after staging is validated AND cross-boundary tests pass.
