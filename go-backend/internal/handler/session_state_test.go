@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -258,7 +259,7 @@ func TestFeature_PublishesFeaturedStudentChanged(t *testing.T) {
 	}
 }
 
-func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
+func TestFeature_PassesStudentAndCodeToPublisher(t *testing.T) {
 	sess := testSession()
 	studentID := uuid.New()
 	code := "x = 1"
@@ -278,7 +279,7 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 	}
 	h := NewSessionStateHandler(pub)
 
-	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `","execution_settings":{"stdin":"hello world"}}`
+	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sess.ID.String())
@@ -292,12 +293,12 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify execution_settings was passed to store update params
-	if capturedParams.FeaturedExecutionSettings == nil {
-		t.Fatal("expected FeaturedExecutionSettings to be set in UpdateSessionParams")
+	// Verify featured student and code were passed to store update params.
+	if capturedParams.FeaturedStudentID == nil || *capturedParams.FeaturedStudentID != studentID {
+		t.Errorf("expected FeaturedStudentID %s in UpdateSessionParams, got %v", studentID, capturedParams.FeaturedStudentID)
 	}
-	if string(capturedParams.FeaturedExecutionSettings) != `{"stdin":"hello world"}` {
-		t.Errorf("expected FeaturedExecutionSettings %q, got %q", `{"stdin":"hello world"}`, string(capturedParams.FeaturedExecutionSettings))
+	if capturedParams.FeaturedCode == nil || *capturedParams.FeaturedCode != code {
+		t.Errorf("expected FeaturedCode %q in UpdateSessionParams, got %v", code, capturedParams.FeaturedCode)
 	}
 
 	pub.waitForCalls(t, 1)
@@ -308,8 +309,11 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 		t.Fatalf("expected 1 featured_student_changed call, got %d", len(pub.featuredStudentChangedCalls))
 	}
 	call := pub.featuredStudentChangedCalls[0]
-	if string(call.executionSettings) != `{"stdin":"hello world"}` {
-		t.Errorf("expected execution_settings %q, got %q", `{"stdin":"hello world"}`, string(call.executionSettings))
+	if call.userID != studentID.String() {
+		t.Errorf("expected userID %q in publisher call, got %q", studentID.String(), call.userID)
+	}
+	if call.code != code {
+		t.Errorf("expected code %q in publisher call, got %q", code, call.code)
 	}
 }
 
@@ -442,13 +446,13 @@ func TestFeature_ClearRequiresNoStudentIDAndNoCode(t *testing.T) {
 	}
 }
 
-func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
+func TestPublicState_ReturnsFeaturedTestCases(t *testing.T) {
 	sess := testSession()
 	studentID := uuid.New()
 	code := "print('hi')"
 	sess.FeaturedStudentID = &studentID
 	sess.FeaturedCode = &code
-	sess.FeaturedExecutionSettings = json.RawMessage(`{"stdin":"test input"}`)
+	sess.FeaturedTestCases = json.RawMessage(`[{"name":"Case 1","input":"test input","match_type":"exact","order":0}]`)
 	section := testSection()
 
 	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
@@ -475,10 +479,19 @@ func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.FeaturedExecutionSettings == nil {
-		t.Fatal("expected featured_execution_settings to be present in response")
+	if resp.FeaturedTestCases == nil {
+		t.Fatal("expected featured_test_cases to be present in response")
 	}
-	if string(resp.FeaturedExecutionSettings) != `{"stdin":"test input"}` {
-		t.Errorf("expected featured_execution_settings %q, got %q", `{"stdin":"test input"}`, string(resp.FeaturedExecutionSettings))
+	expectedTC := `[{"name":"Case 1","input":"test input","match_type":"exact","order":0}]`
+	// Compare JSON structurally (key order may differ between Go and Postgres).
+	var gotVal, wantVal interface{}
+	if err := json.Unmarshal(resp.FeaturedTestCases, &gotVal); err != nil {
+		t.Fatalf("unmarshal response featured_test_cases: %v", err)
+	}
+	if err := json.Unmarshal([]byte(expectedTC), &wantVal); err != nil {
+		t.Fatalf("unmarshal expected featured_test_cases: %v", err)
+	}
+	if !reflect.DeepEqual(gotVal, wantVal) {
+		t.Errorf("expected featured_test_cases %q, got %q", expectedTC, string(resp.FeaturedTestCases))
 	}
 }

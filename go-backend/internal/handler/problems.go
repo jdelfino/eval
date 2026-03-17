@@ -32,16 +32,15 @@ func NewProblemHandler(sectionProblemHandler *SectionProblemHandler) *ProblemHan
 
 // ExportProblem represents a problem in the export format (excludes internal IDs).
 type ExportProblem struct {
-	Title             string          `json:"title"`
-	Description       *string         `json:"description"`
-	StarterCode       *string         `json:"starter_code"`
-	TestCases         json.RawMessage `json:"test_cases"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          string          `json:"language"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	Title       string          `json:"title"`
+	Description *string         `json:"description"`
+	StarterCode *string         `json:"starter_code"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    string          `json:"language"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 // ProblemsExport is the envelope for exported problems.
@@ -171,15 +170,14 @@ func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // createProblemRequest is the request body for POST /problems.
 type createProblemRequest struct {
-	Title             string          `json:"title" validate:"required,min=1,max=255"`
-	Description       *string         `json:"description" validate:"omitempty,max=5000"`
-	StarterCode       *string         `json:"starter_code" validate:"omitempty"`
-	TestCases         json.RawMessage `json:"test_cases"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	ClassID           *uuid.UUID      `json:"class_id"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          string          `json:"language,omitempty"`
+	Title       string          `json:"title" validate:"required,min=1,max=255"`
+	Description *string         `json:"description" validate:"omitempty,max=5000"`
+	StarterCode *string         `json:"starter_code" validate:"omitempty"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	ClassID     *uuid.UUID      `json:"class_id"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    string          `json:"language,omitempty"`
 }
 
 // Create handles POST /api/v1/problems — creates a new problem (instructor+).
@@ -208,17 +206,16 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.CreateProblem(r.Context(), store.CreateProblemParams{
-		NamespaceID:       authUser.NamespaceID,
-		Title:             req.Title,
-		Description:       req.Description,
-		StarterCode:       req.StarterCode,
-		TestCases:         req.TestCases,
-		ExecutionSettings: req.ExecutionSettings,
-		AuthorID:          authUser.ID,
-		ClassID:           req.ClassID,
-		Tags:              req.Tags,
-		Solution:          req.Solution,
-		Language:          lang,
+		NamespaceID: authUser.NamespaceID,
+		Title:       req.Title,
+		Description: req.Description,
+		StarterCode: req.StarterCode,
+		TestCases:   req.TestCases,
+		AuthorID:    authUser.ID,
+		ClassID:     req.ClassID,
+		Tags:        req.Tags,
+		Solution:    req.Solution,
+		Language:    lang,
 	})
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
@@ -230,15 +227,14 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // updateProblemRequest is the request body for PATCH /problems/{id}.
 type updateProblemRequest struct {
-	Title             *string         `json:"title" validate:"omitempty,min=1,max=255"`
-	Description       *string         `json:"description" validate:"omitempty,max=5000"`
-	StarterCode       *string         `json:"starter_code" validate:"omitempty"`
-	TestCases         json.RawMessage `json:"test_cases"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	ClassID           *uuid.UUID      `json:"class_id"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          *string         `json:"language,omitempty"`
+	Title       *string         `json:"title" validate:"omitempty,min=1,max=255"`
+	Description *string         `json:"description" validate:"omitempty,max=5000"`
+	StarterCode *string         `json:"starter_code" validate:"omitempty"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	ClassID     *uuid.UUID      `json:"class_id"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    *string         `json:"language,omitempty"`
 }
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
@@ -264,15 +260,14 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.UpdateProblem(r.Context(), id, store.UpdateProblemParams{
-		Title:             req.Title,
-		Description:       req.Description,
-		StarterCode:       req.StarterCode,
-		TestCases:         req.TestCases,
-		ExecutionSettings: req.ExecutionSettings,
-		ClassID:           req.ClassID,
-		Tags:              req.Tags,
-		Solution:          req.Solution,
-		Language:          req.Language,
+		Title:       req.Title,
+		Description: req.Description,
+		StarterCode: req.StarterCode,
+		TestCases:   req.TestCases,
+		ClassID:     req.ClassID,
+		Tags:        req.Tags,
+		Solution:    req.Solution,
+		Language:    req.Language,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -325,16 +320,15 @@ func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
 	exportProblems := make([]ExportProblem, 0, len(problems))
 	for _, p := range problems {
 		exportProblems = append(exportProblems, ExportProblem{
-			Title:             p.Title,
-			Description:       p.Description,
-			StarterCode:       p.StarterCode,
-			TestCases:         p.TestCases,
-			ExecutionSettings: p.ExecutionSettings,
-			Tags:              p.Tags,
-			Solution:          p.Solution,
-			Language:          p.Language,
-			CreatedAt:         p.CreatedAt,
-			UpdatedAt:         p.UpdatedAt,
+			Title:       p.Title,
+			Description: p.Description,
+			StarterCode: p.StarterCode,
+			TestCases:   p.TestCases,
+			Tags:        p.Tags,
+			Solution:    p.Solution,
+			Language:    p.Language,
+			CreatedAt:   p.CreatedAt,
+			UpdatedAt:   p.UpdatedAt,
 		})
 	}
 

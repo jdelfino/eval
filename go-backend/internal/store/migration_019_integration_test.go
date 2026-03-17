@@ -58,7 +58,7 @@ func TestIntegration_Migration019_StudentWorkTestCasesColumn(t *testing.T) {
 		}
 	})
 
-	t.Run("student_work.test_cases column is nullable", func(t *testing.T) {
+	t.Run("student_work.test_cases column is not nullable (NOT NULL after migration 020)", func(t *testing.T) {
 		var isNullable string
 		err := db.pool.QueryRow(ctx, `
 			SELECT is_nullable FROM information_schema.columns
@@ -67,8 +67,8 @@ func TestIntegration_Migration019_StudentWorkTestCasesColumn(t *testing.T) {
 		if err != nil {
 			t.Fatalf("check is_nullable: %v", err)
 		}
-		if isNullable != "YES" {
-			t.Errorf("expected is_nullable 'YES', got %q", isNullable)
+		if isNullable != "NO" {
+			t.Errorf("expected is_nullable 'NO' (NOT NULL constraint added in migration 020), got %q", isNullable)
 		}
 	})
 }
@@ -152,7 +152,7 @@ func TestIntegration_Migration019_StudentWorkTestCasesRLS(t *testing.T) {
 		assertJSONEqual(t, "test_cases", sw.TestCases, testCasesJSON)
 	})
 
-	t.Run("test_cases defaults to null when not set", func(t *testing.T) {
+	t.Run("test_cases defaults to default value when not set (NOT NULL after migration 020)", func(t *testing.T) {
 		s, conn := db.storeWithRLS(ctx, t, authStudent)
 		defer conn.Release()
 
@@ -163,8 +163,9 @@ func TestIntegration_Migration019_StudentWorkTestCasesRLS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetOrCreateStudentWork: %v", err)
 		}
-		if sw.TestCases != nil {
-			t.Errorf("expected nil test_cases for new student work, got %s", string(sw.TestCases))
+		// Migration 020 added NOT NULL with a default value, so test_cases is never nil.
+		if sw.TestCases == nil {
+			t.Errorf("expected non-nil test_cases for new student work (NOT NULL constraint added in migration 020)")
 		}
 	})
 }

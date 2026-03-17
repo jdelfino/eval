@@ -340,19 +340,19 @@ func TestStudentWorkHandler_Update_Success(t *testing.T) {
 	workID := uuid.New()
 	userID := uuid.New()
 	newCode := "print('updated')"
-	execSettings := json.RawMessage(`{"stdin": "test"}`)
+	testCases := json.RawMessage(`[{"name":"Case 1","input":"test","match_type":"exact","order":0}]`)
 
 	reqBody := updateStudentWorkRequest{
-		Code:              &newCode,
-		ExecutionSettings: execSettings,
+		Code:      &newCode,
+		TestCases: testCases,
 	}
 	body, _ := json.Marshal(reqBody)
 
 	work := &store.StudentWork{
-		ID:                workID,
-		UserID:            userID,
-		Code:              newCode,
-		ExecutionSettings: execSettings,
+		ID:        workID,
+		UserID:    userID,
+		Code:      newCode,
+		TestCases: testCases,
 	}
 
 	swRepo := &mockStudentWorkRepo{
@@ -363,8 +363,8 @@ func TestStudentWorkHandler_Update_Success(t *testing.T) {
 			if params.Code == nil || *params.Code != newCode {
 				t.Fatalf("unexpected code")
 			}
-			if len(params.ExecutionSettings) == 0 {
-				t.Fatalf("execution settings should not be empty")
+			if len(params.TestCases) == 0 {
+				t.Fatalf("test_cases should not be empty")
 			}
 			return work, nil
 		},

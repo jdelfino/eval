@@ -7,13 +7,13 @@ import (
 	"github.com/google/uuid"
 )
 
-const studentWorkColumns = `id, namespace_id, user_id, problem_id, section_id, code, execution_settings, test_cases, created_at, last_update`
+const studentWorkColumns = `id, namespace_id, user_id, problem_id, section_id, code, test_cases, created_at, last_update`
 
 func scanStudentWork(row interface{ Scan(dest ...any) error }) (*StudentWork, error) {
 	var sw StudentWork
 	err := row.Scan(
 		&sw.ID, &sw.NamespaceID, &sw.UserID, &sw.ProblemID, &sw.SectionID,
-		&sw.Code, &sw.ExecutionSettings, &sw.TestCases, &sw.CreatedAt, &sw.LastUpdate,
+		&sw.Code, &sw.TestCases, &sw.CreatedAt, &sw.LastUpdate,
 	)
 	if err != nil {
 		return nil, err
@@ -26,10 +26,10 @@ func scanStudentWorkWithProblem(row interface{ Scan(dest ...any) error }) (*Stud
 	err := row.Scan(
 		// StudentWork fields
 		&swp.ID, &swp.NamespaceID, &swp.UserID, &swp.ProblemID, &swp.SectionID,
-		&swp.Code, &swp.ExecutionSettings, &swp.TestCases, &swp.CreatedAt, &swp.LastUpdate,
+		&swp.Code, &swp.TestCases, &swp.CreatedAt, &swp.LastUpdate,
 		// Problem fields
 		&swp.Problem.ID, &swp.Problem.NamespaceID, &swp.Problem.Title, &swp.Problem.Description,
-		&swp.Problem.StarterCode, &swp.Problem.TestCases, &swp.Problem.ExecutionSettings,
+		&swp.Problem.StarterCode, &swp.Problem.TestCases,
 		&swp.Problem.AuthorID, &swp.Problem.ClassID, &swp.Problem.Tags, &swp.Problem.Solution,
 		&swp.Problem.Language, &swp.Problem.CreatedAt, &swp.Problem.UpdatedAt,
 	)
@@ -43,8 +43,8 @@ func scanStudentWorkWithProblem(row interface{ Scan(dest ...any) error }) (*Stud
 // Uses INSERT ON CONFLICT DO NOTHING, then SELECT to return the record.
 func (s *Store) GetOrCreateStudentWork(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*StudentWork, error) {
 	// Insert with ON CONFLICT DO NOTHING (idempotent)
-	insertQuery := `INSERT INTO student_work (namespace_id, user_id, problem_id, section_id, code, execution_settings)
-		VALUES ($1, $2, $3, $4, '', '{}')
+	insertQuery := `INSERT INTO student_work (namespace_id, user_id, problem_id, section_id, code)
+		VALUES ($1, $2, $3, $4, '')
 		ON CONFLICT (user_id, problem_id, section_id) DO NOTHING`
 
 	_, err := s.q.Exec(ctx, insertQuery, namespaceID, userID, problemID, sectionID)
@@ -73,9 +73,6 @@ func (s *Store) UpdateStudentWork(ctx context.Context, id uuid.UUID, params Upda
 	if params.Code != nil {
 		query += ", code = " + ac.Next(*params.Code)
 	}
-	if params.ExecutionSettings != nil {
-		query += ", execution_settings = " + ac.Next(params.ExecutionSettings)
-	}
 	if params.TestCases != nil {
 		query += ", test_cases = " + ac.Next(params.TestCases)
 	}
@@ -94,8 +91,8 @@ func (s *Store) UpdateStudentWork(ctx context.Context, id uuid.UUID, params Upda
 func (s *Store) GetStudentWork(ctx context.Context, id uuid.UUID) (*StudentWorkWithProblem, error) {
 	query := `SELECT
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.execution_settings, sw.test_cases, sw.created_at, sw.last_update,
-		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases, p.execution_settings,
+		sw.code, sw.test_cases, sw.created_at, sw.last_update,
+		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases,
 		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at
 		FROM student_work sw
 		JOIN problems p ON sw.problem_id = p.id
@@ -124,7 +121,7 @@ func (s *Store) GetStudentWorkByProblem(ctx context.Context, userID, problemID, 
 
 // ListStudentWorkBySession retrieves all student work linked to a session.
 func (s *Store) ListStudentWorkBySession(ctx context.Context, sessionID uuid.UUID) ([]StudentWork, error) {
-	query := `SELECT sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id, sw.code, sw.execution_settings, sw.test_cases, sw.created_at, sw.last_update
+	query := `SELECT sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id, sw.code, sw.test_cases, sw.created_at, sw.last_update
 		FROM student_work sw
 		JOIN session_students ss ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1
@@ -196,7 +193,7 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		` + prefixCols("p", problemColumns) + `,
 		sp.published_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.execution_settings, sw.test_cases, sw.created_at, sw.last_update
+		sw.code, sw.test_cases, sw.created_at, sw.last_update
 		FROM section_problems sp
 		JOIN problems p ON p.id = sp.problem_id
 		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id
@@ -220,7 +217,6 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		var workProblemID *uuid.UUID
 		var workSectionID *uuid.UUID
 		var workCode *string
-		var workExecutionSettings []byte
 		var workTestCases []byte
 		var workCreatedAt *time.Time
 		var workLastUpdate *time.Time
@@ -228,14 +224,14 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		if err := rows.Scan(
 			// Problem fields
 			&summary.Problem.ID, &summary.Problem.NamespaceID, &summary.Problem.Title, &summary.Problem.Description,
-			&summary.Problem.StarterCode, &summary.Problem.TestCases, &summary.Problem.ExecutionSettings,
+			&summary.Problem.StarterCode, &summary.Problem.TestCases,
 			&summary.Problem.AuthorID, &summary.Problem.ClassID, &summary.Problem.Tags, &summary.Problem.Solution,
 			&summary.Problem.Language, &summary.Problem.CreatedAt, &summary.Problem.UpdatedAt,
 			// SectionProblem fields
 			&summary.PublishedAt,
 			// StudentWork fields (nullable)
 			&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
-			&workCode, &workExecutionSettings, &workTestCases, &workCreatedAt, &workLastUpdate,
+			&workCode, &workTestCases, &workCreatedAt, &workLastUpdate,
 		); err != nil {
 			return nil, err
 		}
@@ -248,9 +244,6 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 				ProblemID:   *workProblemID,
 				SectionID:   *workSectionID,
 				Code:        *workCode,
-			}
-			if workExecutionSettings != nil {
-				summary.StudentWork.ExecutionSettings = workExecutionSettings
 			}
 			if workTestCases != nil {
 				summary.StudentWork.TestCases = workTestCases
