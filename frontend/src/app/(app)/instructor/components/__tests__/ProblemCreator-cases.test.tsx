@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
@@ -109,9 +109,8 @@ describe('ProblemCreator — Cases Section', () => {
     });
 
     it('should show IOCaseForm within Cases tab', async () => {
-      const user = userEvent.setup();
       render(<ProblemCreator />);
-      await user.click(screen.getByRole('tab', { name: /cases/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
     });
@@ -119,27 +118,21 @@ describe('ProblemCreator — Cases Section', () => {
 
   describe('Cases submitted on create', () => {
     it('should include test_cases in create payload', async () => {
-      const user = userEvent.setup();
       const onProblemCreated = jest.fn();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Fill title using userEvent so the state update is committed reliably in React 18
-      await user.type(screen.getByLabelText('Title *'), 'Test Problem');
+      // Use fireEvent.change (synchronous) to set title — matches established pattern
+      // in ProblemCreator.test.tsx and avoids React 18 async batching issues in CI.
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
 
       // Navigate to Cases tab and add a case
-      await user.click(screen.getByRole('tab', { name: /cases/i }));
-      await user.click(screen.getByRole('button', { name: /add case/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
-      // In Node 20 + React 18, the title state update may not be committed until
-      // waitFor flushes it. Wait for the title to have its value, then wait for
-      // the button to be enabled before clicking.
-      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test Problem'));
-      const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
-      await user.click(createBtn);
+      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -158,21 +151,16 @@ describe('ProblemCreator — Cases Section', () => {
     });
 
     it('should submit empty test_cases array when no cases defined', async () => {
-      const user = userEvent.setup();
       const onProblemCreated = jest.fn();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-2' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      // Use userEvent so title state is committed reliably in React 18
-      await user.type(screen.getByLabelText('Title *'), 'Test');
 
-      // In Node 20 + React 18, wait for the title to have its value, then wait
-      // for the button to be enabled before clicking.
-      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test'));
-      const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
-      await user.click(createBtn);
+      // Use fireEvent.change (synchronous) to set title
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -212,9 +200,8 @@ describe('ProblemCreator — Cases Section', () => {
         expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
       });
 
-      const user = userEvent.setup();
       // Switch to Cases tab
-      await user.click(screen.getByRole('tab', { name: /cases/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
 
       expect(screen.getByDisplayValue('Greet World')).toBeInTheDocument();
     });
@@ -241,9 +228,7 @@ describe('ProblemCreator — Cases Section', () => {
         expect(screen.getByRole('button', { name: /update problem/i })).not.toBeDisabled();
       });
 
-      const user = userEvent.setup();
-      // Submit
-      await user.click(screen.getByText('Update Problem'));
+      fireEvent.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
         expect(updateProblem).toHaveBeenCalledWith(
@@ -260,28 +245,22 @@ describe('ProblemCreator — Cases Section', () => {
 
   describe('Reset after create', () => {
     it('should reset test_cases to empty after successful create', async () => {
-      const user = userEvent.setup();
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
 
-      // Use userEvent so title state is committed reliably in React 18
-      await user.type(screen.getByLabelText('Title *'), 'Test');
-      // Wait for the title value to be committed before navigating away
-      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test'));
+      // Use fireEvent.change (synchronous) to set title
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
 
       // Add a case
-      await user.click(screen.getByRole('tab', { name: /cases/i }));
-      await user.click(screen.getByRole('button', { name: /add case/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
 
-      // In Node 20 + React 18, wait for the button to be enabled before clicking.
-      const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
-      await user.click(createBtn);
+      fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalled();
