@@ -27,6 +27,11 @@
  */
 
 import { test, expect, getAdminToken } from './fixtures/test-fixture';
+import { IS_EMULATOR } from './fixtures/test-auth';
+
+const DEFAULT_PASSWORD = IS_EMULATOR
+  ? 'e2e-test-password-123' // gitleaks:allow
+  : process.env.E2E_PASSWORD!;
 
 test.describe('Auth loop recovery', () => {
   test('signs out Firebase when backend user does not exist, preventing stale auth loop', async ({
@@ -39,7 +44,7 @@ test.describe('Auth loop recovery', () => {
     // ===== STEP 1: Sign in via the app UI (creates Firebase session in browser) =====
     await page.goto('/auth/signin/email');
     await page.fill('#email', instructor.email);
-    await page.fill('#password', 'e2e-test-password-123');
+    await page.fill('#password', DEFAULT_PASSWORD);
     await page.click('button[type="submit"]');
 
     // Wait for the full redirect chain to complete: signin → / → /instructor.
