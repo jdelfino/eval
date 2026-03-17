@@ -198,6 +198,23 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+      - name: Apply staging ingress proxy
+        run: kubectl apply -f k8s/staging-ingress/
+      - name: Wait for staging-ingress-proxy rollout
+        run: |
+          kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
+      - name: Wait for staging API to be reachable
+        run: |
+          echo "Waiting for staging API to be reachable via external URL..."
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 5 "https://staging.eval.delquillan.com/api/v1/healthz" >/dev/null 2>&1; then
+              echo "Staging API is reachable"
+              break
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          curl -sf --max-time 5 "https://staging.eval.delquillan.com/api/v1/healthz" >/dev/null || { echo "Staging API not reachable after 60s"; exit 1; }
       - name: Read staging config from ConfigMaps
         run: |
           TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
@@ -272,11 +289,6 @@ jobs:
           else
             npx playwright install --with-deps chromium
           fi
-      - name: Apply staging ingress proxy
-        run: kubectl apply -f k8s/staging-ingress/
-      - name: Wait for staging-ingress-proxy rollout
-        run: |
-          kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
       - name: Validate executor sandbox (staging)
         run: |
           # Connect Gateway blocks kubectl port-forward (SPDY upgrade), so we
