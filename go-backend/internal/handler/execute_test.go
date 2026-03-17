@@ -48,9 +48,8 @@ func TestExecute_HappyPath(t *testing.T) {
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Success:         true,
-				Output:          "hello\n",
-				ExecutionTimeMs: 30,
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 30}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1, TimeMs: 30},
 			}, nil
 		},
 	}
@@ -78,28 +77,34 @@ func TestExecute_HappyPath(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !resp.Success {
-		t.Fatal("expected success=true")
+	if len(resp.Results) == 0 {
+		t.Fatal("expected at least one result")
 	}
-	if resp.Output != "hello\n" {
-		t.Fatalf("expected output 'hello\\n', got %q", resp.Output)
+	if resp.Results[0].Actual != "hello\n" {
+		t.Fatalf("expected output 'hello\\n', got %q", resp.Results[0].Actual)
 	}
 	// Verify executor received correct fields
 	if capturedReq.Code != `print("hello")` {
 		t.Fatalf("expected code forwarded, got %q", capturedReq.Code)
 	}
-	if capturedReq.Stdin != "some input" {
-		t.Fatalf("expected stdin 'some input', got %q", capturedReq.Stdin)
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case forwarded to executor")
 	}
-	if len(capturedReq.Files) != 1 || capturedReq.Files[0].Name != "test.txt" {
-		t.Fatalf("expected 1 file 'test.txt', got %v", capturedReq.Files)
+	if capturedReq.Cases[0].Input != "some input" {
+		t.Fatalf("expected stdin 'some input' in case input, got %q", capturedReq.Cases[0].Input)
+	}
+	if len(capturedReq.Cases[0].Files) != 1 || capturedReq.Cases[0].Files[0].Name != "test.txt" {
+		t.Fatalf("expected 1 file 'test.txt' in case files, got %v", capturedReq.Cases[0].Files)
 	}
 }
 
 func TestExecute_MinimalRequest(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	}
 
@@ -123,7 +128,10 @@ func TestExecute_StudentUserAllowed(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "hello\n"}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	}
 
@@ -154,7 +162,10 @@ func TestExecute_RandomSeed(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	}
 
@@ -175,8 +186,12 @@ func TestExecute_RandomSeed(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if capturedReq.RandomSeed == nil || *capturedReq.RandomSeed != 42 {
-		t.Fatalf("expected random_seed 42 forwarded to executor, got %v", capturedReq.RandomSeed)
+	// random_seed is wrapped into Cases[0].RandomSeed by the handler
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case forwarded to executor")
+	}
+	if capturedReq.Cases[0].RandomSeed == nil || *capturedReq.Cases[0].RandomSeed != 42 {
+		t.Fatalf("expected random_seed 42 in case, got %v", capturedReq.Cases[0].RandomSeed)
 	}
 }
 
@@ -185,7 +200,10 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	}
 
@@ -205,8 +223,12 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if capturedReq.RandomSeed != nil {
-		t.Fatalf("expected nil random_seed when not provided, got %v", capturedReq.RandomSeed)
+	// random_seed is wrapped into Cases[0].RandomSeed by the handler — should be nil when not provided
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case forwarded to executor")
+	}
+	if capturedReq.Cases[0].RandomSeed != nil {
+		t.Fatalf("expected nil random_seed in case when not provided, got %v", capturedReq.Cases[0].RandomSeed)
 	}
 }
 
@@ -282,7 +304,10 @@ func TestExecute_LanguagePassedToExecutor(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok"}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1},
+			}, nil
 		},
 	}
 

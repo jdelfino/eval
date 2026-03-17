@@ -45,6 +45,7 @@ func (h *ExecuteHandler) SetActivation(svc ActivationService) {
 }
 
 // executeRequest is the request body for POST /api/v1/execute.
+// TODO(PLAT-oztv.6): Replace Stdin/RandomSeed/Files with Cases[]CaseDef.
 type executeRequest struct {
 	Code       string             `json:"code" validate:"required"`
 	Language   string             `json:"language" validate:"required"`
@@ -55,6 +56,7 @@ type executeRequest struct {
 
 // Execute handles POST /api/v1/execute for any authenticated user.
 // No session context is required — takes code + language directly.
+// TODO(PLAT-oztv.6): Convert to Cases-based request.
 func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	authUser := auth.UserFromContext(r.Context())
 	if authUser == nil {
@@ -73,14 +75,21 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build a single run-only case from the legacy stdin/files/random_seed fields.
+	caseFiles := make([]executorapi.File, len(req.Files))
+	copy(caseFiles, req.Files)
+	runCase := executorapi.CaseDef{
+		Name:       "run",
+		Type:       "io",
+		Input:      req.Stdin,
+		RandomSeed: req.RandomSeed,
+		Files:      caseFiles,
+	}
+
 	execReq := executor.ExecuteRequest{
 		Code:     req.Code,
-		Stdin:    req.Stdin,
-		Files:    req.Files,
 		Language: lang,
-	}
-	if req.RandomSeed != nil {
-		execReq.RandomSeed = req.RandomSeed
+		Cases:    []executorapi.CaseDef{runCase},
 	}
 
 	// Signal executor demand so KEDA can scale from zero.
