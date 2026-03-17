@@ -173,7 +173,8 @@ type ProblemFilters struct {
 	ClassID       *uuid.UUID
 	AuthorID      *uuid.UUID
 	Tags          []string
-	PublicOnly bool
+	PublicOnly    bool
+	IncludePublic bool // when true and ClassID is set, returns class problems OR classless (public) problems
 	SortBy        string // "created_at", "title", "updated_at"
 	SortOrder     string // "asc", "desc"
 }

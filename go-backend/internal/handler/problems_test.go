@@ -1314,3 +1314,65 @@ func TestGenerateSolution_StarterCodeOptional(t *testing.T) {
 		t.Errorf("expected description forwarded, got %q", capturedReq.ProblemDescription)
 	}
 }
+
+// TestListProblems_IncludePublic verifies that the include_public=true query param
+// is parsed and sets IncludePublic on the filters passed to ListProblemsFiltered.
+func TestListProblems_IncludePublic(t *testing.T) {
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	p := testProblem()
+	p.ClassID = &classID
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/?class_id="+classID.String()+"&include_public=true", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !capturedFilters.IncludePublic {
+		t.Errorf("expected IncludePublic=true, got false")
+	}
+	if capturedFilters.ClassID == nil || *capturedFilters.ClassID != classID {
+		t.Errorf("expected ClassID=%v, got %v", classID, capturedFilters.ClassID)
+	}
+}
+
+// TestListProblems_IncludePublicFalse verifies that omitting include_public leaves IncludePublic false.
+func TestListProblems_IncludePublicFalse(t *testing.T) {
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return nil, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if capturedFilters.IncludePublic {
+		t.Errorf("expected IncludePublic=false, got true")
+	}
+}

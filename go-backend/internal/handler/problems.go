@@ -118,6 +118,10 @@ func parseFilters(w http.ResponseWriter, r *http.Request) (store.ProblemFilters,
 		filters.PublicOnly = true
 	}
 
+	if q.Get("include_public") == "true" {
+		filters.IncludePublic = true
+	}
+
 	return filters, true
 }
 

@@ -281,8 +281,8 @@ describe('ProblemLibrary', () => {
     await waitFor(() => {
       expect(listProblems).toHaveBeenCalledWith(
         expect.objectContaining({
-          sortBy: 'created',
-          sortOrder: 'desc',
+          sort_by: 'created_at',
+          sort_order: 'desc',
         })
       );
     });
