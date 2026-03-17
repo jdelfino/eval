@@ -83,10 +83,31 @@ jest.mock('@/hooks/useApiDebugger', () => ({
   useApiDebugger: jest.fn(() => ({})),
 }));
 
+const mockCaseRunner = {
+  caseResults: {},
+  selectedCase: null,
+  isRunning: false,
+  error: null,
+  selectCase: jest.fn(),
+  runCase: jest.fn(),
+  runAllCases: jest.fn(),
+  clearResults: jest.fn(),
+};
+
+jest.mock('@/hooks/useCaseRunner', () => ({
+  useCaseRunner: jest.fn(() => mockCaseRunner),
+}));
+
+// Capture CodeEditor props for assertion
+let lastCodeEditorProps: any = null;
+
 // Mock CodeEditor component
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
-  default: () => <div data-testid="code-editor">CodeEditor</div>,
+  default: (props: any) => {
+    lastCodeEditorProps = props;
+    return <div data-testid="code-editor">CodeEditor</div>;
+  },
 }));
 
 jest.mock('../components/EditorContainer', () => ({
@@ -106,7 +127,7 @@ const fakeStudentWorkWithProblem = {
   section_id: 'section-1',
   problem_id: 'problem-1',
   code: 'print("existing code")',
-  execution_settings: null,
+  test_cases: null,
   last_update: '2024-01-01T00:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
   problem: {
@@ -115,12 +136,14 @@ const fakeStudentWorkWithProblem = {
     title: 'Test Problem',
     description: 'Test description',
     starter_code: 'print("start")',
-    test_cases: null,
-    execution_settings: { stdin: 'test input' },
+    test_cases: [
+      { name: 'case1', input: 'hello', match_type: 'exact', order: 0 },
+    ],
     author_id: 'instructor-1',
     class_id: 'class-1',
     tags: ['python'],
     solution: null,
+    language: 'python',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   },
@@ -140,6 +163,63 @@ describe('StudentPage (student_work-centric)', () => {
       updateCode: mockUpdateCode,
       joinSession: mockJoinSession,
       replacementInfo: null,
+    });
+  });
+
+  describe('Test case runner integration', () => {
+    it('passes caseRunner to CodeEditor', async () => {
+      lastCodeEditorProps = null;
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.caseRunner).toBeDefined();
+      expect(lastCodeEditorProps.caseRunner.runCase).toBeDefined();
+      expect(lastCodeEditorProps.caseRunner.runAllCases).toBeDefined();
+    });
+
+    it('passes instructor test cases to CodeEditor', async () => {
+      lastCodeEditorProps = null;
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.instructorCases).toEqual(
+        fakeStudentWorkWithProblem.problem.test_cases
+      );
+    });
+
+    it('passes student test cases to CodeEditor when loaded from student work', async () => {
+      lastCodeEditorProps = null;
+      const workWithStudentCases = {
+        ...fakeStudentWorkWithProblem,
+        test_cases: [
+          { name: 'my-case', input: '10', match_type: 'exact', order: 0 },
+        ],
+      };
+      mockGetStudentWork.mockResolvedValue(workWithStudentCases);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.studentCases).toEqual(workWithStudentCases.test_cases);
     });
   });
 

@@ -146,7 +146,6 @@ describe('SessionView', () => {
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: mockProblem,
-    sessionExecutionSettings: { stdin: 'test input' },
     onEndSession: jest.fn().mockResolvedValue(undefined),
     onUpdateProblem: jest.fn().mockResolvedValue(undefined),
     onFeatureStudent: jest.fn().mockResolvedValue(undefined),

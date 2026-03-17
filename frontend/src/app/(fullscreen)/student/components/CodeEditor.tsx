@@ -2,14 +2,11 @@
 
 import Editor from '@monaco-editor/react';
 import React, { useEffect, useRef, useState } from 'react';
-import ExecutionSettingsComponent from './ExecutionSettings';
 import { DebuggerSidebar } from './DebuggerSidebar';
 import { CasesPanel } from './CasesPanel';
 import { CaseResultDisplay } from './CaseResultDisplay';
 import MarkdownContent from '@/components/MarkdownContent';
 import type { IOTestCase } from '@/types/problem';
-// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
-type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';
@@ -21,14 +18,8 @@ import type { CaseRunnerResult } from '@/hooks/useCaseRunner';
 interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
-  onRun?: (execution_settings: ExecutionSettings) => void;
+  onRun?: () => void;
   isRunning?: boolean;
-  exampleInput?: string;
-  onStdinChange?: (stdin: string) => void;
-  random_seed?: number;
-  onRandomSeedChange?: (seed: number | undefined) => void;
-  attached_files?: Array<{ name: string; content: string }>;
-  onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
   readOnly?: boolean;
   execution_result?: ExecutionResult | null;
   title?: string;
@@ -55,12 +46,6 @@ export default function CodeEditor({
   onChange,
   onRun,
   isRunning = false,
-  exampleInput,
-  onStdinChange,
-  random_seed,
-  onRandomSeedChange,
-  attached_files,
-  onAttachedFilesChange,
   readOnly = false,
   execution_result = null,
   title = 'Your Code',
@@ -88,7 +73,6 @@ export default function CodeEditor({
   const outputTextSm = fontSize ? '' : (largeOutput ? 'text-base' : 'text-sm');
   const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
-  const [stdin, setStdin] = useState('');
   const decorationsRef = useRef<string[]>([]);
   const errorDecorationsRef = useRef<string[]>([]);
 
@@ -100,14 +84,12 @@ export default function CodeEditor({
   const _mobileViewport = useMobileViewport();
   const isDesktop = forceDesktop ? true : _isDesktop;
   const mobileViewport = forceDesktop ? { isMobile: false, isTablet: false, isVerySmall: false, isDesktop: true, width: 1920 } : _mobileViewport;
-  const { isCollapsed: isSettingsCollapsed, toggle: toggleSettings, setCollapsed: setSettingsCollapsed } = useSidebarSection('execution-settings', true);
   const { isCollapsed: isProblemCollapsed, toggle: toggleProblem, setCollapsed: setProblemCollapsed } = useSidebarSection('problem-panel', false);
   const { isCollapsed: isDebuggerCollapsed, toggle: toggleDebugger, setCollapsed: setDebuggerCollapsed } = useSidebarSection('debugger-panel', true);
   const { isCollapsed: isCasesCollapsed, toggle: toggleCases, setCollapsed: setCasesCollapsed } = useSidebarSection('cases-panel', true);
 
   // Mobile-specific state (separate from desktop sidebar state)
   const [mobileProblemCollapsed, setMobileProblemCollapsed] = useState(true);
-  const [mobileSettingsCollapsed, setMobileSettingsCollapsed] = useState(true);
   const [mobileDebuggerCollapsed, setMobileDebuggerCollapsed] = useState(true);
   const [mobileCasesCollapsed, setMobileCasesCollapsed] = useState(true);
 
@@ -193,7 +175,6 @@ export default function CodeEditor({
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
       const openPanels = [
-        !isSettingsCollapsed,
         !isProblemCollapsed,
         !isDebuggerCollapsed,
         !isCasesCollapsed,
@@ -203,54 +184,38 @@ export default function CodeEditor({
         // Multiple panels open - keep only one
         if (debuggerHook?.hasTrace && !isDebuggerCollapsed) {
           // Prioritize debugger if active
-          setSettingsCollapsed(true);
           setProblemCollapsed(true);
           setCasesCollapsed(true);
         } else if (problem && !isProblemCollapsed) {
           // Then problem if it exists
-          setSettingsCollapsed(true);
           setDebuggerCollapsed(true);
           setCasesCollapsed(true);
         } else if (!isCasesCollapsed) {
-          setSettingsCollapsed(true);
           setProblemCollapsed(true);
           setDebuggerCollapsed(true);
         } else {
-          // Otherwise keep settings
           setProblemCollapsed(true);
           setDebuggerCollapsed(true);
           setCasesCollapsed(true);
         }
       }
     }
-  }, [isSettingsCollapsed, isProblemCollapsed, isDebuggerCollapsed, isCasesCollapsed, problem, debuggerHook?.hasTrace, setSettingsCollapsed, setProblemCollapsed, setDebuggerCollapsed, setCasesCollapsed]);
+  }, [isProblemCollapsed, isDebuggerCollapsed, isCasesCollapsed, problem, debuggerHook?.hasTrace, setProblemCollapsed, setDebuggerCollapsed, setCasesCollapsed]);
 
   // Ensure only one sidebar is open at a time
   const handleToggleProblem = () => {
     if (isProblemCollapsed) {
       // Opening problem panel - close others
-      setSettingsCollapsed(true);
       setDebuggerCollapsed(true);
       setCasesCollapsed(true);
     }
     toggleProblem();
   };
 
-  const handleToggleSettings = () => {
-    if (isSettingsCollapsed) {
-      // Opening settings panel - close others
-      setProblemCollapsed(true);
-      setDebuggerCollapsed(true);
-      setCasesCollapsed(true);
-    }
-    toggleSettings();
-  };
-
   const handleToggleDebugger = () => {
     if (isDebuggerCollapsed) {
       // Opening debugger panel - close others
       setProblemCollapsed(true);
-      setSettingsCollapsed(true);
       setCasesCollapsed(true);
     }
     toggleDebugger();
@@ -260,17 +225,12 @@ export default function CodeEditor({
     if (isCasesCollapsed) {
       // Opening cases panel - close others
       setProblemCollapsed(true);
-      setSettingsCollapsed(true);
       setDebuggerCollapsed(true);
     }
     toggleCases();
   };
 
-  // Wrapper to call both internal state and parent callback
-  const handleStdinChange = (value: string) => {
-    setStdin(value);
-    onStdinChange?.(value);
-  };
+
 
   const handleOutputMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -316,23 +276,15 @@ export default function CodeEditor({
     }
   }, [execution_result, outputPosition]);
 
-  // Initialize stdin with example input if provided
-  useEffect(() => {
-    if (exampleInput) {
-      setStdin(exampleInput);
-    }
-  }, [exampleInput]);
-
   // Auto-open debugger sidebar when debugging starts (desktop only)
   useEffect(() => {
     if (debuggerHook?.hasTrace && isDesktop && setDebuggerCollapsed) {
       setDebuggerCollapsed(false);
       // Close other sidebars
-      setSettingsCollapsed(true);
       setProblemCollapsed(true);
       setCasesCollapsed(true);
     }
-  }, [debuggerHook?.hasTrace, isDesktop, setDebuggerCollapsed, setSettingsCollapsed, setProblemCollapsed, setCasesCollapsed]);
+  }, [debuggerHook?.hasTrace, isDesktop, setDebuggerCollapsed, setProblemCollapsed, setCasesCollapsed]);
 
   // Update line highlighting when debugging
   useEffect(() => {
@@ -439,9 +391,7 @@ export default function CodeEditor({
   };
 
   const handleRun = () => {
-    if (onRun) {
-      onRun({ stdin: stdin || undefined, random_seed, attached_files });
-    }
+    onRun?.();
   };
 
   // Helper function to annotate output lines with step numbers
@@ -619,18 +569,6 @@ export default function CodeEditor({
                   Problem
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setMobileSettingsCollapsed(!mobileSettingsCollapsed)}
-                className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
-                  !mobileSettingsCollapsed
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                }`}
-                aria-label="Toggle Settings"
-              >
-                Settings
-              </button>
               {caseRunner && (instructorCases.length > 0 || studentCases.length > 0) && (
                 <button
                   type="button"
@@ -686,24 +624,6 @@ export default function CodeEditor({
           </div>
         )}
 
-        {/* Mobile: Settings Section */}
-        {!isDesktop && !mobileSettingsCollapsed && (
-          <div className="bg-gray-800 border-b border-gray-700 flex-shrink-0">
-            <ExecutionSettingsComponent
-              stdin={stdin}
-              onStdinChange={handleStdinChange}
-              random_seed={random_seed}
-              onRandomSeedChange={onRandomSeedChange}
-              attached_files={attached_files}
-              onAttachedFilesChange={onAttachedFilesChange}
-              exampleInput={exampleInput}
-              readOnly={readOnly}
-              inSidebar={true}
-              darkTheme={true}
-            />
-          </div>
-        )}
-
         {/* Mobile: Cases Section */}
         {!isDesktop && !mobileCasesCollapsed && caseRunner && (
           <div className="bg-gray-800 border-b border-gray-700 flex-shrink-0" style={{ maxHeight: '40vh', overflowY: 'auto' }}>
@@ -739,7 +659,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', {})}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -805,32 +725,6 @@ export default function CodeEditor({
                   </svg>
                 </button>
               )}
-
-              {/* Settings icon */}
-              <button
-                type="button"
-                onClick={handleToggleSettings}
-                className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                  !isSettingsCollapsed
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                }`}
-                aria-label="Execution Settings"
-                title="Execution Settings"
-              >
-                {/* Settings/Sliders icon */}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="4" y1="21" x2="4" y2="14" />
-                  <line x1="4" y1="10" x2="4" y2="3" />
-                  <line x1="12" y1="21" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12" y2="3" />
-                  <line x1="20" y1="21" x2="20" y2="16" />
-                  <line x1="20" y1="12" x2="20" y2="3" />
-                  <line x1="1" y1="14" x2="7" y2="14" />
-                  <line x1="9" y1="8" x2="15" y2="8" />
-                  <line x1="17" y1="16" x2="23" y2="16" />
-                </svg>
-              </button>
 
               {/* Debugger icon (only show if debuggerHook exists) */}
               {debuggerHook && (
@@ -952,47 +846,6 @@ export default function CodeEditor({
               </div>
             )}
 
-            {!isSettingsCollapsed && (
-              <div
-                className="bg-gray-800 text-gray-200 border-r border-gray-700 flex flex-col flex-shrink-0 relative"
-                style={{ width: `${sidebarWidth}px`, maxHeight: '100%', height: '100%' }}
-              >
-                <div className="px-4 py-2 bg-gray-900 border-b border-gray-700 font-bold flex items-center justify-between flex-shrink-0">
-                  <span>Execution Settings</span>
-                  <button
-                    type="button"
-                    onClick={toggleSettings}
-                    className="text-gray-400 hover:text-gray-100 text-xl leading-none"
-                    aria-label="Close panel"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  <ExecutionSettingsComponent
-                    stdin={stdin}
-                    onStdinChange={handleStdinChange}
-                    random_seed={random_seed}
-                    onRandomSeedChange={onRandomSeedChange}
-                    attached_files={attached_files}
-                    onAttachedFilesChange={onAttachedFilesChange}
-                    exampleInput={exampleInput}
-                    readOnly={readOnly}
-                    inSidebar={true}
-                  />
-                </div>
-                {/* Resize handle */}
-                <div
-                  onMouseDown={handleMouseDown}
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors"
-                  style={{
-                    background: isResizing ? '#3b82f6' : 'transparent',
-                  }}
-                  title="Drag to resize"
-                />
-              </div>
-            )}
-
             {!isCasesCollapsed && caseRunner && (
               <div
                 className="bg-gray-800 text-gray-200 border-r border-gray-700 flex flex-col flex-shrink-0 relative"
@@ -1066,7 +919,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', {})}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}
