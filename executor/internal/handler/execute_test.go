@@ -741,6 +741,66 @@ func TestExecute_Cases_WrapperScriptPassedToSandbox(t *testing.T) {
 	}
 }
 
+func TestExecute_Cases_RandomSeedForwardedToIOTests(t *testing.T) {
+	// Verify that random_seed on a CaseDef is serialized into io_tests.json for the Python runner.
+	var capturedFiles []sandbox.File
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedFiles = req.Files
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(runner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"import random; print(random.randint(1,100))","language":"python","cases":[{"name":"seed-test","type":"io","input":"","random_seed":42}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var testsJSON string
+	for _, f := range capturedFiles {
+		if f.Name == "io_tests.json" {
+			testsJSON = f.Content
+			break
+		}
+	}
+	if testsJSON == "" {
+		t.Fatal("io_tests.json not found in sandbox files")
+	}
+	if !strings.Contains(testsJSON, `"random_seed":42`) {
+		t.Errorf("expected random_seed=42 in io_tests.json, got: %s", testsJSON)
+	}
+}
+
+func TestExecute_Cases_RandomSeedAbsentWhenNil(t *testing.T) {
+	// Verify that random_seed is NOT present in io_tests.json when not set on a CaseDef.
+	var capturedFiles []sandbox.File
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedFiles = req.Files
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(runner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"print('hello')","language":"python","cases":[{"name":"t1","type":"io","input":""}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var testsJSON string
+	for _, f := range capturedFiles {
+		if f.Name == "io_tests.json" {
+			testsJSON = f.Content
+			break
+		}
+	}
+	if testsJSON == "" {
+		t.Fatal("io_tests.json not found in sandbox files")
+	}
+	if strings.Contains(testsJSON, "random_seed") {
+		t.Errorf("expected random_seed to be absent when nil, got: %s", testsJSON)
+	}
+}
+
 func TestExecute_Cases_InvalidRunnerOutput(t *testing.T) {
 	// When sandbox emits non-JSON, expect HTTP 500.
 	runner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {

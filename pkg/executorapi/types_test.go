@@ -6,18 +6,19 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// TestRequest / TestResponse / IOTestDef / TestResult / TestSummary
+// ExecuteRequest
 // ---------------------------------------------------------------------------
 
-func TestTestRequest_JSON(t *testing.T) {
+func TestExecuteRequest_JSON(t *testing.T) {
 	timeout := 5000
-	req := TestRequest{
-		Code:     "print(input())",
-		Language: "python",
-		IOTests: []IOTestDef{
-			{Name: "basic", Input: "hello", ExpectedOutput: "hello", MatchType: "exact"},
-		},
+	seed := 42
+	req := ExecuteRequest{
+		Code:      "print('hello')",
+		Language:  "python",
 		TimeoutMs: &timeout,
+		Cases: []CaseDef{
+			{Name: "basic", Input: "hello", ExpectedOutput: "hello", MatchType: "exact", RandomSeed: &seed},
+		},
 	}
 
 	data, err := json.Marshal(req)
@@ -25,7 +26,7 @@ func TestTestRequest_JSON(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded TestRequest
+	var decoded ExecuteRequest
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -36,31 +37,31 @@ func TestTestRequest_JSON(t *testing.T) {
 	if decoded.Language != req.Language {
 		t.Errorf("language: got %q, want %q", decoded.Language, req.Language)
 	}
-	if len(decoded.IOTests) != 1 {
-		t.Fatalf("io_tests length: got %d, want 1", len(decoded.IOTests))
-	}
-	if decoded.IOTests[0].Name != "basic" {
-		t.Errorf("io_tests[0].name: got %q, want %q", decoded.IOTests[0].Name, "basic")
-	}
-	if decoded.IOTests[0].Input != "hello" {
-		t.Errorf("io_tests[0].input: got %q, want %q", decoded.IOTests[0].Input, "hello")
-	}
-	if decoded.IOTests[0].ExpectedOutput != "hello" {
-		t.Errorf("io_tests[0].expected_output: got %q, want %q", decoded.IOTests[0].ExpectedOutput, "hello")
-	}
-	if decoded.IOTests[0].MatchType != "exact" {
-		t.Errorf("io_tests[0].match_type: got %q, want %q", decoded.IOTests[0].MatchType, "exact")
-	}
 	if decoded.TimeoutMs == nil || *decoded.TimeoutMs != 5000 {
 		t.Errorf("timeout_ms: got %v", decoded.TimeoutMs)
 	}
+	if len(decoded.Cases) != 1 {
+		t.Fatalf("cases length: got %d, want 1", len(decoded.Cases))
+	}
+	if decoded.Cases[0].Name != "basic" {
+		t.Errorf("cases[0].name: got %q, want %q", decoded.Cases[0].Name, "basic")
+	}
+	if decoded.Cases[0].Input != "hello" {
+		t.Errorf("cases[0].input: got %q, want %q", decoded.Cases[0].Input, "hello")
+	}
+	if decoded.Cases[0].ExpectedOutput != "hello" {
+		t.Errorf("cases[0].expected_output: got %q, want %q", decoded.Cases[0].ExpectedOutput, "hello")
+	}
+	if decoded.Cases[0].MatchType != "exact" {
+		t.Errorf("cases[0].match_type: got %q, want %q", decoded.Cases[0].MatchType, "exact")
+	}
+	if decoded.Cases[0].RandomSeed == nil || *decoded.Cases[0].RandomSeed != 42 {
+		t.Errorf("cases[0].random_seed: got %v", decoded.Cases[0].RandomSeed)
+	}
 }
 
-func TestTestRequest_OmitsEmptyFields(t *testing.T) {
-	req := TestRequest{
-		Code:     "print('hello')",
-		Language: "python",
-	}
+func TestExecuteRequest_OmitsEmptyFields(t *testing.T) {
+	req := ExecuteRequest{Code: "x=1"}
 	data, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -71,46 +72,20 @@ func TestTestRequest_OmitsEmptyFields(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	for _, field := range []string{"timeout_ms", "io_tests"} {
+	for _, field := range []string{"timeout_ms", "cases", "language"} {
 		if _, ok := raw[field]; ok {
 			t.Errorf("expected field %q to be omitted, but it was present", field)
 		}
 	}
 }
 
-func TestIOTestDef_OptionalExpectedOutput(t *testing.T) {
-	// ExpectedOutput is optional (run-only case — no expected output means "just run")
-	def := IOTestDef{
-		Name:      "run-only",
-		Input:     "5",
-		MatchType: "exact",
-		// ExpectedOutput intentionally omitted
-	}
-	data, err := json.Marshal(def)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
+// ---------------------------------------------------------------------------
+// ExecuteResponse
+// ---------------------------------------------------------------------------
 
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("unmarshal to raw: %v", err)
-	}
-	if _, ok := raw["expected_output"]; ok {
-		t.Errorf("expected expected_output to be omitted when empty")
-	}
-
-	var decoded IOTestDef
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if decoded.ExpectedOutput != "" {
-		t.Errorf("expected empty ExpectedOutput, got %q", decoded.ExpectedOutput)
-	}
-}
-
-func TestTestResponse_JSON(t *testing.T) {
-	resp := TestResponse{
-		Results: []TestResult{
+func TestExecuteResponse_JSON(t *testing.T) {
+	resp := ExecuteResponse{
+		Results: []CaseResult{
 			{
 				Name:     "test1",
 				Type:     "io",
@@ -130,12 +105,12 @@ func TestTestResponse_JSON(t *testing.T) {
 				TimeMs:   8,
 			},
 		},
-		Summary: TestSummary{
-			Total:   2,
-			Passed:  1,
-			Failed:  1,
-			Errors:  0,
-			TimeMs:  20,
+		Summary: CaseSummary{
+			Total:  2,
+			Passed: 1,
+			Failed: 1,
+			Errors: 0,
+			TimeMs: 20,
 		},
 	}
 
@@ -144,7 +119,7 @@ func TestTestResponse_JSON(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded TestResponse
+	var decoded ExecuteResponse
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -169,8 +144,90 @@ func TestTestResponse_JSON(t *testing.T) {
 	}
 }
 
-func TestTestResult_OmitsEmptyFields(t *testing.T) {
-	result := TestResult{
+func TestExecuteResponse_OmitsEmptyFields(t *testing.T) {
+	resp := ExecuteResponse{
+		Results: []CaseResult{},
+		Summary: CaseSummary{Total: 0},
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// Verify required fields are present
+	for _, field := range []string{"results", "summary"} {
+		if _, ok := raw[field]; !ok {
+			t.Errorf("expected field %q to be present, but it was missing", field)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CaseDef
+// ---------------------------------------------------------------------------
+
+func TestCaseDef_OptionalExpectedOutput(t *testing.T) {
+	// ExpectedOutput is optional (run-only case — no expected output means "just run")
+	def := CaseDef{
+		Name:      "run-only",
+		Type:      "io",
+		Input:     "5",
+		MatchType: "exact",
+		// ExpectedOutput intentionally omitted
+	}
+	data, err := json.Marshal(def)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal to raw: %v", err)
+	}
+	if _, ok := raw["expected_output"]; ok {
+		t.Errorf("expected expected_output to be omitted when empty")
+	}
+
+	var decoded CaseDef
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.ExpectedOutput != "" {
+		t.Errorf("expected empty ExpectedOutput, got %q", decoded.ExpectedOutput)
+	}
+}
+
+func TestCaseDef_RandomSeedOmittedWhenNil(t *testing.T) {
+	def := CaseDef{
+		Name:  "no-seed",
+		Type:  "io",
+		Input: "5",
+	}
+	data, err := json.Marshal(def)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := raw["random_seed"]; ok {
+		t.Errorf("expected random_seed to be omitted when nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CaseResult
+// ---------------------------------------------------------------------------
+
+func TestCaseResult_OmitsEmptyFields(t *testing.T) {
+	result := CaseResult{
 		Name:   "error-test",
 		Type:   "io",
 		Status: "error",
@@ -197,121 +254,5 @@ func TestTestResult_OmitsEmptyFields(t *testing.T) {
 		if _, ok := raw[field]; !ok {
 			t.Errorf("expected field %q to be present, but it was missing", field)
 		}
-	}
-}
-
-func TestExecuteRequest_JSON(t *testing.T) {
-	seed := 42
-	timeout := 5000
-	req := ExecuteRequest{
-		Code:       "print('hello')",
-		Stdin:      "input",
-		Files:      []File{{Name: "data.txt", Content: "hello"}},
-		RandomSeed: &seed,
-		TimeoutMs:  &timeout,
-	}
-
-	data, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var decoded ExecuteRequest
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if decoded.Code != req.Code {
-		t.Errorf("code: got %q, want %q", decoded.Code, req.Code)
-	}
-	if decoded.Stdin != req.Stdin {
-		t.Errorf("stdin: got %q, want %q", decoded.Stdin, req.Stdin)
-	}
-	if len(decoded.Files) != 1 || decoded.Files[0].Name != "data.txt" {
-		t.Errorf("files: got %+v", decoded.Files)
-	}
-	if decoded.RandomSeed == nil || *decoded.RandomSeed != 42 {
-		t.Errorf("random_seed: got %v", decoded.RandomSeed)
-	}
-	if decoded.TimeoutMs == nil || *decoded.TimeoutMs != 5000 {
-		t.Errorf("timeout_ms: got %v", decoded.TimeoutMs)
-	}
-}
-
-func TestExecuteRequest_OmitsEmptyFields(t *testing.T) {
-	req := ExecuteRequest{Code: "x=1"}
-	data, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	for _, field := range []string{"stdin", "files", "random_seed", "timeout_ms"} {
-		if _, ok := raw[field]; ok {
-			t.Errorf("expected field %q to be omitted, but it was present", field)
-		}
-	}
-}
-
-func TestExecuteResponse_OmitsEmptyFields(t *testing.T) {
-	resp := ExecuteResponse{
-		Success:         true,
-		ExecutionTimeMs: 42,
-	}
-	data, err := json.Marshal(resp)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	for _, field := range []string{"error", "output", "stdin"} {
-		if _, ok := raw[field]; ok {
-			t.Errorf("expected field %q to be omitted, but it was present", field)
-		}
-	}
-
-	// Verify required fields are still present
-	for _, field := range []string{"success", "execution_time_ms"} {
-		if _, ok := raw[field]; !ok {
-			t.Errorf("expected field %q to be present, but it was missing", field)
-		}
-	}
-}
-
-func TestExecuteResponse_JSON(t *testing.T) {
-	resp := ExecuteResponse{
-		Success:         true,
-		Output:          "hello\n",
-		Error:           "",
-		ExecutionTimeMs: 42,
-		Stdin:           "input",
-	}
-
-	data, err := json.Marshal(resp)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var decoded ExecuteResponse
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if decoded.Success != resp.Success {
-		t.Errorf("success: got %v, want %v", decoded.Success, resp.Success)
-	}
-	if decoded.Output != resp.Output {
-		t.Errorf("output: got %q, want %q", decoded.Output, resp.Output)
-	}
-	if decoded.ExecutionTimeMs != resp.ExecutionTimeMs {
-		t.Errorf("execution_time_ms: got %d, want %d", decoded.ExecutionTimeMs, resp.ExecutionTimeMs)
 	}
 }

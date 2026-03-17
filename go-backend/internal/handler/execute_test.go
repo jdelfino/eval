@@ -73,15 +73,19 @@ func TestExecute_HappyPath(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp executor.ExecuteResponse
+	// Response should be in legacy format {success, output, error, execution_time_ms, stdin}
+	var resp legacyExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(resp.Results) == 0 {
-		t.Fatal("expected at least one result")
+	if !resp.Success {
+		t.Fatalf("expected success=true, got false")
 	}
-	if resp.Results[0].Actual != "hello\n" {
-		t.Fatalf("expected output 'hello\\n', got %q", resp.Results[0].Actual)
+	if resp.Output != "hello\n" {
+		t.Fatalf("expected output 'hello\\n', got %q", resp.Output)
+	}
+	if resp.Stdin != "some input" {
+		t.Fatalf("expected stdin 'some input' in response, got %q", resp.Stdin)
 	}
 	// Verify executor received correct fields
 	if capturedReq.Code != `print("hello")` {
@@ -390,6 +394,98 @@ func TestExecute_503OnConnectionError(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- legacyExecuteResponse compat wrapper tests ---
+
+func TestExecute_LegacyResponseShape_Success(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{
+					Name:   "run",
+					Type:   "io",
+					Status: "run",
+					Actual: "hello\n",
+					TimeMs: 42,
+				}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1, TimeMs: 42},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": `print("hello")`, "language": "python", "stdin": "world"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp legacyExecuteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal legacy response: %v", err)
+	}
+	if !resp.Success {
+		t.Error("expected success=true for run status")
+	}
+	if resp.Output != "hello\n" {
+		t.Errorf("expected output 'hello\\n', got %q", resp.Output)
+	}
+	if resp.ExecutionTimeMs != 42 {
+		t.Errorf("expected execution_time_ms=42, got %d", resp.ExecutionTimeMs)
+	}
+	if resp.Stdin != "world" {
+		t.Errorf("expected stdin='world', got %q", resp.Stdin)
+	}
+}
+
+func TestExecute_LegacyResponseShape_ErrorStatus(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{
+					Name:   "run",
+					Type:   "io",
+					Status: "error",
+					Stderr: "NameError: name 'x' is not defined",
+					TimeMs: 5,
+				}},
+				Summary: executor.CaseSummary{Total: 1, Errors: 1, TimeMs: 5},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "print(x)", "language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp legacyExecuteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal legacy response: %v", err)
+	}
+	if resp.Success {
+		t.Error("expected success=false for error status")
+	}
+	if resp.Error != "NameError: name 'x' is not defined" {
+		t.Errorf("expected error message in Error field, got %q", resp.Error)
 	}
 }
 
