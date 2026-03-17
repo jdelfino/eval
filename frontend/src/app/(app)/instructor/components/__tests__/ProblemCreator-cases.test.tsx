@@ -125,13 +125,17 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Fire multiple change events before any click, matching the working pattern
-      // in ProblemCreator.test.tsx. Multiple change events before clicking ensure
-      // React processes all pending state updates (including setTitle) before the
-      // button's disabled check runs. Without the extra change event, the title
-      // state commit can lag behind the click in React 19 + Node.js 20.
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      fireEvent.change(screen.getByLabelText('Description'), { target: { value: '' } });
+
+      // Wait for button to be enabled before proceeding. listClasses() resolves as a
+      // Promise microtask after render, and in Node.js 20 this async state update can
+      // race with the synchronous fireEvent.change commit, deferring title state past the
+      // button click. waitFor flushes all pending React work (via act()) between polls,
+      // ensuring setClasses and setTitle are both committed before we click.
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
+
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -160,7 +164,12 @@ describe('ProblemCreator — Cases Section', () => {
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Description'), { target: { value: '' } });
+
+      // Wait for button to be enabled (flushes listClasses async state update).
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
@@ -254,7 +263,12 @@ describe('ProblemCreator — Cases Section', () => {
       render(<ProblemCreator />);
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Description'), { target: { value: '' } });
+
+      // Wait for button to be enabled (flushes listClasses async state update).
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
+      });
+
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
