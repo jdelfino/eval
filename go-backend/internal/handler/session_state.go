@@ -80,12 +80,12 @@ func (h *SessionStateHandler) buildStateResponse(ctx context.Context, id uuid.UU
 }
 
 type sessionPublicStateResponse struct {
-	Problem                   json.RawMessage `json:"problem"`
-	FeaturedStudentID         *uuid.UUID      `json:"featured_student_id"`
-	FeaturedCode              *string         `json:"featured_code"`
-	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings"`
-	JoinCode                  string          `json:"join_code"`
-	Status                    string          `json:"status"`
+	Problem           json.RawMessage `json:"problem"`
+	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
+	FeaturedCode      *string         `json:"featured_code"`
+	FeaturedTestCases json.RawMessage `json:"featured_test_cases"`
+	JoinCode          string          `json:"join_code"`
+	Status            string          `json:"status"`
 }
 
 // PublicState handles GET /api/v1/sessions/{id}/public-state — public display data.
@@ -117,19 +117,18 @@ func (h *SessionStateHandler) PublicState(w http.ResponseWriter, r *http.Request
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, sessionPublicStateResponse{
-		Problem:                   session.Problem,
-		FeaturedStudentID:         session.FeaturedStudentID,
-		FeaturedCode:              session.FeaturedCode,
-		FeaturedExecutionSettings: session.FeaturedExecutionSettings,
-		JoinCode:                  section.JoinCode,
-		Status:                    session.Status,
+		Problem:           session.Problem,
+		FeaturedStudentID: session.FeaturedStudentID,
+		FeaturedCode:      session.FeaturedCode,
+		FeaturedTestCases: session.FeaturedTestCases,
+		JoinCode:          section.JoinCode,
+		Status:            session.Status,
 	})
 }
 
 type featureRequest struct {
-	StudentID         *uuid.UUID      `json:"student_id"`
-	Code              *string         `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings,omitempty"`
+	StudentID *uuid.UUID `json:"student_id"`
+	Code      *string    `json:"code"`
 }
 
 // Feature handles POST /api/v1/sessions/{id}/feature — set/clear featured student.
@@ -149,13 +148,11 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 		// Feature a specific student's code.
 		params.FeaturedStudentID = req.StudentID
 		params.FeaturedCode = req.Code
-		params.FeaturedExecutionSettings = req.ExecutionSettings
 	} else if req.Code != nil {
 		// Code-only featuring (e.g. "Show Solution") — display code without
 		// a student association. Clear the student ID but keep the code.
 		params.ClearFeatured = true
 		params.FeaturedCode = req.Code
-		params.FeaturedExecutionSettings = req.ExecutionSettings
 	} else {
 		// Neither student nor code — clear the projector.
 		params.ClearFeatured = true
@@ -181,11 +178,7 @@ func (h *SessionStateHandler) Feature(w http.ResponseWriter, r *http.Request) {
 	if req.Code != nil {
 		code = *req.Code
 	}
-	var execSettings json.RawMessage
-	if req.ExecutionSettings != nil {
-		execSettings = req.ExecutionSettings
-	}
-	_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), studentID, code, execSettings)
+	_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), studentID, code, nil)
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

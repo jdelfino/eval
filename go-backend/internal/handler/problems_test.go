@@ -97,8 +97,7 @@ func testProblem() *store.Problem {
 		Title:             "Two Sum",
 		Description:       &desc,
 		StarterCode:       &starter,
-		TestCases:         json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
-		ExecutionSettings: json.RawMessage(`{"timeout":5}`),
+		TestCases: json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
 		AuthorID:          uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
 		ClassID:           nil,
 		CreatedAt:         time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -1049,7 +1048,7 @@ func TestExportProblems_Success(t *testing.T) {
 
 	// Verify expected fields ARE present
 	expectedFields := []string{"title", "description", "starter_code", "test_cases",
-		"execution_settings", "tags", "solution", "language", "created_at", "updated_at"}
+		"tags", "solution", "language", "created_at", "updated_at"}
 	for _, field := range expectedFields {
 		if _, ok := prob[field]; !ok {
 			t.Errorf("expected field %q to be present", field)

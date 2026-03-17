@@ -54,11 +54,11 @@ func (s *Store) JoinSession(ctx context.Context, params JoinSessionParams) (*Ses
 }
 
 // ListSessionStudents retrieves all students in a session.
-// Code and execution_settings are populated from student_work via JOIN.
+// Code and test_cases are populated from student_work via JOIN.
 func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([]SessionStudent, error) {
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
-		sw.code, sw.execution_settings,
+		sw.code, sw.test_cases,
 		ss.joined_at, ss.student_work_id
 		FROM session_students ss
 		JOIN student_work sw ON ss.student_work_id = sw.id
@@ -76,7 +76,7 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 		var ss SessionStudent
 		err := rows.Scan(
 			&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
-			&ss.Code, &ss.ExecutionSettings,
+			&ss.Code, &ss.TestCases,
 			&ss.JoinedAt, &ss.StudentWorkID,
 		)
 		if err != nil {
@@ -88,12 +88,12 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 }
 
 // GetSessionStudent retrieves a single student's record in a session.
-// Code and execution_settings are populated from student_work via JOIN.
+// Code and test_cases are populated from student_work via JOIN.
 // Returns ErrNotFound if the student is not in the session.
 func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error) {
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
-		sw.code, sw.execution_settings,
+		sw.code, sw.test_cases,
 		ss.joined_at, ss.student_work_id
 		FROM session_students ss
 		JOIN student_work sw ON ss.student_work_id = sw.id
@@ -101,7 +101,7 @@ func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UU
 	var ss SessionStudent
 	err := s.q.QueryRow(ctx, query, sessionID, userID).Scan(
 		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
-		&ss.Code, &ss.ExecutionSettings,
+		&ss.Code, &ss.TestCases,
 		&ss.JoinedAt, &ss.StudentWorkID,
 	)
 	if err != nil {

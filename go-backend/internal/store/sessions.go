@@ -10,7 +10,7 @@ import (
 
 // sessionColumns is the standard column list for session queries.
 const sessionColumns = `id, namespace_id, section_id, section_name, problem,
-		       featured_student_id, featured_code, featured_execution_settings,
+		       featured_student_id, featured_code, featured_test_cases,
 		       creator_id, participants,
 		       status, created_at, last_activity, ended_at`
 
@@ -26,7 +26,7 @@ func scanSession(row pgx.Row) (*Session, error) {
 		&sess.Problem,
 		&sess.FeaturedStudentID,
 		&sess.FeaturedCode,
-		&sess.FeaturedExecutionSettings,
+		&sess.FeaturedTestCases,
 		&sess.CreatorID,
 		&sess.Participants,
 		&sess.Status,
@@ -150,8 +150,8 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		if params.FeaturedCode == nil {
 			query += ",\n		    featured_code = NULL"
 		}
-		if params.FeaturedExecutionSettings == nil {
-			query += ",\n		    featured_execution_settings = NULL"
+		if params.FeaturedTestCases == nil {
+			query += ",\n		    featured_test_cases = NULL"
 		}
 	}
 
@@ -163,8 +163,8 @@ func (s *Store) UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSe
 		query += ",\n		    featured_code = " + ac.Next(*params.FeaturedCode)
 	}
 
-	if params.FeaturedExecutionSettings != nil {
-		query += ",\n		    featured_execution_settings = " + ac.Next(params.FeaturedExecutionSettings)
+	if params.FeaturedTestCases != nil {
+		query += ",\n		    featured_test_cases = " + ac.Next(params.FeaturedTestCases)
 	}
 
 	if params.Status != nil {
