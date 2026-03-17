@@ -64,7 +64,12 @@ IDP_BASE="https://identitytoolkit.googleapis.com/v1"
 
 echo ""
 echo "==> Step 1: Ensure IDP users exist"
-bash "${SCRIPT_DIR}/setup-e2e-users.sh"
+# Include BOOTSTRAP_ADMIN_EMAIL in the user list (it may differ from the
+# default emulator-admin@test.local, e.g. staging-admin@test.local).
+E2E_USERS="$(jq -n \
+  --arg admin "$BOOTSTRAP_ADMIN_EMAIL" \
+  '["instructor@test.local","student@test.local","student2@test.local"] + [$admin] | unique')" \
+  bash "${SCRIPT_DIR}/setup-e2e-users.sh"
 
 # ── Helper functions ─────────────────────────────────────────────────────────
 
