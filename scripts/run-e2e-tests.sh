@@ -105,4 +105,5 @@ cd frontend
 NEXT_PUBLIC_API_URL=/api/v1 \
 API_BASE_URL="http://localhost:${API_PORT}" \
 FIREBASE_AUTH_EMULATOR_HOST="${HOST}:9099" \
+BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
   npx playwright test "$@"

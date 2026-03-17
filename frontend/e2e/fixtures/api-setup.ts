@@ -44,7 +44,7 @@ setBaseUrl(`${API_BASE}/api/v1`);
 setPublicBaseUrl(`${API_BASE}/api/v1`);
 
 // Admin credentials — must match BOOTSTRAP_ADMIN_EMAIL on the target go-api
-const BOOTSTRAP_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
+const BOOTSTRAP_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL!;
 // Emulator uses a dedicated admin password; staging uses the shared E2E_PASSWORD.
 const BOOTSTRAP_ADMIN_PASSWORD = IS_EMULATOR
   ? 'emulator-admin-password-e2e' // gitleaks:allow

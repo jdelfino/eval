@@ -52,7 +52,7 @@ const ADMIN_PASSWORD = IS_EMULATOR
   ? 'emulator-admin-password-e2e' // gitleaks:allow
   : process.env.E2E_PASSWORD!;
 
-const ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || 'emulator-admin@test.local';
+const ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL!;
 
 export async function loginAsSystemAdmin(page: Page, email?: string): Promise<void> {
   return signInAs(page, email || ADMIN_EMAIL, ADMIN_PASSWORD);

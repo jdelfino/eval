@@ -10,7 +10,7 @@
 #   TENANT_ID=my-tenant-abc123 \
 #   E2E_PASSWORD=secret \
 #   API_BASE_URL=https://staging.eval.example.com \
-#   BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+#   BOOTSTRAP_ADMIN_EMAIL=staging-admin@test.local \
 #   ./scripts/seed-staging.sh
 #
 # Required environment variables:
@@ -18,16 +18,14 @@
 #   TENANT_ID              — Identity Platform tenant ID
 #   E2E_PASSWORD           — Shared password for all test users
 #   API_BASE_URL           — Staging API base URL (no trailing slash)
-#   BOOTSTRAP_ADMIN_EMAIL  — Must be emulator-admin@test.local
+#   BOOTSTRAP_ADMIN_EMAIL  — Admin email matching go-api's BOOTSTRAP_ADMIN_EMAIL
 #
 # Optional environment variables:
 #   IDP_API_KEY  — Identity Platform API key (auto-fetched via gcloud if not set)
 #
-# Dependencies: curl, jq, gcloud (only if IDP_API_KEY is not set)
+# Dependencies: curl, jq, gcloud
 
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Validate required env vars ───────────────────────────────────────────────
 
@@ -60,18 +58,62 @@ fi
 
 IDP_BASE="https://identitytoolkit.googleapis.com/v1"
 
-# ── Step 1: Ensure IDP users exist ──────────────────────────────────────────
-
-echo ""
-echo "==> Step 1: Ensure IDP users exist"
-# Include BOOTSTRAP_ADMIN_EMAIL in the user list (it may differ from the
-# default emulator-admin@test.local, e.g. staging-admin@test.local).
-E2E_USERS="$(jq -n \
-  --arg admin "$BOOTSTRAP_ADMIN_EMAIL" \
-  '["instructor@test.local","student@test.local","student2@test.local"] + [$admin] | unique')" \
-  bash "${SCRIPT_DIR}/setup-e2e-users.sh"
-
 # ── Helper functions ─────────────────────────────────────────────────────────
+
+# ensure_idp_user <email> — create IDP user if it doesn't already exist.
+ensure_idp_user() {
+  local email="$1"
+
+  # Try sign-in to check existence
+  local signin_response
+  signin_response="$(mktemp)"
+  local signin_body
+  signin_body="$(jq -n \
+    --arg email "$email" \
+    --arg password "$E2E_PASSWORD" \
+    --arg tenant "$TENANT_ID" \
+    '{email: $email, password: $password, returnSecureToken: true, tenantId: $tenant}')"
+
+  local signin_code
+  signin_code="$(curl -s -o "$signin_response" -w '%{http_code}' \
+    -X POST -H "Content-Type: application/json" \
+    -d "$signin_body" \
+    "${IDP_BASE}/accounts:signInWithPassword?key=${IDP_API_KEY}")"
+  rm -f "$signin_response"
+
+  if [[ "$signin_code" == "200" ]]; then
+    echo "    IDP user exists: ${email}"
+    return 0
+  fi
+
+  # Create via admin API
+  local access_token
+  access_token="$(gcloud auth print-access-token)"
+  local create_response
+  create_response="$(mktemp)"
+  local create_body
+  create_body="$(jq -n \
+    --arg email "$email" \
+    --arg password "$E2E_PASSWORD" \
+    '{email: $email, password: $password, emailVerified: true}')"
+
+  local create_code
+  create_code="$(curl -s -o "$create_response" -w '%{http_code}' \
+    -X POST \
+    -H "Authorization: Bearer ${access_token}" \
+    -H "Content-Type: application/json" \
+    -d "$create_body" \
+    "${IDP_BASE}/projects/${PROJECT_ID}/tenants/${TENANT_ID}/accounts")"
+
+  if [[ "$create_code" -ge 200 && "$create_code" -lt 300 ]]; then
+    echo "    IDP user created: ${email}"
+  else
+    echo "ERROR: Failed to create IDP user ${email} (HTTP ${create_code}): $(cat "$create_response")" >&2
+    rm -f "$create_response"
+    return 1
+  fi
+  rm -f "$create_response"
+}
 
 # idp_sign_in <email> → prints idToken on stdout, exits non-zero on failure
 idp_sign_in() {
@@ -166,6 +208,7 @@ read_api_status() {
 
 echo ""
 echo "==> Step 2: Sign in as admin (${BOOTSTRAP_ADMIN_EMAIL})"
+ensure_idp_user "$BOOTSTRAP_ADMIN_EMAIL"
 ADMIN_TOKEN="$(idp_sign_in "$BOOTSTRAP_ADMIN_EMAIL")"
 echo "    Admin sign-in OK"
 
@@ -205,6 +248,7 @@ fi
 echo ""
 echo "==> Step 5: Ensure instructor is set up"
 INSTRUCTOR_EMAIL="instructor@test.local"
+ensure_idp_user "$INSTRUCTOR_EMAIL"
 INSTRUCTOR_TOKEN="$(idp_sign_in "$INSTRUCTOR_EMAIL")"
 
 # Check if instructor is already registered by calling GET /auth/me
@@ -424,6 +468,8 @@ register_student() {
   echo "    Student '${display_name}' registered"
 }
 
+ensure_idp_user "student@test.local"
+ensure_idp_user "student2@test.local"
 register_student "student@test.local" "Alice Student"
 register_student "student2@test.local" "Bob Student"
 

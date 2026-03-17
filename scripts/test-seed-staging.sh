@@ -103,14 +103,7 @@ fi
 EOF
   chmod +x "$dir/gcloud"
 
-  # stub setup-e2e-users.sh: write a simple stub into mock dir that just succeeds
   mkdir -p "$dir/scripts"
-  cat > "$dir/scripts/setup-e2e-users.sh" <<'EOF'
-#!/usr/bin/env bash
-echo "MOCK: setup-e2e-users.sh called"
-exit 0
-EOF
-  chmod +x "$dir/scripts/setup-e2e-users.sh"
 
   # mock curl: full API simulation
   cat > "$dir/curl" <<'CURL_EOF'
@@ -150,6 +143,13 @@ write_body() {
 # IDP sign-in
 if [[ "$url" == *"signInWithPassword"* ]]; then
   write_body '{"idToken":"mock-idtoken","localId":"mock-uid-123"}'
+  printf '200'
+  exit 0
+fi
+
+# IDP admin create user
+if [[ "$url" == *"/tenants/"*"/accounts"* && "$method" == "POST" ]]; then
+  write_body '{"localId":"mock-new-uid"}'
   printf '200'
   exit 0
 fi
@@ -259,32 +259,6 @@ CURL_EOF
   chmod +x "$dir/curl"
 
   echo "$dir"
-}
-
-# run_with_mock runs seed-staging.sh inside env -i with the given mock dir and env vars.
-# The mock dir must contain a "scripts" subdirectory with setup-e2e-users.sh
-# We set the SCRIPT_DIR in the seed script by putting the scripts/ stub in mock_dir/scripts/
-# But the seed script itself lives in scripts/ so we patch by prepending mock scripts subdir to PATH
-# instead. Actually we inject mock_dir as SEED_SCRIPT_DIR override via env var.
-# The cleanest approach: override the scripts path by linking/copying the mock from the dir.
-run_with_mock() {
-  local mock_dir="$1"
-  shift
-  # We need the scripts/ directory path to be mockable.
-  # The seed script calls: bash "$(dirname "$0")/setup-e2e-users.sh"
-  # So we place a mock setup-e2e-users.sh in mock_dir and set SCRIPT_DIR override via
-  # symlink trick: put seed-staging.sh copy next to mock setup-e2e-users.sh
-  local run_dir="$mock_dir/scripts"
-  mkdir -p "$run_dir"
-  # Copy real seed script to run dir so dirname resolves correctly
-  cp "$SEED_SCRIPT" "$run_dir/seed-staging.sh"
-
-  env -i \
-    PATH="${mock_dir}:${SYSTEM_PATH}" \
-    HOME="${HOME:-/root}" \
-    TMPDIR="${TMPDIR:-/tmp}" \
-    "$@" \
-    bash "$run_dir/seed-staging.sh"
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -521,6 +495,10 @@ if [[ "\$url" == *"signInWithPassword"* ]]; then
   write_body '{"idToken":"mock-idtoken","localId":"mock-uid"}'
   printf '200'; exit 0
 fi
+if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
+  write_body '{"localId":"mock-new-uid"}'
+  printf '200'; exit 0
+fi
 if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
   write_body '{"id":"uid","email":"instructor@test.local","role":"instructor"}'
   printf '200'; exit 0
@@ -620,6 +598,10 @@ if [[ "\$url" == *"signInWithPassword"* ]]; then
   write_body '{"idToken":"mock-idtoken","localId":"mock-uid"}'
   printf '200'; exit 0
 fi
+if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
+  write_body '{"localId":"mock-new-uid"}'
+  printf '200'; exit 0
+fi
 if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
   write_body '{}'; printf '401'; exit 0
 fi
@@ -705,8 +687,8 @@ fi
 # ────────────────────────────────────────────────────────────────────────────
 
 assert_contains \
-  "Script calls setup-e2e-users.sh" \
-  "setup-e2e-users\.sh"
+  "Script creates IDP users inline via ensure_idp_user" \
+  "ensure_idp_user"
 
 assert_contains \
   "Script uses signInWithPassword IDP endpoint" \
@@ -777,6 +759,10 @@ write_body() { [[ -n "\$output_file" ]] && printf '%s' "\$1" > "\$output_file"; 
 
 if [[ "\$url" == *"signInWithPassword"* ]]; then
   write_body '{"idToken":"mock-idtoken","localId":"mock-uid"}'
+  printf '200'; exit 0
+fi
+if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
+  write_body '{"localId":"mock-new-uid"}'
   printf '200'; exit 0
 fi
 if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
