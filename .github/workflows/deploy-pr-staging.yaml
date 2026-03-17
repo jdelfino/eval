@@ -206,6 +206,24 @@ jobs:
           kubectl rollout status deployment/executor -n staging --timeout=120s
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
+      - name: Read staging config
+        run: |
+          TENANT_ID=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.FIREBASE_TENANT_ID}')
+          API_KEY=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.IDENTITY_PLATFORM_API_KEY}')
+          BOOTSTRAP_EMAIL=$(kubectl get configmap app-config -n staging -o jsonpath='{.data.BOOTSTRAP_ADMIN_EMAIL}')
+          echo "TENANT_ID=$TENANT_ID" >> "$GITHUB_ENV"
+          echo "API_KEY=$API_KEY" >> "$GITHUB_ENV"
+          echo "BOOTSTRAP_EMAIL=$BOOTSTRAP_EMAIL" >> "$GITHUB_ENV"
+      - name: Seed staging data
+        continue-on-error: true
+        env:
+          PROJECT_ID: eval-prod-485520
+          TENANT_ID: ${{ env.TENANT_ID }}
+          IDP_API_KEY: ${{ env.API_KEY }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          API_BASE_URL: https://staging.eval.delquillan.com
+          BOOTSTRAP_ADMIN_EMAIL: ${{ env.BOOTSTRAP_EMAIL }}
+        run: bash scripts/seed-staging.sh
 
   # ── Comment on PR ─────────────────────────────────────────────────────────
   # Post a comment on the PR with the staging URL, deployed commit SHA,
