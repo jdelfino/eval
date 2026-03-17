@@ -20,7 +20,7 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/store"
 )
 
-// mockTestRunnerClient implements TestRunnerClient for testing.
+// mockTestRunnerClient implements ExecutorClient for testing.
 type mockTestRunnerClient struct {
 	executeFn func(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error)
 }
@@ -81,7 +81,7 @@ func (r *testExecSessionRepos) GetSession(ctx context.Context, id uuid.UUID) (*s
 
 // setupStudentWorkTestHandler creates an http.Handler wired to TestExecutionHandler
 // for the student-work/{id}/test endpoint.
-func setupStudentWorkTestHandler(runnerClient TestRunnerClient) http.Handler {
+func setupStudentWorkTestHandler(runnerClient ExecutorClient) http.Handler {
 	h := NewTestExecutionHandler(runnerClient)
 	r := chi.NewRouter()
 	r.Post("/student-work/{id}/test", h.StudentWorkTest)
@@ -737,10 +737,10 @@ func TestSessionTest_404TestNameNotFound(t *testing.T) {
 // --- Execute method on executor Client tests ---
 
 func TestExecutorClientExecute_InterfaceCompliance(t *testing.T) {
-	// Verify that executor.Client satisfies TestRunnerClient interface.
+	// Verify that executor.Client satisfies ExecutorClient interface.
 	// This is a compile-time check via assignment; if the interface is
 	// missing from executor.Client, this test fails to compile.
-	var _ TestRunnerClient = (*testRunnerClientVerify)(nil)
+	var _ ExecutorClient = (*testRunnerClientVerify)(nil)
 }
 
 // testRunnerClientVerify is a minimal implementation to ensure interface shape.

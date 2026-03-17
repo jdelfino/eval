@@ -180,7 +180,7 @@ func (h *ExecuteHandler) runCases(
 	timeoutMs int,
 ) ([]executorapi.CaseResult, bool, error) {
 	// Serialize the case definitions to JSON so they can be passed to the wrapper script
-	// as an attached file. We map CaseDef -> IOTestDef format for the existing Python runner.
+	// as an attached file.
 	ioTests := make([]map[string]interface{}, 0, len(req.Cases))
 	for _, c := range req.Cases {
 		def := map[string]interface{}{
@@ -190,6 +190,9 @@ func (h *ExecuteHandler) runCases(
 		}
 		if c.ExpectedOutput != "" {
 			def["expected_output"] = c.ExpectedOutput
+		}
+		if c.RandomSeed != nil {
+			def["random_seed"] = *c.RandomSeed
 		}
 		ioTests = append(ioTests, def)
 	}

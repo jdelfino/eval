@@ -15,19 +15,14 @@ import (
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
-// TestRunnerClient is the interface for sending test execution requests to the executor service.
-type TestRunnerClient interface {
-	Execute(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error)
-}
-
 // TestExecutionHandler handles I/O test execution requests.
 type TestExecutionHandler struct {
-	runner     TestRunnerClient
+	runner     ExecutorClient
 	activation ActivationService
 }
 
 // NewTestExecutionHandler creates a new TestExecutionHandler.
-func NewTestExecutionHandler(runner TestRunnerClient) *TestExecutionHandler {
+func NewTestExecutionHandler(runner ExecutorClient) *TestExecutionHandler {
 	return &TestExecutionHandler{runner: runner}
 }
 
