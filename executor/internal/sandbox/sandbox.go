@@ -75,14 +75,15 @@ type Config struct {
 
 // Request describes what to execute inside the sandbox.
 type Request struct {
-	Code       string
-	Stdin      string
-	Files      []File
-	RandomSeed *int
-	TimeoutMs  int
-	Args       []string // Additional arguments passed to the Python script.
-	Language   string   // Target language: "", "python", or "java".
-	IsCommand  bool     // When true, Code is a command string to execute directly (not source to compile).
+	Code          string
+	Stdin         string
+	Files         []File
+	RandomSeed    *int
+	TimeoutMs     int
+	Args          []string // Additional arguments passed to the Python script.
+	Language      string   // Target language: "", "python", or "java".
+	InnerLanguage string   // Language of subprocesses spawned by the script (e.g. "java" for io_test_runner).
+	IsCommand     bool     // When true, Code is a command string to execute directly (not source to compile).
 }
 
 // File is an attached file available to the executed program.
@@ -500,6 +501,16 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// These flags are required for running nsjail inside GKE containers.
 	// For environments where nsjail cannot run at all (CI, devcontainers),
 	// use DISABLE_SANDBOX=true to run with RunUnsafe instead.
+	//
+	// When InnerLanguage is "java", the script will spawn a JVM subprocess.
+	// The JVM requires more virtual address space than pure Python, so we use
+	// --rlimit_as soft and add the Java-specific bind mounts.
+	rlimitAS := "128"
+	rlimitNProc := "10"
+	if req.InnerLanguage == "java" {
+		rlimitAS = "soft"
+		rlimitNProc = "64"
+	}
 	args := []string{
 		"--mode", "once",
 		"--chroot", chrootDir,
@@ -508,9 +519,9 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		"--user", "65534",
 		"--group", "65534",
 		"--time_limit", fmt.Sprintf("%d", timeoutSec),
-		"--rlimit_as", "128",
+		"--rlimit_as", rlimitAS,
 		"--rlimit_fsize", "10",
-		"--rlimit_nproc", "10",
+		"--rlimit_nproc", rlimitNProc,
 		"--cwd", "/tmp/work",
 		"--bindmount_ro", "/usr/bin",
 		"--bindmount_ro", "/usr/lib",
@@ -540,6 +551,21 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	// Add /usr/lib64 bind mount if it exists (needed on some distros).
 	if info, err := os.Stat("/usr/lib64"); err == nil && info.IsDir() {
 		args = appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib64")
+	}
+	// Add Java-specific bind mounts when the script will spawn a JVM subprocess.
+	if req.InnerLanguage == "java" {
+		// /etc/ld.so.cache — pre-built dynamic linker cache used to find libjli.so
+		if _, err := os.Stat("/etc/ld.so.cache"); err == nil {
+			args = appendBeforeTerminator(args, "--bindmount_ro", "/etc/ld.so.cache")
+		}
+		// /etc/alternatives — Debian symlink targets for java/javac
+		if info, err := os.Stat("/etc/alternatives"); err == nil && info.IsDir() {
+			args = appendBeforeTerminator(args, "--bindmount_ro", "/etc/alternatives")
+		}
+		// /usr/lib/jvm — JDK installation (may already be covered by /usr/lib, but explicit is safer)
+		if info, err := os.Stat("/usr/lib/jvm"); err == nil && info.IsDir() {
+			args = appendBeforeTerminator(args, "--bindmount_ro", "/usr/lib/jvm")
+		}
 	}
 
 	// Create a derived context with a deadline so that if nsjail hangs beyond

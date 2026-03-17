@@ -133,8 +133,11 @@ describe('ProblemCreator — Cases Section', () => {
       await user.click(screen.getByRole('tab', { name: /cases/i }));
       await user.click(screen.getByRole('button', { name: /add case/i }));
 
-      // Submit (title is committed, button is enabled)
-      await user.click(screen.getByText('Create Problem'));
+      // In Node 20 + React 18, the title state update may not be committed until
+      // waitFor flushes it. Wait for the button to be enabled before clicking.
+      const createBtn = screen.getByRole('button', { name: /create problem/i });
+      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await user.click(createBtn);
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -162,7 +165,10 @@ describe('ProblemCreator — Cases Section', () => {
       // Use userEvent so title state is committed reliably in React 18
       await user.type(screen.getByLabelText('Title *'), 'Test');
 
-      await user.click(screen.getByText('Create Problem'));
+      // In Node 20 + React 18, wait for the button to be enabled before clicking.
+      const createBtn = screen.getByRole('button', { name: /create problem/i });
+      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await user.click(createBtn);
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
@@ -266,8 +272,10 @@ describe('ProblemCreator — Cases Section', () => {
       // Verify case is visible
       expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
 
-      // Submit (title is committed, button is enabled)
-      await user.click(screen.getByText('Create Problem'));
+      // In Node 20 + React 18, wait for the button to be enabled before clicking.
+      const createBtn = screen.getByRole('button', { name: /create problem/i });
+      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await user.click(createBtn);
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalled();
