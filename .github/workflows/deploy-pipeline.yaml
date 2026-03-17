@@ -199,7 +199,10 @@ jobs:
           kubectl rollout status deployment/frontend -n staging --timeout=120s
           kubectl rollout status deployment/centrifugo -n staging --timeout=120s
       - name: Apply staging ingress proxy
-        run: kubectl apply -f k8s/staging-ingress/
+        run: |
+          kubectl apply -f k8s/staging-ingress/
+          # Restart to pick up configmap changes and re-resolve DNS for new pod IPs
+          kubectl rollout restart deployment/staging-ingress-proxy
       - name: Wait for staging-ingress-proxy rollout
         run: |
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s

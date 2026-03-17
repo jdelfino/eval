@@ -7,6 +7,11 @@ data:
     events {}
 
     http {
+      # Use kube-dns for dynamic upstream resolution.
+      # Without this, nginx caches DNS from startup and never re-resolves,
+      # causing 504s when backend pods get new IPs during rolling updates.
+      resolver kube-dns.kube-system.svc.cluster.local valid=5s;
+
       server {
         listen 8080;
 
@@ -18,7 +23,8 @@ data:
 
         # WebSocket proxy to staging centrifugo
         location = /connection/websocket {
-          proxy_pass http://centrifugo.staging.svc.cluster.local:8000;
+          set $upstream_centrifugo http://centrifugo.staging.svc.cluster.local:8000;
+          proxy_pass $upstream_centrifugo;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
@@ -29,7 +35,8 @@ data:
 
         # API proxy to staging go-api
         location /api/ {
-          proxy_pass http://go-api.staging.svc.cluster.local:80;
+          set $upstream_api http://go-api.staging.svc.cluster.local:80;
+          proxy_pass $upstream_api;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -37,7 +44,8 @@ data:
 
         # Default backend — staging frontend
         location / {
-          proxy_pass http://frontend.staging.svc.cluster.local:80;
+          set $upstream_frontend http://frontend.staging.svc.cluster.local:80;
+          proxy_pass $upstream_frontend;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
