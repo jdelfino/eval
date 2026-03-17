@@ -129,27 +129,7 @@ describe('useSessionOperations', () => {
       starter_code: 'print("test")',
     };
 
-    const mockSettings = {
-      stdin: 'test input',
-      random_seed: 42,
-    };
-
-    it('updates a problem successfully', async () => {
-      mockApiPost.mockResolvedValueOnce({});
-
-      const { result } = renderHook(() => useSessionOperations());
-
-      await act(async () => {
-        await result.current.updateProblem('session-1', mockProblem, mockSettings);
-      });
-
-      expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
-        problem: mockProblem,
-        execution_settings: mockSettings,
-      });
-    });
-
-    it('updates problem without execution settings', async () => {
+    it('updates a problem successfully without execution_settings', async () => {
       mockApiPost.mockResolvedValueOnce({});
 
       const { result } = renderHook(() => useSessionOperations());
@@ -160,8 +140,10 @@ describe('useSessionOperations', () => {
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
         problem: mockProblem,
-        execution_settings: undefined,
       });
+      // execution_settings should NOT be sent
+      const callArgs = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+      expect('execution_settings' in callArgs).toBe(false);
     });
 
     it('sets error when update fails', async () => {

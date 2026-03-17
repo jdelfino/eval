@@ -9,7 +9,7 @@ import type { ExecutionResult } from '../api';
 
 // Task PLAT-uum.49: instructor types should re-export from canonical sources
 import type { ClassInfo, ClassWithSections, ProblemSummary, Student as InstructorStudent, RealtimeStudent } from '../../app/(app)/instructor/types';
-import type { ExecutionSettings } from '../problem';
+import type { IOTestCase } from '../problem';
 
 describe('ExecutionResult consolidation (PLAT-uum.46)', () => {
   it('ExecutionResult from api.ts has all required fields including stdin', () => {
@@ -26,26 +26,30 @@ describe('ExecutionResult consolidation (PLAT-uum.46)', () => {
 });
 
 describe('Instructor types consolidation (PLAT-uum.49)', () => {
-  it('Student uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'test', random_seed: 42 };
+  it('Student uses test_cases from types/problem (not ExecutionSettings)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Case 1', input: 'test', match_type: 'exact', order: 0 }];
     const student: InstructorStudent = {
       id: 'u-1',
       name: 'Alice',
       has_code: true,
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('test');
+    expect(student.test_cases?.[0].input).toBe('test');
+    // execution_settings should not be on InstructorStudent
+    expect('execution_settings' in student).toBe(false);
   });
 
-  it('RealtimeStudent uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'input' };
+  it('RealtimeStudent uses test_cases from types/problem (not ExecutionSettings)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Case 1', input: 'input', match_type: 'exact', order: 0 }];
     const student: RealtimeStudent = {
       id: 'u-2',
       name: 'Bob',
       code: 'print(1)',
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('input');
+    expect(student.test_cases?.[0].input).toBe('input');
+    // execution_settings should not be on RealtimeStudent
+    expect('execution_settings' in student).toBe(false);
   });
 
   it('ClassInfo has the expected shape', () => {

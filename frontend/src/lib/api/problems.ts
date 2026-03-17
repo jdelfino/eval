@@ -82,7 +82,6 @@ export async function createProblem(data: {
   description?: string;
   starter_code?: string;
   test_cases?: unknown[];
-  execution_settings?: unknown;
   class_id?: string;
   tags?: string[];
   solution?: string;
@@ -102,7 +101,6 @@ export async function updateProblem(id: string, data: Partial<{
   description: string | null;
   starter_code: string | null;
   test_cases: unknown[];
-  execution_settings: unknown;
   class_id: string | null;
   tags: string[];
   solution: string | null;

@@ -865,7 +865,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: '# Main Header\n\nSome content\n\n## Sub Header',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -886,7 +886,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'This is **bold** text.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -907,7 +907,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Call the `main()` function to start.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -928,7 +928,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: '## Requirements\n\n- First item\n- Second item\n- Third item',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -951,7 +951,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'See [Python docs](https://docs.python.org) for more info.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -973,7 +973,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Example:\n\n```python\nprint("hello")\n```',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1008,7 +1008,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: '# Main Header\n\nSome content\n\n## Sub Header',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1034,7 +1034,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'This is **bold** text.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1060,7 +1060,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Call the `main()` function to start.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1086,7 +1086,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: '## Requirements\n\n- First item\n- Second item',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1128,7 +1128,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'This is a test problem description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1152,7 +1152,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1194,7 +1194,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1709,7 +1709,6 @@ describe('CodeEditor - Font Size Scaling', () => {
     title: 'Test Problem',
     description: 'A test problem description.',
     starter_code: '',
-    execution_settings: {},
     created_at: new Date(),
     updated_at: new Date(),
     language: 'python',
@@ -2059,7 +2058,7 @@ describe('CodeEditor - Cases Panel Integration', () => {
         onChange={jest.fn()}
         instructorCases={instructorCases}
         caseRunner={mockCaseRunner}
-        problem={{ id: 'p1', title: 'Test', description: null, starter_code: null, test_cases: null, execution_settings: null, author_id: 'u1', class_id: null, tags: [], solution: null, language: 'python', created_at: new Date(), updated_at: new Date() }}
+        problem={{ id: 'p1', title: 'Test', description: null, starter_code: null, test_cases: null, author_id: 'u1', class_id: null, tags: [], solution: null, language: 'python', created_at: new Date(), updated_at: new Date() }}
         execution_result={null}
       />
     );

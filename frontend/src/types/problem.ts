@@ -10,16 +10,6 @@
 import type { Problem as ApiProblem } from './api';
 
 // ---------------------------------------------------------------------------
-// Execution settings
-// ---------------------------------------------------------------------------
-
-export interface ExecutionSettings {
-  stdin?: string;
-  random_seed?: number;
-  attached_files?: Array<{ name: string; content: string }>;
-}
-
-// ---------------------------------------------------------------------------
 // I/O test case types
 // ---------------------------------------------------------------------------
 
@@ -80,7 +70,6 @@ export interface Problem {
   description: string | null;
   starter_code: string | null;
   test_cases: IOTestCase[] | null;
-  execution_settings: ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -111,7 +100,6 @@ export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
     test_cases: api.test_cases as IOTestCase[] | null,
-    execution_settings: api.execution_settings as ExecutionSettings | null,
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),
   };

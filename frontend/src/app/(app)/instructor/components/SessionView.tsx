@@ -13,7 +13,9 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 

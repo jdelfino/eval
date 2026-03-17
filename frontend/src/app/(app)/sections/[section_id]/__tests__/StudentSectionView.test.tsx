@@ -83,7 +83,7 @@ const activeSessionWithProblem: Session = {
     description: 'Write a FizzBuzz solution',
     starter_code: null,
     test_cases: null,
-    execution_settings: null,
+
     author_id: 'user-1',
     class_id: CLASS_ID,
     tags: ['loops'],
@@ -113,7 +113,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       description: 'Write a FizzBuzz solution',
       starter_code: null,
       test_cases: [],
-      execution_settings: {},
+
       author_id: 'user-1',
       class_id: null,
       tags: ['loops', 'conditionals'],
@@ -128,7 +128,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       section_id: SECTION_ID,
       problem_id: PROBLEM_ID_1,
       code: '',
-      execution_settings: {},
+      test_cases: null,
       last_update: '2026-02-20T10:00:00Z',
       created_at: '2026-02-20T10:00:00Z',
     },
@@ -147,7 +147,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       description: 'Implement binary search',
       starter_code: null,
       test_cases: [],
-      execution_settings: {},
+
       author_id: 'user-1',
       class_id: null,
       tags: ['arrays', 'search'],
@@ -294,7 +294,7 @@ describe('StudentSectionView', () => {
         section_id: SECTION_ID,
         problem_id: PROBLEM_ID_1,
         code: '',
-        execution_settings: null,
+    
         last_update: '2026-02-20T10:00:00Z',
         created_at: '2026-02-20T10:00:00Z',
       });
@@ -452,7 +452,7 @@ describe('StudentSectionView', () => {
         section_id: SECTION_ID,
         problem_id: PROBLEM_ID_2,
         code: '',
-        execution_settings: null,
+    
         last_update: '2026-02-20T10:00:00Z',
         created_at: '2026-02-20T10:00:00Z',
       });
@@ -482,7 +482,7 @@ describe('StudentSectionView', () => {
         section_id: SECTION_ID,
         problem_id: PROBLEM_ID_1,
         code: 'existing code',
-        execution_settings: null,
+    
         last_update: '2026-02-20T10:00:00Z',
         created_at: '2026-02-20T10:00:00Z',
       });
@@ -598,7 +598,7 @@ describe('StudentSectionView', () => {
             description: 'Implement binary search',
             starter_code: null,
             test_cases: [],
-            execution_settings: {},
+      
             author_id: 'user-1',
             class_id: null,
             tags: ['arrays'],
@@ -641,7 +641,7 @@ describe('StudentSectionView', () => {
             description: 'Write a FizzBuzz solution',
             starter_code: null,
             test_cases: [],
-            execution_settings: {},
+      
             author_id: 'user-1',
             class_id: null,
             tags: [],
@@ -656,7 +656,7 @@ describe('StudentSectionView', () => {
             section_id: SECTION_ID,
             problem_id: PROBLEM_ID_1,
             code: '',
-            execution_settings: {},
+            test_cases: null,
             last_update: '2026-02-20T10:00:00Z',
             created_at: '2026-02-20T10:00:00Z',
           },
@@ -732,7 +732,7 @@ describe('StudentSectionView', () => {
           description: 'Write a FizzBuzz solution',
           starter_code: null,
           test_cases: [],
-          execution_settings: {},
+    
           author_id: 'user-1',
           class_id: null,
           tags: [],
@@ -747,7 +747,7 @@ describe('StudentSectionView', () => {
           section_id: SECTION_ID,
           problem_id: PROBLEM_ID_1,
           code: '',
-          execution_settings: {},
+          test_cases: null,
           last_update: '2026-02-20T10:00:00Z',
           created_at: '2026-02-20T10:00:00Z',
         },
@@ -817,7 +817,7 @@ describe('StudentSectionView', () => {
             description: 'Write a FizzBuzz solution',
             starter_code: null,
             test_cases: [],
-            execution_settings: {},
+      
             author_id: 'user-1',
             class_id: null,
             tags: [],

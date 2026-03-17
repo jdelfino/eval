@@ -6,7 +6,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import type { Problem } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
@@ -116,9 +118,8 @@ function StudentPage() {
         setProblemId(data.problem_id);
         setProblem(data.problem);
         setCode(data.code);
-        if (data.execution_settings) {
-          setStudentExecutionSettings(data.execution_settings as typeof studentExecutionSettings);
-        }
+        // TODO(PLAT-oztv.7): Load test_cases from student work
+        void data.test_cases; // test_cases replaces execution_settings
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
         setMode('error');
@@ -205,9 +206,8 @@ function StudentPage() {
         if (result.code) {
           setCode(result.code);
         }
-        if (result.execution_settings) {
-          setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
-        }
+        // TODO(PLAT-oztv.7): Load test_cases from session student
+        void result.test_cases; // test_cases replaces execution_settings
 
         // Check if session is already completed
         if (session?.status === 'completed') {
@@ -237,7 +237,8 @@ function StudentPage() {
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        execution_settings: studentExecutionSettings || undefined,
+        // TODO(PLAT-oztv.7): Pass test_cases here instead
+        test_cases: undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });
@@ -251,7 +252,8 @@ function StudentPage() {
     if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
 
     const timeout = setTimeout(() => {
-      realtimeUpdateCode(user.id, code, studentExecutionSettings || undefined);
+      // TODO(PLAT-oztv.7): Pass test_cases here instead of execution settings
+      realtimeUpdateCode(user.id, code, undefined as IOTestCase[] | undefined);
     }, 500);
 
     return () => clearTimeout(timeout);
@@ -324,11 +326,8 @@ function StudentPage() {
     setExecutionResult(null);
 
     try {
-      const result = await executeCode(code, problem.language, {
-        stdin: execution_settings.stdin,
-        random_seed: execution_settings.random_seed,
-        attached_files: execution_settings.attached_files,
-      });
+      // TODO(PLAT-oztv.7): Pass selected test case as cases[] param
+      const result = await executeCode(code, problem.language);
       setExecutionResult(result);
       setIsRunning(false);
     } catch (err: any) {
@@ -408,7 +407,8 @@ function StudentPage() {
     );
   }
 
-  const sessionExecutionSettings = problem?.execution_settings || {};
+  // TODO(PLAT-oztv.7): Remove sessionExecutionSettings — use test_cases from problem instead
+  const sessionExecutionSettings: ExecutionSettings = {};
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">

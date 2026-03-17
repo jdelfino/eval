@@ -20,7 +20,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -92,11 +94,7 @@ export default function InstructorSessionPage() {
       id: s.user_id,
       name: s.name,
       has_code: !!s.code,
-      execution_settings: {
-        random_seed: s.execution_settings?.random_seed,
-        stdin: s.execution_settings?.stdin,
-        attached_files: s.execution_settings?.attached_files,
-      },
+      test_cases: s.test_cases,
       last_code_update: s.last_update,
     })),
     [realtimeStudents]
@@ -108,7 +106,7 @@ export default function InstructorSessionPage() {
       id: s.user_id,
       name: s.name,
       code: s.code,
-      execution_settings: s.execution_settings,
+      test_cases: s.test_cases,
     })),
     [realtimeStudents]
   );
@@ -126,7 +124,8 @@ export default function InstructorSessionPage() {
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    setSessionExecutionSettings(realtimeSession.problem?.execution_settings || {});
+    // TODO(PLAT-oztv.7): Wire sessionExecutionSettings to test_cases
+    setSessionExecutionSettings({});
   }, [realtimeSession]);
 
   // Show connection status in the global header
@@ -174,7 +173,8 @@ export default function InstructorSessionPage() {
 
   const handleUpdateProblem = useCallback(async (
     problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
+    // TODO(PLAT-oztv.7): Replace execution_settings with test_cases
+    _execution_settings?: {
       stdin?: string;
       random_seed?: number;
       attached_files?: Array<{ name: string; content: string }>;
@@ -183,7 +183,7 @@ export default function InstructorSessionPage() {
     if (!session_id) return;
 
     try {
-      await apiUpdateProblem(session_id, problem, execution_settings);
+      await apiUpdateProblem(session_id, problem);
     } catch (err: any) {
       setError(err.message || 'Failed to update problem');
     }
@@ -212,14 +212,11 @@ export default function InstructorSessionPage() {
   const handleExecuteCode = useCallback(async (
     _studentId: string,
     code: string,
-    execution_settings: ExecutionSettings
+    // TODO(PLAT-oztv.7): Replace execution_settings with test_cases
+    _execution_settings: ExecutionSettings
   ) => {
     const language = sessionProblem?.language || 'python';
-    return apiExecuteCode(code, language, {
-      stdin: execution_settings.stdin,
-      random_seed: execution_settings.random_seed,
-      attached_files: execution_settings.attached_files,
-    });
+    return apiExecuteCode(code, language);
   }, [sessionProblem?.language]);
 
   // Loading state

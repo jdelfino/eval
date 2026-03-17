@@ -5,11 +5,12 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
+import { executeCode } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import type { ExecutionSettings } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -75,15 +76,12 @@ function PublicViewContent() {
   const [isRunning, setIsRunning] = useState(false);
   const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
 
-  const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
+  const handleRunCode = (codeToRun: string) => (_execution_settings: ExecutionSettings) => {
+    // TODO(PLAT-oztv.7): Wire to featured_test_cases instead of execution_settings
     const language = (state?.problem as any)?.language || 'python';
-    const options: ExecuteOptions = {};
-    if (execution_settings.stdin) options.stdin = execution_settings.stdin;
-    if (execution_settings.random_seed !== undefined) options.random_seed = execution_settings.random_seed;
-    if (execution_settings.attached_files) options.attached_files = execution_settings.attached_files;
     setIsRunning(true);
     setExecutionResult(null);
-    executeCode(codeToRun, language, options)
+    executeCode(codeToRun, language)
       .then(setExecutionResult)
       .catch((err) => {
         setExecutionResult({
@@ -128,9 +126,10 @@ function PublicViewContent() {
   const debuggerHook = useApiDebugger();
 
   // Derive featured stdin for the CodeEditor
+  // TODO(PLAT-oztv.7): Use featured_test_cases instead of inferring stdin
   const featuredStdin = (() => {
-    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
-    return settings?.stdin;
+    const testCases = state?.featured_test_cases;
+    return testCases?.[0]?.input;
   })();
 
   // Reset local code when featured student or their code changes
@@ -144,7 +143,7 @@ function PublicViewContent() {
       setLocalCode(state?.featured_code ?? '');
       hasUserEdited.current = false;
     }
-  }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
+  }, [state?.featured_student_id, state?.featured_code, state?.featured_test_cases, state?.problem]);
 
   // Track user edits to the scratch pad
   const handleCodeChange = (code: string) => {

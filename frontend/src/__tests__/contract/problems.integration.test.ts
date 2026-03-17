@@ -85,7 +85,7 @@ describe('Problems API', () => {
 
       // Validate nullable complex fields
       expect('test_cases' in problem).toBe(true);
-      expect('execution_settings' in problem).toBe(true);
+
 
       // Verify the values match what we sent
       expect(problem.title).toBe(title);
@@ -125,7 +125,7 @@ describe('Problems API', () => {
 
       // Validate nullable complex fields
       expect('test_cases' in problem).toBe(true);
-      expect('execution_settings' in problem).toBe(true);
+
 
       // Verify it matches the created problem
       expect(problem.id).toBe(createdProblemId);
@@ -246,7 +246,7 @@ describe('Problems API', () => {
 
       // Validate nullable complex fields
       expect('test_cases' in problem).toBe(true);
-      expect('execution_settings' in problem).toBe(true);
+
 
       // Verify the updated values
       expect(problem.id).toBe(createdProblemId);
@@ -323,7 +323,7 @@ describe('Problems API', () => {
 
         // Validate complex fields can be null or present
         expect('test_cases' in problem).toBe(true);
-        expect('execution_settings' in problem).toBe(true);
+  
 
         // CRITICAL: Verify NO internal fields are present
         expect(problem).not.toHaveProperty('id');
