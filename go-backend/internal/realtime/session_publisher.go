@@ -10,10 +10,10 @@ import (
 // SessionPublisher provides typed methods for publishing session events.
 type SessionPublisher interface {
 	StudentJoined(ctx context.Context, sessionID, userID, displayName string) error
-	CodeUpdated(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error
+	CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
 	SessionEnded(ctx context.Context, sessionID, reason string) error
 	SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error
-	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error
+	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
 	SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error
 	SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error
@@ -65,11 +65,11 @@ func (s *sessionPublisher) StudentJoined(ctx context.Context, sessionID, userID,
 	})
 }
 
-func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	return s.publish(ctx, sessionID, EventStudentCodeUpdated, StudentCodeUpdatedData{
-		UserID:            userID,
-		Code:              code,
-		ExecutionSettings: executionSettings,
+		UserID:    userID,
+		Code:      code,
+		TestCases: testCases,
 	})
 }
 
@@ -86,11 +86,11 @@ func (s *sessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, ne
 	})
 }
 
-func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, executionSettings json.RawMessage) error {
+func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	return s.publish(ctx, sessionID, EventFeaturedStudentChanged, FeaturedStudentChangedData{
-		UserID:            userID,
-		Code:              code,
-		ExecutionSettings: executionSettings,
+		UserID:    userID,
+		Code:      code,
+		TestCases: testCases,
 	})
 }
 

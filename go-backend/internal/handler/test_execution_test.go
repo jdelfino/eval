@@ -22,11 +22,11 @@ import (
 
 // mockTestRunnerClient implements TestRunnerClient for testing.
 type mockTestRunnerClient struct {
-	runTestsFn func(ctx context.Context, req executor.TestRequest) (*executor.TestResponse, error)
+	executeFn func(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error)
 }
 
-func (m *mockTestRunnerClient) RunTests(ctx context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
-	return m.runTestsFn(ctx, req)
+func (m *mockTestRunnerClient) Execute(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+	return m.executeFn(ctx, req)
 }
 
 // testStudentWorkID and testProblemID are stable UUIDs for test fixtures.
@@ -46,10 +46,10 @@ func testStudentWorkWithProblem(testCasesJSON string) *store.StudentWorkWithProb
 	}
 	return &store.StudentWorkWithProblem{
 		StudentWork: store.StudentWork{
-			ID:       testWorkID,
-			UserID:   testStudentID, // testStudentID from execute_test.go: dddddddd-...
+			ID:        testWorkID,
+			UserID:    testStudentID, // testStudentID from execute_test.go: dddddddd-...
 			ProblemID: testProblemID,
-			Code:     `print("hello")`,
+			Code:      `print("hello")`,
 		},
 		Problem: store.Problem{
 			ID:        testProblemID,
@@ -91,15 +91,15 @@ func setupStudentWorkTestHandler(runnerClient TestRunnerClient) http.Handler {
 // --- student-work/{id}/test tests ---
 
 func TestStudentWorkTest_HappyPath_AllTests(t *testing.T) {
-	var capturedReq executor.TestRequest
+	var capturedReq executor.ExecuteRequest
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.TestResponse{
-				Results: []executor.TestResult{
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
 					{Name: "case1", Type: "io", Status: "passed"},
 				},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -129,7 +129,7 @@ func TestStudentWorkTest_HappyPath_AllTests(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp executor.TestResponse
+	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -147,24 +147,27 @@ func TestStudentWorkTest_HappyPath_AllTests(t *testing.T) {
 	if capturedReq.Language != "python" {
 		t.Errorf("expected language 'python', got %q", capturedReq.Language)
 	}
-	if len(capturedReq.IOTests) != 1 {
-		t.Errorf("expected 1 io test forwarded, got %d", len(capturedReq.IOTests))
+	if len(capturedReq.Cases) != 1 {
+		t.Errorf("expected 1 case forwarded, got %d", len(capturedReq.Cases))
 	}
-	if capturedReq.IOTests[0].Name != "case1" {
-		t.Errorf("expected test name 'case1', got %q", capturedReq.IOTests[0].Name)
+	if capturedReq.Cases[0].Name != "case1" {
+		t.Errorf("expected case name 'case1', got %q", capturedReq.Cases[0].Name)
+	}
+	if capturedReq.Cases[0].Type != "io" {
+		t.Errorf("expected case type 'io', got %q", capturedReq.Cases[0].Type)
 	}
 }
 
 func TestStudentWorkTest_HappyPath_SingleTest(t *testing.T) {
-	var capturedReq executor.TestRequest
+	var capturedReq executor.ExecuteRequest
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.TestResponse{
-				Results: []executor.TestResult{
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
 					{Name: "case1", Type: "io", Status: "passed"},
 				},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -192,12 +195,12 @@ func TestStudentWorkTest_HappyPath_SingleTest(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Only one test should be forwarded when test_name is specified
-	if len(capturedReq.IOTests) != 1 {
-		t.Errorf("expected 1 io test forwarded for single test_name filter, got %d", len(capturedReq.IOTests))
+	// Only one case should be forwarded when test_name is specified
+	if len(capturedReq.Cases) != 1 {
+		t.Errorf("expected 1 case forwarded for single test_name filter, got %d", len(capturedReq.Cases))
 	}
-	if capturedReq.IOTests[0].Name != "case1" {
-		t.Errorf("expected only 'case1' forwarded, got %q", capturedReq.IOTests[0].Name)
+	if capturedReq.Cases[0].Name != "case1" {
+		t.Errorf("expected only 'case1' forwarded, got %q", capturedReq.Cases[0].Name)
 	}
 }
 
@@ -287,10 +290,10 @@ func TestStudentWorkTest_InstructorCanAccessAnyWork(t *testing.T) {
 	// work.StudentWork.UserID is testStudentID, instructor is a different user
 
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -368,13 +371,13 @@ func TestStudentWorkTest_404TestNameNotFound(t *testing.T) {
 
 func TestStudentWorkTest_503OnExecutorConnectionError(t *testing.T) {
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			urlErr := &url.Error{
 				Op:  "Post",
-				URL: "http://executor:8080/test",
+				URL: "http://executor:8080/execute",
 				Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED},
 			}
-			return nil, fmt.Errorf("executor: send test request: %w", urlErr)
+			return nil, fmt.Errorf("executor: send request: %w", urlErr)
 		},
 	}
 
@@ -418,15 +421,15 @@ func testSessionWithProblem(testCasesJSON string) *store.Session {
 }
 
 func TestSessionTest_HappyPath_AllTests(t *testing.T) {
-	var capturedReq executor.TestRequest
+	var capturedReq executor.ExecuteRequest
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.TestResponse{
-				Results: []executor.TestResult{
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
 					{Name: "case1", Type: "io", Status: "passed"},
 				},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -468,19 +471,22 @@ func TestSessionTest_HappyPath_AllTests(t *testing.T) {
 	if capturedReq.Language != "python" {
 		t.Errorf("expected language 'python', got %q", capturedReq.Language)
 	}
-	if len(capturedReq.IOTests) != 1 || capturedReq.IOTests[0].Name != "case1" {
-		t.Errorf("expected 1 io test 'case1', got %v", capturedReq.IOTests)
+	if len(capturedReq.Cases) != 1 || capturedReq.Cases[0].Name != "case1" {
+		t.Errorf("expected 1 case 'case1', got %v", capturedReq.Cases)
+	}
+	if capturedReq.Cases[0].Type != "io" {
+		t.Errorf("expected case type 'io', got %q", capturedReq.Cases[0].Type)
 	}
 }
 
 func TestSessionTest_HappyPath_SingleTest(t *testing.T) {
-	var capturedReq executor.TestRequest
+	var capturedReq executor.ExecuteRequest
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case2", Type: "io", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case2", Type: "io", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -511,8 +517,8 @@ func TestSessionTest_HappyPath_SingleTest(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if len(capturedReq.IOTests) != 1 || capturedReq.IOTests[0].Name != "case2" {
-		t.Errorf("expected only 'case2' forwarded, got %v", capturedReq.IOTests)
+	if len(capturedReq.Cases) != 1 || capturedReq.Cases[0].Name != "case2" {
+		t.Errorf("expected only 'case2' forwarded, got %v", capturedReq.Cases)
 	}
 }
 
@@ -608,10 +614,10 @@ func TestSessionTest_403Forbidden_NonParticipant(t *testing.T) {
 
 func TestSessionTest_InstructorCreatorCanTest(t *testing.T) {
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case1", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case1", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -728,9 +734,9 @@ func TestSessionTest_404TestNameNotFound(t *testing.T) {
 	}
 }
 
-// --- RunTests method on executor Client tests ---
+// --- Execute method on executor Client tests ---
 
-func TestExecutorClientRunTests_InterfaceCompliance(t *testing.T) {
+func TestExecutorClientExecute_InterfaceCompliance(t *testing.T) {
 	// Verify that executor.Client satisfies TestRunnerClient interface.
 	// This is a compile-time check via assignment; if the interface is
 	// missing from executor.Client, this test fails to compile.
@@ -740,6 +746,6 @@ func TestExecutorClientRunTests_InterfaceCompliance(t *testing.T) {
 // testRunnerClientVerify is a minimal implementation to ensure interface shape.
 type testRunnerClientVerify struct{}
 
-func (t *testRunnerClientVerify) RunTests(ctx context.Context, req executor.TestRequest) (*executor.TestResponse, error) {
+func (t *testRunnerClientVerify) Execute(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 	return nil, nil
 }

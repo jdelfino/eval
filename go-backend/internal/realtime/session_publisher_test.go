@@ -62,8 +62,8 @@ func TestStudentJoined(t *testing.T) {
 
 func TestCodeUpdated(t *testing.T) {
 	mock, sp := newTestPublisher()
-	execSettings := json.RawMessage(`{"stdin":"world"}`)
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", execSettings)
+	testCases := json.RawMessage(`[{"name":"Case 1","input":"world\n","match_type":"exact"}]`)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", testCases)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,12 +78,12 @@ func TestCodeUpdated(t *testing.T) {
 	if data.UserID != "user-2" || data.Code != "fmt.Println()" {
 		t.Errorf("payload = %+v", data)
 	}
-	if string(data.ExecutionSettings) != `{"stdin":"world"}` {
-		t.Errorf("execution_settings = %q, want %q", string(data.ExecutionSettings), `{"stdin":"world"}`)
+	if string(data.TestCases) != `[{"name":"Case 1","input":"world\n","match_type":"exact"}]` {
+		t.Errorf("test_cases = %q, want %q", string(data.TestCases), `[{"name":"Case 1","input":"world\n","match_type":"exact"}]`)
 	}
 }
 
-func TestCodeUpdated_NilExecutionSettings(t *testing.T) {
+func TestCodeUpdated_NilTestCases(t *testing.T) {
 	mock, sp := newTestPublisher()
 	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil)
 	if err != nil {
@@ -91,8 +91,8 @@ func TestCodeUpdated_NilExecutionSettings(t *testing.T) {
 	}
 	event := mock.data.(Event)
 	data := event.Data.(StudentCodeUpdatedData)
-	if data.ExecutionSettings != nil {
-		t.Errorf("expected nil execution_settings, got %q", string(data.ExecutionSettings))
+	if data.TestCases != nil {
+		t.Errorf("expected nil test_cases, got %q", string(data.TestCases))
 	}
 }
 
@@ -136,8 +136,8 @@ func TestSessionReplaced(t *testing.T) {
 
 func TestFeaturedStudentChanged(t *testing.T) {
 	mock, sp := newTestPublisher()
-	execSettings := json.RawMessage(`{"stdin":"hello"}`)
-	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1", execSettings)
+	testCases := json.RawMessage(`[{"name":"Case 1","input":"hello\n","match_type":"exact"}]`)
+	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1", testCases)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,12 +152,12 @@ func TestFeaturedStudentChanged(t *testing.T) {
 	if data.UserID != "user-4" || data.Code != "x := 1" {
 		t.Errorf("payload = %+v", data)
 	}
-	if string(data.ExecutionSettings) != `{"stdin":"hello"}` {
-		t.Errorf("execution_settings = %q, want %q", string(data.ExecutionSettings), `{"stdin":"hello"}`)
+	if string(data.TestCases) != `[{"name":"Case 1","input":"hello\n","match_type":"exact"}]` {
+		t.Errorf("test_cases = %q, want %q", string(data.TestCases), `[{"name":"Case 1","input":"hello\n","match_type":"exact"}]`)
 	}
 }
 
-func TestFeaturedStudentChanged_NilExecutionSettings(t *testing.T) {
+func TestFeaturedStudentChanged_NilTestCases(t *testing.T) {
 	mock, sp := newTestPublisher()
 	err := sp.FeaturedStudentChanged(context.Background(), "sess-4", "user-4", "x := 1", nil)
 	if err != nil {
@@ -165,8 +165,8 @@ func TestFeaturedStudentChanged_NilExecutionSettings(t *testing.T) {
 	}
 	event := mock.data.(Event)
 	data := event.Data.(FeaturedStudentChangedData)
-	if data.ExecutionSettings != nil {
-		t.Errorf("expected nil execution_settings, got %q", string(data.ExecutionSettings))
+	if data.TestCases != nil {
+		t.Errorf("expected nil test_cases, got %q", string(data.TestCases))
 	}
 }
 

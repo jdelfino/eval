@@ -228,10 +228,10 @@ func TestTestExecutionHandler_SignalsDemandOnStudentWorkTest(t *testing.T) {
 	svc := &countingActivationService{}
 
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -269,10 +269,10 @@ func TestTestExecutionHandler_SignalsDemandOnSessionTest(t *testing.T) {
 	svc := &countingActivationService{}
 
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
@@ -310,10 +310,10 @@ func TestTestExecutionHandler_SignalsDemandOnSessionTest(t *testing.T) {
 func TestTestExecutionHandler_NoActivationWithoutSetter_StudentWork(t *testing.T) {
 	// Verifies that TestExecutionHandler without SetActivation called does not panic.
 	runnerClient := &mockTestRunnerClient{
-		runTestsFn: func(_ context.Context, _ executor.TestRequest) (*executor.TestResponse, error) {
-			return &executor.TestResponse{
-				Results: []executor.TestResult{{Name: "case1", Type: "io", Status: "passed"}},
-				Summary: executor.TestSummary{Total: 1, Passed: 1},
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "case1", Type: "io", Status: "passed"}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1},
 			}, nil
 		},
 	}
