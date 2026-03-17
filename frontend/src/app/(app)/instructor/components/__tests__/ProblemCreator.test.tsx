@@ -101,12 +101,16 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
   };
 });
 
+const DEFAULT_CLASSES = [
+  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
+];
+
 describe('ProblemCreator Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Set default mock implementations
+    // Set default mock implementations — provide a class so tests can submit
     const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockResolvedValue([]);
+    listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
   describe('Layout', () => {
@@ -156,6 +160,9 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
+      // Wait for class dropdown to load
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       // Fill in fields (now in editable sidebar)
       fireEvent.change(screen.getByLabelText('Title *'), {
         target: { value: 'Test Problem' },
@@ -165,6 +172,10 @@ describe('ProblemCreator Component', () => {
       });
       fireEvent.change(screen.getByLabelText(/Starter Code/), {
         target: { value: 'def solution():\n    pass' },
+      });
+      // Select a class (required for create)
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
 
       // Submit
@@ -191,8 +202,13 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       fireEvent.change(screen.getByLabelText(/Title/), {
         target: { value: 'Test Problem' },
+      });
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
       fireEvent.click(screen.getByText('Create Problem'));
 
@@ -334,11 +350,59 @@ describe('ProblemCreator Component', () => {
       expect(submitButton).toBeDisabled();
     });
 
-    it('should enable submit button when title is provided', () => {
+    it('should enable submit button when title and class are provided', async () => {
       render(<ProblemCreator />);
+
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
 
       fireEvent.change(screen.getByLabelText(/Title/), {
         target: { value: 'Test' },
+      });
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
+      });
+
+      const submitButton = screen.getByText('Create Problem');
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    it('should disable submit button when title is provided but no class is selected', async () => {
+      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
+      const { listClasses } = require('@/lib/api/classes');
+      listClasses.mockResolvedValue(mockClasses);
+
+      render(<ProblemCreator />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
+      });
+
+      // Set title but leave class unselected
+      fireEvent.change(screen.getByLabelText(/Title/), {
+        target: { value: 'Test Problem' },
+      });
+
+      // No class selected (still on "Select a class...")
+      const submitButton = screen.getByText('Create Problem');
+      expect(submitButton).toBeDisabled();
+    });
+
+    it('should enable submit button when both title and class are provided', async () => {
+      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
+      const { listClasses } = require('@/lib/api/classes');
+      listClasses.mockResolvedValue(mockClasses);
+
+      render(<ProblemCreator />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByLabelText(/Title/), {
+        target: { value: 'Test Problem' },
+      });
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'class-1' },
       });
 
       const submitButton = screen.getByText('Create Problem');
@@ -351,8 +415,13 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       fireEvent.change(screen.getByLabelText(/Title/), {
         target: { value: 'Test' },
+      });
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
       fireEvent.click(screen.getByText('Create Problem'));
 
@@ -383,11 +452,17 @@ describe('ProblemCreator Component', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue(mockProblem);
 
-      const { rerender } = render(<ProblemCreator onProblemCreated={onProblemCreated} />);
+      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
+
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
 
       // Fill in basic fields
       fireEvent.change(screen.getByLabelText(/Title/), {
         target: { value: 'Test Problem' },
+      });
+      // Select a class (required for create)
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
 
       // Note: ExecutionSettings (stdin, random seed, attached files) are now handled
@@ -446,9 +521,15 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       // Fill in fields
       fireEvent.change(screen.getByLabelText(/Title/), {
         target: { value: 'Test' },
+      });
+      // Select a class (required for create)
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
 
       // Note: Execution settings are managed by CodeEditor's ExecutionSettings
@@ -584,13 +665,57 @@ describe('ProblemCreator Component', () => {
         expect(select.value).toBe('class-2');
       });
     });
+
+    it('should show class validation hint when class is not selected in create mode', async () => {
+      render(<ProblemCreator />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
+      });
+
+      // Class selector should show a validation hint when no class selected
+      expect(screen.getByText('Required')).toBeInTheDocument();
+    });
+
+    it('should not show class validation hint when class is selected', async () => {
+      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
+      const { listClasses } = require('@/lib/api/classes');
+      listClasses.mockResolvedValue(mockClasses);
+
+      render(<ProblemCreator />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-1' } });
+
+      expect(screen.queryByText('Required')).not.toBeInTheDocument();
+    });
+
+    it('should not show class validation hint in edit mode', async () => {
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue({
+        ...mockExistingProblem,
+        class_id: null,
+      });
+
+      render(<ProblemCreator problem_id="problem-456" />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
+      });
+
+      // In edit mode, no class required hint should be shown
+      expect(screen.queryByText('Required')).not.toBeInTheDocument();
+    });
   });
 
   describe('Generate Solution', () => {
     beforeEach(() => {
       jest.clearAllMocks();
       const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue([]);
+      listClasses.mockResolvedValue(DEFAULT_CLASSES);
     });
 
     it('should render the Generate Solution button in the tab bar area', () => {
@@ -619,11 +744,16 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       fireEvent.change(screen.getByLabelText('Description'), {
         target: { value: 'Some description' },
       });
       fireEvent.change(screen.getByLabelText('Title *'), {
         target: { value: 'Test' },
+      });
+      fireEvent.change(screen.getByLabelText('Class *'), {
+        target: { value: 'default-class-1' },
       });
 
       // Trigger submission
@@ -984,8 +1114,11 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      // Set title
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
+      // Set title and class (required for create)
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
 
       // Set solution
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
@@ -1031,8 +1164,11 @@ describe('ProblemCreator Component', () => {
 
       render(<ProblemCreator />);
 
-      // Set title and solution
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
+      // Set title, class (required for create), and solution
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
       fireEvent.change(screen.getByLabelText(/Solution Code/), {
         target: { value: 'some solution' },

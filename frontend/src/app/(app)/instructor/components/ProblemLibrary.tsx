@@ -89,12 +89,17 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       setLoading(true);
       setError(null);
 
+      const sortByMap: Record<string, 'title' | 'created_at' | 'updated_at'> = {
+        title: 'title',
+        created: 'created_at',
+        updated: 'updated_at',
+      };
       const loadedProblems = await listProblems({
         author_id: user.id,
         class_id: selectedClassId || undefined,
-        includePublic: true,
-        sortBy,
-        sortOrder,
+        include_public: true,
+        sort_by: sortByMap[sortBy],
+        sort_order: sortOrder,
       });
       setProblems(loadedProblems);
     } catch (err) {

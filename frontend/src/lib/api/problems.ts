@@ -30,9 +30,9 @@ export interface ProblemSummary {
 export interface ListProblemsFilters {
   author_id?: string;
   class_id?: string;
-  includePublic?: boolean;
-  sortBy?: 'title' | 'created' | 'updated';
-  sortOrder?: 'asc' | 'desc';
+  include_public?: boolean;
+  sort_by?: 'title' | 'created_at' | 'updated_at';
+  sort_order?: 'asc' | 'desc';
 }
 
 /**
@@ -48,14 +48,14 @@ export async function listProblems(filters?: ListProblemsFilters): Promise<Probl
   if (filters?.class_id) {
     params.set('class_id', filters.class_id);
   }
-  if (filters?.includePublic) {
-    params.set('includePublic', 'true');
+  if (filters?.include_public) {
+    params.set('include_public', 'true');
   }
-  if (filters?.sortBy) {
-    params.set('sortBy', filters.sortBy);
+  if (filters?.sort_by) {
+    params.set('sort_by', filters.sort_by);
   }
-  if (filters?.sortOrder) {
-    params.set('sortOrder', filters.sortOrder);
+  if (filters?.sort_order) {
+    params.set('sort_order', filters.sort_order);
   }
   const query = params.toString();
   const path = query ? `/problems?${query}` : '/problems';

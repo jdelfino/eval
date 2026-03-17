@@ -118,6 +118,10 @@ func parseFilters(w http.ResponseWriter, r *http.Request) (store.ProblemFilters,
 		filters.PublicOnly = true
 	}
 
+	if q.Get("include_public") == "true" {
+		filters.IncludePublic = true
+	}
+
 	return filters, true
 }
 
@@ -189,6 +193,11 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 	req, err := httpbind.BindJSON[createProblemRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
+	}
+
+	if req.ClassID == nil {
+		httputil.WriteError(w, http.StatusUnprocessableEntity, "class_id is required")
+		return
 	}
 
 	lang, err := normalizeLanguage(req.Language)

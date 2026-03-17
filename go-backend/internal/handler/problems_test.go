@@ -338,11 +338,13 @@ func TestCreateProblem_Success(t *testing.T) {
 		},
 	}
 
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	body, _ := json.Marshal(map[string]any{
 		"title":       "Two Sum",
 		"description": "Write a function that adds two numbers",
 		"test_cases":  json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
 		"language":    "java",
+		"class_id":    classID.String(),
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -368,6 +370,41 @@ func TestCreateProblem_Success(t *testing.T) {
 	}
 	if got.ID != p.ID {
 		t.Errorf("expected id %q, got %q", p.ID, got.ID)
+	}
+}
+
+func TestCreateProblem_MissingClassID(t *testing.T) {
+	userID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	repo := &mockProblemRepo{}
+
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Two Sum",
+		"language": "python",
+	})
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp["error"] != "class_id is required" {
+		t.Errorf("expected error 'class_id is required', got %q", errResp["error"])
 	}
 }
 
@@ -605,7 +642,8 @@ func TestCreateProblem_InternalError(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"title": "Two Sum", "language": "python"})
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	body, _ := json.Marshal(map[string]any{"title": "Two Sum", "language": "python", "class_id": classID.String()})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -900,9 +938,11 @@ func TestListProblems_InvalidSortOrder(t *testing.T) {
 
 func TestCreateProblem_InvalidLanguage(t *testing.T) {
 	h := NewProblemHandler(nil)
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	body, _ := json.Marshal(map[string]any{
 		"title":    "Test Problem",
 		"language": "ruby",
+		"class_id": classID.String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1312,5 +1352,67 @@ func TestGenerateSolution_StarterCodeOptional(t *testing.T) {
 	}
 	if capturedReq.ProblemDescription != "Write a function that adds two numbers" {
 		t.Errorf("expected description forwarded, got %q", capturedReq.ProblemDescription)
+	}
+}
+
+// TestListProblems_IncludePublic verifies that the include_public=true query param
+// is parsed and sets IncludePublic on the filters passed to ListProblemsFiltered.
+func TestListProblems_IncludePublic(t *testing.T) {
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	p := testProblem()
+	p.ClassID = &classID
+
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/?class_id="+classID.String()+"&include_public=true", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !capturedFilters.IncludePublic {
+		t.Errorf("expected IncludePublic=true, got false")
+	}
+	if capturedFilters.ClassID == nil || *capturedFilters.ClassID != classID {
+		t.Errorf("expected ClassID=%v, got %v", classID, capturedFilters.ClassID)
+	}
+}
+
+// TestListProblems_IncludePublicFalse verifies that omitting include_public leaves IncludePublic false.
+func TestListProblems_IncludePublicFalse(t *testing.T) {
+	var capturedFilters store.ProblemFilters
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			capturedFilters = filters
+			return nil, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if capturedFilters.IncludePublic {
+		t.Errorf("expected IncludePublic=false, got true")
 	}
 }

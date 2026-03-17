@@ -61,7 +61,12 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 	ac := newArgCounter(1)
 
 	if filters.ClassID != nil {
-		query += " AND class_id = " + ac.Next(*filters.ClassID)
+		if filters.IncludePublic {
+			// Return problems in this class OR classless (public) problems
+			query += " AND (class_id = " + ac.Next(*filters.ClassID) + " OR class_id IS NULL)"
+		} else {
+			query += " AND class_id = " + ac.Next(*filters.ClassID)
+		}
 	}
 
 	if filters.AuthorID != nil {

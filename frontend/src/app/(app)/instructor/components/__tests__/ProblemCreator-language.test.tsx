@@ -112,13 +112,17 @@ const JAVA_DEFAULT_STARTER = `public class Main {
     }
 }`;
 
+const DEFAULT_CLASSES = [
+  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
+];
+
 describe('ProblemCreator - Language Selector', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedStarterCode = '';
     capturedOnLoadStarterCode = undefined;
     const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockResolvedValue([]);
+    listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
   describe('Language selector rendering', () => {
@@ -152,7 +156,10 @@ describe('ProblemCreator - Language Selector', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
@@ -168,8 +175,11 @@ describe('ProblemCreator - Language Selector', () => {
 
       render(<ProblemCreator />);
 
+      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+
       fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {

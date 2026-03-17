@@ -487,6 +487,49 @@ func TestIntegration_ListProblemsFiltered(t *testing.T) {
 			t.Errorf("expected first problem %s (oldest), got %s", p1, results[0].ID)
 		}
 	})
+
+	// include_public: when ClassID is set AND IncludePublic=true, returns both
+	// class-specific problems AND classless (public) problems.
+	t.Run("include_public with class_id returns class + public problems", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{ClassID: &classID, IncludePublic: true})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
+		// p1 and p3 are in classID, p2 has class_id=nil (public)
+		if len(results) != 3 {
+			t.Errorf("expected 3 problems (class + public), got %d", len(results))
+		}
+		ids := make(map[uuid.UUID]bool)
+		for _, r := range results {
+			ids[r.ID] = true
+		}
+		if !ids[p1] {
+			t.Errorf("expected p1 (%s) in results", p1)
+		}
+		if !ids[p2] {
+			t.Errorf("expected p2 (%s) in results (public problem)", p2)
+		}
+		if !ids[p3] {
+			t.Errorf("expected p3 (%s) in results", p3)
+		}
+	})
+
+	// include_public without class_id: behaves like no class filter, returning all problems
+	t.Run("include_public without class_id returns all problems", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authUser)
+		defer conn.Release()
+
+		results, err := s.ListProblemsFiltered(ctx, ProblemFilters{IncludePublic: true})
+		if err != nil {
+			t.Fatalf("ListProblemsFiltered: %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("expected 3 problems, got %d", len(results))
+		}
+	})
 }
 
 // =============================================================================
