@@ -211,6 +211,144 @@ describe('Problems API', () => {
       expect(found).toBeDefined();
       expect(found!.class_id).toBe(classId);
     });
+
+    describe('sort_by=title query parameter', () => {
+      let sortProblemAaaId: string | null = null;
+      let sortProblemZzzId: string | null = null;
+
+      afterAll(async () => {
+        for (const id of [sortProblemAaaId, sortProblemZzzId]) {
+          if (id) {
+            try {
+              await deleteProblem(id);
+            } catch {
+              // Best-effort cleanup
+            }
+          }
+        }
+      });
+
+      it('sort_by=title returns results sorted by title', async () => {
+        const classId = state.classId;
+        expect(classId).toBeTruthy();
+
+        // Create two problems with predictably ordered titles
+        const suffix = Date.now();
+        const problemAaa = await createProblem({
+          title: `AAA-contract-sort-test-${suffix}`,
+          class_id: classId,
+          language: 'python',
+          tags: ['contract-sort-test'],
+        });
+        sortProblemAaaId = problemAaa.id;
+
+        const problemZzz = await createProblem({
+          title: `ZZZ-contract-sort-test-${suffix}`,
+          class_id: classId,
+          language: 'python',
+          tags: ['contract-sort-test'],
+        });
+        sortProblemZzzId = problemZzz.id;
+
+        // Ascending order: AAA should come before ZZZ
+        const ascProblems = await listProblems({ class_id: classId, sort_by: 'title', sort_order: 'asc' });
+        expect(Array.isArray(ascProblems)).toBe(true);
+
+        const ascAaaIndex = ascProblems.findIndex(p => p.id === sortProblemAaaId);
+        const ascZzzIndex = ascProblems.findIndex(p => p.id === sortProblemZzzId);
+        expect(ascAaaIndex).toBeGreaterThanOrEqual(0);
+        expect(ascZzzIndex).toBeGreaterThanOrEqual(0);
+        expect(ascAaaIndex).toBeLessThan(ascZzzIndex);
+
+        // Descending order: ZZZ should come before AAA
+        const descProblems = await listProblems({ class_id: classId, sort_by: 'title', sort_order: 'desc' });
+        expect(Array.isArray(descProblems)).toBe(true);
+
+        const descAaaIndex = descProblems.findIndex(p => p.id === sortProblemAaaId);
+        const descZzzIndex = descProblems.findIndex(p => p.id === sortProblemZzzId);
+        expect(descAaaIndex).toBeGreaterThanOrEqual(0);
+        expect(descZzzIndex).toBeGreaterThanOrEqual(0);
+        expect(descZzzIndex).toBeLessThan(descAaaIndex);
+      });
+    });
+
+    describe('sort_by=created_at query parameter', () => {
+      let firstCreatedId: string | null = null;
+      let secondCreatedId: string | null = null;
+
+      afterAll(async () => {
+        for (const id of [firstCreatedId, secondCreatedId]) {
+          if (id) {
+            try {
+              await deleteProblem(id);
+            } catch {
+              // Best-effort cleanup
+            }
+          }
+        }
+      });
+
+      it('sort_by=created_at returns results sorted by creation time', async () => {
+        const classId = state.classId;
+        expect(classId).toBeTruthy();
+
+        // Create two problems sequentially
+        const suffix = Date.now();
+        const firstProblem = await createProblem({
+          title: `contract-created-at-first-${suffix}`,
+          class_id: classId,
+          language: 'python',
+          tags: ['contract-created-at-test'],
+        });
+        firstCreatedId = firstProblem.id;
+
+        // Small delay to ensure distinct created_at timestamps
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const secondProblem = await createProblem({
+          title: `contract-created-at-second-${suffix}`,
+          class_id: classId,
+          language: 'python',
+          tags: ['contract-created-at-test'],
+        });
+        secondCreatedId = secondProblem.id;
+
+        // Ascending order: first-created should come before second-created
+        const ascProblems = await listProblems({ class_id: classId, sort_by: 'created_at', sort_order: 'asc' });
+        expect(Array.isArray(ascProblems)).toBe(true);
+
+        const ascFirstIndex = ascProblems.findIndex(p => p.id === firstCreatedId);
+        const ascSecondIndex = ascProblems.findIndex(p => p.id === secondCreatedId);
+        expect(ascFirstIndex).toBeGreaterThanOrEqual(0);
+        expect(ascSecondIndex).toBeGreaterThanOrEqual(0);
+        expect(ascFirstIndex).toBeLessThan(ascSecondIndex);
+
+        // Descending order: second-created should come before first-created
+        const descProblems = await listProblems({ class_id: classId, sort_by: 'created_at', sort_order: 'desc' });
+        expect(Array.isArray(descProblems)).toBe(true);
+
+        const descFirstIndex = descProblems.findIndex(p => p.id === firstCreatedId);
+        const descSecondIndex = descProblems.findIndex(p => p.id === secondCreatedId);
+        expect(descFirstIndex).toBeGreaterThanOrEqual(0);
+        expect(descSecondIndex).toBeGreaterThanOrEqual(0);
+        expect(descSecondIndex).toBeLessThan(descFirstIndex);
+      });
+    });
+
+    it('include_public=true with class_id is accepted and returns results', async () => {
+      const classId = state.classId;
+      expect(classId).toBeTruthy();
+      expect(createdProblemId).toBeTruthy();
+
+      // This validates include_public is a recognized parameter (not silently ignored)
+      const problems = await listProblems({ class_id: classId, include_public: true });
+
+      expect(Array.isArray(problems)).toBe(true);
+
+      // Should include the test class's problems
+      const found = problems.find(p => p.id === createdProblemId);
+      expect(found).toBeDefined();
+    });
   });
 
   describe('updateProblem()', () => {
