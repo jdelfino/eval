@@ -171,6 +171,14 @@ test-setup-e2e-users:
 test-run-e2e-tests:
 	bash scripts/test-run-e2e-tests.sh
 
+# ──────────────────────────────────────────────
+# Staging seed script tests
+# ──────────────────────────────────────────────
+.PHONY: test-seed-staging
+
+test-seed-staging:
+	bash scripts/test-seed-staging.sh
+
 # Deploy pipeline validation
 # ──────────────────────────────────────────────
 .PHONY: validate-deploy-pipeline

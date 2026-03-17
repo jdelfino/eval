@@ -49,7 +49,8 @@ fi
 DEFAULT_E2E_USERS='[
   "emulator-admin@test.local",
   "instructor@test.local",
-  "student@test.local"
+  "student@test.local",
+  "student2@test.local"
 ]'
 
 E2E_USERS="${E2E_USERS:-${DEFAULT_E2E_USERS}}"
