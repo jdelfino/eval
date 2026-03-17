@@ -844,3 +844,56 @@ func TestExecute_Cases_CasesForwardedToSandbox(t *testing.T) {
 		t.Errorf("expected match_type=contains in io_tests.json, got: %s", testsJSON)
 	}
 }
+
+func TestExecute_Cases_ArgsUseRelativeFilenames(t *testing.T) {
+	// Verify that the Args passed to the sandbox use relative filenames (not absolute /tmp/work/ paths).
+	// This ensures RunUnsafe mode (used in CI) works correctly because files are written to a
+	// temp dir whose CWD matches the args.
+	var capturedArgs []string
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedArgs = req.Args
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(runner, metrics.NewNoop(), defaultConfig())
+
+	// Python case: arg[0] should be "solution.py", arg[1] should be "io_tests.json"
+	body := `{"code":"print('hello')","language":"python","cases":[{"name":"t1","type":"io","input":""}]}`
+	w := doRequest(h, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(capturedArgs) < 2 {
+		t.Fatalf("expected at least 2 args, got %d", len(capturedArgs))
+	}
+	if capturedArgs[0] != "solution.py" {
+		t.Errorf("expected args[0]='solution.py' (relative), got %q", capturedArgs[0])
+	}
+	if capturedArgs[1] != "io_tests.json" {
+		t.Errorf("expected args[1]='io_tests.json' (relative), got %q", capturedArgs[1])
+	}
+}
+
+func TestExecute_Cases_ArgsUseRelativeFilenames_Java(t *testing.T) {
+	// Verify that the Args passed to the sandbox use relative filenames for Java.
+	var capturedArgs []string
+	runner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		capturedArgs = req.Args
+		return &sandbox.Result{Stdout: "[]", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(runner, metrics.NewNoop(), defaultConfig())
+
+	body := `{"code":"public class Main {}","language":"java","cases":[{"name":"t1","type":"io","input":""}]}`
+	w := doRequest(h, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(capturedArgs) < 2 {
+		t.Fatalf("expected at least 2 args, got %d", len(capturedArgs))
+	}
+	if capturedArgs[0] != "Main.java" {
+		t.Errorf("expected args[0]='Main.java' (relative), got %q", capturedArgs[0])
+	}
+	if capturedArgs[1] != "io_tests.json" {
+		t.Errorf("expected args[1]='io_tests.json' (relative), got %q", capturedArgs[1])
+	}
+}

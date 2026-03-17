@@ -92,7 +92,7 @@ def run_test(code_path, test, language):
                     student_code = f.read()
                 seeded_code = seed_prefix + student_code
                 tmp = tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".py", delete=False, dir=os.path.dirname(code_path)
+                    mode="w", suffix=".py", delete=False, dir=os.path.dirname(code_path) or "."
                 )
                 tmp.write(seeded_code)
                 tmp.close()
