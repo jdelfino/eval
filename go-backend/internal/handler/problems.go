@@ -195,6 +195,11 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return // BindJSON already wrote the error response
 	}
 
+	if req.ClassID == nil {
+		httputil.WriteError(w, http.StatusUnprocessableEntity, "class_id is required")
+		return
+	}
+
 	lang, err := normalizeLanguage(req.Language)
 	if err != nil {
 		httputil.WriteError(w, http.StatusUnprocessableEntity, err.Error())

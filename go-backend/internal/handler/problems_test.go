@@ -338,11 +338,13 @@ func TestCreateProblem_Success(t *testing.T) {
 		},
 	}
 
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	body, _ := json.Marshal(map[string]any{
 		"title":       "Two Sum",
 		"description": "Write a function that adds two numbers",
 		"test_cases":  json.RawMessage(`[{"input":"1 2","expected":"3"}]`),
 		"language":    "java",
+		"class_id":    classID.String(),
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
@@ -368,6 +370,41 @@ func TestCreateProblem_Success(t *testing.T) {
 	}
 	if got.ID != p.ID {
 		t.Errorf("expected id %q, got %q", p.ID, got.ID)
+	}
+}
+
+func TestCreateProblem_MissingClassID(t *testing.T) {
+	userID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	repo := &mockProblemRepo{}
+
+	body, _ := json.Marshal(map[string]any{
+		"title":    "Two Sum",
+		"language": "python",
+	})
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp["error"] != "class_id is required" {
+		t.Errorf("expected error 'class_id is required', got %q", errResp["error"])
 	}
 }
 
@@ -605,7 +642,8 @@ func TestCreateProblem_InternalError(t *testing.T) {
 		},
 	}
 
-	body, _ := json.Marshal(map[string]any{"title": "Two Sum", "language": "python"})
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	body, _ := json.Marshal(map[string]any{"title": "Two Sum", "language": "python", "class_id": classID.String()})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -900,9 +938,11 @@ func TestListProblems_InvalidSortOrder(t *testing.T) {
 
 func TestCreateProblem_InvalidLanguage(t *testing.T) {
 	h := NewProblemHandler(nil)
+	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	body, _ := json.Marshal(map[string]any{
 		"title":    "Test Problem",
 		"language": "ruby",
+		"class_id": classID.String(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

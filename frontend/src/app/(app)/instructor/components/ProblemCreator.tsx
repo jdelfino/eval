@@ -298,7 +298,7 @@ export default function ProblemCreator({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || isLoading || !title.trim()}
+            disabled={isSubmitting || isLoading || !title.trim() || (!isEditMode && !selectedClassId)}
             style={{
               padding: '0.5rem 1rem',
               fontSize: '0.875rem',
@@ -307,8 +307,8 @@ export default function ProblemCreator({
               backgroundColor: '#0d6efd',
               border: 'none',
               borderRadius: '0.25rem',
-              cursor: (isSubmitting || isLoading || !title.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (isSubmitting || isLoading || !title.trim()) ? 0.5 : 1
+              cursor: (isSubmitting || isLoading || !title.trim() || (!isEditMode && !selectedClassId)) ? 'not-allowed' : 'pointer',
+              opacity: (isSubmitting || isLoading || !title.trim() || (!isEditMode && !selectedClassId)) ? 0.5 : 1
             }}
           >
             {isSubmitting ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Problem' : 'Create Problem')}
@@ -349,7 +349,7 @@ export default function ProblemCreator({
             style={{
               padding: '0.375rem 0.5rem',
               fontSize: '0.875rem',
-              border: '1px solid #ced4da',
+              border: `1px solid ${!isEditMode && !selectedClassId ? '#dc3545' : '#ced4da'}`,
               borderRadius: '0.25rem',
               minWidth: '150px',
             }}
@@ -359,6 +359,9 @@ export default function ProblemCreator({
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          {!isEditMode && !selectedClassId && (
+            <span style={{ fontSize: '0.75rem', color: '#dc3545' }}>Required</span>
+          )}
         </div>
 
         {/* Language selector */}
