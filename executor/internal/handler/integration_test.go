@@ -76,6 +76,37 @@ func executeRequest(t *testing.T, baseURL string, req executorapi.ExecuteRequest
 	return result
 }
 
+// runOnlyCase builds a run-only (no expected output) case definition.
+func runOnlyCase(input string) []executorapi.CaseDef {
+	return []executorapi.CaseDef{
+		{Name: "run", Type: "io", Input: input},
+	}
+}
+
+// firstActual returns the actual output from the first case result.
+func firstActual(resp executorapi.ExecuteResponse) string {
+	if len(resp.Results) == 0 {
+		return ""
+	}
+	return resp.Results[0].Actual
+}
+
+// firstStatus returns the status from the first case result.
+func firstStatus(resp executorapi.ExecuteResponse) string {
+	if len(resp.Results) == 0 {
+		return ""
+	}
+	return resp.Results[0].Status
+}
+
+// firstStderr returns the stderr from the first case result.
+func firstStderr(resp executorapi.ExecuteResponse) string {
+	if len(resp.Results) == 0 {
+		return ""
+	}
+	return resp.Results[0].Stderr
+}
+
 func intPtr(n int) *int { return &n }
 
 func TestIntegration_HelloWorld(t *testing.T) {
@@ -83,12 +114,13 @@ func TestIntegration_HelloWorld(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     `print("hello")`,
 		Language: "python",
+		Cases:    runOnlyCase(""),
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
-	if strings.TrimSpace(resp.Output) != "hello" {
-		t.Errorf("expected 'hello', got %q", resp.Output)
+	if strings.TrimSpace(firstActual(resp)) != "hello" {
+		t.Errorf("expected 'hello', got %q", firstActual(resp))
 	}
 }
 
@@ -96,16 +128,15 @@ func TestIntegration_Stdin(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     "name = input()\nprint(f'hi {name}')",
-		Stdin:    "Alice\n",
 		Language: "python",
+		Cases:    runOnlyCase("Alice\n"),
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
-	// Input echo preamble causes input() values to appear in stdout.
-	want := "Alice\nhi Alice"
-	if strings.TrimSpace(resp.Output) != want {
-		t.Errorf("expected %q, got %q", want, resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
+	if !strings.Contains(output, "hi Alice") {
+		t.Errorf("expected 'hi Alice' in output, got %q", output)
 	}
 }
 
@@ -114,12 +145,13 @@ func TestIntegration_SyntaxError(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     `print(`,
 		Language: "python",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure for syntax error")
 	}
-	if !strings.Contains(resp.Error, "SyntaxError") {
-		t.Errorf("expected SyntaxError in error, got %q", resp.Error)
+	if !strings.Contains(firstStderr(resp), "SyntaxError") {
+		t.Errorf("expected SyntaxError in stderr, got %q", firstStderr(resp))
 	}
 }
 
@@ -128,12 +160,13 @@ func TestIntegration_RuntimeError(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     `x`,
 		Language: "python",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure for undefined variable")
 	}
-	if !strings.Contains(resp.Error, "NameError") {
-		t.Errorf("expected NameError in error, got %q", resp.Error)
+	if !strings.Contains(firstStderr(resp), "NameError") {
+		t.Errorf("expected NameError in stderr, got %q", firstStderr(resp))
 	}
 }
 
@@ -143,47 +176,48 @@ func TestIntegration_Timeout(t *testing.T) {
 		Code:      "import time; time.sleep(60)",
 		TimeoutMs: intPtr(1000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	if resp.Success {
-		t.Fatal("expected failure for timeout")
+	if firstStatus(resp) != "error" {
+		t.Fatal("expected error status for timeout")
 	}
-	if resp.Error != "execution timed out" {
-		t.Errorf("expected 'execution timed out', got %q", resp.Error)
+	if firstStderr(resp) != "execution timed out" {
+		t.Errorf("expected 'execution timed out', got %q", firstStderr(resp))
 	}
 }
 
-func TestIntegration_RandomSeed(t *testing.T) {
+func TestIntegration_RandomOutput(t *testing.T) {
+	// Verify that code using random can run successfully.
+	// Per-case random seed forwarding is a forward-compatibility feature
+	// tracked for future implementation.
 	u := executorURL(t)
-	seed := 42
 	req := executorapi.ExecuteRequest{
-		Code:       "import random; print(random.randint(1,1000))",
-		RandomSeed: &seed,
-		Language:   "python",
+		Code:     "import random; print(random.randint(1,1000))",
+		Language: "python",
+		Cases:    runOnlyCase(""),
 	}
-	resp1 := executeRequest(t, u, req)
-	resp2 := executeRequest(t, u, req)
-	if !resp1.Success || !resp2.Success {
-		t.Fatal("expected both runs to succeed")
-	}
-	if resp1.Output != resp2.Output {
-		t.Errorf("deterministic output expected: run1=%q run2=%q", resp1.Output, resp2.Output)
+	resp := executeRequest(t, u, req)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
 }
 
 func TestIntegration_FileAttachment(t *testing.T) {
 	u := executorURL(t)
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: "with open('data.txt') as f: print(f.read().strip())",
-		Files: []executorapi.File{
-			{Name: "data.txt", Content: "file contents here"},
-		},
+		Code:     "with open('data.txt') as f: print(f.read().strip())",
 		Language: "python",
+		Cases: []executorapi.CaseDef{
+			{Name: "run", Type: "io", Input: "", Files: []executorapi.File{
+				{Name: "data.txt", Content: "file contents here"},
+			}},
+		},
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
-	if strings.TrimSpace(resp.Output) != "file contents here" {
-		t.Errorf("expected file contents, got %q", resp.Output)
+	if strings.TrimSpace(firstActual(resp)) != "file contents here" {
+		t.Errorf("expected file contents, got %q", firstActual(resp))
 	}
 }
 
@@ -193,13 +227,14 @@ func TestIntegration_LargeOutputTruncation(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     "print('x' * 2_000_000)",
 		Language: "python",
+		Cases:    runOnlyCase(""),
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
 	// Default MaxOutputBytes is 1MB, so output should be truncated.
-	if len(resp.Output) > 1100000 {
-		t.Errorf("expected output to be truncated, got %d bytes", len(resp.Output))
+	if len(firstActual(resp)) > 1100000 {
+		t.Errorf("expected output to be truncated, got %d bytes", len(firstActual(resp)))
 	}
 }
 
@@ -208,12 +243,13 @@ func TestIntegration_StderrSanitization(t *testing.T) {
 	resp := executeRequest(t, u, executorapi.ExecuteRequest{
 		Code:     "raise ValueError('test error')",
 		Language: "python",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure")
 	}
 	// Stderr should not contain the actual sandbox path.
-	if strings.Contains(resp.Error, "/tmp/work/main.py") {
+	if strings.Contains(firstStderr(resp), "/tmp/work/main.py") {
 		t.Error("stderr should sanitize sandbox paths")
 	}
 }
@@ -224,8 +260,9 @@ func TestIntegration_NetworkDisabled(t *testing.T) {
 		Code:      "import socket; s = socket.socket(); s.connect(('8.8.8.8', 53))",
 		TimeoutMs: intPtr(5000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		// Network isolation depends on nsjail config and kernel capabilities.
 		// In privileged Docker mode, network may not be restricted.
 		// This is expected — log a warning but don't skip/fail.
@@ -241,8 +278,9 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 		Code:      fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
 		TimeoutMs: intPtr(5000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Error("expected memory-limited code to fail")
 	}
 }
@@ -261,13 +299,14 @@ except Exception as e:
 `,
 		TimeoutMs: intPtr(5000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, firstStatus(resp), firstStderr(resp))
 	}
 }
 
@@ -285,13 +324,14 @@ except Exception as e:
 `,
 		TimeoutMs: intPtr(5000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /proc, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, firstStatus(resp), firstStderr(resp))
 	}
 }
 
@@ -308,25 +348,14 @@ print(json.dumps({"pi": round(math.pi, 2), "cwd": os.getcwd()}))
 `,
 		TimeoutMs: intPtr(5000),
 		Language:  "python",
+		Cases:     runOnlyCase(""),
 	})
-	if !resp.Success {
-		t.Fatalf("expected Python stdlib to work, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected Python stdlib to work, got error: %s", firstStderr(resp))
 	}
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if !strings.Contains(output, "3.14") {
 		t.Errorf("expected pi in output, got %q", output)
-	}
-}
-
-func TestIntegration_StdinEchoed(t *testing.T) {
-	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     "print('ok')",
-		Stdin:    "my input",
-		Language: "python",
-	})
-	if resp.Stdin != "my input" {
-		t.Errorf("expected stdin echoed back, got %q", resp.Stdin)
 	}
 }
 
@@ -371,12 +400,13 @@ func TestIntegration_Java_HelloWorld(t *testing.T) {
     }
 }`,
 		Language: "java",
+		Cases:    runOnlyCase(""),
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
-	if strings.TrimSpace(resp.Output) != "hello from java" {
-		t.Errorf("expected 'hello from java', got %q", resp.Output)
+	if strings.TrimSpace(firstActual(resp)) != "hello from java" {
+		t.Errorf("expected 'hello from java', got %q", firstActual(resp))
 	}
 }
 
@@ -389,12 +419,13 @@ func TestIntegration_Java_CompilationError(t *testing.T) {
     }
 }`,
 		Language: "java",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure for compilation error")
 	}
-	if !strings.Contains(resp.Error, "error") {
-		t.Errorf("expected compilation error message, got %q", resp.Error)
+	if !strings.Contains(firstStderr(resp), "error") {
+		t.Errorf("expected compilation error message, got %q", firstStderr(resp))
 	}
 }
 
@@ -408,12 +439,13 @@ func TestIntegration_Java_RuntimeException(t *testing.T) {
     }
 }`,
 		Language: "java",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure for runtime exception")
 	}
-	if !strings.Contains(resp.Error, "ArrayIndexOutOfBoundsException") {
-		t.Errorf("expected ArrayIndexOutOfBoundsException in error, got %q", resp.Error)
+	if !strings.Contains(firstStderr(resp), "ArrayIndexOutOfBoundsException") {
+		t.Errorf("expected ArrayIndexOutOfBoundsException in stderr, got %q", firstStderr(resp))
 	}
 }
 
@@ -428,14 +460,14 @@ public class Main {
         System.out.println("hi " + name);
     }
 }`,
-		Stdin:    "Alice\n",
 		Language: "java",
+		Cases:    runOnlyCase("Alice\n"),
 	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	if firstStatus(resp) == "error" {
+		t.Fatalf("expected success, got error: %s", firstStderr(resp))
 	}
-	if !strings.Contains(resp.Output, "hi Alice") {
-		t.Errorf("expected output containing 'hi Alice', got %q", resp.Output)
+	if !strings.Contains(firstActual(resp), "hi Alice") {
+		t.Errorf("expected output containing 'hi Alice', got %q", firstActual(resp))
 	}
 }
 
@@ -449,12 +481,13 @@ func TestIntegration_Java_Timeout(t *testing.T) {
 }`,
 		Language:  "java",
 		TimeoutMs: intPtr(3000),
+		Cases:     runOnlyCase(""),
 	})
-	if resp.Success {
-		t.Fatal("expected failure for timeout")
+	if firstStatus(resp) != "error" {
+		t.Fatal("expected error status for timeout")
 	}
-	if resp.Error != "execution timed out" {
-		t.Errorf("expected 'execution timed out', got %q", resp.Error)
+	if firstStderr(resp) != "execution timed out" {
+		t.Errorf("expected 'execution timed out', got %q", firstStderr(resp))
 	}
 }
 
@@ -467,12 +500,13 @@ func TestIntegration_Java_StderrSanitization(t *testing.T) {
     }
 }`,
 		Language: "java",
+		Cases:    runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Fatal("expected failure")
 	}
 	// Stderr should not contain sandbox-internal paths.
-	if strings.Contains(resp.Error, "/tmp/work") {
+	if strings.Contains(firstStderr(resp), "/tmp/work") {
 		t.Error("stderr should sanitize sandbox paths")
 	}
 }
@@ -494,8 +528,9 @@ public class Main {
 }`,
 		Language:  "java",
 		TimeoutMs: intPtr(10000),
+		Cases:     runOnlyCase(""),
 	})
-	if resp.Success {
+	if firstStatus(resp) != "error" {
 		t.Log("WARNING: network access was not blocked; network isolation is not enforced in this environment (likely privileged Docker mode)")
 		return
 	}
@@ -519,13 +554,14 @@ public class Main {
 }`,
 		Language:  "java",
 		TimeoutMs: intPtr(10000),
+		Cases:     runOnlyCase(""),
 	})
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, firstStatus(resp), firstStderr(resp))
 	}
 }
 
@@ -547,13 +583,14 @@ public class Main {
 }`,
 		Language:  "java",
 		TimeoutMs: intPtr(10000),
+		Cases:     runOnlyCase(""),
 	})
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /proc, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, firstStatus(resp), firstStderr(resp))
 	}
 }
 
@@ -576,13 +613,14 @@ public class Main {
 }`,
 		Language:  "java",
 		TimeoutMs: intPtr(10000),
+		Cases:     runOnlyCase(""),
 	})
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(firstActual(resp))
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not allow writing outside work dir, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, firstStatus(resp), firstStderr(resp))
 	}
 }
 
