@@ -7,7 +7,9 @@ import { DebuggerSidebar } from './DebuggerSidebar';
 import { CasesPanel } from './CasesPanel';
 import { CaseResultDisplay } from './CaseResultDisplay';
 import MarkdownContent from '@/components/MarkdownContent';
-import type { ExecutionSettings, IOTestCase } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';

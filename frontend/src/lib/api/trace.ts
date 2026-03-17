@@ -4,20 +4,28 @@
 
 import { apiPost } from '@/lib/api-client';
 import type { ExecutionTrace } from '@/types/session';
-import type { ExecutionSettings } from '@/types/problem';
+
+/**
+ * Settings for code tracing (stdin, seed, files).
+ */
+export interface TraceSettings {
+  stdin?: string;
+  random_seed?: number;
+  attached_files?: Array<{ name: string; content: string }>;
+}
 
 /**
  * Request a step-by-step execution trace for code.
  * @param code - The code to trace
  * @param language - The programming language
- * @param settings - Execution settings (stdin, random_seed, attached_files)
+ * @param settings - Trace settings (stdin, random_seed, attached_files)
  * @param maxSteps - Optional maximum number of trace steps
  * @returns ExecutionTrace with step-by-step state
  */
 export async function traceCode(
   code: string,
   language: string,
-  settings: ExecutionSettings,
+  settings: TraceSettings,
   maxSteps?: number,
 ): Promise<ExecutionTrace> {
   const body: Record<string, unknown> = { code, language };

@@ -12,7 +12,9 @@ import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem } from '@/types/problem';
+// TODO(PLAT-oztv.7): Remove after component is updated to use test cases
+type ExecutionSettings = { stdin?: string; random_seed?: number; attached_files?: Array<{ name: string; content: string }> };
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, ExecutionResult } from '../types';
 
@@ -314,8 +316,8 @@ export function SessionStudentPane({
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
                 exampleInput={sessionExecutionSettings.stdin}
-                random_seed={selectedStudent?.execution_settings?.random_seed}
-                attached_files={selectedStudent?.execution_settings?.attached_files}
+                random_seed={undefined}
+                attached_files={undefined}
                 readOnly
                 problem={sessionProblem}
                 execution_result={execution_result}

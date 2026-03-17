@@ -14,7 +14,6 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     description: 'A test problem description',
     starter_code: null,
     test_cases: null,
-    execution_settings: null,
     solution: null,
     namespace_id: 'test-namespace',
     author_id: 'author-1',
@@ -250,26 +249,18 @@ factorial(5)  # Returns 120
     });
   });
 
-  describe('Execution settings', () => {
-    it('displays random seed when set', () => {
+  describe('Execution settings (removed - uses test_cases instead)', () => {
+    // TODO(PLAT-oztv.7): execution_settings display removed; test case configuration
+    // will be driven by test_cases field on Problem.
+    it('does not display random seed or attached files badges', () => {
       const problem = createProblem({
-        execution_settings: { random_seed: 42 },
+        test_cases: [
+          { name: 'case1', input: '42', match_type: 'exact', expected_output: 'foo' } as IOTestCase,
+        ],
       });
       render(<ProblemDisplay problem={problem} />);
-      expect(screen.getByText(/Random seed: 42/)).toBeInTheDocument();
-    });
-
-    it('displays attached files count when files exist', () => {
-      const problem = createProblem({
-        execution_settings: {
-          attached_files: [
-            { name: 'data.txt', content: 'data' },
-            { name: 'config.json', content: '{}' },
-          ],
-        },
-      });
-      render(<ProblemDisplay problem={problem} />);
-      expect(screen.getByText(/2 file\(s\) attached/)).toBeInTheDocument();
+      expect(screen.queryByText(/Random seed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/file\(s\) attached/)).not.toBeInTheDocument();
     });
   });
 });

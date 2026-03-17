@@ -100,17 +100,7 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
           </div>
         )}
 
-        {/* Execution Settings Info */}
-        {problem.execution_settings && (
-          <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-            {problem.execution_settings.random_seed !== undefined && (
-              <p>🎲 Random seed: {problem.execution_settings.random_seed}</p>
-            )}
-            {problem.execution_settings.attached_files && problem.execution_settings.attached_files.length > 0 && (
-              <p>📎 {problem.execution_settings.attached_files.length} file(s) attached</p>
-            )}
-          </div>
-        )}
+        {/* TODO(PLAT-oztv.7): Test case info shown in CasesPanel instead */}
       </div>
     </div>
   );

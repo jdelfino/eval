@@ -89,19 +89,15 @@ describe('Sessions Full API', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('resolves without throwing when updating problem with execution settings', async () => {
+    it('resolves without throwing when updating problem fields', async () => {
       const problem = {
         title: 'Contract Test Problem v2',
-        description: 'Updated problem with execution settings',
+        description: 'Updated problem with test cases',
         starter_code: 'print("world")',
-      };
-      const executionSettings = {
-        language: 'python',
-        timeout: 10,
       };
 
       await expect(
-        updateSessionProblem(testSessionId, problem, executionSettings)
+        updateSessionProblem(testSessionId, problem)
       ).resolves.toBeUndefined();
     });
   });

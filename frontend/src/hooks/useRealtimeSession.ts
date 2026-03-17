@@ -11,7 +11,7 @@ import {
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
 import { Session, Student } from '@/types/session';
-import { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
@@ -63,7 +63,7 @@ export interface UseRealtimeSessionOptions {
 export interface FeaturedStudent {
   studentId?: string;
   code?: string;
-  executionSettings?: ExecutionSettings;
+  testCases?: IOTestCase[];
 }
 
 /**
@@ -107,7 +107,7 @@ export function useRealtimeSession({
   // Store pending code updates that arrive before student_joined events
   const pendingCodeUpdatesRef = useRef<Map<string, {
     code: string;
-    execution_settings?: ExecutionSettings;
+    test_cases?: IOTestCase[];
     last_update?: string;
   }>>(new Map());
 
@@ -119,7 +119,7 @@ export function useRealtimeSession({
     name: s.name,
     code: s.code || '',
     last_update: new Date(s.joined_at),
-    execution_settings: s.execution_settings as ExecutionSettings | undefined,
+    test_cases: s.test_cases ?? undefined,
   }), []);
 
   /**
@@ -244,7 +244,7 @@ export function useRealtimeSession({
                 name: displayName,
                 code: pendingUpdate.code,
                 last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
-                execution_settings: pendingUpdate.execution_settings,
+                test_cases: pendingUpdate.test_cases,
               });
               pendingCodeUpdatesRef.current.delete(userId);
             } else {
@@ -261,9 +261,9 @@ export function useRealtimeSession({
         }
 
         case 'student_code_updated': {
-          // data: StudentCodeUpdatedData{user_id, code, execution_settings?}
-          const { user_id: studentId, code, execution_settings: rawExecutionSettings } = parsed.data;
-          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          // data: StudentCodeUpdatedData{user_id, code, test_cases?}
+          const { user_id: studentId, code, test_cases: rawTestCases } = parsed.data;
+          const testCases = rawTestCases as IOTestCase[] | undefined;
           setStudents(prev => {
             const updated = new Map(prev);
             const student = updated.get(studentId);
@@ -271,13 +271,13 @@ export function useRealtimeSession({
               updated.set(studentId, {
                 ...student,
                 code: code || '',
-                ...(executionSettings !== undefined && { execution_settings: executionSettings }),
+                ...(testCases !== undefined && { test_cases: testCases }),
                 last_update: new Date(),
               });
             } else {
               pendingCodeUpdatesRef.current.set(studentId, {
                 code: code || '',
-                ...(executionSettings !== undefined && { execution_settings: executionSettings }),
+                ...(testCases !== undefined && { test_cases: testCases }),
               });
             }
             return updated;
@@ -301,13 +301,13 @@ export function useRealtimeSession({
         }
 
         case 'featured_student_changed': {
-          // data: FeaturedStudentChangedData{user_id, code, execution_settings?}
+          // data: FeaturedStudentChangedData{user_id, code, test_cases?}
           const {
             user_id: studentId,
             code,
-            execution_settings: rawExecutionSettings,
+            test_cases: rawTestCases,
           } = parsed.data;
-          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          const testCases = rawTestCases as IOTestCase[] | undefined;
           setSession(prev => {
             if (!prev) {
               console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
@@ -317,13 +317,13 @@ export function useRealtimeSession({
               ...prev,
               featured_student_id: studentId,
               featured_code: code,
-              featured_execution_settings: executionSettings,
+              featured_test_cases: testCases,
             };
           });
           setFeaturedStudent({
             studentId,
             code,
-            executionSettings,
+            testCases,
           });
           break;
         }
@@ -418,10 +418,10 @@ export function useRealtimeSession({
   const updateCodeImmediate = useCallback(async (
     studentId: string,
     code: string,
-    execution_settings?: ExecutionSettings
+    testCases?: IOTestCase[]
   ) => {
     try {
-      await apiUpdateCode(session_id, studentId, code, execution_settings);
+      await apiUpdateCode(session_id, studentId, code, testCases);
 
       // Optimistically update local state
       setStudents(prev => {
@@ -432,7 +432,7 @@ export function useRealtimeSession({
             ...student,
             code,
             last_update: new Date(),
-            execution_settings: execution_settings || student.execution_settings,
+            test_cases: testCases || student.test_cases,
           });
         }
         return updated;
@@ -469,14 +469,14 @@ export function useRealtimeSession({
     try {
       const student = students.get(studentId);
       const studentCode = student?.code;
-      const studentExecutionSettings = student?.execution_settings;
-      await apiFeatureStudent(session_id, studentId, studentCode, studentExecutionSettings);
+      const studentTestCases = student?.test_cases;
+      await apiFeatureStudent(session_id, studentId, studentCode, studentTestCases);
 
       // Optimistically update local state
       setFeaturedStudent({
         studentId,
         code: studentCode,
-        executionSettings: studentExecutionSettings,
+        testCases: studentTestCases,
       });
     } catch (e: unknown) {
       console.error('[useRealtimeSession] Failed to feature student:', e);

@@ -61,7 +61,7 @@ describe('executeCode()', () => {
     const result = await executeCode(
       'import sys; print(sys.stdin.read().strip())',
       'python3',
-      { stdin: 'contract-test-input' }
+      { cases: [{ name: 'stdin-test', input: 'contract-test-input', match_type: 'exact' as const }] }
     );
 
     expect(typeof result.success).toBe('boolean');

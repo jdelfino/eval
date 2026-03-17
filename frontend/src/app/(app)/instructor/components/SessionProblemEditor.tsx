@@ -225,15 +225,12 @@ export default function SessionProblemEditor({
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : () => {}}
           readOnly={activeTab === 'solution'}
-          onRun={(execution_settings) => {
+          onRun={(_execution_settings) => {
+            // TODO(PLAT-oztv.7): Wire to test cases
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
             setExecutionResult(null);
-            executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err) => {
+            executeCode(codeToRun, language).then(setExecutionResult).catch((err) => {
               setExecutionResult({
                 success: false,
                 output: '',
