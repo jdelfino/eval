@@ -134,9 +134,11 @@ describe('ProblemCreator — Cases Section', () => {
       await user.click(screen.getByRole('button', { name: /add case/i }));
 
       // In Node 20 + React 18, the title state update may not be committed until
-      // waitFor flushes it. Wait for the button to be enabled before clicking.
+      // waitFor flushes it. Wait for the title to have its value, then wait for
+      // the button to be enabled before clicking.
+      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test Problem'));
       const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
       await user.click(createBtn);
 
       await waitFor(() => {
@@ -165,9 +167,11 @@ describe('ProblemCreator — Cases Section', () => {
       // Use userEvent so title state is committed reliably in React 18
       await user.type(screen.getByLabelText('Title *'), 'Test');
 
-      // In Node 20 + React 18, wait for the button to be enabled before clicking.
+      // In Node 20 + React 18, wait for the title to have its value, then wait
+      // for the button to be enabled before clicking.
+      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test'));
       const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
       await user.click(createBtn);
 
       await waitFor(() => {
@@ -264,6 +268,8 @@ describe('ProblemCreator — Cases Section', () => {
 
       // Use userEvent so title state is committed reliably in React 18
       await user.type(screen.getByLabelText('Title *'), 'Test');
+      // Wait for the title value to be committed before navigating away
+      await waitFor(() => expect(screen.getByLabelText('Title *')).toHaveValue('Test'));
 
       // Add a case
       await user.click(screen.getByRole('tab', { name: /cases/i }));
@@ -274,7 +280,7 @@ describe('ProblemCreator — Cases Section', () => {
 
       // In Node 20 + React 18, wait for the button to be enabled before clicking.
       const createBtn = screen.getByRole('button', { name: /create problem/i });
-      await waitFor(() => expect(createBtn).not.toBeDisabled());
+      await waitFor(() => expect(createBtn).not.toBeDisabled(), { timeout: 5000 });
       await user.click(createBtn);
 
       await waitFor(() => {
