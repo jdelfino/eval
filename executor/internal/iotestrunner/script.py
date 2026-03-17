@@ -71,6 +71,7 @@ def run_test(code_path, test, language):
     stdin_input = test.get("input", "")
     expected_output = test.get("expected_output", None)  # None = run-only
     match_type = test.get("match_type", "exact")
+    random_seed = test.get("random_seed", None)
 
     start = time.monotonic()
     try:
@@ -81,8 +82,23 @@ def run_test(code_path, test, language):
             cmd = [java_bin, "-XX:TieredStopAtLevel=1", code_path]
         else:
             # Python: run the file with python3.
+            # If random_seed is provided, build a temporary wrapper file that
+            # seeds the RNG before executing the student code.
             python_bin = os.environ.get("PYTHON_PATH", "/usr/bin/python3")
-            cmd = [python_bin, code_path]
+            if random_seed is not None:
+                import tempfile
+                seed_prefix = f"import random; random.seed({random_seed})\n"
+                with open(code_path, "r") as f:
+                    student_code = f.read()
+                seeded_code = seed_prefix + student_code
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, dir=os.path.dirname(code_path)
+                )
+                tmp.write(seeded_code)
+                tmp.close()
+                cmd = [python_bin, tmp.name]
+            else:
+                cmd = [python_bin, code_path]
 
         proc = subprocess.run(
             cmd,
@@ -122,8 +138,8 @@ def run_test(code_path, test, language):
         }
 
         if expected_output is None:
-            # Run-only: code ran without error => pass.
-            result["status"] = "passed"
+            # Run-only: code ran without error => "run" (no assertion made).
+            result["status"] = "run"
         else:
             expected_normalized = expected_output.rstrip("\n")
             if matches(actual_normalized, expected_normalized, match_type):

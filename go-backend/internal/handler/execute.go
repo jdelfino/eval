@@ -54,6 +54,17 @@ type executeRequest struct {
 	Files      []executorapi.File `json:"files,omitempty"`
 }
 
+// legacyExecuteResponse is the response shape the frontend expects from POST /api/v1/execute.
+// The executor now returns {results[], summary} but the frontend's executeCode() function
+// expects the legacy single-result shape. This compat wrapper bridges the gap.
+type legacyExecuteResponse struct {
+	Success         bool   `json:"success"`
+	Output          string `json:"output,omitempty"`
+	Error           string `json:"error,omitempty"`
+	ExecutionTimeMs int64  `json:"execution_time_ms"`
+	Stdin           string `json:"stdin,omitempty"`
+}
+
 // Execute handles POST /api/v1/execute for any authenticated user.
 // No session context is required — takes code + language directly.
 // TODO(PLAT-oztv.6): Convert to Cases-based request.
@@ -108,7 +119,19 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, execResp)
+	// Convert executor response to the legacy format the frontend expects.
+	// The frontend's executeCode() expects {success, output, error, execution_time_ms, stdin}.
+	legacy := legacyExecuteResponse{
+		Stdin: req.Stdin,
+	}
+	if len(execResp.Results) > 0 {
+		r0 := execResp.Results[0]
+		legacy.Success = r0.Status != "error"
+		legacy.Output = r0.Actual
+		legacy.Error = r0.Stderr
+		legacy.ExecutionTimeMs = r0.TimeMs
+	}
+	httputil.WriteJSON(w, http.StatusOK, legacy)
 }
 
 // isConnectionError reports whether err is a network-layer connection failure,

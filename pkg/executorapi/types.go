@@ -59,54 +59,6 @@ type File struct {
 	Content string `json:"content"`
 }
 
-// TestRequest is the JSON request body for running I/O test cases.
-// Deprecated: use ExecuteRequest with Cases instead.
-type TestRequest struct {
-	Code      string      `json:"code"`
-	Language  string      `json:"language"`
-	IOTests   []IOTestDef `json:"io_tests,omitempty"`
-	TimeoutMs *int        `json:"timeout_ms,omitempty"`
-}
-
-// IOTestDef defines a single I/O test case sent to the executor.
-// Deprecated: use CaseDef instead.
-type IOTestDef struct {
-	Name           string `json:"name"`
-	Input          string `json:"input"`
-	ExpectedOutput string `json:"expected_output,omitempty"`
-	MatchType      string `json:"match_type"`
-}
-
-// TestResponse is the JSON response for running I/O test cases.
-// Deprecated: use ExecuteResponse instead.
-type TestResponse struct {
-	Results []TestResult `json:"results"`
-	Summary TestSummary  `json:"summary"`
-}
-
-// TestResult holds the outcome of a single test case execution.
-// Deprecated: use CaseResult instead.
-type TestResult struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`    // always "io" for I/O tests
-	Status   string `json:"status"`  // "passed" | "failed" | "error"
-	Input    string `json:"input,omitempty"`
-	Expected string `json:"expected,omitempty"`
-	Actual   string `json:"actual,omitempty"`
-	Stderr   string `json:"stderr,omitempty"`
-	TimeMs   int64  `json:"time_ms"`
-}
-
-// TestSummary aggregates counts and total elapsed time across all test results.
-// Deprecated: use CaseSummary instead.
-type TestSummary struct {
-	Total  int   `json:"total"`
-	Passed int   `json:"passed"`
-	Failed int   `json:"failed"`
-	Errors int   `json:"errors"`
-	TimeMs int64 `json:"time_ms"`
-}
-
 // TraceRequest is the JSON request body for step-through debugger tracing.
 type TraceRequest struct {
 	Code       string `json:"code"`
