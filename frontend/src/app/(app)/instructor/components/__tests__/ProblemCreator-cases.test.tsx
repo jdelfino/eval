@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 import type { IOTestCase } from '@/types/problem';
@@ -101,19 +101,19 @@ describe('ProblemCreator — Cases Section', () => {
   });
 
   describe('Cases section rendering', () => {
-    it('should render the Cases section', () => {
+    it('should render the Cases section', async () => {
       render(<ProblemCreator />);
+      await act(async () => {});
       // Should have a tab or section for Cases
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
     it('should show IOCaseForm within Cases tab', async () => {
       render(<ProblemCreator />);
+      await act(async () => {});
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       // Should render Add Case button
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
-      });
+      expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
     });
   });
 
@@ -124,18 +124,14 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
+      // Flush listClasses().then(setClasses) before interacting. In React 19 + Node.js 20,
+      // this async state update races with setTitle from fireEvent.change — both get batched
+      // and deferred via React's scheduler, leaving the button disabled when clicked.
+      // await act(async () => {}) drains the microtask queue and flushes all pending React
+      // work, so the component is stable before we change the title.
+      await act(async () => {});
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-
-      // Wait for button to be enabled before proceeding. listClasses() resolves as a
-      // Promise microtask after render, and in Node.js 20 this async state update can
-      // race with the synchronous fireEvent.change commit, deferring title state past the
-      // button click. waitFor flushes all pending React work (via act()) between polls,
-      // ensuring setClasses and setTitle are both committed before we click.
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
-
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -162,14 +158,9 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-2' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
+      await act(async () => {});
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      // Wait for button to be enabled (flushes listClasses async state update).
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
-
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
@@ -261,14 +252,9 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
+      await act(async () => {});
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      // Wait for button to be enabled (flushes listClasses async state update).
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /create problem/i })).not.toBeDisabled();
-      });
-
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
