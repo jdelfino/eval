@@ -94,33 +94,23 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
 });
 
 describe('ProblemCreator — Cases Section', () => {
-  // Captured resolver for the listClasses Promise. In React 19 + Node.js 20, a
-  // Promise that auto-resolves via mockResolvedValue fires its .then() callback
-  // asynchronously — outside of any act() scope — creating a pending non-urgent
-  // React update that races with fireEvent interactions. By using a manually
-  // controlled Promise, we resolve it explicitly inside act(), ensuring
-  // setClasses commits before any test interactions.
-  let resolveListClasses: (value: any[]) => void;
-
   beforeEach(() => {
     jest.clearAllMocks();
     const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockImplementation(
-      () => new Promise<any[]>(resolve => { resolveListClasses = resolve; })
-    );
+    listClasses.mockResolvedValue([]);
   });
 
   describe('Cases section rendering', () => {
     it('should render the Cases section', async () => {
       render(<ProblemCreator />);
-      await act(async () => { resolveListClasses([]); });
+      await act(async () => {});
       // Should have a tab or section for Cases
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
     it('should show IOCaseForm within Cases tab', async () => {
       render(<ProblemCreator />);
-      await act(async () => { resolveListClasses([]); });
+      await act(async () => {});
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
@@ -134,10 +124,14 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      // Resolve listClasses inside act() so setClasses commits before we interact.
-      await act(async () => { resolveListClasses([]); });
 
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      // In React 19 + Node.js 20, a single fireEvent.change batches setTitle with the
+      // pending setClasses update from listClasses().then(), deferring the commit and
+      // leaving the button disabled. Wrapping in synchronous act() forces an immediate
+      // synchronous flush of setTitle so the button is enabled before we interact further.
+      act(() => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -164,9 +158,10 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-2' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      await act(async () => { resolveListClasses([]); });
 
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      act(() => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      });
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
@@ -201,7 +196,6 @@ describe('ProblemCreator — Cases Section', () => {
       });
 
       render(<ProblemCreator problem_id="p-edit" />);
-      await act(async () => { resolveListClasses([]); });
 
       // Wait for loading to finish (tabs appear only when !isLoading)
       await waitFor(() => {
@@ -232,7 +226,6 @@ describe('ProblemCreator — Cases Section', () => {
       updateProblem.mockResolvedValue({ id: 'p-edit', title: 'Edit Me' });
 
       render(<ProblemCreator problem_id="p-edit" />);
-      await act(async () => { resolveListClasses([]); });
 
       // Wait for loading to finish (button is enabled when !isLoading and title is set)
       await waitFor(() => {
@@ -260,9 +253,10 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
-      await act(async () => { resolveListClasses([]); });
 
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      act(() => {
+        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
