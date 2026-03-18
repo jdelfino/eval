@@ -320,14 +320,8 @@ describe('StudentPage (student_work-centric)', () => {
         );
       });
 
-      // activeSessionId must be set to the matching session's id
-      // Verified via the caseRunner being initialized with sessionId
-      // (useCaseRunner receives sessionId when mode is 'live' and joined)
-      const { useCaseRunner } = require('@/hooks/useCaseRunner');
-      const lastCall = (useCaseRunner as jest.Mock).mock.calls[
-        (useCaseRunner as jest.Mock).mock.calls.length - 1
-      ][0];
-      expect(lastCall.sessionId).toBe('session-1');
+      // joinSession being called confirms live mode is active with the correct session.
+      // useCaseRunner now uses /execute directly and no longer receives sessionId.
     });
   });
 

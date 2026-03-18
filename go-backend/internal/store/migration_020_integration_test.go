@@ -167,19 +167,19 @@ func TestIntegration_Migration020_Backfill(t *testing.T) {
 		}
 	})
 
-	// Problem 3: empty object → default "Case 1" test case.
-	t.Run("problem with empty execution_settings gets default case", func(t *testing.T) {
-		assertDefaultCase(t, db, "problems", "id", prob3)
+	// Problem 3: empty object → empty test_cases array.
+	t.Run("problem with empty execution_settings gets empty test_cases", func(t *testing.T) {
+		assertEmptyTestCases(t, db, "problems", "id", prob3)
 	})
 
-	// Problem 4: NULL execution_settings → default "Case 1" test case.
-	t.Run("problem with null execution_settings gets default case", func(t *testing.T) {
-		assertDefaultCase(t, db, "problems", "id", prob4)
+	// Problem 4: NULL execution_settings → empty test_cases array.
+	t.Run("problem with null execution_settings gets empty test_cases", func(t *testing.T) {
+		assertEmptyTestCases(t, db, "problems", "id", prob4)
 	})
 
-	// Problem 5: no execution_settings → default "Case 1" test case.
-	t.Run("problem with no execution_settings gets default case", func(t *testing.T) {
-		assertDefaultCase(t, db, "problems", "id", prob5)
+	// Problem 5: no execution_settings → empty test_cases array.
+	t.Run("problem with no execution_settings gets empty test_cases", func(t *testing.T) {
+		assertEmptyTestCases(t, db, "problems", "id", prob5)
 	})
 
 	// Student work: stdin backfill.
@@ -297,9 +297,8 @@ func TestIntegration_Migration020_DownMigration(t *testing.T) {
 // Assertion helpers
 // -------------------------------------------------------------------------
 
-// assertDefaultCase verifies that a row in table has exactly one test case
-// matching the default "Case 1" template.
-func assertDefaultCase(t *testing.T, db *testutil.MigrationTestDB, table, pkCol, id string) {
+// assertEmptyTestCases verifies that a row in table has an empty test_cases array.
+func assertEmptyTestCases(t *testing.T, db *testutil.MigrationTestDB, table, pkCol, id string) {
 	t.Helper()
 	var raw []byte
 	if err := db.QueryRow(t, fmt.Sprintf(`SELECT test_cases FROM %s WHERE %s = $1`, table, pkCol), id).Scan(&raw); err != nil {
@@ -309,18 +308,8 @@ func assertDefaultCase(t *testing.T, db *testutil.MigrationTestDB, table, pkCol,
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(cases) != 1 {
-		t.Fatalf("want 1 default test case, got %d: %s", len(cases), raw)
-	}
-	tc := cases[0]
-	if tc["name"] != "Case 1" {
-		t.Errorf("name: want %q got %v", "Case 1", tc["name"])
-	}
-	if tc["input"] != "" {
-		t.Errorf("input: want %q got %v", "", tc["input"])
-	}
-	if tc["match_type"] != "exact" {
-		t.Errorf("match_type: want %q got %v", "exact", tc["match_type"])
+	if len(cases) != 0 {
+		t.Fatalf("want empty test_cases array, got %d cases: %s", len(cases), raw)
 	}
 }
 

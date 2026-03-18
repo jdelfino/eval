@@ -1,31 +1,26 @@
 /**
  * Hook for managing I/O test case execution state.
  *
+ * Executes test cases directly via POST /execute, passing code and case definitions
+ * from frontend state. No dependency on student_work IDs or session IDs — the
+ * frontend already has all the information needed.
+ *
  * Manages:
  * - caseResults: map of case name → TestResult
  * - selectedCase: currently selected case name
  * - isRunning: whether a test is currently executing
  * - error: last error message
- *
- * Supports both practice mode (via student work ID) and live session mode.
  */
 
 import { useState, useCallback } from 'react';
 import type { IOTestCase, TestResult } from '@/types/problem';
-import { runTests, runSessionTests } from '@/lib/api/tests';
-import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE, type CaseDef } from '@/lib/api/execute';
 
 export interface CaseRunnerOptions {
-  /** Student work ID for practice mode. Pass null for session mode. */
-  workId: string | null;
-  /** Session ID for live session mode. */
-  sessionId?: string;
-  /** Student user ID for live session mode. */
-  studentId?: string;
-  /** Current code to run. Required for the free-run path (no cases). */
+  /** Current code in the editor. */
   code?: string;
-  /** Programming language. Required for the free-run path (no cases). */
-  language?: string;
+  /** Programming language. */
+  language: string;
   /** Instructor-defined test cases from the problem. */
   instructorCases: IOTestCase[];
   /** Student-defined test cases from student_work. */
@@ -51,10 +46,19 @@ export interface CaseRunnerResult {
   clearResults: () => void;
 }
 
+/** Convert an IOTestCase to a CaseDef for the execute endpoint. */
+function toCaseDef(tc: IOTestCase): CaseDef {
+  return {
+    name: tc.name,
+    input: tc.input,
+    match_type: tc.match_type,
+    expected_output: tc.expected_output,
+    random_seed: tc.random_seed,
+    attached_files: tc.attached_files,
+  };
+}
+
 export function useCaseRunner({
-  workId,
-  sessionId,
-  studentId,
   code,
   language,
   instructorCases,
@@ -76,49 +80,49 @@ export function useCaseRunner({
 
   /**
    * Execute a single test case and store its result.
+   * Passes code and case definition directly to POST /execute.
    */
   const runCase = useCallback(async (caseName: string) => {
+    if (!code || !language) return;
+
     setIsRunning(true);
     setError(null);
 
     try {
-      let response;
-      if (sessionId && studentId && code !== undefined) {
-        response = await runSessionTests(sessionId, code, caseName);
-      } else if (workId) {
-        response = await runTests(workId, caseName);
-      } else {
-        throw new Error('Either workId or sessionId+studentId+code must be provided');
-      }
+      const allCases = [...instructorCases, ...studentCases];
+      const tc = allCases.find(c => c.name === caseName);
+      if (!tc) throw new Error(`Case "${caseName}" not found`);
 
-      // Store the result keyed by case name
+      const response = await executeCode(code, language, {
+        cases: [toCaseDef(tc)],
+      });
+
       const result = response.results.find(r => r.name === caseName);
       if (result) {
         setCaseResults(prev => ({ ...prev, [caseName]: result }));
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Test execution failed');
+      const msg = err instanceof Error ? err.message : 'Test execution failed';
+      console.error('[useCaseRunner] runCase error:', msg, err);
+      setError(msg);
     } finally {
       setIsRunning(false);
     }
-  }, [workId, sessionId, studentId, code]);
+  }, [instructorCases, studentCases, code, language]);
 
   /**
-   * Execute all instructor and student cases.
-   * Runs them sequentially to avoid overwhelming the executor.
+   * Execute all instructor and student cases via a single POST /execute call.
    *
    * When there are no instructor or student cases (free-run mode), synthesizes
-   * a single run-only case and calls executeCode() directly — bypassing the
-   * /student-work/{id}/test endpoint which requires DB-backed cases.
+   * a single run-only case — the same behavior as clicking "Run Code".
    */
   const runAllCases = useCallback(async () => {
+    if (!code || !language) return;
+
     const allCases = [...instructorCases, ...studentCases];
 
     // Free-run path: no instructor or student cases defined.
-    // Synthesize a single run-only case and execute directly via POST /execute.
     if (allCases.length === 0) {
-      if (!code || !language) return;
-
       setIsRunning(true);
       setError(null);
 
@@ -143,23 +147,17 @@ export function useCaseRunner({
     setError(null);
 
     try {
-      for (const tc of allCases) {
-        let response;
-        if (sessionId && studentId && code !== undefined) {
-          response = await runSessionTests(sessionId, code, tc.name);
-        } else if (workId) {
-          response = await runTests(workId, tc.name);
-        } else {
-          throw new Error('Either workId or sessionId+studentId+code must be provided');
-        }
+      const response = await executeCode(code, language, {
+        cases: allCases.map(toCaseDef),
+      });
 
-        const result = response.results.find(r => r.name === tc.name);
-        if (result) {
-          setCaseResults(prev => ({ ...prev, [tc.name]: result }));
-        }
+      const newResults: Record<string, TestResult> = {};
+      for (const result of response.results) {
+        newResults[result.name] = result;
       }
-      // Auto-select the first case if no case is currently selected,
-      // so the output area displays a result immediately after Run Code.
+      setCaseResults(prev => ({ ...prev, ...newResults }));
+
+      // Auto-select the first case so the output area shows a result immediately.
       if (allCases.length > 0) {
         setSelectedCase(prev => prev ?? allCases[0].name);
       }
@@ -168,7 +166,7 @@ export function useCaseRunner({
     } finally {
       setIsRunning(false);
     }
-  }, [workId, sessionId, studentId, code, language, instructorCases, studentCases]);
+  }, [instructorCases, studentCases, code, language]);
 
   return {
     caseResults,

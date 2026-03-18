@@ -85,19 +85,25 @@ func (h *TestExecutionHandler) StudentWorkTest(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Extract I/O test cases from the problem.
-	testCases, err := parseIOTestCases(work.Problem.TestCases)
+	// Extract I/O test cases from the problem (instructor-defined) and student work (student-defined).
+	instructorCases, err := parseIOTestCases(work.Problem.TestCases)
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "failed to parse test cases")
 		return
 	}
-	if len(testCases) == 0 {
+	studentCases, err := parseIOTestCases(work.TestCases)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "failed to parse student test cases")
+		return
+	}
+	allCases := append(instructorCases, studentCases...)
+	if len(allCases) == 0 {
 		httputil.WriteError(w, http.StatusNotFound, "no test cases defined for this problem")
 		return
 	}
 
 	// Filter to a single test if test_name is specified.
-	ioTests, notFound := filterTestCases(testCases, req.TestName)
+	ioTests, notFound := filterTestCases(allCases, req.TestName)
 	if notFound {
 		httputil.WriteError(w, http.StatusNotFound, "test not found")
 		return

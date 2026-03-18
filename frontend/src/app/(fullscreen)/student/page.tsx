@@ -80,14 +80,11 @@ function StudentPage() {
   // Debugger state
   const debuggerHook = useApiDebugger();
 
-  // Case runner for executing test cases.
-  // language is passed to support the free-run path when no instructor/student cases exist.
+  // Case runner for executing test cases directly via POST /execute.
+  // Passes code and case definitions from frontend state — no workId or sessionId needed.
   const caseRunner = useCaseRunner({
-    workId: mode === 'practice' ? workId : null,
-    sessionId: mode === 'live' && joined ? activeSessionId ?? undefined : undefined,
-    studentId: mode === 'live' && joined ? user?.id : undefined,
     code,
-    language: problem?.language,
+    language: problem?.language ?? "",
     instructorCases,
     studentCases,
   });

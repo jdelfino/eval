@@ -404,6 +404,158 @@ func TestStudentWorkTest_503OnExecutorConnectionError(t *testing.T) {
 	}
 }
 
+func TestStudentWorkTest_StudentCasesRunWhenNoProblemCases(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	runnerClient := &mockTestRunnerClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
+					{Name: "my-case", Type: "io", Status: "run"},
+				},
+				Summary: executor.CaseSummary{Total: 1},
+			}, nil
+		},
+	}
+
+	work := testStudentWorkWithProblem("null")
+	work.TestCases = json.RawMessage(`[{"name":"my-case","input":"hello\n","match_type":"exact","order":0}]`)
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	handler := setupStudentWorkTestHandler(runnerClient)
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when problem has no cases but student has cases, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedReq.Cases) != 1 || capturedReq.Cases[0].Name != "my-case" {
+		t.Errorf("expected student case 'my-case' forwarded, got %v", capturedReq.Cases)
+	}
+}
+
+func TestStudentWorkTest_RunAll_MergesInstructorAndStudentCases(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	runnerClient := &mockTestRunnerClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
+					{Name: "instructor-case", Type: "io", Status: "passed"},
+					{Name: "student-case", Type: "io", Status: "run"},
+				},
+				Summary: executor.CaseSummary{Total: 2, Passed: 1},
+			}, nil
+		},
+	}
+
+	work := testStudentWorkWithProblem(`[{"name":"instructor-case","input":"1\n","expected_output":"1","match_type":"exact","order":0}]`)
+	work.TestCases = json.RawMessage(`[{"name":"student-case","input":"hello\n","match_type":"exact","order":0}]`)
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	handler := setupStudentWorkTestHandler(runnerClient)
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when merging instructor and student cases, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedReq.Cases) != 2 {
+		t.Errorf("expected 2 merged cases, got %d: %v", len(capturedReq.Cases), capturedReq.Cases)
+	}
+	if capturedReq.Cases[0].Name != "instructor-case" || capturedReq.Cases[1].Name != "student-case" {
+		t.Errorf("expected [instructor-case, student-case], got [%s, %s]", capturedReq.Cases[0].Name, capturedReq.Cases[1].Name)
+	}
+}
+
+func TestStudentWorkTest_StudentCaseName_SingleTestFilter(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	runnerClient := &mockTestRunnerClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
+					{Name: "student-case", Type: "io", Status: "run"},
+				},
+				Summary: executor.CaseSummary{Total: 1},
+			}, nil
+		},
+	}
+
+	work := testStudentWorkWithProblem(`[{"name":"instructor-case","input":"1\n","expected_output":"1","match_type":"exact","order":0}]`)
+	work.TestCases = json.RawMessage(`[{"name":"student-case","input":"hello\n","match_type":"exact","order":0}]`)
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	handler := setupStudentWorkTestHandler(runnerClient)
+	body, _ := json.Marshal(map[string]any{"test_name": "student-case"})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for test_name matching student case, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedReq.Cases) != 1 || capturedReq.Cases[0].Name != "student-case" {
+		t.Errorf("expected only 'student-case' forwarded, got %v", capturedReq.Cases)
+	}
+}
+
+func TestStudentWorkTest_404TestNameNotFoundInEitherCaseSet(t *testing.T) {
+	work := testStudentWorkWithProblem(`[{"name":"instructor-case","input":"1\n","match_type":"exact","order":0}]`)
+	work.TestCases = json.RawMessage(`[{"name":"student-case","input":"2\n","match_type":"exact","order":0}]`)
+	repos := &testStudentWorkRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+	}
+
+	handler := setupStudentWorkTestHandler(&mockTestRunnerClient{})
+	body, _ := json.Marshal(map[string]any{"test_name": "nonexistent"})
+	req := httptest.NewRequest(http.MethodPost, "/student-work/"+testWorkID.String()+"/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, repos)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for test_name not in either case set, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // --- sessions/{id}/test tests ---
 
 // testSessionWithProblem returns a store.Session with an embedded problem JSON containing test_cases.

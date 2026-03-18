@@ -7,22 +7,14 @@ import { renderHook, act } from '@testing-library/react';
 import { useCaseRunner } from '../useCaseRunner';
 import type { IOTestCase } from '@/types/problem';
 
-jest.mock('@/lib/api/tests', () => ({
-  runTests: jest.fn(),
-  runSessionTests: jest.fn(),
-}));
-
 jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn(),
+  FREE_RUN_CASE: { name: 'run', input: '', match_type: 'exact' },
 }));
 
-import { runTests, runSessionTests } from '@/lib/api/tests';
 import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 
 const mockExecuteCode = executeCode as jest.MockedFunction<typeof executeCode>;
-
-const mockRunTests = runTests as jest.MockedFunction<typeof runTests>;
-const mockRunSessionTests = runSessionTests as jest.MockedFunction<typeof runSessionTests>;
 
 const instructorCase: IOTestCase = {
   name: 'case1',
@@ -77,7 +69,7 @@ describe('useCaseRunner', () => {
   describe('initial state', () => {
     it('starts with empty caseResults, no selected case, not running', () => {
       const { result } = renderHook(() =>
-        useCaseRunner({ workId: 'work-1', instructorCases: [], studentCases: [] })
+        useCaseRunner({ instructorCases: [], studentCases: [], language: 'python' })
       );
 
       expect(result.current.caseResults).toEqual({});
@@ -91,9 +83,9 @@ describe('useCaseRunner', () => {
     it('sets the selected case', () => {
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
           instructorCases: [instructorCase],
           studentCases: [],
+          language: 'python',
         })
       );
 
@@ -107,9 +99,9 @@ describe('useCaseRunner', () => {
     it('can deselect by passing null', () => {
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
           instructorCases: [instructorCase],
           studentCases: [],
+          language: 'python',
         })
       );
 
@@ -125,12 +117,13 @@ describe('useCaseRunner', () => {
   });
 
   describe('runCase', () => {
-    it('calls runTests with workId and caseName, stores result', async () => {
-      mockRunTests.mockResolvedValue(mockPassResult);
+    it('calls executeCode with code, language, and case definition, stores result', async () => {
+      mockExecuteCode.mockResolvedValue(mockPassResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -140,17 +133,68 @@ describe('useCaseRunner', () => {
         await result.current.runCase('case1');
       });
 
-      expect(mockRunTests).toHaveBeenCalledWith('work-1', 'case1');
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        {
+          cases: [{
+            name: 'case1',
+            input: 'hello',
+            match_type: 'exact',
+            expected_output: 'HELLO',
+            random_seed: undefined,
+            attached_files: undefined,
+          }],
+        }
+      );
       expect(result.current.caseResults['case1']).toEqual(mockPassResult.results[0]);
+    });
+
+    it('can run a student case by name', async () => {
+      const studentResult = {
+        results: [{ name: 'my_case', type: 'io' as const, status: 'passed' as const, time_ms: 5 }],
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 5 },
+      };
+      mockExecuteCode.mockResolvedValue(studentResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          code: 'print("hello")',
+          language: 'python',
+          instructorCases: [],
+          studentCases: [studentCase],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runCase('my_case');
+      });
+
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        {
+          cases: [{
+            name: 'my_case',
+            input: 'world',
+            match_type: 'exact',
+            expected_output: undefined,
+            random_seed: undefined,
+            attached_files: undefined,
+          }],
+        }
+      );
+      expect(result.current.caseResults['my_case']).toEqual(studentResult.results[0]);
     });
 
     it('sets isRunning during execution', async () => {
       let resolveRun: (value: any) => void;
-      mockRunTests.mockImplementation(() => new Promise(r => { resolveRun = r; }));
+      mockExecuteCode.mockImplementation(() => new Promise(r => { resolveRun = r; }));
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -171,12 +215,13 @@ describe('useCaseRunner', () => {
       expect(result.current.isRunning).toBe(false);
     });
 
-    it('sets error when runTests throws', async () => {
-      mockRunTests.mockRejectedValue(new Error('Network error'));
+    it('sets error when executeCode throws', async () => {
+      mockExecuteCode.mockRejectedValue(new Error('Network error'));
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -190,12 +235,30 @@ describe('useCaseRunner', () => {
       expect(result.current.isRunning).toBe(false);
     });
 
+    it('sets error when case name not found', async () => {
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          code: 'print("hello")',
+          language: 'python',
+          instructorCases: [],
+          studentCases: [],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runCase('nonexistent');
+      });
+
+      expect(result.current.error).toBe('Case "nonexistent" not found');
+    });
+
     it('stores result keyed by case name even on failure result', async () => {
-      mockRunTests.mockResolvedValue(mockFailResult);
+      mockExecuteCode.mockResolvedValue(mockFailResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -207,23 +270,57 @@ describe('useCaseRunner', () => {
 
       expect(result.current.caseResults['case1']?.status).toBe('failed');
     });
+
+    it('does nothing when code is missing', async () => {
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          code: undefined,
+          language: 'python',
+          instructorCases: [instructorCase],
+          studentCases: [],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runCase('case1');
+      });
+
+      expect(mockExecuteCode).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when language is missing', async () => {
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          code: 'print("hello")',
+          language: '',
+          instructorCases: [instructorCase],
+          studentCases: [],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runCase('case1');
+      });
+
+      expect(mockExecuteCode).not.toHaveBeenCalled();
+    });
   });
 
   describe('runAllCases', () => {
-    it('calls runTests for each instructor and student case', async () => {
-      const multiResult1 = {
-        results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
+    it('calls executeCode once with all instructor and student cases', async () => {
+      const multiResult = {
+        results: [
+          { name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 },
+          { name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 },
+        ],
+        summary: { total: 2, passed: 1, failed: 1, errors: 0, run: 0, time_ms: 15 },
       };
-      const multiResult2 = {
-        results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
-      };
-      mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
+      mockExecuteCode.mockResolvedValue(multiResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [studentCase],
         })
@@ -233,20 +330,30 @@ describe('useCaseRunner', () => {
         await result.current.runAllCases();
       });
 
-      expect(mockRunTests).toHaveBeenCalledTimes(2);
-      expect(mockRunTests).toHaveBeenCalledWith('work-1', 'case1');
-      expect(mockRunTests).toHaveBeenCalledWith('work-1', 'my_case');
+      // Single batch call with all cases
+      expect(mockExecuteCode).toHaveBeenCalledTimes(1);
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        {
+          cases: [
+            { name: 'case1', input: 'hello', match_type: 'exact', expected_output: 'HELLO', random_seed: undefined, attached_files: undefined },
+            { name: 'my_case', input: 'world', match_type: 'exact', expected_output: undefined, random_seed: undefined, attached_files: undefined },
+          ],
+        }
+      );
       expect(result.current.caseResults['case1']?.status).toBe('passed');
       expect(result.current.caseResults['my_case']?.status).toBe('failed');
     });
 
     it('sets isRunning during execution', async () => {
       let resolveRun: (value: any) => void;
-      mockRunTests.mockImplementation(() => new Promise(r => { resolveRun = r; }));
+      mockExecuteCode.mockImplementation(() => new Promise(r => { resolveRun = r; }));
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -268,11 +375,12 @@ describe('useCaseRunner', () => {
     });
 
     it('clears previous error before running', async () => {
-      mockRunTests.mockRejectedValueOnce(new Error('First error'));
+      mockExecuteCode.mockRejectedValueOnce(new Error('First error'));
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
@@ -283,7 +391,7 @@ describe('useCaseRunner', () => {
       });
       expect(result.current.error).toBe('First error');
 
-      mockRunTests.mockResolvedValueOnce(mockPassResult);
+      mockExecuteCode.mockResolvedValueOnce(mockPassResult);
       await act(async () => {
         await result.current.runAllCases();
       });
@@ -291,41 +399,40 @@ describe('useCaseRunner', () => {
     });
 
     it('auto-selects the first instructor case after running all cases', async () => {
-      mockRunTests.mockResolvedValue(mockPassResult);
+      mockExecuteCode.mockResolvedValue(mockPassResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })
       );
 
-      // selectedCase starts null
       expect(result.current.selectedCase).toBeNull();
 
       await act(async () => {
         await result.current.runAllCases();
       });
 
-      // After running, first case should be auto-selected so output is visible
       expect(result.current.selectedCase).toBe('case1');
     });
 
     it('auto-selects the first case (instructor before student) after running all cases', async () => {
-      const multiResult1 = {
-        results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
+      const multiResult = {
+        results: [
+          { name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 },
+          { name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 },
+        ],
+        summary: { total: 2, passed: 1, failed: 1, errors: 0, run: 0, time_ms: 15 },
       };
-      const multiResult2 = {
-        results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
-      };
-      mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
+      mockExecuteCode.mockResolvedValue(multiResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [studentCase],
         })
@@ -335,30 +442,28 @@ describe('useCaseRunner', () => {
         await result.current.runAllCases();
       });
 
-      // First case in the combined list (instructor cases come first) should be selected
       expect(result.current.selectedCase).toBe('case1');
     });
 
-    it('preserves manually selected case when running all cases if that case is in the list', async () => {
-      const multiResult1 = {
-        results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
+    it('preserves manually selected case when running all cases', async () => {
+      const multiResult = {
+        results: [
+          { name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 },
+          { name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 },
+        ],
+        summary: { total: 2, passed: 1, failed: 1, errors: 0, run: 0, time_ms: 15 },
       };
-      const multiResult2 = {
-        results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
-      };
-      mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
+      mockExecuteCode.mockResolvedValue(multiResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [studentCase],
         })
       );
 
-      // Pre-select the second case
       act(() => {
         result.current.selectCase('my_case');
       });
@@ -368,21 +473,53 @@ describe('useCaseRunner', () => {
         await result.current.runAllCases();
       });
 
-      // Should keep the user's selection since they explicitly chose a case
       expect(result.current.selectedCase).toBe('my_case');
     });
+  });
 
-    it('auto-selects first case in session mode after running all cases', async () => {
-      mockRunSessionTests.mockResolvedValue(mockPassResult);
+  describe('free-run path (no instructor or student cases)', () => {
+    it('calls executeCode with synthetic run case when no cases are defined', async () => {
+      const freeRunResult = {
+        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 30 },
+      };
+      mockExecuteCode.mockResolvedValue(freeRunResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: null,
-          sessionId: 'session-1',
-          studentId: 'student-1',
-          code: 'print("hi")',
-          instructorCases: [instructorCase],
+          instructorCases: [],
           studentCases: [],
+          code: 'print("hello")',
+          language: 'python',
+        })
+      );
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        { cases: [FREE_RUN_CASE] }
+      );
+      expect(result.current.caseResults['run']).toEqual(freeRunResult.results[0]);
+      expect(result.current.selectedCase).toBe('run');
+    });
+
+    it('auto-selects run case after free run', async () => {
+      const freeRunResult = {
+        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'output\n', time_ms: 20 }],
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 20 },
+      };
+      mockExecuteCode.mockResolvedValue(freeRunResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          instructorCases: [],
+          studentCases: [],
+          code: 'print("output")',
+          language: 'python',
         })
       );
 
@@ -392,130 +529,18 @@ describe('useCaseRunner', () => {
         await result.current.runAllCases();
       });
 
-      expect(result.current.selectedCase).toBe('case1');
-    });
-  });
-
-  describe('session mode (runSessionTests)', () => {
-    it('uses runSessionTests when sessionId and studentId are provided', async () => {
-      mockRunSessionTests.mockResolvedValue(mockPassResult);
-
-      const { result } = renderHook(() =>
-        useCaseRunner({
-          workId: null,
-          sessionId: 'session-1',
-          studentId: 'student-1',
-          code: 'print("hi")',
-          instructorCases: [instructorCase],
-          studentCases: [],
-        })
-      );
-
-      await act(async () => {
-        await result.current.runCase('case1');
-      });
-
-      expect(mockRunSessionTests).toHaveBeenCalledWith('session-1', 'print("hi")', 'case1');
-      expect(result.current.caseResults['case1']).toEqual(mockPassResult.results[0]);
-    });
-  });
-
-  describe('free-run path (no instructor or student cases)', () => {
-    it('calls executeCode with synthetic run case when no cases and workId is provided', async () => {
-      const freeRunResult = {
-        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
-        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 30 },
-      };
-      mockExecuteCode.mockResolvedValue(freeRunResult);
-
-      const { result } = renderHook(() =>
-        useCaseRunner({
-          workId: 'work-1',
-          instructorCases: [],
-          studentCases: [],
-          code: 'print("hello")',
-          language: 'python',
-        })
-      );
-
-      await act(async () => {
-        await result.current.runAllCases();
-      });
-
-      // Should NOT call runTests (no DB cases)
-      expect(mockRunTests).not.toHaveBeenCalled();
-      // Should call executeCode with synthetic free-run case
-      expect(mockExecuteCode).toHaveBeenCalledWith(
-        'print("hello")',
-        'python',
-        { cases: [FREE_RUN_CASE] }
-      );
-      // Should store the run result under 'run' key
-      expect(result.current.caseResults['run']).toEqual(freeRunResult.results[0]);
-    });
-
-    it('calls executeCode with synthetic run case in session mode when no cases', async () => {
-      const freeRunResult = {
-        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
-        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 30 },
-      };
-      mockExecuteCode.mockResolvedValue(freeRunResult);
-
-      const { result } = renderHook(() =>
-        useCaseRunner({
-          workId: null,
-          sessionId: 'session-1',
-          studentId: 'student-1',
-          code: 'print("hello")',
-          language: 'python',
-          instructorCases: [],
-          studentCases: [],
-        })
-      );
-
-      await act(async () => {
-        await result.current.runAllCases();
-      });
-
-      // Should NOT call runSessionTests (no DB cases to look up)
-      expect(mockRunSessionTests).not.toHaveBeenCalled();
-      // Should call executeCode directly with synthetic case
-      expect(mockExecuteCode).toHaveBeenCalledWith(
-        'print("hello")',
-        'python',
-        { cases: [FREE_RUN_CASE] }
-      );
-    });
-
-    it('does not call executeCode when cases are present (uses runTests instead)', async () => {
-      mockRunTests.mockResolvedValue(mockPassResult);
-
-      const { result } = renderHook(() =>
-        useCaseRunner({
-          workId: 'work-1',
-          instructorCases: [instructorCase],
-          studentCases: [],
-          code: 'print("hello")',
-          language: 'python',
-        })
-      );
-
-      await act(async () => {
-        await result.current.runAllCases();
-      });
-
-      expect(mockExecuteCode).not.toHaveBeenCalled();
-      expect(mockRunTests).toHaveBeenCalled();
+      expect(result.current.selectedCase).toBe('run');
     });
   });
 
   describe('clearResults', () => {
     it('clears all case results and error', async () => {
-      mockRunTests.mockResolvedValue(mockPassResult);
+      mockExecuteCode.mockResolvedValue(mockPassResult);
 
       const { result } = renderHook(() =>
         useCaseRunner({
-          workId: 'work-1',
+          code: 'print("hello")',
+          language: 'python',
           instructorCases: [instructorCase],
           studentCases: [],
         })

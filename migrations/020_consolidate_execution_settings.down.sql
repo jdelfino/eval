@@ -34,6 +34,7 @@ ALTER TABLE student_work
     ALTER COLUMN test_cases DROP NOT NULL,
     ALTER COLUMN test_cases DROP DEFAULT;
 
+
 -- ============================================================================
 -- STEP 3: Restore problems.execution_settings
 -- ============================================================================

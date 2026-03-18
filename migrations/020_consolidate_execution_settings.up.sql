@@ -33,18 +33,17 @@ SET test_cases = jsonb_build_array(
 WHERE execution_settings IS NOT NULL
   AND execution_settings::text NOT IN ('{}', 'null', '');
 
--- For problems with no test cases yet (NULL, empty object, or non-array), seed a
--- default "Case 1" so every problem has at least one test case.
+-- For problems with no test cases yet (NULL or non-array), set to empty array.
 UPDATE problems
-SET test_cases = '[{"name":"Case 1","input":"","match_type":"exact","order":0}]'::jsonb
+SET test_cases = '[]'::jsonb
 WHERE test_cases IS NULL
-   OR jsonb_typeof(test_cases) != 'array'
-   OR jsonb_array_length(test_cases) = 0;
+   OR jsonb_typeof(test_cases) != 'array';
 
--- Add NOT NULL constraint with default value so future inserts always have a case.
+-- Add NOT NULL constraint. Default is an empty array — business logic for seeding
+-- a first case belongs in application code, not the DB schema.
 ALTER TABLE problems
     ALTER COLUMN test_cases SET NOT NULL,
-    ALTER COLUMN test_cases SET DEFAULT '[{"name":"Case 1","input":"","match_type":"exact","order":0}]'::jsonb;
+    ALTER COLUMN test_cases SET DEFAULT '[]'::jsonb;
 
 -- ============================================================================
 -- STEP 3: DROP problems.execution_settings
@@ -71,18 +70,17 @@ SET test_cases = jsonb_build_array(
 WHERE execution_settings IS NOT NULL
   AND execution_settings::text NOT IN ('{}', 'null', '');
 
--- Seed a default case for student_work rows with no test_cases yet (NULL,
--- empty object, or non-array).
+-- For student_work rows with no test_cases yet (NULL or non-array), set to empty array.
 UPDATE student_work
-SET test_cases = '[{"name":"Case 1","input":"","match_type":"exact","order":0}]'::jsonb
+SET test_cases = '[]'::jsonb
 WHERE test_cases IS NULL
-   OR jsonb_typeof(test_cases) != 'array'
-   OR jsonb_array_length(test_cases) = 0;
+   OR jsonb_typeof(test_cases) != 'array';
 
--- Add NOT NULL constraint with default value.
+-- Add NOT NULL constraint. Default is an empty array — business logic for seeding
+-- a first case belongs in application code, not the DB schema.
 ALTER TABLE student_work
     ALTER COLUMN test_cases SET NOT NULL,
-    ALTER COLUMN test_cases SET DEFAULT '[{"name":"Case 1","input":"","match_type":"exact","order":0}]'::jsonb;
+    ALTER COLUMN test_cases SET DEFAULT '[]'::jsonb;
 
 -- ============================================================================
 -- STEP 6: DROP student_work.execution_settings

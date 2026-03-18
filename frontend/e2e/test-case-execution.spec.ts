@@ -108,11 +108,11 @@ test.describe('IO Test Case Execution', () => {
 
     // Output area should show Pass badge (case is selected, result is available)
     const outputArea = page.locator('[data-testid="output-area"]');
-    await expect(outputArea.locator('text=Pass')).toBeVisible({ timeout: 15000 });
+    await expect(outputArea.locator('text="Pass"')).toBeVisible({ timeout: 15000 });
 
     // The inline Pass badge should also appear in the cases list
     const passCaseItem = page.locator('li').filter({ hasText: 'case-pass' });
-    await expect(passCaseItem.locator('text=Pass')).toBeVisible({ timeout: 5000 });
+    await expect(passCaseItem.locator('text="Pass"')).toBeVisible({ timeout: 5000 });
 
     // ===== RUN THE FAILING CASE =====
     // Click the list item to select case-fail, then click its run button
@@ -120,11 +120,11 @@ test.describe('IO Test Case Execution', () => {
     await page.locator(`button[aria-label="Run case-fail"]`).click();
 
     // Output area should now show Fail badge
-    await expect(outputArea.locator('text=Fail')).toBeVisible({ timeout: 15000 });
+    await expect(outputArea.locator('text="Fail"')).toBeVisible({ timeout: 15000 });
 
     // The inline Fail badge should appear in the cases list
     const failCaseItem = page.locator('li').filter({ hasText: 'case-fail' });
-    await expect(failCaseItem.locator('text=Fail')).toBeVisible({ timeout: 5000 });
+    await expect(failCaseItem.locator('text="Fail"')).toBeVisible({ timeout: 5000 });
   });
 
   /**
@@ -275,10 +275,10 @@ test.describe('IO Test Case Execution', () => {
     // Both case list items should now have result badges
     // Pass badge for run-all-pass
     const passCaseItem = page.locator('li').filter({ hasText: 'run-all-pass' });
-    await expect(passCaseItem.locator('text=Pass')).toBeVisible({ timeout: 5000 });
+    await expect(passCaseItem.locator('text="Pass"')).toBeVisible({ timeout: 5000 });
 
     // Fail badge for run-all-fail
     const failCaseItem = page.locator('li').filter({ hasText: 'run-all-fail' });
-    await expect(failCaseItem.locator('text=Fail')).toBeVisible({ timeout: 5000 });
+    await expect(failCaseItem.locator('text="Fail"')).toBeVisible({ timeout: 5000 });
   });
 });

@@ -150,8 +150,7 @@ type File struct {
 }
 
 // Problem represents a coding exercise in the database.
-// test_cases stores a NOT NULL JSONB array of IOTestCase definitions.
-// Every problem has at least one test case (default: [{name:"Case 1",...}]).
+// test_cases stores a NOT NULL JSONB array of IOTestCase definitions (may be empty).
 type Problem struct {
 	ID          uuid.UUID       `json:"id"`
 	NamespaceID string          `json:"namespace_id"`
@@ -696,8 +695,7 @@ type SectionProblemRepository interface {
 }
 
 // StudentWork represents persistent student work for a problem in a section.
-// test_cases stores student-defined I/O test cases as a NOT NULL JSONB array of IOTestCase.
-// Every student_work row has at least one test case (default: [{name:"Case 1",...}]).
+// test_cases stores student-defined I/O test cases as a NOT NULL JSONB array of IOTestCase (may be empty).
 type StudentWork struct {
 	ID          uuid.UUID       `json:"id"`
 	NamespaceID string          `json:"namespace_id"`
