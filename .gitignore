@@ -22,6 +22,7 @@ out/
 .op-token
 .op-vault
 .gh-token
+.gh-app-token
 
 # IDE
 .idea/
