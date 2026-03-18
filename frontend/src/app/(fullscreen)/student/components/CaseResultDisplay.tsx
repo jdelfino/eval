@@ -150,9 +150,16 @@ function TestResultWithExpected({ result }: { result: TestResult }) {
 }
 
 function RunOnlyResult({ result }: { result: TestResult }) {
+  const showSuccess = result.status === 'run';
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
+        {showSuccess && (
+          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300 border border-green-700">
+            ✓ Success
+          </span>
+        )}
         <span className="text-gray-400 text-xs">{result.time_ms}ms</span>
       </div>
       {result.actual !== undefined && (

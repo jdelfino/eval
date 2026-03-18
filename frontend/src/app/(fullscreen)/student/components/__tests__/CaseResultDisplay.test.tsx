@@ -37,6 +37,14 @@ const runOnlyResult: TestResult = {
   time_ms: 8,
 };
 
+const freeRunResult: TestResult = {
+  name: 'run',
+  type: 'io',
+  status: 'run',
+  actual: 'hello from preview\n',
+  time_ms: 42,
+};
+
 const errorResult: TestResult = {
   name: 'case_error',
   type: 'io',
@@ -109,6 +117,26 @@ describe('CaseResultDisplay', () => {
 
     it('does not show expected output section', () => {
       render(<CaseResultDisplay result={runOnlyResult} caseName="case_run_only" />);
+
+      expect(screen.queryByText(/expected/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('free-run case (status="run", no expected output)', () => {
+    it('shows ✓ Success indicator', () => {
+      render(<CaseResultDisplay result={freeRunResult} caseName="run" />);
+
+      expect(screen.getByText('✓ Success')).toBeInTheDocument();
+    });
+
+    it('shows actual output', () => {
+      render(<CaseResultDisplay result={freeRunResult} caseName="run" />);
+
+      expect(screen.getByText(/hello from preview/)).toBeInTheDocument();
+    });
+
+    it('does not show expected output section', () => {
+      render(<CaseResultDisplay result={freeRunResult} caseName="run" />);
 
       expect(screen.queryByText(/expected/i)).not.toBeInTheDocument();
     });
