@@ -113,8 +113,10 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // updateCodeRequest is the request body for PUT /sessions/{id}/code.
 // Code is not validated as required because empty code is valid
 // (e.g., student just joined and hasn't typed anything yet).
+// TestCases is optional; when present, it is persisted alongside the code update.
 type updateCodeRequest struct {
-	Code string `json:"code"`
+	Code      string          `json:"code"`
+	TestCases json.RawMessage `json:"test_cases"`
 }
 
 // UpdateCode handles PUT /api/v1/sessions/{id}/code — student updates their code.
@@ -153,10 +155,13 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Update student_work instead of session_students
-	studentWork, err := repos.UpdateStudentWork(r.Context(), *sessionStudent.StudentWorkID, store.UpdateStudentWorkParams{
-		Code: &req.Code,
-	})
+	// Update student_work instead of session_students.
+	// TestCases is nil when absent from the request body, meaning "don't update".
+	updateParams := store.UpdateStudentWorkParams{
+		Code:      &req.Code,
+		TestCases: req.TestCases,
+	}
+	studentWork, err := repos.UpdateStudentWork(r.Context(), *sessionStudent.StudentWorkID, updateParams)
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return

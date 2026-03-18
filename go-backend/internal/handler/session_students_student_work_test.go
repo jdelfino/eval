@@ -160,6 +160,118 @@ func TestUpdateCode_WithStudentWork_UpdatesStudentWorkNotSessionStudents(t *test
 	}
 }
 
+// TestUpdateCode_WithTestCases_PersistsTestCases verifies that test_cases sent
+// via PUT /sessions/{id}/code are forwarded to UpdateStudentWork, not silently dropped.
+func TestUpdateCode_WithTestCases_PersistsTestCases(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+	userID := ss.UserID
+	newCode := "print('hello')"
+	testCasesJSON := json.RawMessage(`[{"id":"cc000001-0000-0000-0000-000000000001","label":"Case 1","input":"hello","expected_output":"hello","case_type":"io"}]`)
+
+	var capturedParams store.UpdateStudentWorkParams
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
+			}
+			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			capturedParams = params
+			return &store.StudentWork{
+				ID:        id,
+				Code:      *params.Code,
+				TestCases: params.TestCases,
+			}, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{"code": newCode, "test_cases": json.RawMessage(testCasesJSON)})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify test_cases were forwarded to UpdateStudentWork (not silently dropped).
+	if capturedParams.TestCases == nil {
+		t.Fatal("expected test_cases to be forwarded to UpdateStudentWork, got nil")
+	}
+	if string(capturedParams.TestCases) != string(testCasesJSON) {
+		t.Errorf("expected test_cases %s, got %s", testCasesJSON, capturedParams.TestCases)
+	}
+}
+
+// TestUpdateCode_WithoutTestCases_DoesNotOverwriteTestCases verifies that when
+// test_cases is absent from the request, it is not passed to UpdateStudentWork
+// (so existing test cases in the DB are not wiped).
+func TestUpdateCode_WithoutTestCases_DoesNotOverwriteTestCases(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+	userID := ss.UserID
+
+	var capturedParams store.UpdateStudentWorkParams
+
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, sessID, uID uuid.UUID) (*store.SessionStudent, error) {
+			if sessID != ss.SessionID || uID != userID {
+				return nil, store.ErrNotFound
+			}
+			return ss, nil
+		},
+	}
+
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			capturedParams = params
+			code := ""
+			if params.Code != nil {
+				code = *params.Code
+			}
+			return &store.StudentWork{ID: id, Code: code}, nil
+		},
+	}
+
+	// Request body has no test_cases field.
+	body, _ := json.Marshal(map[string]any{"code": "print('x')"})
+	h := NewSessionStudentHandler(noopPublisher())
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// When no test_cases in request, UpdateStudentWork should NOT receive test_cases
+	// (nil means "don't update" in the store layer).
+	if capturedParams.TestCases != nil {
+		t.Errorf("expected TestCases to be nil when absent from request, got %s", capturedParams.TestCases)
+	}
+}
+
 // Helper to create test repos with all mocks
 func studReposWithAllMocks(studRepo *mockSessionStudentRepo, sessRepo *mockSessionRepo, workRepo *mockStudentWorkRepo) *sessionStudentTestRepos {
 	return &sessionStudentTestRepos{students: studRepo, sessions: sessRepo, studentWork: workRepo}
