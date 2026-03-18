@@ -22,13 +22,8 @@ export interface CaseDef {
   expected_output?: string;
   /** Optional random seed for reproducible execution. */
   random_seed?: number;
-  /**
-   * Optional files to attach for the execution context.
-   * NOTE: This field is named `files` (executor wire format). The storage type
-   * `IOTestCase` uses `attached_files` instead. Any code mapping IOTestCase →
-   * CaseDef must rename attached_files → files.
-   */
-  files?: Array<{ name: string; content: string }>;
+  /** Optional files to attach for the execution context. */
+  attached_files?: Array<{ name: string; content: string }>;
 }
 
 /**

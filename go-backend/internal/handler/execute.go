@@ -44,13 +44,38 @@ func (h *ExecuteHandler) SetActivation(svc ActivationService) {
 	h.activation = svc
 }
 
+// executeCaseDef is the frontend-facing representation of a test case in POST /execute.
+// Uses attached_files (matching store.IOTestCase) rather than files (executor wire format);
+// the handler translates between the two before calling the executor.
+type executeCaseDef struct {
+	Name           string                `json:"name"`
+	Input          string                `json:"input"`
+	MatchType      string                `json:"match_type"`
+	ExpectedOutput string                `json:"expected_output,omitempty"`
+	RandomSeed     *int                  `json:"random_seed,omitempty"`
+	AttachedFiles  []executorapi.File    `json:"attached_files,omitempty"`
+}
+
+// toExecutorCaseDef converts a frontend case def to the executor wire format.
+func (c executeCaseDef) toExecutorCaseDef() executorapi.CaseDef {
+	return executorapi.CaseDef{
+		Name:           c.Name,
+		Type:           "io",
+		Input:          c.Input,
+		MatchType:      c.MatchType,
+		ExpectedOutput: c.ExpectedOutput,
+		RandomSeed:     c.RandomSeed,
+		Files:          c.AttachedFiles,
+	}
+}
+
 // executeRequest is the request body for POST /api/v1/execute.
 // Accepts code, language, and an optional cases[] array of test case definitions.
 // When cases is omitted or empty, a single free-run case is synthesized.
 type executeRequest struct {
-	Code     string               `json:"code" validate:"required"`
-	Language string               `json:"language" validate:"required"`
-	Cases    []executorapi.CaseDef `json:"cases,omitempty"`
+	Code     string           `json:"code" validate:"required"`
+	Language string           `json:"language" validate:"required"`
+	Cases    []executeCaseDef `json:"cases,omitempty"`
 }
 
 // Execute handles POST /api/v1/execute for any authenticated user.
@@ -74,14 +99,16 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use provided cases, or synthesize a free-run case when none are given.
-	cases := req.Cases
-	if len(cases) == 0 {
-		cases = []executorapi.CaseDef{{
-			Name:  "run",
-			Type:  "io",
-			Input: "",
-		}}
+	// Translate frontend case defs (attached_files) to executor wire format (files).
+	var cases []executorapi.CaseDef
+	if len(req.Cases) == 0 {
+		// Synthesize a free-run case when none are given.
+		cases = []executorapi.CaseDef{{Name: "run", Type: "io", Input: ""}}
+	} else {
+		cases = make([]executorapi.CaseDef, len(req.Cases))
+		for i, c := range req.Cases {
+			cases[i] = c.toExecutorCaseDef()
+		}
 	}
 
 	execReq := executor.ExecuteRequest{
