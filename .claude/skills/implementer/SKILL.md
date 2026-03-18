@@ -15,23 +15,28 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - Mock properly in tests. Do not add production fallbacks to make tests pass.
 - No type casts that bypass the type system.
 - No optional chaining on required properties.
-- **Every production code change requires tests.** No exceptions for migrations, refactors, copy-paste, or "just wiring things up." If you wrote or modified production code, you must write tests for it. Never defer tests to a follow-up issue.
+- **Test cases from the issue are your spec.** The planner defines concrete test cases on each task. Implement those first, then add high-value coverage for gaps. Focus on tests that catch real bugs — avoid exhaustive, duplicative unit tests that test constructors, wiring, or things the compiler already guarantees.
 - **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
 - **Lint and typecheck are enforced by lefthook git hooks at commit time.** Do not run lint or typecheck commands manually — focus on tests in Phase 3.
 
 ## Phase 1: Write Failing Tests
 
-Write tests for the behavior you are about to change or add. Do this **before** touching any production code.
+Implement the **test cases defined in the task issue** before touching production code. These are your acceptance criteria — they define what "done" looks like.
 
-**This phase is NOT optional.** Common excuses that do NOT exempt you from writing tests:
-- "It's just a migration" — migrated code has new integration points that need testing
-- "It's just wiring up an API client" — API client calls, error handling, and auth headers need tests
-- "The old code didn't have tests" — that's a reason to add them, not skip them
-- "I'll add tests later" — no, tests ship with the code, always
+1. Read the task description (`bd show <task-id> --json`) and identify the test cases
+2. Read the relevant production code to understand current behavior
+3. Implement each specified test case
+4. Add additional high-value tests for gaps you identify (error paths, edge cases) — but focus on quality over quantity. A few well-targeted tests beat many shallow ones.
+5. Verify your new tests fail by delegating to a test-runner sub-agent (see Phase 3)
 
-1. Read the relevant production code to understand current behavior
-2. Write new test cases that describe the desired behavior after your change
-3. Verify your new tests fail by delegating to a test-runner sub-agent (see Phase 3)
+**Test documentation:** Planned and critical tests (integration, e2e, and non-obvious unit tests) must include a docstring or block comment answering:
+- **What** behavioral contract is being verified?
+- **Why** does it matter to correctness?
+- **What breaks** if this contract is violated?
+
+Go table-driven tests with descriptive names are often self-documenting — use judgment on whether a docstring adds value.
+
+**Skipping tests:** Tests can be skipped only for genuinely test-free changes — pure config, copy, environment variables. This should be rare. Migrations, refactors, and wiring changes still need tests.
 
 **Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
@@ -58,16 +63,18 @@ COMMANDS:
 
 ## Phase 4: Test Coverage Audit
 
-Evaluate whether your tests actually cover the changes you made. Do NOT re-read files you already have in context from writing them.
+Check whether all planned test cases were implemented and whether any meaningful gaps remain. Do NOT re-read files you already have in context from writing them.
 
-1. List changed files: `git diff --name-only`
+1. Verify all test cases from the task issue are implemented
 2. For each changed production file, evaluate from what you already know:
-   - What behavior changed? (new feature, bug fix, removed feature, refactored logic)
-   - Do your tests cover: happy path, error paths, edge cases, regressions?
-   - Are integration tests needed? (persistence, API routes, auth, cross-layer data flow)
-3. If gaps exist: write the missing tests, then re-run quality gates via test-runner sub-agent (same as Phase 3).
+   - What behavior changed?
+   - Are there meaningful gaps not covered by the planned tests? (error paths, edge cases, regressions)
+   - Would an additional test catch a real bug, or would it just be exhaustive coverage?
+3. If meaningful gaps exist: write targeted tests, then re-run quality gates via test-runner sub-agent (same as Phase 3).
 
-**Gate:** No coverage gaps remain, or gaps are documented with reasoning (e.g., "Changes were purely deletions; added regression tests in Phase 1 confirming removed elements no longer render").
+Do NOT pad coverage with low-value unit tests. A missing test for a real failure mode is a gap; a missing test for a constructor or a getter is not.
+
+**Gate:** All planned test cases implemented. No meaningful coverage gaps remain, or gaps are documented with reasoning.
 
 ## Phase 5: Summary
 

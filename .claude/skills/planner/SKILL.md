@@ -72,11 +72,76 @@ After the user approves:
 - **Summary**: What and why in 1-2 sentences
 - **Files to modify**: Exact paths (with line numbers if relevant)
 - **Files to read for context**: Paths the implementer will need to understand before coding
-- **Testing notes**: What test coverage to add — e.g., "integration tests for the new RLS policy", "unit tests for the validation logic". Call out integration tests explicitly when changes affect persistence, API routes, auth, or cross-layer data flow.
+- **Test cases**: Concrete acceptance tests for the task (see below)
 - **Implementation steps**: Numbered, specific actions
 - **Example**: Show before → after transformation when applicable
 
 A future implementer session must understand the task completely from its description alone — no external context.
+
+### Test Cases — Two Levels
+
+Test cases are defined at two levels: **task-level** (on each subtask) and **epic-level** (on the epic itself).
+
+#### Task-Level Test Cases
+
+Each subtask includes a **Test Cases** section with concrete, named scenarios. For each test case, specify:
+- **Type**: unit, integration, or e2e
+- **Scenario**: what situation is being tested
+- **Expected behavior**: what the correct outcome is
+- **Why it matters**: what bug or regression this catches
+
+Be prescriptive — lean toward detailed descriptions or pseudo-code rather than vague one-liners. The user reviews and approves test cases as part of plan approval.
+
+**Prefer integration tests** when they provide good coverage. Only specify e2e tests when frontend behavior is the thing being validated — e2e tests are expensive to build and maintain. Unit tests should be specified sparingly and only when testing isolated logic that integration tests can't efficiently cover.
+
+**Example — task-level test cases:**
+
+```markdown
+## Test Cases
+
+1. (integration) Student queries assignments — only enrolled-course rows returned
+   - Create student enrolled in course A, create assignments in courses A and B
+   - Query as student, assert only course A assignments returned
+   - Catches: RLS policy not filtering by enrollment
+
+2. (integration) Unpublished assignments hidden from students
+   - Create published and unpublished assignments in same course
+   - Query as enrolled student, assert unpublished excluded
+   - Catches: missing visibility filter in RLS policy
+
+3. (e2e) Student assignment list shows only own course
+   - Log in as student enrolled in one course
+   - Navigate to assignment list page
+   - Assert: only that course's assignments visible, no others
+   - Catches: frontend not passing correct filters or rendering unfiltered data
+```
+
+#### Epic-Level Acceptance Tests
+
+Define acceptance test cases on the **epic issue itself**. These are the "done" criteria for the whole feature — they verify the feature works end-to-end across all subtasks.
+
+- Epic acceptance tests are typically e2e or integration tests
+- They require multiple subtasks to be complete before they can pass
+- Create an explicit subtask (or subtasks) to **implement** the epic acceptance tests, with dependencies on the relevant implementation subtasks
+- Duplicate the epic acceptance test definitions into this subtask so it remains self-contained
+- **Skip epic acceptance tests for small/simple epics** where task-level tests already prove the feature works
+
+**Example — epic acceptance test definitions (on the epic issue):**
+
+```markdown
+## Acceptance Tests
+
+1. (e2e) Full assignment visibility flow
+   - Student logs in, sees only enrolled course assignments
+   - Instructor logs in, sees all assignments in taught courses
+   - Admin sees everything
+   - Catches: end-to-end integration of RLS + API + frontend filtering
+
+2. (integration) Assignment API returns correct shape with visibility applied
+   - Hit GET /assignments as student, instructor, admin
+   - Assert response shapes match contract, filtered correctly per role
+   - Catches: API contract drift or missing serialization of visibility fields
+```
 
 ### Task Sizing
 

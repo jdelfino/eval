@@ -23,23 +23,52 @@ You evaluate whether the tests in a PR are meaningful. High coverage with bad te
 
 ## Review Process
 
-### 1. Identify Changed Production and Test Files
+### 1. Check Planned Test Cases
+
+If the PR is associated with beads issues (check the PR description for "Beads: ..." references), read the task descriptions to find **planned test cases**. These are the acceptance criteria — every planned test case must be implemented.
+
+```bash
+bd show <task-id> --json
+```
+
+### 2. Identify Changed Production and Test Files
 
 ```bash
 cd <worktree-path>
 git diff <base-branch>...HEAD --stat
 ```
 
-For every changed production file, find its corresponding test file. Flag production files with no tests.
+For every changed production file, find its corresponding test file. Flag production files with no tests (unless the change is genuinely test-free — pure config, copy, environment variables).
 
-### 2. Read Each Test File
+### 3. Read Each Test File
 
-For every test file, read it completely and check:
+**Review order matters.** Follow this sequence for every test file:
+
+1. **Read docstrings first** (on planned/critical tests). Verify that docstrings answer: (a) what behavioral contract is being verified, (b) why it matters to correctness, and (c) what would break if violated. If a docstring only describes *what the code does* without explaining *why it matters*, flag it.
+2. **Spot-check assertions.** Verify assertions match the stated intent. You don't need to read every line — only dig deeper if something feels misaligned.
+3. **Go into implementation** only when a docstring is missing on a planned test, or the assertion pattern raises a concern.
+
+Note: Go table-driven tests with descriptive names are often self-documenting. Docstrings are required on planned/critical tests (integration, e2e, non-obvious unit tests), not on every test.
+
+Then check:
+
+#### Planned Test Coverage
+- Are all test cases from the task issue implemented?
+- Do implemented tests match the planned scenarios (correct setup, assertions, coverage)?
+- Flag any planned test case that is missing or substantially different from its specification
 
 #### Are Tests Meaningful?
 - Do tests verify actual behavior, or just that code doesn't crash?
 - Would a test catch a real regression if the implementation changed?
 - Are assertions checking the right things? (e.g., checking response body, not just status code)
+
+#### Test Value — Flag Low-Value Tests
+- Tests that assert `ctx != nil` or similar tautologies
+- Tests that only check `err == nil` without verifying the result
+- Tests that duplicate what the compiler already checks
+- Tests with no assertions at all
+- Exhaustive unit tests that test constructors, getters, or simple wiring without meaningful behavioral coverage
+- Tests that only exercise mocks without verifying real behavior — could a completely wrong implementation still pass?
 
 #### Mock vs Real Behavior
 - Do tests only exercise mocks, never testing real logic?
@@ -51,33 +80,23 @@ For every test file, read it completely and check:
 - Do integration tests cover the critical paths end-to-end? (e.g., HTTP request → handler → store → database → response)
 - Are database interactions tested against a real database (e.g., Docker Postgres with migrations), not just mocked?
 - Do integration tests verify that SQL queries, RLS policies, and migrations work correctly together?
-- Is there an appropriate balance of unit vs integration tests? (Unit tests for logic, integration tests for I/O boundaries)
+- Is there an appropriate balance of unit vs integration tests? (Unit tests for isolated logic, integration tests for I/O boundaries)
 
 #### Edge Cases
 - Are error paths tested? (not just happy path)
 - Are boundary conditions covered? (empty input, max values, nil/null)
 - Are concurrent scenarios tested if the code is concurrent?
 
-#### Test Names & Organization
-- Do test names describe the behavior being tested?
-- Are table-driven tests used where appropriate?
-
 #### Skipped Tests
 - Are there `it.skip`, `test.skip`, `describe.skip`, or `t.Skip()` calls that appear to be deferred work rather than legitimate environment-gating (e.g., skipping integration tests when `DATABASE_URL` is unset)?
 - Skipped tests that represent missing backend endpoints, unimplemented features, or known bugs should be flagged as non-trivial — they indicate work was left incomplete without a tracking issue
 - Legitimate skips: environment-gating (`if os.Getenv("DATABASE_URL") == ""`) or platform-specific exclusions
 
-#### Meaningless Tests (flag these specifically)
-- Tests that assert `ctx != nil` or similar tautologies
-- Tests that only check `err == nil` without verifying the result
-- Tests that duplicate what the compiler already checks
-- Tests with no assertions at all
+### 4. Assess Severity
 
-### 3. Assess Severity
+**Trivial**: misleading test name, minor missing edge case, docstring that describes behavior but omits the "what breaks" clause.
 
-**Trivial**: misleading test name, minor missing edge case.
-
-**Non-trivial**: production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code.
+**Non-trivial**: planned test case not implemented, production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code, missing docstrings on planned/critical tests.
 
 ## Report Your Outcome
 
@@ -97,6 +116,10 @@ Issues:
 2. ...
 Untested production files:
 - <file path, or "None">
+Missing planned test cases:
+- <task-id: test case description, or "None">
 Missing integration tests:
 - <description of what needs integration testing, or "None">
+Docstring gaps:
+- <test-file:line — what is missing from the docstring, or "None">
 ```
