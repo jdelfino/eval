@@ -92,7 +92,7 @@ Each subtask includes a **Test Cases** section with concrete, named scenarios. F
 
 Be prescriptive — lean toward detailed descriptions or pseudo-code rather than vague one-liners. The user reviews and approves test cases as part of plan approval.
 
-**Prefer integration tests** when they provide good coverage. Only specify e2e tests when frontend behavior is the thing being validated — e2e tests are expensive to build and maintain. Unit tests should be specified sparingly and only when testing isolated logic that integration tests can't efficiently cover.
+**Prefer integration tests** for task-level acceptance tests — they exercise real dependencies and catch real bugs. Only specify e2e tests when frontend behavior is the thing being validated — e2e tests are expensive to build and maintain. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds in Phase 4, not for proving a feature works.
 
 **Example — task-level test cases:**
 
