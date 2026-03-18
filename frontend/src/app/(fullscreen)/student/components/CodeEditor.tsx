@@ -41,6 +41,12 @@ interface CodeEditorProps {
   outputPosition?: 'bottom' | 'right';
   outputCollapsible?: boolean;
   fontSize?: number;
+  /** Called when the student adds a new test case. */
+  onAddCase?: () => void;
+  /** Called when the student edits one of their test cases. */
+  onUpdateStudentCase?: (name: string, updates: Partial<IOTestCase>) => void;
+  /** Called when the student deletes one of their test cases. */
+  onDeleteStudentCase?: (name: string) => void;
 }
 
 export default function CodeEditor({
@@ -65,6 +71,9 @@ export default function CodeEditor({
   outputPosition = 'bottom',
   outputCollapsible = false,
   fontSize,
+  onAddCase,
+  onUpdateStudentCase,
+  onDeleteStudentCase,
 }: CodeEditorProps) {
   const largeOutput = fontSize && fontSize >= 20;
   // When fontSize is set, scale all text proportionally via inline styles.
@@ -645,9 +654,9 @@ export default function CodeEditor({
               onSelectCase={caseRunner.selectCase}
               onRunCase={caseRunner.runCase}
               onRunAll={caseRunner.runAllCases}
-              onAddCase={() => {}}
-              onUpdateStudentCase={() => {}}
-              onDeleteStudentCase={() => {}}
+              onAddCase={onAddCase ?? (() => {})}
+              onUpdateStudentCase={onUpdateStudentCase ?? (() => {})}
+              onDeleteStudentCase={onDeleteStudentCase ?? (() => {})}
               darkTheme={true}
             />
           </div>
@@ -881,9 +890,9 @@ export default function CodeEditor({
                     onSelectCase={caseRunner.selectCase}
                     onRunCase={caseRunner.runCase}
                     onRunAll={caseRunner.runAllCases}
-                    onAddCase={() => {/* student case addition handled externally */}}
-                    onUpdateStudentCase={() => {/* student case update handled externally */}}
-                    onDeleteStudentCase={() => {/* student case delete handled externally */}}
+                    onAddCase={onAddCase ?? (() => {})}
+                    onUpdateStudentCase={onUpdateStudentCase ?? (() => {})}
+                    onDeleteStudentCase={onDeleteStudentCase ?? (() => {})}
                     darkTheme={true}
                   />
                 </div>

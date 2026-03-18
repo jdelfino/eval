@@ -314,6 +314,29 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
+  // Student case CRUD handlers
+  const handleAddCase = useCallback(() => {
+    setStudentCases(prev => {
+      const newCase: IOTestCase = {
+        name: `Case ${prev.length + 1}`,
+        input: '',
+        match_type: 'exact',
+        order: prev.length,
+      };
+      return [...prev, newCase];
+    });
+  }, []);
+
+  const handleUpdateStudentCase = useCallback((name: string, updates: Partial<IOTestCase>) => {
+    setStudentCases(prev =>
+      prev.map(c => (c.name === name ? { ...c, ...updates } : c))
+    );
+  }, []);
+
+  const handleDeleteStudentCase = useCallback((name: string) => {
+    setStudentCases(prev => prev.filter(c => c.name !== name));
+  }, []);
+
 
   // No work_id in URL
   if (!workIdFromUrl) {
@@ -426,6 +449,9 @@ function StudentPage() {
           caseRunner={caseRunner}
           instructorCases={instructorCases}
           studentCases={studentCases}
+          onAddCase={handleAddCase}
+          onUpdateStudentCase={handleUpdateStudentCase}
+          onDeleteStudentCase={handleDeleteStudentCase}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
           externalEditorRef={editorRef}
