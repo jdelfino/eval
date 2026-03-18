@@ -1,11 +1,12 @@
 /**
- * Tests for ProblemCreator's test cases (IOCaseForm) integration.
+ * Tests for ProblemCreator's test cases (CasesPanel) integration.
  *
  * Covers:
- * - Cases section is rendered in ProblemCreator
+ * - Cases section is rendered in ProblemCreator using CasesPanel (not IOCaseForm)
  * - test_cases submitted correctly on create
  * - test_cases submitted correctly on update
  * - Cases loaded from problem in edit mode
+ * - Instructor cases are editable in CasesPanel (add/update/delete)
  *
  * @jest-environment jsdom
  */
@@ -100,10 +101,67 @@ describe('ProblemCreator — Cases Section', () => {
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
-    it('should show IOCaseForm within Cases tab', async () => {
+    it('should show CasesPanel (not IOCaseForm) within Cases tab', async () => {
       render(<ProblemCreator />);
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+      // CasesPanel has Run All and Add Case buttons; IOCaseForm only has Add Case
+      expect(screen.getByRole('button', { name: /run all/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
+    });
+
+    it('should show existing instructor cases in the CasesPanel list', async () => {
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue({
+        id: 'p-edit',
+        title: 'My Problem',
+        description: '',
+        starter_code: '',
+        test_cases: [
+          { name: 'Case Alpha', input: '', match_type: 'exact', order: 0 },
+        ],
+      });
+
+      render(<ProblemCreator problem_id="p-edit" />);
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Case Alpha')).toBeInTheDocument();
+      });
+    });
+
+    it('should allow editing an instructor case name via CasesPanel detail view', async () => {
+      const { getProblem, updateProblem } = require('@/lib/api/problems');
+      updateProblem.mockResolvedValue({ id: 'p-edit' });
+      getProblem.mockResolvedValue({
+        id: 'p-edit',
+        title: 'My Problem',
+        description: '',
+        starter_code: '',
+        test_cases: [
+          { name: 'Case Beta', input: 'in', expected_output: 'out', match_type: 'exact', order: 0 },
+        ],
+      });
+
+      render(<ProblemCreator problem_id="p-edit" />);
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+
+      // Click the case to select it and show detail view
+      await waitFor(() => {
+        expect(screen.getByText('Case Beta')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Case Beta'));
+
+      // Detail view should show input field as editable (not read-only)
+      await waitFor(() => {
+        const inputArea = screen.getByDisplayValue('in');
+        expect(inputArea).not.toHaveAttribute('readOnly');
+      });
     });
   });
 
@@ -186,7 +244,8 @@ describe('ProblemCreator — Cases Section', () => {
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
 
       await waitFor(() => {
-        expect(screen.getByDisplayValue('Greet World')).toBeInTheDocument();
+        // CasesPanel renders case name as text in list, not as input
+        expect(screen.getByText('Greet World')).toBeInTheDocument();
       });
     });
 
@@ -235,10 +294,13 @@ describe('ProblemCreator — Cases Section', () => {
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
       fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
+
+      // Add a case via CasesPanel's Add Case button
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
+      // A case should appear in the CasesPanel list
       await waitFor(() => {
-        expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
+        expect(screen.getAllByText(/case 1/i).length).toBeGreaterThan(0);
       });
 
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -247,8 +309,9 @@ describe('ProblemCreator — Cases Section', () => {
         expect(createProblem).toHaveBeenCalled();
       });
 
+      // After successful create, panel should show empty state
       await waitFor(() => {
-        expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(0);
+        expect(screen.getByText(/no cases/i)).toBeInTheDocument();
       });
     });
   });

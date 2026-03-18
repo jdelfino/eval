@@ -26,6 +26,16 @@ interface CasesPanelProps {
   onUpdateStudentCase: (name: string, updates: Partial<IOTestCase>) => void;
   /** Called when user deletes a student case. */
   onDeleteStudentCase: (name: string) => void;
+  /**
+   * Called when user edits an instructor case (instructor authoring mode only).
+   * When provided, instructor cases are rendered as editable instead of read-only.
+   */
+  onUpdateInstructorCase?: (name: string, updates: Partial<IOTestCase>) => void;
+  /**
+   * Called when user deletes an instructor case (instructor authoring mode only).
+   * When provided, a delete button is shown for instructor cases.
+   */
+  onDeleteInstructorCase?: (name: string) => void;
   /** Whether to use dark theme (defaults to true for sidebar). */
   darkTheme?: boolean;
 }
@@ -51,6 +61,8 @@ export function CasesPanel({
   onAddCase,
   onUpdateStudentCase,
   onDeleteStudentCase,
+  onUpdateInstructorCase,
+  onDeleteInstructorCase,
   darkTheme = true,
 }: CasesPanelProps) {
   const bg = darkTheme ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-800';
@@ -161,10 +173,25 @@ export function CasesPanel({
       {selectedCaseData && (
         <CaseDetail
           tc={selectedCaseData}
-          isStudent={selectedCaseData.source === 'student'}
+          isStudent={
+            selectedCaseData.source === 'student' ||
+            (selectedCaseData.source === 'instructor' && onUpdateInstructorCase !== undefined)
+          }
           darkTheme={darkTheme}
-          onUpdate={(updates) => onUpdateStudentCase(selectedCaseData.name, updates)}
-          onDelete={() => onDeleteStudentCase(selectedCaseData.name)}
+          onUpdate={(updates) =>
+            selectedCaseData.source === 'student'
+              ? onUpdateStudentCase(selectedCaseData.name, updates)
+              : onUpdateInstructorCase?.(selectedCaseData.name, updates)
+          }
+          onDelete={() =>
+            selectedCaseData.source === 'student'
+              ? onDeleteStudentCase(selectedCaseData.name)
+              : onDeleteInstructorCase?.(selectedCaseData.name)
+          }
+          showDelete={
+            selectedCaseData.source === 'student' ||
+            (selectedCaseData.source === 'instructor' && onDeleteInstructorCase !== undefined)
+          }
         />
       )}
     </div>
@@ -203,9 +230,11 @@ interface CaseDetailProps {
   darkTheme: boolean;
   onUpdate: (updates: Partial<IOTestCase>) => void;
   onDelete: () => void;
+  showDelete?: boolean;
 }
 
-function CaseDetail({ tc, isStudent, darkTheme, onUpdate, onDelete }: CaseDetailProps) {
+function CaseDetail({ tc, isStudent, darkTheme, onUpdate, onDelete, showDelete }: CaseDetailProps) {
+  const shouldShowDelete = showDelete !== undefined ? showDelete : isStudent;
   const borderColor = darkTheme ? 'border-gray-700' : 'border-gray-200';
   const labelColor = darkTheme ? 'text-gray-400' : 'text-gray-500';
   const inputBg = darkTheme
@@ -219,7 +248,7 @@ function CaseDetail({ tc, isStudent, darkTheme, onUpdate, onDelete }: CaseDetail
     <div className={`border-t ${borderColor} p-3 flex-shrink-0 max-h-60 overflow-y-auto`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold font-mono">{tc.name}</span>
-        {isStudent && (
+        {shouldShowDelete && (
           <button
             type="button"
             onClick={onDelete}
