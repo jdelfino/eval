@@ -165,6 +165,7 @@ export async function getSectionByJoinCode(joinCode: string): Promise<RegisterSt
 
 export async function createProblem(token: string, classId: string, opts: {
   title: string; starterCode?: string; description?: string; language?: string; solution?: string;
+  testCases?: Array<{ name: string; input: string; expected_output?: string; match_type: string; order: number }>;
 }): Promise<Problem> {
   const language = opts.language || 'python';
   return withToken(token, () =>
@@ -175,6 +176,7 @@ export async function createProblem(token: string, classId: string, opts: {
       description: opts.description || '',
       language,
       ...(opts.solution !== undefined ? { solution: opts.solution } : {}),
+      ...(opts.testCases !== undefined ? { test_cases: opts.testCases } : {}),
     })
   );
 }
