@@ -4,7 +4,6 @@
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import CreateSectionModal from '../CreateSectionModal';
 
 jest.mock('@/lib/api/classes');
@@ -37,14 +36,11 @@ describe('CreateSectionModal', () => {
     jest.restoreAllMocks();
   });
 
-  it('renders the modal with all form fields', () => {
+  it('renders the modal with form fields', () => {
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     expect(screen.getByText('Create New Section')).toBeInTheDocument();
     expect(screen.getByLabelText(/section name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/schedule/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/capacity/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create section/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
   });
@@ -108,38 +104,6 @@ describe('CreateSectionModal', () => {
     expect(mockCreateSection).not.toHaveBeenCalled();
   });
 
-  it('shows validation error for negative capacity', async () => {
-    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
-
-    const nameInput = screen.getByLabelText(/section name/i);
-    const capacityInput = screen.getByLabelText(/capacity/i);
-
-    fireEvent.change(nameInput, { target: { value: 'Section A' } });
-    fireEvent.change(capacityInput, { target: { value: '-5' } });
-
-    const form = screen.getByRole('button', { name: /create section/i }).closest('form');
-    fireEvent.submit(form!);
-
-    expect(await screen.findByText(/capacity must be a positive number/i)).toBeInTheDocument();
-    expect(mockCreateSection).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for zero capacity', async () => {
-    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
-
-    const nameInput = screen.getByLabelText(/section name/i);
-    const capacityInput = screen.getByLabelText(/capacity/i);
-
-    fireEvent.change(nameInput, { target: { value: 'Section A' } });
-    fireEvent.change(capacityInput, { target: { value: '0' } });
-
-    const form = screen.getByRole('button', { name: /create section/i }).closest('form');
-    fireEvent.submit(form!);
-
-    expect(await screen.findByText(/capacity must be a positive number/i)).toBeInTheDocument();
-    expect(mockCreateSection).not.toHaveBeenCalled();
-  });
-
   it('successfully creates a section with name only', async () => {
     mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
@@ -152,77 +116,25 @@ describe('CreateSectionModal', () => {
     await waitFor(() => {
       expect(mockCreateSection).toHaveBeenCalledWith(class_id, {
         name: 'Section A',
-        schedule: undefined,
-        location: undefined,
       });
     });
 
     expect(mockOnSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it('successfully creates a section with all fields', async () => {
+  it('trims whitespace from name', async () => {
     mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
 
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
     const nameInput = screen.getByLabelText(/section name/i);
-    const scheduleInput = screen.getByLabelText(/schedule/i);
-    const locationInput = screen.getByLabelText(/location/i);
-    const capacityInput = screen.getByLabelText(/capacity/i);
-
-    fireEvent.change(nameInput, { target: { value: 'Section A' } });
-    fireEvent.change(scheduleInput, { target: { value: 'MWF 10-11am' } });
-    fireEvent.change(locationInput, { target: { value: 'Room 101' } });
-    fireEvent.change(capacityInput, { target: { value: '30' } });
-    fireEvent.click(screen.getByRole('button', { name: /create section/i }));
-
-    await waitFor(() => {
-      expect(mockCreateSection).toHaveBeenCalledWith(class_id, {
-        name: 'Section A',
-        schedule: 'MWF 10-11am',
-        location: 'Room 101',
-        capacity: 30,
-      });
-    });
-
-    expect(mockOnSuccess).toHaveBeenCalledTimes(1);
-  });
-
-  it('trims whitespace from text fields', async () => {
-    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
-
-    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
-
-    const nameInput = screen.getByLabelText(/section name/i);
-    const scheduleInput = screen.getByLabelText(/schedule/i);
-    const locationInput = screen.getByLabelText(/location/i);
-
     fireEvent.change(nameInput, { target: { value: '  Section A  ' } });
-    fireEvent.change(scheduleInput, { target: { value: '  MWF 10am  ' } });
-    fireEvent.change(locationInput, { target: { value: '  Room 101  ' } });
     fireEvent.click(screen.getByRole('button', { name: /create section/i }));
 
     await waitFor(() => {
       expect(mockCreateSection).toHaveBeenCalledWith(class_id, {
         name: 'Section A',
-        schedule: 'MWF 10am',
-        location: 'Room 101',
       });
-    });
-  });
-
-  it('sends undefined capacity when capacity field is empty', async () => {
-    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
-
-    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
-
-    const nameInput = screen.getByLabelText(/section name/i);
-    fireEvent.change(nameInput, { target: { value: 'Section A' } });
-    fireEvent.click(screen.getByRole('button', { name: /create section/i }));
-
-    await waitFor(() => {
-      const callArgs = mockCreateSection.mock.calls[0];
-      expect(callArgs[1].capacity).toBeUndefined();
     });
   });
 
@@ -310,38 +222,11 @@ describe('CreateSectionModal', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/section name/i)).toBeDisabled();
-      expect(screen.getByLabelText(/schedule/i)).toBeDisabled();
-      expect(screen.getByLabelText(/location/i)).toBeDisabled();
-      expect(screen.getByLabelText(/capacity/i)).toBeDisabled();
       expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
     });
 
     await waitFor(() => {
       expect(mockOnSuccess).toHaveBeenCalled();
     });
-  });
-
-  it('accepts valid capacity values', async () => {
-    mockCreateSection.mockResolvedValueOnce(mockSectionResponse);
-
-    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
-
-    const nameInput = screen.getByLabelText(/section name/i);
-    const capacityInput = screen.getByLabelText(/capacity/i);
-
-    fireEvent.change(nameInput, { target: { value: 'Section A' } });
-    fireEvent.change(capacityInput, { target: { value: '50' } });
-    fireEvent.click(screen.getByRole('button', { name: /create section/i }));
-
-    await waitFor(() => {
-      expect(mockCreateSection).toHaveBeenCalledWith(class_id, {
-        name: 'Section A',
-        schedule: undefined,
-        location: undefined,
-        capacity: 50,
-      });
-    });
-
-    expect(mockOnSuccess).toHaveBeenCalledTimes(1);
   });
 });

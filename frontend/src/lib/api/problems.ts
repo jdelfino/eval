@@ -83,7 +83,7 @@ export async function createProblem(data: {
   starter_code?: string;
   test_cases?: unknown[];
   execution_settings?: unknown;
-  class_id?: string;
+  class_id: string;
   tags?: string[];
   solution?: string;
   language: string;

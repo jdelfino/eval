@@ -493,9 +493,6 @@ describe('SectionView', () => {
       const nameInput = screen.getByLabelText(/Section Name/);
       fireEvent.change(nameInput, { target: { value: 'Test Section' } });
 
-      const scheduleInput = screen.getByLabelText(/Schedule/);
-      fireEvent.change(scheduleInput, { target: { value: 'MWF 10am' } });
-
       // Submit the form - use the submit button inside the modal form
       const modal = screen.getByText('Create New Section').closest('div[class*="bg-white rounded-xl"]');
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
