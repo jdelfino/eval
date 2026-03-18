@@ -92,11 +92,28 @@ Then check:
 - Skipped tests that represent missing backend endpoints, unimplemented features, or known bugs should be flagged as non-trivial — they indicate work was left incomplete without a tracking issue
 - Legitimate skips: environment-gating (`if os.Getenv("DATABASE_URL") == ""`) or platform-specific exclusions
 
-### 4. Assess Severity
+### 4. Coverage Gap Analysis
+
+After reviewing existing tests, step back and evaluate what's **missing**. For each changed production file, read the diff and ask:
+
+- What new or changed behavior does this diff introduce?
+- Is there a test — planned or otherwise — that would break if this behavior regressed?
+- Are there error paths, authorization checks, or state transitions with no test coverage?
+
+Focus on meaningful gaps that could cause real bugs, not exhaustive line coverage. Common high-value gaps to flag:
+- New API endpoints or handler branches with no integration test
+- Database queries or RLS policies with no integration test against a real database
+- Authorization or permission checks with no test verifying denial
+- Error handling paths (what happens when the external service is down, the input is invalid, the row doesn't exist?)
+- State transitions or side effects (sending emails, publishing events, updating related records)
+
+Do NOT flag gaps for trivial code (config, constants, simple getters) or code where the planned tests already provide adequate coverage.
+
+### 5. Assess Severity
 
 **Trivial**: misleading test name, minor missing edge case, docstring that describes behavior but omits the "what breaks" clause.
 
-**Non-trivial**: planned test case not implemented, production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code, missing docstrings on planned/critical tests.
+**Non-trivial**: planned test case not implemented, production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code, missing docstrings on planned/critical tests, meaningful coverage gap for changed behavior (new endpoint untested, authorization check unverified, error path uncovered).
 
 ## Report Your Outcome
 
@@ -122,4 +139,6 @@ Missing integration tests:
 - <description of what needs integration testing, or "None">
 Docstring gaps:
 - <test-file:line — what is missing from the docstring, or "None">
+Coverage gaps:
+- <production-file — what changed behavior has no test, or "None">
 ```
