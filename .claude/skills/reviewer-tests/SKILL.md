@@ -92,28 +92,28 @@ Then check:
 - Skipped tests that represent missing backend endpoints, unimplemented features, or known bugs should be flagged as non-trivial — they indicate work was left incomplete without a tracking issue
 - Legitimate skips: environment-gating (`if os.Getenv("DATABASE_URL") == ""`) or platform-specific exclusions
 
-### 4. Coverage Gap Analysis
+### 4. Behavioral Coverage Gap Analysis
 
-After reviewing existing tests, step back and evaluate what's **missing**. For each changed production file, read the diff and ask:
+After reviewing existing tests, step back and think about the PR **as a user or caller would experience it**. This is not a line-by-line diff review — it's a behavioral analysis.
 
-- What new or changed behavior does this diff introduce?
-- Is there a test — planned or otherwise — that would break if this behavior regressed?
-- Are there error paths, authorization checks, or state transitions with no test coverage?
+1. **Summarize what the PR changes from a behavioral perspective.** What can a user, API caller, or downstream system do now that they couldn't before? What existing behavior changed? Write this down as a short list of behaviors.
 
-Focus on meaningful gaps that could cause real bugs, not exhaustive line coverage. Common high-value gaps to flag:
-- New API endpoints or handler branches with no integration test
-- Database queries or RLS policies with no integration test against a real database
-- Authorization or permission checks with no test verifying denial
-- Error handling paths (what happens when the external service is down, the input is invalid, the row doesn't exist?)
-- State transitions or side effects (sending emails, publishing events, updating related records)
+2. **For each behavior, ask: is there a test that would break if this behavior regressed?** Not "is the code that implements it tested" — but "if someone reverted or broke this behavior, would a test fail and tell them?"
 
-Do NOT flag gaps for trivial code (config, constants, simple getters) or code where the planned tests already provide adequate coverage.
+3. **Flag behaviors with no test.** Common high-value gaps:
+   - A user can now do X, but no test exercises the full path (request → response or UI → result)
+   - A permission/authorization rule was added, but no test verifies that unauthorized access is denied
+   - An error case is handled (invalid input, missing resource, service unavailable), but no test triggers that error
+   - A side effect occurs (email sent, event published, related record updated), but no test verifies it fires — or verifies it *doesn't* fire when it shouldn't
+   - Behavior differs by role or state, but only one variant is tested
+
+Do NOT flag gaps for trivial behaviors or behaviors where the planned tests already provide adequate coverage.
 
 ### 5. Assess Severity
 
 **Trivial**: misleading test name, minor missing edge case, docstring that describes behavior but omits the "what breaks" clause.
 
-**Non-trivial**: planned test case not implemented, production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code, missing docstrings on planned/critical tests, meaningful coverage gap for changed behavior (new endpoint untested, authorization check unverified, error path uncovered).
+**Non-trivial**: planned test case not implemented, production file with no tests, tests that provide false confidence (all mocks, no real logic tested), missing error path coverage, no integration tests for database/store code, missing docstrings on planned/critical tests, new or changed behavior with no test that would catch a regression.
 
 ## Report Your Outcome
 
@@ -139,6 +139,6 @@ Missing integration tests:
 - <description of what needs integration testing, or "None">
 Docstring gaps:
 - <test-file:line — what is missing from the docstring, or "None">
-Coverage gaps:
-- <production-file — what changed behavior has no test, or "None">
+Untested behaviors:
+- <description of the behavior and why it matters, or "None">
 ```
