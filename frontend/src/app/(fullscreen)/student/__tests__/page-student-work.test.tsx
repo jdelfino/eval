@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import StudentPageWrapper from '../page';
 
 // Mock dependencies
@@ -250,18 +250,28 @@ describe('StudentPage (student_work-centric)', () => {
 
       render(<StudentPageWrapper />);
 
+      // Wait for the editor to load (practice mode active)
       await waitFor(() => {
         expect(screen.getByTestId('code-editor')).toBeInTheDocument();
       });
 
-      // Code changes trigger auto-save (tested via mock - implementation uses debounce)
+      // Allow debounce timer to fire (500ms in production code)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+
+      // Verify updateStudentWork was called with the code and test_cases payload
+      expect(mockUpdateStudentWork).toHaveBeenCalledWith(
+        'work-123',
+        expect.objectContaining({
+          code: fakeStudentWorkWithProblem.code,
+        })
+      );
     });
 
-    it('executes code via POST /execute', async () => {
+    it('executes code via POST /execute — onRun wired to caseRunner.runAllCases', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
       mockGetActiveSessions.mockResolvedValue([]);
-      // mockExecuteCode is from @/lib/api/execute - not needed for this smoke test
-      // The actual execution flow is tested via the warmup tests
 
       render(<StudentPageWrapper />);
 
@@ -269,7 +279,16 @@ describe('StudentPage (student_work-centric)', () => {
         expect(screen.getByTestId('code-editor')).toBeInTheDocument();
       });
 
-      // Execution tested via mock
+      // onRun prop must be wired to caseRunner.runAllCases
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(typeof lastCodeEditorProps.onRun).toBe('function');
+
+      // Invoking onRun should trigger caseRunner.runAllCases
+      await act(async () => {
+        lastCodeEditorProps.onRun();
+      });
+
+      expect(mockCaseRunner.runAllCases).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -282,6 +301,8 @@ describe('StudentPage (student_work-centric)', () => {
         section_id: 'section-1',
       };
 
+      // joinSession must resolve so the auto-join effect completes
+      mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: [] });
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
       mockGetActiveSessions.mockResolvedValue([activeSession]);
 
@@ -291,7 +312,22 @@ describe('StudentPage (student_work-centric)', () => {
         expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
       });
 
-      // Mode switches to live when active session is detected
+      // Mode switches to live: auto-join triggers joinSession with the active session id
+      await waitFor(() => {
+        expect(mockJoinSession).toHaveBeenCalledWith(
+          'user-1',
+          expect.any(String)
+        );
+      });
+
+      // activeSessionId must be set to the matching session's id
+      // Verified via the caseRunner being initialized with sessionId
+      // (useCaseRunner receives sessionId when mode is 'live' and joined)
+      const { useCaseRunner } = require('@/hooks/useCaseRunner');
+      const lastCall = (useCaseRunner as jest.Mock).mock.calls[
+        (useCaseRunner as jest.Mock).mock.calls.length - 1
+      ][0];
+      expect(lastCall.sessionId).toBe('session-1');
     });
   });
 

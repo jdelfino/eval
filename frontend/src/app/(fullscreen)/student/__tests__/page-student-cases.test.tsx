@@ -382,4 +382,127 @@ describe('StudentPage student case CRUD (PLAT-x0ii)', () => {
       });
     });
   });
+
+  describe('persistence side-effects: updateStudentWork called after mutations', () => {
+    it('calls updateStudentWork with new test_cases after onAddCase', async () => {
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      // Flush the initial auto-save debounce (500ms)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+      mockUpdateStudentWork.mockClear();
+
+      // Add a new case
+      act(() => {
+        lastCodeEditorProps.onAddCase();
+      });
+
+      await waitFor(() => {
+        expect(lastCodeEditorProps.studentCases).toHaveLength(2);
+      });
+
+      // Advance past debounce to trigger persistence
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+
+      expect(mockUpdateStudentWork).toHaveBeenCalledWith(
+        'work-123',
+        expect.objectContaining({
+          test_cases: expect.arrayContaining([
+            expect.objectContaining({ name: 'my-case' }),
+            expect.objectContaining({ input: '', match_type: 'exact' }),
+          ]),
+        })
+      );
+    });
+
+    it('calls updateStudentWork with updated test_cases after onUpdateStudentCase', async () => {
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      // Flush the initial auto-save debounce (500ms)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+      mockUpdateStudentWork.mockClear();
+
+      // Update the existing case
+      act(() => {
+        lastCodeEditorProps.onUpdateStudentCase('my-case', { input: 'updated-input' });
+      });
+
+      await waitFor(() => {
+        expect(lastCodeEditorProps.studentCases[0].input).toBe('updated-input');
+      });
+
+      // Advance past debounce to trigger persistence
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+
+      expect(mockUpdateStudentWork).toHaveBeenCalledWith(
+        'work-123',
+        expect.objectContaining({
+          test_cases: [
+            expect.objectContaining({ name: 'my-case', input: 'updated-input' }),
+          ],
+        })
+      );
+    });
+
+    it('calls updateStudentWork with remaining test_cases after onDeleteStudentCase', async () => {
+      const workWithMultipleCases = {
+        ...fakeStudentWork,
+        test_cases: [
+          { name: 'case-a', input: 'a', match_type: 'exact', order: 0 },
+          { name: 'case-b', input: 'b', match_type: 'exact', order: 1 },
+        ],
+      };
+      mockGetStudentWork.mockResolvedValue(workWithMultipleCases);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      // Flush the initial auto-save debounce (500ms)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+      mockUpdateStudentWork.mockClear();
+
+      // Delete case-a
+      act(() => {
+        lastCodeEditorProps.onDeleteStudentCase('case-a');
+      });
+
+      await waitFor(() => {
+        expect(lastCodeEditorProps.studentCases).toHaveLength(1);
+      });
+
+      // Advance past debounce to trigger persistence
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+
+      expect(mockUpdateStudentWork).toHaveBeenCalledWith(
+        'work-123',
+        expect.objectContaining({
+          test_cases: [
+            expect.objectContaining({ name: 'case-b', input: 'b' }),
+          ],
+        })
+      );
+    });
+  });
 });
