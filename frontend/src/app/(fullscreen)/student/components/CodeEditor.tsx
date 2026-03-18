@@ -11,7 +11,8 @@ import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hoo
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
+import type { SessionPublicProblem } from '@/types/api';
+import type { TestResult } from '@/types/problem';
 import { parseErrorLineNumber } from '@/lib/parse-error-line';
 import type { CaseRunnerResult } from '@/hooks/useCaseRunner';
 
@@ -21,7 +22,8 @@ interface CodeEditorProps {
   onRun?: () => void;
   isRunning?: boolean;
   readOnly?: boolean;
-  execution_result?: ExecutionResult | null;
+  /** Single run result to display when no caseRunner.selectedCase is active. */
+  runResult?: TestResult | null;
   title?: string;
   showRunButton?: boolean;
   problem?: Problem | SessionPublicProblem | null;
@@ -47,7 +49,7 @@ export default function CodeEditor({
   onRun,
   isRunning = false,
   readOnly = false,
-  execution_result = null,
+  runResult = null,
   title = 'Your Code',
   showRunButton = true,
   problem = null,
@@ -239,42 +241,54 @@ export default function CodeEditor({
 
   // Use local state for API execution, or passed props for WebSocket execution
   // Compute whether error decorations should be shown
+  // Error decorations come from runResult (direct execute path) or caseRunner results.
+  const runResultError = runResult?.status === 'error' ? (runResult.stderr ?? null) : null;
+  const caseRunnerError = caseRunner?.selectedCase
+    ? (caseRunner.caseResults[caseRunner.selectedCase]?.status === 'error'
+        ? (caseRunner.caseResults[caseRunner.selectedCase]?.stderr ?? null)
+        : null)
+    : null;
+  const activeError = runResultError ?? caseRunnerError;
   const hasErrorDecoration =
     !debuggerHook?.hasTrace &&
-    !!execution_result &&
-    !execution_result.success &&
-    !!execution_result.error &&
-    parseErrorLineNumber(execution_result.error) !== null;
+    !!activeError &&
+    parseErrorLineNumber(activeError) !== null;
 
   // Auto-grow output section when results appear (up to 40%)
   // Skip auto-grow for right-positioned output to avoid jarring width changes
   useEffect(() => {
     if (outputPosition === 'right') return;
 
-    if (execution_result && outputResizeRef.current) {
+    const hasResult = runResult !== null || (caseRunner?.selectedCase && caseRunner.caseResults[caseRunner.selectedCase]);
+
+    if (hasResult && outputResizeRef.current) {
       const container = outputResizeRef.current.parentElement;
       if (!container) return;
 
       const containerHeight = container.getBoundingClientRect().height;
       const maxHeight = containerHeight * 0.8;
 
-      // Estimate needed height based on content
-      const hasOutput = execution_result.output && execution_result.output.length > 0;
-      const hasError = execution_result.error && execution_result.error.length > 0;
+      // Estimate content based on active result
+      let contentText = '';
+      if (runResult) {
+        contentText = runResult.actual ?? runResult.stderr ?? '';
+      } else if (caseRunner?.selectedCase) {
+        const r = caseRunner.caseResults[caseRunner.selectedCase];
+        if (r) contentText = r.actual ?? r.stderr ?? '';
+      }
 
       let targetHeight = 150; // Minimum
-      if (hasOutput || hasError) {
-        // Grow to accommodate content, up to 80%
-        const contentLines = (execution_result.output || execution_result.error || '').split('\n').length;
+      if (contentText.length > 0) {
+        const contentLines = contentText.split('\n').length;
         targetHeight = Math.min(150 + (contentLines * 20), maxHeight);
       }
 
       setOutputHeight(Math.min(targetHeight, maxHeight));
-    } else if (!execution_result) {
+    } else if (!hasResult) {
       // Reset to initial size when no results
       setOutputHeight(150);
     }
-  }, [execution_result, outputPosition]);
+  }, [runResult, caseRunner?.selectedCase, caseRunner?.caseResults, outputPosition]);
 
   // Auto-open debugger sidebar when debugging starts (desktop only)
   useEffect(() => {
@@ -328,13 +342,8 @@ export default function CodeEditor({
 
     // Determine the error line to highlight (null = no highlight)
     let errorLine: number | null = null;
-    if (
-      !debuggerHook?.hasTrace &&
-      execution_result &&
-      !execution_result.success &&
-      execution_result.error
-    ) {
-      errorLine = parseErrorLineNumber(execution_result.error);
+    if (!debuggerHook?.hasTrace && activeError) {
+      errorLine = parseErrorLineNumber(activeError);
     }
 
     if (errorLine !== null) {
@@ -360,7 +369,7 @@ export default function CodeEditor({
       const newDecorations = editor.deltaDecorations(errorDecorationsRef.current, []);
       errorDecorationsRef.current = newDecorations;
     }
-  }, [execution_result, debuggerHook?.hasTrace]);
+  }, [activeError, debuggerHook?.hasTrace]);
 
   // Cleanup __TEST_EDITORS on unmount
   useEffect(() => {
@@ -1077,6 +1086,13 @@ export default function CodeEditor({
                 allResults={caseRunner.caseResults}
                 totalCases={instructorCases.length + studentCases.length}
               />
+            ) : runResult ? (
+              /* Show direct run result (instructor tools / free-run path) */
+              <CaseResultDisplay
+                result={runResult}
+                caseName={runResult.name}
+                isRunning={isRunning}
+              />
             ) : debuggerHook?.hasTrace ? (
               /* Show debugger output when debugging */
               <div className="p-4 h-full bg-gray-900 overflow-y-auto">
@@ -1132,50 +1148,8 @@ export default function CodeEditor({
                 )}
 
                 <div className="mt-3 text-xs text-blue-300">
-                  💡 Step through your code to see how output is generated. Variables and call stack are in the sidebar.
+                  Step through your code to see how output is generated. Variables and call stack are in the sidebar.
                 </div>
-              </div>
-            ) : execution_result ? (
-              /* Show normal output when not debugging */
-              <div className={`p-4 h-full ${
-                execution_result.success ? 'bg-gray-900' : 'bg-gray-900'
-              }`} style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className={`font-bold ${
-                    execution_result.success ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {execution_result.success ? '✓ Success' : '✗ Error'}
-                  </span>
-                  <span className={`${outputTextSm} ${
-                    execution_result.success ? 'text-green-300' : 'text-red-300'
-                  }`}>
-                    Execution time: {execution_result.execution_time_ms}ms
-                  </span>
-                </div>
-
-                {execution_result.output && (
-                  <div className="mt-2">
-                    <div className={`font-bold ${outputTextSm} ${
-                      execution_result.success ? 'text-green-300' : 'text-red-300'
-                    }`}>
-                      Output:
-                    </div>
-                    <pre className={`bg-gray-800 text-gray-200 p-2 rounded border border-gray-700 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words`}>
-                      {execution_result.output}
-                    </pre>
-                  </div>
-                )}
-
-                {execution_result.error && (
-                  <div className="mt-2">
-                    <div className={`font-bold ${outputTextSm} text-red-400`}>
-                      Error:
-                    </div>
-                    <pre className={`bg-gray-800 p-2 rounded border border-red-900 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words text-red-300`}>
-                      {execution_result.error}
-                    </pre>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="p-4 bg-gray-900 h-full flex flex-col items-center justify-center" style={outputFontSize ? { fontSize: outputFontSize } : undefined}>

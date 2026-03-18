@@ -14,7 +14,8 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Problem } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
-import { Student, RealtimeStudent, ExecutionResult } from '../types';
+import { Student, RealtimeStudent } from '../types';
+import type { TestResult } from '@/types/problem';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -57,7 +58,7 @@ interface SessionStudentPaneProps {
   /** Callback to view student history */
   onViewHistory?: (studentId: string, studentName: string) => void;
   /** Callback to execute student code */
-  onExecuteCode?: (studentId: string, code: string) => Promise<ExecutionResult | undefined>;
+  onExecuteCode?: (studentId: string, code: string) => Promise<TestResult | undefined>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -89,7 +90,7 @@ export function SessionStudentPane({
   // Local state for student selection and code
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentCode, setSelectedStudentCode] = useState<string>('');
-  const [execution_result, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
   const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // Analysis options state
@@ -130,7 +131,7 @@ export function SessionStudentPane({
 
   const handleSelectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
-    setExecutionResult(null);
+    setRunResult(null);
     onSelectStudent?.(studentId);
   };
 
@@ -138,12 +139,12 @@ export function SessionStudentPane({
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
-    setExecutionResult(null);
+    setRunResult(null);
 
     try {
       const result = await onExecuteCode(selectedStudentId, selectedStudentCode);
       if (result) {
-        setExecutionResult(result);
+        setRunResult(result);
       }
     } finally {
       setIsExecutingCode(false);
@@ -308,7 +309,7 @@ export function SessionStudentPane({
                 isRunning={isExecutingCode}
                 readOnly
                 problem={sessionProblem}
-                execution_result={execution_result}
+                runResult={runResult}
               />
             </EditorContainer>
           </div>

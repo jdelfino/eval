@@ -48,18 +48,19 @@ func TestExecute_HappyPath(t *testing.T) {
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 30}},
-				Summary: executor.CaseSummary{Total: 1, Run: 1, TimeMs: 30},
+				Results: []executor.CaseResult{{Name: "case1", Type: "io", Status: "passed", Input: "hello", Expected: "HELLO", Actual: "HELLO", TimeMs: 30}},
+				Summary: executor.CaseSummary{Total: 1, Passed: 1, TimeMs: 30},
 			}, nil
 		},
 	}
 
 	handler := setupExecuteHandler(execClient)
 	body, _ := json.Marshal(map[string]any{
-		"code":     `print("hello")`,
+		"code":     `print(input().upper())`,
 		"language": "python",
-		"stdin":    "some input",
-		"files":    []map[string]string{{"name": "test.txt", "content": "data"}},
+		"cases": []map[string]any{
+			{"name": "case1", "input": "hello", "expected_output": "HELLO", "match_type": "exact"},
+		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -73,32 +74,35 @@ func TestExecute_HappyPath(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Response should be in legacy format {success, output, error, execution_time_ms, stdin}
-	var resp legacyExecuteResponse
+	// Response must be native {results[], summary} shape
+	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !resp.Success {
-		t.Fatalf("expected success=true, got false")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Output != "hello\n" {
-		t.Fatalf("expected output 'hello\\n', got %q", resp.Output)
+	if resp.Results[0].Name != "case1" {
+		t.Fatalf("expected results[0].name='case1', got %q", resp.Results[0].Name)
 	}
-	if resp.Stdin != "some input" {
-		t.Fatalf("expected stdin 'some input' in response, got %q", resp.Stdin)
+	if resp.Results[0].Status != "passed" {
+		t.Fatalf("expected results[0].status='passed', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Actual != "HELLO" {
+		t.Fatalf("expected results[0].actual='HELLO', got %q", resp.Results[0].Actual)
 	}
 	// Verify executor received correct fields
-	if capturedReq.Code != `print("hello")` {
+	if capturedReq.Code != `print(input().upper())` {
 		t.Fatalf("expected code forwarded, got %q", capturedReq.Code)
 	}
 	if len(capturedReq.Cases) == 0 {
 		t.Fatal("expected at least one case forwarded to executor")
 	}
-	if capturedReq.Cases[0].Input != "some input" {
-		t.Fatalf("expected stdin 'some input' in case input, got %q", capturedReq.Cases[0].Input)
+	if capturedReq.Cases[0].Name != "case1" {
+		t.Fatalf("expected cases[0].name='case1', got %q", capturedReq.Cases[0].Name)
 	}
-	if len(capturedReq.Cases[0].Files) != 1 || capturedReq.Cases[0].Files[0].Name != "test.txt" {
-		t.Fatalf("expected 1 file 'test.txt' in case files, got %v", capturedReq.Cases[0].Files)
+	if capturedReq.Cases[0].Input != "hello" {
+		t.Fatalf("expected cases[0].input='hello', got %q", capturedReq.Cases[0].Input)
 	}
 }
 
@@ -167,17 +171,20 @@ func TestExecute_RandomSeed(t *testing.T) {
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok"}},
+				Results: []executor.CaseResult{{Name: "seed-case", Type: "io", Status: "run", Actual: "ok"}},
 				Summary: executor.CaseSummary{Total: 1, Run: 1},
 			}, nil
 		},
 	}
 
+	seed := 42
 	handler := setupExecuteHandler(execClient)
 	body, _ := json.Marshal(map[string]any{
-		"code":        "x",
-		"language":    "python",
-		"random_seed": 42,
+		"code":     "x",
+		"language": "python",
+		"cases": []map[string]any{
+			{"name": "seed-case", "input": "", "match_type": "exact", "random_seed": seed},
+		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -190,7 +197,7 @@ func TestExecute_RandomSeed(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	// random_seed is wrapped into Cases[0].RandomSeed by the handler
+	// random_seed should be forwarded in Cases[0].RandomSeed
 	if len(capturedReq.Cases) == 0 {
 		t.Fatal("expected at least one case forwarded to executor")
 	}
@@ -212,6 +219,7 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	}
 
 	handler := setupExecuteHandler(execClient)
+	// No cases provided — handler synthesizes a free-run case with nil RandomSeed
 	body, _ := json.Marshal(map[string]any{
 		"code":     "x",
 		"language": "python",
@@ -227,12 +235,12 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	// random_seed is wrapped into Cases[0].RandomSeed by the handler — should be nil when not provided
+	// Synthesized free-run case should have nil RandomSeed
 	if len(capturedReq.Cases) == 0 {
 		t.Fatal("expected at least one case forwarded to executor")
 	}
 	if capturedReq.Cases[0].RandomSeed != nil {
-		t.Fatalf("expected nil random_seed in case when not provided, got %v", capturedReq.Cases[0].RandomSeed)
+		t.Fatalf("expected nil random_seed in synthesized case, got %v", capturedReq.Cases[0].RandomSeed)
 	}
 }
 
@@ -397,9 +405,195 @@ func TestExecute_503OnConnectionError(t *testing.T) {
 	}
 }
 
-// --- legacyExecuteResponse compat wrapper tests ---
+// --- native Cases[] request / {results[], summary} response tests ---
 
-func TestExecute_LegacyResponseShape_Success(t *testing.T) {
+// TestExecute_NativeProtocol_AcceptsCasesArray asserts that the handler accepts
+// a cases[] array in the request and returns {results[], summary} natively.
+func TestExecute_NativeProtocol_AcceptsCasesArray(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{
+					{Name: "case1", Type: "io", Status: "passed", Input: "hello", Expected: "HELLO", Actual: "HELLO", TimeMs: 20},
+					{Name: "case2", Type: "io", Status: "failed", Input: "world", Expected: "WORLD", Actual: "world", TimeMs: 15},
+				},
+				Summary: executor.CaseSummary{Total: 2, Passed: 1, Failed: 1, TimeMs: 35},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	cases := []map[string]any{
+		{"name": "case1", "input": "hello", "expected_output": "HELLO", "match_type": "exact"},
+		{"name": "case2", "input": "world", "expected_output": "WORLD", "match_type": "exact"},
+	}
+	body, _ := json.Marshal(map[string]any{
+		"code":     `print(input().upper())`,
+		"language": "python",
+		"cases":    cases,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Response must be {results[], summary} shape — NOT legacy {success, output, ...}
+	var resp executor.ExecuteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal native response: %v", err)
+	}
+	if len(resp.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(resp.Results))
+	}
+	if resp.Results[0].Name != "case1" {
+		t.Errorf("expected results[0].name='case1', got %q", resp.Results[0].Name)
+	}
+	if resp.Results[0].Status != "passed" {
+		t.Errorf("expected results[0].status='passed', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[1].Name != "case2" {
+		t.Errorf("expected results[1].name='case2', got %q", resp.Results[1].Name)
+	}
+	if resp.Results[1].Status != "failed" {
+		t.Errorf("expected results[1].status='failed', got %q", resp.Results[1].Status)
+	}
+	if resp.Summary.Total != 2 {
+		t.Errorf("expected summary.total=2, got %d", resp.Summary.Total)
+	}
+	if resp.Summary.Passed != 1 {
+		t.Errorf("expected summary.passed=1, got %d", resp.Summary.Passed)
+	}
+
+	// Cases are forwarded as-is to executor
+	if len(capturedReq.Cases) != 2 {
+		t.Fatalf("expected 2 cases forwarded to executor, got %d", len(capturedReq.Cases))
+	}
+	if capturedReq.Cases[0].Name != "case1" {
+		t.Errorf("expected cases[0].name='case1', got %q", capturedReq.Cases[0].Name)
+	}
+	if capturedReq.Cases[0].Input != "hello" {
+		t.Errorf("expected cases[0].input='hello', got %q", capturedReq.Cases[0].Input)
+	}
+}
+
+// TestExecute_NativeProtocol_FreeRunCase asserts that when cases[] is omitted,
+// the handler passes an empty cases slice (or single run-only case) and returns
+// {results[], summary} shape.
+func TestExecute_NativeProtocol_FreeRunCase(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 30}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1, TimeMs: 30},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": `print("hello")`, "language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Response must be {results[], summary} NOT legacy {success, output, execution_time_ms, ...}
+	var resp executor.ExecuteResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal native response: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
+	}
+	if resp.Results[0].Name != "run" {
+		t.Errorf("expected results[0].name='run', got %q", resp.Results[0].Name)
+	}
+	if resp.Results[0].Status != "run" {
+		t.Errorf("expected results[0].status='run', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Actual != "hello\n" {
+		t.Errorf("expected results[0].actual='hello\\n', got %q", resp.Results[0].Actual)
+	}
+
+	// Legacy fields must NOT be present in response
+	raw := rec.Body.Bytes()
+	var rawMap map[string]any
+	if err := json.Unmarshal(raw, &rawMap); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if _, ok := rawMap["success"]; ok {
+		t.Error("legacy 'success' field must not be present in response")
+	}
+	if _, ok := rawMap["execution_time_ms"]; ok {
+		t.Error("legacy 'execution_time_ms' field must not be present in response")
+	}
+}
+
+// TestExecute_NativeProtocol_CasesForwardedWithFiles asserts that case-level files
+// are forwarded to the executor when provided via cases[].
+func TestExecute_NativeProtocol_CasesForwardedWithFiles(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return &executor.ExecuteResponse{
+				Results: []executor.CaseResult{{Name: "file-case", Type: "io", Status: "run", Actual: "data", TimeMs: 10}},
+				Summary: executor.CaseSummary{Total: 1, Run: 1, TimeMs: 10},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{
+		"code":     "x",
+		"language": "python",
+		"cases": []map[string]any{
+			{
+				"name":       "file-case",
+				"input":      "hello",
+				"match_type": "exact",
+				"files":      []map[string]string{{"name": "test.txt", "content": "data"}},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case forwarded to executor")
+	}
+	if len(capturedReq.Cases[0].Files) != 1 || capturedReq.Cases[0].Files[0].Name != "test.txt" {
+		t.Fatalf("expected 1 file 'test.txt' in case files, got %v", capturedReq.Cases[0].Files)
+	}
+}
+
+// --- Native protocol response shape tests ---
+
+func TestExecute_NativeResponseShape_RunOnlyCase(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			return &executor.ExecuteResponse{
@@ -416,7 +610,7 @@ func TestExecute_LegacyResponseShape_Success(t *testing.T) {
 	}
 
 	handler := setupExecuteHandler(execClient)
-	body, _ := json.Marshal(map[string]any{"code": `print("hello")`, "language": "python", "stdin": "world"})
+	body, _ := json.Marshal(map[string]any{"code": `print("hello")`, "language": "python"})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
@@ -429,25 +623,37 @@ func TestExecute_LegacyResponseShape_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp legacyExecuteResponse
+	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal legacy response: %v", err)
+		t.Fatalf("unmarshal native response: %v", err)
 	}
-	if !resp.Success {
-		t.Error("expected success=true for run status")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Output != "hello\n" {
-		t.Errorf("expected output 'hello\\n', got %q", resp.Output)
+	if resp.Results[0].Status != "run" {
+		t.Errorf("expected status='run', got %q", resp.Results[0].Status)
 	}
-	if resp.ExecutionTimeMs != 42 {
-		t.Errorf("expected execution_time_ms=42, got %d", resp.ExecutionTimeMs)
+	if resp.Results[0].Actual != "hello\n" {
+		t.Errorf("expected actual='hello\\n', got %q", resp.Results[0].Actual)
 	}
-	if resp.Stdin != "world" {
-		t.Errorf("expected stdin='world', got %q", resp.Stdin)
+	if resp.Summary.TimeMs != 42 {
+		t.Errorf("expected summary.time_ms=42, got %d", resp.Summary.TimeMs)
+	}
+
+	// Legacy fields must NOT be present
+	var rawMap map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &rawMap); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if _, ok := rawMap["success"]; ok {
+		t.Error("legacy 'success' field must not be present in native response")
+	}
+	if _, ok := rawMap["execution_time_ms"]; ok {
+		t.Error("legacy 'execution_time_ms' field must not be present in native response")
 	}
 }
 
-func TestExecute_LegacyResponseShape_ErrorStatus(t *testing.T) {
+func TestExecute_NativeResponseShape_ErrorCase(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			return &executor.ExecuteResponse{
@@ -477,15 +683,21 @@ func TestExecute_LegacyResponseShape_ErrorStatus(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp legacyExecuteResponse
+	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal legacy response: %v", err)
+		t.Fatalf("unmarshal native response: %v", err)
 	}
-	if resp.Success {
-		t.Error("expected success=false for error status")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Error != "NameError: name 'x' is not defined" {
-		t.Errorf("expected error message in Error field, got %q", resp.Error)
+	if resp.Results[0].Status != "error" {
+		t.Errorf("expected status='error', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Stderr != "NameError: name 'x' is not defined" {
+		t.Errorf("expected stderr message, got %q", resp.Results[0].Stderr)
+	}
+	if resp.Summary.Errors != 1 {
+		t.Errorf("expected summary.errors=1, got %d", resp.Summary.Errors)
 	}
 }
 

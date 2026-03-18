@@ -40,7 +40,7 @@ export interface IOTestCase {
 // ---------------------------------------------------------------------------
 
 /** Status of a single test case execution. */
-export type TestStatus = 'passed' | 'failed' | 'error';
+export type TestStatus = 'passed' | 'failed' | 'error' | 'run';
 
 /**
  * TestResult holds the outcome of a single test case run.

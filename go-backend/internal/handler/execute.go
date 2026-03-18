@@ -45,29 +45,17 @@ func (h *ExecuteHandler) SetActivation(svc ActivationService) {
 }
 
 // executeRequest is the request body for POST /api/v1/execute.
-// TODO(PLAT-oztv.6): Replace Stdin/RandomSeed/Files with Cases[]CaseDef.
+// Accepts code, language, and an optional cases[] array of test case definitions.
+// When cases is omitted or empty, a single free-run case is synthesized.
 type executeRequest struct {
-	Code       string             `json:"code" validate:"required"`
-	Language   string             `json:"language" validate:"required"`
-	Stdin      string             `json:"stdin,omitempty"`
-	RandomSeed *int               `json:"random_seed,omitempty"`
-	Files      []executorapi.File `json:"files,omitempty"`
-}
-
-// legacyExecuteResponse is the response shape the frontend expects from POST /api/v1/execute.
-// The executor now returns {results[], summary} but the frontend's executeCode() function
-// expects the legacy single-result shape. This compat wrapper bridges the gap.
-type legacyExecuteResponse struct {
-	Success         bool   `json:"success"`
-	Output          string `json:"output,omitempty"`
-	Error           string `json:"error,omitempty"`
-	ExecutionTimeMs int64  `json:"execution_time_ms"`
-	Stdin           string `json:"stdin,omitempty"`
+	Code     string               `json:"code" validate:"required"`
+	Language string               `json:"language" validate:"required"`
+	Cases    []executorapi.CaseDef `json:"cases,omitempty"`
 }
 
 // Execute handles POST /api/v1/execute for any authenticated user.
+// Accepts {code, language, cases[]} and returns {results[], summary} natively.
 // No session context is required — takes code + language directly.
-// TODO(PLAT-oztv.6): Convert to Cases-based request.
 func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	authUser := auth.UserFromContext(r.Context())
 	if authUser == nil {
@@ -86,21 +74,20 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build a single run-only case from the legacy stdin/files/random_seed fields.
-	caseFiles := make([]executorapi.File, len(req.Files))
-	copy(caseFiles, req.Files)
-	runCase := executorapi.CaseDef{
-		Name:       "run",
-		Type:       "io",
-		Input:      req.Stdin,
-		RandomSeed: req.RandomSeed,
-		Files:      caseFiles,
+	// Use provided cases, or synthesize a free-run case when none are given.
+	cases := req.Cases
+	if len(cases) == 0 {
+		cases = []executorapi.CaseDef{{
+			Name:  "run",
+			Type:  "io",
+			Input: "",
+		}}
 	}
 
 	execReq := executor.ExecuteRequest{
 		Code:     req.Code,
 		Language: lang,
-		Cases:    []executorapi.CaseDef{runCase},
+		Cases:    cases,
 	}
 
 	// Signal executor demand so KEDA can scale from zero.
@@ -119,19 +106,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert executor response to the legacy format the frontend expects.
-	// The frontend's executeCode() expects {success, output, error, execution_time_ms, stdin}.
-	legacy := legacyExecuteResponse{
-		Stdin: req.Stdin,
-	}
-	if len(execResp.Results) > 0 {
-		r0 := execResp.Results[0]
-		legacy.Success = r0.Status != "error"
-		legacy.Output = r0.Actual
-		legacy.Error = r0.Stderr
-		legacy.ExecutionTimeMs = r0.TimeMs
-	}
-	httputil.WriteJSON(w, http.StatusOK, legacy)
+	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
 // isConnectionError reports whether err is a network-layer connection failure,

@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
-import type { IOTestCase } from '@/types/problem';
+import type { IOTestCase, TestResult } from '@/types/problem';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
@@ -67,7 +67,7 @@ export default function ProblemCreator({
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
   const isEditMode = !!problem_id;
 
@@ -471,18 +471,24 @@ export default function ProblemCreator({
           onRun={() => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
-            setExecutionResult(null);
-            executeCode(codeToRun, language).then(setExecutionResult).catch((err) => {
-              setExecutionResult({
-                success: false,
-                output: '',
-                error: err.message || 'Execution failed',
-                execution_time_ms: 0,
+            setRunResult(null);
+            executeCode(codeToRun, language, {
+              cases: [{ name: 'run', input: '', match_type: 'exact' }],
+            }).then(response => {
+              setRunResult(response.results[0] ?? null);
+            }).catch((err) => {
+              setRunResult({
+                name: 'run',
+                type: 'io',
+                status: 'error',
+                actual: '',
+                stderr: err.message || 'Execution failed',
+                time_ms: 0,
               });
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}
-          execution_result={executionResult}
+          runResult={runResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
