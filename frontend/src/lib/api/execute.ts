@@ -6,7 +6,7 @@
  */
 
 import { apiFetch, apiPost } from '@/lib/api-client';
-import type { ExecutionResult } from '@/types/api';
+import type { TestResponse } from '@/lib/api/tests';
 
 /**
  * A single test case definition sent to the execute endpoint.
@@ -39,20 +39,20 @@ export interface ExecuteOptions {
  * @param code - The code to execute
  * @param language - The programming language
  * @param options - Optional execution parameters (cases[])
- * @returns ExecutionResult with output and status
+ * @returns TestResponse with results[] and summary
  */
 export async function executeCode(
   code: string,
   language: string,
   options?: ExecuteOptions
-): Promise<ExecutionResult> {
+): Promise<TestResponse> {
   const body: Record<string, unknown> = { code, language };
 
   if (options?.cases !== undefined) {
     body.cases = options.cases;
   }
 
-  return apiPost<ExecutionResult>('/execute', body);
+  return apiPost<TestResponse>('/execute', body);
 }
 
 /**

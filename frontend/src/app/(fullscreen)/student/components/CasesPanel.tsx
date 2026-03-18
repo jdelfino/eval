@@ -175,7 +175,7 @@ export function CasesPanel({
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ResultBadge({ status }: { status: 'passed' | 'failed' | 'error' }) {
+function ResultBadge({ status }: { status: 'passed' | 'failed' | 'error' | 'run' }) {
   if (status === 'passed') {
     return (
       <span className="px-1.5 py-0.5 text-xs rounded bg-green-900 text-green-300 border border-green-700 flex-shrink-0">

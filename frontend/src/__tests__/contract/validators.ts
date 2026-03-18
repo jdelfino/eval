@@ -4,7 +4,7 @@
  * Type-safe validators that use TypeScript interfaces to catch API mismatches at compile time.
  */
 
-import { User, Session, SessionStudent, ExecutionResult, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
+import { User, Session, SessionStudent, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 import type {
   StudentJoinedData,
@@ -95,20 +95,6 @@ export function validateSessionStudentShape(obj: SessionStudent, label = 'Sessio
   expect('code' in obj).toBe(true);
   expect('test_cases' in obj).toBe(true);
   expect(typeof obj.joined_at).toBe('string');
-  expectSnakeCaseKeys(obj, label);
-}
-
-/** Validate the shape of an ExecutionResult object from the backend. */
-export function validateExecutionResultShape(obj: ExecutionResult, label = 'ExecutionResult') {
-  expect(typeof obj.success).toBe('boolean');
-  expect(typeof obj.execution_time_ms).toBe('number');
-  // output and error use omitempty — only present when non-empty
-  if ('output' in obj) {
-    expect(typeof obj.output).toBe('string');
-  }
-  if ('error' in obj) {
-    expect(typeof obj.error).toBe('string');
-  }
   expectSnakeCaseKeys(obj, label);
 }
 

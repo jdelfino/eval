@@ -13,6 +13,7 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
+import type { TestResult } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
 
@@ -40,7 +41,7 @@ export default function SessionProblemEditor({
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded)
   useEffect(() => {
@@ -193,18 +194,24 @@ export default function SessionProblemEditor({
           onRun={() => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
-            setExecutionResult(null);
-            executeCode(codeToRun, language).then(setExecutionResult).catch((err) => {
-              setExecutionResult({
-                success: false,
-                output: '',
-                error: err.message || 'Execution failed',
-                execution_time_ms: 0,
+            setRunResult(null);
+            executeCode(codeToRun, language, {
+              cases: [{ name: 'run', input: '', match_type: 'exact' }],
+            }).then(response => {
+              setRunResult(response.results[0] ?? null);
+            }).catch((err) => {
+              setRunResult({
+                name: 'run',
+                type: 'io',
+                status: 'error',
+                actual: '',
+                stderr: err.message || 'Execution failed',
+                time_ms: 0,
               });
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}
-          execution_result={executionResult}
+          runResult={runResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}

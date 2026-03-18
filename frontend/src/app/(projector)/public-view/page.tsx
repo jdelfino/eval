@@ -9,6 +9,7 @@ import { executeCode } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import type { TestResult } from '@/types/problem';
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -72,23 +73,26 @@ function PublicViewContent() {
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
   const handleRunCode = (codeToRun: string) => () => {
     const language = (state?.problem as any)?.language || 'python';
     setIsRunning(true);
-    setExecutionResult(null);
-    executeCode(codeToRun, language)
-      .then(setExecutionResult)
-      .catch((err) => {
-        setExecutionResult({
-          success: false,
-          output: '',
-          error: err.message || 'Execution failed',
-          execution_time_ms: 0,
-        });
-      })
-      .finally(() => setIsRunning(false));
+    setRunResult(null);
+    executeCode(codeToRun, language, {
+      cases: [{ name: 'run', input: '', match_type: 'exact' }],
+    }).then(response => {
+      setRunResult(response.results[0] ?? null);
+    }).catch((err) => {
+      setRunResult({
+        name: 'run',
+        type: 'io',
+        status: 'error',
+        actual: '',
+        stderr: err.message || 'Execution failed',
+        time_ms: 0,
+      });
+    }).finally(() => setIsRunning(false));
   };
 
   const hasFeaturedSubmission = !!state?.featured_student_id || !!state?.featured_code;
@@ -230,7 +234,7 @@ function PublicViewContent() {
             title="Featured Code"
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
-            execution_result={executionResult}
+            runResult={runResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
@@ -247,7 +251,7 @@ function PublicViewContent() {
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
             onRun={handleRunCode(scratchPadCode)}
             isRunning={isRunning}
-            execution_result={executionResult}
+            runResult={runResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"

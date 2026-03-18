@@ -39,7 +39,3 @@ export interface RealtimeStudent {
  */
 export type { ProblemSummary } from '@/lib/api/problems';
 
-/**
- * Re-export ExecutionResult from api.ts to avoid duplication.
- */
-export type { ExecutionResult } from '@/types/api';

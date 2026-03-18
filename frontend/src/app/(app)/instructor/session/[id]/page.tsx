@@ -199,7 +199,11 @@ export default function InstructorSessionPage() {
     code: string
   ) => {
     const language = sessionProblem?.language || 'python';
-    return apiExecuteCode(code, language);
+    const response = await apiExecuteCode(code, language, {
+      cases: [{ name: 'run', input: '', match_type: 'exact' }],
+    });
+    // Return the first result as a TestResult for display in CodeViewer.
+    return response.results[0];
   }, [sessionProblem?.language]);
 
   // Loading state

@@ -12,7 +12,14 @@ jest.mock('@/lib/api/tests', () => ({
   runSessionTests: jest.fn(),
 }));
 
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn(),
+}));
+
 import { runTests, runSessionTests } from '@/lib/api/tests';
+import { executeCode } from '@/lib/api/execute';
+
+const mockExecuteCode = executeCode as jest.MockedFunction<typeof executeCode>;
 
 const mockRunTests = runTests as jest.MockedFunction<typeof runTests>;
 const mockRunSessionTests = runSessionTests as jest.MockedFunction<typeof runSessionTests>;
@@ -305,6 +312,95 @@ describe('useCaseRunner', () => {
 
       expect(mockRunSessionTests).toHaveBeenCalledWith('session-1', 'print("hi")', 'case1');
       expect(result.current.caseResults['case1']).toEqual(mockPassResult.results[0]);
+    });
+  });
+
+  describe('free-run path (no instructor or student cases)', () => {
+    it('calls executeCode with synthetic run case when no cases and workId is provided', async () => {
+      const freeRunResult = {
+        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 30 },
+      };
+      mockExecuteCode.mockResolvedValue(freeRunResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: 'work-1',
+          instructorCases: [],
+          studentCases: [],
+          code: 'print("hello")',
+          language: 'python',
+        })
+      );
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      // Should NOT call runTests (no DB cases)
+      expect(mockRunTests).not.toHaveBeenCalled();
+      // Should call executeCode with synthetic free-run case
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        { cases: [{ name: 'run', input: '', match_type: 'exact' }] }
+      );
+      // Should store the run result under 'run' key
+      expect(result.current.caseResults['run']).toEqual(freeRunResult.results[0]);
+    });
+
+    it('calls executeCode with synthetic run case in session mode when no cases', async () => {
+      const freeRunResult = {
+        results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 30 },
+      };
+      mockExecuteCode.mockResolvedValue(freeRunResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: null,
+          sessionId: 'session-1',
+          studentId: 'student-1',
+          code: 'print("hello")',
+          language: 'python',
+          instructorCases: [],
+          studentCases: [],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      // Should NOT call runSessionTests (no DB cases to look up)
+      expect(mockRunSessionTests).not.toHaveBeenCalled();
+      // Should call executeCode directly with synthetic case
+      expect(mockExecuteCode).toHaveBeenCalledWith(
+        'print("hello")',
+        'python',
+        { cases: [{ name: 'run', input: '', match_type: 'exact' }] }
+      );
+    });
+
+    it('does not call executeCode when cases are present (uses runTests instead)', async () => {
+      mockRunTests.mockResolvedValue(mockPassResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: 'work-1',
+          instructorCases: [instructorCase],
+          studentCases: [],
+          code: 'print("hello")',
+          language: 'python',
+        })
+      );
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      expect(mockExecuteCode).not.toHaveBeenCalled();
+      expect(mockRunTests).toHaveBeenCalled();
     });
   });
 

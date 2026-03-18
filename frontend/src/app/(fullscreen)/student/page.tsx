@@ -10,7 +10,7 @@ import type { IOTestCase } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor, executeCode } from '@/lib/api/execute';
+import { warmExecutor } from '@/lib/api/execute';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -50,9 +50,6 @@ function StudentPage() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [activeSessions, setActiveSessions] = useState<Session[] | null>(null);
 
-  // Execution state (plain code execution — used when problem has no instructor test cases)
-  const [execution_result, setExecutionResult] = useState<any>(null);
-  const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Join state
@@ -83,12 +80,14 @@ function StudentPage() {
   // Debugger state
   const debuggerHook = useApiDebugger();
 
-  // Case runner for executing test cases
+  // Case runner for executing test cases.
+  // language is passed to support the free-run path when no instructor/student cases exist.
   const caseRunner = useCaseRunner({
     workId: mode === 'practice' ? workId : null,
     sessionId: mode === 'live' && joined ? activeSessionId ?? undefined : undefined,
     studentId: mode === 'live' && joined ? user?.id : undefined,
     code,
+    language: problem?.language,
     instructorCases,
     studentCases,
   });
@@ -315,28 +314,6 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  // Plain code execution — for problems without instructor test cases
-  const handleRunCode = useCallback(async () => {
-    if (!code || code.trim().length === 0) {
-      setError('Please write some code before running');
-      return;
-    }
-    if (!problem?.language) {
-      setError('Problem language not available');
-      return;
-    }
-    setError(null);
-    setIsRunning(true);
-    setExecutionResult(null);
-    try {
-      const result = await executeCode(code, problem.language);
-      setExecutionResult(result);
-    } catch (err: any) {
-      setError(err.message || 'Code execution failed');
-    } finally {
-      setIsRunning(false);
-    }
-  }, [code, problem?.language]);
 
   // No work_id in URL
   if (!workIdFromUrl) {
@@ -444,12 +421,11 @@ function StudentPage() {
         <CodeEditor
           code={code}
           onChange={setCode}
-          onRun={handleRunCode}
-          isRunning={isRunning || caseRunner.isRunning}
+          onRun={caseRunner.runAllCases}
+          isRunning={caseRunner.isRunning}
           caseRunner={caseRunner}
           instructorCases={instructorCases}
           studentCases={studentCases}
-          execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
           externalEditorRef={editorRef}

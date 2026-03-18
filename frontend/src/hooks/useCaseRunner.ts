@@ -13,6 +13,7 @@
 import { useState, useCallback } from 'react';
 import type { IOTestCase, TestResult } from '@/types/problem';
 import { runTests, runSessionTests } from '@/lib/api/tests';
+import { executeCode } from '@/lib/api/execute';
 
 export interface CaseRunnerOptions {
   /** Student work ID for practice mode. Pass null for session mode. */
@@ -21,8 +22,10 @@ export interface CaseRunnerOptions {
   sessionId?: string;
   /** Student user ID for live session mode. */
   studentId?: string;
-  /** Current code for live session mode. */
+  /** Current code to run. Required for the free-run path (no cases). */
   code?: string;
+  /** Programming language. Required for the free-run path (no cases). */
+  language?: string;
   /** Instructor-defined test cases from the problem. */
   instructorCases: IOTestCase[];
   /** Student-defined test cases from student_work. */
@@ -53,6 +56,7 @@ export function useCaseRunner({
   sessionId,
   studentId,
   code,
+  language,
   instructorCases,
   studentCases,
 }: CaseRunnerOptions): CaseRunnerResult {
@@ -102,10 +106,38 @@ export function useCaseRunner({
   /**
    * Execute all instructor and student cases.
    * Runs them sequentially to avoid overwhelming the executor.
+   *
+   * When there are no instructor or student cases (free-run mode), synthesizes
+   * a single run-only case and calls executeCode() directly — bypassing the
+   * /student-work/{id}/test endpoint which requires DB-backed cases.
    */
   const runAllCases = useCallback(async () => {
     const allCases = [...instructorCases, ...studentCases];
-    if (allCases.length === 0) return;
+
+    // Free-run path: no instructor or student cases defined.
+    // Synthesize a single run-only case and execute directly via POST /execute.
+    if (allCases.length === 0) {
+      if (!code || !language) return;
+
+      setIsRunning(true);
+      setError(null);
+
+      try {
+        const response = await executeCode(code, language, {
+          cases: [{ name: 'run', input: '', match_type: 'exact' }],
+        });
+        const result = response.results.find(r => r.name === 'run');
+        if (result) {
+          setCaseResults(prev => ({ ...prev, run: result }));
+          setSelectedCase('run');
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Code execution failed');
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
 
     setIsRunning(true);
     setError(null);
@@ -131,7 +163,7 @@ export function useCaseRunner({
     } finally {
       setIsRunning(false);
     }
-  }, [workId, sessionId, studentId, code, instructorCases, studentCases]);
+  }, [workId, sessionId, studentId, code, language, instructorCases, studentCases]);
 
   return {
     caseResults,
