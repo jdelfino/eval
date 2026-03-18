@@ -28,9 +28,9 @@ fi
 export OP_VAULT="${OP_VAULT:-eval-dev}"
 
 # Fetch app credentials from 1Password (single secure note with 3 fields)
-APP_ID=$(op read "op://${OP_VAULT}/claudebot-github-app/app-id" 2>/dev/null) || true
-INSTALLATION_ID=$(op read "op://${OP_VAULT}/claudebot-github-app/installation-id" 2>/dev/null) || true
-PRIVATE_KEY=$(op read "op://${OP_VAULT}/claudebot-github-app/private-key" 2>/dev/null) || true
+APP_ID=$(op read "op://${OP_VAULT}/claudebot-github-app/app-id")
+INSTALLATION_ID=$(op read "op://${OP_VAULT}/claudebot-github-app/installation-id")
+PRIVATE_KEY=$(op read "op://${OP_VAULT}/claudebot-github-app/private-key")
 
 if [ -z "$APP_ID" ] || [ -z "$INSTALLATION_ID" ] || [ -z "$PRIVATE_KEY" ]; then
     echo "ERROR: GitHub App credentials missing or incomplete in 1Password"
