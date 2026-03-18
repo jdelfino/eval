@@ -54,7 +54,7 @@ EOF
 fi
 
 # Refresh GitHub App token (expires hourly, sessions often start later)
-"$main_repo/.devcontainer/setup-github-app.sh" 2>/dev/null || true
+"$main_repo/.devcontainer/setup-github-app.sh"
 
 # Always output AGENTS.md
 cat "$main_repo/AGENTS.md"
