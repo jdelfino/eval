@@ -13,7 +13,7 @@
 import { useState, useCallback } from 'react';
 import type { IOTestCase, TestResult } from '@/types/problem';
 import { runTests, runSessionTests } from '@/lib/api/tests';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 
 export interface CaseRunnerOptions {
   /** Student work ID for practice mode. Pass null for session mode. */
@@ -124,7 +124,7 @@ export function useCaseRunner({
 
       try {
         const response = await executeCode(code, language, {
-          cases: [{ name: 'run', input: '', match_type: 'exact' }],
+          cases: [FREE_RUN_CASE],
         });
         const result = response.results.find(r => r.name === 'run');
         if (result) {

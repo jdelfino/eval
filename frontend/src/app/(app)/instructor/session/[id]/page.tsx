@@ -22,7 +22,7 @@ import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem } from '@/types/problem';
 import { reopenSession } from '@/lib/api/sessions';
-import { executeCode as apiExecuteCode } from '@/lib/api/execute';
+import { executeCode as apiExecuteCode, FREE_RUN_CASE } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
@@ -200,7 +200,7 @@ export default function InstructorSessionPage() {
   ) => {
     const language = sessionProblem?.language || 'python';
     const response = await apiExecuteCode(code, language, {
-      cases: [{ name: 'run', input: '', match_type: 'exact' }],
+      cases: [FREE_RUN_CASE],
     });
     // Return the first result as a TestResult for display in CodeViewer.
     return response.results[0];

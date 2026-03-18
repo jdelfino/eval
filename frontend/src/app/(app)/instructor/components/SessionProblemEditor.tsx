@@ -15,7 +15,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
 import type { TestResult } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (
@@ -196,7 +196,7 @@ export default function SessionProblemEditor({
             setIsRunning(true);
             setRunResult(null);
             executeCode(codeToRun, language, {
-              cases: [{ name: 'run', input: '', match_type: 'exact' }],
+              cases: [FREE_RUN_CASE],
             }).then(response => {
               setRunResult(response.results[0] ?? null);
             }).catch((err) => {

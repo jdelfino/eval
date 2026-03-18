@@ -333,6 +333,9 @@ func TestCreateProblem_Success(t *testing.T) {
 			if params.Language != "java" {
 				t.Fatalf("unexpected language: %v", params.Language)
 			}
+			if params.TestCases == nil {
+				t.Fatalf("expected test_cases to be forwarded, got nil")
+			}
 			return p, nil
 		},
 	}
@@ -462,13 +465,18 @@ func TestUpdateProblem_Success(t *testing.T) {
 			if params.Language == nil || *params.Language != newLang {
 				t.Fatalf("unexpected language: %v", params.Language)
 			}
+			if params.TestCases == nil {
+				t.Fatalf("expected test_cases to be forwarded, got nil")
+			}
 			return p, nil
 		},
 	}
 
+	newCases := json.RawMessage(`[{"input":"a b","expected":"ab"}]`)
 	body, _ := json.Marshal(map[string]any{
-		"title":    newTitle,
-		"language": newLang,
+		"title":      newTitle,
+		"language":   newLang,
+		"test_cases": newCases,
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+p.ID.String(), bytes.NewReader(body))

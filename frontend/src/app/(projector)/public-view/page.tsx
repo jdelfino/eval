@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
@@ -80,7 +80,7 @@ function PublicViewContent() {
     setIsRunning(true);
     setRunResult(null);
     executeCode(codeToRun, language, {
-      cases: [{ name: 'run', input: '', match_type: 'exact' }],
+      cases: [FREE_RUN_CASE],
     }).then(response => {
       setRunResult(response.results[0] ?? null);
     }).catch((err) => {

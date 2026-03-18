@@ -18,7 +18,7 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 import { CasesPanel } from '@/app/(fullscreen)/student/components/CasesPanel';
 
 interface ProblemCreatorProps {
@@ -513,7 +513,7 @@ export default function ProblemCreator({
             setIsRunning(true);
             setRunResult(null);
             executeCode(codeToRun, language, {
-              cases: [{ name: 'run', input: '', match_type: 'exact' }],
+              cases: [FREE_RUN_CASE],
             }).then(response => {
               setRunResult(response.results[0] ?? null);
             }).catch((err) => {

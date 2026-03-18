@@ -22,9 +22,24 @@ export interface CaseDef {
   expected_output?: string;
   /** Optional random seed for reproducible execution. */
   random_seed?: number;
-  /** Optional files to attach for the execution context. */
+  /**
+   * Optional files to attach for the execution context.
+   * NOTE: This field is named `files` (executor wire format). The storage type
+   * `IOTestCase` uses `attached_files` instead. Any code mapping IOTestCase →
+   * CaseDef must rename attached_files → files.
+   */
   files?: Array<{ name: string; content: string }>;
 }
+
+/**
+ * Synthetic case used for free-run execution (no expected output, no assertions).
+ * Used when running code without instructor-defined test cases.
+ */
+export const FREE_RUN_CASE: CaseDef = {
+  name: 'run',
+  input: '',
+  match_type: 'exact',
+};
 
 /**
  * Options for code execution.
