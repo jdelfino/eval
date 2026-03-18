@@ -94,26 +94,34 @@ Be prescriptive — lean toward detailed descriptions or pseudo-code rather than
 
 **Prefer integration tests** for task-level acceptance tests — they exercise real dependencies and catch real bugs. Only specify e2e tests when frontend behavior is the thing being validated — e2e tests are expensive to build and maintain. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds in Phase 4, not for proving a feature works.
 
-**Example — task-level test cases:**
+**Example — task-level test cases for a store layer subtask:**
 
 ```markdown
 ## Test Cases
 
-1. (integration) Student queries assignments — only enrolled-course rows returned
-   - Create student enrolled in course A, create assignments in courses A and B
-   - Query as student, assert only course A assignments returned
-   - Catches: RLS policy not filtering by enrollment
+1. (integration) AssignmentStore.ListByCourse applies enrollment RLS
+   - Seed: student enrolled in course A, assignments in courses A and B
+   - Call ListByCourse(ctx, courseID) with student's auth context
+   - Assert: returns only course A assignments; course B excluded
+   - Catches: RLS policy not filtering by enrollment join
 
-2. (integration) Unpublished assignments hidden from students
-   - Create published and unpublished assignments in same course
-   - Query as enrolled student, assert unpublished excluded
-   - Catches: missing visibility filter in RLS policy
+2. (integration) AssignmentStore.ListByCourse excludes unpublished for students
+   - Seed: course with 2 published + 1 unpublished assignment, enrolled student
+   - Call ListByCourse(ctx, courseID) with student's auth context
+   - Assert: returns 2 rows, unpublished assignment excluded
+   - Catches: missing `WHERE published = true` in student-role RLS policy
+```
 
-3. (e2e) Student assignment list shows only own course
-   - Log in as student enrolled in one course
-   - Navigate to assignment list page
-   - Assert: only that course's assignments visible, no others
-   - Catches: frontend not passing correct filters or rendering unfiltered data
+**Example — task-level test cases for an API handler subtask:**
+
+```markdown
+## Test Cases
+
+1. (integration) GET /api/courses/:id/assignments returns filtered list
+   - Seed: student enrolled in course, mix of published/unpublished assignments
+   - HTTP GET as student, assert 200 with only published assignments in response body
+   - Assert response shape matches AssignmentListResponse contract
+   - Catches: handler not propagating auth context to store, or serializing wrong fields
 ```
 
 #### Epic-Level Acceptance Tests
@@ -131,16 +139,19 @@ Define acceptance test cases on the **epic issue itself**. These are the "done" 
 ```markdown
 ## Acceptance Tests
 
-1. (e2e) Full assignment visibility flow
-   - Student logs in, sees only enrolled course assignments
-   - Instructor logs in, sees all assignments in taught courses
-   - Admin sees everything
-   - Catches: end-to-end integration of RLS + API + frontend filtering
+1. (e2e) Student sees only their enrolled course assignments on /assignments page
+   - Log in as student enrolled in course "Intro CS" only
+   - Navigate to /assignments
+   - Assert: page lists "Intro CS" assignments, no assignments from other courses
+   - Assert: unpublished assignments not visible
+   - Catches: frontend rendering unfiltered API data, or API not applying RLS
 
-2. (integration) Assignment API returns correct shape with visibility applied
-   - Hit GET /assignments as student, instructor, admin
-   - Assert response shapes match contract, filtered correctly per role
-   - Catches: API contract drift or missing serialization of visibility fields
+2. (e2e) Instructor sees all assignments including unpublished in taught course
+   - Log in as instructor teaching "Intro CS"
+   - Navigate to /courses/intro-cs/assignments
+   - Assert: both published and unpublished assignments visible
+   - Assert: "Create Assignment" button present
+   - Catches: instructor role not granted visibility to unpublished, or missing UI controls
 ```
 
 ### Task Sizing
