@@ -158,6 +158,11 @@ export function useCaseRunner({
           setCaseResults(prev => ({ ...prev, [tc.name]: result }));
         }
       }
+      // Auto-select the first case if no case is currently selected,
+      // so the output area displays a result immediately after Run Code.
+      if (allCases.length > 0) {
+        setSelectedCase(prev => prev ?? allCases[0].name);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Test execution failed');
     } finally {

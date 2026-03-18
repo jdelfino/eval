@@ -289,6 +289,111 @@ describe('useCaseRunner', () => {
       });
       expect(result.current.error).toBeNull();
     });
+
+    it('auto-selects the first instructor case after running all cases', async () => {
+      mockRunTests.mockResolvedValue(mockPassResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: 'work-1',
+          instructorCases: [instructorCase],
+          studentCases: [],
+        })
+      );
+
+      // selectedCase starts null
+      expect(result.current.selectedCase).toBeNull();
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      // After running, first case should be auto-selected so output is visible
+      expect(result.current.selectedCase).toBe('case1');
+    });
+
+    it('auto-selects the first case (instructor before student) after running all cases', async () => {
+      const multiResult1 = {
+        results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+      };
+      const multiResult2 = {
+        results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 5 },
+      };
+      mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: 'work-1',
+          instructorCases: [instructorCase],
+          studentCases: [studentCase],
+        })
+      );
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      // First case in the combined list (instructor cases come first) should be selected
+      expect(result.current.selectedCase).toBe('case1');
+    });
+
+    it('preserves manually selected case when running all cases if that case is in the list', async () => {
+      const multiResult1 = {
+        results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+      };
+      const multiResult2 = {
+        results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 5 },
+      };
+      mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: 'work-1',
+          instructorCases: [instructorCase],
+          studentCases: [studentCase],
+        })
+      );
+
+      // Pre-select the second case
+      act(() => {
+        result.current.selectCase('my_case');
+      });
+      expect(result.current.selectedCase).toBe('my_case');
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      // Should keep the user's selection since they explicitly chose a case
+      expect(result.current.selectedCase).toBe('my_case');
+    });
+
+    it('auto-selects first case in session mode after running all cases', async () => {
+      mockRunSessionTests.mockResolvedValue(mockPassResult);
+
+      const { result } = renderHook(() =>
+        useCaseRunner({
+          workId: null,
+          sessionId: 'session-1',
+          studentId: 'student-1',
+          code: 'print("hi")',
+          instructorCases: [instructorCase],
+          studentCases: [],
+        })
+      );
+
+      expect(result.current.selectedCase).toBeNull();
+
+      await act(async () => {
+        await result.current.runAllCases();
+      });
+
+      expect(result.current.selectedCase).toBe('case1');
+    });
   });
 
   describe('session mode (runSessionTests)', () => {
