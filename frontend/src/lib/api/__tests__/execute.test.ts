@@ -22,7 +22,7 @@ describe('executeCode', () => {
   it('returns TestResponse shape (results[], summary) not ExecutionResult', async () => {
     const mockResult = {
       results: [{ name: 'run', type: 'io', status: 'run', actual: 'hello\n', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 50 },
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 50 },
     };
     mockApiPost.mockResolvedValue(mockResult);
 
@@ -39,7 +39,7 @@ describe('executeCode', () => {
   it('posts to /execute with code, language, and cases', async () => {
     const mockResult = {
       results: [{ name: 'Case 1', type: 'io', status: 'run', actual: 'hello\n', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 50 },
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 50 },
     };
     mockApiPost.mockResolvedValue(mockResult);
 
@@ -57,7 +57,7 @@ describe('executeCode', () => {
   it('posts to /execute without cases when not provided', async () => {
     const mockResult = {
       results: [{ name: 'run', type: 'io', status: 'run', actual: 'hello\n', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 50 },
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 50 },
     };
     mockApiPost.mockResolvedValue(mockResult);
 
@@ -70,7 +70,7 @@ describe('executeCode', () => {
   it('does not include undefined optional fields', async () => {
     mockApiPost.mockResolvedValue({
       results: [],
-      summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
+      summary: { total: 0, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 0 },
     });
 
     await executeCode('print("hi")', 'python', {});
@@ -86,7 +86,7 @@ describe('executeCode', () => {
   it('sends cases array with all case fields', async () => {
     mockApiPost.mockResolvedValue({
       results: [],
-      summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
+      summary: { total: 0, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 0 },
     });
 
     const cases = [

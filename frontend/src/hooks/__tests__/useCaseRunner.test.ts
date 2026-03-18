@@ -51,7 +51,7 @@ const mockPassResult = {
       time_ms: 10,
     },
   ],
-  summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+  summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
 };
 
 const mockFailResult = {
@@ -66,7 +66,7 @@ const mockFailResult = {
       time_ms: 15,
     },
   ],
-  summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 15 },
+  summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 15 },
 };
 
 describe('useCaseRunner', () => {
@@ -213,11 +213,11 @@ describe('useCaseRunner', () => {
     it('calls runTests for each instructor and student case', async () => {
       const multiResult1 = {
         results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
       };
       const multiResult2 = {
         results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 5 },
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
       };
       mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
 
@@ -315,11 +315,11 @@ describe('useCaseRunner', () => {
     it('auto-selects the first case (instructor before student) after running all cases', async () => {
       const multiResult1 = {
         results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
       };
       const multiResult2 = {
         results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 5 },
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
       };
       mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
 
@@ -342,11 +342,11 @@ describe('useCaseRunner', () => {
     it('preserves manually selected case when running all cases if that case is in the list', async () => {
       const multiResult1 = {
         results: [{ name: 'case1', type: 'io' as const, status: 'passed' as const, time_ms: 10 }],
-        summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
       };
       const multiResult2 = {
         results: [{ name: 'my_case', type: 'io' as const, status: 'failed' as const, time_ms: 5 }],
-        summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 5 },
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
       };
       mockRunTests.mockResolvedValueOnce(multiResult1).mockResolvedValueOnce(multiResult2);
 
@@ -424,7 +424,7 @@ describe('useCaseRunner', () => {
     it('calls executeCode with synthetic run case when no cases and workId is provided', async () => {
       const freeRunResult = {
         results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
-        summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 30 },
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 30 },
       };
       mockExecuteCode.mockResolvedValue(freeRunResult);
 
@@ -457,7 +457,7 @@ describe('useCaseRunner', () => {
     it('calls executeCode with synthetic run case in session mode when no cases', async () => {
       const freeRunResult = {
         results: [{ name: 'run', type: 'io' as const, status: 'run' as const, actual: 'hello\n', time_ms: 30 }],
-        summary: { total: 1, passed: 0, failed: 0, errors: 0, time_ms: 30 },
+        summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 30 },
       };
       mockExecuteCode.mockResolvedValue(freeRunResult);
 
