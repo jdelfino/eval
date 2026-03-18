@@ -185,7 +185,7 @@ REFERENCE DIRS: <key directories in the existing codebase to compare against>
 - **Trivial issues** (typos, minor naming): fix directly, commit
 - **Non-trivial issues** (bugs, missing tests, duplication): file a beads issue, spawn implementer, close when fixed
 
-After all issues resolved, run quality gates via a test-runner sub-agent. **Only run integration tests here** — unit tests and contract coverage are handled by pre-push hooks when pushing in Phase 4. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
+After all issues resolved, run quality gates via a test-runner sub-agent. **Run integration tests and any epic-level e2e acceptance tests here** — unit tests and contract coverage are handled by pre-push hooks when pushing in Phase 4. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
 ```
 ROLE: Test Runner
@@ -194,9 +194,12 @@ SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 WORKING DIRECTORY: ../<project>-<work-name>
 COMMANDS:
 - <integration test commands matching changed code — see Hooks section below>
+- <e2e acceptance test commands if the epic defined them — e.g., make test-e2e -- e2e/specific-test.spec.ts>
 ```
 
-**Skip the test-runner entirely** if no integration tests are needed (e.g., frontend-only changes with no store layer involvement). **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
+If the epic has e2e acceptance tests, run them here targeting the specific test files (not the full e2e suite). This is the gate that verifies the feature works end-to-end before creating the PR.
+
+**Skip the test-runner entirely** if no integration tests or acceptance tests are needed (e.g., frontend-only changes with no store layer involvement and no e2e acceptance tests). **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
 ### 4. Create PR and Hand Off
 
@@ -226,10 +229,11 @@ EOF
 
 **After creating the PR:**
 
-1. If user indicated review needed: request review
+1. If user indicated review needed (e.g., "review this", "flag for review", or high-risk changes like auth/infra/migrations):
    ```bash
-   gh pr edit <number> --add-reviewer <username>
+   gh pr edit <number> --add-label "needs-human-review"
    ```
+   This blocks merge until a human approves the PR on GitHub.
 2. Label beads issues as `in-pr`:
    ```bash
    bd update <id> --set-labels in-pr --json
@@ -275,5 +279,8 @@ Lefthook git hooks run quality gates automatically. Do NOT duplicate these in te
 - `make test-integration-realtime` — realtime/Centrifugo changes
 - `make test-integration-api` — API handler changes
 - `make test-integration-contract` — API contract changes
+
+**E2e acceptance tests (NOT in hooks) — run in coordinator test-runner when epic defines them:**
+- `make test-e2e -- e2e/specific-test.spec.ts` — target specific acceptance test files, not the full suite
 
 Note: implementer subagents DO run unit tests (`make test-api`, etc.) for TDD feedback before committing. Pre-push hooks re-running them is an accepted safety net, not wasteful duplication.
