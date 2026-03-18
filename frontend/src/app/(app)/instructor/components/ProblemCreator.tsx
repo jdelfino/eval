@@ -19,7 +19,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
-import IOCaseForm from './IOCaseForm';
+import { CasesPanel } from '@/app/(fullscreen)/student/components/CasesPanel';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -64,6 +64,8 @@ export default function ProblemCreator({
 
   // I/O test cases
   const [test_cases, setTestCases] = useState<IOTestCase[]>([]);
+  // Selected case in CasesPanel (for detail view)
+  const [selectedCase, setSelectedCase] = useState<string | null>(null);
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
@@ -163,6 +165,7 @@ export default function ProblemCreator({
         setTags([]);
         setTagInput('');
         setTestCases([]);
+        setSelectedCase(null);
       }
 
       // Notify parent
@@ -224,6 +227,32 @@ export default function ProblemCreator({
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // CasesPanel handlers (instructor authoring mode)
+  const handleAddCase = () => {
+    const newCase: IOTestCase = {
+      name: `Case ${test_cases.length + 1}`,
+      input: '',
+      match_type: 'exact',
+      order: test_cases.length,
+    };
+    setTestCases(prev => [...prev, newCase]);
+    setSelectedCase(newCase.name);
+  };
+
+  const handleUpdateInstructorCase = (name: string, updates: Partial<IOTestCase>) => {
+    setTestCases(prev =>
+      prev.map(c => (c.name === name ? { ...c, ...updates } : c))
+    );
+  };
+
+  const handleDeleteInstructorCase = (name: string) => {
+    setTestCases(prev => {
+      const filtered = prev.filter(c => c.name !== name);
+      return filtered.map((c, i) => ({ ...c, order: i }));
+    });
+    setSelectedCase(null);
   };
 
   const debuggerHook = useApiDebugger();
@@ -452,13 +481,24 @@ export default function ProblemCreator({
         </Tabs.List>
       </Tabs>}
 
-      {/* Cases tab content */}
+      {/* Cases tab content — uses the same CasesPanel pattern as the student view */}
       {!isLoading && activeTab === 'cases' && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '1rem' }}>
-          <IOCaseForm
-            cases={test_cases}
-            onChange={setTestCases}
-            label="I/O Test Cases"
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <CasesPanel
+            instructorCases={test_cases}
+            studentCases={[]}
+            caseResults={{}}
+            selectedCase={selectedCase}
+            isRunning={false}
+            onSelectCase={setSelectedCase}
+            onRunCase={() => {}}
+            onRunAll={() => {}}
+            onAddCase={handleAddCase}
+            onUpdateStudentCase={() => {}}
+            onDeleteStudentCase={() => {}}
+            onUpdateInstructorCase={handleUpdateInstructorCase}
+            onDeleteInstructorCase={handleDeleteInstructorCase}
+            darkTheme={false}
           />
         </div>
       )}
