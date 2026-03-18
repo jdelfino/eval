@@ -567,7 +567,7 @@ func TestExecute_NativeProtocol_CasesForwardedWithFiles(t *testing.T) {
 				"name":       "file-case",
 				"input":      "hello",
 				"match_type": "exact",
-				"files":      []map[string]string{{"name": "test.txt", "content": "data"}},
+				"attached_files": []map[string]string{{"name": "test.txt", "content": "data"}},
 			},
 		},
 	})

@@ -17,7 +17,7 @@ jest.mock('@/lib/api/execute', () => ({
 }));
 
 import { runTests, runSessionTests } from '@/lib/api/tests';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 
 const mockExecuteCode = executeCode as jest.MockedFunction<typeof executeCode>;
 
@@ -448,7 +448,7 @@ describe('useCaseRunner', () => {
       expect(mockExecuteCode).toHaveBeenCalledWith(
         'print("hello")',
         'python',
-        { cases: [{ name: 'run', input: '', match_type: 'exact' }] }
+        { cases: [FREE_RUN_CASE] }
       );
       // Should store the run result under 'run' key
       expect(result.current.caseResults['run']).toEqual(freeRunResult.results[0]);
@@ -483,7 +483,7 @@ describe('useCaseRunner', () => {
       expect(mockExecuteCode).toHaveBeenCalledWith(
         'print("hello")',
         'python',
-        { cases: [{ name: 'run', input: '', match_type: 'exact' }] }
+        { cases: [FREE_RUN_CASE] }
       );
     });
 
