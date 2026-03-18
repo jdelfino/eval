@@ -29,14 +29,9 @@ Implement the **test cases defined in the task issue** before touching productio
 4. Add additional high-value tests for gaps you identify (error paths, edge cases) — but focus on quality over quantity. A few well-targeted tests beat many shallow ones.
 5. Verify your new tests fail by delegating to a test-runner sub-agent (see Phase 3)
 
-**Test documentation:** Planned and critical tests (integration, e2e, and non-obvious unit tests) must include a docstring or block comment answering:
-- **What** behavioral contract is being verified?
-- **Why** does it matter to correctness?
-- **What breaks** if this contract is violated?
+**Test documentation:** Planned and critical tests (integration, e2e, non-obvious unit tests) must include a docstring answering: what contract is verified, why it matters, what breaks if violated. Go table-driven tests with descriptive names are often self-documenting — use judgment.
 
-Go table-driven tests with descriptive names are often self-documenting — use judgment on whether a docstring adds value.
-
-**Skipping tests:** Tests can be skipped only for genuinely test-free changes — pure config, copy, environment variables. This should be rare. Migrations, refactors, and wiring changes still need tests.
+**Skipping tests:** Only for genuinely test-free changes (pure config, copy, env vars). Migrations, refactors, and wiring still need tests.
 
 **Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
 
@@ -63,18 +58,9 @@ COMMANDS:
 
 ## Phase 4: Test Coverage Audit
 
-Check whether all planned test cases were implemented and whether any meaningful gaps remain. Do NOT re-read files you already have in context from writing them.
+Verify all planned test cases are implemented. Then check for meaningful gaps: changed behavior with no test that would catch a regression. Focus on real failure modes, not exhaustive coverage. If gaps exist, write targeted tests and re-run via test-runner.
 
-1. Verify all test cases from the task issue are implemented
-2. For each changed production file, evaluate from what you already know:
-   - What behavior changed?
-   - Are there meaningful gaps not covered by the planned tests? (error paths, edge cases, regressions)
-   - Would an additional test catch a real bug, or would it just be exhaustive coverage?
-3. If meaningful gaps exist: write targeted tests, then re-run quality gates via test-runner sub-agent (same as Phase 3).
-
-Do NOT pad coverage with low-value unit tests. A missing test for a real failure mode is a gap; a missing test for a constructor or a getter is not.
-
-**Gate:** All planned test cases implemented. No meaningful coverage gaps remain, or gaps are documented with reasoning.
+**Gate:** All planned test cases implemented. No meaningful coverage gaps, or gaps documented with reasoning.
 
 ## Phase 5: Summary
 

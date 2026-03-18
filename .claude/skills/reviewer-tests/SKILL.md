@@ -53,61 +53,36 @@ Note: Go table-driven tests with descriptive names are often self-documenting. D
 Then check:
 
 #### Planned Test Coverage
-- Are all test cases from the task issue implemented?
-- Do implemented tests match the planned scenarios (correct setup, assertions, coverage)?
+- Are all test cases from the task issue implemented and matching the planned scenarios?
 - Flag any planned test case that is missing or substantially different from its specification
 
-#### Are Tests Meaningful?
-- Do tests verify actual behavior, or just that code doesn't crash?
-- Would a test catch a real regression if the implementation changed?
-- Are assertions checking the right things? (e.g., checking response body, not just status code)
-
-#### Test Value — Flag Low-Value Tests
-- Tests that assert `ctx != nil` or similar tautologies
-- Tests that only check `err == nil` without verifying the result
-- Tests that duplicate what the compiler already checks
-- Tests with no assertions at all
-- Exhaustive unit tests that test constructors, getters, or simple wiring without meaningful behavioral coverage
-- Tests that only exercise mocks without verifying real behavior — could a completely wrong implementation still pass?
-
-#### Mock vs Real Behavior
-- Do tests only exercise mocks, never testing real logic?
-- Are mocks verifying what was sent to them? (e.g., checking the SQL query, the HTTP request body)
-- Could a completely wrong implementation still pass these tests?
+#### Test Quality
+- Do tests verify actual behavior, or just that code doesn't crash? Would a regression be caught?
+- Are assertions checking the right things? (e.g., response body, not just status code)
+- Could a completely wrong implementation still pass? (sign of over-mocking or weak assertions)
+- Flag low-value tests: tautologies (`ctx != nil`), `err == nil` without checking the result, no assertions, exhaustive unit tests for constructors/getters/wiring
 
 #### Integration Test Coverage
-- Are there integration tests that exercise real dependencies (database, external services)?
-- Do integration tests cover the critical paths end-to-end? (e.g., HTTP request → handler → store → database → response)
-- Are database interactions tested against a real database (e.g., Docker Postgres with migrations), not just mocked?
-- Do integration tests verify that SQL queries, RLS policies, and migrations work correctly together?
-- Is there an appropriate balance of unit vs integration tests? (Unit tests for isolated logic, integration tests for I/O boundaries)
+- Are database interactions tested against a real database (Docker Postgres with migrations)?
+- Do integration tests cover critical paths end-to-end? (HTTP request → handler → store → database → response)
+- Are SQL queries, RLS policies, and migrations tested together?
 
-#### Edge Cases
-- Are error paths tested? (not just happy path)
-- Are boundary conditions covered? (empty input, max values, nil/null)
-- Are concurrent scenarios tested if the code is concurrent?
+#### Edge Cases & Skipped Tests
+- Are error paths, boundary conditions, and concurrent scenarios tested where relevant?
+- Flag `it.skip`/`t.Skip()` that represent deferred work (not environment-gating) as non-trivial
 
-#### Skipped Tests
-- Are there `it.skip`, `test.skip`, `describe.skip`, or `t.Skip()` calls that appear to be deferred work rather than legitimate environment-gating (e.g., skipping integration tests when `DATABASE_URL` is unset)?
-- Skipped tests that represent missing backend endpoints, unimplemented features, or known bugs should be flagged as non-trivial — they indicate work was left incomplete without a tracking issue
-- Legitimate skips: environment-gating (`if os.Getenv("DATABASE_URL") == ""`) or platform-specific exclusions
+### 4. Behavioral Coverage Gaps
 
-### 4. Behavioral Coverage Gap Analysis
+Step back and think about the PR from the user/caller perspective. List the new or changed behaviors, then ask: **if this behavior regressed, would a test fail?**
 
-After reviewing existing tests, step back and think about the PR **as a user or caller would experience it**. This is not a line-by-line diff review — it's a behavioral analysis.
+Flag untested behaviors — especially:
+- New capabilities with no test exercising the full path
+- Authorization rules with no denial test
+- Error cases that are handled but never triggered in tests
+- Side effects (events, emails, record updates) with no verification
+- Role/state-dependent behavior where only one variant is tested
 
-1. **Summarize what the PR changes from a behavioral perspective.** What can a user, API caller, or downstream system do now that they couldn't before? What existing behavior changed? Write this down as a short list of behaviors.
-
-2. **For each behavior, ask: is there a test that would break if this behavior regressed?** Not "is the code that implements it tested" — but "if someone reverted or broke this behavior, would a test fail and tell them?"
-
-3. **Flag behaviors with no test.** Common high-value gaps:
-   - A user can now do X, but no test exercises the full path (request → response or UI → result)
-   - A permission/authorization rule was added, but no test verifies that unauthorized access is denied
-   - An error case is handled (invalid input, missing resource, service unavailable), but no test triggers that error
-   - A side effect occurs (email sent, event published, related record updated), but no test verifies it fires — or verifies it *doesn't* fire when it shouldn't
-   - Behavior differs by role or state, but only one variant is tested
-
-Do NOT flag gaps for trivial behaviors or behaviors where the planned tests already provide adequate coverage.
+Skip trivial behaviors and those already covered by planned tests.
 
 ### 5. Assess Severity
 

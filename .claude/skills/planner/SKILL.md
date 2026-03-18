@@ -80,21 +80,13 @@ A future implementer session must understand the task completely from its descri
 
 ### Test Cases — Two Levels
 
-Test cases are defined at two levels: **task-level** (on each subtask) and **epic-level** (on the epic itself).
-
 #### Task-Level Test Cases
 
-Each subtask includes a **Test Cases** section with concrete, named scenarios. For each test case, specify:
-- **Type**: unit, integration, or e2e
-- **Scenario**: what situation is being tested
-- **Expected behavior**: what the correct outcome is
-- **Why it matters**: what bug or regression this catches
+Each subtask includes a **Test Cases** section with concrete, named scenarios specifying type (integration/e2e/unit), setup, assertions, and what bug it catches. Be prescriptive — pseudo-code or detailed steps, not vague one-liners. The user reviews and approves test cases as part of plan approval.
 
-Be prescriptive — lean toward detailed descriptions or pseudo-code rather than vague one-liners. The user reviews and approves test cases as part of plan approval.
+**Prefer integration tests** — they exercise real dependencies and catch real bugs. Only specify e2e when frontend behavior is being validated. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds.
 
-**Prefer integration tests** for task-level acceptance tests — they exercise real dependencies and catch real bugs. Only specify e2e tests when frontend behavior is the thing being validated — e2e tests are expensive to build and maintain. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds in Phase 4, not for proving a feature works.
-
-**Example — task-level test cases for a store layer subtask:**
+**Examples:**
 
 ```markdown
 ## Test Cases
@@ -105,19 +97,7 @@ Be prescriptive — lean toward detailed descriptions or pseudo-code rather than
    - Assert: returns only course A assignments; course B excluded
    - Catches: RLS policy not filtering by enrollment join
 
-2. (integration) AssignmentStore.ListByCourse excludes unpublished for students
-   - Seed: course with 2 published + 1 unpublished assignment, enrolled student
-   - Call ListByCourse(ctx, courseID) with student's auth context
-   - Assert: returns 2 rows, unpublished assignment excluded
-   - Catches: missing `WHERE published = true` in student-role RLS policy
-```
-
-**Example — task-level test cases for an API handler subtask:**
-
-```markdown
-## Test Cases
-
-1. (integration) GET /api/courses/:id/assignments returns filtered list
+2. (integration) GET /api/courses/:id/assignments returns filtered list
    - Seed: student enrolled in course, mix of published/unpublished assignments
    - HTTP GET as student, assert 200 with only published assignments in response body
    - Assert response shape matches AssignmentListResponse contract
@@ -126,32 +106,23 @@ Be prescriptive — lean toward detailed descriptions or pseudo-code rather than
 
 #### Epic-Level Acceptance Tests
 
-Define acceptance test cases on the **epic issue itself**. These are the "done" criteria for the whole feature — they verify the feature works end-to-end across all subtasks.
+Define acceptance tests on the **epic issue itself** — the "done" criteria for the whole feature. Create an explicit subtask to implement them (with dependencies on implementation subtasks), duplicating the test definitions into it for self-containment. Skip for small epics where task-level tests suffice.
 
-- Epic acceptance tests are typically e2e or integration tests
-- They require multiple subtasks to be complete before they can pass
-- Create an explicit subtask (or subtasks) to **implement** the epic acceptance tests, with dependencies on the relevant implementation subtasks
-- Duplicate the epic acceptance test definitions into this subtask so it remains self-contained
-- **Skip epic acceptance tests for small/simple epics** where task-level tests already prove the feature works
-
-**Example — epic acceptance test definitions (on the epic issue):**
+**Example (on the epic issue):**
 
 ```markdown
 ## Acceptance Tests
 
-1. (e2e) Student sees only their enrolled course assignments on /assignments page
-   - Log in as student enrolled in course "Intro CS" only
-   - Navigate to /assignments
-   - Assert: page lists "Intro CS" assignments, no assignments from other courses
-   - Assert: unpublished assignments not visible
-   - Catches: frontend rendering unfiltered API data, or API not applying RLS
+1. (e2e) Student sees only enrolled course assignments on /assignments
+   - Log in as student enrolled in "Intro CS" only
+   - Navigate to /assignments, assert only "Intro CS" assignments visible
+   - Catches: frontend rendering unfiltered data, or API not applying RLS
 
-2. (e2e) Instructor sees all assignments including unpublished in taught course
+2. (e2e) Instructor sees all assignments including unpublished
    - Log in as instructor teaching "Intro CS"
    - Navigate to /courses/intro-cs/assignments
-   - Assert: both published and unpublished assignments visible
-   - Assert: "Create Assignment" button present
-   - Catches: instructor role not granted visibility to unpublished, or missing UI controls
+   - Assert: published + unpublished visible, "Create Assignment" button present
+   - Catches: instructor role not granted unpublished visibility
 ```
 
 ### Task Sizing
