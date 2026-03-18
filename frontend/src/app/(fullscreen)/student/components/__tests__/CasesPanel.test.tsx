@@ -307,4 +307,101 @@ describe('CasesPanel', () => {
       expect(screen.getByText(/no cases/i)).toBeInTheDocument();
     });
   });
+
+  describe('instructor editing mode (onUpdateInstructorCase / onDeleteInstructorCase)', () => {
+    const editableInstructorCase: IOTestCase = {
+      name: 'editable_case',
+      input: 'some input',
+      expected_output: 'some output',
+      match_type: 'exact',
+      order: 0,
+    };
+
+    it('shows editable input for instructor case when onUpdateInstructorCase is provided', () => {
+      const onUpdateInstructorCase = jest.fn();
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+          onUpdateInstructorCase={onUpdateInstructorCase}
+        />
+      );
+
+      const inputArea = screen.getByDisplayValue('some input');
+      expect(inputArea).not.toHaveAttribute('readOnly');
+    });
+
+    it('calls onUpdateInstructorCase when instructor case input is edited', () => {
+      const onUpdateInstructorCase = jest.fn();
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+          onUpdateInstructorCase={onUpdateInstructorCase}
+        />
+      );
+
+      const inputArea = screen.getByDisplayValue('some input');
+      fireEvent.change(inputArea, { target: { value: 'new input' } });
+
+      expect(onUpdateInstructorCase).toHaveBeenCalledWith('editable_case', { input: 'new input' });
+    });
+
+    it('shows delete button for instructor case when onDeleteInstructorCase is provided', () => {
+      const onDeleteInstructorCase = jest.fn();
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+          onDeleteInstructorCase={onDeleteInstructorCase}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+    });
+
+    it('calls onDeleteInstructorCase when delete is clicked for instructor case in editable mode', () => {
+      const onDeleteInstructorCase = jest.fn();
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+          onDeleteInstructorCase={onDeleteInstructorCase}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+      expect(onDeleteInstructorCase).toHaveBeenCalledWith('editable_case');
+    });
+
+    it('still shows read-only input for instructor case when onUpdateInstructorCase is NOT provided', () => {
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+        />
+      );
+
+      const inputArea = screen.getByDisplayValue('some input');
+      expect(inputArea).toHaveAttribute('readOnly');
+    });
+
+    it('does not show delete button for instructor case when onDeleteInstructorCase is NOT provided', () => {
+      render(
+        <CasesPanel
+          {...defaultProps}
+          instructorCases={[editableInstructorCase]}
+          selectedCase="editable_case"
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    });
+  });
 });
