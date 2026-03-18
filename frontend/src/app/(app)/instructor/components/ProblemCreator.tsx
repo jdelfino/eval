@@ -11,7 +11,6 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
 import type { IOTestCase } from '@/types/problem';
@@ -27,6 +26,7 @@ interface ProblemCreatorProps {
   onProblemCreated?: (problem_id: string) => void;
   onCancel?: () => void;
   class_id?: string | null;
+  classes?: Class[];
 }
 
 const JAVA_DEFAULT_STARTER = `public class Main {
@@ -40,6 +40,7 @@ export default function ProblemCreator({
   onProblemCreated,
   onCancel,
   class_id = null,
+  classes = [],
 }: ProblemCreatorProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -56,7 +57,6 @@ export default function ProblemCreator({
   const [generateModalError, setGenerateModalError] = useState<string | null>(null);
 
   // Class and tags state
-  const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(class_id || '');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -70,23 +70,6 @@ export default function ProblemCreator({
   const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
 
   const isEditMode = !!problem_id;
-
-  // Load classes on mount
-  useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        const loadedClasses = await listClasses();
-        setClasses(loadedClasses);
-        // Pre-populate if class_id prop provided
-        if (class_id) {
-          setSelectedClassId(class_id);
-        }
-      } catch {
-        // Classes won't be populated but form still works
-      }
-    };
-    fetchClasses();
-  }, [class_id]);
 
   // Load problem data when editing
   useEffect(() => {

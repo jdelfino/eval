@@ -6,21 +6,15 @@
  * - test_cases submitted correctly on create
  * - test_cases submitted correctly on update
  * - Cases loaded from problem in edit mode
- * - Cases section replaces (or coexists with) execution settings
  *
  * @jest-environment jsdom
  */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 import type { IOTestCase } from '@/types/problem';
-
-// Mock API modules
-jest.mock('@/lib/api/classes', () => ({
-  listClasses: jest.fn(),
-}));
 
 jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
@@ -29,7 +23,6 @@ jest.mock('@/lib/api/problems', () => ({
   generateSolution: jest.fn(),
 }));
 
-// Mock useApiDebugger hook
 jest.mock('@/hooks/useApiDebugger', () => ({
   useApiDebugger: () => ({
     trace: null,
@@ -66,7 +59,6 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
   }),
 }));
 
-// Mock CodeEditor component (same pattern as ProblemCreator.test.tsx)
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
   return function MockCodeEditor({ code, onChange, title, problem, onProblemEdit, editableProblem }: any) {
     return (
@@ -93,26 +85,24 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
   };
 });
 
+const DEFAULT_CLASSES = [
+  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1', description: null, created_by: 'u-1', created_at: '', updated_at: '' },
+];
+
 describe('ProblemCreator — Cases Section', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockResolvedValue([]);
   });
 
   describe('Cases section rendering', () => {
     it('should render the Cases section', async () => {
       render(<ProblemCreator />);
-      await act(async () => {});
-      // Should have a tab or section for Cases
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
     it('should show IOCaseForm within Cases tab', async () => {
       render(<ProblemCreator />);
-      await act(async () => {});
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
-      // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
     });
   });
@@ -123,15 +113,9 @@ describe('ProblemCreator — Cases Section', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-1' });
 
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      // In React 19 + Node.js 20, a single fireEvent.change batches setTitle with the
-      // pending setClasses update from listClasses().then(), deferring the commit and
-      // leaving the button disabled. Wrapping in synchronous act() forces an immediate
-      // synchronous flush of setTitle so the button is enabled before we interact further.
-      act(() => {
-        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      });
+      render(<ProblemCreator onProblemCreated={onProblemCreated} classes={DEFAULT_CLASSES} />);
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -157,11 +141,9 @@ describe('ProblemCreator — Cases Section', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-2' });
 
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      act(() => {
-        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      });
+      render(<ProblemCreator onProblemCreated={onProblemCreated} classes={DEFAULT_CLASSES} />);
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
 
       await waitFor(() => {
@@ -197,12 +179,10 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator problem_id="p-edit" />);
 
-      // Wait for loading to finish (tabs appear only when !isLoading)
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
       });
 
-      // Switch to Cases tab
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
 
       await waitFor(() => {
@@ -227,7 +207,6 @@ describe('ProblemCreator — Cases Section', () => {
 
       render(<ProblemCreator problem_id="p-edit" />);
 
-      // Wait for loading to finish (button is enabled when !isLoading and title is set)
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /update problem/i })).not.toBeDisabled();
       });
@@ -252,15 +231,12 @@ describe('ProblemCreator — Cases Section', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
-      render(<ProblemCreator />);
-
-      act(() => {
-        fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      });
+      render(<ProblemCreator classes={DEFAULT_CLASSES} />);
+      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
+      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       fireEvent.click(screen.getByRole('button', { name: /add case/i }));
 
-      // Verify case is visible before submitting
       await waitFor(() => {
         expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(1);
       });
@@ -271,7 +247,6 @@ describe('ProblemCreator — Cases Section', () => {
         expect(createProblem).toHaveBeenCalled();
       });
 
-      // After reset, cases should be empty
       await waitFor(() => {
         expect(screen.queryAllByRole('button', { name: /remove case/i })).toHaveLength(0);
       });
