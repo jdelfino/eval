@@ -36,8 +36,6 @@ if [ -f "$TF_SECRETS_TEMPLATE" ] && [ -s "$TF_SECRETS_TEMPLATE" ]; then
     echo "Terraform secrets loaded into $TF_SECRETS_OUTPUT"
 fi
 
-# GH_TOKEN is handled by setup.sh (file-based, like OP_SERVICE_ACCOUNT_TOKEN)
-
 echo ""
 echo "========================================"
 echo "  eval is ready!"

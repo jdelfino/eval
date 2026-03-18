@@ -53,5 +53,8 @@ You are on a non-main branch, likely left over from a previous session.
 EOF
 fi
 
+# Refresh GitHub App token (expires hourly, sessions often start later)
+"$main_repo/.devcontainer/setup-github-app.sh" 2>/dev/null || true
+
 # Always output AGENTS.md
 cat "$main_repo/AGENTS.md"

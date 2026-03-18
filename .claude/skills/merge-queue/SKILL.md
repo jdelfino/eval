@@ -16,7 +16,7 @@ Run this in a dedicated terminal window. Invoke periodically with `/merge` while
 gh run list --branch main --limit 1 --json status,conclusion
 
 # List open PRs
-gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews
+gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews,labels
 ```
 
 **If main CI is failing:** file a P0 beads issue (if one doesn't already exist), report prominently, and stop. Nothing can merge until main is green.
@@ -31,7 +31,8 @@ For each PR, determine its state:
 
 | State | Action |
 |-------|--------|
-| CI passing, mergeable, no pending review | Merge |
+| CI passing, mergeable, no pending review, no `needs-human-review` label | Merge |
+| CI passing, mergeable, `needs-human-review` label, not approved | Skip, report "awaiting human review" |
 | CI passing, mergeable, review requested but not approved | Skip, report |
 | CI passing, mergeable, review approved | Merge |
 | CI pending | Skip, report status |

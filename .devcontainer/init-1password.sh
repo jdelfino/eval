@@ -2,9 +2,9 @@
 # Initialize 1Password vault for this project (runs on HOST via initializeCommand)
 # Requires: op CLI installed and signed in on host
 #
-# This script handles vault and service account setup for project secrets,
-# including GitHub CLI authentication.
+# This script handles vault and service account setup for project secrets.
 # SSH and git identity are handled by devcontainer/DevPod forwarding.
+# GitHub access uses a GitHub App token (see claudebot-github-app in 1Password).
 
 set -e
 
@@ -81,27 +81,22 @@ fi
 # Also write vault name for container
 echo "$VAULT_NAME" > "$(dirname "$0")/../.op-vault"
 
-# Store GitHub CLI token in 1Password (if gh is available and authenticated)
-echo ""
-if command -v gh &> /dev/null; then
-    GH_TOKEN=$(gh auth token 2>/dev/null) || true
-    if [ -n "$GH_TOKEN" ]; then
-        if op item get "github-cli-token" --vault "$VAULT_NAME" &> /dev/null; then
-            op item edit "github-cli-token" --vault "$VAULT_NAME" \
-                "credential[password]=$GH_TOKEN" > /dev/null
-            echo "✓ GitHub CLI token updated in 1Password"
-        else
-            op item create --category "API Credential" --vault "$VAULT_NAME" \
-                --title "github-cli-token" \
-                "credential[password]=$GH_TOKEN" > /dev/null
-            echo "✓ GitHub CLI token stored in 1Password"
-        fi
-    else
-        echo "⚠ gh CLI installed but not authenticated, skipping GitHub token"
-    fi
-else
-    echo "⚠ gh CLI not found on host, skipping GitHub token"
+# Verify GitHub App credentials exist (required for all git/gh operations)
+if ! op item get "claudebot-github-app" --vault "$VAULT_NAME" &> /dev/null; then
+    echo ""
+    echo "ERROR: 'claudebot-github-app' not found in vault '$VAULT_NAME'"
+    echo "  The container requires a GitHub App for all git/gh operations."
+    echo "  To set up:"
+    echo "    1. Create a GitHub App at https://github.com/settings/apps/new"
+    echo "       - Permissions: Contents (R/W), Pull requests (R/W), Issues (R/W), Checks (R)"
+    echo "       - Install on your repo(s)"
+    echo "    2. Create a Secure Note 'claudebot-github-app' in vault '$VAULT_NAME' with fields:"
+    echo "       - app-id: <App ID from app settings page>"
+    echo "       - installation-id: <numeric ID from https://github.com/settings/installations/>"
+    echo "       - private-key: <contents of generated .pem file>"
+    exit 1
 fi
+echo "✓ GitHub App credentials found"
 
 echo ""
 echo "=== 1Password setup complete ==="
