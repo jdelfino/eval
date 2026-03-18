@@ -19,7 +19,7 @@ import type { IOTestCase } from '@/types/problem';
 
 // Mock API modules
 jest.mock('@/lib/api/classes', () => ({
-  listClasses: jest.fn().mockResolvedValue([]),
+  listClasses: jest.fn(),
 }));
 
 jest.mock('@/lib/api/problems', () => ({
@@ -94,23 +94,33 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
 });
 
 describe('ProblemCreator — Cases Section', () => {
+  // Captured resolver for the listClasses Promise. In React 19 + Node.js 20, a
+  // Promise that auto-resolves via mockResolvedValue fires its .then() callback
+  // asynchronously — outside of any act() scope — creating a pending non-urgent
+  // React update that races with fireEvent interactions. By using a manually
+  // controlled Promise, we resolve it explicitly inside act(), ensuring
+  // setClasses commits before any test interactions.
+  let resolveListClasses: (value: any[]) => void;
+
   beforeEach(() => {
     jest.clearAllMocks();
     const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockResolvedValue([]);
+    listClasses.mockImplementation(
+      () => new Promise<any[]>(resolve => { resolveListClasses = resolve; })
+    );
   });
 
   describe('Cases section rendering', () => {
     it('should render the Cases section', async () => {
       render(<ProblemCreator />);
-      await act(async () => {});
+      await act(async () => { resolveListClasses([]); });
       // Should have a tab or section for Cases
       expect(screen.getByRole('tab', { name: /cases/i })).toBeInTheDocument();
     });
 
     it('should show IOCaseForm within Cases tab', async () => {
       render(<ProblemCreator />);
-      await act(async () => {});
+      await act(async () => { resolveListClasses([]); });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
       // Should render Add Case button
       expect(screen.getByRole('button', { name: /add case/i })).toBeInTheDocument();
@@ -124,12 +134,8 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-1' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      // Flush listClasses().then(setClasses) before interacting. In React 19 + Node.js 20,
-      // this async state update races with setTitle from fireEvent.change — both get batched
-      // and deferred via React's scheduler, leaving the button disabled when clicked.
-      // await act(async () => {}) drains the microtask queue and flushes all pending React
-      // work, so the component is stable before we change the title.
-      await act(async () => {});
+      // Resolve listClasses inside act() so setClasses commits before we interact.
+      await act(async () => { resolveListClasses([]); });
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
@@ -158,7 +164,7 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-2' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-      await act(async () => {});
+      await act(async () => { resolveListClasses([]); });
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
       fireEvent.click(screen.getByRole('button', { name: /create problem/i }));
@@ -195,6 +201,7 @@ describe('ProblemCreator — Cases Section', () => {
       });
 
       render(<ProblemCreator problem_id="p-edit" />);
+      await act(async () => { resolveListClasses([]); });
 
       // Wait for loading to finish (tabs appear only when !isLoading)
       await waitFor(() => {
@@ -225,6 +232,7 @@ describe('ProblemCreator — Cases Section', () => {
       updateProblem.mockResolvedValue({ id: 'p-edit', title: 'Edit Me' });
 
       render(<ProblemCreator problem_id="p-edit" />);
+      await act(async () => { resolveListClasses([]); });
 
       // Wait for loading to finish (button is enabled when !isLoading and title is set)
       await waitFor(() => {
@@ -252,7 +260,7 @@ describe('ProblemCreator — Cases Section', () => {
       createProblem.mockResolvedValue({ id: 'p-reset' });
 
       render(<ProblemCreator />);
-      await act(async () => {});
+      await act(async () => { resolveListClasses([]); });
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
       fireEvent.click(screen.getByRole('tab', { name: /cases/i }));
