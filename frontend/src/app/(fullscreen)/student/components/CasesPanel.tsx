@@ -217,6 +217,13 @@ function ResultBadge({ status }: { status: 'passed' | 'failed' | 'error' | 'run'
       </span>
     );
   }
+  if (status === 'run') {
+    return (
+      <span className="px-1.5 py-0.5 text-xs rounded bg-gray-700 text-gray-300 border border-gray-600 flex-shrink-0">
+        Run
+      </span>
+    );
+  }
   return (
     <span className="px-1.5 py-0.5 text-xs rounded bg-yellow-900 text-yellow-300 border border-yellow-700 flex-shrink-0">
       Error

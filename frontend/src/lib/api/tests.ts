@@ -18,6 +18,7 @@ export interface TestSummary {
   passed: number;
   failed: number;
   errors: number;
+  run: number;
   time_ms: number;
 }
 

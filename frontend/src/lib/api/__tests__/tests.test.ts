@@ -20,7 +20,7 @@ describe('runTests', () => {
   it('posts to /student-work/{id}/test with no body when no testName', async () => {
     const mockResponse = {
       results: [],
-      summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
+      summary: { total: 0, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 0 },
     };
     mockApiPost.mockResolvedValue(mockResponse);
 
@@ -33,7 +33,7 @@ describe('runTests', () => {
   it('posts with test_name when testName is provided', async () => {
     const mockResponse = {
       results: [{ name: 'test1', type: 'io', status: 'passed', time_ms: 10 }],
-      summary: { total: 1, passed: 1, failed: 0, errors: 0, time_ms: 10 },
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
     };
     mockApiPost.mockResolvedValue(mockResponse);
 
@@ -62,7 +62,7 @@ describe('runTests', () => {
           time_ms: 15,
         },
       ],
-      summary: { total: 1, passed: 0, failed: 1, errors: 0, time_ms: 15 },
+      summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 15 },
     };
     mockApiPost.mockResolvedValue(mockResponse);
 
@@ -82,7 +82,7 @@ describe('runSessionTests', () => {
   it('posts to /sessions/{id}/test with required code', async () => {
     const mockResponse = {
       results: [],
-      summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
+      summary: { total: 0, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 0 },
     };
     mockApiPost.mockResolvedValue(mockResponse);
 
@@ -97,7 +97,7 @@ describe('runSessionTests', () => {
   it('posts with test_name when provided', async () => {
     mockApiPost.mockResolvedValue({
       results: [],
-      summary: { total: 0, passed: 0, failed: 0, errors: 0, time_ms: 0 },
+      summary: { total: 0, passed: 0, failed: 0, errors: 0, run: 0, time_ms: 0 },
     });
 
     await runSessionTests('session-123', 'print("hi")', 'my_test');
