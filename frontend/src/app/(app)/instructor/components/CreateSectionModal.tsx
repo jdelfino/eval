@@ -11,9 +11,6 @@ interface CreateSectionModalProps {
 
 export default function CreateSectionModal({ class_id, onClose, onSuccess }: CreateSectionModalProps) {
   const [name, setName] = useState('');
-  const [schedule, setSchedule] = useState('');
-  const [location, setLocation] = useState('');
-  const [capacity, setCapacity] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,8 +19,6 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
     setError(null);
 
     const trimmedName = name.trim();
-    const trimmedSchedule = schedule.trim();
-    const trimmedLocation = location.trim();
 
     // Validation
     if (!trimmedName) {
@@ -35,27 +30,15 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
       return;
     }
 
-    const capacityNum = capacity ? parseInt(capacity, 10) : undefined;
-    if (capacity && (isNaN(capacityNum!) || capacityNum! < 1)) {
-      setError('Capacity must be a positive number');
-      return;
-    }
-
     setLoading(true);
 
     try {
       await createSection(class_id, {
         name: trimmedName,
-        schedule: trimmedSchedule || undefined,
-        location: trimmedLocation || undefined,
-        capacity: capacityNum,
       });
 
       // Success
       setName('');
-      setSchedule('');
-      setLocation('');
-      setCapacity('');
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -67,9 +50,6 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
   const handleClose = () => {
     if (!loading) {
       setName('');
-      setSchedule('');
-      setLocation('');
-      setCapacity('');
       setError(null);
       onClose();
     }
@@ -106,54 +86,6 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
                 disabled={loading}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
                 maxLength={100}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="section-schedule" className="block text-sm font-medium text-gray-700 mb-1">
-                Schedule
-              </label>
-              <input
-                id="section-schedule"
-                type="text"
-                value={schedule}
-                onChange={(e) => setSchedule(e.target.value)}
-                placeholder="e.g., MWF 10:00-11:00am"
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
-                maxLength={100}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="section-location" className="block text-sm font-medium text-gray-700 mb-1">
-                Location
-              </label>
-              <input
-                id="section-location"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., Room 101"
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
-                maxLength={100}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="section-capacity" className="block text-sm font-medium text-gray-700 mb-1">
-                Capacity
-              </label>
-              <input
-                id="section-capacity"
-                type="number"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                placeholder="Maximum students (optional)"
-                disabled={loading}
-                min="1"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
               />
             </div>
 

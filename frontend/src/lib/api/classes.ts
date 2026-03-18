@@ -70,9 +70,6 @@ export async function deleteClass(id: string): Promise<void> {
 export interface CreateSectionOptions {
   name: string;
   semester?: string;
-  schedule?: string;
-  location?: string;
-  capacity?: number;
 }
 
 /**
