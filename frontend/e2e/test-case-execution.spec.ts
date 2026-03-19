@@ -267,7 +267,7 @@ test.describe('IO Test Case Execution', () => {
     const outputArea = page.locator('[data-testid="output-area"]');
 
     // The output area should show a result for the first case (run-all-pass → Pass)
-    await expect(outputArea.locator('text=Pass')).toBeVisible({ timeout: 30000 });
+    await expect(outputArea.locator('text="Pass"').first()).toBeVisible({ timeout: 30000 });
 
     // The summary bar should show 1/2 cases passed
     await expect(outputArea.locator('text=1/2 cases passed')).toBeVisible({ timeout: 5000 });
