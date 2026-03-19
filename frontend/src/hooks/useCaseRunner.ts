@@ -83,7 +83,9 @@ export function useCaseRunner({
    * Passes code and case definition directly to POST /execute.
    */
   const runCase = useCallback(async (caseName: string) => {
-    if (!code || !language) return;
+    if (!code || !language) {
+      return;
+    }
 
     setIsRunning(true);
     setError(null);
@@ -97,14 +99,12 @@ export function useCaseRunner({
         cases: [toCaseDef(tc)],
       });
 
-      const result = response.results.find(r => r.name === caseName);
+      const result = (response.results ?? []).find(r => r.name === caseName);
       if (result) {
         setCaseResults(prev => ({ ...prev, [caseName]: result }));
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Test execution failed';
-      console.error('[useCaseRunner] runCase error:', msg, err);
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Test execution failed');
     } finally {
       setIsRunning(false);
     }
@@ -117,7 +117,9 @@ export function useCaseRunner({
    * a single run-only case — the same behavior as clicking "Run Code".
    */
   const runAllCases = useCallback(async () => {
-    if (!code || !language) return;
+    if (!code || !language) {
+      return;
+    }
 
     const allCases = [...instructorCases, ...studentCases];
 
@@ -130,7 +132,7 @@ export function useCaseRunner({
         const response = await executeCode(code, language, {
           cases: [FREE_RUN_CASE],
         });
-        const result = response.results.find(r => r.name === 'run');
+        const result = (response.results ?? []).find(r => r.name === 'run');
         if (result) {
           setCaseResults(prev => ({ ...prev, run: result }));
           setSelectedCase('run');
@@ -152,7 +154,7 @@ export function useCaseRunner({
       });
 
       const newResults: Record<string, TestResult> = {};
-      for (const result of response.results) {
+      for (const result of (response.results ?? [])) {
         newResults[result.name] = result;
       }
       setCaseResults(prev => ({ ...prev, ...newResults }));

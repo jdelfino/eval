@@ -51,7 +51,8 @@ export const test = base.extend<TestFixtures>({
       logs.set(label, pageLogs);
 
       page.on('console', (msg) => {
-        pageLogs.push(`[${msg.type()}] ${msg.text()}`);
+        const line = `[${msg.type()}] ${msg.text()}`;
+        pageLogs.push(line);
       });
       page.on('pageerror', (err) => {
         pageLogs.push(`[PAGE ERROR] ${err.message}`);

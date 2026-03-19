@@ -133,6 +133,11 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure Results is never serialized as JSON null.
+	if execResp.Results == nil {
+		execResp.Results = []executorapi.CaseResult{}
+	}
+
 	httputil.WriteJSON(w, http.StatusOK, execResp)
 }
 
