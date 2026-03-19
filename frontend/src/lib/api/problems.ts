@@ -145,13 +145,14 @@ export async function generateSolution(data: {
 }
 
 /**
- * Export problems as a JSON file download.
- * @param filters - Optional filters for class_id and tags
+ * Export problems as a JSON or PDF file download.
+ * @param filters - Optional filters for class_id, tags, and format
  * @returns Promise that resolves when download is triggered
  */
 export async function exportProblems(filters?: {
   class_id?: string;
   tags?: string[];
+  format?: 'json' | 'pdf';
 }): Promise<void> {
   // Build query parameters from filters
   const params = new URLSearchParams();
@@ -161,6 +162,9 @@ export async function exportProblems(filters?: {
   if (filters?.tags && filters.tags.length > 0) {
     params.set('tags', filters.tags.join(','));
   }
+  if (filters?.format) {
+    params.set('format', filters.format);
+  }
   const query = params.toString();
   const path = query ? `/problems/export?${query}` : '/problems/export';
 
@@ -169,7 +173,9 @@ export async function exportProblems(filters?: {
 
   // Extract filename from Content-Disposition header
   const contentDisposition = response.headers.get('Content-Disposition');
-  let filename = 'problems-export.json';
+  let filename = filters?.format === 'pdf'
+    ? 'problems-export.pdf'
+    : 'problems-export.json';
   if (contentDisposition) {
     const match = contentDisposition.match(/filename="?([^"]+)"?/);
     if (match) {

@@ -499,12 +499,18 @@ describe('ProblemLibrary', () => {
       const exportButton = screen.getByRole('button', { name: /export/i });
       expect(exportButton).not.toBeDisabled();
 
+      // Open dropdown
       fireEvent.click(exportButton);
+
+      // Click JSON export option
+      const jsonMenuItem = await screen.findByRole('menuitem', { name: /export json/i });
+      fireEvent.click(jsonMenuItem);
 
       await waitFor(() => {
         expect(exportProblems).toHaveBeenCalledWith({
           class_id: 'class-1',
           tags: undefined,
+          format: 'json',
         });
       });
     });
@@ -523,7 +529,13 @@ describe('ProblemLibrary', () => {
       });
 
       const exportButton = screen.getByRole('button', { name: /export/i });
+
+      // Open dropdown
       fireEvent.click(exportButton);
+
+      // Click JSON export option
+      const jsonMenuItem = await screen.findByRole('menuitem', { name: /export json/i });
+      fireEvent.click(jsonMenuItem);
 
       // Button should be disabled while exporting
       await waitFor(() => {
@@ -537,6 +549,94 @@ describe('ProblemLibrary', () => {
       // Button should be enabled again
       await waitFor(() => {
         expect(exportButton).not.toBeDisabled();
+      });
+    });
+  });
+
+  describe('Export dropdown', () => {
+    /**
+     * Verifies that the export dropdown renders with both JSON and PDF format options.
+     * Catches: dropdown not rendering or missing options
+     */
+    it('renders two format options in dropdown', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('menuitem', { name: /export json/i })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: /export pdf/i })).toBeInTheDocument();
+      });
+    });
+
+    /**
+     * Verifies that clicking "Export PDF" passes the correct format parameter to the API.
+     * Catches: format not passed to API client
+     */
+    it('calls exportProblems with format=pdf when Export PDF is clicked', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
+
+      const pdfMenuItem = await screen.findByRole('menuitem', { name: /export pdf/i });
+      fireEvent.click(pdfMenuItem);
+
+      await waitFor(() => {
+        expect(exportProblems).toHaveBeenCalledWith(
+          expect.objectContaining({
+            format: 'pdf',
+          })
+        );
+      });
+    });
+
+    /**
+     * Verifies that the dropdown closes when user clicks outside or presses Escape.
+     * Catches: missing event handlers for click-outside and escape key
+     */
+    it('closes dropdown on click-outside and escape key', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Library')).toBeInTheDocument();
+      });
+
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
+
+      // Dropdown should be visible
+      await waitFor(() => {
+        expect(screen.getByRole('menuitem', { name: /export json/i })).toBeInTheDocument();
+      });
+
+      // Click outside (on document body)
+      fireEvent.mouseDown(document.body);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('menuitem', { name: /export json/i })).not.toBeInTheDocument();
+      });
+
+      // Re-open dropdown
+      fireEvent.click(exportButton);
+      await waitFor(() => {
+        expect(screen.getByRole('menuitem', { name: /export json/i })).toBeInTheDocument();
+      });
+
+      // Press Escape
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('menuitem', { name: /export json/i })).not.toBeInTheDocument();
       });
     });
   });
