@@ -6,7 +6,7 @@
  * Main library view that displays problems with search, filter, and view options.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listClasses } from '@/lib/api/classes';
@@ -17,6 +17,7 @@ import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
 import PublishProblemModal from './PublishProblemModal';
 import type { Class } from '@/types/api';
 import type { ProblemSummary } from '../types';
+import { Download, ChevronDown, FileJson, FileText } from 'lucide-react';
 
 interface ProblemLibraryProps {
   onCreateNew?: () => void;
@@ -51,6 +52,8 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
 
   // Export state
   const [exporting, setExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Load classes on mount
   useEffect(() => {
@@ -226,12 +229,14 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'json' | 'pdf') => {
+    setExportMenuOpen(false);
     try {
       setExporting(true);
       await exportProblems({
         class_id: selectedClassId || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
+        format,
       });
     } catch (err) {
       console.error('Export failed:', err);
@@ -240,6 +245,28 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       setExporting(false);
     }
   };
+
+  // Click outside handler for export dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Escape key handler for export dropdown
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && exportMenuOpen) {
+        setExportMenuOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [exportMenuOpen]);
 
   if (loading) {
     return (
@@ -292,23 +319,46 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
               </select>
             </div>
           )}
-          <button
-            onClick={handleExport}
-            disabled={exporting || filteredProblems.length === 0}
-            className="px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {exporting ? (
-              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setExportMenuOpen(!exportMenuOpen)}
+              disabled={exporting || filteredProblems.length === 0}
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="true"
+              className="px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exporting ? (
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              Export
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50" role="menu">
+                <button
+                  role="menuitem"
+                  onClick={() => handleExport('json')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileJson className="w-4 h-4" />
+                  Export JSON
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => handleExport('pdf')}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Export PDF
+                </button>
+              </div>
             )}
-            Export
-          </button>
+          </div>
           {onCreateNew && (
             <button
               onClick={onCreateNew}
