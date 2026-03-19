@@ -33,9 +33,6 @@ type ExecuteHandlerConfig struct {
 	MaxOutputBytes          int
 	DefaultTimeoutMs        int
 	MaxCodeBytes            int
-	MaxStdinBytes           int
-	MaxFiles                int
-	MaxFileBytes            int
 	MaxConcurrentExecutions int
 }
 
@@ -112,21 +109,6 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timeoutMs = *req.TimeoutMs
 	}
 
-	// Build sandbox request.
-	files := make([]sandbox.File, len(req.Files))
-	for i, f := range req.Files {
-		files[i] = sandbox.File{Name: f.Name, Content: f.Content}
-	}
-
-	sandboxReq := sandbox.Request{
-		Code:       req.Code,
-		Stdin:      req.Stdin,
-		Files:      files,
-		RandomSeed: req.RandomSeed,
-		TimeoutMs:  timeoutMs,
-		Language:   req.Language,
-	}
-
 	sandboxCfg := sandbox.Config{
 		NsjailPath:     h.cfg.NsjailPath,
 		PythonPath:     h.cfg.PythonPath,
@@ -137,8 +119,8 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("executing code",
 		"code_length", len(req.Code),
-		"has_stdin", req.Stdin != "",
-		"file_count", len(req.Files),
+		"case_count", len(req.Cases),
+		"language", req.Language,
 		"timeout_ms", timeoutMs,
 	)
 
@@ -147,53 +129,118 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer h.metrics.ActiveExecutions.Dec()
 
 	start := time.Now()
-	result, err := h.runner(r.Context(), sandboxCfg, sandboxReq)
+	results, timedOut, sandboxErr := h.runCases(r.Context(), sandboxCfg, req, timeoutMs)
 	duration := time.Since(start)
 
 	// Observe duration.
 	h.metrics.ExecutionDuration.Observe(duration.Seconds())
 
-	if err != nil {
-		h.logger.Error("sandbox execution failed", "error", err, "duration_ms", duration.Milliseconds())
+	if sandboxErr != nil {
+		h.logger.Error("sandbox execution failed", "error", sandboxErr, "duration_ms", duration.Milliseconds())
 		h.metrics.ExecutionsTotal.WithLabelValues("error").Inc()
-		httputil.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("sandbox setup failed: %v", err))
+		httputil.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("sandbox setup failed: %v", sandboxErr))
 		return
 	}
 
-	success := result.ExitCode == 0 && !result.TimedOut
+	summary := buildCaseSummary(results)
 
-	// Record execution status.
-	switch {
-	case result.TimedOut:
+	if timedOut {
 		h.metrics.ExecutionsTotal.WithLabelValues("timeout").Inc()
-	case success:
-		h.metrics.ExecutionsTotal.WithLabelValues("success").Inc()
-	default:
+	} else if summary.Errors > 0 || summary.Failed > 0 {
 		h.metrics.ExecutionsTotal.WithLabelValues("failure").Inc()
-	}
-
-	// Build output and error strings.
-	output := result.Stdout
-	errOutput := result.Stderr
-	if result.TimedOut {
-		errOutput = "execution timed out"
-	}
-
-	resp := executorapi.ExecuteResponse{
-		Success:         success,
-		Output:          output,
-		Error:           errOutput,
-		ExecutionTimeMs: result.DurationMs,
-		Stdin:           req.Stdin,
+	} else {
+		h.metrics.ExecutionsTotal.WithLabelValues("success").Inc()
 	}
 
 	h.logger.Info("execution complete",
-		"success", success,
-		"duration_ms", result.DurationMs,
+		"total", summary.Total,
+		"passed", summary.Passed,
+		"failed", summary.Failed,
+		"errors", summary.Errors,
+		"run", summary.Run,
+		"duration_ms", duration.Milliseconds(),
 	)
+
+	resp := executorapi.ExecuteResponse{
+		Results: results,
+		Summary: summary,
+	}
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// runCases executes each case in the request sequentially, running the sandbox once per case.
+// This is an intentionally simple throwaway implementation — PR 2 replaces it with iotestrunner.
+// Returns (results, timedOut, error). timedOut is true if any case timed out.
+func (h *ExecuteHandler) runCases(
+	ctx context.Context,
+	sandboxCfg sandbox.Config,
+	req executorapi.ExecuteRequest,
+	timeoutMs int,
+) ([]executorapi.CaseResult, bool, error) {
+	results := make([]executorapi.CaseResult, 0, len(req.Cases))
+	anyTimedOut := false
+
+	for _, c := range req.Cases {
+		// Convert case files to sandbox files.
+		files := make([]sandbox.File, len(c.Files))
+		for i, f := range c.Files {
+			files[i] = sandbox.File{Name: f.Name, Content: f.Content}
+		}
+
+		sandboxReq := sandbox.Request{
+			Code:       req.Code,
+			Stdin:      c.Input,
+			Files:      files,
+			RandomSeed: c.RandomSeed,
+			TimeoutMs:  timeoutMs,
+			Language:   req.Language,
+		}
+
+		result, err := h.runner(ctx, sandboxCfg, sandboxReq)
+		if err != nil {
+			return nil, false, err
+		}
+
+		var caseResult executorapi.CaseResult
+		if result.TimedOut {
+			anyTimedOut = true
+			caseResult = executorapi.CaseResult{
+				Name:   c.Name,
+				Type:   "io",
+				Status: "error",
+				Input:  c.Input,
+				Stderr: "execution timed out",
+				TimeMs: result.DurationMs,
+			}
+		} else if result.ExitCode != 0 {
+			caseResult = executorapi.CaseResult{
+				Name:   c.Name,
+				Type:   "io",
+				Status: "error",
+				Input:  c.Input,
+				Actual: result.Stdout,
+				Stderr: result.Stderr,
+				TimeMs: result.DurationMs,
+			}
+		} else {
+			// Run-only case (no expected output): status "run".
+			caseResult = executorapi.CaseResult{
+				Name:   c.Name,
+				Type:   "io",
+				Status: "run",
+				Input:  c.Input,
+				Actual: result.Stdout,
+				Stderr: result.Stderr,
+				TimeMs: result.DurationMs,
+			}
+		}
+
+		results = append(results, caseResult)
+	}
+
+	return results, anyTimedOut, nil
 }
 
 func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (string, string) {
@@ -202,23 +249,6 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	}
 	if len(req.Code) > h.cfg.MaxCodeBytes {
 		return "code_too_large", fmt.Sprintf("code exceeds maximum size of %d bytes", h.cfg.MaxCodeBytes)
-	}
-	if len(req.Stdin) > h.cfg.MaxStdinBytes {
-		return "stdin_too_large", fmt.Sprintf("stdin exceeds maximum size of %d bytes", h.cfg.MaxStdinBytes)
-	}
-	if len(req.Files) > h.cfg.MaxFiles {
-		return "too_many_files", fmt.Sprintf("too many files: maximum is %d", h.cfg.MaxFiles)
-	}
-	for _, f := range req.Files {
-		if f.Name == "" {
-			return "invalid_request", "file name must not be empty"
-		}
-		if f.Content == "" {
-			return "invalid_request", "file content must not be empty"
-		}
-		if len(f.Content) > h.cfg.MaxFileBytes {
-			return "file_too_large", fmt.Sprintf("file %q exceeds maximum size of %d bytes", f.Name, h.cfg.MaxFileBytes)
-		}
 	}
 	if req.TimeoutMs != nil {
 		if *req.TimeoutMs <= 0 {
@@ -231,6 +261,29 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	if req.Language != "python" && req.Language != "java" {
 		return "invalid_request", fmt.Sprintf("language is required: must be \"python\" or \"java\", got %q", req.Language)
 	}
+	if len(req.Cases) == 0 {
+		return "invalid_request", "cases must be a non-empty list"
+	}
 	return "", ""
 }
 
+// buildCaseSummary aggregates CaseResult entries into a CaseSummary.
+func buildCaseSummary(results []executorapi.CaseResult) executorapi.CaseSummary {
+	s := executorapi.CaseSummary{
+		Total: len(results),
+	}
+	for _, r := range results {
+		s.TimeMs += r.TimeMs
+		switch r.Status {
+		case "passed":
+			s.Passed++
+		case "failed":
+			s.Failed++
+		case "run":
+			s.Run++
+		default:
+			s.Errors++
+		}
+	}
+	return s
+}

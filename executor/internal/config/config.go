@@ -26,11 +26,11 @@ type Config struct {
 	// Execution Limits
 	MaxConcurrentExecutions int `env:"MAX_CONCURRENT_EXECUTIONS" envDefault:"10"`
 	DefaultTimeoutMS        int `env:"DEFAULT_TIMEOUT_MS" envDefault:"10000"`
-	MaxCodeBytes     int `env:"MAX_CODE_BYTES" envDefault:"102400"`
-	MaxStdinBytes    int `env:"MAX_STDIN_BYTES" envDefault:"1048576"`
-	MaxOutputBytes   int `env:"MAX_OUTPUT_BYTES" envDefault:"1048576"`
-	MaxFiles         int `env:"MAX_FILES" envDefault:"5"`
-	MaxFileBytes     int `env:"MAX_FILE_BYTES" envDefault:"10240"`
+	MaxCodeBytes            int `env:"MAX_CODE_BYTES" envDefault:"102400"`
+	MaxOutputBytes          int `env:"MAX_OUTPUT_BYTES" envDefault:"1048576"`
+	MaxStdinBytes           int `env:"MAX_STDIN_BYTES" envDefault:"1048576"`
+	MaxFiles                int `env:"MAX_FILES" envDefault:"5"`
+	MaxFileBytes            int `env:"MAX_FILE_BYTES" envDefault:"10240"`
 
 	// Redis (for distributed rate limiting)
 	RedisHost string `env:"REDIS_HOST"`

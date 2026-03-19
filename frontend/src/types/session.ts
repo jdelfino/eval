@@ -37,9 +37,9 @@ export interface ExecutionTrace {
 }
 
 /**
- * Re-export ExecutionResult from api.ts to avoid duplication.
+ * Re-export execution response types from api.ts to avoid duplication.
  */
-export type { ExecutionResult } from './api';
+export type { CaseResult, CaseSummary, TestResponse } from './api';
 
 /**
  * Client-side student representation (no WebSocket).

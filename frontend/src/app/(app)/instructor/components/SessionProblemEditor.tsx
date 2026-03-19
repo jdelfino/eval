@@ -58,7 +58,7 @@ export default function SessionProblemEditor({
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded)
   useEffect(() => {
@@ -233,13 +233,8 @@ export default function SessionProblemEditor({
               stdin: execution_settings.stdin,
               random_seed: execution_settings.random_seed,
               attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err) => {
-              setExecutionResult({
-                success: false,
-                output: '',
-                error: err.message || 'Execution failed',
-                execution_time_ms: 0,
-              });
+            }).then(setExecutionResult).catch(() => {
+              // On error, leave executionResult null
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}

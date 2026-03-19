@@ -7,6 +7,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import OutputPanel from '../OutputPanel';
+import type { TestResponse } from '@/types/api';
 
 describe('OutputPanel', () => {
   describe('Empty state', () => {
@@ -42,11 +43,16 @@ describe('OutputPanel', () => {
   });
 
   describe('Success result', () => {
-    const successResult = {
-      success: true,
-      output: 'Hello, World!',
-      error: '',
-      execution_time_ms: 42,
+    const successResult: TestResponse = {
+      results: [{
+        name: 'run',
+        type: 'io',
+        status: 'run',
+        input: '',
+        actual: 'Hello, World!',
+        time_ms: 42,
+      }],
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 42 },
     };
 
     it('should display output when result is successful', () => {
@@ -65,11 +71,16 @@ describe('OutputPanel', () => {
   });
 
   describe('Error result', () => {
-    const errorResult = {
-      success: false,
-      output: '',
-      error: 'SyntaxError: invalid syntax',
-      execution_time_ms: 5,
+    const errorResult: TestResponse = {
+      results: [{
+        name: 'run',
+        type: 'io',
+        status: 'error',
+        input: '',
+        stderr: 'SyntaxError: invalid syntax',
+        time_ms: 5,
+      }],
+      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 5 },
     };
 
     it('should display error message when result has error', () => {
@@ -81,20 +92,24 @@ describe('OutputPanel', () => {
     });
   });
 
-  describe('Result with stdin', () => {
-    const resultWithStdin = {
-      success: true,
-      output: '10',
-      error: '',
-      execution_time_ms: 15,
-      stdin: '5\n5',
+  describe('Result with input', () => {
+    const resultWithInput: TestResponse = {
+      results: [{
+        name: 'run',
+        type: 'io',
+        status: 'run',
+        input: '5\n5',
+        actual: '10',
+        time_ms: 15,
+      }],
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 15 },
     };
 
-    it('should display stdin when provided', () => {
-      render(<OutputPanel result={resultWithStdin} />);
+    it('should display input when provided', () => {
+      render(<OutputPanel result={resultWithInput} />);
 
       expect(screen.getByText('Input provided:')).toBeInTheDocument();
-      // Verify input section exists and contains the stdin value
+      // Verify input section exists and contains the input value
       const inputSection = screen.getByText('Input provided:').closest('div');
       expect(inputSection).toBeInTheDocument();
       expect(inputSection?.querySelector('pre')).toBeInTheDocument();

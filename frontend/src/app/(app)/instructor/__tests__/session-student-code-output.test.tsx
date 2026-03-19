@@ -22,6 +22,7 @@ import '@testing-library/jest-dom';
 // by the instructor page.
 
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
+import type { TestResponse } from '@/types/api';
 
 // Mock Monaco Editor
 jest.mock('@monaco-editor/react', () => {
@@ -60,11 +61,16 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
     // When viewing student code in instructor session, execution results
     // should be passed to CodeEditor and displayed in its output area.
 
-    const execution_result = {
-      success: true,
-      output: 'Hello from student code!',
-      error: '',
-      execution_time_ms: 42,
+    const execution_result: TestResponse = {
+      results: [{
+        name: 'run',
+        type: 'io',
+        status: 'run',
+        input: '',
+        actual: 'Hello from student code!',
+        time_ms: 42,
+      }],
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 42 },
     };
 
     // Render CodeEditor with the same props pattern used in instructor page
@@ -87,11 +93,16 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
   });
 
   it('should display error output when execution fails', () => {
-    const execution_result = {
-      success: false,
-      output: '',
-      error: 'NameError: name "undefined_var" is not defined',
-      execution_time_ms: 15,
+    const execution_result: TestResponse = {
+      results: [{
+        name: 'run',
+        type: 'io',
+        status: 'error',
+        input: '',
+        stderr: 'NameError: name "undefined_var" is not defined',
+        time_ms: 15,
+      }],
+      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 15 },
     };
 
     render(

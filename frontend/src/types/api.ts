@@ -272,13 +272,34 @@ export interface StudentWorkSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Execution
+// Execution — Cases[] protocol
 // ---------------------------------------------------------------------------
 
-export interface ExecutionResult {
-  success: boolean;
-  output?: string;
-  error?: string;
-  execution_time_ms: number;
-  stdin?: string;
+/** CaseResult — outcome of a single test case execution. */
+export interface CaseResult {
+  name: string;
+  type: string;
+  /** "run" | "passed" | "failed" | "error" */
+  status: string;
+  input?: string;
+  expected?: string;
+  actual?: string;
+  stderr?: string;
+  time_ms: number;
+}
+
+/** CaseSummary — aggregate counts across all case results. */
+export interface CaseSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  errors: number;
+  run: number;
+  time_ms: number;
+}
+
+/** TestResponse — the response shape for POST /execute. */
+export interface TestResponse {
+  results: CaseResult[];
+  summary: CaseSummary;
 }

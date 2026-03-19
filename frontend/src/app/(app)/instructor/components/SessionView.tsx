@@ -15,7 +15,7 @@ import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem, ExecutionSettings } from '@/types/problem';
 import { featureCode } from '@/lib/api/sessions';
-import { Student, RealtimeStudent, ExecutionResult } from '../types';
+import { Student, RealtimeStudent, TestResponse } from '../types';
 
 interface SessionContext {
   section_id: string;
@@ -61,7 +61,7 @@ interface SessionViewProps {
     studentId: string,
     code: string,
     execution_settings: ExecutionSettings
-  ) => Promise<ExecutionResult>;
+  ) => Promise<TestResponse>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -128,7 +128,7 @@ export function SessionView({
     studentId: string,
     code: string,
     settings: ExecutionSettings
-  ): Promise<ExecutionResult | undefined> => {
+  ): Promise<TestResponse | undefined> => {
     try {
       return await executeCode(studentId, code, settings);
     } catch (error) {

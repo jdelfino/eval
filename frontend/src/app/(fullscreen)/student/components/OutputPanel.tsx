@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import type { ExecutionResult } from '@/types/api';
+import type { TestResponse } from '@/types/api';
 
 interface OutputPanelProps {
-  result: ExecutionResult | null;
+  result: TestResponse | null;
   isConnected?: boolean;
   isRunning?: boolean;
 }
@@ -34,7 +34,7 @@ export default function OutputPanel({ result, isConnected = true, isRunning = fa
               No output yet.
             </p>
             <p className="text-gray-400 text-sm m-0">
-              Click the "Run Code" button to execute your code and see the output here.
+              Click the &quot;Run Code&quot; button to execute your code and see the output here.
             </p>
           </div>
         )}
@@ -42,44 +42,52 @@ export default function OutputPanel({ result, isConnected = true, isRunning = fa
     );
   }
 
+  // Use the first result for display (free-run mode sends one case).
+  const r = result.results[0];
+  const isSuccess = r ? (r.status === 'run' || r.status === 'passed') : false;
+  const output = r?.actual ?? '';
+  const errorOutput = r?.stderr ?? '';
+  const input = r?.input ?? '';
+  const timeMs = r?.time_ms ?? 0;
+
   return (
     <div className={cn(
       'p-4 border rounded mt-4 min-h-[150px]',
-      result.success
+      isSuccess
         ? 'bg-green-100 border-green-300'
         : 'bg-red-100 border-red-300'
     )}>
       <h4 className="mt-0">Output</h4>
 
       {/* Display input if it was provided */}
-      {result.stdin && (
+      {input && (
         <div className="mb-4">
           <strong className="text-gray-500">Input provided:</strong>
           <pre className="my-2 font-mono whitespace-pre-wrap break-words bg-gray-100 p-2 rounded border border-gray-300">
-            {result.stdin}
+            {input}
           </pre>
         </div>
       )}
 
-      {result.output && (
+      {output && (
         <div className="mb-4">
           <pre className="m-0 font-mono whitespace-pre-wrap break-words">
-            {result.output}
+            {output}
           </pre>
         </div>
       )}
 
-      {result.error && (
+      {errorOutput && (
         <div className="mb-4">
           <strong className="text-red-800">Error:</strong>
           <pre className="mt-2 mb-0 font-mono whitespace-pre-wrap break-words text-red-800">
-            {result.error}
+            {errorOutput}
           </pre>
         </div>
       )}
 
       <div className="text-sm text-gray-500 mt-2">
-        Execution time: {result.execution_time_ms}ms
+        Execution time: {timeMs}ms
       </div>
     </div>
   );

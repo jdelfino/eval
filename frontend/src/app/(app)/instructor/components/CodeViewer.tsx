@@ -2,12 +2,12 @@
 
 import React from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import type { ExecutionResult } from '@/types/api';
+import type { TestResponse } from '@/types/api';
 
 interface CodeViewerProps {
   code: string;
   studentName?: string;
-  execution_result?: ExecutionResult;
+  execution_result?: TestResponse;
   onRun?: (execution_settings: import('@/types/problem').ExecutionSettings) => void;
   isRunning?: boolean;
 }

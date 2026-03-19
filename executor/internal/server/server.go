@@ -115,9 +115,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			MaxOutputBytes:          cfg.MaxOutputBytes,
 			DefaultTimeoutMs:        cfg.DefaultTimeoutMS,
 			MaxCodeBytes:            cfg.MaxCodeBytes,
-			MaxStdinBytes:           cfg.MaxStdinBytes,
-			MaxFiles:                cfg.MaxFiles,
-			MaxFileBytes:            cfg.MaxFileBytes,
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
 		},
 	)

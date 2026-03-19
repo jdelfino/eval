@@ -28,9 +28,6 @@ func defaultConfig() handler.ExecuteHandlerConfig {
 		MaxOutputBytes:   1048576,
 		DefaultTimeoutMs: 10000,
 		MaxCodeBytes:     102400,
-		MaxStdinBytes:    1048576,
-		MaxFiles:         5,
-		MaxFileBytes:     10240,
 	}
 }
 
@@ -43,6 +40,7 @@ func noopLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// successRunner returns a successful sandbox result with stdout "hello\n".
 func successRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
 	return &sandbox.Result{
 		Stdout:     "hello\n",
@@ -53,6 +51,7 @@ func successRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*san
 	}, nil
 }
 
+// failRunner simulates a crash (non-zero exit code, stderr output).
 func failRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
 	return &sandbox.Result{
 		Stdout:     "",
@@ -86,7 +85,7 @@ type captureRunner struct {
 func (c *captureRunner) run(_ context.Context, cfg sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
 	c.req = req
 	c.cfg = cfg
-	return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
+	return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 1}, nil
 }
 
 func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
@@ -98,8 +97,10 @@ func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
 }
 
 func TestExecute_Success(t *testing.T) {
+	// successRunner returns stdout "hello\n". A run-only case (no expected_output)
+	// should appear in results with status "run".
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print('hello')","language":"python"}`)
+	w := doRequest(h, `{"code":"print('hello')","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -109,20 +110,24 @@ func TestExecute_Success(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if !resp.Success {
-		t.Error("expected success=true")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Output != "hello\n" {
-		t.Errorf("expected output 'hello\\n', got %q", resp.Output)
+	if resp.Results[0].Status != "run" {
+		t.Errorf("expected status 'run', got %q", resp.Results[0].Status)
 	}
-	if resp.ExecutionTimeMs != 45 {
-		t.Errorf("expected 45ms, got %d", resp.ExecutionTimeMs)
+	if resp.Results[0].Actual != "hello\n" {
+		t.Errorf("expected actual 'hello\\n', got %q", resp.Results[0].Actual)
+	}
+	if resp.Results[0].TimeMs != 45 {
+		t.Errorf("expected 45ms, got %d", resp.Results[0].TimeMs)
 	}
 }
 
 func TestExecute_CodeFailure(t *testing.T) {
+	// When student code crashes (non-zero exit), the case result has status "error".
 	h := newHandler(failRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(x)","language":"python"}`)
+	w := doRequest(h, `{"code":"print(x)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -132,17 +137,20 @@ func TestExecute_CodeFailure(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Success {
-		t.Error("expected success=false")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Error == "" {
-		t.Error("expected non-empty error")
+	if resp.Results[0].Status != "error" {
+		t.Errorf("expected status 'error', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Stderr == "" {
+		t.Error("expected non-empty stderr")
 	}
 }
 
 func TestExecute_Timeout(t *testing.T) {
 	h := newHandler(timeoutRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"while True: pass","language":"python"}`)
+	w := doRequest(h, `{"code":"while True: pass","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -152,17 +160,20 @@ func TestExecute_Timeout(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
-	if resp.Success {
-		t.Error("expected success=false for timeout")
+	if len(resp.Results) == 0 {
+		t.Fatal("expected at least one result for timeout")
 	}
-	if resp.Error != "execution timed out" {
-		t.Errorf("expected timeout error, got %q", resp.Error)
+	if resp.Results[0].Status != "error" {
+		t.Errorf("expected status 'error' for timeout, got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Stderr != "execution timed out" {
+		t.Errorf("expected timeout error in Stderr, got %q", resp.Results[0].Stderr)
 	}
 }
 
 func TestExecute_InternalError(t *testing.T) {
 	h := newHandler(errorRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
@@ -179,7 +190,7 @@ func TestExecute_InternalError(t *testing.T) {
 
 func TestExecute_EmptyCode(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":""}`)
+	w := doRequest(h, `{"code":"","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -208,62 +219,7 @@ func TestExecute_CodeTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxCodeBytes = 10
 	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"print('this is way too long')","language":"python"}`)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestExecute_StdinTooLarge(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxStdinBytes = 5
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"x=1","language":"python","stdin":"toolarge"}`)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestExecute_TooManyFiles(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxFiles = 1
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
-	w := doRequest(h, body)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestExecute_FileTooLarge(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxFileBytes = 5
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"toolarge"}]}`
-	w := doRequest(h, body)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestExecute_EmptyFileName(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","language":"python","files":[{"name":"","content":"data"}]}`
-	w := doRequest(h, body)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestExecute_EmptyFileContent(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":""}]}`
-	w := doRequest(h, body)
+	w := doRequest(h, `{"code":"print('this is way too long')","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -272,7 +228,7 @@ func TestExecute_EmptyFileContent(t *testing.T) {
 
 func TestExecute_NegativeTimeout(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":-1}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}],"timeout_ms":-1}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -281,30 +237,17 @@ func TestExecute_NegativeTimeout(t *testing.T) {
 
 func TestExecute_TimeoutTooLarge(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":99999}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}],"timeout_ms":99999}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
-func TestExecute_StdinEchoed(t *testing.T) {
-	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","language":"python","stdin":"my input"}`)
-
-	var resp executorapi.ExecuteResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatal(err)
-	}
-	if resp.Stdin != "my input" {
-		t.Errorf("expected stdin echoed, got %q", resp.Stdin)
-	}
-}
-
 func TestExecute_CustomTimeout(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","language":"python","timeout_ms":5000}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}],"timeout_ms":5000}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -317,33 +260,13 @@ func TestExecute_CustomTimeout(t *testing.T) {
 func TestExecute_DefaultTimeout(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"x=1","language":"python"}`)
+	w := doRequest(h, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	if cap.req.TimeoutMs != 10000 {
 		t.Errorf("expected default timeout 10000, got %d", cap.req.TimeoutMs)
-	}
-}
-
-func TestExecute_FilesPassedToSandbox(t *testing.T) {
-	cap := &captureRunner{}
-	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	body := `{"code":"x=1","language":"python","files":[{"name":"data.txt","content":"hello"}],"random_seed":42}`
-	w := doRequest(h, body)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if len(cap.req.Files) != 1 {
-		t.Fatalf("expected 1 file, got %d", len(cap.req.Files))
-	}
-	if cap.req.Files[0].Name != "data.txt" {
-		t.Errorf("expected file name data.txt, got %q", cap.req.Files[0].Name)
-	}
-	if cap.req.RandomSeed == nil || *cap.req.RandomSeed != 42 {
-		t.Error("expected random_seed 42")
 	}
 }
 
@@ -360,7 +283,6 @@ func TestExecute_BodyTooLarge(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
-
 
 func newTestMetrics(t *testing.T) *metrics.Metrics {
 	t.Helper()
@@ -389,7 +311,7 @@ func getGaugeValue(t *testing.T, g prometheus.Gauge) float64 {
 func TestExecute_MetricsSuccess(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(successRunner, m, defaultConfig())
-	w := doRequest(h, `{"code":"print('hello')","language":"python"}`)
+	w := doRequest(h, `{"code":"print('hello')","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -407,7 +329,7 @@ func TestExecute_MetricsSuccess(t *testing.T) {
 func TestExecute_MetricsFailure(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(failRunner, m, defaultConfig())
-	doRequest(h, `{"code":"print(x)","language":"python"}`)
+	doRequest(h, `{"code":"print(x)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "failure"); v != 1 {
 		t.Errorf("expected executions_total{status=failure}=1, got %v", v)
@@ -417,7 +339,7 @@ func TestExecute_MetricsFailure(t *testing.T) {
 func TestExecute_MetricsTimeout(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(timeoutRunner, m, defaultConfig())
-	doRequest(h, `{"code":"while True: pass","language":"python"}`)
+	doRequest(h, `{"code":"while True: pass","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "timeout"); v != 1 {
 		t.Errorf("expected executions_total{status=timeout}=1, got %v", v)
@@ -427,7 +349,7 @@ func TestExecute_MetricsTimeout(t *testing.T) {
 func TestExecute_MetricsError(t *testing.T) {
 	m := newTestMetrics(t)
 	h := newHandler(errorRunner, m, defaultConfig())
-	doRequest(h, `{"code":"print(1)","language":"python"}`)
+	doRequest(h, `{"code":"print(1)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if v := getCounterValue(t, m.ExecutionsTotal, "error"); v != 1 {
 		t.Errorf("expected executions_total{status=error}=1, got %v", v)
@@ -439,7 +361,7 @@ func TestExecute_MetricsValidationCodeTooLarge(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.MaxCodeBytes = 10
 	h := newHandler(successRunner, m, cfg)
-	doRequest(h, `{"code":"print('this is way too long')","language":"python"}`)
+	doRequest(h, `{"code":"print('this is way too long')","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if v := getCounterValue(t, m.ValidationErrorsTotal, "code_too_large"); v != 1 {
 		t.Errorf("expected validation_errors_total{reason=code_too_large}=1, got %v", v)
@@ -456,96 +378,31 @@ func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestExecute_MetricsValidationStdinTooLarge(t *testing.T) {
-	m := newTestMetrics(t)
-	cfg := defaultConfig()
-	cfg.MaxStdinBytes = 5
-	h := newHandler(successRunner, m, cfg)
-	doRequest(h, `{"code":"x=1","language":"python","stdin":"toolarge"}`)
-
-	if v := getCounterValue(t, m.ValidationErrorsTotal, "stdin_too_large"); v != 1 {
-		t.Errorf("expected validation_errors_total{reason=stdin_too_large}=1, got %v", v)
-	}
-}
-
-func TestExecute_MetricsValidationTooManyFiles(t *testing.T) {
-	m := newTestMetrics(t)
-	cfg := defaultConfig()
-	cfg.MaxFiles = 1
-	h := newHandler(successRunner, m, cfg)
-	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}`
-	doRequest(h, body)
-
-	if v := getCounterValue(t, m.ValidationErrorsTotal, "too_many_files"); v != 1 {
-		t.Errorf("expected validation_errors_total{reason=too_many_files}=1, got %v", v)
-	}
-}
-
-func TestExecute_MetricsValidationFileTooLarge(t *testing.T) {
-	m := newTestMetrics(t)
-	cfg := defaultConfig()
-	cfg.MaxFileBytes = 5
-	h := newHandler(successRunner, m, cfg)
-	body := `{"code":"x=1","language":"python","files":[{"name":"a.txt","content":"toolarge"}]}`
-	doRequest(h, body)
-
-	if v := getCounterValue(t, m.ValidationErrorsTotal, "file_too_large"); v != 1 {
-		t.Errorf("expected validation_errors_total{reason=file_too_large}=1, got %v", v)
-	}
-}
-
 func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
-	// blockCh controls when the runner completes.
+	entryCh := make(chan struct{})
 	blockCh := make(chan struct{})
 	blockingRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		close(entryCh)
 		<-blockCh
-		return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
+		return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 1}, nil
 	}
 
 	cfg := defaultConfig()
 	cfg.MaxConcurrentExecutions = 1
 	h := handler.NewExecuteHandler(noopLogger(), blockingRunner, metrics.NewNoop(), cfg)
 
-	// First request: occupies the single slot.
 	var wg sync.WaitGroup
 	wg.Add(1)
-	var firstStatus int
 	go func() {
 		defer wg.Done()
-		w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
-		firstStatus = w.Code
+		doRequest(h.ServeHTTP, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	}()
 
-	// Give the first goroutine time to acquire the semaphore.
-	// We send a second request while the first is still blocking.
-	// Use a small sync trick: send another request synchronously.
-	// The blocking runner holds the slot, so this should get 429.
-	//
-	// We need to wait a moment for the goroutine to enter the runner.
-	// A more robust approach: use a channel to signal entry.
-	entryCh := make(chan struct{})
-	blockCh2 := make(chan struct{})
-	entryRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
-		close(entryCh)
-		<-blockCh2
-		return &sandbox.Result{Stdout: "ok", ExitCode: 0, DurationMs: 1}, nil
-	}
-
-	// Recreate handler with entryRunner so we can synchronize.
-	h2 := handler.NewExecuteHandler(noopLogger(), entryRunner, metrics.NewNoop(), cfg)
-
-	wg2 := sync.WaitGroup{}
-	wg2.Add(1)
-	go func() {
-		defer wg2.Done()
-		doRequest(h2.ServeHTTP, `{"code":"x=1","language":"python"}`)
-	}()
-
-	// Wait for first request to enter runner.
+	// Wait for first request to enter the runner (slot occupied).
 	<-entryCh
 
-	// Second request should be rejected.
-	w := doRequest(h2.ServeHTTP, `{"code":"x=1","language":"python"}`)
+	// Second request should be rejected with 429.
+	w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", w.Code)
 	}
@@ -559,13 +416,8 @@ func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
 	}
 
 	// Unblock.
-	close(blockCh2)
-	wg2.Wait()
-
-	// Clean up first handler too.
 	close(blockCh)
 	wg.Wait()
-	_ = firstStatus
 }
 
 func TestExecute_ConcurrencyLimit_AllowsAfterRelease(t *testing.T) {
@@ -574,13 +426,13 @@ func TestExecute_ConcurrencyLimit_AllowsAfterRelease(t *testing.T) {
 	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
 
 	// First request succeeds (acquires and releases).
-	w1 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
+	w1 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w1.Code != http.StatusOK {
 		t.Fatalf("first request: expected 200, got %d", w1.Code)
 	}
 
 	// Second request should also succeed since first released the slot.
-	w2 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
+	w2 := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w2.Code != http.StatusOK {
 		t.Fatalf("second request: expected 200, got %d", w2.Code)
 	}
@@ -591,7 +443,7 @@ func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
 	cfg.MaxConcurrentExecutions = 0
 	h := handler.NewExecuteHandler(noopLogger(), successRunner, metrics.NewNoop(), cfg)
 
-	w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python"}`)
+	w := doRequest(h.ServeHTTP, `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
@@ -602,7 +454,7 @@ func TestExecute_ConcurrencyLimit_ZeroMeansUnlimited(t *testing.T) {
 func TestExecute_ValidateLanguage_EmptyIsRejected(t *testing.T) {
 	// Empty language must now be rejected — every request must specify a language explicitly.
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)"}`)
+	w := doRequest(h, `{"code":"print(1)","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for empty language, got %d", w.Code)
 	}
@@ -610,18 +462,17 @@ func TestExecute_ValidateLanguage_EmptyIsRejected(t *testing.T) {
 
 func TestExecute_ValidateLanguage_PythonIsOk(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for language=python, got %d", w.Code)
 	}
 }
 
 func TestExecute_ValidateLanguage_JavaIsOk(t *testing.T) {
-	// Java causes a sandbox error (not yet implemented), but validation passes.
-	// We use a captureRunner to avoid the sandbox error path.
+	// Java validation passes; captureRunner returns a simple result.
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"public class Main {}","language":"java"}`)
+	w := doRequest(h, `{"code":"public class Main {}","language":"java","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for language=java (validation passes), got %d", w.Code)
 	}
@@ -629,7 +480,7 @@ func TestExecute_ValidateLanguage_JavaIsOk(t *testing.T) {
 
 func TestExecute_ValidateLanguage_InvalidRejected(t *testing.T) {
 	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)","language":"ruby"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"ruby","cases":[{"name":"run","type":"io","input":""}]}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unsupported language, got %d", w.Code)
 	}
@@ -645,7 +496,7 @@ func TestExecute_ValidateLanguage_InvalidRejected(t *testing.T) {
 func TestExecute_LanguagePassedToSandbox(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
-	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -661,7 +512,7 @@ func TestExecute_JavaPathPassedToSandboxConfig(t *testing.T) {
 	cfg.JavaPath = "/usr/bin/java"
 	cfg.JavacPath = "/usr/bin/javac"
 	h := newHandler(cap.run, metrics.NewNoop(), cfg)
-	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	w := doRequest(h, `{"code":"print(1)","language":"python","cases":[{"name":"run","type":"io","input":""}]}`)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -671,5 +522,150 @@ func TestExecute_JavaPathPassedToSandboxConfig(t *testing.T) {
 	}
 	if cap.cfg.JavacPath != "/usr/bin/javac" {
 		t.Errorf("expected cfg.JavacPath='/usr/bin/javac', got %q", cap.cfg.JavacPath)
+	}
+}
+
+// --- Cases protocol tests ---
+
+// TestExecute_Cases_EmptyCasesRejected verifies that an empty cases list returns 400.
+// Catches: missing validation on required Cases field.
+func TestExecute_Cases_EmptyCasesRejected(t *testing.T) {
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)","language":"python","cases":[]}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty cases list, got %d", w.Code)
+	}
+}
+
+func TestExecute_Cases_NoCasesRejected(t *testing.T) {
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	w := doRequest(h, `{"code":"print(1)","language":"python"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when cases field is absent, got %d", w.Code)
+	}
+}
+
+func TestExecute_Cases_SingleRunOnly(t *testing.T) {
+	// A case with no expected_output should get status "run".
+	h := newHandler(successRunner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"print(input().upper())","language":"python","cases":[{"name":"case1","type":"io","input":"hello"}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
+	}
+	if resp.Results[0].Status != "run" {
+		t.Errorf("expected status 'run' for case without expected_output, got %q", resp.Results[0].Status)
+	}
+}
+
+func TestExecute_Cases_MultipleCases(t *testing.T) {
+	// Multiple cases each get their own sandbox call.
+	callCount := 0
+	multiRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		callCount++
+		return &sandbox.Result{Stdout: "out\n", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(multiRunner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"print(input())","language":"python","cases":[` +
+		`{"name":"c1","type":"io","input":"1"},` +
+		`{"name":"c2","type":"io","input":"2"},` +
+		`{"name":"c3","type":"io","input":"3"}` +
+		`]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(resp.Results))
+	}
+	if callCount != 3 {
+		t.Errorf("expected 3 sandbox calls (one per case), got %d", callCount)
+	}
+	if resp.Summary.Total != 3 {
+		t.Errorf("expected total=3, got %d", resp.Summary.Total)
+	}
+}
+
+// TestExecute_Cases_StdinForwardedFromInput verifies that case.Input is forwarded
+// as Stdin to the sandbox. Catches: CaseDef.Input not mapped to sandbox Stdin.
+func TestExecute_Cases_StdinForwardedFromInput(t *testing.T) {
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"print(input())","language":"python","cases":[{"name":"run","type":"io","input":"test input"}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cap.req.Stdin != "test input" {
+		t.Errorf("expected sandbox Stdin='test input', got %q", cap.req.Stdin)
+	}
+}
+
+func TestExecute_Cases_CaseFilesForwardedToSandbox(t *testing.T) {
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"x=1","language":"python","cases":[{"name":"run","type":"io","input":"","files":[{"name":"data.csv","content":"a,b"}]}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(cap.req.Files) != 1 {
+		t.Fatalf("expected 1 file in sandbox request, got %d", len(cap.req.Files))
+	}
+	if cap.req.Files[0].Name != "data.csv" {
+		t.Errorf("expected file name 'data.csv', got %q", cap.req.Files[0].Name)
+	}
+}
+
+func TestExecute_Cases_RandomSeedForwardedToSandbox(t *testing.T) {
+	cap := &captureRunner{}
+	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"import random; print(random.randint(1,100))","language":"python","cases":[{"name":"seed-test","type":"io","input":"","random_seed":42}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if cap.req.RandomSeed == nil || *cap.req.RandomSeed != 42 {
+		t.Errorf("expected random_seed=42 forwarded to sandbox, got %v", cap.req.RandomSeed)
+	}
+}
+
+func TestExecute_Cases_SandboxTimeout(t *testing.T) {
+	// When sandbox times out, the case result should have status "error".
+	h := newHandler(timeoutRunner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"while True: pass","language":"python","cases":[{"name":"t1","type":"io","input":""}]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Summary.Errors == 0 {
+		t.Error("expected at least one error in summary for timed-out execution")
+	}
+	if resp.Results[0].Status != "error" {
+		t.Errorf("expected status 'error' for timed-out case, got %q", resp.Results[0].Status)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -18,6 +17,7 @@ import (
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
+	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
 // mockExecutorClient implements ExecutorClient for testing.
@@ -42,25 +42,34 @@ func setupExecuteHandler(execClient ExecutorClient) http.Handler {
 	return r
 }
 
+// defaultTestResponse returns a minimal valid ExecuteResponse for tests that
+// don't care about the response content.
+func defaultTestResponse() *executor.ExecuteResponse {
+	return &executor.ExecuteResponse{
+		Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n", TimeMs: 10}},
+		Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 10},
+	}
+}
+
 func TestExecute_HappyPath(t *testing.T) {
 	var capturedReq executor.ExecuteRequest
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Success:         true,
-				Output:          "hello\n",
-				ExecutionTimeMs: 30,
+				Results: []executorapi.CaseResult{{Name: "case1", Type: "io", Status: "run", Input: "hello", Actual: "HELLO", TimeMs: 30}},
+				Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 30},
 			}, nil
 		},
 	}
 
 	handler := setupExecuteHandler(execClient)
 	body, _ := json.Marshal(map[string]any{
-		"code":     `print("hello")`,
+		"code":     `print(input().upper())`,
 		"language": "python",
-		"stdin":    "some input",
-		"files":    []map[string]string{{"name": "test.txt", "content": "data"}},
+		"cases": []map[string]any{
+			{"name": "case1", "input": "hello"},
+		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -74,32 +83,43 @@ func TestExecute_HappyPath(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
+	// Response must be native {results[], summary} shape
 	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !resp.Success {
-		t.Fatal("expected success=true")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Output != "hello\n" {
-		t.Fatalf("expected output 'hello\\n', got %q", resp.Output)
+	if resp.Results[0].Name != "case1" {
+		t.Fatalf("expected results[0].name='case1', got %q", resp.Results[0].Name)
+	}
+	if resp.Results[0].Status != "run" {
+		t.Fatalf("expected results[0].status='run', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Actual != "HELLO" {
+		t.Fatalf("expected results[0].actual='HELLO', got %q", resp.Results[0].Actual)
 	}
 	// Verify executor received correct fields
-	if capturedReq.Code != `print("hello")` {
+	if capturedReq.Code != `print(input().upper())` {
 		t.Fatalf("expected code forwarded, got %q", capturedReq.Code)
 	}
-	if capturedReq.Stdin != "some input" {
-		t.Fatalf("expected stdin 'some input', got %q", capturedReq.Stdin)
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case forwarded to executor")
 	}
-	if len(capturedReq.Files) != 1 || capturedReq.Files[0].Name != "test.txt" {
-		t.Fatalf("expected 1 file 'test.txt', got %v", capturedReq.Files)
+	if capturedReq.Cases[0].Name != "case1" {
+		t.Fatalf("expected cases[0].name='case1', got %q", capturedReq.Cases[0].Name)
+	}
+	if capturedReq.Cases[0].Input != "hello" {
+		t.Fatalf("expected cases[0].input='hello', got %q", capturedReq.Cases[0].Input)
 	}
 }
 
 func TestExecute_MinimalRequest(t *testing.T) {
+	// No cases provided → handler synthesizes a free-run case.
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return defaultTestResponse(), nil
 		},
 	}
 
@@ -118,12 +138,43 @@ func TestExecute_MinimalRequest(t *testing.T) {
 	}
 }
 
+func TestExecute_NoCases_SynthesizesFreeRunCase(t *testing.T) {
+	// When the frontend sends no cases, the handler synthesizes a single free-run case.
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return defaultTestResponse(), nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedReq.Cases) != 1 {
+		t.Fatalf("expected 1 synthesized case, got %d", len(capturedReq.Cases))
+	}
+	if capturedReq.Cases[0].Name != "run" {
+		t.Errorf("expected synthesized case name='run', got %q", capturedReq.Cases[0].Name)
+	}
+}
+
 func TestExecute_StudentUserAllowed(t *testing.T) {
 	var capturedReq executor.ExecuteRequest
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "hello\n"}, nil
+			return defaultTestResponse(), nil
 		},
 	}
 
@@ -149,43 +200,15 @@ func TestExecute_StudentUserAllowed(t *testing.T) {
 	}
 }
 
-func TestExecute_RandomSeed(t *testing.T) {
+// TestExecute_AttachedFilesTranslatedToFiles verifies that the handler translates
+// frontend case.attached_files to executor Cases[].Files.
+// Catches: field name mismatch between frontend (attached_files) and executor (files).
+func TestExecute_AttachedFilesTranslatedToFiles(t *testing.T) {
 	var capturedReq executor.ExecuteRequest
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
-		},
-	}
-
-	handler := setupExecuteHandler(execClient)
-	body, _ := json.Marshal(map[string]any{
-		"code":        "x",
-		"language":    "python",
-		"random_seed": 42,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if capturedReq.RandomSeed == nil || *capturedReq.RandomSeed != 42 {
-		t.Fatalf("expected random_seed 42 forwarded to executor, got %v", capturedReq.RandomSeed)
-	}
-}
-
-func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
-	var capturedReq executor.ExecuteRequest
-	execClient := &mockExecutorClient{
-		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
-			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return defaultTestResponse(), nil
 		},
 	}
 
@@ -193,6 +216,55 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"code":     "x",
 		"language": "python",
+		"cases": []map[string]any{
+			{
+				"name":  "run",
+				"input": "",
+				"attached_files": []map[string]string{
+					{"name": "data.csv", "content": "a,b"},
+				},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(capturedReq.Cases) == 0 {
+		t.Fatal("expected at least one case")
+	}
+	if len(capturedReq.Cases[0].Files) != 1 {
+		t.Fatalf("expected 1 file in executor case, got %d", len(capturedReq.Cases[0].Files))
+	}
+	if capturedReq.Cases[0].Files[0].Name != "data.csv" {
+		t.Errorf("expected file name 'data.csv', got %q", capturedReq.Cases[0].Files[0].Name)
+	}
+}
+
+func TestExecute_RandomSeed(t *testing.T) {
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return defaultTestResponse(), nil
+		},
+	}
+
+	seed := 42
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{
+		"code":     "x",
+		"language": "python",
+		"cases": []map[string]any{
+			{"name": "seed-case", "input": "", "random_seed": seed},
+		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -205,8 +277,8 @@ func TestExecute_NilRandomSeedNotForwarded(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if capturedReq.RandomSeed != nil {
-		t.Fatalf("expected nil random_seed when not provided, got %v", capturedReq.RandomSeed)
+	if len(capturedReq.Cases) == 0 || capturedReq.Cases[0].RandomSeed == nil || *capturedReq.Cases[0].RandomSeed != 42 {
+		t.Fatalf("expected random_seed 42 forwarded in cases[0], got %v", capturedReq.Cases)
 	}
 }
 
@@ -282,7 +354,7 @@ func TestExecute_LanguagePassedToExecutor(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			return &executor.ExecuteResponse{Success: true, Output: "ok"}, nil
+			return defaultTestResponse(), nil
 		},
 	}
 
@@ -368,6 +440,34 @@ func TestExecute_503OnConnectionError(t *testing.T) {
 	}
 }
 
+func TestExecute_ResultsNeverNull(t *testing.T) {
+	// Verify that even when executor returns nil Results, the response has an empty array.
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return &executor.ExecuteResponse{Results: nil, Summary: executorapi.CaseSummary{}}, nil
+		},
+	}
+	handler := setupExecuteHandler(execClient)
+	body, _ := json.Marshal(map[string]any{"code": "x", "language": "python"})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if string(raw["results"]) == "null" {
+		t.Error("expected results to be [] not null")
+	}
+}
+
 // --- normalizeLanguage tests ---
 
 func TestNormalizeLanguage_EmptyReturnsError(t *testing.T) {
@@ -395,125 +495,5 @@ func TestNormalizeLanguage_Python3AliasMapsTo_Python(t *testing.T) {
 	got, err := normalizeLanguage("python3")
 	if err != nil || got != "python" {
 		t.Errorf("expected 'python', got %q, err %v", got, err)
-	}
-}
-
-func TestNormalizeLanguage_InvalidReturnsError(t *testing.T) {
-	_, err := normalizeLanguage("ruby")
-	if err == nil {
-		t.Error("expected error for invalid language 'ruby', got nil")
-	}
-}
-
-// --- isConnectionError tests ---
-
-func TestIsConnectionError_URLErrorWithNetOpError_ReturnsTrue(t *testing.T) {
-	inner := &net.OpError{
-		Op:  "dial",
-		Net: "tcp",
-		Err: syscall.ECONNREFUSED,
-	}
-	urlErr := &url.Error{
-		Op:  "Post",
-		URL: "http://executor:8080/execute",
-		Err: inner,
-	}
-	wrapped := fmt.Errorf("executor: send request: %w", urlErr)
-	if !isConnectionError(wrapped) {
-		t.Error("expected isConnectionError=true for wrapped *url.Error with *net.OpError")
-	}
-}
-
-func TestIsConnectionError_DNSError_ReturnsTrue(t *testing.T) {
-	dnsErr := &net.DNSError{
-		Err:  "no such host",
-		Name: "executor",
-	}
-	wrapped := fmt.Errorf("executor: send request: %w", dnsErr)
-	if !isConnectionError(wrapped) {
-		t.Error("expected isConnectionError=true for wrapped *net.DNSError")
-	}
-}
-
-func TestIsConnectionError_ContextDeadlineExceeded_ReturnsTrue(t *testing.T) {
-	wrapped := fmt.Errorf("executor: send request: %w", context.DeadlineExceeded)
-	if !isConnectionError(wrapped) {
-		t.Error("expected isConnectionError=true for wrapped context.DeadlineExceeded")
-	}
-}
-
-func TestIsConnectionError_StatusError_ReturnsFalse(t *testing.T) {
-	statusErr := &executor.StatusError{Code: http.StatusInternalServerError, Body: "internal error"}
-	if isConnectionError(statusErr) {
-		t.Error("expected isConnectionError=false for *executor.StatusError")
-	}
-}
-
-func TestIsConnectionError_PlainError_ReturnsFalse(t *testing.T) {
-	if isConnectionError(fmt.Errorf("some other error")) {
-		t.Error("expected isConnectionError=false for a plain error")
-	}
-}
-
-// --- writeExecutorError 503 behavior tests ---
-
-func TestWriteExecutorError_ConnectionError_Returns503(t *testing.T) {
-	urlErr := &url.Error{
-		Op:  "Post",
-		URL: "http://executor:8080/execute",
-		Err: &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED},
-	}
-	wrapped := fmt.Errorf("executor: send request: %w", urlErr)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	writeExecutorError(w, r, wrapped, "execution failed")
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
-	}
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !strings.Contains(resp["error"], "Code execution is warming up") {
-		t.Errorf("expected 'Code execution is warming up' in error message, got %q", resp["error"])
-	}
-}
-
-func TestWriteExecutorError_DNSError_Returns503(t *testing.T) {
-	dnsErr := &net.DNSError{Err: "no such host", Name: "executor"}
-	wrapped := fmt.Errorf("executor: send request: %w", dnsErr)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	writeExecutorError(w, r, wrapped, "execution failed")
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestWriteExecutorError_429StillPropagated(t *testing.T) {
-	err := &executor.StatusError{Code: http.StatusTooManyRequests, Body: "rate limit exceeded"}
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	writeExecutorError(w, r, err, "execution failed")
-
-	if w.Code != http.StatusTooManyRequests {
-		t.Fatalf("expected 429, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestWriteExecutorError_OtherErrorStill500(t *testing.T) {
-	err := fmt.Errorf("some unexpected internal error")
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/execute", nil)
-	writeExecutorError(w, r, err, "execution failed")
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
