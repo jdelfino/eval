@@ -96,10 +96,46 @@ test-integration-realtime-contract:
 # ──────────────────────────────────────────────
 .PHONY: test-e2e test-e2e-auth
 
-test-e2e:
-	./scripts/run-e2e-tests.sh
+# Rebuild Next.js standalone build when frontend source files change.
+# Uses the same stamp-file pattern as .executor-image.
+# $$ escapes shell variables so they're expanded at recipe runtime, not by make.
+FRONTEND_E2E_SRCS := $(shell find frontend/src frontend/public \
+    -type f ! -path '*/node_modules/*' ! -path '*/.next/*' ! -path '*/test-results/*' \
+    2>/dev/null) \
+    $(wildcard frontend/package.json frontend/package-lock.json \
+               frontend/next.config.ts frontend/tsconfig.json \
+               frontend/playwright.config.ts)
 
-test-e2e-auth:
+.next-e2e-build: $(FRONTEND_E2E_SRCS)
+	@# Turbopack cannot follow symlinks outside the project root (worktrees use symlinked node_modules).
+	@if [ -L frontend/node_modules ]; then \
+	  echo "Symlinked node_modules detected — running npm install for Turbopack compatibility..."; \
+	  rm frontend/node_modules; \
+	  (cd frontend && npm install --prefer-offline); \
+	fi
+	cd frontend && \
+	NEXT_PUBLIC_API_URL=/api/v1 \
+	NEXT_PUBLIC_CENTRIFUGO_URL="ws://$${DOCKER_HOST_IP:-localhost}:8000/connection/websocket" \
+	NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
+	NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="$${DOCKER_HOST_IP:-localhost}" \
+	NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
+	NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST="http://$${DOCKER_HOST_IP:-localhost}:9099" \
+	API_PROXY_URL="http://localhost:$${API_PORT:-4100}" \
+	npm run build
+	@touch $@
+
+# Extra Playwright args can be passed after '--':  make test-e2e -- e2e/foo.spec.ts
+# $(MAKECMDGOALS) captures all goals; filter out 'test-e2e' to get the remainder.
+E2E_ARGS := $(filter-out test-e2e,$(MAKECMDGOALS))
+
+test-e2e: .next-e2e-build
+	./scripts/run-e2e-tests.sh $(E2E_ARGS)
+
+# Catch-all so unknown goals (Playwright file paths / -g patterns) don't error.
+%:
+	@:
+
+test-e2e-auth: .next-e2e-build
 	USE_FIREBASE_EMULATOR=1 ./scripts/run-e2e-tests.sh
 
 # ──────────────────────────────────────────────

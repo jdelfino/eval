@@ -107,44 +107,46 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Test: run-e2e-tests.sh prints skip message when standalone exists
-# We use a fake frontend/.next/standalone dir to simulate cache hit
+# Test: run-e2e-tests.sh errors when standalone dir does NOT exist
+# The build is now managed by 'make test-e2e' (.next-e2e-build stamp target),
+# not by the script itself. The script requires standalone to be pre-built.
 # ────────────────────────────────────────────────────────────────────────────
 
 FAKE_REPO="$TMPDIR_ROOT/fake-repo"
-mkdir -p "$FAKE_REPO/frontend/.next/standalone"
 mkdir -p "$FAKE_REPO/scripts"
+# No frontend/.next/standalone — simulate missing build
 
-# Create a minimal stub of run-e2e-tests.sh that only tests the build logic
 STUB_SCRIPT="$FAKE_REPO/scripts/test-build-logic.sh"
 cat > "$STUB_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-if [ -d frontend/.next/standalone ]; then
-  echo "Next.js standalone build exists, skipping build"
-else
-  echo "Building Next.js..."
+if [ ! -d frontend/.next/standalone ]; then
+  echo "ERROR: Next.js standalone build not found. Run 'make test-e2e' instead of the script directly." >&2
+  exit 1
 fi
+echo "Next.js standalone build found, proceeding"
 EOF
 chmod +x "$STUB_SCRIPT"
 
-output=$(cd "$FAKE_REPO" && bash "$STUB_SCRIPT" 2>&1)
-if echo "$output" | grep -q "skipping build"; then
-  echo "PASS: Skip logic outputs 'skipping build' when standalone dir exists"
+output=$(cd "$FAKE_REPO" && bash "$STUB_SCRIPT" 2>&1 || true)
+exit_code=$(cd "$FAKE_REPO" && bash "$STUB_SCRIPT" 2>/dev/null; echo $?) 2>/dev/null || true
+if echo "$output" | grep -q "ERROR.*make test-e2e"; then
+  echo "PASS: Script errors with helpful message when standalone dir is missing"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: Skip logic did not output 'skipping build' when standalone dir exists"
+  echo "FAIL: Script did not error with expected message when standalone dir is missing"
   echo "  Output was: $output"
   FAIL=$((FAIL + 1))
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Test: run-e2e-tests.sh builds when standalone dir does NOT exist
+# Test: run-e2e-tests.sh proceeds when standalone dir exists
 # ────────────────────────────────────────────────────────────────────────────
 
 FAKE_REPO2="$TMPDIR_ROOT/fake-repo2"
+mkdir -p "$FAKE_REPO2/frontend/.next/standalone"
 mkdir -p "$FAKE_REPO2/scripts"
 
 STUB_SCRIPT2="$FAKE_REPO2/scripts/test-build-logic.sh"
@@ -153,20 +155,20 @@ cat > "$STUB_SCRIPT2" <<'EOF'
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
-if [ -d frontend/.next/standalone ]; then
-  echo "Next.js standalone build exists, skipping build"
-else
-  echo "Building Next.js..."
+if [ ! -d frontend/.next/standalone ]; then
+  echo "ERROR: Next.js standalone build not found. Run 'make test-e2e' instead of the script directly." >&2
+  exit 1
 fi
+echo "Next.js standalone build found, proceeding"
 EOF
 chmod +x "$STUB_SCRIPT2"
 
 output2=$(cd "$FAKE_REPO2" && bash "$STUB_SCRIPT2" 2>&1)
-if echo "$output2" | grep -q "Building Next.js"; then
-  echo "PASS: Build logic outputs 'Building Next.js' when standalone dir is absent"
+if echo "$output2" | grep -q "proceeding"; then
+  echo "PASS: Script proceeds when standalone dir exists"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: Build logic did not output 'Building Next.js' when standalone dir is absent"
+  echo "FAIL: Script did not proceed when standalone dir exists"
   echo "  Output was: $output2"
   FAIL=$((FAIL + 1))
 fi

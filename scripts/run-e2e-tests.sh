@@ -3,13 +3,14 @@ set -euo pipefail
 
 # E2E test runner.
 #
+# Requires the Next.js standalone build to already exist — managed by the
+# '.next-e2e-build' Make target which rebuilds automatically when frontend
+# source files change. Always invoke via 'make test-e2e', not directly.
+#
 # Infrastructure (postgres, redis, centrifugo, executor) is shared on fixed
 # ports — started only if not already healthy.
 #
 # Go API runs on a fixed default port (4100) — can be overridden via API_PORT.
-# Using a fixed port makes Next.js builds deterministic (API_PROXY_URL is baked
-# in at build time), enabling cache hits across CI runs.
-#
 # Always uses the Firebase Auth Emulator for real end-to-end auth testing.
 #
 # When running inside a GitHub Actions container job, set DOCKER_HOST_IP to
@@ -52,35 +53,18 @@ SERVER_PID=$(./scripts/ensure-test-api.sh)
 PIDS_TO_KILL+=("$SERVER_PID")
 
 # --- 3. Next.js (production build) ---
+# The standalone build is managed by the 'make test-e2e' dependency graph
+# (.next-e2e-build stamp file). It is always pre-built before this script runs.
+if [ ! -d frontend/.next/standalone ]; then
+  echo "ERROR: Next.js standalone build not found. Run 'make test-e2e' instead of the script directly." >&2
+  exit 1
+fi
+
 # Stop any running Next.js on the port before (re)starting.
 if fuser "${NEXT_PORT}/tcp" >/dev/null 2>&1; then
   echo "Killing previous Next.js on port ${NEXT_PORT}..."
   fuser -k "${NEXT_PORT}/tcp" 2>/dev/null || true
   sleep 1
-fi
-
-# Turbopack (Next.js 16 default) cannot follow symlinks outside the project root.
-# In worktrees, node_modules is symlinked to the main repo to save install time.
-# Replace with a real install so the production build works.
-if [ -L frontend/node_modules ]; then
-  echo "Symlinked node_modules detected — running npm install for Turbopack compatibility..."
-  rm frontend/node_modules
-  (cd frontend && npm install --prefer-offline)
-fi
-
-if [ -d frontend/.next/standalone ]; then
-  echo "Next.js standalone build exists, skipping build"
-else
-  echo "Building Next.js..."
-  (cd frontend && \
-    NEXT_PUBLIC_API_URL=/api/v1 \
-    NEXT_PUBLIC_CENTRIFUGO_URL="ws://${HOST}:8000/connection/websocket" \
-    NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key \
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="${HOST}" \
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-test \
-    NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST="http://${HOST}:9099" \
-    API_PROXY_URL="http://localhost:${API_PORT}" \
-    npm run build)
 fi
 
 echo "Starting Next.js on port ${NEXT_PORT}..."
