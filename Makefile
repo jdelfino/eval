@@ -61,10 +61,14 @@ test-executor:
 lint-executor:
 	cd executor && golangci-lint run ./...
 
-# Rebuild executor image only when source files change
+# Rebuild executor image and restart the container when source files change.
+# The container is restarted here (not just the image rebuilt) so that any
+# currently-running container immediately picks up the new image.  Without the
+# 'up' step, run-e2e-tests.sh would skip the restart because the old container
+# is still healthy.
 EXECUTOR_SOURCES := $(shell find executor/ pkg/ -name '*.go' -o -name '*.policy' -o -name '*.java' -o -name 'Dockerfile' -o -name 'go.mod' -o -name 'go.sum' 2>/dev/null)
 .executor-image: $(EXECUTOR_SOURCES)
-	docker compose build executor
+	docker compose up -d executor --build --wait
 	@touch $@
 
 test-integration-executor: .executor-image
@@ -128,14 +132,14 @@ FRONTEND_E2E_SRCS := $(shell find frontend/src frontend/public \
 # $(MAKECMDGOALS) captures all goals; filter out 'test-e2e' to get the remainder.
 E2E_ARGS := $(filter-out test-e2e,$(MAKECMDGOALS))
 
-test-e2e: .next-e2e-build
+test-e2e: .next-e2e-build .executor-image
 	./scripts/run-e2e-tests.sh $(E2E_ARGS)
 
 # Catch-all so unknown goals (Playwright file paths / -g patterns) don't error.
 %:
 	@:
 
-test-e2e-auth: .next-e2e-build
+test-e2e-auth: .next-e2e-build .executor-image
 	USE_FIREBASE_EMULATOR=1 ./scripts/run-e2e-tests.sh
 
 # ──────────────────────────────────────────────
