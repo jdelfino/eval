@@ -1218,6 +1218,184 @@ func TestExportProblems_RBACForbidden(t *testing.T) {
 	}
 }
 
+// TestExportProblems_PDFFormat verifies that the handler returns a PDF response
+// when format=pdf is specified, with correct content type and headers.
+// This catches: format param not wired, wrong content type, or invalid PDF output.
+func TestExportProblems_PDFFormat(t *testing.T) {
+	p1 := testProblem()
+	solution := "func add(a, b int) int {\n\treturn a + b\n}"
+	p1.Solution = &solution
+	p1.Tags = []string{"go", "math"}
+	p1.Language = "go"
+
+	p2 := testProblem()
+	p2.ID = uuid.MustParse("22222222-3333-4444-5555-666666666666")
+	p2.Title = "Three Sum"
+	p2.Tags = []string{"algorithms"}
+	p2.Language = "python"
+
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			return []store.Problem{*p1, *p2}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export?format=pdf", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify Content-Type is application/pdf
+	if ct := rec.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("expected Content-Type application/pdf, got %q", ct)
+	}
+
+	// Verify Content-Disposition contains .pdf
+	cd := rec.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, ".pdf") {
+		t.Errorf("expected Content-Disposition with attachment and .pdf filename, got %q", cd)
+	}
+
+	// Verify body starts with PDF magic header %PDF-
+	body := rec.Body.Bytes()
+	if len(body) < 5 {
+		t.Fatalf("response body too short: %d bytes", len(body))
+	}
+	pdfMagic := []byte{0x25, 0x50, 0x44, 0x46, 0x2D} // %PDF-
+	if !bytes.Equal(body[:5], pdfMagic) {
+		t.Errorf("expected PDF magic header %%PDF-, got %x", body[:5])
+	}
+}
+
+// TestExportProblems_JSONFormatExplicit verifies that explicitly requesting format=json
+// produces the same JSON response as the existing behavior.
+// This catches regression in the JSON export path when format is explicitly specified.
+func TestExportProblems_JSONFormatExplicit(t *testing.T) {
+	p1 := testProblem()
+	p2 := testProblem()
+	p2.ID = uuid.MustParse("22222222-3333-4444-5555-666666666666")
+	p2.Title = "Three Sum"
+
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, filters store.ProblemFilters) ([]store.Problem, error) {
+			return []store.Problem{*p1, *p2}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export?format=json", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify Content-Type and Content-Disposition headers
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+	cd := rec.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, "problems-export-") || !strings.Contains(cd, ".json") {
+		t.Errorf("expected Content-Disposition with attachment and .json filename, got %q", cd)
+	}
+
+	// Verify envelope structure
+	var envelope map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if _, ok := envelope["exported_at"]; !ok {
+		t.Error("expected exported_at field in envelope")
+	}
+
+	// Verify problems array
+	var problems []map[string]any
+	if err := json.Unmarshal(envelope["problems"], &problems); err != nil {
+		t.Fatalf("decode problems: %v", err)
+	}
+	if len(problems) != 2 {
+		t.Fatalf("expected 2 problems, got %d", len(problems))
+	}
+}
+
+// TestExportProblems_DefaultFormatIsJSON verifies that omitting the format parameter
+// defaults to JSON export, maintaining backward compatibility.
+func TestExportProblems_DefaultFormatIsJSON(t *testing.T) {
+	p := testProblem()
+
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
+			return []store.Problem{*p}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export", nil) // No format param
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify it's JSON, not PDF
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected default Content-Type application/json, got %q", ct)
+	}
+
+	// Verify it's a valid JSON envelope
+	var envelope map[string]json.RawMessage
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode envelope: %v (this should be JSON by default)", err)
+	}
+}
+
+// TestExportProblems_InvalidFormat verifies that an invalid format parameter
+// returns a 400 error with a helpful message.
+func TestExportProblems_InvalidFormat(t *testing.T) {
+	repo := &mockProblemRepo{
+		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
+			return []store.Problem{*testProblem()}, nil
+		},
+	}
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodGet, "/export?format=xml", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Export(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify error message mentions format validation
+	body := rec.Body.String()
+	if !strings.Contains(body, "invalid format") && !strings.Contains(body, "format") {
+		t.Errorf("expected error message to mention format validation, got %q", body)
+	}
+}
+
 // setupGenerateSolutionHandler creates an http.Handler for GenerateSolution tests.
 func setupGenerateSolutionHandler(aiClient ai.Client) http.Handler {
 	h := NewGenerateSolutionHandler(aiClient)
