@@ -244,7 +244,7 @@ export default function CodeEditor({
   // Use local state for API execution, or passed props for WebSocket execution
   // Derive first result from TestResponse for display and decoration logic.
   const firstResult = execution_result?.results?.[0] ?? null;
-  const resultIsError = firstResult ? (firstResult.status === 'error') : false;
+  const resultIsError = firstResult ? (firstResult.status === 'error' || firstResult.status === 'failed') : false;
   const resultStderr = firstResult?.stderr ?? '';
 
   // Compute whether error decorations should be shown

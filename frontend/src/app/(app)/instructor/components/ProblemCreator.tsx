@@ -472,8 +472,8 @@ export default function ProblemCreator({
               stdin: execution_settings.stdin,
               random_seed: execution_settings.random_seed,
               attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch(() => {
-              // On error, leave executionResult null
+            }).then(setExecutionResult).catch((err: any) => {
+              setError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}

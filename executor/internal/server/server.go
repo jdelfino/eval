@@ -116,6 +116,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, reg prometheus.Reg
 			DefaultTimeoutMs:        cfg.DefaultTimeoutMS,
 			MaxCodeBytes:            cfg.MaxCodeBytes,
 			MaxConcurrentExecutions: cfg.MaxConcurrentExecutions,
+			MaxStdinBytes:           cfg.MaxStdinBytes,
+			MaxFiles:                cfg.MaxFiles,
+			MaxFileBytes:            cfg.MaxFileBytes,
 		},
 	)
 	// Defense-in-depth global rate limit. Per-student limits are enforced

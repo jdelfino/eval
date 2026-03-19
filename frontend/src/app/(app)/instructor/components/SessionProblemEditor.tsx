@@ -59,6 +59,7 @@ export default function SessionProblemEditor({
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
   const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded)
   useEffect(() => {
@@ -211,6 +212,12 @@ export default function SessionProblemEditor({
         </div>
       </div>
 
+      {executionError && (
+        <div style={{ flexShrink: 0, padding: '0.5rem 1rem', backgroundColor: '#f8d7da', borderBottom: '1px solid #f5c2c7', color: '#842029', fontSize: '0.875rem' }}>
+          {executionError}
+        </div>
+      )}
+
       {/* Tab bar for Starter Code / Solution */}
       <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
         <Tabs.List>
@@ -229,12 +236,13 @@ export default function SessionProblemEditor({
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
             setExecutionResult(null);
+            setExecutionError(null);
             executeCode(codeToRun, language, {
               stdin: execution_settings.stdin,
               random_seed: execution_settings.random_seed,
               attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch(() => {
-              // On error, leave executionResult null
+            }).then(setExecutionResult).catch((err: any) => {
+              setExecutionError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}

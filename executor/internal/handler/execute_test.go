@@ -28,6 +28,9 @@ func defaultConfig() handler.ExecuteHandlerConfig {
 		MaxOutputBytes:   1048576,
 		DefaultTimeoutMs: 10000,
 		MaxCodeBytes:     102400,
+		MaxStdinBytes:    1048576,
+		MaxFiles:         5,
+		MaxFileBytes:     10240,
 	}
 }
 
@@ -667,5 +670,85 @@ func TestExecute_Cases_SandboxTimeout(t *testing.T) {
 	}
 	if resp.Results[0].Status != "error" {
 		t.Errorf("expected status 'error' for timed-out case, got %q", resp.Results[0].Status)
+	}
+}
+
+// TestExecute_Cases_TimeoutStopsLoop verifies that once a case times out, subsequent
+// cases are not executed. Catches: missing break after anyTimedOut = true.
+func TestExecute_Cases_TimeoutStopsLoop(t *testing.T) {
+	callCount := 0
+	timeoutThenSuccessRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+		callCount++
+		if callCount == 1 {
+			return &sandbox.Result{TimedOut: true, ExitCode: 137, DurationMs: 10000}, nil
+		}
+		return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 10}, nil
+	}
+	h := newHandler(timeoutThenSuccessRunner, metrics.NewNoop(), defaultConfig())
+	body := `{"code":"while True: pass","language":"python","cases":[` +
+		`{"name":"c1","type":"io","input":""},` +
+		`{"name":"c2","type":"io","input":""}` +
+		`]}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if callCount != 1 {
+		t.Errorf("expected sandbox called exactly once (break on timeout), got %d calls", callCount)
+	}
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Errorf("expected 1 result after timeout break, got %d", len(resp.Results))
+	}
+}
+
+// --- Per-case input/file size validation tests ---
+
+// TestExecute_Cases_StdinTooLarge verifies that per-case stdin exceeding MaxStdinBytes
+// is rejected with 400. Catches: missing per-case stdin size validation.
+func TestExecute_Cases_StdinTooLarge(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MaxStdinBytes = 5
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 10240
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
+	body := `{"code":"print(input())","language":"python","cases":[{"name":"c1","type":"io","input":"toolong"}]}`
+	w := doRequest(h, body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for stdin exceeding MaxStdinBytes, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestExecute_Cases_TooManyFiles verifies that per-case file count exceeding MaxFiles
+// is rejected with 400. Catches: missing per-case file count validation.
+func TestExecute_Cases_TooManyFiles(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MaxStdinBytes = 1048576
+	cfg.MaxFiles = 1
+	cfg.MaxFileBytes = 10240
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
+	body := `{"code":"x=1","language":"python","cases":[{"name":"c1","type":"io","input":"","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}]}`
+	w := doRequest(h, body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for too many files, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestExecute_Cases_FileTooLarge verifies that a per-case file exceeding MaxFileBytes
+// is rejected with 400. Catches: missing per-case file size validation.
+func TestExecute_Cases_FileTooLarge(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.MaxStdinBytes = 1048576
+	cfg.MaxFiles = 5
+	cfg.MaxFileBytes = 5
+	h := newHandler(successRunner, metrics.NewNoop(), cfg)
+	body := `{"code":"x=1","language":"python","cases":[{"name":"c1","type":"io","input":"","files":[{"name":"data.txt","content":"toolong"}]}]}`
+	w := doRequest(h, body)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for file exceeding MaxFileBytes, got %d: %s", w.Code, w.Body.String())
 	}
 }

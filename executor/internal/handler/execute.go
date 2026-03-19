@@ -34,6 +34,9 @@ type ExecuteHandlerConfig struct {
 	DefaultTimeoutMs        int
 	MaxCodeBytes            int
 	MaxConcurrentExecutions int
+	MaxStdinBytes           int
+	MaxFiles                int
+	MaxFileBytes            int
 }
 
 // ExecuteHandler handles code execution requests.
@@ -214,6 +217,8 @@ func (h *ExecuteHandler) runCases(
 				Stderr: "execution timed out",
 				TimeMs: result.DurationMs,
 			}
+			results = append(results, caseResult)
+			break
 		} else if result.ExitCode != 0 {
 			caseResult = executorapi.CaseResult{
 				Name:   c.Name,
@@ -263,6 +268,19 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	}
 	if len(req.Cases) == 0 {
 		return "invalid_request", "cases must be a non-empty list"
+	}
+	for i, c := range req.Cases {
+		if h.cfg.MaxStdinBytes > 0 && len(c.Input) > h.cfg.MaxStdinBytes {
+			return "stdin_too_large", fmt.Sprintf("case %d: stdin exceeds maximum size of %d bytes", i, h.cfg.MaxStdinBytes)
+		}
+		if h.cfg.MaxFiles > 0 && len(c.Files) > h.cfg.MaxFiles {
+			return "too_many_files", fmt.Sprintf("case %d: too many files: maximum is %d", i, h.cfg.MaxFiles)
+		}
+		for _, f := range c.Files {
+			if h.cfg.MaxFileBytes > 0 && len(f.Content) > h.cfg.MaxFileBytes {
+				return "file_too_large", fmt.Sprintf("case %d: file %q exceeds maximum size of %d bytes", i, f.Name, h.cfg.MaxFileBytes)
+			}
+		}
 	}
 	return "", ""
 }
