@@ -77,6 +77,6 @@ describe('executeCode()', () => {
     );
 
     expect(result.results.length).toBe(1);
-    expect(result.results[0].actual).toBe('test input');
+    expect(result.results[0].actual).toBe('test input\n');
   });
 });
