@@ -307,7 +307,7 @@ func (h *ProblemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Export handles GET /api/v1/problems/export — returns a JSON file download of problems.
+// Export handles GET /api/v1/problems/export — returns a JSON or PDF file download of problems.
 func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
 	filters, ok := parseFilters(w, r)
 	if !ok {
@@ -343,23 +343,48 @@ func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
 		exportProblems = []ExportProblem{}
 	}
 
-	envelope := ProblemsExport{
-		ExportedAt: time.Now().UTC(),
-		Problems:   exportProblems,
+	// Read and validate format parameter
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "json"
 	}
-
-	// Set headers for file download
-	filename := fmt.Sprintf("problems-export-%s.json", time.Now().UTC().Format("2006-01-02"))
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-
-	// Marshal to bytes first so errors are caught before writing to the response
-	data, err := json.MarshalIndent(envelope, "", "  ")
-	if err != nil {
-		httputil.WriteInternalError(w, r, err, "internal error")
+	if format != "json" && format != "pdf" {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid format: must be 'json' or 'pdf'")
 		return
 	}
-	data = append(data, '\n')
-	_, _ = w.Write(data)
+
+	now := time.Now().UTC()
+
+	switch format {
+	case "pdf":
+		data, err := renderProblemsPDF(exportProblems, now)
+		if err != nil {
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+		filename := fmt.Sprintf("problems-export-%s.pdf", now.Format("2006-01-02"))
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		_, _ = w.Write(data)
+	default: // json
+		envelope := ProblemsExport{
+			ExportedAt: now,
+			Problems:   exportProblems,
+		}
+
+		// Set headers for file download
+		filename := fmt.Sprintf("problems-export-%s.json", now.Format("2006-01-02"))
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+		// Marshal to bytes first so errors are caught before writing to the response
+		data, err := json.MarshalIndent(envelope, "", "  ")
+		if err != nil {
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+		data = append(data, '\n')
+		_, _ = w.Write(data)
+	}
 }
 
