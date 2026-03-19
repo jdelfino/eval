@@ -129,7 +129,10 @@ BEADS_IDS: <comma-separated task IDs whose changes are on the source branch>
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
-Check the "Concerns" section — file follow-up issues if needed.
+Triage the "Concerns" section:
+- **Bugs or broken behavior introduced by this task** — must be fixed before the PR ships. File an issue, spawn an implementer, and fix it on the feature branch.
+- **Low-priority, non-behavioral issues** (naming nits, future optimization ideas, minor code smells) — file as follow-up issues.
+- **Anything ambiguous** — ask the user whether to fix now or defer.
 
 **On rebase subagent FAILURE:**
 - Spawn a new implementer in a fresh worktree to resolve the conflict
@@ -253,6 +256,7 @@ EOF
 - Starting dependent task before blocker is closed
 - Creating PR before running specialized reviews
 - Creating PR with failing tests
+- Shipping known bugs as follow-up issues — bugs introduced by the current work must be fixed before the PR ships
 - Merging PRs (that's `/merge`'s job)
 - Watching CI (that's `/merge`'s job)
 - Cleaning up worktrees before merge (that's `/merge`'s job)
