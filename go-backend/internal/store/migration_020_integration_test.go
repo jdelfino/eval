@@ -175,7 +175,7 @@ func TestIntegration_Migration020_StoreOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateProblem failed: %v", err)
 		}
-		if string(p.TestCases) != string(testCases) {
+		if !jsonEqual(t, p.TestCases, testCases) {
 			t.Errorf("expected test_cases %s, got %s", testCases, p.TestCases)
 		}
 	})
@@ -242,7 +242,7 @@ func TestIntegration_Migration020_StoreOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("UpdateSession failed: %v", err)
 		}
-		if string(updated.FeaturedTestCases) != string(testCases) {
+		if !jsonEqual(t, updated.FeaturedTestCases, testCases) {
 			t.Errorf("expected featured_test_cases %s, got %s", testCases, updated.FeaturedTestCases)
 		}
 	})

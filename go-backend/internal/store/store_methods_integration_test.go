@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,22 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
+
+// jsonEqual compares two json.RawMessage values structurally (ignoring whitespace
+// and key ordering differences introduced by PostgreSQL JSONB normalization).
+func jsonEqual(t *testing.T, actual, expected json.RawMessage) bool {
+	t.Helper()
+	var a, e interface{}
+	if err := json.Unmarshal(actual, &a); err != nil {
+		t.Errorf("jsonEqual: failed to unmarshal actual %s: %v", actual, err)
+		return false
+	}
+	if err := json.Unmarshal(expected, &e); err != nil {
+		t.Errorf("jsonEqual: failed to unmarshal expected %s: %v", expected, err)
+		return false
+	}
+	return reflect.DeepEqual(a, e)
+}
 
 // ensureRolesOnce guards the one-time EnsureAppRole call so that parallel
 // tests don't race on PostgreSQL catalog GRANT statements.

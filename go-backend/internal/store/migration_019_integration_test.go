@@ -87,7 +87,7 @@ func TestIntegration_Migration019_StudentWorkTestCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("UpdateStudentWork failed: %v", err)
 		}
-		if string(updated.TestCases) != string(testCases) {
+		if !jsonEqual(t, updated.TestCases, testCases) {
 			t.Errorf("expected test_cases %s, got %s", testCases, updated.TestCases)
 		}
 	})
@@ -113,7 +113,7 @@ func TestIntegration_Migration019_StudentWorkTestCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetStudentWork failed: %v", err)
 		}
-		if string(got.TestCases) != string(testCases) {
+		if !jsonEqual(t, got.TestCases, testCases) {
 			t.Errorf("GetStudentWork: expected test_cases %s, got %s", testCases, got.TestCases)
 		}
 	})

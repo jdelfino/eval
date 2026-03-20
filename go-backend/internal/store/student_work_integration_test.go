@@ -151,7 +151,7 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 		if work.Code != newCode {
 			t.Errorf("expected code %s, got %s", newCode, work.Code)
 		}
-		if string(work.TestCases) != string(newTestCases) {
+		if !jsonEqual(t, work.TestCases, newTestCases) {
 			t.Errorf("expected test_cases %s, got %s", newTestCases, work.TestCases)
 		}
 	})
