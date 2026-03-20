@@ -90,6 +90,29 @@ ALTER TABLE student_work DROP COLUMN IF EXISTS execution_settings;
 
 -- ============================================================================
 -- STEP 7: RENAME sessions.featured_execution_settings -> featured_test_cases
+--
+-- Uses a DO block for idempotency: the ensure-test-postgres.sh dev script
+-- re-applies all migrations on each run. If migration 012 re-adds
+-- featured_execution_settings after this migration has already renamed it,
+-- we handle both the "rename needed" and "both exist, drop old" cases.
 -- ============================================================================
 
-ALTER TABLE sessions RENAME COLUMN featured_execution_settings TO featured_test_cases;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'sessions' AND column_name = 'featured_execution_settings'
+    ) THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'sessions' AND column_name = 'featured_test_cases'
+        ) THEN
+            -- Normal case: rename the column.
+            ALTER TABLE sessions RENAME COLUMN featured_execution_settings TO featured_test_cases;
+        ELSE
+            -- Both columns exist (migration re-ran after 012 re-added the old name).
+            -- Drop the old column; featured_test_cases already has the data.
+            ALTER TABLE sessions DROP COLUMN featured_execution_settings;
+        END IF;
+    END IF;
+END $$;
