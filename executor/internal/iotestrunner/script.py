@@ -139,15 +139,11 @@ def run_test(code_path, test, language):
                 result["stderr"] = stderr_output
             return result
 
-        # Normalize: strip trailing whitespace from each line for comparison,
-        # and strip trailing newlines from the overall output.
-        actual_normalized = actual_stdout.rstrip("\n")
-
         result = {
             "name": name,
             "type": "io",
             "input": stdin_input,
-            "actual": actual_normalized,
+            "actual": actual_stdout,
             "time_ms": elapsed_ms,
         }
 
@@ -155,13 +151,15 @@ def run_test(code_path, test, language):
             # Run-only: code ran without error => "run" (no assertion made).
             result["status"] = "run"
         else:
+            # Normalize trailing newlines for comparison only; preserve originals in output.
+            actual_normalized = actual_stdout.rstrip("\n")
             expected_normalized = expected_output.rstrip("\n")
             if matches(actual_normalized, expected_normalized, match_type):
                 result["status"] = "passed"
-                result["expected"] = expected_normalized
+                result["expected"] = expected_output
             else:
                 result["status"] = "failed"
-                result["expected"] = expected_normalized
+                result["expected"] = expected_output
 
         if stderr_output:
             result["stderr"] = stderr_output
