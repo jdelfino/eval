@@ -4,6 +4,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,16 @@ import (
 
 // maxBodyBytes is the maximum allowed request body size (1 MB).
 const maxBodyBytes = 1 * 1024 * 1024
+
+// reservedFileError is returned when a student-submitted file name collides
+// with a reserved sandbox file name (e.g. solution.py, io_tests.json).
+type reservedFileError struct {
+	filename string
+}
+
+func (e *reservedFileError) Error() string {
+	return fmt.Sprintf("file name %q is reserved", e.filename)
+}
 
 // maxTimeoutMs is the hard cap on timeout_ms.
 const maxTimeoutMs = 30000
@@ -137,6 +148,12 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.metrics.ExecutionDuration.Observe(duration.Seconds())
 
 	if sandboxErr != nil {
+		var rfErr *reservedFileError
+		if errors.As(sandboxErr, &rfErr) {
+			h.metrics.ValidationErrorsTotal.WithLabelValues("reserved_filename").Inc()
+			httputil.WriteError(w, http.StatusBadRequest, rfErr.Error())
+			return
+		}
 		h.logger.Error("sandbox execution failed", "error", sandboxErr, "duration_ms", duration.Milliseconds())
 		h.metrics.ExecutionsTotal.WithLabelValues("error").Inc()
 		httputil.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("sandbox setup failed: %v", sandboxErr))
@@ -224,14 +241,18 @@ func (h *ExecuteHandler) runCases(
 		{Name: codeFilename, Content: req.Code},
 		{Name: "io_tests.json", Content: string(testsJSON)},
 	}
-	// Collect unique extra files from all cases (first occurrence wins on name conflict).
+	// Collect unique extra files from all cases.
+	// If a case file name collides with a reserved sandbox file name, return an
+	// error so the caller can respond with HTTP 400 rather than silently dropping
+	// the file and producing confusing failures.
 	seen := map[string]bool{codeFilename: true, "io_tests.json": true}
 	for _, c := range req.Cases {
-		for _, f := range c.Files {
-			if !seen[f.Name] {
-				files = append(files, sandbox.File{Name: f.Name, Content: f.Content})
-				seen[f.Name] = true
+		for i := range c.Files {
+			if seen[c.Files[i].Name] {
+				return nil, false, &reservedFileError{filename: c.Files[i].Name}
 			}
+			files = append(files, sandbox.File{Name: c.Files[i].Name, Content: c.Files[i].Content})
+			seen[c.Files[i].Name] = true
 		}
 	}
 
