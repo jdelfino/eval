@@ -8,6 +8,7 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
+import type { TestResponse } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
 import { warmExecutor, executeCode } from '@/lib/api/execute';
@@ -51,7 +52,7 @@ function StudentPage() {
   const [activeSessions, setActiveSessions] = useState<Session[] | null>(null);
 
   // Execution state
-  const [execution_result, setExecutionResult] = useState<any>(null);
+  const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // True when executor returned 503 (cold-starting) — shown as a distinct warming-up banner

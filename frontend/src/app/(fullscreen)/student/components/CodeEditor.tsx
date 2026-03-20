@@ -10,7 +10,7 @@ import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hoo
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { ExecutionResult, SessionPublicProblem } from '@/types/api';
+import type { TestResponse, SessionPublicProblem } from '@/types/api';
 import { parseErrorLineNumber } from '@/lib/parse-error-line';
 
 interface CodeEditorProps {
@@ -25,7 +25,7 @@ interface CodeEditorProps {
   attached_files?: Array<{ name: string; content: string }>;
   onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
   readOnly?: boolean;
-  execution_result?: ExecutionResult | null;
+  execution_result?: TestResponse | null;
   title?: string;
   showRunButton?: boolean;
   problem?: Problem | SessionPublicProblem | null;
@@ -242,20 +242,25 @@ export default function CodeEditor({
   };
 
   // Use local state for API execution, or passed props for WebSocket execution
+  // Derive first result from TestResponse for display and decoration logic.
+  const firstResult = execution_result?.results?.[0] ?? null;
+  const resultIsError = firstResult ? (firstResult.status === 'error' || firstResult.status === 'failed') : false;
+  const resultStderr = firstResult?.stderr ?? '';
+
   // Compute whether error decorations should be shown
   const hasErrorDecoration =
     !debuggerHook?.hasTrace &&
-    !!execution_result &&
-    !execution_result.success &&
-    !!execution_result.error &&
-    parseErrorLineNumber(execution_result.error) !== null;
+    !!firstResult &&
+    resultIsError &&
+    !!resultStderr &&
+    parseErrorLineNumber(resultStderr) !== null;
 
   // Auto-grow output section when results appear (up to 40%)
   // Skip auto-grow for right-positioned output to avoid jarring width changes
   useEffect(() => {
     if (outputPosition === 'right') return;
 
-    if (execution_result && outputResizeRef.current) {
+    if (firstResult && outputResizeRef.current) {
       const container = outputResizeRef.current.parentElement;
       if (!container) return;
 
@@ -263,22 +268,22 @@ export default function CodeEditor({
       const maxHeight = containerHeight * 0.8;
 
       // Estimate needed height based on content
-      const hasOutput = execution_result.output && execution_result.output.length > 0;
-      const hasError = execution_result.error && execution_result.error.length > 0;
+      const hasOutput = firstResult.actual && firstResult.actual.length > 0;
+      const hasError = firstResult.stderr && firstResult.stderr.length > 0;
 
       let targetHeight = 150; // Minimum
       if (hasOutput || hasError) {
         // Grow to accommodate content, up to 80%
-        const contentLines = (execution_result.output || execution_result.error || '').split('\n').length;
+        const contentLines = (firstResult.actual || firstResult.stderr || '').split('\n').length;
         targetHeight = Math.min(150 + (contentLines * 20), maxHeight);
       }
 
       setOutputHeight(Math.min(targetHeight, maxHeight));
-    } else if (!execution_result) {
+    } else if (!firstResult) {
       // Reset to initial size when no results
       setOutputHeight(150);
     }
-  }, [execution_result, outputPosition]);
+  }, [firstResult, outputPosition]);
 
   // Initialize stdin with example input if provided
   useEffect(() => {
@@ -341,11 +346,11 @@ export default function CodeEditor({
     let errorLine: number | null = null;
     if (
       !debuggerHook?.hasTrace &&
-      execution_result &&
-      !execution_result.success &&
-      execution_result.error
+      firstResult &&
+      resultIsError &&
+      resultStderr
     ) {
-      errorLine = parseErrorLineNumber(execution_result.error);
+      errorLine = parseErrorLineNumber(resultStderr);
     }
 
     if (errorLine !== null) {
@@ -371,7 +376,7 @@ export default function CodeEditor({
       const newDecorations = editor.deltaDecorations(errorDecorationsRef.current, []);
       errorDecorationsRef.current = newDecorations;
     }
-  }, [execution_result, debuggerHook?.hasTrace]);
+  }, [firstResult, resultIsError, resultStderr, debuggerHook?.hasTrace]);
 
   // Cleanup __TEST_EDITORS on unmount
   useEffect(() => {
@@ -1136,44 +1141,42 @@ export default function CodeEditor({
                   💡 Step through your code to see how output is generated. Variables and call stack are in the sidebar.
                 </div>
               </div>
-            ) : execution_result ? (
+            ) : firstResult ? (
               /* Show normal output when not debugging */
-              <div className={`p-4 h-full ${
-                execution_result.success ? 'bg-gray-900' : 'bg-gray-900'
-              }`} style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
+              <div className="p-4 h-full bg-gray-900" style={outputFontSize ? { fontSize: outputFontSize } : undefined}>
                 <div className="flex justify-between items-center mb-2">
                   <span className={`font-bold ${
-                    execution_result.success ? 'text-green-400' : 'text-red-400'
+                    !resultIsError ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {execution_result.success ? '✓ Success' : '✗ Error'}
+                    {!resultIsError ? '✓ Success' : '✗ Error'}
                   </span>
                   <span className={`${outputTextSm} ${
-                    execution_result.success ? 'text-green-300' : 'text-red-300'
+                    !resultIsError ? 'text-green-300' : 'text-red-300'
                   }`}>
-                    Execution time: {execution_result.execution_time_ms}ms
+                    Execution time: {firstResult.time_ms}ms
                   </span>
                 </div>
 
-                {execution_result.output && (
+                {firstResult.actual && (
                   <div className="mt-2">
                     <div className={`font-bold ${outputTextSm} ${
-                      execution_result.success ? 'text-green-300' : 'text-red-300'
+                      !resultIsError ? 'text-green-300' : 'text-red-300'
                     }`}>
                       Output:
                     </div>
                     <pre className={`bg-gray-800 text-gray-200 p-2 rounded border border-gray-700 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words`}>
-                      {execution_result.output}
+                      {firstResult.actual}
                     </pre>
                   </div>
                 )}
 
-                {execution_result.error && (
+                {firstResult.stderr && (
                   <div className="mt-2">
                     <div className={`font-bold ${outputTextSm} text-red-400`}>
                       Error:
                     </div>
                     <pre className={`bg-gray-800 p-2 rounded border border-red-900 overflow-x-auto ${outputTextSm} font-mono mt-1 whitespace-pre-wrap break-words text-red-300`}>
-                      {execution_result.error}
+                      {firstResult.stderr}
                     </pre>
                   </div>
                 )}

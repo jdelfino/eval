@@ -5,8 +5,9 @@
  * Requires the executor service to be running. The contract test CI workflow
  * builds and starts the executor Docker container alongside the Go API.
  *
- * The backend returns {success, output?, error?, execution_time_ms, stdin?}
- * with omitempty on output/error/stdin.
+ * Contract verified: executeCode() sends Cases[] to POST /execute and receives
+ * {results[], summary} in response. Any mismatch between executor/Go API/frontend
+ * types would cause these tests to fail.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { executeCode, warmExecutor } from '@/lib/api/execute';
@@ -21,33 +22,39 @@ describe('executeCode()', () => {
     resetAuthProvider();
   });
 
-  it('returns ExecutionResult with correct snake_case shape', async () => {
+  it('returns Cases[] response shape with results and summary', async () => {
+    /**
+     * Verifies that executeCode() returns {results[], summary} — not the old
+     * {success, output, error, execution_time_ms} shape. If any layer of the
+     * stack (executor, Go API, frontend) still uses the old flat format, this
+     * test catches it.
+     */
     const result = await executeCode('print("hello")', 'python3');
 
-    // Validate required fields
-    expect(typeof result.success).toBe('boolean');
-    expect(typeof result.execution_time_ms).toBe('number');
+    // Must have results array and summary object
+    expect(Array.isArray(result.results)).toBe(true);
+    expect(result.results.length).toBe(1);
+    expect(typeof result.summary).toBe('object');
 
-    // Verify code actually executed successfully (not just shape validation)
-    expect(result.success).toBe(true);
-    expect(result.output).toBe('hello\n');
+    // results[0] must have the correct shape
+    const r = result.results[0];
+    expect(typeof r.name).toBe('string');
+    expect(typeof r.status).toBe('string');
+    expect(typeof r.actual).toBe('string');
+    expect(typeof r.time_ms).toBe('number');
 
-    // output and error use omitempty — only present when non-empty
-    const raw = result as unknown as Record<string, unknown>;
-    if ('output' in raw) {
-      expect(typeof raw.output).toBe('string');
-    }
-    if ('error' in raw) {
-      expect(typeof raw.error).toBe('string');
-    }
+    // Free-run case: status should be 'run'
+    expect(r.status).toBe('run');
+    expect(r.actual).toBe('hello\n');
 
-    // stdin is optional in the response
-    if ('stdin' in raw && raw.stdin !== undefined) {
-      expect(typeof raw.stdin).toBe('string');
-    }
+    // Summary counts
+    expect(result.summary.total).toBe(1);
+    expect(result.summary.run).toBe(1);
 
     // No PascalCase leaks
-    expectSnakeCaseKeys(result, 'ExecutionResult');
+    expectSnakeCaseKeys(result, 'TestResponse');
+    expectSnakeCaseKeys(result.results[0], 'CaseResult');
+    expectSnakeCaseKeys(result.summary, 'CaseSummary');
   });
 
   it('warmExecutor() calls POST /executor/warm without error', async () => {
@@ -57,20 +64,19 @@ describe('executeCode()', () => {
     await expect(warmExecutor()).resolves.toBeUndefined();
   });
 
-  it('passes stdin option through to executor', async () => {
+  it('passes input through to executor via cases[].input', async () => {
+    /**
+     * Verifies that case.input is forwarded as stdin to the sandbox. If
+     * CaseDef.Input is not mapped to sandbox Stdin in the executor handler,
+     * the program would receive empty stdin and produce wrong output.
+     */
     const result = await executeCode(
       'import sys; print(sys.stdin.read().strip())',
       'python3',
-      { stdin: 'contract-test-input' }
+      { cases: [{ name: 'run', input: 'test input', match_type: 'exact' }] }
     );
 
-    expect(typeof result.success).toBe('boolean');
-    expect(typeof result.execution_time_ms).toBe('number');
-
-    // output uses omitempty — only present when non-empty
-    const raw = result as unknown as Record<string, unknown>;
-    if ('output' in raw && raw.output) {
-      expect(typeof raw.output).toBe('string');
-    }
+    expect(result.results.length).toBe(1);
+    expect(result.results[0].actual).toBe('test input\n');
   });
 });

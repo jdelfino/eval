@@ -14,7 +14,7 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Problem, ExecutionSettings } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
-import { Student, RealtimeStudent, ExecutionResult } from '../types';
+import { Student, RealtimeStudent, TestResponse } from '../types';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -63,7 +63,7 @@ interface SessionStudentPaneProps {
   /** Callback to view student history */
   onViewHistory?: (studentId: string, studentName: string) => void;
   /** Callback to execute student code */
-  onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<ExecutionResult | undefined>;
+  onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<TestResponse | undefined>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -96,7 +96,7 @@ export function SessionStudentPane({
   // Local state for student selection and code
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentCode, setSelectedStudentCode] = useState<string>('');
-  const [execution_result, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
   const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // Analysis options state

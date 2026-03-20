@@ -73,7 +73,7 @@ function PublicViewContent() {
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
 
   const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
     const language = (state?.problem as any)?.language || 'python';
@@ -85,13 +85,8 @@ function PublicViewContent() {
     setExecutionResult(null);
     executeCode(codeToRun, language, options)
       .then(setExecutionResult)
-      .catch((err) => {
-        setExecutionResult({
-          success: false,
-          output: '',
-          error: err.message || 'Execution failed',
-          execution_time_ms: 0,
-        });
+      .catch(() => {
+        // On error, leave executionResult null — the error banner handles display
       })
       .finally(() => setIsRunning(false));
   };

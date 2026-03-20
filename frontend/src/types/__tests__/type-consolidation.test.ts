@@ -1,27 +1,40 @@
 /**
  * Tests verifying type consolidation:
- * - ExecutionResult is only exported from api.ts (no local copies)
+ * - TestResponse (cases[] protocol) is only exported from api.ts (no local copies)
  * - instructor/types.ts re-exports from canonical sources
  */
 
-// Task PLAT-uum.46: ExecutionResult should be importable from api.ts
-import type { ExecutionResult } from '../api';
+// Task PLAT-uum.46 (updated): TestResponse/CaseResult/CaseSummary should be importable from api.ts
+import type { TestResponse, CaseResult, CaseSummary } from '../api';
 
 // Task PLAT-uum.49: instructor types should re-export from canonical sources
 import type { ClassInfo, ClassWithSections, ProblemSummary, Student as InstructorStudent, RealtimeStudent } from '../../app/(app)/instructor/types';
 import type { ExecutionSettings } from '../problem';
 
-describe('ExecutionResult consolidation (PLAT-uum.46)', () => {
-  it('ExecutionResult from api.ts has all required fields including stdin', () => {
-    const result: ExecutionResult = {
-      success: true,
-      output: 'hello',
-      error: '',
-      execution_time_ms: 42,
-      stdin: 'input',
+describe('TestResponse consolidation (cases[] protocol)', () => {
+  it('TestResponse from api.ts has results[] and summary', () => {
+    const caseResult: CaseResult = {
+      name: 'run',
+      type: 'io',
+      status: 'run',
+      input: '',
+      actual: 'hello\n',
+      time_ms: 42,
     };
-    expect(result.success).toBe(true);
-    expect(result.stdin).toBe('input');
+    const summary: CaseSummary = {
+      total: 1,
+      passed: 0,
+      failed: 0,
+      errors: 0,
+      run: 1,
+      time_ms: 42,
+    };
+    const result: TestResponse = {
+      results: [caseResult],
+      summary,
+    };
+    expect(result.results[0].actual).toBe('hello\n');
+    expect(result.summary.total).toBe(1);
   });
 });
 

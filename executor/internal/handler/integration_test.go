@@ -76,156 +76,171 @@ func executeRequest(t *testing.T, baseURL string, req executorapi.ExecuteRequest
 	return result
 }
 
+// firstResult returns the first CaseResult from a response, or fails the test.
+func firstResult(t *testing.T, resp executorapi.ExecuteResponse) executorapi.CaseResult {
+	t.Helper()
+	if len(resp.Results) == 0 {
+		t.Fatal("expected at least one result in response")
+	}
+	return resp.Results[0]
+}
+
+// singleCase builds an ExecuteRequest with a single I/O case.
+func singleCase(code, language, input string, files []executorapi.File, randomSeed *int, timeoutMs *int) executorapi.ExecuteRequest {
+	c := executorapi.CaseDef{
+		Name:  "run",
+		Type:  "io",
+		Input: input,
+	}
+	if len(files) > 0 {
+		c.Files = files
+	}
+	if randomSeed != nil {
+		c.RandomSeed = randomSeed
+	}
+	req := executorapi.ExecuteRequest{
+		Code:     code,
+		Language: language,
+		Cases:    []executorapi.CaseDef{c},
+	}
+	if timeoutMs != nil {
+		req.TimeoutMs = timeoutMs
+	}
+	return req
+}
+
 func intPtr(n int) *int { return &n }
 
 func TestIntegration_HelloWorld(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     `print("hello")`,
-		Language: "python",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	resp := executeRequest(t, u, singleCase(`print("hello")`, "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	if strings.TrimSpace(resp.Output) != "hello" {
-		t.Errorf("expected 'hello', got %q", resp.Output)
+	if strings.TrimSpace(r.Actual) != "hello" {
+		t.Errorf("expected 'hello', got %q", r.Actual)
 	}
 }
 
 func TestIntegration_Stdin(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     "name = input()\nprint(f'hi {name}')",
-		Stdin:    "Alice\n",
-		Language: "python",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	resp := executeRequest(t, u, singleCase("name = input()\nprint(f'hi {name}')", "python", "Alice\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
 	// Input echo preamble causes input() values to appear in stdout.
 	want := "Alice\nhi Alice"
-	if strings.TrimSpace(resp.Output) != want {
-		t.Errorf("expected %q, got %q", want, resp.Output)
+	if strings.TrimSpace(r.Actual) != want {
+		t.Errorf("expected %q, got %q", want, r.Actual)
 	}
 }
 
 func TestIntegration_SyntaxError(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     `print(`,
-		Language: "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase(`print(`, "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for syntax error")
 	}
-	if !strings.Contains(resp.Error, "SyntaxError") {
-		t.Errorf("expected SyntaxError in error, got %q", resp.Error)
+	if !strings.Contains(r.Stderr, "SyntaxError") {
+		t.Errorf("expected SyntaxError in stderr, got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_RuntimeError(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     `x`,
-		Language: "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase(`x`, "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for undefined variable")
 	}
-	if !strings.Contains(resp.Error, "NameError") {
-		t.Errorf("expected NameError in error, got %q", resp.Error)
+	if !strings.Contains(r.Stderr, "NameError") {
+		t.Errorf("expected NameError in stderr, got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_Timeout(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:      "import time; time.sleep(60)",
-		TimeoutMs: intPtr(1000),
-		Language:  "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase("import time; time.sleep(60)", "python", "", nil, nil, intPtr(1000)))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for timeout")
 	}
-	if resp.Error != "execution timed out" {
-		t.Errorf("expected 'execution timed out', got %q", resp.Error)
+	if r.Stderr != "execution timed out" {
+		t.Errorf("expected 'execution timed out', got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_RandomSeed(t *testing.T) {
 	u := executorURL(t)
 	seed := 42
-	req := executorapi.ExecuteRequest{
-		Code:       "import random; print(random.randint(1,1000))",
-		RandomSeed: &seed,
-		Language:   "python",
-	}
+	req := singleCase("import random; print(random.randint(1,1000))", "python", "", nil, &seed, nil)
 	resp1 := executeRequest(t, u, req)
 	resp2 := executeRequest(t, u, req)
-	if !resp1.Success || !resp2.Success {
+	r1 := firstResult(t, resp1)
+	r2 := firstResult(t, resp2)
+	if r1.Status == "error" || r2.Status == "error" {
 		t.Fatal("expected both runs to succeed")
 	}
-	if resp1.Output != resp2.Output {
-		t.Errorf("deterministic output expected: run1=%q run2=%q", resp1.Output, resp2.Output)
+	if r1.Actual != r2.Actual {
+		t.Errorf("deterministic output expected: run1=%q run2=%q", r1.Actual, r2.Actual)
 	}
 }
 
 func TestIntegration_FileAttachment(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: "with open('data.txt') as f: print(f.read().strip())",
-		Files: []executorapi.File{
-			{Name: "data.txt", Content: "file contents here"},
-		},
-		Language: "python",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	resp := executeRequest(t, u, singleCase(
+		"with open('data.txt') as f: print(f.read().strip())",
+		"python", "",
+		[]executorapi.File{{Name: "data.txt", Content: "file contents here"}},
+		nil, nil,
+	))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	if strings.TrimSpace(resp.Output) != "file contents here" {
-		t.Errorf("expected file contents, got %q", resp.Output)
+	if strings.TrimSpace(r.Actual) != "file contents here" {
+		t.Errorf("expected file contents, got %q", r.Actual)
 	}
 }
 
 func TestIntegration_LargeOutputTruncation(t *testing.T) {
 	u := executorURL(t)
 	// Print ~2MB of output.
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     "print('x' * 2_000_000)",
-		Language: "python",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+	resp := executeRequest(t, u, singleCase("print('x' * 2_000_000)", "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
 	// Default MaxOutputBytes is 1MB, so output should be truncated.
-	if len(resp.Output) > 1100000 {
-		t.Errorf("expected output to be truncated, got %d bytes", len(resp.Output))
+	if len(r.Actual) > 1100000 {
+		t.Errorf("expected output to be truncated, got %d bytes", len(r.Actual))
 	}
 }
 
 func TestIntegration_StderrSanitization(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     "raise ValueError('test error')",
-		Language: "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase("raise ValueError('test error')", "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure")
 	}
 	// Stderr should not contain the actual sandbox path.
-	if strings.Contains(resp.Error, "/tmp/work/main.py") {
+	if strings.Contains(r.Stderr, "/tmp/work/main.py") {
 		t.Error("stderr should sanitize sandbox paths")
 	}
 }
 
 func TestIntegration_NetworkDisabled(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:      "import socket; s = socket.socket(); s.connect(('8.8.8.8', 53))",
-		TimeoutMs: intPtr(5000),
-		Language:  "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase(
+		"import socket; s = socket.socket(); s.connect(('8.8.8.8', 53))",
+		"python", "", nil, nil, intPtr(5000),
+	))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		// Network isolation depends on nsjail config and kernel capabilities.
 		// In privileged Docker mode, network may not be restricted.
 		// This is expected — log a warning but don't skip/fail.
@@ -237,12 +252,12 @@ func TestIntegration_NetworkDisabled(t *testing.T) {
 func TestIntegration_MemoryLimit(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:      fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
-		TimeoutMs: intPtr(5000),
-		Language:  "python",
-	})
-	if resp.Success {
+	resp := executeRequest(t, u, singleCase(
+		fmt.Sprintf("x = 'a' * %d", 512*1024*1024), // 512MB
+		"python", "", nil, nil, intPtr(5000),
+	))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Error("expected memory-limited code to fail")
 	}
 }
@@ -250,48 +265,42 @@ func TestIntegration_MemoryLimit(t *testing.T) {
 func TestIntegration_FilesystemIsolation_EtcPasswd(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `
+	resp := executeRequest(t, u, singleCase(`
 import os
 try:
     with open('/etc/passwd') as f:
         print("LEAKED:" + f.readline())
 except Exception as e:
     print("BLOCKED:" + type(e).__name__)
-`,
-		TimeoutMs: intPtr(5000),
-		Language:  "python",
-	})
-	output := strings.TrimSpace(resp.Output)
+`, "python", "", nil, nil, intPtr(5000)))
+	r := firstResult(t, resp)
+	output := strings.TrimSpace(r.Actual)
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
 	}
 }
 
 func TestIntegration_FilesystemIsolation_Proc(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `
+	resp := executeRequest(t, u, singleCase(`
 import os
 try:
     entries = os.listdir('/proc')
     print("LEAKED:" + str(len(entries)))
 except Exception as e:
     print("BLOCKED:" + type(e).__name__)
-`,
-		TimeoutMs: intPtr(5000),
-		Language:  "python",
-	})
-	output := strings.TrimSpace(resp.Output)
+`, "python", "", nil, nil, intPtr(5000)))
+	r := firstResult(t, resp)
+	output := strings.TrimSpace(r.Actual)
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /proc, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
 	}
 }
 
@@ -299,34 +308,19 @@ func TestIntegration_FilesystemIsolation_PythonStdlib(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
 	// Verify Python stdlib still works with the restricted chroot.
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `
+	resp := executeRequest(t, u, singleCase(`
 import json
 import math
 import os
 print(json.dumps({"pi": round(math.pi, 2), "cwd": os.getcwd()}))
-`,
-		TimeoutMs: intPtr(5000),
-		Language:  "python",
-	})
-	if !resp.Success {
-		t.Fatalf("expected Python stdlib to work, got error: %s", resp.Error)
+`, "python", "", nil, nil, intPtr(5000)))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected Python stdlib to work, got error: %s", r.Stderr)
 	}
-	output := strings.TrimSpace(resp.Output)
+	output := strings.TrimSpace(r.Actual)
 	if !strings.Contains(output, "3.14") {
 		t.Errorf("expected pi in output, got %q", output)
-	}
-}
-
-func TestIntegration_StdinEchoed(t *testing.T) {
-	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code:     "print('ok')",
-		Stdin:    "my input",
-		Language: "python",
-	})
-	if resp.Stdin != "my input" {
-		t.Errorf("expected stdin echoed back, got %q", resp.Stdin)
 	}
 }
 
@@ -364,115 +358,101 @@ func traceRequest(t *testing.T, baseURL string, req executorapi.TraceRequest) ex
 
 func TestIntegration_Java_HelloWorld(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `public class Main {
+	resp := executeRequest(t, u, singleCase(`public class Main {
     public static void main(String[] args) {
         System.out.println("hello from java");
     }
-}`,
-		Language: "java",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+}`, "java", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	if strings.TrimSpace(resp.Output) != "hello from java" {
-		t.Errorf("expected 'hello from java', got %q", resp.Output)
+	if strings.TrimSpace(r.Actual) != "hello from java" {
+		t.Errorf("expected 'hello from java', got %q", r.Actual)
 	}
 }
 
 func TestIntegration_Java_CompilationError(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `public class Main {
+	resp := executeRequest(t, u, singleCase(`public class Main {
     public static void main(String[] args) {
         System.out.println("missing semicolon")
     }
-}`,
-		Language: "java",
-	})
-	if resp.Success {
+}`, "java", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for compilation error")
 	}
-	if !strings.Contains(resp.Error, "error") {
-		t.Errorf("expected compilation error message, got %q", resp.Error)
+	if !strings.Contains(r.Stderr, "error") {
+		t.Errorf("expected compilation error message, got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_Java_RuntimeException(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `public class Main {
+	resp := executeRequest(t, u, singleCase(`public class Main {
     public static void main(String[] args) {
         int[] arr = new int[1];
         System.out.println(arr[5]);
     }
-}`,
-		Language: "java",
-	})
-	if resp.Success {
+}`, "java", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for runtime exception")
 	}
-	if !strings.Contains(resp.Error, "ArrayIndexOutOfBoundsException") {
-		t.Errorf("expected ArrayIndexOutOfBoundsException in error, got %q", resp.Error)
+	if !strings.Contains(r.Stderr, "ArrayIndexOutOfBoundsException") {
+		t.Errorf("expected ArrayIndexOutOfBoundsException in stderr, got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_Java_Stdin(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `import java.util.Scanner;
+	resp := executeRequest(t, u, singleCase(`import java.util.Scanner;
 public class Main {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
         String name = sc.nextLine();
         System.out.println("hi " + name);
     }
-}`,
-		Stdin:    "Alice\n",
-		Language: "java",
-	})
-	if !resp.Success {
-		t.Fatalf("expected success, got error: %s", resp.Error)
+}`, "java", "Alice\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	if !strings.Contains(resp.Output, "hi Alice") {
-		t.Errorf("expected output containing 'hi Alice', got %q", resp.Output)
+	if !strings.Contains(r.Actual, "hi Alice") {
+		t.Errorf("expected output containing 'hi Alice', got %q", r.Actual)
 	}
 }
 
 func TestIntegration_Java_Timeout(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `public class Main {
+	resp := executeRequest(t, u, singleCase(`public class Main {
     public static void main(String[] args) throws Exception {
         Thread.sleep(60000);
     }
-}`,
-		Language:  "java",
-		TimeoutMs: intPtr(3000),
-	})
-	if resp.Success {
+}`, "java", "", nil, nil, intPtr(3000)))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure for timeout")
 	}
-	if resp.Error != "execution timed out" {
-		t.Errorf("expected 'execution timed out', got %q", resp.Error)
+	if r.Stderr != "execution timed out" {
+		t.Errorf("expected 'execution timed out', got %q", r.Stderr)
 	}
 }
 
 func TestIntegration_Java_StderrSanitization(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `public class Main {
+	resp := executeRequest(t, u, singleCase(`public class Main {
     public static void main(String[] args) {
         throw new RuntimeException("test error");
     }
-}`,
-		Language: "java",
-	})
-	if resp.Success {
+}`, "java", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Fatal("expected failure")
 	}
 	// Stderr should not contain sandbox-internal paths.
-	if strings.Contains(resp.Error, "/tmp/work") {
+	if strings.Contains(r.Stderr, "/tmp/work") {
 		t.Error("stderr should sanitize sandbox paths")
 	}
 }
@@ -483,19 +463,16 @@ func TestIntegration_Java_StderrSanitization(t *testing.T) {
 
 func TestIntegration_Java_NetworkDisabled(t *testing.T) {
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `import java.net.Socket;
+	resp := executeRequest(t, u, singleCase(`import java.net.Socket;
 public class Main {
     public static void main(String[] args) throws Exception {
         Socket s = new Socket("8.8.8.8", 53);
         System.out.println("CONNECTED");
         s.close();
     }
-}`,
-		Language:  "java",
-		TimeoutMs: intPtr(10000),
-	})
-	if resp.Success {
+}`, "java", "", nil, nil, intPtr(10000)))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
 		t.Log("WARNING: network access was not blocked; network isolation is not enforced in this environment (likely privileged Docker mode)")
 		return
 	}
@@ -504,8 +481,7 @@ public class Main {
 func TestIntegration_Java_FilesystemIsolation_EtcPasswd(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `import java.io.*;
+	resp := executeRequest(t, u, singleCase(`import java.io.*;
 public class Main {
     public static void main(String[] args) {
         try {
@@ -516,24 +492,21 @@ public class Main {
             System.out.println("BLOCKED:" + e.getClass().getSimpleName());
         }
     }
-}`,
-		Language:  "java",
-		TimeoutMs: intPtr(10000),
-	})
-	output := strings.TrimSpace(resp.Output)
+}`, "java", "", nil, nil, intPtr(10000)))
+	r := firstResult(t, resp)
+	output := strings.TrimSpace(r.Actual)
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /etc/passwd, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
 	}
 }
 
 func TestIntegration_Java_FilesystemIsolation_Proc(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `import java.io.File;
+	resp := executeRequest(t, u, singleCase(`import java.io.File;
 public class Main {
     public static void main(String[] args) {
         File proc = new File("/proc");
@@ -544,24 +517,21 @@ public class Main {
             System.out.println("BLOCKED:NoEntries");
         }
     }
-}`,
-		Language:  "java",
-		TimeoutMs: intPtr(10000),
-	})
-	output := strings.TrimSpace(resp.Output)
+}`, "java", "", nil, nil, intPtr(10000)))
+	r := firstResult(t, resp)
+	output := strings.TrimSpace(r.Actual)
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not expose /proc, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
 	}
 }
 
 func TestIntegration_Java_FilesystemIsolation_WriteOutsideWorkDir(t *testing.T) {
 	skipSandboxTest(t)
 	u := executorURL(t)
-	resp := executeRequest(t, u, executorapi.ExecuteRequest{
-		Code: `import java.io.*;
+	resp := executeRequest(t, u, singleCase(`import java.io.*;
 public class Main {
     public static void main(String[] args) {
         try {
@@ -573,16 +543,14 @@ public class Main {
             System.out.println("BLOCKED:" + e.getClass().getSimpleName());
         }
     }
-}`,
-		Language:  "java",
-		TimeoutMs: intPtr(10000),
-	})
-	output := strings.TrimSpace(resp.Output)
+}`, "java", "", nil, nil, intPtr(10000)))
+	r := firstResult(t, resp)
+	output := strings.TrimSpace(r.Actual)
 	if strings.HasPrefix(output, "LEAKED:") {
 		t.Fatalf("sandbox should not allow writing outside work dir, got: %s", output)
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
-		t.Errorf("expected BLOCKED prefix, got %q (success=%v, error=%q)", output, resp.Success, resp.Error)
+		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
 	}
 }
 

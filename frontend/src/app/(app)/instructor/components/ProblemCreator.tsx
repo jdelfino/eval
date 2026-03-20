@@ -67,7 +67,7 @@ export default function ProblemCreator({
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').ExecutionResult | null>(null);
+  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
 
   const isEditMode = !!problem_id;
 
@@ -472,13 +472,8 @@ export default function ProblemCreator({
               stdin: execution_settings.stdin,
               random_seed: execution_settings.random_seed,
               attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err) => {
-              setExecutionResult({
-                success: false,
-                output: '',
-                error: err.message || 'Execution failed',
-                execution_time_ms: 0,
-              });
+            }).then(setExecutionResult).catch((err: any) => {
+              setError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}

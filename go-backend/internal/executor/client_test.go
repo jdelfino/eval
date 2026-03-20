@@ -15,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
 func intPtr(n int) *int { return &n }
@@ -40,9 +42,8 @@ func TestExecute_Success(t *testing.T) {
 		}
 
 		resp := ExecuteResponse{
-			Success:         true,
-			Output:          "hello\n",
-			ExecutionTimeMs: 42,
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 42}},
+			Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 42},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -51,27 +52,28 @@ func TestExecute_Success(t *testing.T) {
 
 	client := NewClient(srv.URL, 5*time.Second)
 	resp, err := client.Execute(context.Background(), ExecuteRequest{
-		Code: "print('hello')",
+		Code:  "print('hello')",
+		Cases: []executorapi.CaseDef{{Name: "run", Type: "io"}},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Success {
-		t.Error("expected success=true")
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Output != "hello\n" {
-		t.Errorf("unexpected output: %q", resp.Output)
+	if resp.Results[0].Actual != "hello\n" {
+		t.Errorf("unexpected actual: %q", resp.Results[0].Actual)
 	}
-	if resp.ExecutionTimeMs != 42 {
-		t.Errorf("unexpected execution time: %d", resp.ExecutionTimeMs)
+	if resp.Results[0].TimeMs != 42 {
+		t.Errorf("unexpected time_ms: %d", resp.Results[0].TimeMs)
 	}
 }
 
 func TestExecute_FailedExecution(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := ExecuteResponse{
-			Success: false,
-			Error:   "NameError: name 'foo' is not defined",
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "error", Stderr: "NameError: name 'foo' is not defined"}},
+			Summary: executorapi.CaseSummary{Total: 1, Errors: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -79,15 +81,21 @@ func TestExecute_FailedExecution(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL, 5*time.Second)
-	resp, err := client.Execute(context.Background(), ExecuteRequest{Code: "foo"})
+	resp, err := client.Execute(context.Background(), ExecuteRequest{
+		Code:  "foo",
+		Cases: []executorapi.CaseDef{{Name: "run", Type: "io"}},
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Success {
-		t.Error("expected success=false")
+	if len(resp.Results) == 0 {
+		t.Fatal("expected results")
 	}
-	if resp.Error != "NameError: name 'foo' is not defined" {
-		t.Errorf("unexpected error message: %s", resp.Error)
+	if resp.Results[0].Status != "error" {
+		t.Errorf("expected status 'error', got %q", resp.Results[0].Status)
+	}
+	if resp.Results[0].Stderr != "NameError: name 'foo' is not defined" {
+		t.Errorf("unexpected error message: %s", resp.Results[0].Stderr)
 	}
 }
 
@@ -223,7 +231,10 @@ func TestExecute_PropagatesRequestID(t *testing.T) {
 		if got != reqID {
 			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
 		}
-		resp := ExecuteResponse{Success: true, Output: "ok"}
+		resp := ExecuteResponse{
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -244,7 +255,10 @@ func TestExecute_NoRequestIDHeader(t *testing.T) {
 		if got := r.Header.Get("X-Request-ID"); got != "" {
 			t.Errorf("unexpected X-Request-ID header: %q", got)
 		}
-		resp := ExecuteResponse{Success: true, Output: "ok"}
+		resp := ExecuteResponse{
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -287,7 +301,10 @@ func TestExecute_InjectsTraceContext(t *testing.T) {
 	var receivedTraceparent string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedTraceparent = r.Header.Get("traceparent")
-		resp := ExecuteResponse{Success: true, Output: "ok"}
+		resp := ExecuteResponse{
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -368,20 +385,26 @@ func TestExecute_RequestFields(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		if req.Stdin != "input data" {
-			t.Errorf("unexpected stdin: %s", req.Stdin)
+		if len(req.Cases) == 0 {
+			t.Error("expected at least one case")
 		}
-		if len(req.Files) != 1 || req.Files[0].Name != "data.txt" {
-			t.Errorf("unexpected files: %+v", req.Files)
+		if req.Cases[0].Input != "input data" {
+			t.Errorf("unexpected case input: %s", req.Cases[0].Input)
 		}
-		if req.RandomSeed == nil || *req.RandomSeed != 42 {
-			t.Errorf("unexpected random_seed: %v", req.RandomSeed)
+		if len(req.Cases[0].Files) != 1 || req.Cases[0].Files[0].Name != "data.txt" {
+			t.Errorf("unexpected case files: %+v", req.Cases[0].Files)
+		}
+		if req.Cases[0].RandomSeed == nil || *req.Cases[0].RandomSeed != 42 {
+			t.Errorf("unexpected random_seed: %v", req.Cases[0].RandomSeed)
 		}
 		if req.TimeoutMs == nil || *req.TimeoutMs != 5000 {
 			t.Errorf("unexpected timeout_ms: %v", req.TimeoutMs)
 		}
 
-		resp := ExecuteResponse{Success: true, Output: "ok"}
+		resp := ExecuteResponse{
+			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -389,16 +412,20 @@ func TestExecute_RequestFields(t *testing.T) {
 
 	client := NewClient(srv.URL, 5*time.Second)
 	resp, err := client.Execute(context.Background(), ExecuteRequest{
-		Code:       "print('ok')",
-		Stdin:      "input data",
-		Files:      []File{{Name: "data.txt", Content: "hello"}},
-		RandomSeed: &seed,
-		TimeoutMs:  intPtr(5000),
+		Code: "print('ok')",
+		Cases: []executorapi.CaseDef{{
+			Name:       "run",
+			Type:       "io",
+			Input:      "input data",
+			Files:      []executorapi.File{{Name: "data.txt", Content: "hello"}},
+			RandomSeed: &seed,
+		}},
+		TimeoutMs: intPtr(5000),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Success {
-		t.Error("expected success")
+	if len(resp.Results) == 0 {
+		t.Error("expected results")
 	}
 }
