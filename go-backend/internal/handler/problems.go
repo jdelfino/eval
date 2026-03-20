@@ -32,16 +32,44 @@ func NewProblemHandler(sectionProblemHandler *SectionProblemHandler) *ProblemHan
 
 // ExportProblem represents a problem in the export format (excludes internal IDs).
 type ExportProblem struct {
-	Title             string          `json:"title"`
-	Description       *string         `json:"description"`
-	StarterCode       *string         `json:"starter_code"`
-	TestCases         json.RawMessage `json:"test_cases"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          string          `json:"language"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	Title       string          `json:"title"`
+	Description *string         `json:"description"`
+	StarterCode *string         `json:"starter_code"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    string          `json:"language"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// legacyExecutionSettings is the pre-migration shape of execution_settings JSON.
+// Used by the compat bridge to convert old frontend requests to IOTestCase[].
+// This bridge is removed in PR 3 when the frontend is updated.
+type legacyExecutionSettings struct {
+	Stdin         string                   `json:"stdin"`
+	RandomSeed    *int                     `json:"random_seed"`
+	AttachedFiles []store.File             `json:"attached_files"`
+}
+
+// convertExecutionSettingsToTestCases converts a legacy execution_settings JSON object
+// into a single-element IOTestCase JSON array. Returns nil when settings is nil or empty.
+func convertExecutionSettingsToTestCases(settings json.RawMessage) (json.RawMessage, error) {
+	if len(settings) == 0 || string(settings) == "null" || string(settings) == "{}" {
+		return nil, nil
+	}
+	var es legacyExecutionSettings
+	if err := json.Unmarshal(settings, &es); err != nil {
+		return nil, fmt.Errorf("parse execution_settings: %w", err)
+	}
+	tc := store.IOTestCase{
+		Name:          "Default",
+		Input:         es.Stdin,
+		MatchType:     "exact",
+		RandomSeed:    es.RandomSeed,
+		AttachedFiles: es.AttachedFiles,
+	}
+	return json.Marshal([]store.IOTestCase{tc})
 }
 
 // ProblemsExport is the envelope for exported problems.
@@ -171,10 +199,12 @@ func (h *ProblemHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // createProblemRequest is the request body for POST /problems.
 type createProblemRequest struct {
-	Title             string          `json:"title" validate:"required,min=1,max=255"`
-	Description       *string         `json:"description" validate:"omitempty,max=5000"`
-	StarterCode       *string         `json:"starter_code" validate:"omitempty"`
-	TestCases         json.RawMessage `json:"test_cases"`
+	Title       string          `json:"title" validate:"required,min=1,max=255"`
+	Description *string         `json:"description" validate:"omitempty,max=5000"`
+	StarterCode *string         `json:"starter_code" validate:"omitempty"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	// ExecutionSettings is accepted for backward compatibility with the old frontend
+	// and converted to a single IOTestCase. Removed in PR 3 when the frontend is updated.
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	ClassID           *uuid.UUID      `json:"class_id"`
 	Tags              []string        `json:"tags"`
@@ -206,19 +236,30 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Compat bridge: if old frontend sent execution_settings and no test_cases,
+	// convert execution_settings to a single IOTestCase.
+	testCases := req.TestCases
+	if len(testCases) == 0 && len(req.ExecutionSettings) > 0 {
+		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
+		if convErr != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")
+			return
+		}
+		testCases = converted
+	}
+
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.CreateProblem(r.Context(), store.CreateProblemParams{
-		NamespaceID:       authUser.NamespaceID,
-		Title:             req.Title,
-		Description:       req.Description,
-		StarterCode:       req.StarterCode,
-		TestCases:         req.TestCases,
-		ExecutionSettings: req.ExecutionSettings,
-		AuthorID:          authUser.ID,
-		ClassID:           req.ClassID,
-		Tags:              req.Tags,
-		Solution:          req.Solution,
-		Language:          lang,
+		NamespaceID: authUser.NamespaceID,
+		Title:       req.Title,
+		Description: req.Description,
+		StarterCode: req.StarterCode,
+		TestCases:   testCases,
+		AuthorID:    authUser.ID,
+		ClassID:     req.ClassID,
+		Tags:        req.Tags,
+		Solution:    req.Solution,
+		Language:    lang,
 	})
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
@@ -230,10 +271,12 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // updateProblemRequest is the request body for PATCH /problems/{id}.
 type updateProblemRequest struct {
-	Title             *string         `json:"title" validate:"omitempty,min=1,max=255"`
-	Description       *string         `json:"description" validate:"omitempty,max=5000"`
-	StarterCode       *string         `json:"starter_code" validate:"omitempty"`
-	TestCases         json.RawMessage `json:"test_cases"`
+	Title       *string         `json:"title" validate:"omitempty,min=1,max=255"`
+	Description *string         `json:"description" validate:"omitempty,max=5000"`
+	StarterCode *string         `json:"starter_code" validate:"omitempty"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	// ExecutionSettings is accepted for backward compatibility with the old frontend
+	// and converted to a single IOTestCase. Removed in PR 3 when the frontend is updated.
 	ExecutionSettings json.RawMessage `json:"execution_settings"`
 	ClassID           *uuid.UUID      `json:"class_id"`
 	Tags              []string        `json:"tags"`
@@ -262,17 +305,28 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Language = &normalized
 	}
 
+	// Compat bridge: if old frontend sent execution_settings and no test_cases,
+	// convert execution_settings to a single IOTestCase.
+	testCases := req.TestCases
+	if len(testCases) == 0 && len(req.ExecutionSettings) > 0 {
+		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
+		if convErr != nil {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")
+			return
+		}
+		testCases = converted
+	}
+
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.UpdateProblem(r.Context(), id, store.UpdateProblemParams{
-		Title:             req.Title,
-		Description:       req.Description,
-		StarterCode:       req.StarterCode,
-		TestCases:         req.TestCases,
-		ExecutionSettings: req.ExecutionSettings,
-		ClassID:           req.ClassID,
-		Tags:              req.Tags,
-		Solution:          req.Solution,
-		Language:          req.Language,
+		Title:       req.Title,
+		Description: req.Description,
+		StarterCode: req.StarterCode,
+		TestCases:   testCases,
+		ClassID:     req.ClassID,
+		Tags:        req.Tags,
+		Solution:    req.Solution,
+		Language:    req.Language,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -325,16 +379,15 @@ func (h *ProblemHandler) Export(w http.ResponseWriter, r *http.Request) {
 	exportProblems := make([]ExportProblem, 0, len(problems))
 	for _, p := range problems {
 		exportProblems = append(exportProblems, ExportProblem{
-			Title:             p.Title,
-			Description:       p.Description,
-			StarterCode:       p.StarterCode,
-			TestCases:         p.TestCases,
-			ExecutionSettings: p.ExecutionSettings,
-			Tags:              p.Tags,
-			Solution:          p.Solution,
-			Language:          p.Language,
-			CreatedAt:         p.CreatedAt,
-			UpdatedAt:         p.UpdatedAt,
+			Title:       p.Title,
+			Description: p.Description,
+			StarterCode: p.StarterCode,
+			TestCases:   p.TestCases,
+			Tags:        p.Tags,
+			Solution:    p.Solution,
+			Language:    p.Language,
+			CreatedAt:   p.CreatedAt,
+			UpdatedAt:   p.UpdatedAt,
 		})
 	}
 

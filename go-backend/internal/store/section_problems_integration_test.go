@@ -66,11 +66,10 @@ func TestIntegration_SectionProblemsCRUD(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}
@@ -310,11 +309,10 @@ func TestIntegration_EnsureSectionProblem(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Ensure Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Ensure Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}
@@ -433,11 +431,10 @@ func TestIntegration_ListSectionProblemsWithStudentWork(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}

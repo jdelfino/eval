@@ -50,7 +50,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "Python Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "python",
 		})
@@ -70,7 +70,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "Java Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "java",
 		})
@@ -108,7 +108,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "Get Lang Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "java",
 		})
@@ -133,7 +133,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "Update Lang Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "python",
 		})
@@ -164,7 +164,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "No Change Lang Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "java",
 		})
@@ -194,7 +194,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "List Python Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "python",
 		})
@@ -206,7 +206,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 			NamespaceID:       nsID,
 			Title:             "List Java Problem",
 			TestCases:         []byte(`{}`),
-			ExecutionSettings: []byte(`{}`),
+			
 			AuthorID:          authorID,
 			Language:          "java",
 		})
@@ -286,7 +286,7 @@ func TestIntegration_Migration018_LanguageInJoinedQueries(t *testing.T) {
 		NamespaceID:       nsID,
 		Title:             "Java Join Problem",
 		TestCases:         json.RawMessage(`{}`),
-		ExecutionSettings: json.RawMessage(`{}`),
+		
 		AuthorID:          instructorID,
 		Language:          "java",
 	})
@@ -311,8 +311,8 @@ func TestIntegration_Migration018_LanguageInJoinedQueries(t *testing.T) {
 	// Create student work for the java problem.
 	studentWorkID := uuid.New()
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code, execution_settings)
-		 VALUES ($1, $2, $3, $4, $5, 'System.out.println("hello");', '{}')`,
+		`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code)
+		 VALUES ($1, $2, $3, $4, $5, 'System.out.println("hello");')`,
 		studentWorkID, nsID, studentID, javaProblemID, sectionID)
 	if err != nil {
 		t.Fatalf("insert student_work: %v", err)

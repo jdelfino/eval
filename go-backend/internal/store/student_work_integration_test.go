@@ -66,11 +66,10 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}
@@ -141,10 +140,10 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 		defer conn.Release()
 
 		newCode := "print('updated')"
-		newSettings := json.RawMessage(`{"stdin": "input"}`)
+		newTestCases := json.RawMessage(`[{"name":"t1","input":"input","match_type":"exact"}]`)
 		work, err := s.UpdateStudentWork(ctx, workID, UpdateStudentWorkParams{
-			Code:              &newCode,
-			ExecutionSettings: newSettings,
+			Code:      &newCode,
+			TestCases: newTestCases,
 		})
 		if err != nil {
 			t.Fatalf("UpdateStudentWork failed: %v", err)
@@ -152,8 +151,8 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 		if work.Code != newCode {
 			t.Errorf("expected code %s, got %s", newCode, work.Code)
 		}
-		if string(work.ExecutionSettings) != string(newSettings) {
-			t.Errorf("expected execution_settings %s, got %s", newSettings, work.ExecutionSettings)
+		if string(work.TestCases) != string(newTestCases) {
+			t.Errorf("expected test_cases %s, got %s", newTestCases, work.TestCases)
 		}
 	})
 
@@ -171,11 +170,7 @@ func TestIntegration_StudentWorkCRUD(t *testing.T) {
 		if work.Code != newCode {
 			t.Errorf("expected code %s, got %s", newCode, work.Code)
 		}
-		// execution_settings should remain unchanged
-		expectedSettings := `{"stdin": "input"}`
-		if string(work.ExecutionSettings) != expectedSettings {
-			t.Errorf("expected execution_settings %s, got %s", expectedSettings, work.ExecutionSettings)
-		}
+		// test_cases should remain unchanged (UpdateStudentWork only updates code here)
 	})
 
 	t.Run("UpdateStudentWork_NotFound", func(t *testing.T) {
@@ -305,11 +300,10 @@ func TestIntegration_ListStudentWorkBySession(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}
@@ -444,11 +438,10 @@ func TestIntegration_ListStudentProgress(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	executionSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
-		VALUES ($1, $2, 'Test Problem', $3, $4, $5)`,
-		problemID, db.nsID, testCases, executionSettings, instructorID)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
+		VALUES ($1, $2, 'Test Problem', $3, $4)`,
+		problemID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problem: %v", err)
 	}
@@ -591,14 +584,13 @@ func TestIntegration_ListStudentWorkForReview(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	execSettings := json.RawMessage(`{"stdin": ""}`)
 	_, err = db.pool.Exec(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id)
+		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
 		VALUES
-		($1, $2, 'Problem 1', $3, $4, $5),
-		($6, $7, 'Problem 2', $8, $9, $10)`,
-		problem1ID, db.nsID, testCases, execSettings, instructorID,
-		problem2ID, db.nsID, testCases, execSettings, instructorID)
+		($1, $2, 'Problem 1', $3, $4),
+		($5, $6, 'Problem 2', $7, $8)`,
+		problem1ID, db.nsID, testCases, instructorID,
+		problem2ID, db.nsID, testCases, instructorID)
 	if err != nil {
 		t.Fatalf("create problems: %v", err)
 	}

@@ -28,9 +28,11 @@ type Config struct {
 	DefaultTimeoutMS        int `env:"DEFAULT_TIMEOUT_MS" envDefault:"10000"`
 	MaxCodeBytes            int `env:"MAX_CODE_BYTES" envDefault:"102400"`
 	MaxOutputBytes          int `env:"MAX_OUTPUT_BYTES" envDefault:"1048576"`
-	MaxStdinBytes           int `env:"MAX_STDIN_BYTES" envDefault:"1048576"`
-	MaxFiles                int `env:"MAX_FILES" envDefault:"5"`
-	MaxFileBytes            int `env:"MAX_FILE_BYTES" envDefault:"10240"`
+	// MaxStdinBytes/MaxFiles/MaxFileBytes are used by the /trace endpoint (flat format).
+	// The /execute endpoint uses Cases[] and validates per-case limits differently.
+	MaxStdinBytes int `env:"MAX_STDIN_BYTES" envDefault:"1048576"`
+	MaxFiles      int `env:"MAX_FILES" envDefault:"5"`
+	MaxFileBytes  int `env:"MAX_FILE_BYTES" envDefault:"10240"`
 
 	// Redis (for distributed rate limiting)
 	RedisHost string `env:"REDIS_HOST"`

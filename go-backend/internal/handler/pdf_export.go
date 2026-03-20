@@ -91,15 +91,6 @@ func renderProblemsPDF(problems []ExportProblem, exportedAt time.Time) ([]byte, 
 			pdf.Ln(6)
 		}
 
-		// Execution Settings section - compact JSON
-		pdf.SetFont("Helvetica", "B", 12)
-		pdf.Cell(0, 8, "Execution Settings")
-		pdf.Ln(6)
-		prettyExecSettings, err := prettyPrintJSON(p.ExecutionSettings)
-		if err != nil {
-			return nil, fmt.Errorf("pretty-printing execution settings: %w", err)
-		}
-		pdfCodeBlock(pdf, prettyExecSettings)
 	}
 
 	var buf bytes.Buffer

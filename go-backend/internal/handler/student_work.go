@@ -22,8 +22,8 @@ func NewStudentWorkHandler() *StudentWorkHandler {
 
 // updateStudentWorkRequest is the request body for PATCH /student-work/{id}.
 type updateStudentWorkRequest struct {
-	Code              *string         `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
+	Code      *string         `json:"code"`
+	TestCases json.RawMessage `json:"test_cases"`
 }
 
 // GetOrCreate handles POST /api/v1/sections/{id}/problems/{problemID}/work — get or create student_work.
@@ -107,8 +107,8 @@ func (h *StudentWorkHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	repos := store.ReposFromContext(r.Context())
 	work, err := repos.UpdateStudentWork(r.Context(), workID, store.UpdateStudentWorkParams{
-		Code:              req.Code,
-		ExecutionSettings: req.ExecutionSettings,
+		Code:      req.Code,
+		TestCases: req.TestCases,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
