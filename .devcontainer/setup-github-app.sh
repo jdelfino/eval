@@ -98,7 +98,4 @@ fi
 echo "$TOKEN" > "$WORKSPACE_DIR/.gh-app-token"
 chmod 600 "$WORKSPACE_DIR/.gh-app-token"
 
-# Configure git to use the app token for this repo
-git config url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-
 echo "GitHub App token generated (expires in 1 hour)"
