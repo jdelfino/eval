@@ -340,14 +340,14 @@ jobs:
                           -H 'Content-Type: application/json' \
                           -d '{"code":"print(\"sandbox-ok\")","language":"python","cases":[{"name":"run","input":""}]}')
                         echo "$RESULT"
-                        echo "$RESULT" | grep -q '"sandbox-ok"' || { echo "FAIL: Python"; exit 1; }
+                        echo "$RESULT" | grep -q 'sandbox-ok' || { echo "FAIL: Python"; exit 1; }
 
                         echo "=== Java execution test ==="
                         RESULT=$(curl -sf -X POST http://executor.staging.svc.cluster.local:8081/execute \
                           -H 'Content-Type: application/json' \
                           -d '{"code":"public class Main { public static void main(String[] args) { System.out.println(\"java-ok\"); } }","language":"java","timeout_ms":30000,"cases":[{"name":"run","input":""}]}')
                         echo "$RESULT"
-                        echo "$RESULT" | grep -q '"java-ok"' || { echo "FAIL: Java"; exit 1; }
+                        echo "$RESULT" | grep -q 'java-ok' || { echo "FAIL: Java"; exit 1; }
 
                         echo "=== Timeout enforcement test ==="
                         RESULT=$(curl -sf -X POST http://executor.staging.svc.cluster.local:8081/execute \
