@@ -815,3 +815,84 @@ func TestExecute_Cases_TimeoutProducesErrorForAllCases(t *testing.T) {
 // Per-case stdin/file size limits are enforced by the iotestrunner script,
 // not by the Go handler. The handler only validates code size, language, and
 // that cases is non-empty.
+
+// TestExecute_Cases_ReservedFilenameRejected verifies that submitting a case
+// file with a name that collides with a reserved sandbox file (solution.py,
+// Main.java, io_tests.json) returns HTTP 400 with a descriptive error.
+//
+// Without this check the student's file is silently dropped, causing confusing
+// failures where the file appears missing even though the request succeeds.
+func TestExecute_Cases_ReservedFilenameRejected(t *testing.T) {
+	tests := []struct {
+		name         string
+		language     string
+		reservedFile string
+	}{
+		{
+			name:         "solution.py is reserved for python",
+			language:     "python",
+			reservedFile: "solution.py",
+		},
+		{
+			name:         "io_tests.json is reserved for python",
+			language:     "python",
+			reservedFile: "io_tests.json",
+		},
+		{
+			name:         "Main.java is reserved for java",
+			language:     "java",
+			reservedFile: "Main.java",
+		},
+		{
+			name:         "io_tests.json is reserved for java",
+			language:     "java",
+			reservedFile: "io_tests.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cap := &captureRunner{}
+			h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
+
+			code := `print("hello")`
+			if tt.language == "java" {
+				code = `public class Main { public static void main(String[] a) {} }`
+			}
+
+			body, _ := json.Marshal(map[string]any{
+				"code":     code,
+				"language": tt.language,
+				"cases": []map[string]any{
+					{
+						"name":  "test",
+						"type":  "io",
+						"input": "",
+						"files": []map[string]any{
+							{"name": tt.reservedFile, "content": "overwrite attempt"},
+						},
+					},
+				},
+			})
+
+			w := doRequest(h, string(body))
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for reserved file name %q, got %d (body: %s)",
+					tt.reservedFile, w.Code, w.Body.String())
+			}
+
+			var errResp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+				t.Fatalf("failed to decode error response: %v", err)
+			}
+			if got := errResp["error"]; !strings.Contains(got, "reserved") {
+				t.Errorf("expected error message to mention 'reserved', got %q", got)
+			}
+			if !strings.Contains(errResp["error"], tt.reservedFile) {
+				t.Errorf("expected error message to contain file name %q, got %q",
+					tt.reservedFile, errResp["error"])
+			}
+		})
+	}
+}
