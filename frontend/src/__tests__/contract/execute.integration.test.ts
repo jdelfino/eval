@@ -79,4 +79,80 @@ describe('executeCode()', () => {
     expect(result.results.length).toBe(1);
     expect(result.results[0].actual).toBe('test input\n');
   });
+
+  it('returns status=passed when expected_output matches actual output', async () => {
+    /**
+     * Verifies that the executor compares actual output against expected_output
+     * and sets status='passed' on match. If the iotestrunner skips comparison,
+     * status would be 'run' instead of 'passed', breaking the test pass/fail UI.
+     *
+     * TC 5 from PLAT-wibv.
+     */
+    const result = await executeCode('print("hello")', 'python3', {
+      cases: [
+        {
+          name: 'exact match',
+          input: '',
+          expected_output: 'hello\n',
+          match_type: 'exact',
+        },
+      ],
+    });
+
+    expect(result.results.length).toBe(1);
+    expect(result.results[0].status).toBe('passed');
+    expect(result.results[0].actual).toBe('hello\n');
+  });
+
+  it('returns status=failed when expected_output does not match actual output', async () => {
+    /**
+     * Verifies that mismatched expected_output causes status='failed', not
+     * status='run'. If the iotestrunner does not compare or ignores expected_output,
+     * failing tests would be silently reported as passing.
+     *
+     * TC 5 (fail branch) from PLAT-wibv.
+     */
+    const result = await executeCode('print("hello")', 'python3', {
+      cases: [
+        {
+          name: 'wrong expected',
+          input: '',
+          expected_output: 'world\n',
+          match_type: 'exact',
+        },
+      ],
+    });
+
+    expect(result.results.length).toBe(1);
+    expect(result.results[0].status).toBe('failed');
+    expect(result.results[0].actual).toBe('hello\n');
+  });
+
+  it('returns all results and correct summary counts for multiple test cases', async () => {
+    /**
+     * Verifies multi-case execution: results[] must contain one entry per case,
+     * and summary.{passed, failed, total} must match actual outcomes.
+     * If the executor only runs one case, or summary counts are wrong, the
+     * multi-case UI (pass rate, per-case results) breaks.
+     *
+     * TC 6 from PLAT-wibv: 3 cases, 2 passing, 1 failing.
+     */
+    const result = await executeCode('print("hello")', 'python3', {
+      cases: [
+        { name: 'pass-1', input: '', expected_output: 'hello\n', match_type: 'exact' },
+        { name: 'pass-2', input: '', expected_output: 'hello\n', match_type: 'exact' },
+        { name: 'fail-1', input: '', expected_output: 'wrong\n', match_type: 'exact' },
+      ],
+    });
+
+    expect(result.results.length).toBe(3);
+    expect(result.summary.total).toBe(3);
+    expect(result.summary.passed).toBe(2);
+    expect(result.summary.failed).toBe(1);
+
+    // Verify individual statuses.
+    const statuses = result.results.map((r) => r.status);
+    expect(statuses.filter((s) => s === 'passed').length).toBe(2);
+    expect(statuses.filter((s) => s === 'failed').length).toBe(1);
+  });
 });

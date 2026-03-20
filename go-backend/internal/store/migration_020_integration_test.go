@@ -8,6 +8,7 @@
 //   - sessions.featured_test_cases column exists (renamed from featured_execution_settings)
 //   - sessions.featured_execution_settings column no longer exists
 //   - Store-level: CreateProblem, UpdateProblem, GetStudentWork work correctly post-migration
+//   - Backfill: execution_settings → test_cases conversion correctness
 //
 // Run with:
 //
@@ -21,6 +22,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
 
 // TestIntegration_Migration020_SchemaChanges verifies the column-level changes
@@ -242,6 +244,115 @@ func TestIntegration_Migration020_StoreOperations(t *testing.T) {
 		}
 		if string(updated.FeaturedTestCases) != string(testCases) {
 			t.Errorf("expected featured_test_cases %s, got %s", testCases, updated.FeaturedTestCases)
+		}
+	})
+}
+
+// TestIntegration_Migration020_Backfill verifies the data migration logic in migration 020:
+// execution_settings values are correctly converted to IOTestCase entries in test_cases.
+//
+// Contract: when a problem has execution_settings = '{"stdin":"hello","random_seed":42}',
+// migration 020 must produce test_cases = '[{"name":"Default","input":"hello","match_type":"exact","order":0,"random_seed":42}]'.
+// If the backfill SQL is wrong (e.g., maps stdin to the wrong key, or loses random_seed),
+// existing problems lose their execution configuration silently.
+func TestIntegration_Migration020_Backfill(t *testing.T) {
+	t.Parallel()
+
+	t.Run("execution_settings with stdin and random_seed backfills to IOTestCase", func(t *testing.T) {
+		// TC 1: Set up DB at migration 19 (execution_settings column still exists).
+		// Insert a problem with execution_settings, apply migration 020, and assert
+		// that test_cases contains one IOTestCase with the correct field mapping.
+		db := testutil.SetupMigrationTestDB(t, 19)
+
+		// Seed required parent rows.
+		nsID := "ns-backfill-020"
+		db.Exec(t, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Backfill NS', true)`, nsID)
+		userID := uuid.New()
+		db.Exec(t, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'backfill@test.com', 'instructor', $2)`,
+			userID, nsID)
+
+		// Insert a problem with execution_settings containing stdin and random_seed.
+		problemID := uuid.New()
+		db.Exec(t, `
+			INSERT INTO problems (id, namespace_id, title, author_id, execution_settings)
+			VALUES ($1, $2, 'Backfill Problem', $3, '{"stdin":"hello","random_seed":42}'::jsonb)
+		`, problemID, nsID, userID)
+
+		// Apply migration 020 — this runs the backfill SQL.
+		db.MigrateTo(t, 20)
+
+		// Read back test_cases.
+		var rawTestCases []byte
+		row := db.QueryRow(t, `SELECT test_cases FROM problems WHERE id = $1`, problemID)
+		if err := row.Scan(&rawTestCases); err != nil {
+			t.Fatalf("scan test_cases: %v", err)
+		}
+
+		var cases []map[string]interface{}
+		if err := json.Unmarshal(rawTestCases, &cases); err != nil {
+			t.Fatalf("unmarshal test_cases: %v", err)
+		}
+
+		if len(cases) != 1 {
+			t.Fatalf("expected 1 test case after backfill, got %d: %s", len(cases), rawTestCases)
+		}
+
+		tc := cases[0]
+		if tc["input"] != "hello" {
+			t.Errorf("expected input='hello', got %v", tc["input"])
+		}
+		// random_seed comes through as a JSON number; json.Unmarshal decodes it as float64.
+		if seed, ok := tc["random_seed"].(float64); !ok || int(seed) != 42 {
+			t.Errorf("expected random_seed=42, got %v (type %T)", tc["random_seed"], tc["random_seed"])
+		}
+		if tc["match_type"] != "exact" {
+			t.Errorf("expected match_type='exact', got %v", tc["match_type"])
+		}
+
+		// Verify execution_settings column no longer exists.
+		var colCount int
+		colRow := db.QueryRow(t, `
+			SELECT COUNT(*) FROM information_schema.columns
+			WHERE table_name = 'problems' AND column_name = 'execution_settings'
+		`)
+		if err := colRow.Scan(&colCount); err != nil {
+			t.Fatalf("check execution_settings column: %v", err)
+		}
+		if colCount != 0 {
+			t.Error("problems.execution_settings should be dropped after migration 020")
+		}
+	})
+
+	t.Run("NULL execution_settings backfills to empty test_cases array", func(t *testing.T) {
+		// TC 2: Problem with NULL execution_settings must get test_cases = '[]'::jsonb,
+		// not NULL. If the NULL branch is missing in the backfill SQL the NOT NULL
+		// constraint addition will fail, breaking the whole migration.
+		db := testutil.SetupMigrationTestDB(t, 19)
+
+		nsID := "ns-backfill-null-020"
+		db.Exec(t, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Null NS', true)`, nsID)
+		userID := uuid.New()
+		db.Exec(t, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'null-es@test.com', 'instructor', $2)`,
+			userID, nsID)
+
+		// Insert problem with NULL execution_settings.
+		problemID := uuid.New()
+		db.Exec(t, `
+			INSERT INTO problems (id, namespace_id, title, author_id, execution_settings)
+			VALUES ($1, $2, 'Null ES Problem', $3, NULL)
+		`, problemID, nsID, userID)
+
+		db.MigrateTo(t, 20)
+
+		var rawTestCases []byte
+		row := db.QueryRow(t, `SELECT test_cases FROM problems WHERE id = $1`, problemID)
+		if err := row.Scan(&rawTestCases); err != nil {
+			t.Fatalf("scan test_cases: %v", err)
+		}
+
+		// Must be '[]', not NULL — the NOT NULL constraint now enforces this.
+		if string(rawTestCases) != "[]" {
+			t.Errorf("expected test_cases='[]' for NULL execution_settings, got %q", rawTestCases)
 		}
 	})
 }
