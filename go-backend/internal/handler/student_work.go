@@ -93,7 +93,7 @@ func (h *StudentWorkHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, work)
 }
 
-// Update handles PATCH /api/v1/student-work/{id} — update code/execution_settings (owner only).
+// Update handles PATCH /api/v1/student-work/{id} — update code/test_cases (owner only).
 func (h *StudentWorkHandler) Update(w http.ResponseWriter, r *http.Request) {
 	workID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {

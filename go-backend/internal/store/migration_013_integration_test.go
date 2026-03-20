@@ -114,7 +114,7 @@ func TestIntegration_Migration013_StudentWorkTableExists(t *testing.T) {
 	// Verify columns
 	expectedColumns := []string{
 		"id", "namespace_id", "user_id", "problem_id", "section_id",
-		"code", "execution_settings", "created_at", "last_update",
+		"code", "created_at", "last_update",
 	}
 	for _, col := range expectedColumns {
 		var colExists bool

@@ -5,6 +5,7 @@ I/O test runner for the executor service.
 Receives:
   argv[1]: path to student code file (solution.py or Main.java)
   argv[2]: path to JSON test definitions file
+  argv[3]: language (optional, default "python")
 
 Each test definition has the shape:
   {
@@ -79,6 +80,7 @@ def run_test(code_path, test, language):
     random_seed = test.get("random_seed", None)
 
     start = time.monotonic()
+    seeded_tmp_path = None
     try:
         if language == "java":
             # For Java: the code_path is the .java source file.
@@ -102,16 +104,21 @@ def run_test(code_path, test, language):
                 tmp.write(seeded_code)
                 tmp.close()
                 cmd = [python_bin, tmp.name]
+                seeded_tmp_path = tmp.name
             else:
                 cmd = [python_bin, code_path]
 
-        proc = subprocess.run(
-            cmd,
-            input=stdin_input,
-            capture_output=True,
-            text=True,
-            timeout=PER_TEST_TIMEOUT_SEC,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=stdin_input,
+                capture_output=True,
+                text=True,
+                timeout=PER_TEST_TIMEOUT_SEC,
+            )
+        finally:
+            if seeded_tmp_path:
+                os.unlink(seeded_tmp_path)
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         actual_stdout = proc.stdout
@@ -185,7 +192,7 @@ def run_test(code_path, test, language):
 
 def main():
     if len(sys.argv) < 3:
-        print(json.dumps({"error": "usage: io_test_runner.py <code_path> <tests_path>"}))
+        print(json.dumps({"error": "usage: io_test_runner.py <code_path> <tests_path> [<language>]"}))
         sys.exit(1)
 
     code_path = sys.argv[1]
