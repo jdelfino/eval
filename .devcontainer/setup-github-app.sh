@@ -1,6 +1,6 @@
 #!/bin/bash
 # setup-github-app.sh - Generate GitHub App installation token for Claude
-# Runs via postStartCommand (every container start)
+# Safe to call frequently — skips regeneration if token is <55 minutes old.
 #
 # The app token scopes Claude's git/gh access to only the installed repos
 # with only the granted permissions. This is safer than a personal PAT.
@@ -10,6 +10,34 @@
 set -e
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-$(pwd)}"
+
+# Wire up shell profile so GH_TOKEN auto-refreshes in every new shell.
+# The profile calls this script (which skips if token is fresh), then reads the file.
+# Done unconditionally so re-running the script always keeps profiles current.
+_SCRIPT_PATH="$WORKSPACE_DIR/.devcontainer/setup-github-app.sh"
+_PROFILE_BLOCK="# BEGIN: GitHub App token auto-refresh
+if [ -f \"$_SCRIPT_PATH\" ]; then
+    WORKSPACE_DIR=\"$WORKSPACE_DIR\" \"$_SCRIPT_PATH\" >/dev/null 2>&1 || true
+    export GH_TOKEN=\$(cat \"$WORKSPACE_DIR/.gh-app-token\" 2>/dev/null)
+fi
+# END: GitHub App token auto-refresh"
+
+for _rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    if [ -f "$_rc" ]; then
+        sed -i '/^# GitHub App token for agent identity$/,/^fi$/d' "$_rc"
+        sed -i '/^# BEGIN: GitHub App token auto-refresh$/,/^# END: GitHub App token auto-refresh$/d' "$_rc"
+        echo "" >> "$_rc"
+        printf '%s\n' "$_PROFILE_BLOCK" >> "$_rc"
+    fi
+done
+unset _SCRIPT_PATH _PROFILE_BLOCK _rc
+
+# Skip token regeneration if fresh (< 55 minutes old).
+# Tokens expire after 1 hour; 55 minutes gives a 5-minute buffer.
+if [ -f "$WORKSPACE_DIR/.gh-app-token" ] && \
+   find "$WORKSPACE_DIR/.gh-app-token" -mmin -55 -print -quit 2>/dev/null | grep -q .; then
+    exit 0
+fi
 
 # Load 1Password token if needed
 if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && [ -f "$WORKSPACE_DIR/.op-token" ]; then
@@ -72,20 +100,5 @@ chmod 600 "$WORKSPACE_DIR/.gh-app-token"
 
 # Configure git to use the app token for this repo
 git config url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-
-# Wire up shell profile so GH_TOKEN uses the app token in new shells
-# (the session-start hook runs this script, but exports don't propagate
-# to subsequent Bash tool calls — shell profile is the only way)
-PROFILE_LINE="# GitHub App token for agent identity
-if [ -f \"$WORKSPACE_DIR/.gh-app-token\" ]; then
-    export GH_TOKEN=\$(cat \"$WORKSPACE_DIR/.gh-app-token\")
-fi"
-
-for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    if [ -f "$rc" ] && ! grep -qF "gh-app-token" "$rc" 2>/dev/null; then
-        echo "" >> "$rc"
-        echo "$PROFILE_LINE" >> "$rc"
-    fi
-done
 
 echo "GitHub App token generated (expires in 1 hour)"
