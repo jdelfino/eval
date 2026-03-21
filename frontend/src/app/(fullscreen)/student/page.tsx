@@ -315,7 +315,7 @@ function StudentPage() {
   const handleAddCase = useCallback(() => {
     setStudentCases(prev => {
       const newCase: IOTestCase = {
-        name: `Case ${prev.length + 1}`,
+        name: `My Case ${prev.length + 1}`,
         input: '',
         match_type: 'exact',
         order: prev.length,

@@ -203,4 +203,51 @@ describe('executeCode()', () => {
     expect(statuses.filter((s) => s === 'passed').length).toBe(2);
     expect(statuses.filter((s) => s === 'failed').length).toBe(1);
   });
+
+  it('returns status "passed" when expected_output matches actual output', async () => {
+    /**
+     * Contract: expected_output matching is evaluated by the executor.
+     * When the program output equals expected_output exactly, status must be "passed".
+     * If this breaks, pass/fail grading is silently broken for all students.
+     */
+    const response = await executeCode(
+      'print("hello")',
+      'python3',
+      {
+        cases: [{
+          name: 'pass-case',
+          input: '',
+          match_type: 'exact' as const,
+          expected_output: 'hello',
+        }],
+      }
+    );
+
+    const result = response.results.find(r => r.name === 'pass-case');
+    expect(result).toBeDefined();
+    expect(result?.status).toBe('passed');
+  });
+
+  it('returns status "failed" when expected_output does not match actual output', async () => {
+    /**
+     * Contract: expected_output mismatch must produce status "failed".
+     * If the executor always returns "passed" or "run" regardless, grading is broken.
+     */
+    const response = await executeCode(
+      'print("hello")',
+      'python3',
+      {
+        cases: [{
+          name: 'fail-case',
+          input: '',
+          match_type: 'exact' as const,
+          expected_output: 'wrong output',
+        }],
+      }
+    );
+
+    const result = response.results.find(r => r.name === 'fail-case');
+    expect(result).toBeDefined();
+    expect(result?.status).toBe('failed');
+  });
 });

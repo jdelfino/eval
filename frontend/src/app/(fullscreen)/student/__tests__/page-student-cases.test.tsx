@@ -244,6 +244,33 @@ describe('StudentPage student case CRUD (PLAT-x0ii)', () => {
       const uniqueNames = new Set(names);
       expect(uniqueNames.size).toBe(names.length);
     });
+
+    it('uses "My Case N" naming to avoid collision with instructor case names like "Case 1"', async () => {
+      // Regression test for PLAT-u7t5: student cases were named "Case N", colliding
+      // with instructor cases. The fix prefixes with "My Case" instead.
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      act(() => {
+        lastCodeEditorProps.onAddCase();
+      });
+
+      await waitFor(() => {
+        expect(lastCodeEditorProps.studentCases).toHaveLength(2);
+      });
+
+      const newCase = lastCodeEditorProps.studentCases[1];
+      expect(newCase.name).toMatch(/^My Case /);
+
+      // Instructor cases in fakeStudentWork are named "instructor-case".
+      // Student case name must not match any instructor case name.
+      const instructorCases = lastCodeEditorProps.instructorCases ?? [];
+      const instructorNames = instructorCases.map((c: any) => c.name);
+      expect(instructorNames).not.toContain(newCase.name);
+    });
   });
 
   describe('onUpdateStudentCase handler', () => {

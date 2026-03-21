@@ -310,34 +310,8 @@ export interface StudentWorkSummary {
 // Execution — Cases[] protocol
 // ---------------------------------------------------------------------------
 
-/** CaseResult — outcome of a single test case execution. */
-export interface CaseResult {
-  name: string;
-  type: string;
-  /** "run" | "passed" | "failed" | "error" */
-  status: string;
-  input?: string;
-  expected?: string;
-  actual?: string;
-  stderr?: string;
-  time_ms: number;
-}
-
-/** CaseSummary — aggregate counts across all case results. */
-export interface CaseSummary {
-  total: number;
-  passed: number;
-  failed: number;
-  errors: number;
-  run: number;
-  time_ms: number;
-}
-
-/** TestResponse — the response shape for POST /execute. */
-export interface TestResponse {
-  results: CaseResult[];
-  summary: CaseSummary;
-}
+// TestResponse, TestSummary, and TestResult are defined in @/lib/api/tests
+// (strict types with TestStatus union). Import from there, not from here.
 
 /** @deprecated Use TestResponse instead. Legacy flat execution result shape. */
 export interface ExecutionResult {
