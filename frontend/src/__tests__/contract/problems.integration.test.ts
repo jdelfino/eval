@@ -56,6 +56,7 @@ describe('Problems API', () => {
         starter_code: 'print("hello")',
         solution: 'print("hello world")',
         language: 'python',
+        test_cases: [],
       });
 
       createdProblemId = problem.id;
