@@ -5,7 +5,7 @@
  *
  * Provides an editor for creating/editing problems during an active session.
  * Similar to ProblemCreator but designed for live session updates rather than
- * database persistence. Uses Monaco editor and supports execution settings.
+ * database persistence. Uses Monaco editor.
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -13,31 +13,21 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
+import type { TestResult } from '@/types/problem';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
+    problem: { title: string; description: string; starter_code: string }
   ) => void;
   initialProblem?: Problem | { title: string; description: string; starter_code: string; solution?: string | null } | null;
-  initialExecutionSettings?: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
   onFeatureSolution?: () => void;
 }
 
 export default function SessionProblemEditor({
   onUpdateProblem,
   initialProblem = null,
-  initialExecutionSettings = {},
   onFeatureSolution,
 }: SessionProblemEditorProps) {
   const [title, setTitle] = useState(initialProblem?.title || '');
@@ -49,17 +39,9 @@ export default function SessionProblemEditor({
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = (initialProblem as Problem | null)?.language ?? 'python';
 
-  // Execution settings
-  const [stdin, setStdin] = useState(initialExecutionSettings?.stdin || '');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(initialExecutionSettings?.random_seed);
-  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
-    initialExecutionSettings?.attached_files || []
-  );
-
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
-  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded)
   useEffect(() => {
@@ -70,18 +52,6 @@ export default function SessionProblemEditor({
       setSolution(initialSolution);
     }
   }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
-
-  useEffect(() => {
-    if (initialExecutionSettings) {
-      setStdin(initialExecutionSettings.stdin || '');
-      setRandomSeed(initialExecutionSettings.random_seed);
-      setAttachedFiles(initialExecutionSettings.attached_files || []);
-    }
-  }, [
-    initialExecutionSettings?.stdin,
-    initialExecutionSettings?.random_seed,
-    initialExecutionSettings?.attached_files
-  ]);
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
@@ -124,12 +94,7 @@ export default function SessionProblemEditor({
       starter_code: starter_code.trim(),
     };
 
-    const execution_settings: any = {};
-    if (stdin.trim()) execution_settings.stdin = stdin.trim();
-    if (random_seed !== undefined) execution_settings.random_seed = random_seed;
-    if (attached_files.length > 0) execution_settings.attached_files = attached_files;
-
-    onUpdateProblem(problem, Object.keys(execution_settings).length > 0 ? execution_settings : undefined);
+    onUpdateProblem(problem);
   };
 
   const debuggerHook = useApiDebugger();
@@ -212,12 +177,6 @@ export default function SessionProblemEditor({
         </div>
       </div>
 
-      {executionError && (
-        <div style={{ flexShrink: 0, padding: '0.5rem 1rem', backgroundColor: '#f8d7da', borderBottom: '1px solid #f5c2c7', color: '#842029', fontSize: '0.875rem' }}>
-          {executionError}
-        </div>
-      )}
-
       {/* Tab bar for Starter Code / Solution */}
       <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
         <Tabs.List>
@@ -232,28 +191,28 @@ export default function SessionProblemEditor({
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : () => {}}
           readOnly={activeTab === 'solution'}
-          onRun={(execution_settings) => {
+          onRun={() => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
-            setExecutionResult(null);
-            setExecutionError(null);
+            setRunResult(null);
             executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err: any) => {
-              setExecutionError(err?.message || 'Failed to run code');
+              cases: [FREE_RUN_CASE],
+            }).then(response => {
+              setRunResult(response.results[0] ?? null);
+            }).catch((err) => {
+              setRunResult({
+                name: 'run',
+                type: 'io',
+                status: 'error',
+                actual: '',
+                stderr: err.message || 'Execution failed',
+                time_ms: 0,
+              });
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}
-          execution_result={executionResult}
+          runResult={runResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          exampleInput={stdin}
-          onStdinChange={setStdin}
-          random_seed={random_seed}
-          onRandomSeedChange={setRandomSeed}
-          attached_files={attached_files}
-          onAttachedFilesChange={setAttachedFiles}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}

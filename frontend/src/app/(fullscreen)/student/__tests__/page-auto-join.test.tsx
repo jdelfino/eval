@@ -26,7 +26,7 @@ jest.mock('@/lib/api/student-work', () => ({
 
 jest.mock('@/lib/api/execute', () => ({
   warmExecutor: jest.fn().mockResolvedValue(undefined),
-  executeCode: jest.fn().mockResolvedValue({ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: '', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }),
+  executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 10 }),
 }));
 
 jest.mock('@/lib/api/sections', () => ({

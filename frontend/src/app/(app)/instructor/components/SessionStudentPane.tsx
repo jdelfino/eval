@@ -12,9 +12,10 @@ import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem } from '@/types/problem';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
-import { Student, RealtimeStudent, TestResponse } from '../types';
+import { Student, RealtimeStudent } from '../types';
+import type { TestResult } from '@/types/problem';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -46,12 +47,6 @@ interface SessionStudentPaneProps {
   realtimeStudents: RealtimeStudent[];
   /** Current session problem */
   sessionProblem: Problem | null;
-  /** Session execution settings */
-  sessionExecutionSettings: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
   /** Join code for the session */
   join_code?: string;
   /** Callback when a student is selected */
@@ -63,7 +58,7 @@ interface SessionStudentPaneProps {
   /** Callback to view student history */
   onViewHistory?: (studentId: string, studentName: string) => void;
   /** Callback to execute student code */
-  onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<TestResponse | undefined>;
+  onExecuteCode?: (studentId: string, code: string) => Promise<TestResult | undefined>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -83,7 +78,6 @@ export function SessionStudentPane({
   students,
   realtimeStudents,
   sessionProblem,
-  sessionExecutionSettings,
   join_code,
   onSelectStudent,
   onShowOnPublicView,
@@ -96,7 +90,7 @@ export function SessionStudentPane({
   // Local state for student selection and code
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedStudentCode, setSelectedStudentCode] = useState<string>('');
-  const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
   const [isExecutingCode, setIsExecutingCode] = useState(false);
 
   // Analysis options state
@@ -137,20 +131,20 @@ export function SessionStudentPane({
 
   const handleSelectStudent = (studentId: string) => {
     setSelectedStudentId(studentId);
-    setExecutionResult(null);
+    setRunResult(null);
     onSelectStudent?.(studentId);
   };
 
-  const handleExecuteStudentCode = async (execution_settings: ExecutionSettings) => {
+  const handleExecuteStudentCode = async () => {
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
-    setExecutionResult(null);
+    setRunResult(null);
 
     try {
-      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, execution_settings);
+      const result = await onExecuteCode(selectedStudentId, selectedStudentCode);
       if (result) {
-        setExecutionResult(result);
+        setRunResult(result);
       }
     } finally {
       setIsExecutingCode(false);
@@ -313,12 +307,9 @@ export function SessionStudentPane({
                 onChange={() => {}} // Read-only for instructor
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
-                exampleInput={sessionExecutionSettings.stdin}
-                random_seed={selectedStudent?.execution_settings?.random_seed}
-                attached_files={selectedStudent?.execution_settings?.attached_files}
                 readOnly
                 problem={sessionProblem}
-                execution_result={execution_result}
+                runResult={runResult}
               />
             </EditorContainer>
           </div>

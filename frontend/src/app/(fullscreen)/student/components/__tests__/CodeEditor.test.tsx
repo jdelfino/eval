@@ -61,16 +61,6 @@ jest.mock('@monaco-editor/react', () => {
 // Other shared mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../ExecutionSettings', () => {
-  return function MockExecutionSettings({ inSidebar }: { inSidebar?: boolean }) {
-    return (
-      <div data-testid="execution-settings" data-in-sidebar={inSidebar}>
-        Execution Settings {inSidebar ? '(Sidebar)' : '(Bottom)'}
-      </div>
-    );
-  };
-});
-
 jest.mock('@/hooks/useResponsiveLayout', () => ({
   useResponsiveLayout: jest.fn(() => true), // default: desktop
   useSidebarSection: jest.fn((section_id: string, defaultCollapsed: boolean) => ({
@@ -199,11 +189,7 @@ describe('CodeEditor - API Execution', () => {
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      expect(mockOnRun).toHaveBeenCalledWith({
-        stdin: undefined,
-        random_seed: undefined,
-        attached_files: undefined,
-      });
+      expect(mockOnRun).toHaveBeenCalledWith();
     });
 
     it('displays execution results when provided', () => {
@@ -212,15 +198,17 @@ describe('CodeEditor - API Execution', () => {
           code="print('Hello, World!')"
           onChange={jest.fn()}
           onRun={jest.fn()}
-          execution_result={{
-            results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello, World!\n', time_ms: 125 }],
-            summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 125 },
+          runResult={{
+            name: 'run',
+            type: 'io',
+            status: 'run',
+            actual: 'Hello, World!\n',
+            time_ms: 125,
           }}
         />
       );
 
-      expect(screen.getByText('✓ Success')).toBeInTheDocument();
-      expect(screen.getByText(/Execution time: 125ms/)).toBeInTheDocument();
+      expect(screen.getByText(/125ms/)).toBeInTheDocument();
       expect(screen.getByText('Output:')).toBeInTheDocument();
       expect(screen.getByText('Hello, World!')).toBeInTheDocument();
     });
@@ -231,16 +219,19 @@ describe('CodeEditor - API Execution', () => {
           code="print(x)"
           onChange={jest.fn()}
           onRun={jest.fn()}
-          execution_result={{
-            results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'NameError: name "x" is not defined', time_ms: 100 }],
-            summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 100 },
+          runResult={{
+            name: 'run',
+            type: 'io',
+            status: 'error',
+            actual: '',
+            stderr: 'NameError: name "x" is not defined',
+            time_ms: 100,
           }}
         />
       );
 
-      expect(screen.getByText('✗ Error')).toBeInTheDocument();
-      expect(screen.getByText(/Execution time: 100ms/)).toBeInTheDocument();
-      expect(screen.getByText('Error:')).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(screen.getByText(/100ms/)).toBeInTheDocument();
       expect(screen.getByText('NameError: name "x" is not defined')).toBeInTheDocument();
     });
   });
@@ -637,10 +628,11 @@ describe('CodeEditor - Debugger Output Display', () => {
         <CodeEditor
           code="print('Hello')"
           onChange={jest.fn()}
-          execution_result={{ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello\n', time_ms: 100 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 100 } }}
+          runResult={{ name: 'run', type: 'io', status: 'run', actual: 'Hello\n', time_ms: 100 }}
         />
       );
-      expect(screen.getByText('✓ Success')).toBeInTheDocument();
+      // RunOnlyResult shows Output: header and actual value
+      expect(screen.getByText('Output:')).toBeInTheDocument();
       // Use getAllByText to handle the textarea also containing the code
       expect(screen.getAllByText(/Hello/).length).toBeGreaterThan(0);
     });
@@ -704,22 +696,6 @@ describe('CodeEditor - Form Interaction', () => {
 
     const problemToggleButton = screen.getByLabelText('Problem');
     await act(async () => { fireEvent.click(problemToggleButton); });
-
-    expect(handleSubmit).not.toHaveBeenCalled();
-  });
-
-  it('does not submit parent form when clicking Settings toggle button', async () => {
-    const handleSubmit = jest.fn((e) => e.preventDefault());
-
-    render(
-      <form onSubmit={handleSubmit}>
-        <CodeEditor code="print('test')" onChange={jest.fn()} problem={mockProblem} />
-        <button type="submit">Submit Form</button>
-      </form>
-    );
-
-    const settingsToggleButton = screen.getByLabelText('Execution Settings');
-    await act(async () => { fireEvent.click(settingsToggleButton); });
 
     expect(handleSubmit).not.toHaveBeenCalled();
   });
@@ -861,7 +837,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: '# Main Header\n\nSome content\n\n## Sub Header',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -882,7 +858,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'This is **bold** text.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -903,7 +879,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Call the `main()` function to start.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -924,7 +900,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: '## Requirements\n\n- First item\n- Second item\n- Third item',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -947,7 +923,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'See [Python docs](https://docs.python.org) for more info.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -969,7 +945,7 @@ describe('CodeEditor - Problem Description Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Example:\n\n```python\nprint("hello")\n```',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1004,7 +980,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: '# Main Header\n\nSome content\n\n## Sub Header',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1030,7 +1006,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'This is **bold** text.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1056,7 +1032,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: 'Call the `main()` function to start.',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1082,7 +1058,7 @@ describe('CodeEditor - Mobile Markdown Rendering', () => {
       title: 'Test Problem',
       description: '## Requirements\n\n- First item\n- Second item',
       starter_code: '',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1124,7 +1100,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'This is a test problem description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1148,7 +1124,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1190,7 +1166,7 @@ describe('CodeEditor - Problem Sidebar', () => {
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'def solution():\n    pass',
-      execution_settings: {},
+
       created_at: new Date(),
       updated_at: new Date(),
       language: 'python',
@@ -1254,7 +1230,7 @@ describe('CodeEditor - Empty States', () => {
           code="print('Hello, World!')"
           onChange={jest.fn()}
           problem={{ title: 'Test Problem', description: null, starter_code: null, language: 'python' }}
-          execution_result={{ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello, World!', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }}
+          runResult={{ name: 'run', type: 'io', status: 'run', actual: 'Hello, World!', time_ms: 10 }}
         />
       );
 
@@ -1505,9 +1481,13 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'x = 1\ny = x + undefined_var\nprint(y)'}
         onChange={jest.fn()}
-        execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'Traceback (most recent call last):\n  File "<student code>", line 2, in <module>\nNameError: name \'undefined_var\' is not defined', time_ms: 50 }],
-          summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'error',
+          actual: '',
+          stderr: 'Traceback (most recent call last):\n  File "<student code>", line 2, in <module>\nNameError: name \'undefined_var\' is not defined',
+          time_ms: 50,
         }}
       />
     );
@@ -1542,9 +1522,13 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'def foo():\n    raise ValueError("bad")\n\nfoo()'}
         onChange={jest.fn()}
-        execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: multiFrameError, time_ms: 50 }],
-          summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'error',
+          actual: '',
+          stderr: multiFrameError,
+          time_ms: 50,
         }}
       />
     );
@@ -1560,14 +1544,18 @@ describe('CodeEditor - Error Line Highlighting', () => {
 
   it('clears error decorations when execution result becomes null', () => {
     const errorResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 3\nNameError: name "x" is not defined', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
+      name: 'run',
+      type: 'io' as const,
+      status: 'error' as const,
+      actual: '',
+      stderr: 'File "<student code>", line 3\nNameError: name "x" is not defined',
+      time_ms: 50,
     };
     const { rerender } = render(
       <CodeEditor
         code={'print("hello")'}
         onChange={jest.fn()}
-        execution_result={errorResult}
+        runResult={errorResult}
       />
     );
 
@@ -1580,7 +1568,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'print("hello")'}
         onChange={jest.fn()}
-        execution_result={null}
+        runResult={null}
       />
     );
 
@@ -1593,14 +1581,18 @@ describe('CodeEditor - Error Line Highlighting', () => {
 
   it('clears error decorations when execution result becomes successful', () => {
     const errorResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 2\nNameError: name "x" is not defined', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
+      name: 'run',
+      type: 'io' as const,
+      status: 'error' as const,
+      actual: '',
+      stderr: 'File "<student code>", line 2\nNameError: name "x" is not defined',
+      time_ms: 50,
     };
     const { rerender } = render(
       <CodeEditor
         code={'print("hello")'}
         onChange={jest.fn()}
-        execution_result={errorResult}
+        runResult={errorResult}
       />
     );
 
@@ -1611,9 +1603,12 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'print("hello")'}
         onChange={jest.fn()}
-        execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'hello\n', time_ms: 50 }],
-          summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 50 },
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'run',
+          actual: 'hello\n',
+          time_ms: 50,
         }}
       />
     );
@@ -1629,9 +1624,13 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'print("hello")'}
         onChange={jest.fn()}
-        execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'Killed: execution timeout', time_ms: 10000 }],
-          summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 10000 },
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'error',
+          actual: '',
+          stderr: 'Killed: execution timeout',
+          time_ms: 10000,
         }}
       />
     );
@@ -1646,15 +1645,18 @@ describe('CodeEditor - Error Line Highlighting', () => {
 
   it('clears error decorations when debugger activates', () => {
     const activeDebugger = makeActiveDebugger();
-    const errResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 1\nNameError: ...', time_ms: 50 }],
-      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
-    };
     const { rerender } = render(
       <CodeEditor
         code={'x = undefined_var'}
         onChange={jest.fn()}
-        execution_result={errResult}
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'error',
+          actual: '',
+          stderr: 'File "<student code>", line 1\nNameError: ...',
+          time_ms: 50,
+        }}
       />
     );
 
@@ -1663,7 +1665,14 @@ describe('CodeEditor - Error Line Highlighting', () => {
       <CodeEditor
         code={'x = undefined_var'}
         onChange={jest.fn()}
-        execution_result={errResult}
+        runResult={{
+          name: 'run',
+          type: 'io',
+          status: 'error',
+          actual: '',
+          stderr: 'File "<student code>", line 1\nNameError: ...',
+          time_ms: 50,
+        }}
         debugger={activeDebugger}
       />
     );
@@ -1687,7 +1696,6 @@ describe('CodeEditor - Font Size Scaling', () => {
     title: 'Test Problem',
     description: 'A test problem description.',
     starter_code: '',
-    execution_settings: {},
     created_at: new Date(),
     updated_at: new Date(),
     language: 'python',
@@ -1925,5 +1933,124 @@ describe('CodeEditor - Font Size Scaling', () => {
       expect(proseContainer!.className).toContain('prose-lg');
       expect(proseContainer!.className).not.toContain('prose-sm');
     });
+  });
+});
+
+// ===========================================================================
+// Cases Panel Integration
+// ===========================================================================
+
+describe('CodeEditor - Cases Panel Integration', () => {
+  const instructorCases = [
+    { name: 'case1', input: 'hello', expected_output: 'HELLO', match_type: 'exact' as const, order: 0 },
+  ];
+
+  const mockCaseRunner = {
+    caseResults: {},
+    selectedCase: null,
+    isRunning: false,
+    error: null,
+    selectCase: jest.fn(),
+    runCase: jest.fn(),
+    runAllCases: jest.fn(),
+    clearResults: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: true,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('shows Test Cases activity bar button when instructorCases provided', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={mockCaseRunner}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Test Cases' })).toBeInTheDocument();
+  });
+
+  it('shows Test Cases activity bar button when caseRunner provided without cases', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={[]}
+        studentCases={[]}
+        caseRunner={mockCaseRunner}
+      />
+    );
+
+    // caseRunner alone (no cases) still shows the button per our logic
+    expect(screen.getByRole('button', { name: 'Test Cases' })).toBeInTheDocument();
+  });
+
+  it('does not show Test Cases button when no caseRunner and no cases', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={[]}
+        studentCases={[]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Test Cases' })).not.toBeInTheDocument();
+  });
+
+  it('shows CaseResultDisplay in output pane when a case is selected', () => {
+    // Use a result with expected output so the Pass badge renders
+    const passResult = {
+      name: 'case1',
+      type: 'io' as const,
+      status: 'passed' as const,
+      input: 'hello',
+      expected: 'HELLO',
+      actual: 'HELLO',
+      time_ms: 10,
+    };
+    const caseRunnerWithSelected = {
+      ...mockCaseRunner,
+      selectedCase: 'case1',
+      caseResults: { case1: passResult },
+    };
+
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={caseRunnerWithSelected}
+      />
+    );
+
+    // CaseResultDisplay is rendered — confirms case result output pane is shown
+    expect(screen.getByText('Pass')).toBeInTheDocument();
+  });
+
+  it('shows normal output pane when no case is selected', () => {
+    render(
+      <CodeEditor
+        code=""
+        onChange={jest.fn()}
+        instructorCases={instructorCases}
+        caseRunner={mockCaseRunner}
+        problem={{ id: 'p1', title: 'Test', description: null, starter_code: null, test_cases: null, author_id: 'u1', class_id: null, tags: [], solution: null, language: 'python', created_at: new Date(), updated_at: new Date() }}
+        runResult={null}
+      />
+    );
+
+    // No case selected: shows normal output pane placeholder
+    expect(screen.getByText('No output yet.')).toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@
  * Type-safe validators that use TypeScript interfaces to catch API mismatches at compile time.
  */
 
-import { User, Session, SessionStudent, TestResponse, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
+import { User, Session, SessionStudent, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentProgress, StudentWorkSummary } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 import type {
   StudentJoinedData,
@@ -98,16 +98,6 @@ export function validateSessionStudentShape(obj: SessionStudent, label = 'Sessio
   expectSnakeCaseKeys(obj, label);
 }
 
-/** Validate the shape of a TestResponse object from the backend (cases[] protocol). */
-export function validateTestResponseShape(obj: TestResponse, label = 'TestResponse') {
-  expect(Array.isArray(obj.results)).toBe(true);
-  expect(typeof obj.summary).toBe('object');
-  expect(obj.summary).not.toBeNull();
-  expect(typeof obj.summary.total).toBe('number');
-  expect(typeof obj.summary.time_ms).toBe('number');
-  expectSnakeCaseKeys(obj, label);
-}
-
 /** Validate the shape of a SectionProblem object from the backend. */
 export function validateSectionProblemShape(obj: SectionProblem, label = 'SectionProblem') {
   expect(typeof obj.id).toBe('string');
@@ -147,8 +137,8 @@ export function validateStudentWorkShape(obj: StudentWork, label = 'StudentWork'
   expect(typeof obj.section_id).toBe('string');
   expect(typeof obj.problem_id).toBe('string');
   expect(typeof obj.code).toBe('string');
-  // test_cases is an array (may be empty)
-  expect(Array.isArray(obj.test_cases)).toBe(true);
+  // test_cases is an array or null
+  expect(obj.test_cases === null || Array.isArray(obj.test_cases)).toBe(true);
   expect(typeof obj.last_update).toBe('string');
   expect(typeof obj.created_at).toBe('string');
   expectSnakeCaseKeys(obj, label);

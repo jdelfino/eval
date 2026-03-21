@@ -7,15 +7,22 @@
  * Uses the ProblemLibrary component for the main UI.
  */
 
-import React, { Suspense, useCallback } from 'react';
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProblemLibrary from '../components/ProblemLibrary';
 import ProblemCreator from '../components/ProblemCreator';
 import NamespaceHeader from '@/components/NamespaceHeader';
+import { listClasses } from '@/lib/api/classes';
+import type { Class } from '@/types/api';
 
 function ProblemsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [classes, setClasses] = useState<Class[]>([]);
+
+  useEffect(() => {
+    listClasses().then(setClasses).catch(() => {});
+  }, []);
 
   const editParam = searchParams.get('edit');
   const showCreator = editParam !== null;
@@ -40,6 +47,7 @@ function ProblemsPage() {
           problem_id={editingProblemId}
           onCancel={handleCloseCreator}
           onProblemCreated={handleCloseCreator}
+          classes={classes}
         />
       </div>
     );

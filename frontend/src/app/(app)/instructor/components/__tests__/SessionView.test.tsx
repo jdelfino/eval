@@ -146,11 +146,10 @@ describe('SessionView', () => {
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: mockProblem,
-    sessionExecutionSettings: { stdin: 'test input' },
     onEndSession: jest.fn().mockResolvedValue(undefined),
     onUpdateProblem: jest.fn().mockResolvedValue(undefined),
     onFeatureStudent: jest.fn().mockResolvedValue(undefined),
-    executeCode: jest.fn().mockResolvedValue({ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: '', time_ms: 100 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 100 } }),
+    executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 100 }),
   };
 
   beforeEach(() => {

@@ -78,8 +78,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: import('./problem').TestCase[] | null;
-  execution_settings: import('./problem').ExecutionSettings | null;
+  test_cases: import('./problem').IOTestCase[] | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -97,7 +96,7 @@ export interface Session {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases?: import('./problem').IOTestCase[] | null;
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -112,7 +111,7 @@ export interface SessionStudent {
   user_id: string;
   name: string;
   code: string;
-  execution_settings: unknown;
+  test_cases: import('./problem').IOTestCase[] | null;
   joined_at: string;
 }
 
@@ -168,7 +167,7 @@ export interface SessionPublicState {
   problem: SessionPublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases?: import('./problem').IOTestCase[] | null;
   join_code: string;
   status: string;
 }
@@ -221,7 +220,7 @@ export interface StudentWork {
   section_id: string;
   problem_id: string;
   code: string;
-  test_cases: unknown[];
+  test_cases: import('./problem').IOTestCase[] | null;
   last_update: string;
   created_at: string;
 }
@@ -302,4 +301,13 @@ export interface CaseSummary {
 export interface TestResponse {
   results: CaseResult[];
   summary: CaseSummary;
+}
+
+/** @deprecated Use TestResponse instead. Legacy flat execution result shape. */
+export interface ExecutionResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  execution_time_ms: number;
+  stdin?: string;
 }

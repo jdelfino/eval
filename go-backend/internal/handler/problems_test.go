@@ -333,6 +333,9 @@ func TestCreateProblem_Success(t *testing.T) {
 			if params.Language != "java" {
 				t.Fatalf("unexpected language: %v", params.Language)
 			}
+			if params.TestCases == nil {
+				t.Fatalf("expected test_cases to be forwarded, got nil")
+			}
 			return p, nil
 		},
 	}
@@ -462,13 +465,18 @@ func TestUpdateProblem_Success(t *testing.T) {
 			if params.Language == nil || *params.Language != newLang {
 				t.Fatalf("unexpected language: %v", params.Language)
 			}
+			if params.TestCases == nil {
+				t.Fatalf("expected test_cases to be forwarded, got nil")
+			}
 			return p, nil
 		},
 	}
 
+	newCases := json.RawMessage(`[{"input":"a b","expected":"ab"}]`)
 	body, _ := json.Marshal(map[string]any{
-		"title":    newTitle,
-		"language": newLang,
+		"title":      newTitle,
+		"language":   newLang,
+		"test_cases": newCases,
 	})
 	h := NewProblemHandler(nil)
 	req := httptest.NewRequest(http.MethodPatch, "/"+p.ID.String(), bytes.NewReader(body))
@@ -1295,7 +1303,7 @@ func TestExportProblems_JSONFormatExplicit(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify Content-Type and Content-Disposition headers (same as existing test)
+	// Verify Content-Type and Content-Disposition headers
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
 	}
@@ -1304,7 +1312,7 @@ func TestExportProblems_JSONFormatExplicit(t *testing.T) {
 		t.Errorf("expected Content-Disposition with attachment and .json filename, got %q", cd)
 	}
 
-	// Verify envelope structure (same validation as existing test)
+	// Verify envelope structure
 	var envelope map[string]json.RawMessage
 	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode envelope: %v", err)
@@ -1325,7 +1333,6 @@ func TestExportProblems_JSONFormatExplicit(t *testing.T) {
 
 // TestExportProblems_DefaultFormatIsJSON verifies that omitting the format parameter
 // defaults to JSON export, maintaining backward compatibility.
-// This catches default format not being set correctly.
 func TestExportProblems_DefaultFormatIsJSON(t *testing.T) {
 	p := testProblem()
 
@@ -1362,7 +1369,6 @@ func TestExportProblems_DefaultFormatIsJSON(t *testing.T) {
 
 // TestExportProblems_InvalidFormat verifies that an invalid format parameter
 // returns a 400 error with a helpful message.
-// This catches missing validation on the format parameter.
 func TestExportProblems_InvalidFormat(t *testing.T) {
 	repo := &mockProblemRepo{
 		listProblemsFilteredFn: func(_ context.Context, _ store.ProblemFilters) ([]store.Problem, error) {
@@ -1383,7 +1389,7 @@ func TestExportProblems_InvalidFormat(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify error message mentions valid formats
+	// Verify error message mentions format validation
 	body := rec.Body.String()
 	if !strings.Contains(body, "invalid format") && !strings.Contains(body, "format") {
 		t.Errorf("expected error message to mention format validation, got %q", body)
@@ -1594,161 +1600,4 @@ func TestListProblems_IncludePublicFalse(t *testing.T) {
 	if capturedFilters.IncludePublic {
 		t.Errorf("expected IncludePublic=false, got true")
 	}
-}
-
-// TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases verifies that the
-// handler's compat bridge converts legacy execution_settings to a single IOTestCase
-// when the frontend sends execution_settings and no test_cases.
-//
-// Contract: during the PR 2→3 transition, old frontends send execution_settings
-// (with stdin, random_seed, attached_files). The compat bridge in Create/Update
-// must convert these to IOTestCase[] so the store receives test_cases correctly.
-// If the bridge is missing or maps fields incorrectly, old-frontend users lose
-// their execution configuration silently with no error.
-func TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases(t *testing.T) {
-	userID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-	classID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
-
-	var capturedParams store.CreateProblemParams
-	p := testProblem()
-
-	repo := &mockProblemRepo{
-		createProblemFn: func(_ context.Context, params store.CreateProblemParams) (*store.Problem, error) {
-			capturedParams = params
-			return p, nil
-		},
-	}
-
-	t.Run("execution_settings with stdin and random_seed converts to IOTestCase", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]any{
-			"title":    "Compat Problem",
-			"class_id": classID.String(),
-			"language": "python",
-			// Old frontend sends execution_settings, no test_cases.
-			"execution_settings": map[string]any{
-				"stdin":       "hi",
-				"random_seed": 42,
-			},
-		})
-		h := NewProblemHandler(nil)
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		ctx := auth.WithUser(req.Context(), &auth.User{
-			ID:          userID,
-			Role:        auth.RoleInstructor,
-			NamespaceID: "test-ns",
-		})
-		ctx = store.WithRepos(ctx, problemRepos(repo))
-		req = req.WithContext(ctx)
-		rec := httptest.NewRecorder()
-
-		h.Create(rec, req)
-
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-		}
-
-		// The store must receive test_cases, not execution_settings.
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
-			t.Fatalf("unmarshal TestCases: %v (raw: %s)", err, capturedParams.TestCases)
-		}
-		if len(cases) != 1 {
-			t.Fatalf("expected 1 IOTestCase, got %d", len(cases))
-		}
-		if cases[0].Input != "hi" {
-			t.Errorf("expected Input='hi', got %q", cases[0].Input)
-		}
-		if cases[0].RandomSeed == nil || *cases[0].RandomSeed != 42 {
-			t.Errorf("expected RandomSeed=42, got %v", cases[0].RandomSeed)
-		}
-	})
-
-	t.Run("execution_settings with attached_files maps to IOTestCase.AttachedFiles", func(t *testing.T) {
-		body, _ := json.Marshal(map[string]any{
-			"title":    "Compat Files Problem",
-			"class_id": classID.String(),
-			"language": "python",
-			"execution_settings": map[string]any{
-				"stdin": "data",
-				"attached_files": []map[string]string{
-					{"name": "input.txt", "content": "hello"},
-				},
-			},
-		})
-		h := NewProblemHandler(nil)
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		ctx := auth.WithUser(req.Context(), &auth.User{
-			ID:          userID,
-			Role:        auth.RoleInstructor,
-			NamespaceID: "test-ns",
-		})
-		ctx = store.WithRepos(ctx, problemRepos(repo))
-		req = req.WithContext(ctx)
-		rec := httptest.NewRecorder()
-
-		h.Create(rec, req)
-
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-		}
-
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
-			t.Fatalf("unmarshal TestCases: %v", err)
-		}
-		if len(cases) != 1 {
-			t.Fatalf("expected 1 IOTestCase, got %d", len(cases))
-		}
-		if len(cases[0].AttachedFiles) != 1 {
-			t.Fatalf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
-		}
-		if cases[0].AttachedFiles[0].Name != "input.txt" {
-			t.Errorf("expected file name 'input.txt', got %q", cases[0].AttachedFiles[0].Name)
-		}
-		if cases[0].AttachedFiles[0].Content != "hello" {
-			t.Errorf("expected file content 'hello', got %q", cases[0].AttachedFiles[0].Content)
-		}
-	})
-
-	t.Run("test_cases takes precedence over execution_settings when both present", func(t *testing.T) {
-		explicitCases := json.RawMessage(`[{"name":"explicit","input":"x","match_type":"exact"}]`)
-		body, _ := json.Marshal(map[string]any{
-			"title":              "Both Fields Problem",
-			"class_id":           classID.String(),
-			"language":           "python",
-			"test_cases":         explicitCases,
-			"execution_settings": map[string]any{"stdin": "should-be-ignored"},
-		})
-		h := NewProblemHandler(nil)
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		ctx := auth.WithUser(req.Context(), &auth.User{
-			ID:          userID,
-			Role:        auth.RoleInstructor,
-			NamespaceID: "test-ns",
-		})
-		ctx = store.WithRepos(ctx, problemRepos(repo))
-		req = req.WithContext(ctx)
-		rec := httptest.NewRecorder()
-
-		h.Create(rec, req)
-
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-		}
-
-		// test_cases must pass through unmodified; execution_settings must be ignored.
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
-			t.Fatalf("unmarshal TestCases: %v", err)
-		}
-		if len(cases) != 1 {
-			t.Fatalf("expected 1 case from test_cases, got %d", len(cases))
-		}
-		if cases[0].Name != "explicit" {
-			t.Errorf("expected case name 'explicit', got %q (execution_settings should have been ignored)", cases[0].Name)
-		}
-	})
 }

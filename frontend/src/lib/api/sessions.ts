@@ -52,16 +52,13 @@ export async function completeSession(sessionId: string): Promise<void> {
  * Update a session's problem inline.
  * @param sessionId - The session ID
  * @param problem - The problem object to set
- * @param executionSettings - Optional execution settings
  */
 export async function updateSessionProblem(
   sessionId: string,
-  problem: Record<string, unknown>,
-  executionSettings?: Record<string, unknown>
+  problem: Record<string, unknown>
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/update-problem`, {
     problem,
-    execution_settings: executionSettings,
   });
 }
 

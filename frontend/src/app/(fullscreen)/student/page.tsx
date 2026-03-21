@@ -6,13 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
 import type { Problem } from '@/types/api';
-import type { TestResponse } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor, executeCode } from '@/lib/api/execute';
-import { ApiError } from '@/lib/api-error';
+import { warmExecutor } from '@/lib/api/execute';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -21,6 +19,7 @@ import { EditorContainer } from './components/EditorContainer';
 import SessionEndedNotification from './components/SessionEndedNotification';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import { useCaseRunner } from '@/hooks/useCaseRunner';
 import type { Session } from '@/types/api';
 
 function StudentPage() {
@@ -37,10 +36,10 @@ function StudentPage() {
   const [problemId, setProblemId] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
-  const [studentExecutionSettings, setStudentExecutionSettings] = useState<{
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  } | null>(null);
+
+  // Test case state
+  const [instructorCases, setInstructorCases] = useState<IOTestCase[]>([]);
+  const [studentCases, setStudentCases] = useState<IOTestCase[]>([]);
 
   // Breadcrumb state
   const [sectionName, setSectionName] = useState<string | null>(null);
@@ -51,14 +50,7 @@ function StudentPage() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [activeSessions, setActiveSessions] = useState<Session[] | null>(null);
 
-  // Execution state
-  const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // True when executor returned 503 (cold-starting) — shown as a distinct warming-up banner
-  const [warmingUp, setWarmingUp] = useState(false);
-  // Last execution settings used, to support retry from the warming-up banner
-  const lastExecutionSettingsRef = useRef<ExecutionSettings | null>(null);
 
   // Join state
   const [joined, setJoined] = useState(false);
@@ -87,6 +79,15 @@ function StudentPage() {
 
   // Debugger state
   const debuggerHook = useApiDebugger();
+
+  // Case runner for executing test cases directly via POST /execute.
+  // Passes code and case definitions from frontend state — no workId or sessionId needed.
+  const caseRunner = useCaseRunner({
+    code,
+    language: problem?.language ?? "",
+    instructorCases,
+    studentCases,
+  });
 
   // Show connection status in header (only in live mode)
   useEffect(() => {
@@ -117,6 +118,10 @@ function StudentPage() {
         setProblemId(data.problem_id);
         setProblem(data.problem);
         setCode(data.code);
+        // Load instructor test cases from problem
+        setInstructorCases((data.problem?.test_cases as IOTestCase[]) ?? []);
+        // Load student test cases from student work
+        setStudentCases((data.test_cases as IOTestCase[]) ?? []);
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
         setMode('error');
@@ -203,8 +208,9 @@ function StudentPage() {
         if (result.code) {
           setCode(result.code);
         }
-        if (result.execution_settings) {
-          setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
+        // Load student test cases from session join result
+        if (result.test_cases) {
+          setStudentCases(result.test_cases as IOTestCase[]);
         }
 
         // Check if session is already completed
@@ -228,32 +234,32 @@ function StudentPage() {
     }
   }, [mode, session?.status]);
 
-  // Auto-save code in practice mode (debounced)
+  // Auto-save code and student test cases in practice mode (debounced)
   useEffect(() => {
     if (mode !== 'practice' || !workId) return;
 
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        execution_settings: studentExecutionSettings || undefined,
+        test_cases: studentCases.length > 0 ? studentCases : undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [mode, workId, code, studentExecutionSettings]);
+  }, [mode, workId, code, studentCases]);
 
   // Auto-save code in live mode (via realtime)
   useEffect(() => {
     if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
 
     const timeout = setTimeout(() => {
-      realtimeUpdateCode(user.id, code, studentExecutionSettings || undefined);
+      realtimeUpdateCode(user.id, code, studentCases.length > 0 ? studentCases : undefined);
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentExecutionSettings, realtimeUpdateCode]);
+  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentCases, realtimeUpdateCode]);
 
   // Handlers
   const handleLeaveSession = useCallback(() => {
@@ -305,39 +311,29 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  const handleRunCode = async (execution_settings: ExecutionSettings) => {
-    if (!code || code.trim().length === 0) {
-      setError('Please write some code before running');
-      return;
-    }
-    if (!problem?.language) {
-      setError('Problem language not available');
-      return;
-    }
+  // Student case CRUD handlers
+  const handleAddCase = useCallback(() => {
+    setStudentCases(prev => {
+      const newCase: IOTestCase = {
+        name: `Case ${prev.length + 1}`,
+        input: '',
+        match_type: 'exact',
+        order: prev.length,
+      };
+      return [...prev, newCase];
+    });
+  }, []);
 
-    lastExecutionSettingsRef.current = execution_settings;
-    setError(null);
-    setWarmingUp(false);
-    setIsRunning(true);
-    setExecutionResult(null);
+  const handleUpdateStudentCase = useCallback((name: string, updates: Partial<IOTestCase>) => {
+    setStudentCases(prev =>
+      prev.map(c => (c.name === name ? { ...c, ...updates } : c))
+    );
+  }, []);
 
-    try {
-      const result = await executeCode(code, problem.language, {
-        stdin: execution_settings.stdin,
-        random_seed: execution_settings.random_seed,
-        attached_files: execution_settings.attached_files,
-      });
-      setExecutionResult(result);
-      setIsRunning(false);
-    } catch (err: any) {
-      if (err instanceof ApiError && err.status === 503) {
-        setWarmingUp(true);
-      } else {
-        setError(err.message || 'Code execution failed');
-      }
-      setIsRunning(false);
-    }
-  };
+  const handleDeleteStudentCase = useCallback((name: string) => {
+    setStudentCases(prev => prev.filter(c => c.name !== name));
+  }, []);
+
 
   // No work_id in URL
   if (!workIdFromUrl) {
@@ -406,8 +402,6 @@ function StudentPage() {
     );
   }
 
-  const sessionExecutionSettings = problem?.execution_settings || {};
-
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
       {sectionId && (
@@ -422,19 +416,6 @@ function StudentPage() {
         <ErrorAlert
           error={connectionError}
           variant="warning"
-          className="mx-3 my-1 flex-shrink-0"
-        />
-      )}
-      {warmingUp && (
-        <ErrorAlert
-          error="Code execution is warming up, please try again in a few moments."
-          title="Code Execution Warming Up"
-          variant="warning"
-          onDismiss={() => setWarmingUp(false)}
-          onRetry={lastExecutionSettingsRef.current !== null
-            ? () => handleRunCode(lastExecutionSettingsRef.current!)
-            : undefined}
-          isRetrying={isRunning}
           className="mx-3 my-1 flex-shrink-0"
         />
       )}
@@ -460,20 +441,19 @@ function StudentPage() {
         <CodeEditor
           code={code}
           onChange={setCode}
-          onRun={handleRunCode}
-          isRunning={isRunning}
-          exampleInput={sessionExecutionSettings.stdin}
-          random_seed={studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed}
-          onRandomSeedChange={(seed) => setStudentExecutionSettings(prev => ({ ...prev, random_seed: seed }))}
-          attached_files={studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files}
-          onAttachedFilesChange={(files) => setStudentExecutionSettings(prev => ({ ...prev, attached_files: files }))}
-          execution_result={execution_result}
+          onRun={caseRunner.runAllCases}
+          isRunning={caseRunner.isRunning}
+          caseRunner={caseRunner}
+          instructorCases={instructorCases}
+          studentCases={studentCases}
+          onAddCase={handleAddCase}
+          onUpdateStudentCase={handleUpdateStudentCase}
+          onDeleteStudentCase={handleDeleteStudentCase}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
           externalEditorRef={editorRef}
           debugger={debuggerHook}
           readOnly={false}
-          showRunButton={true}
         />
       </EditorContainer>
 

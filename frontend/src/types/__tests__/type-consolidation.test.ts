@@ -1,64 +1,55 @@
 /**
  * Tests verifying type consolidation:
- * - TestResponse (cases[] protocol) is only exported from api.ts (no local copies)
+ * - ExecutionResult is only exported from api.ts (no local copies)
  * - instructor/types.ts re-exports from canonical sources
  */
 
-// Task PLAT-uum.46 (updated): TestResponse/CaseResult/CaseSummary should be importable from api.ts
-import type { TestResponse, CaseResult, CaseSummary } from '../api';
+// Task PLAT-uum.46: ExecutionResult should be importable from api.ts
+import type { ExecutionResult } from '../api';
 
 // Task PLAT-uum.49: instructor types should re-export from canonical sources
 import type { ClassInfo, ClassWithSections, ProblemSummary, Student as InstructorStudent, RealtimeStudent } from '../../app/(app)/instructor/types';
-import type { ExecutionSettings } from '../problem';
+import type { IOTestCase } from '../problem';
 
-describe('TestResponse consolidation (cases[] protocol)', () => {
-  it('TestResponse from api.ts has results[] and summary', () => {
-    const caseResult: CaseResult = {
-      name: 'run',
-      type: 'io',
-      status: 'run',
-      input: '',
-      actual: 'hello\n',
-      time_ms: 42,
+describe('ExecutionResult consolidation (PLAT-uum.46)', () => {
+  it('ExecutionResult from api.ts has all required fields including stdin', () => {
+    const result: ExecutionResult = {
+      success: true,
+      output: 'hello',
+      error: '',
+      execution_time_ms: 42,
+      stdin: 'input',
     };
-    const summary: CaseSummary = {
-      total: 1,
-      passed: 0,
-      failed: 0,
-      errors: 0,
-      run: 1,
-      time_ms: 42,
-    };
-    const result: TestResponse = {
-      results: [caseResult],
-      summary,
-    };
-    expect(result.results[0].actual).toBe('hello\n');
-    expect(result.summary.total).toBe(1);
+    expect(result.success).toBe(true);
+    expect(result.stdin).toBe('input');
   });
 });
 
 describe('Instructor types consolidation (PLAT-uum.49)', () => {
-  it('Student uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'test', random_seed: 42 };
+  it('Student uses test_cases from types/problem (not ExecutionSettings)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Case 1', input: 'test', match_type: 'exact', order: 0 }];
     const student: InstructorStudent = {
       id: 'u-1',
       name: 'Alice',
       has_code: true,
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('test');
+    expect(student.test_cases?.[0].input).toBe('test');
+    // execution_settings should not be on InstructorStudent
+    expect('execution_settings' in student).toBe(false);
   });
 
-  it('RealtimeStudent uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'input' };
+  it('RealtimeStudent uses test_cases from types/problem (not ExecutionSettings)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Case 1', input: 'input', match_type: 'exact', order: 0 }];
     const student: RealtimeStudent = {
       id: 'u-2',
       name: 'Bob',
       code: 'print(1)',
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('input');
+    expect(student.test_cases?.[0].input).toBe('input');
+    // execution_settings should not be on RealtimeStudent
+    expect('execution_settings' in student).toBe(false);
   });
 
   it('ClassInfo has the expected shape', () => {

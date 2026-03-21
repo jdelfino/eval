@@ -5,11 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import type { ExecutionSettings } from '@/types/problem';
+import type { TestResult } from '@/types/problem';
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -73,22 +73,26 @@ function PublicViewContent() {
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
-  const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
+  const handleRunCode = (codeToRun: string) => () => {
     const language = (state?.problem as any)?.language || 'python';
-    const options: ExecuteOptions = {};
-    if (execution_settings.stdin) options.stdin = execution_settings.stdin;
-    if (execution_settings.random_seed !== undefined) options.random_seed = execution_settings.random_seed;
-    if (execution_settings.attached_files) options.attached_files = execution_settings.attached_files;
     setIsRunning(true);
-    setExecutionResult(null);
-    executeCode(codeToRun, language, options)
-      .then(setExecutionResult)
-      .catch(() => {
-        // On error, leave executionResult null — the error banner handles display
-      })
-      .finally(() => setIsRunning(false));
+    setRunResult(null);
+    executeCode(codeToRun, language, {
+      cases: [FREE_RUN_CASE],
+    }).then(response => {
+      setRunResult(response.results[0] ?? null);
+    }).catch((err) => {
+      setRunResult({
+        name: 'run',
+        type: 'io',
+        status: 'error',
+        actual: '',
+        stderr: err.message || 'Execution failed',
+        time_ms: 0,
+      });
+    }).finally(() => setIsRunning(false));
   };
 
   const hasFeaturedSubmission = !!state?.featured_student_id || !!state?.featured_code;
@@ -122,12 +126,6 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Derive featured stdin for the CodeEditor
-  const featuredStdin = (() => {
-    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
-    return settings?.stdin;
-  })();
-
   // Reset local code when featured student or their code changes
   useEffect(() => {
     const studentChanged = state?.featured_student_id !== lastFeaturedStudentId.current;
@@ -139,7 +137,7 @@ function PublicViewContent() {
       setLocalCode(state?.featured_code ?? '');
       hasUserEdited.current = false;
     }
-  }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
+  }, [state?.featured_student_id, state?.featured_code, state?.featured_test_cases, state?.problem]);
 
   // Track user edits to the scratch pad
   const handleCodeChange = (code: string) => {
@@ -234,10 +232,9 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
-            exampleInput={featuredStdin}
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
-            execution_result={executionResult}
+            runResult={runResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
@@ -254,7 +251,7 @@ function PublicViewContent() {
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
             onRun={handleRunCode(scratchPadCode)}
             isRunning={isRunning}
-            execution_result={executionResult}
+            runResult={runResult}
             debugger={debuggerHook}
             forceDesktop={true}
             outputPosition="right"
