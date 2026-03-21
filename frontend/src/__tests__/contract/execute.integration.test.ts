@@ -50,7 +50,6 @@ describe('executeCode()', () => {
     // Summary counts
     expect(result.summary.total).toBe(1);
     expect(result.summary.run).toBe(1);
-
   });
 
   it('warmExecutor() calls POST /executor/warm without error', async () => {

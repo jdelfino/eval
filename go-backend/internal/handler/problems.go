@@ -204,13 +204,20 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to empty array when test_cases is not provided.
+	// The DB column is NOT NULL, so nil would violate the constraint.
+	testCases := req.TestCases
+	if len(testCases) == 0 {
+		testCases = json.RawMessage("[]")
+	}
+
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.CreateProblem(r.Context(), store.CreateProblemParams{
 		NamespaceID: authUser.NamespaceID,
 		Title:       req.Title,
 		Description: req.Description,
 		StarterCode: req.StarterCode,
-		TestCases:   req.TestCases,
+		TestCases:   testCases,
 		AuthorID:    authUser.ID,
 		ClassID:     req.ClassID,
 		Tags:        req.Tags,
