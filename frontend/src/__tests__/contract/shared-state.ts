@@ -12,6 +12,7 @@ export const state: {
   instructorUserId: string;
   classId: string;
   sectionId: string;
+  problemId: string;
   sessionId: string;
   joinCode: string;
 } = {
@@ -20,6 +21,7 @@ export const state: {
   instructorUserId: setupState?.instructorUserId || '',
   classId: setupState?.classId || '',
   sectionId: setupState?.sectionId || '',
+  problemId: setupState?.problemId || '',
   sessionId: setupState?.sessionId || '',
   joinCode: setupState?.joinCode || '',
 };

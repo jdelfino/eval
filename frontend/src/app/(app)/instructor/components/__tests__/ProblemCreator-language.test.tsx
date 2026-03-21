@@ -79,12 +79,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
       <div data-testid={`code-editor-${title}`}>
         {editableProblem && problem && onProblemEdit && (
           <div data-testid="editable-problem-sidebar">
-            <label htmlFor="problem-title">Title *</label>
-            <input
-              id="problem-title"
-              value={problem.title || ''}
-              onChange={(e) => onProblemEdit({ title: e.target.value })}
-            />
             <label htmlFor="problem-description">Description</label>
             <textarea
               id="problem-description"
@@ -113,7 +107,7 @@ const JAVA_DEFAULT_STARTER = `public class Main {
 }`;
 
 const DEFAULT_CLASSES = [
-  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
+  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1', description: null, created_by: 'u-1', created_at: '', updated_at: '' },
 ];
 
 describe('ProblemCreator - Language Selector', () => {
@@ -121,8 +115,6 @@ describe('ProblemCreator - Language Selector', () => {
     jest.clearAllMocks();
     capturedStarterCode = '';
     capturedOnLoadStarterCode = undefined;
-    const { listClasses } = require('@/lib/api/classes');
-    listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
   describe('Language selector rendering', () => {
@@ -154,9 +146,7 @@ describe('ProblemCreator - Language Selector', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'problem-1' });
 
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+      render(<ProblemCreator classes={DEFAULT_CLASSES} />);
 
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
       fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
@@ -173,9 +163,7 @@ describe('ProblemCreator - Language Selector', () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'problem-1' });
 
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+      render(<ProblemCreator classes={DEFAULT_CLASSES} />);
 
       fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
       fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });

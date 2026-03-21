@@ -8,16 +8,13 @@
 
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import StudentPageWrapper from '../page';
-import { ApiError } from '@/lib/api-error';
 
 const mockGetStudentWork = jest.fn();
 const mockGetActiveSessions = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockWarmExecutor = jest.fn();
-const mockExecuteCode = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
 
@@ -36,7 +33,6 @@ jest.mock('@/lib/api/sections', () => ({
 
 jest.mock('@/lib/api/execute', () => ({
   warmExecutor: (...args: unknown[]) => mockWarmExecutor(...args),
-  executeCode: (...args: unknown[]) => mockExecuteCode(...args),
 }));
 
 const mockUseRealtimeSession = jest.fn();
@@ -71,13 +67,22 @@ jest.mock('@/hooks/useApiDebugger', () => ({
   useApiDebugger: jest.fn(() => ({})),
 }));
 
-// Track onRun callback from CodeEditor to trigger execution in tests
-let capturedOnRun: ((settings: Record<string, unknown>) => void) | null = null;
+jest.mock('@/hooks/useCaseRunner', () => ({
+  useCaseRunner: jest.fn(() => ({
+    caseResults: {},
+    selectedCase: null,
+    isRunning: false,
+    error: null,
+    selectCase: jest.fn(),
+    runCase: jest.fn(),
+    runAllCases: jest.fn(),
+    clearResults: jest.fn(),
+  })),
+}));
 
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
-  default: ({ onRun }: { onRun: (settings: Record<string, unknown>) => void }) => {
-    capturedOnRun = onRun;
+  default: () => {
     return <div data-testid="code-editor">CodeEditor</div>;
   },
 }));
@@ -133,7 +138,6 @@ const defaultRealtimeSession = {
 describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedOnRun = null;
     mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
     mockUpdateStudentWork.mockResolvedValue(undefined);
     mockWarmExecutor.mockResolvedValue(undefined);
@@ -199,57 +203,4 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
     });
   });
 
-  describe('503 warming-up message on execute', () => {
-    it('shows warming-up message when execute returns 503', async () => {
-      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteCode.mockRejectedValue(
-        new ApiError('Code execution is warming up, please try again in a few moments', 503)
-      );
-
-      render(<StudentPageWrapper />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-      });
-
-      // Trigger execution
-      act(() => {
-        capturedOnRun?.({});
-      });
-
-      await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
-      });
-
-      const alert = screen.getByRole('alert');
-      expect(alert.textContent).toMatch(/warming up/i);
-    });
-
-    it('shows generic error message for non-503 errors', async () => {
-      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteCode.mockRejectedValue(
-        new ApiError('internal server error', 500)
-      );
-
-      render(<StudentPageWrapper />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-      });
-
-      act(() => {
-        capturedOnRun?.({});
-      });
-
-      await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
-      });
-
-      const alert = screen.getByRole('alert');
-      // Should not show warming-up message for 500 errors
-      expect(alert.textContent).not.toMatch(/warming up/i);
-    });
-  });
 });

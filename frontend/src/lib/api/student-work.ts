@@ -32,7 +32,7 @@ export async function getStudentWork(workId: string): Promise<StudentWorkWithPro
 }
 
 /**
- * Update student work code and execution settings.
+ * Update student work code and test cases.
  * @param workId - The student_work ID
  * @param data - Code and/or test_cases to update
  */
@@ -40,7 +40,7 @@ export async function updateStudentWork(
   workId: string,
   data: {
     code?: string;
-    test_cases?: ExecutionSettings;
+    test_cases?: import('@/types/problem').IOTestCase[];
   }
 ): Promise<void> {
   await apiPatch(`/student-work/${workId}`, data);

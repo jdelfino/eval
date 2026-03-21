@@ -69,6 +69,7 @@ const activeSession: Session = {
     description: 'An active problem',
     starter_code: null,
     test_cases: null,
+
     author_id: 'user-1',
     class_id: CLASS_ID,
     tags: [],
@@ -100,6 +101,7 @@ const pastSession: Session = {
     description: 'A completed problem',
     starter_code: null,
     test_cases: null,
+
     author_id: 'user-1',
     class_id: CLASS_ID,
     tags: [],
@@ -130,6 +132,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       description: 'Write a FizzBuzz solution',
       starter_code: null,
       test_cases: [],
+
       author_id: 'user-1',
       class_id: null,
       tags: ['loops'],

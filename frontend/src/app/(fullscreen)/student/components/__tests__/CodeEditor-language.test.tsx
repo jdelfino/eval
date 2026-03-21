@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CodeEditor from '../CodeEditor';
 
@@ -27,13 +27,6 @@ jest.mock('@monaco-editor/react', () => {
         onChange={(e) => onChange?.(e.target.value)}
       />
     );
-  };
-});
-
-// Mock ExecutionSettings
-jest.mock('../ExecutionSettings', () => {
-  return function MockExecutionSettings() {
-    return <div data-testid="execution-settings">Execution Settings</div>;
   };
 });
 
@@ -125,8 +118,8 @@ describe('CodeEditor - Language Awareness', () => {
     });
   });
 
-  describe('onRun callback with execution settings', () => {
-    it('should call onRun with correct stdin and seed when run button clicked', () => {
+  describe('onRun callback', () => {
+    it('should call onRun with no arguments when run button clicked', () => {
       const mockOnRun = jest.fn();
       const pythonProblem = { ...baseProblem, language: 'python' };
 
@@ -135,41 +128,13 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          defaultExecutionSettings={{ stdin: "my input", random_seed: 42 }}
           problem={pythonProblem}
         />
       );
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      expect(mockOnRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          stdin: 'my input',
-          random_seed: 42,
-        })
-      );
-    });
-
-    it('should call onRun with attached_files when provided', () => {
-      const mockOnRun = jest.fn();
-      const files = [{ name: 'data.txt', content: 'content' }];
-
-      render(
-        <CodeEditor
-          code="print('hello')"
-          onChange={jest.fn()}
-          onRun={mockOnRun}
-          defaultExecutionSettings={{ attached_files: files }}
-        />
-      );
-
-      fireEvent.click(screen.getByText('▶ Run Code'));
-
-      expect(mockOnRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          attached_files: files,
-        })
-      );
+      expect(mockOnRun).toHaveBeenCalledWith();
     });
   });
 });

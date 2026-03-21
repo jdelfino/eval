@@ -13,6 +13,22 @@
 import typia from 'typia';
 import type { User, Session, SessionStudent, TestResponse, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentWorkWithProblem, StudentProgress, StudentWorkSummary, Revision, SessionPublicState } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
+const SNAKE_CASE_RE = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
+
+/**
+ * Asserts that all top-level keys of an object are snake_case.
+ * Catches PascalCase leaks (e.g., Go struct fields serialized without json tags).
+ */
+export function expectSnakeCaseKeys(obj: object, label: string): void {
+  for (const key of Object.keys(obj)) {
+    expect(key).toMatch(SNAKE_CASE_RE);
+  }
+}
 import type {
   StudentJoinedData,
   StudentCodeUpdatedData,

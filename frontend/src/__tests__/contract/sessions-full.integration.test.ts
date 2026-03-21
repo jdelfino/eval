@@ -118,7 +118,7 @@ describe('Sessions Full API', () => {
         id: '',
         namespace_id: '',
         title: 'Contract Test Problem v2',
-        description: 'Updated problem with execution settings',
+        description: 'Updated problem with test cases',
         starter_code: 'print("world")',
         solution: null,
         language: 'python',
@@ -200,11 +200,16 @@ describe('Sessions Full API', () => {
        * of SessionPublicState including the optional featured_test_cases field.
        * If the field is missing or renamed, this test catches it.
        */
-      const executionSettings = {
-        stdin: 'round-trip-input',
-        random_seed: 99,
-        attached_files: [{ name: 'data.txt', content: 'hello' }],
-      };
+      const executionSettings = [
+        {
+          name: 'round-trip-case',
+          input: 'round-trip-input',
+          match_type: 'exact' as const,
+          random_seed: 99,
+          attached_files: [{ name: 'data.txt', content: 'hello' }],
+          order: 0,
+        },
+      ];
 
       await featureCode(testSessionId, 'print("round-trip")', executionSettings);
 

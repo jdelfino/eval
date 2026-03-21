@@ -99,7 +99,7 @@ jest.mock('@/components/ui/Spinner', () => ({
 }));
 
 jest.mock('@/lib/api/execute', () => ({
-  executeCode: jest.fn().mockResolvedValue({ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: '', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }),
+  executeCode: jest.fn().mockResolvedValue({ success: true, output: '', error: '', execution_time_ms: 10 }),
 }));
 
 jest.mock('@/lib/api/sessions', () => ({
@@ -132,12 +132,13 @@ describe('InstructorSessionPage', () => {
       title: 'Test Problem',
       description: 'A test problem',
       starter_code: 'print("Hello")',
+      test_cases: null,
     },
   };
 
   const mockStudents = [
-    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', execution_settings: {} },
-    { user_id: 'student-2', name: 'Bob', code: '', execution_settings: {} },
+    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', test_cases: [] },
+    { user_id: 'student-2', name: 'Bob', code: '', test_cases: [] },
   ];
 
   const mockClearFeaturedStudent = jest.fn();
@@ -509,6 +510,7 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
+          test_cases: [],
         },
       ];
 
@@ -530,6 +532,7 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
+          test_cases: [],
           last_update: lastUpdate,
         },
       ];

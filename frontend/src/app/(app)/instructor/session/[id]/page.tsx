@@ -20,10 +20,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
-import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
-import { executeCode as apiExecuteCode } from '@/lib/api/execute';
+import { executeCode as apiExecuteCode, FREE_RUN_CASE } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
@@ -54,11 +54,6 @@ export default function InstructorSessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [reopening, setReopening] = useState(false);
   const [sessionProblem, setSessionProblem] = useState<Problem | null>(null);
-  const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  }>({});
 
   // Realtime session hook
   const {
@@ -93,11 +88,7 @@ export default function InstructorSessionPage() {
       id: s.user_id,
       name: s.name,
       has_code: !!s.code,
-      execution_settings: {
-        random_seed: s.execution_settings?.random_seed,
-        stdin: s.execution_settings?.stdin,
-        attached_files: s.execution_settings?.attached_files,
-      },
+      test_cases: s.test_cases,
       last_code_update: s.last_update,
     })),
     [realtimeStudents]
@@ -109,7 +100,7 @@ export default function InstructorSessionPage() {
       id: s.user_id,
       name: s.name,
       code: s.code,
-      execution_settings: s.execution_settings,
+      test_cases: s.test_cases,
     })),
     [realtimeStudents]
   );
@@ -127,9 +118,6 @@ export default function InstructorSessionPage() {
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    setSessionExecutionSettings(
-      extractExecutionSettingsFromTestCases(realtimeSession.problem?.test_cases) || {}
-    );
   }, [realtimeSession]);
 
   // Show connection status in the global header
@@ -209,15 +197,14 @@ export default function InstructorSessionPage() {
 
   const handleExecuteCode = useCallback(async (
     _studentId: string,
-    code: string,
-    execution_settings: ExecutionSettings
+    code: string
   ) => {
     const language = sessionProblem?.language || 'python';
-    return apiExecuteCode(code, language, {
-      stdin: execution_settings.stdin,
-      random_seed: execution_settings.random_seed,
-      attached_files: execution_settings.attached_files,
+    const response = await apiExecuteCode(code, language, {
+      cases: [FREE_RUN_CASE],
     });
+    // Return the first result as a TestResult for display in CodeViewer.
+    return response.results[0];
   }, [sessionProblem?.language]);
 
   // Loading state
@@ -313,7 +300,6 @@ export default function InstructorSessionPage() {
           students={students}
           realtimeStudents={mappedRealtimeStudents}
           sessionProblem={sessionProblem}
-          sessionExecutionSettings={sessionExecutionSettings}
           onEndSession={handleEndSession}
           onUpdateProblem={handleUpdateProblem}
           onFeatureStudent={handleFeatureStudent}

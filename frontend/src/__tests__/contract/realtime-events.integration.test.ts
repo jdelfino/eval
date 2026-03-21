@@ -416,11 +416,16 @@ describe('Realtime event contract tests', () => {
       const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
 
       try {
-        const testCases = {
-          stdin: 'student-input',
-          random_seed: 7,
-          attached_files: [{ name: 'helper.py', content: 'def helper(): pass' }],
-        };
+        const testCases = [
+          {
+            name: 'case-1',
+            input: 'student-input',
+            match_type: 'exact' as const,
+            random_seed: 7,
+            attached_files: [{ name: 'helper.py', content: 'def helper(): pass' }],
+            order: 0,
+          },
+        ];
 
         // Instructor updates student code with test_cases (instructor path sends test_cases field)
         configureTestAuth(instructorToken);
@@ -492,12 +497,17 @@ describe('Realtime event contract tests', () => {
       const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
 
       try {
-        // Feature with execution settings (test_cases)
-        const executionSettings = {
-          stdin: 'contract-test-input',
-          random_seed: 42,
-          attached_files: [{ name: 'test.txt', content: 'test content' }],
-        };
+        // Feature with test cases
+        const executionSettings = [
+          {
+            name: 'case-1',
+            input: 'contract-test-input',
+            match_type: 'exact' as const,
+            random_seed: 42,
+            attached_files: [{ name: 'test.txt', content: 'test content' }],
+            order: 0,
+          },
+        ];
 
         configureTestAuth(instructorToken);
         if (joinedStudentUserId) {

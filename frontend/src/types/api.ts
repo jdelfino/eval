@@ -98,7 +98,7 @@ export interface Session {
   problem: Problem | null; // full Problem, or null/empty for blank sessions
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized (no omitempty)
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized (no omitempty)
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -175,7 +175,7 @@ export interface SessionPublicState {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized
   join_code: string;
   status: string;
 }
@@ -337,4 +337,13 @@ export interface CaseSummary {
 export interface TestResponse {
   results: CaseResult[];
   summary: CaseSummary;
+}
+
+/** @deprecated Use TestResponse instead. Legacy flat execution result shape. */
+export interface ExecutionResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  execution_time_ms: number;
+  stdin?: string;
 }

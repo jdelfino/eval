@@ -7,7 +7,7 @@
 
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import type { SessionStudent, SessionState } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
 
 /**
  * Get the current state of a session, including session details, students, and join code.
@@ -23,14 +23,14 @@ export async function getSessionState(sessionId: string): Promise<SessionState> 
  * @param sessionId - The session ID
  * @param studentId - The student's user ID
  * @param code - The code to save
- * @param executionSettings - Optional execution settings
+ * @param testCases - Optional test cases
  * @returns The updated SessionStudent object
  */
 export async function updateCode(
   sessionId: string,
   studentId: string,
   code: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<SessionStudent> {
   return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
     student_id: studentId,
@@ -57,14 +57,14 @@ export async function updateStudentCode(
  * Feature a specific student's code for the session (instructor-facing).
  * @param sessionId - The session ID
  * @param studentId - The student's user ID to feature
- * @param code - The code to feature
- * @param testCases - Optional execution settings (test_cases) to feature alongside the code
+ * @param code - Optional code to feature
+ * @param testCases - Optional test cases
  */
 export async function featureStudent(
   sessionId: string,
   studentId: string,
   code?: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/feature`, {
     student_id: studentId,

@@ -63,7 +63,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
       code,
       onChange,
       readOnly,
-      onExecutionSettingsChange,
       title,
       problem,
       onProblemEdit,
@@ -108,17 +107,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
           value={displayedCode}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
-        />
-        <input
-          data-testid="stdin-input"
-          placeholder="stdin"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: e.target.value, random_seed: undefined, attached_files: undefined })}
-        />
-        <input
-          data-testid="seed-input"
-          type="number"
-          placeholder="seed"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: undefined, random_seed: e.target.value ? Number(e.target.value) : undefined, attached_files: undefined })}
         />
         {editableProblem && (
           <div data-testid="editable-problem-sidebar">
@@ -180,24 +168,6 @@ describe('SessionProblemEditor', () => {
     expect(screen.getByTestId('problem-title-input')).toHaveValue('Test Problem');
     expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Test description');
     expect(screen.getByTestId('code-textarea')).toHaveValue('print("hello")');
-  });
-
-  it('renders with initial execution settings', () => {
-    const initialExecutionSettings = {
-      stdin: 'test input',
-      random_seed: 42,
-      attached_files: [{ name: 'test.txt', content: 'content' }],
-    };
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialExecutionSettings={initialExecutionSettings}
-      />
-    );
-
-    // CodeEditor should receive these settings as props
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
   });
 
   it('updates title when user types', () => {
@@ -400,7 +370,6 @@ describe('SessionProblemEditor', () => {
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
         initialProblem={initialProblem}
-        initialExecutionSettings={initialSettings}
       />
     );
 

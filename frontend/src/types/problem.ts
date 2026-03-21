@@ -20,48 +20,37 @@ export interface ExecutionSettings {
 }
 
 // ---------------------------------------------------------------------------
-// Test case types (kept lightweight for client-side usage)
+// I/O test case types
 // ---------------------------------------------------------------------------
 
-export type TestCaseType = 'input-output' | 'pytest' | 'property-based';
+/** Supported output match strategies for I/O test cases. */
+export type MatchType = 'exact' | 'contains' | 'regex';
 
-export type OutputMatchType = 'exact' | 'contains' | 'regex';
+// Re-export IOTestCase from api.ts for convenience
+export type { IOTestCase };
 
-export interface InputOutputTestConfig {
-  input: string;
-  expected_output: string;
-  match_type: OutputMatchType;
-  ignore_whitespace?: boolean;
-}
+// ---------------------------------------------------------------------------
+// Test result types (returned by executor /test endpoint)
+// ---------------------------------------------------------------------------
 
-export interface PyTestConfig {
-  test_code: string;
-  target_function?: string;
-  timeout?: number;
-}
+/** Status of a single test case execution. */
+export type TestStatus = 'passed' | 'failed' | 'error' | 'run';
 
-export interface PropertyTestConfig {
-  property_code: string;
-  strategy_config?: Record<string, unknown>;
-  max_examples?: number;
-}
-
-export type TestConfig =
-  | { type: 'input-output'; data: InputOutputTestConfig }
-  | { type: 'pytest'; data: PyTestConfig }
-  | { type: 'property-based'; data: PropertyTestConfig };
-
-export interface TestCase {
-  id: string;
-  problem_id: string;
-  type: TestCaseType;
+/**
+ * TestResult holds the outcome of a single test case run.
+ * Returned by the executor POST /test endpoint.
+ * input, expected, actual, stderr are optional — absent when not applicable
+ * (e.g. for run-only cases or error-status results with no output).
+ */
+export interface TestResult {
   name: string;
-  description: string;
-  visible: boolean;
-  order: number;
-  config: TestConfig;
-  random_seed?: number;
-  attached_files?: Array<{ name: string; content: string }>;
+  type: 'io';
+  status: TestStatus;
+  input?: string;
+  expected?: string;
+  actual?: string;
+  stderr?: string;
+  time_ms: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +63,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: TestCase[] | ExecutionSettings | null;
+  test_cases: IOTestCase[] | ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -89,7 +78,7 @@ export interface StudentProblem {
   title: string;
   description: string;
   starter_code?: string;
-  test_cases: TestCase[];
+  test_cases: IOTestCase[];
 }
 
 export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
@@ -101,7 +90,7 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 /**
  * Convert an API wire-format Problem to a rich client Problem with Date timestamps.
  * Note: test_cases may be IOTestCase[] (wire format) or ExecutionSettings (legacy).
- * The rich client Problem.test_cases accepts TestCase[] | ExecutionSettings | null;
+ * The rich client Problem.test_cases accepts IOTestCase[] | ExecutionSettings | null;
  * IOTestCase[] is cast since the runtime handler (extractExecutionSettingsFromTestCases)
  * handles both formats via the `as any` access pattern.
  */
@@ -164,7 +153,7 @@ export function buildTestCasesFromExecutionSettings(opts: {
 }
 
 export function extractExecutionSettingsFromTestCases(
-  testCases: TestCase[] | IOTestCase[] | ExecutionSettings | null | undefined
+  testCases: IOTestCase[] | ExecutionSettings | null | undefined
 ): ExecutionSettings {
   if (!testCases || (Array.isArray(testCases) && testCases.length === 0)) {
     return {
@@ -180,7 +169,6 @@ export function extractExecutionSettingsFromTestCases(
   }
 
   // Backend IOTestCase wire format has top-level fields: input, random_seed, attached_files.
-  // The rich client TestCase type nests input inside config.data — check both shapes.
   const firstCase = testCases[0] as any;
 
   // Prefer top-level input (IOTestCase wire format), fall back to config.data.input (rich TestCase)

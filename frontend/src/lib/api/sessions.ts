@@ -8,7 +8,7 @@
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 import type { Session, Revision, SessionPublicState, Problem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -244,9 +244,9 @@ export async function analyzeSession(
 export async function featureCode(
   sessionId: string,
   code: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<void> {
-  const body: { code: string; test_cases?: ExecutionSettings } = { code };
+  const body: { code: string; test_cases?: IOTestCase[] } = { code };
   if (testCases !== undefined) {
     body.test_cases = testCases;
   }
