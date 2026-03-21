@@ -221,7 +221,7 @@ export interface StudentWork {
   section_id: string;
   problem_id: string;
   code: string;
-  execution_settings: unknown;
+  test_cases: unknown[];
   last_update: string;
   created_at: string;
 }

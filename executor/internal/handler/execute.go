@@ -4,11 +4,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/jdelfino/eval/executor/internal/iotestrunner"
 	"github.com/jdelfino/eval/executor/internal/metrics"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 	"github.com/jdelfino/eval/pkg/executorapi"
@@ -17,6 +19,16 @@ import (
 
 // maxBodyBytes is the maximum allowed request body size (1 MB).
 const maxBodyBytes = 1 * 1024 * 1024
+
+// reservedFileError is returned when a student-submitted file name collides
+// with a reserved sandbox file name (e.g. solution.py, io_tests.json).
+type reservedFileError struct {
+	filename string
+}
+
+func (e *reservedFileError) Error() string {
+	return fmt.Sprintf("file name %q is reserved", e.filename)
+}
 
 // maxTimeoutMs is the hard cap on timeout_ms.
 const maxTimeoutMs = 30000
@@ -34,9 +46,6 @@ type ExecuteHandlerConfig struct {
 	DefaultTimeoutMs        int
 	MaxCodeBytes            int
 	MaxConcurrentExecutions int
-	MaxStdinBytes           int
-	MaxFiles                int
-	MaxFileBytes            int
 }
 
 // ExecuteHandler handles code execution requests.
@@ -139,6 +148,12 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.metrics.ExecutionDuration.Observe(duration.Seconds())
 
 	if sandboxErr != nil {
+		var rfErr *reservedFileError
+		if errors.As(sandboxErr, &rfErr) {
+			h.metrics.ValidationErrorsTotal.WithLabelValues("reserved_filename").Inc()
+			httputil.WriteError(w, http.StatusBadRequest, rfErr.Error())
+			return
+		}
 		h.logger.Error("sandbox execution failed", "error", sandboxErr, "duration_ms", duration.Milliseconds())
 		h.metrics.ExecutionsTotal.WithLabelValues("error").Inc()
 		httputil.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("sandbox setup failed: %v", sandboxErr))
@@ -173,79 +188,129 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// runCases executes each case in the request sequentially, running the sandbox once per case.
-// This is an intentionally simple throwaway implementation — PR 2 replaces it with iotestrunner.
-// Returns (results, timedOut, error). timedOut is true if any case timed out.
+// runCases dispatches cases to the iotestrunner sandbox and returns results.
+// Returns (results, timedOut, error).
 func (h *ExecuteHandler) runCases(
 	ctx context.Context,
 	sandboxCfg sandbox.Config,
 	req executorapi.ExecuteRequest,
 	timeoutMs int,
 ) ([]executorapi.CaseResult, bool, error) {
-	results := make([]executorapi.CaseResult, 0, len(req.Cases))
-	anyTimedOut := false
-
+	// Serialize the case definitions to JSON so they can be passed to the wrapper script
+	// as an attached file.
+	ioTests := make([]map[string]interface{}, 0, len(req.Cases))
 	for _, c := range req.Cases {
-		// Convert case files to sandbox files.
-		files := make([]sandbox.File, len(c.Files))
-		for i, f := range c.Files {
-			files[i] = sandbox.File{Name: f.Name, Content: f.Content}
+		def := map[string]interface{}{
+			"name":       c.Name,
+			"input":      c.Input,
+			"match_type": c.MatchType,
 		}
-
-		sandboxReq := sandbox.Request{
-			Code:       req.Code,
-			Stdin:      c.Input,
-			Files:      files,
-			RandomSeed: c.RandomSeed,
-			TimeoutMs:  timeoutMs,
-			Language:   req.Language,
+		if c.ExpectedOutput != "" {
+			def["expected_output"] = c.ExpectedOutput
 		}
-
-		result, err := h.runner(ctx, sandboxCfg, sandboxReq)
-		if err != nil {
-			return nil, false, err
+		if c.RandomSeed != nil {
+			def["random_seed"] = *c.RandomSeed
 		}
+		ioTests = append(ioTests, def)
+	}
 
-		var caseResult executorapi.CaseResult
-		if result.TimedOut {
-			anyTimedOut = true
-			caseResult = executorapi.CaseResult{
+	testsJSON, err := json.Marshal(ioTests)
+	if err != nil {
+		return nil, false, fmt.Errorf("marshal case definitions: %w", err)
+	}
+
+	// Determine the student code filename based on language.
+	codeFilename := "solution.py"
+	if req.Language == "java" {
+		codeFilename = "Main.java"
+	}
+
+	// The wrapper script receives:
+	//   argv[1]: path to student code file (relative inside sandbox)
+	//   argv[2]: path to test definitions JSON file
+	//   argv[3]: language
+	// Use relative filenames so they work with both nsjail (CWD=/tmp/work) and
+	// RunUnsafe mode (CWD=tempDir), where files are written to the working directory.
+	args := []string{
+		codeFilename,
+		"io_tests.json",
+		req.Language,
+	}
+
+	files := []sandbox.File{
+		{Name: codeFilename, Content: req.Code},
+		{Name: "io_tests.json", Content: string(testsJSON)},
+	}
+	// Collect unique extra files from all cases.
+	// If a case file name collides with a reserved sandbox file name, return an
+	// error so the caller can respond with HTTP 400 rather than silently dropping
+	// the file and producing confusing failures.
+	seen := map[string]bool{codeFilename: true, "io_tests.json": true}
+	for _, c := range req.Cases {
+		for i := range c.Files {
+			if seen[c.Files[i].Name] {
+				return nil, false, &reservedFileError{filename: c.Files[i].Name}
+			}
+			files = append(files, sandbox.File{Name: c.Files[i].Name, Content: c.Files[i].Content})
+			seen[c.Files[i].Name] = true
+		}
+	}
+
+	// The io_test_runner wrapper is always a Python script; the student's language
+	// is passed via Args[2] so the runner can invoke the right interpreter.
+	// Do NOT set Language:"java" here — that would cause the sandbox to treat the
+	// Python runner script as Java source. Instead, set InnerLanguage so the
+	// sandbox can configure appropriate resource limits and bind mounts for the
+	// subprocesses the runner will spawn (e.g. the JVM for Java problems).
+	sandboxReq := sandbox.Request{
+		Code:          iotestrunner.Script,
+		Stdin:         "",
+		Files:         files,
+		TimeoutMs:     timeoutMs,
+		Args:          args,
+		Language:      "python",
+		InnerLanguage: req.Language,
+	}
+
+	// The io_test_runner JSON output can be larger than the student's raw output
+	// (JSON encoding overhead, multiple cases). Use a larger sandbox output limit
+	// so the JSON is never truncated by the sandbox itself; truncation is handled
+	// per-case inside the runner script.
+	ioRunnerCfg := sandboxCfg
+	ioRunnerCfg.MaxOutputBytes = 10 * 1024 * 1024 // 10 MB
+
+	result, err := h.runner(ctx, ioRunnerCfg, sandboxReq)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Handle sandbox-level timeout: build error results for all cases.
+	if result.TimedOut {
+		errResults := make([]executorapi.CaseResult, len(req.Cases))
+		for i, c := range req.Cases {
+			errResults[i] = executorapi.CaseResult{
 				Name:   c.Name,
 				Type:   "io",
 				Status: "error",
 				Input:  c.Input,
 				Stderr: "execution timed out",
-				TimeMs: result.DurationMs,
-			}
-			results = append(results, caseResult)
-			break
-		} else if result.ExitCode != 0 {
-			caseResult = executorapi.CaseResult{
-				Name:   c.Name,
-				Type:   "io",
-				Status: "error",
-				Input:  c.Input,
-				Actual: result.Stdout,
-				Stderr: result.Stderr,
-				TimeMs: result.DurationMs,
-			}
-		} else {
-			// Run-only case (no expected output): status "run".
-			caseResult = executorapi.CaseResult{
-				Name:   c.Name,
-				Type:   "io",
-				Status: "run",
-				Input:  c.Input,
-				Actual: result.Stdout,
-				Stderr: result.Stderr,
-				TimeMs: result.DurationMs,
 			}
 		}
-
-		results = append(results, caseResult)
+		return errResults, true, nil
 	}
 
-	return results, anyTimedOut, nil
+	// Parse the JSON results array emitted by the wrapper script.
+	caseResults, parseErr := parseCaseResults(result.Stdout)
+	if parseErr != nil {
+		h.logger.Error("failed to parse case results",
+			"error", parseErr,
+			"stdout_len", len(result.Stdout),
+			"stderr", result.Stderr,
+		)
+		return nil, false, fmt.Errorf("parse case results: %w", parseErr)
+	}
+
+	return caseResults, false, nil
 }
 
 func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (string, string) {
@@ -269,20 +334,24 @@ func (h *ExecuteHandler) validateRequest(req *executorapi.ExecuteRequest) (strin
 	if len(req.Cases) == 0 {
 		return "invalid_request", "cases must be a non-empty list"
 	}
-	for i, c := range req.Cases {
-		if h.cfg.MaxStdinBytes > 0 && len(c.Input) > h.cfg.MaxStdinBytes {
-			return "stdin_too_large", fmt.Sprintf("case %d: stdin exceeds maximum size of %d bytes", i, h.cfg.MaxStdinBytes)
-		}
-		if h.cfg.MaxFiles > 0 && len(c.Files) > h.cfg.MaxFiles {
-			return "too_many_files", fmt.Sprintf("case %d: too many files: maximum is %d", i, h.cfg.MaxFiles)
-		}
-		for _, f := range c.Files {
-			if h.cfg.MaxFileBytes > 0 && len(f.Content) > h.cfg.MaxFileBytes {
-				return "file_too_large", fmt.Sprintf("case %d: file %q exceeds maximum size of %d bytes", i, f.Name, h.cfg.MaxFileBytes)
-			}
+	return "", ""
+}
+
+// parseCaseResults parses the JSON array of case results from the wrapper script.
+// The wrapper script outputs a JSON array matching CaseResult shape.
+func parseCaseResults(stdout string) ([]executorapi.CaseResult, error) {
+	var raw []json.RawMessage
+	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+		return nil, fmt.Errorf("unmarshal case results: %w", err)
+	}
+
+	results := make([]executorapi.CaseResult, len(raw))
+	for i, r := range raw {
+		if err := json.Unmarshal(r, &results[i]); err != nil {
+			return nil, fmt.Errorf("unmarshal case result %d: %w", i, err)
 		}
 	}
-	return "", ""
+	return results, nil
 }
 
 // buildCaseSummary aggregates CaseResult entries into a CaseSummary.

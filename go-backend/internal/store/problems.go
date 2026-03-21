@@ -8,13 +8,13 @@ import (
 )
 
 const problemColumns = `id, namespace_id, title, description, starter_code, test_cases,
-		       execution_settings, author_id, class_id, tags, solution, language, created_at, updated_at`
+		       author_id, class_id, tags, solution, language, created_at, updated_at`
 
 func scanProblem(row interface{ Scan(dest ...any) error }) (*Problem, error) {
 	var p Problem
 	err := row.Scan(
 		&p.ID, &p.NamespaceID, &p.Title, &p.Description,
-		&p.StarterCode, &p.TestCases, &p.ExecutionSettings,
+		&p.StarterCode, &p.TestCases,
 		&p.AuthorID, &p.ClassID, &p.Tags, &p.Solution,
 		&p.Language, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -126,8 +126,8 @@ func (s *Store) GetProblem(ctx context.Context, id uuid.UUID) (*Problem, error) 
 // CreateProblem creates a new problem and returns the created record.
 func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (*Problem, error) {
 	query := `INSERT INTO problems (namespace_id, title, description, starter_code, test_cases,
-		                      execution_settings, author_id, class_id, tags, solution, language)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		                      author_id, class_id, tags, solution, language)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING ` + problemColumns
 
 	// Default to 'python' if language is not specified.
@@ -138,7 +138,7 @@ func (s *Store) CreateProblem(ctx context.Context, params CreateProblemParams) (
 
 	p, err := scanProblem(s.q.QueryRow(ctx, query,
 		params.NamespaceID, params.Title, params.Description, params.StarterCode,
-		params.TestCases, params.ExecutionSettings, params.AuthorID, params.ClassID,
+		params.TestCases, params.AuthorID, params.ClassID,
 		params.Tags, params.Solution, language,
 	))
 	if err != nil {
@@ -163,11 +163,6 @@ func (s *Store) UpdateProblem(ctx context.Context, id uuid.UUID, params UpdatePr
 	// test_cases: if provided (non-nil), set it; otherwise keep current value
 	if params.TestCases != nil {
 		query += "\n		    test_cases         = " + ac.Next(params.TestCases) + ","
-	}
-
-	// execution_settings: if provided (non-nil), set it; otherwise keep current value
-	if params.ExecutionSettings != nil {
-		query += "\n		    execution_settings = " + ac.Next(params.ExecutionSettings) + ","
 	}
 
 	// class_id: if provided (non-nil), set it; otherwise keep current value

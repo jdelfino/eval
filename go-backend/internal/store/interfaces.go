@@ -122,50 +122,75 @@ type ClassRepository interface {
 	ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 }
 
+// IOTestCase represents a single I/O test case stored as JSONB in the database.
+// It is used in both problems.test_cases (instructor-defined cases) and
+// student_work.test_cases (student-defined cases).
+//
+// A case with ExpectedOutput set is a proper test (pass/fail comparison).
+// A case without ExpectedOutput is a "run-only" case that shows output without asserting correctness.
+//
+// IOTestCase subsumes ExecutionSettings: a case carries its own Input (stdin),
+// RandomSeed, and AttachedFiles. The execution_settings columns have been removed;
+// all execution parameters live in test_cases.
+type IOTestCase struct {
+	Name           string `json:"name"`
+	Input          string `json:"input"`
+	ExpectedOutput string `json:"expected_output,omitempty"`
+	MatchType      string `json:"match_type"`
+	RandomSeed     *int   `json:"random_seed,omitempty"`
+	AttachedFiles  []File `json:"attached_files,omitempty"`
+	Order          int    `json:"order"`
+}
+
+// File represents an auxiliary file attached to a test case or execution environment.
+// Mirrors executorapi.File so the store layer has no dependency on the executorapi package.
+type File struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
 // Problem represents a coding exercise in the database.
+// test_cases stores a NOT NULL JSONB array of IOTestCase definitions (may be empty).
 type Problem struct {
-	ID                uuid.UUID       `json:"id"`
-	NamespaceID       string          `json:"namespace_id"`
-	Title             string          `json:"title"`
-	Description       *string         `json:"description"`
-	StarterCode       *string         `json:"starter_code"`
-	TestCases         json.RawMessage `json:"test_cases"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	AuthorID          uuid.UUID       `json:"author_id"`
-	ClassID           *uuid.UUID      `json:"class_id"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          string          `json:"language"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	NamespaceID string          `json:"namespace_id"`
+	Title       string          `json:"title"`
+	Description *string         `json:"description"`
+	StarterCode *string         `json:"starter_code"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	AuthorID    uuid.UUID       `json:"author_id"`
+	ClassID     *uuid.UUID      `json:"class_id"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    string          `json:"language"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 // CreateProblemParams contains the fields for creating a problem.
 type CreateProblemParams struct {
-	NamespaceID       string
-	Title             string
-	Description       *string
-	StarterCode       *string
-	TestCases         json.RawMessage
-	ExecutionSettings json.RawMessage
-	AuthorID          uuid.UUID
-	ClassID           *uuid.UUID
-	Tags              []string
-	Solution          *string
-	Language          string
+	NamespaceID string
+	Title       string
+	Description *string
+	StarterCode *string
+	TestCases   json.RawMessage
+	AuthorID    uuid.UUID
+	ClassID     *uuid.UUID
+	Tags        []string
+	Solution    *string
+	Language    string
 }
 
 // UpdateProblemParams contains the fields that can be updated on a problem.
 type UpdateProblemParams struct {
-	Title             *string
-	Description       *string
-	StarterCode       *string
-	TestCases         json.RawMessage
-	ExecutionSettings json.RawMessage
-	ClassID           *uuid.UUID
-	Tags              []string
-	Solution          *string
-	Language          *string
+	Title       *string
+	Description *string
+	StarterCode *string
+	TestCases   json.RawMessage
+	ClassID     *uuid.UUID
+	Tags        []string
+	Solution    *string
+	Language    *string
 }
 
 // ProblemFilters contains optional filters for listing problems.
@@ -274,20 +299,20 @@ type SectionRepository interface {
 
 // Session represents a coding session within a section.
 type Session struct {
-	ID                        uuid.UUID       `json:"id"`
-	NamespaceID               string          `json:"namespace_id"`
-	SectionID                 uuid.UUID       `json:"section_id"`
-	SectionName               string          `json:"section_name"`
-	Problem                   json.RawMessage `json:"problem"`
-	FeaturedStudentID         *uuid.UUID      `json:"featured_student_id"`
-	FeaturedCode              *string         `json:"featured_code"`
-	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings"`
-	CreatorID                 uuid.UUID       `json:"creator_id"`
-	Participants              []uuid.UUID     `json:"participants"`
-	Status                    string          `json:"status"`
-	CreatedAt                 time.Time       `json:"created_at"`
-	LastActivity              time.Time       `json:"last_activity"`
-	EndedAt                   *time.Time      `json:"ended_at"`
+	ID                uuid.UUID       `json:"id"`
+	NamespaceID       string          `json:"namespace_id"`
+	SectionID         uuid.UUID       `json:"section_id"`
+	SectionName       string          `json:"section_name"`
+	Problem           json.RawMessage `json:"problem"`
+	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
+	FeaturedCode      *string         `json:"featured_code"`
+	FeaturedTestCases json.RawMessage `json:"featured_test_cases"`
+	CreatorID         uuid.UUID       `json:"creator_id"`
+	Participants      []uuid.UUID     `json:"participants"`
+	Status            string          `json:"status"`
+	CreatedAt         time.Time       `json:"created_at"`
+	LastActivity      time.Time       `json:"last_activity"`
+	EndedAt           *time.Time      `json:"ended_at"`
 }
 
 // CreateSessionParams contains the fields for creating a session.
@@ -301,13 +326,13 @@ type CreateSessionParams struct {
 
 // UpdateSessionParams contains the fields that can be updated on a session.
 type UpdateSessionParams struct {
-	FeaturedStudentID         *uuid.UUID
-	FeaturedCode              *string
-	FeaturedExecutionSettings json.RawMessage
-	Status                    *string
-	EndedAt                   *time.Time
-	ClearEndedAt              bool
-	ClearFeatured             bool
+	FeaturedStudentID *uuid.UUID
+	FeaturedCode      *string
+	FeaturedTestCases json.RawMessage
+	Status            *string
+	EndedAt           *time.Time
+	ClearEndedAt      bool
+	ClearFeatured     bool
 }
 
 // SessionHistoryFilters contains optional filters for listing session history.
@@ -376,16 +401,16 @@ type MembershipRepository interface {
 }
 
 // SessionStudent represents a student's participation in a session.
-// Code and ExecutionSettings are populated from student_work via JOIN.
+// Code and TestCases are populated from student_work via JOIN.
 type SessionStudent struct {
-	ID                uuid.UUID       `json:"id"`
-	SessionID         uuid.UUID       `json:"session_id"`
-	UserID            uuid.UUID       `json:"user_id"`
-	Name              string          `json:"name"`
-	Code              string          `json:"code"`                      // From student_work
-	ExecutionSettings json.RawMessage `json:"execution_settings"`       // From student_work
-	JoinedAt          time.Time       `json:"joined_at"`                // When student joined session
-	StudentWorkID     *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
+	ID            uuid.UUID       `json:"id"`
+	SessionID     uuid.UUID       `json:"session_id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	Name          string          `json:"name"`
+	Code          string          `json:"code"`                      // From student_work
+	TestCases     json.RawMessage `json:"test_cases"`                // From student_work
+	JoinedAt      time.Time       `json:"joined_at"`                 // When student joined session
+	StudentWorkID *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
 }
 
 // JoinSessionParams contains the fields for joining a session.
@@ -671,15 +696,15 @@ type SectionProblemRepository interface {
 
 // StudentWork represents persistent student work for a problem in a section.
 type StudentWork struct {
-	ID                uuid.UUID       `json:"id"`
-	NamespaceID       string          `json:"namespace_id"`
-	UserID            uuid.UUID       `json:"user_id"`
-	ProblemID         uuid.UUID       `json:"problem_id"`
-	SectionID         uuid.UUID       `json:"section_id"`
-	Code              string          `json:"code"`
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	CreatedAt         time.Time       `json:"created_at"`
-	LastUpdate        time.Time       `json:"last_update"`
+	ID          uuid.UUID       `json:"id"`
+	NamespaceID string          `json:"namespace_id"`
+	UserID      uuid.UUID       `json:"user_id"`
+	ProblemID   uuid.UUID       `json:"problem_id"`
+	SectionID   uuid.UUID       `json:"section_id"`
+	Code        string          `json:"code"`
+	TestCases   json.RawMessage `json:"test_cases"`
+	CreatedAt   time.Time       `json:"created_at"`
+	LastUpdate  time.Time       `json:"last_update"`
 }
 
 // StudentWorkWithProblem represents student work with its associated problem details.
@@ -690,8 +715,8 @@ type StudentWorkWithProblem struct {
 
 // UpdateStudentWorkParams contains the fields that can be updated on student work.
 type UpdateStudentWorkParams struct {
-	Code              *string
-	ExecutionSettings json.RawMessage // nil means don't update
+	Code      *string
+	TestCases json.RawMessage // nil means don't update
 }
 
 // StudentProgress holds progress summary for a single student in a section.

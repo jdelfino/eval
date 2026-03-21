@@ -234,10 +234,10 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // updateSessionRequest is the request body for PATCH /sessions/{id}.
 type updateSessionRequest struct {
-	FeaturedStudentID         *uuid.UUID      `json:"featured_student_id"`
-	FeaturedCode              *string         `json:"featured_code" validate:"omitempty,max=50000"`
-	FeaturedExecutionSettings json.RawMessage `json:"featured_execution_settings,omitempty"`
-	Status                    *string         `json:"status" validate:"omitempty,oneof=active completed"`
+	FeaturedStudentID *uuid.UUID      `json:"featured_student_id"`
+	FeaturedCode      *string         `json:"featured_code" validate:"omitempty,max=50000"`
+	FeaturedTestCases json.RawMessage `json:"featured_test_cases,omitempty"`
+	Status            *string         `json:"status" validate:"omitempty,oneof=active completed"`
 }
 
 // Update handles PATCH /api/v1/sessions/{id} — updates a session (instructor+).
@@ -265,10 +265,10 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := store.UpdateSessionParams{
-		FeaturedStudentID:         req.FeaturedStudentID,
-		FeaturedCode:              req.FeaturedCode,
-		FeaturedExecutionSettings: req.FeaturedExecutionSettings,
-		Status:                    req.Status,
+		FeaturedStudentID: req.FeaturedStudentID,
+		FeaturedCode:      req.FeaturedCode,
+		FeaturedTestCases: req.FeaturedTestCases,
+		Status:            req.Status,
 	}
 
 	// When ending a session, set ended_at to now
@@ -306,7 +306,7 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.FeaturedStudentID != nil && req.FeaturedCode != nil {
 		featuredChanged := previous.FeaturedStudentID == nil || *previous.FeaturedStudentID != *req.FeaturedStudentID
 		if featuredChanged {
-			_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode, req.FeaturedExecutionSettings)
+			_ = h.publisher.FeaturedStudentChanged(r.Context(), id.String(), req.FeaturedStudentID.String(), *req.FeaturedCode, req.FeaturedTestCases)
 		}
 	}
 

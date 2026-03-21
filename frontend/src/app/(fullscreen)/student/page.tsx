@@ -117,9 +117,6 @@ function StudentPage() {
         setProblemId(data.problem_id);
         setProblem(data.problem);
         setCode(data.code);
-        if (data.execution_settings) {
-          setStudentExecutionSettings(data.execution_settings as typeof studentExecutionSettings);
-        }
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
         setMode('error');

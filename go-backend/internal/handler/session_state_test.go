@@ -258,10 +258,11 @@ func TestFeature_PublishesFeaturedStudentChanged(t *testing.T) {
 	}
 }
 
-func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
+func TestFeature_PassesTestCasesToPublisher(t *testing.T) {
 	sess := testSession()
 	studentID := uuid.New()
 	code := "x = 1"
+	testCasesJSON := `[{"name":"t1","input":"hello world","match_type":"exact"}]`
 
 	updatedSess := *sess
 	updatedSess.FeaturedStudentID = &studentID
@@ -278,7 +279,7 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 	}
 	h := NewSessionStateHandler(pub)
 
-	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `","execution_settings":{"stdin":"hello world"}}`
+	body := `{"student_id":"` + studentID.String() + `","code":"` + code + `","test_cases":` + testCasesJSON + `}`
 	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sess.ID.String()+"/feature", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := withChiParam(req.Context(), "id", sess.ID.String())
@@ -292,12 +293,12 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify execution_settings was passed to store update params
-	if capturedParams.FeaturedExecutionSettings == nil {
-		t.Fatal("expected FeaturedExecutionSettings to be set in UpdateSessionParams")
+	// Verify test_cases was passed to store update params
+	if capturedParams.FeaturedTestCases == nil {
+		t.Fatal("expected FeaturedTestCases to be set in UpdateSessionParams")
 	}
-	if string(capturedParams.FeaturedExecutionSettings) != `{"stdin":"hello world"}` {
-		t.Errorf("expected FeaturedExecutionSettings %q, got %q", `{"stdin":"hello world"}`, string(capturedParams.FeaturedExecutionSettings))
+	if string(capturedParams.FeaturedTestCases) != testCasesJSON {
+		t.Errorf("expected FeaturedTestCases %q, got %q", testCasesJSON, string(capturedParams.FeaturedTestCases))
 	}
 
 	pub.waitForCalls(t, 1)
@@ -308,8 +309,8 @@ func TestFeature_PassesExecutionSettingsToPublisher(t *testing.T) {
 		t.Fatalf("expected 1 featured_student_changed call, got %d", len(pub.featuredStudentChangedCalls))
 	}
 	call := pub.featuredStudentChangedCalls[0]
-	if string(call.executionSettings) != `{"stdin":"hello world"}` {
-		t.Errorf("expected execution_settings %q, got %q", `{"stdin":"hello world"}`, string(call.executionSettings))
+	if string(call.testCases) != testCasesJSON {
+		t.Errorf("expected test_cases %q, got %q", testCasesJSON, string(call.testCases))
 	}
 }
 
@@ -442,13 +443,14 @@ func TestFeature_ClearRequiresNoStudentIDAndNoCode(t *testing.T) {
 	}
 }
 
-func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
+func TestPublicState_ReturnsFeaturedTestCases(t *testing.T) {
 	sess := testSession()
 	studentID := uuid.New()
 	code := "print('hi')"
+	testCasesJSON := json.RawMessage(`[{"name":"t1","input":"test input","match_type":"exact"}]`)
 	sess.FeaturedStudentID = &studentID
 	sess.FeaturedCode = &code
-	sess.FeaturedExecutionSettings = json.RawMessage(`{"stdin":"test input"}`)
+	sess.FeaturedTestCases = testCasesJSON
 	section := testSection()
 
 	sessRepo := &mockSessionRepo{getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
@@ -475,10 +477,10 @@ func TestPublicState_ReturnsFeaturedExecutionSettings(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.FeaturedExecutionSettings == nil {
-		t.Fatal("expected featured_execution_settings to be present in response")
+	if resp.FeaturedTestCases == nil {
+		t.Fatal("expected featured_test_cases to be present in response")
 	}
-	if string(resp.FeaturedExecutionSettings) != `{"stdin":"test input"}` {
-		t.Errorf("expected featured_execution_settings %q, got %q", `{"stdin":"test input"}`, string(resp.FeaturedExecutionSettings))
+	if string(resp.FeaturedTestCases) != string(testCasesJSON) {
+		t.Errorf("expected featured_test_cases %q, got %q", string(testCasesJSON), string(resp.FeaturedTestCases))
 	}
 }

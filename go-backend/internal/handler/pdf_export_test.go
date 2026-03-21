@@ -15,39 +15,35 @@ func TestRenderProblemsPDF_PopulatedProblems(t *testing.T) {
 	desc1 := "Write a function that adds two numbers"
 	starterCode1 := "def add(a, b):\n    pass"
 	solution1 := "def add(a, b):\n    return a + b"
-	testCases1 := json.RawMessage(`[{"input": [1, 2], "expected": 3}]`)
-	execSettings1 := json.RawMessage(`{"timeout": 5}`)
+	testCases1 := json.RawMessage(`[{"name":"t1","input":"1 2","expected_output":"3","match_type":"exact"}]`)
 
 	desc2 := "Write a function that multiplies two numbers"
 	starterCode2 := "def multiply(a, b):\n    pass"
 	solution2 := "def multiply(a, b):\n    return a * b"
-	testCases2 := json.RawMessage(`[{"input": [3, 4], "expected": 12}]`)
-	execSettings2 := json.RawMessage(`{"timeout": 10}`)
+	testCases2 := json.RawMessage(`[{"name":"t1","input":"3 4","expected_output":"12","match_type":"exact"}]`)
 
 	problems := []ExportProblem{
 		{
-			Title:             "Add Two Numbers",
-			Description:       &desc1,
-			StarterCode:       &starterCode1,
-			TestCases:         testCases1,
-			ExecutionSettings: execSettings1,
-			Tags:              []string{"math", "easy"},
-			Solution:          &solution1,
-			Language:          "python",
-			CreatedAt:         time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			UpdatedAt:         time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			Title:       "Add Two Numbers",
+			Description: &desc1,
+			StarterCode: &starterCode1,
+			TestCases:   testCases1,
+			Tags:        []string{"math", "easy"},
+			Solution:    &solution1,
+			Language:    "python",
+			CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			Title:             "Multiply Two Numbers",
-			Description:       &desc2,
-			StarterCode:       &starterCode2,
-			TestCases:         testCases2,
-			ExecutionSettings: execSettings2,
-			Tags:              []string{"math", "medium"},
-			Solution:          &solution2,
-			Language:          "python",
-			CreatedAt:         time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
-			UpdatedAt:         time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+			Title:       "Multiply Two Numbers",
+			Description: &desc2,
+			StarterCode: &starterCode2,
+			TestCases:   testCases2,
+			Tags:        []string{"math", "medium"},
+			Solution:    &solution2,
+			Language:    "python",
+			CreatedAt:   time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
@@ -80,21 +76,19 @@ func TestRenderProblemsPDF_PopulatedProblems(t *testing.T) {
 // panicking. This catches nil pointer dereferences when optional fields are not set.
 func TestRenderProblemsPDF_NilOptionalFields(t *testing.T) {
 	// Problem with only required fields set
-	testCases := json.RawMessage(`[{"input": [], "expected": true}]`)
-	execSettings := json.RawMessage(`{}`)
+	testCases := json.RawMessage(`[{"name":"t1","input":"","match_type":"exact"}]`)
 
 	problems := []ExportProblem{
 		{
-			Title:             "Minimal Problem",
-			Description:       nil, // Optional
-			StarterCode:       nil, // Optional
-			TestCases:         testCases,
-			ExecutionSettings: execSettings,
-			Tags:              []string{"test"},
-			Solution:          nil, // Optional
-			Language:          "python",
-			CreatedAt:         time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-			UpdatedAt:         time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			Title:       "Minimal Problem",
+			Description: nil, // Optional
+			StarterCode: nil, // Optional
+			TestCases:   testCases,
+			Tags:        []string{"test"},
+			Solution:    nil, // Optional
+			Language:    "python",
+			CreatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 

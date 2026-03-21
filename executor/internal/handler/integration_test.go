@@ -130,8 +130,8 @@ func TestIntegration_Stdin(t *testing.T) {
 	if r.Status == "error" {
 		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	// Input echo preamble causes input() values to appear in stdout.
-	want := "Alice\nhi Alice"
+	// iotestrunner runs student code as a subprocess (no echo preamble).
+	want := "hi Alice"
 	if strings.TrimSpace(r.Actual) != want {
 		t.Errorf("expected %q, got %q", want, r.Actual)
 	}

@@ -1150,11 +1150,11 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	prevSess := testSession() // no featured student
 	featuredID := uuid.New()
 	featuredCode := "print('featured')"
-	featuredExecSettings := json.RawMessage(`{"stdin":"test input"}`)
+	featuredTestCases := json.RawMessage(`[{"name":"t1","input":"test input","match_type":"exact"}]`)
 	updatedSess := *prevSess
 	updatedSess.FeaturedStudentID = &featuredID
 	updatedSess.FeaturedCode = &featuredCode
-	updatedSess.FeaturedExecutionSettings = featuredExecSettings
+	updatedSess.FeaturedTestCases = featuredTestCases
 
 	repo := &mockSessionRepo{
 		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
@@ -1168,9 +1168,9 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	h := NewSessionHandler(pub)
 
 	body, _ := json.Marshal(map[string]any{
-		"featured_student_id":          featuredID.String(),
-		"featured_code":                featuredCode,
-		"featured_execution_settings":  json.RawMessage(`{"stdin":"test input"}`),
+		"featured_student_id": featuredID.String(),
+		"featured_code":       featuredCode,
+		"featured_test_cases": json.RawMessage(`[{"name":"t1","input":"test input","match_type":"exact"}]`),
 	})
 	req := httptest.NewRequest(http.MethodPatch, "/"+prevSess.ID.String(), bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -1203,8 +1203,8 @@ func TestUpdateSession_FeaturedStudent_PublishesFeaturedStudentChanged(t *testin
 	if call.code != featuredCode {
 		t.Errorf("expected code %q, got %q", featuredCode, call.code)
 	}
-	if string(call.executionSettings) != string(featuredExecSettings) {
-		t.Errorf("expected executionSettings %q, got %q", string(featuredExecSettings), string(call.executionSettings))
+	if string(call.testCases) != string(featuredTestCases) {
+		t.Errorf("expected testCases %q, got %q", string(featuredTestCases), string(call.testCases))
 	}
 }
 

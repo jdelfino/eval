@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,22 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
+
+// jsonEqual compares two json.RawMessage values structurally (ignoring whitespace
+// and key ordering differences introduced by PostgreSQL JSONB normalization).
+func jsonEqual(t *testing.T, actual, expected json.RawMessage) bool {
+	t.Helper()
+	var a, e interface{}
+	if err := json.Unmarshal(actual, &a); err != nil {
+		t.Errorf("jsonEqual: failed to unmarshal actual %s: %v", actual, err)
+		return false
+	}
+	if err := json.Unmarshal(expected, &e); err != nil {
+		t.Errorf("jsonEqual: failed to unmarshal expected %s: %v", expected, err)
+		return false
+	}
+	return reflect.DeepEqual(a, e)
+}
 
 // ensureRolesOnce guards the one-time EnsureAppRole call so that parallel
 // tests don't race on PostgreSQL catalog GRANT statements.
@@ -307,8 +324,8 @@ func (db *integrationDB) createMembership(ctx context.Context, t *testing.T, use
 func (db *integrationDB) createStudentWork(ctx context.Context, t *testing.T, id uuid.UUID, nsID string, userID, problemID, sectionID uuid.UUID) {
 	t.Helper()
 	err := db.execAsSuperuser(ctx,
-		`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code, execution_settings)
-		 VALUES ($1, $2, $3, $4, $5, '', '{}')`,
+		`INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code)
+		 VALUES ($1, $2, $3, $4, $5, '')`,
 		id, nsID, userID, problemID, sectionID)
 	if err != nil {
 		t.Fatalf("create student_work: %v", err)
@@ -318,8 +335,8 @@ func (db *integrationDB) createStudentWork(ctx context.Context, t *testing.T, id
 func (db *integrationDB) createProblem(ctx context.Context, t *testing.T, id uuid.UUID, nsID, title string, authorID uuid.UUID, classID *uuid.UUID, tags []string) {
 	t.Helper()
 	err := db.execAsSuperuser(ctx,
-		`INSERT INTO problems (id, namespace_id, title, test_cases, execution_settings, author_id, class_id, tags)
-		 VALUES ($1, $2, $3, '{}', '{}', $4, $5, $6)`,
+		`INSERT INTO problems (id, namespace_id, title, author_id, class_id, tags)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
 		id, nsID, title, authorID, classID, tags)
 	if err != nil {
 		t.Fatalf("create problem %s: %v", title, err)

@@ -28,9 +28,6 @@ func defaultConfig() handler.ExecuteHandlerConfig {
 		MaxOutputBytes:   1048576,
 		DefaultTimeoutMs: 10000,
 		MaxCodeBytes:     102400,
-		MaxStdinBytes:    1048576,
-		MaxFiles:         5,
-		MaxFileBytes:     10240,
 	}
 }
 
@@ -43,10 +40,23 @@ func noopLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// successRunner returns a successful sandbox result with stdout "hello\n".
-func successRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+// successRunner returns JSON case results representing one "run" case with actual="hello\n".
+// The iotestrunner protocol requires sandbox Stdout to be a JSON array of CaseResult objects.
+func successRunner(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+	cases := parseCasesFromFiles(req.Files)
+	results := make([]map[string]any, len(cases))
+	for i, name := range cases {
+		results[i] = map[string]any{
+			"name":    name,
+			"status":  "run",
+			"actual":  "hello\n",
+			"time_ms": 45,
+			"type":    "io",
+		}
+	}
+	out, _ := json.Marshal(results)
 	return &sandbox.Result{
-		Stdout:     "hello\n",
+		Stdout:     string(out),
 		Stderr:     "",
 		ExitCode:   0,
 		TimedOut:   false,
@@ -54,10 +64,21 @@ func successRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*san
 	}, nil
 }
 
-// failRunner simulates a crash (non-zero exit code, stderr output).
-func failRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+// failRunner simulates student code crashing; returns JSON case results with status "error".
+func failRunner(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+	cases := parseCasesFromFiles(req.Files)
+	results := make([]map[string]any, len(cases))
+	for i, name := range cases {
+		results[i] = map[string]any{
+			"name":   name,
+			"status": "error",
+			"stderr": "NameError: name 'x' is not defined",
+			"type":   "io",
+		}
+	}
+	out, _ := json.Marshal(results)
 	return &sandbox.Result{
-		Stdout:     "",
+		Stdout:     string(out),
 		Stderr:     "NameError: name 'x' is not defined",
 		ExitCode:   1,
 		TimedOut:   false,
@@ -79,7 +100,7 @@ func timeoutRunner(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*san
 	}, nil
 }
 
-// captureRunner records the sandbox request for inspection.
+// captureRunner records the sandbox request for inspection and returns JSON case results.
 type captureRunner struct {
 	req sandbox.Request
 	cfg sandbox.Config
@@ -88,7 +109,39 @@ type captureRunner struct {
 func (c *captureRunner) run(_ context.Context, cfg sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
 	c.req = req
 	c.cfg = cfg
-	return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 1}, nil
+	cases := parseCasesFromFiles(req.Files)
+	results := make([]map[string]any, len(cases))
+	for i, name := range cases {
+		results[i] = map[string]any{
+			"name":    name,
+			"status":  "run",
+			"actual":  "ok\n",
+			"time_ms": 1,
+			"type":    "io",
+		}
+	}
+	out, _ := json.Marshal(results)
+	return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 1}, nil
+}
+
+// parseCasesFromFiles extracts case names from the io_tests.json attached file.
+// This lets mock runners return the correct number of results.
+func parseCasesFromFiles(files []sandbox.File) []string {
+	for _, f := range files {
+		if f.Name == "io_tests.json" {
+			var defs []struct {
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal([]byte(f.Content), &defs); err == nil {
+				names := make([]string, len(defs))
+				for i, d := range defs {
+					names[i] = d.Name
+				}
+				return names
+			}
+		}
+	}
+	return []string{"run"}
 }
 
 func doRequest(h http.HandlerFunc, body string) *httptest.ResponseRecorder {
@@ -384,10 +437,16 @@ func TestExecute_MetricsValidationInvalidJSON(t *testing.T) {
 func TestExecute_ConcurrencyLimit_RejectWhenFull(t *testing.T) {
 	entryCh := make(chan struct{})
 	blockCh := make(chan struct{})
-	blockingRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+	blockingRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
 		close(entryCh)
 		<-blockCh
-		return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 1}, nil
+		cases := parseCasesFromFiles(req.Files)
+		results := make([]map[string]any, len(cases))
+		for i, name := range cases {
+			results[i] = map[string]any{"name": name, "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io"}
+		}
+		out, _ := json.Marshal(results)
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 1}, nil
 	}
 
 	cfg := defaultConfig()
@@ -571,11 +630,17 @@ func TestExecute_Cases_SingleRunOnly(t *testing.T) {
 }
 
 func TestExecute_Cases_MultipleCases(t *testing.T) {
-	// Multiple cases each get their own sandbox call.
+	// All cases are dispatched in a single sandbox call to the iotestrunner.
 	callCount := 0
 	multiRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
 		callCount++
-		return &sandbox.Result{Stdout: "out\n", ExitCode: 0, DurationMs: 10}, nil
+		cases := parseCasesFromFiles(req.Files)
+		results := make([]map[string]any, len(cases))
+		for i, name := range cases {
+			results[i] = map[string]any{"name": name, "status": "run", "actual": "out\n", "time_ms": 10, "type": "io"}
+		}
+		out, _ := json.Marshal(results)
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 30}, nil
 	}
 	h := newHandler(multiRunner, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"print(input())","language":"python","cases":[` +
@@ -596,17 +661,19 @@ func TestExecute_Cases_MultipleCases(t *testing.T) {
 	if len(resp.Results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(resp.Results))
 	}
-	if callCount != 3 {
-		t.Errorf("expected 3 sandbox calls (one per case), got %d", callCount)
+	if callCount != 1 {
+		t.Errorf("expected 1 sandbox call (all cases in single iotestrunner invocation), got %d", callCount)
 	}
 	if resp.Summary.Total != 3 {
 		t.Errorf("expected total=3, got %d", resp.Summary.Total)
 	}
 }
 
-// TestExecute_Cases_StdinForwardedFromInput verifies that case.Input is forwarded
-// as Stdin to the sandbox. Catches: CaseDef.Input not mapped to sandbox Stdin.
-func TestExecute_Cases_StdinForwardedFromInput(t *testing.T) {
+// TestExecute_Cases_InputInTestsJSON verifies that case.Input is included in
+// the io_tests.json attached file passed to the iotestrunner sandbox.
+// Input is no longer forwarded as sandbox Stdin — the iotestrunner script
+// reads cases from the JSON file and pipes each input to the student process.
+func TestExecute_Cases_InputInTestsJSON(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"print(input())","language":"python","cases":[{"name":"run","type":"io","input":"test input"}]}`
@@ -615,8 +682,19 @@ func TestExecute_Cases_StdinForwardedFromInput(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if cap.req.Stdin != "test input" {
-		t.Errorf("expected sandbox Stdin='test input', got %q", cap.req.Stdin)
+	// Find io_tests.json in the attached files.
+	var ioTestsJSON string
+	for _, f := range cap.req.Files {
+		if f.Name == "io_tests.json" {
+			ioTestsJSON = f.Content
+			break
+		}
+	}
+	if ioTestsJSON == "" {
+		t.Fatal("expected io_tests.json to be in sandbox files")
+	}
+	if !strings.Contains(ioTestsJSON, "test input") {
+		t.Errorf("expected io_tests.json to contain 'test input', got %q", ioTestsJSON)
 	}
 }
 
@@ -629,15 +707,27 @@ func TestExecute_Cases_CaseFilesForwardedToSandbox(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if len(cap.req.Files) != 1 {
-		t.Fatalf("expected 1 file in sandbox request, got %d", len(cap.req.Files))
+	// The iotestrunner design attaches: solution.py, io_tests.json, plus any case files.
+	// Verify data.csv is present among the files.
+	var found bool
+	for _, f := range cap.req.Files {
+		if f.Name == "data.csv" {
+			found = true
+			if f.Content != "a,b" {
+				t.Errorf("expected data.csv content 'a,b', got %q", f.Content)
+			}
+		}
 	}
-	if cap.req.Files[0].Name != "data.csv" {
-		t.Errorf("expected file name 'data.csv', got %q", cap.req.Files[0].Name)
+	if !found {
+		names := make([]string, len(cap.req.Files))
+		for i, f := range cap.req.Files {
+			names[i] = f.Name
+		}
+		t.Errorf("expected data.csv in sandbox files, got: %v", names)
 	}
 }
 
-func TestExecute_Cases_RandomSeedForwardedToSandbox(t *testing.T) {
+func TestExecute_Cases_RandomSeedInTestsJSON(t *testing.T) {
 	cap := &captureRunner{}
 	h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"import random; print(random.randint(1,100))","language":"python","cases":[{"name":"seed-test","type":"io","input":"","random_seed":42}]}`
@@ -646,8 +736,19 @@ func TestExecute_Cases_RandomSeedForwardedToSandbox(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	if cap.req.RandomSeed == nil || *cap.req.RandomSeed != 42 {
-		t.Errorf("expected random_seed=42 forwarded to sandbox, got %v", cap.req.RandomSeed)
+	// random_seed is passed inside io_tests.json, not as a sandbox-level field.
+	var ioTestsJSON string
+	for _, f := range cap.req.Files {
+		if f.Name == "io_tests.json" {
+			ioTestsJSON = f.Content
+			break
+		}
+	}
+	if ioTestsJSON == "" {
+		t.Fatal("expected io_tests.json in sandbox files")
+	}
+	if !strings.Contains(ioTestsJSON, "42") {
+		t.Errorf("expected io_tests.json to contain random_seed=42, got %q", ioTestsJSON)
 	}
 }
 
@@ -673,18 +774,17 @@ func TestExecute_Cases_SandboxTimeout(t *testing.T) {
 	}
 }
 
-// TestExecute_Cases_TimeoutStopsLoop verifies that once a case times out, subsequent
-// cases are not executed. Catches: missing break after anyTimedOut = true.
-func TestExecute_Cases_TimeoutStopsLoop(t *testing.T) {
+// TestExecute_Cases_TimeoutProducesErrorForAllCases verifies that when the sandbox
+// times out, all requested cases get an error result with "execution timed out".
+// With the iotestrunner design, all cases run in one sandbox call, so a timeout
+// affects all cases simultaneously rather than stopping a per-case loop.
+func TestExecute_Cases_TimeoutProducesErrorForAllCases(t *testing.T) {
 	callCount := 0
-	timeoutThenSuccessRunner := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
+	timeoutRunner2 := func(_ context.Context, _ sandbox.Config, _ sandbox.Request) (*sandbox.Result, error) {
 		callCount++
-		if callCount == 1 {
-			return &sandbox.Result{TimedOut: true, ExitCode: 137, DurationMs: 10000}, nil
-		}
-		return &sandbox.Result{Stdout: "ok\n", ExitCode: 0, DurationMs: 10}, nil
+		return &sandbox.Result{TimedOut: true, ExitCode: 137, DurationMs: 10000}, nil
 	}
-	h := newHandler(timeoutThenSuccessRunner, metrics.NewNoop(), defaultConfig())
+	h := newHandler(timeoutRunner2, metrics.NewNoop(), defaultConfig())
 	body := `{"code":"while True: pass","language":"python","cases":[` +
 		`{"name":"c1","type":"io","input":""},` +
 		`{"name":"c2","type":"io","input":""}` +
@@ -695,60 +795,104 @@ func TestExecute_Cases_TimeoutStopsLoop(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	if callCount != 1 {
-		t.Errorf("expected sandbox called exactly once (break on timeout), got %d calls", callCount)
+		t.Errorf("expected sandbox called exactly once (all cases in one call), got %d calls", callCount)
 	}
 	var resp executorapi.ExecuteResponse
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(resp.Results) != 1 {
-		t.Errorf("expected 1 result after timeout break, got %d", len(resp.Results))
+	// Both cases get error results when sandbox times out.
+	if len(resp.Results) != 2 {
+		t.Errorf("expected 2 error results (one per case), got %d", len(resp.Results))
+	}
+	for _, r := range resp.Results {
+		if r.Status != "error" {
+			t.Errorf("expected status 'error' for timed-out case %q, got %q", r.Name, r.Status)
+		}
 	}
 }
 
-// --- Per-case input/file size validation tests ---
+// Per-case stdin/file size limits are enforced by the iotestrunner script,
+// not by the Go handler. The handler only validates code size, language, and
+// that cases is non-empty.
 
-// TestExecute_Cases_StdinTooLarge verifies that per-case stdin exceeding MaxStdinBytes
-// is rejected with 400. Catches: missing per-case stdin size validation.
-func TestExecute_Cases_StdinTooLarge(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxStdinBytes = 5
-	cfg.MaxFiles = 5
-	cfg.MaxFileBytes = 10240
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"print(input())","language":"python","cases":[{"name":"c1","type":"io","input":"toolong"}]}`
-	w := doRequest(h, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for stdin exceeding MaxStdinBytes, got %d: %s", w.Code, w.Body.String())
+// TestExecute_Cases_ReservedFilenameRejected verifies that submitting a case
+// file with a name that collides with a reserved sandbox file (solution.py,
+// Main.java, io_tests.json) returns HTTP 400 with a descriptive error.
+//
+// Without this check the student's file is silently dropped, causing confusing
+// failures where the file appears missing even though the request succeeds.
+func TestExecute_Cases_ReservedFilenameRejected(t *testing.T) {
+	tests := []struct {
+		name         string
+		language     string
+		reservedFile string
+	}{
+		{
+			name:         "solution.py is reserved for python",
+			language:     "python",
+			reservedFile: "solution.py",
+		},
+		{
+			name:         "io_tests.json is reserved for python",
+			language:     "python",
+			reservedFile: "io_tests.json",
+		},
+		{
+			name:         "Main.java is reserved for java",
+			language:     "java",
+			reservedFile: "Main.java",
+		},
+		{
+			name:         "io_tests.json is reserved for java",
+			language:     "java",
+			reservedFile: "io_tests.json",
+		},
 	}
-}
 
-// TestExecute_Cases_TooManyFiles verifies that per-case file count exceeding MaxFiles
-// is rejected with 400. Catches: missing per-case file count validation.
-func TestExecute_Cases_TooManyFiles(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxStdinBytes = 1048576
-	cfg.MaxFiles = 1
-	cfg.MaxFileBytes = 10240
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","language":"python","cases":[{"name":"c1","type":"io","input":"","files":[{"name":"a.txt","content":"a"},{"name":"b.txt","content":"b"}]}]}`
-	w := doRequest(h, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for too many files, got %d: %s", w.Code, w.Body.String())
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cap := &captureRunner{}
+			h := newHandler(cap.run, metrics.NewNoop(), defaultConfig())
 
-// TestExecute_Cases_FileTooLarge verifies that a per-case file exceeding MaxFileBytes
-// is rejected with 400. Catches: missing per-case file size validation.
-func TestExecute_Cases_FileTooLarge(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.MaxStdinBytes = 1048576
-	cfg.MaxFiles = 5
-	cfg.MaxFileBytes = 5
-	h := newHandler(successRunner, metrics.NewNoop(), cfg)
-	body := `{"code":"x=1","language":"python","cases":[{"name":"c1","type":"io","input":"","files":[{"name":"data.txt","content":"toolong"}]}]}`
-	w := doRequest(h, body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for file exceeding MaxFileBytes, got %d: %s", w.Code, w.Body.String())
+			code := `print("hello")`
+			if tt.language == "java" {
+				code = `public class Main { public static void main(String[] a) {} }`
+			}
+
+			body, _ := json.Marshal(map[string]any{
+				"code":     code,
+				"language": tt.language,
+				"cases": []map[string]any{
+					{
+						"name":  "test",
+						"type":  "io",
+						"input": "",
+						"files": []map[string]any{
+							{"name": tt.reservedFile, "content": "overwrite attempt"},
+						},
+					},
+				},
+			})
+
+			w := doRequest(h, string(body))
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for reserved file name %q, got %d (body: %s)",
+					tt.reservedFile, w.Code, w.Body.String())
+			}
+
+			var errResp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+				t.Fatalf("failed to decode error response: %v", err)
+			}
+			if got := errResp["error"]; !strings.Contains(got, "reserved") {
+				t.Errorf("expected error message to mention 'reserved', got %q", got)
+			}
+			if !strings.Contains(errResp["error"], tt.reservedFile) {
+				t.Errorf("expected error message to contain file name %q, got %q",
+					tt.reservedFile, errResp["error"])
+			}
+		})
 	}
 }
