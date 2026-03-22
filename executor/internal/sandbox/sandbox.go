@@ -455,13 +455,13 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 
 	// Create temp directory for code and attached files.
 	// MkdirTemp creates with 0700 but the sandboxed process runs as nobody
-	// (uid 65534), so we widen to 0755 for read/traverse access.
+	// (uid 65534), so we widen to 0777 to allow writing output files.
 	tempDir, err := os.MkdirTemp("", "sandbox-")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
-	if err := os.Chmod(tempDir, 0755); err != nil {
+	if err := os.Chmod(tempDir, 0777); err != nil {
 		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
 	}
 
