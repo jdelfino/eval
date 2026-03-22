@@ -92,7 +92,7 @@ export function CasesPanel({
           <button
             type="button"
             onClick={onRunAll}
-            disabled={isRunning || allCases.length === 0}
+            disabled={isRunning}
             className="px-2 py-1 text-xs rounded bg-green-700 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Run All"
           >

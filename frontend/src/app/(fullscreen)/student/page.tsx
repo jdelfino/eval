@@ -426,6 +426,15 @@ function StudentPage() {
           className="mx-3 my-1 flex-shrink-0"
         />
       )}
+      {caseRunner.error && (
+        <ErrorAlert
+          error={caseRunner.error}
+          onRetry={caseRunner.runAllCases}
+          isRetrying={caseRunner.isRunning}
+          onDismiss={caseRunner.clearResults}
+          className="mx-3 my-1 flex-shrink-0"
+        />
+      )}
 
       {sessionEnded && mode === 'live' && (
         <SessionEndedNotification
