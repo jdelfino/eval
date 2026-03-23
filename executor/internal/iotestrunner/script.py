@@ -48,6 +48,27 @@ PER_TEST_TIMEOUT_SEC = 10
 # own stdout (a JSON array of results) stays well within the sandbox output cap.
 MAX_CASE_OUTPUT_BYTES = 1024 * 1024  # 1 MB
 
+# INPUT_ECHO_PREAMBLE overrides Python's input() to print each value after
+# reading it — the same behavior a terminal provides. Without this, piped
+# stdin is invisible in stdout, producing hard-to-read output like:
+#
+#   Enter name: Enter age: Hello Alice, you are 25
+#
+# With the preamble the output reads naturally:
+#
+#   Enter name: Alice
+#   Enter age: 25
+#   Hello Alice, you are 25
+#
+# This mirrors the Go-side inputEchoPreamble in sandbox.go. The Go preamble
+# handles direct execution; this one handles subprocess execution via iotestrunner.
+INPUT_ECHO_PREAMBLE = """_original_input = input
+def input(prompt=''):
+    value = _original_input(prompt)
+    print(value)
+    return value
+"""
+
 
 def matches(actual, expected, match_type):
     """Return True if actual matches expected according to match_type.
@@ -80,31 +101,41 @@ def run_test(code_path, test, language):
     random_seed = test.get("random_seed", None)
 
     start = time.monotonic()
-    seeded_tmp_path = None
+    tmp_path = None
     try:
         if language == "java":
             # For Java: the code_path is the .java source file.
             # Use the JEP 330 single-file launcher (java <file>).
             java_bin = os.environ.get("JAVA_PATH", "/usr/bin/java")
             cmd = [java_bin, "-XX:TieredStopAtLevel=1", code_path]
+            preamble_lines = 0
         else:
             # Python: run the file with python3.
-            # If random_seed is provided, build a temporary wrapper file that
-            # seeds the RNG before executing the student code.
+            # Build a prefix consisting of:
+            #   1. Echo preamble (when stdin is provided) so input() values appear in output.
+            #   2. Random seed injection (when random_seed is provided).
+            # If any prefix is needed, write a temp wrapper file so Python tracebacks
+            # reference a consistent path that we can sanitize.
+            import tempfile
             python_bin = os.environ.get("PYTHON_PATH", "/usr/bin/python3")
+            prefix = ""
+            if stdin_input != "":
+                prefix += INPUT_ECHO_PREAMBLE
             if random_seed is not None:
-                import tempfile
-                seed_prefix = f"import random; random.seed({random_seed})\n"
+                prefix += f"import random; random.seed({random_seed})\n"
+            preamble_lines = prefix.count("\n")
+
+            if prefix:
                 with open(code_path, "r") as f:
                     student_code = f.read()
-                seeded_code = seed_prefix + student_code
+                combined_code = prefix + student_code
                 tmp = tempfile.NamedTemporaryFile(
                     mode="w", suffix=".py", delete=False, dir=os.path.dirname(code_path) or "."
                 )
-                tmp.write(seeded_code)
+                tmp.write(combined_code)
                 tmp.close()
                 cmd = [python_bin, tmp.name]
-                seeded_tmp_path = tmp.name
+                tmp_path = tmp.name
             else:
                 cmd = [python_bin, code_path]
 
@@ -117,14 +148,38 @@ def run_test(code_path, test, language):
                 timeout=PER_TEST_TIMEOUT_SEC,
             )
         finally:
-            if seeded_tmp_path:
-                os.unlink(seeded_tmp_path)
+            if tmp_path:
+                os.unlink(tmp_path)
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         actual_stdout = proc.stdout
         if len(actual_stdout) > MAX_CASE_OUTPUT_BYTES:
             actual_stdout = actual_stdout[:MAX_CASE_OUTPUT_BYTES] + "\n... [output truncated]"
         stderr_output = proc.stderr
+
+        # Clean up stderr: replace temp file paths with "solution.py" and adjust
+        # line numbers to be relative to the student's code (not the preamble).
+        if stderr_output and tmp_path:
+            # Replace the full temp file path with "solution.py" in tracebacks.
+            # The full path replacement must come first so it takes precedence over
+            # the basename replacement (which would leave a directory prefix behind).
+            stderr_output = stderr_output.replace(tmp_path, "solution.py")
+            # Also replace any remaining bare basename references (e.g. tmpXXXXXX.py).
+            tmp_filename = os.path.basename(tmp_path)
+            stderr_output = stderr_output.replace(tmp_filename, "solution.py")
+            # Adjust line numbers in traceback lines: subtract preamble_lines.
+            # Matches: File "solution.py", line N  (or File "/path/solution.py", line N)
+            if preamble_lines > 0:
+                def adjust_line(m):
+                    prefix_str = m.group(1)
+                    line_num = int(m.group(2))
+                    adjusted = max(1, line_num - preamble_lines)
+                    return f"{prefix_str}{adjusted}"
+                stderr_output = re.sub(
+                    r'(File ".*?solution\.py", line )(\d+)',
+                    adjust_line,
+                    stderr_output,
+                )
 
         if proc.returncode != 0:
             # Student code crashed.
