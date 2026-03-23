@@ -264,7 +264,6 @@ func (h *ExecuteHandler) runCases(
 	// subprocesses the runner will spawn (e.g. the JVM for Java problems).
 	sandboxReq := sandbox.Request{
 		Code:          iotestrunner.Script,
-		Stdin:         "",
 		Files:         files,
 		TimeoutMs:     timeoutMs,
 		Args:          args,

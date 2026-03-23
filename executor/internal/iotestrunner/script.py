@@ -60,8 +60,8 @@ MAX_CASE_OUTPUT_BYTES = 1024 * 1024  # 1 MB
 #   Enter age: 25
 #   Hello Alice, you are 25
 #
-# This mirrors the Go-side inputEchoPreamble in sandbox.go. The Go preamble
-# handles direct execution; this one handles subprocess execution via iotestrunner.
+# This is the single implementation of input echo for the executor. It runs
+# inside iotestrunner's per-test-case subprocesses.
 INPUT_ECHO_PREAMBLE = """_original_input = input
 def input(prompt=''):
     value = _original_input(prompt)
