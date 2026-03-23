@@ -1386,6 +1386,94 @@ describe('CodeEditor - Undo/Redo Functionality', () => {
 });
 
 // ===========================================================================
+// Sidebar visibility with readOnly
+// ===========================================================================
+
+describe('CodeEditor - sidebar with readOnly', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: false,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('shows activity bar (sidebar) even when readOnly is true', () => {
+    render(<CodeEditor code="print('hello')" onChange={jest.fn()} readOnly={true} />);
+    // Activity bar and settings icon are present even in readOnly mode
+    expect(screen.getByRole('button', { name: 'Execution Settings' })).toBeInTheDocument();
+  });
+
+  it('shows activity bar when readOnly is false', () => {
+    render(<CodeEditor code="print('hello')" onChange={jest.fn()} readOnly={false} />);
+    expect(screen.getByRole('button', { name: 'Execution Settings' })).toBeInTheDocument();
+  });
+});
+
+// ===========================================================================
+// Execution settings internal state (random_seed and attached_files)
+// ===========================================================================
+
+describe('CodeEditor - execution settings internal state', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: true,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('passes random_seed prop to onRun', () => {
+    const mockOnRun = jest.fn();
+    render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={42} />
+    );
+    fireEvent.click(screen.getByText('▶ Run Code'));
+    expect(mockOnRun).toHaveBeenCalledWith({
+      stdin: undefined,
+      random_seed: 42,
+      attached_files: undefined,
+    });
+  });
+
+  it('passes attached_files prop to onRun', () => {
+    const mockOnRun = jest.fn();
+    const files = [{ name: 'data.txt', content: 'hello' }];
+    render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} attached_files={files} />
+    );
+    fireEvent.click(screen.getByText('▶ Run Code'));
+    expect(mockOnRun).toHaveBeenCalledWith({
+      stdin: undefined,
+      random_seed: undefined,
+      attached_files: files,
+    });
+  });
+
+  it('uses updated random_seed when prop changes', () => {
+    const mockOnRun = jest.fn();
+    const { rerender } = render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={1} />
+    );
+    rerender(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={99} />
+    );
+    fireEvent.click(screen.getByText('▶ Run Code'));
+    expect(mockOnRun).toHaveBeenCalledWith({
+      stdin: undefined,
+      random_seed: 99,
+      attached_files: undefined,
+    });
+  });
+});
+
+// ===========================================================================
 // Output Collapsible
 // ===========================================================================
 

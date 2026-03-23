@@ -76,6 +76,8 @@ export default function CodeEditor({
   const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
   const [stdin, setStdin] = useState('');
+  const [localRandomSeed, setLocalRandomSeed] = useState<number | undefined>(random_seed);
+  const [localAttachedFiles, setLocalAttachedFiles] = useState<Array<{ name: string; content: string }> | undefined>(attached_files);
   const decorationsRef = useRef<string[]>([]);
   const errorDecorationsRef = useRef<string[]>([]);
 
@@ -236,6 +238,16 @@ export default function CodeEditor({
     onStdinChange?.(value);
   };
 
+  const handleRandomSeedChange = (seed: number | undefined) => {
+    setLocalRandomSeed(seed);
+    onRandomSeedChange?.(seed);
+  };
+
+  const handleAttachedFilesChange = (files: Array<{ name: string; content: string }>) => {
+    setLocalAttachedFiles(files);
+    onAttachedFilesChange?.(files);
+  };
+
   const handleOutputMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizingOutput(true);
@@ -291,6 +303,15 @@ export default function CodeEditor({
       setStdin(exampleInput);
     }
   }, [exampleInput]);
+
+  // Sync local random_seed and attached_files when controlled props change
+  useEffect(() => {
+    setLocalRandomSeed(random_seed);
+  }, [random_seed]);
+
+  useEffect(() => {
+    setLocalAttachedFiles(attached_files);
+  }, [attached_files]);
 
   // Auto-open debugger sidebar when debugging starts (desktop only)
   useEffect(() => {
@@ -408,7 +429,7 @@ export default function CodeEditor({
 
   const handleRun = () => {
     if (onRun) {
-      onRun({ stdin: stdin || undefined, random_seed, attached_files });
+      onRun({ stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles });
     }
   };
 
@@ -646,12 +667,11 @@ export default function CodeEditor({
             <ExecutionSettingsComponent
               stdin={stdin}
               onStdinChange={handleStdinChange}
-              random_seed={random_seed}
-              onRandomSeedChange={onRandomSeedChange}
-              attached_files={attached_files}
-              onAttachedFilesChange={onAttachedFilesChange}
+              random_seed={localRandomSeed}
+              onRandomSeedChange={handleRandomSeedChange}
+              attached_files={localAttachedFiles}
+              onAttachedFilesChange={handleAttachedFilesChange}
               exampleInput={exampleInput}
-              readOnly={readOnly}
               inSidebar={true}
               darkTheme={true}
             />
@@ -673,7 +693,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles })}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -689,8 +709,8 @@ export default function CodeEditor({
         {/* Desktop layout: Activity bar + optional sidebar + editor */}
         {/* CRITICAL: Parent flex row needs min-h-0 to allow proper height distribution */}
         <div className={`flex flex-row flex-1 min-h-0 min-w-0 ${!isDesktop ? '' : ''}`}>
-          {/* Left Sidebar (Desktop only) - VS Code style, hidden in readOnly mode */}
-          {isDesktop && !readOnly && (
+          {/* Left Sidebar (Desktop only) - VS Code style */}
+          {isDesktop && (
             <div className="flex flex-row flex-shrink-0 min-h-0" style={{ height: '100%' }}>
               {/* Activity Bar (Icon bar) - CRITICAL: Must have full height to fill parent */}
               <div className="w-12 bg-gray-800 flex flex-col items-center py-2 gap-1 flex-shrink-0" style={{ height: '100%' }}>
@@ -884,12 +904,11 @@ export default function CodeEditor({
                   <ExecutionSettingsComponent
                     stdin={stdin}
                     onStdinChange={handleStdinChange}
-                    random_seed={random_seed}
-                    onRandomSeedChange={onRandomSeedChange}
-                    attached_files={attached_files}
-                    onAttachedFilesChange={onAttachedFilesChange}
+                    random_seed={localRandomSeed}
+                    onRandomSeedChange={handleRandomSeedChange}
+                    attached_files={localAttachedFiles}
+                    onAttachedFilesChange={handleAttachedFilesChange}
                     exampleInput={exampleInput}
-                    readOnly={readOnly}
                     inSidebar={true}
                   />
                 </div>
@@ -934,7 +953,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed, attached_files })}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles })}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}
