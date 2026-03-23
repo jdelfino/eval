@@ -204,7 +204,7 @@ If the epic has e2e acceptance tests, run them here targeting the specific test 
 
 **Skip the test-runner entirely** if no integration tests or acceptance tests are needed (e.g., frontend-only changes with no store layer involvement and no e2e acceptance tests). **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
-### 4. Create PR and Hand Off
+### 4. Create PR, Monitor CI, and Hand Off
 
 ```bash
 cd ../<project>-<work-name>
@@ -230,7 +230,27 @@ EOF
 )"
 ```
 
-**After creating the PR:**
+**After creating the PR, monitor CI:**
+
+```bash
+gh pr checks <number> --watch
+```
+
+**If CI fails:**
+
+1. Fetch failure logs:
+   ```bash
+   gh run view <run-id> --log-failed
+   ```
+2. **Trivial fix** (single-line, obvious test typo): fix inline, commit, push.
+3. **Non-trivial fix**: spawn an implementer in the existing feature worktree to fix the failures, then push:
+   ```bash
+   cd ../<project>-<work-name>
+   git push
+   ```
+4. Re-run `gh pr checks <number> --watch` and repeat until CI passes.
+
+**After CI passes:**
 
 1. If user indicated review needed (e.g., "review this", "flag for review", or high-risk changes like auth/infra/migrations):
    ```bash
@@ -241,9 +261,9 @@ EOF
    ```bash
    bd update <id> --set-labels in-pr --json
    ```
-3. Report: "PR #X opened. `/merge` will handle CI and merging."
+3. Report: "PR #X opened. CI passing. `/merge` will handle merging."
 
-**Do NOT** watch CI, merge, or wait for approval. The `/merge` agent handles all of that.
+**Do NOT** merge. The `/merge` agent handles all merging.
 
 **Do NOT** clean up worktrees or branches. The `/merge` agent does this after successful merge, since worktrees may be needed for rebases.
 
@@ -258,7 +278,7 @@ EOF
 - Creating PR with failing tests
 - Shipping known bugs as follow-up issues — bugs introduced by the current work must be fixed before the PR ships
 - Merging PRs (that's `/merge`'s job)
-- Watching CI (that's `/merge`'s job)
+- Handing off to `/merge` before CI passes — coordinator owns CI failures and must fix them
 - Cleaning up worktrees before merge (that's `/merge`'s job)
 - Running integrations in parallel (must be sequential for linear history)
 - Spawning a rebase subagent when there are no conflicts (use inline fast-path first)
