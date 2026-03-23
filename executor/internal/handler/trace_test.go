@@ -672,27 +672,6 @@ func TestTrace_FilesForwardedToSandbox(t *testing.T) {
 	}
 }
 
-// TestTrace_RandomSeedForwardedToSandbox verifies that random_seed from the
-// request is forwarded to the sandbox request.
-func TestTrace_RandomSeedForwardedToSandbox(t *testing.T) {
-	cap := &traceCaptureRunner{}
-	cfg := defaultTraceConfig()
-	cfg.MaxFiles = 5
-	cfg.MaxFileBytes = 10000
-	h := newTraceHandler(cap.run, metrics.NewNoop(), cfg)
-	w := doTraceRequest(h, `{"code":"import random\nprint(random.random())","random_seed":42}`)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if cap.req.RandomSeed == nil {
-		t.Fatal("expected RandomSeed to be set, got nil")
-	}
-	if *cap.req.RandomSeed != 42 {
-		t.Errorf("expected RandomSeed=42, got %d", *cap.req.RandomSeed)
-	}
-}
-
 // TestTrace_TooManyFilesRejected verifies that exceeding MaxFiles is rejected.
 func TestTrace_TooManyFilesRejected(t *testing.T) {
 	cfg := defaultTraceConfig()

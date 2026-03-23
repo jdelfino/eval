@@ -143,25 +143,21 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			javaPath = "/usr/bin/java"
 		}
 		sandboxReq = sandbox.Request{
-			Code:       fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
-			Stdin:      "", // tracer reads stdin via argv, not actual stdin
-			Files:      files,
-			RandomSeed: req.RandomSeed,
-			TimeoutMs:  traceTimeoutMs,
-			Args:       tracerArgs,
-			Language:   "java",
-			IsCommand:  true,
+			Code:      fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
+			Files:     files,
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
+			Language:  "java",
+			IsCommand: true,
 		}
 	} else {
 		// Python path (default): the tracer script becomes main.py,
 		// and the student code, stdin, and maxSteps are passed as arguments.
 		sandboxReq = sandbox.Request{
-			Code:       tracer.Script,
-			Stdin:      "", // tracer reads stdin via argv, not actual stdin
-			Files:      files,
-			RandomSeed: req.RandomSeed,
-			TimeoutMs:  traceTimeoutMs,
-			Args:       tracerArgs,
+			Code:      tracer.Script,
+			Files:     files,
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
 		}
 	}
 
