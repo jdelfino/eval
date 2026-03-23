@@ -122,7 +122,7 @@ def run_test(code_path, test, language):
             if stdin_input != "":
                 prefix += INPUT_ECHO_PREAMBLE
             if random_seed is not None:
-                prefix += f"import random; random.seed({random_seed})\n"
+                prefix += f"import random\nrandom.seed({random_seed})\n"
             preamble_lines = prefix.count("\n")
 
             if prefix:

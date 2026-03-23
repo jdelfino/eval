@@ -219,9 +219,9 @@ func TestIntegration_ErrorLineNumbers_WithSeed(t *testing.T) {
 	if r.Status != "error" {
 		t.Fatal("expected error from raised ValueError")
 	}
-	// seed prefix is 1 line; student's error on line 2 becomes internal line 3
-	if strings.Contains(r.Stderr, "line 3") {
-		t.Errorf("stderr contains seed-offset line number 'line 3'; expected student-visible 'line 2': %q", r.Stderr)
+	// seed prefix is 2 lines ("import random\nrandom.seed(N)\n"); student's error on line 2 becomes internal line 4
+	if strings.Contains(r.Stderr, "line 4") {
+		t.Errorf("stderr contains seed-offset line number 'line 4'; expected student-visible 'line 2': %q", r.Stderr)
 	}
 	if !strings.Contains(r.Stderr, "line 2") {
 		t.Errorf("expected 'line 2' in stderr for student code error, got %q", r.Stderr)
@@ -230,7 +230,7 @@ func TestIntegration_ErrorLineNumbers_WithSeed(t *testing.T) {
 
 func TestIntegration_ErrorLineNumbers_WithStdinAndSeed(t *testing.T) {
 	// Verifies that when both stdin and random_seed are provided (7 preamble lines total:
-	// 5 for echo preamble + 1 blank + 1 seed line), error line numbers are correctly adjusted.
+	// 5 for echo preamble + 2 seed lines), error line numbers are correctly adjusted.
 	// Student code erroring on line 1 should show "line 1", not "line 8".
 	u := executorURL(t)
 	seed := 42
