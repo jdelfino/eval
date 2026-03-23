@@ -126,7 +126,7 @@ class ExecutionTracer:
 
         return self.trace_function
 
-    def execute(self, code, stdin_data=''):
+    def execute(self, code, stdin_data='', random_seed=None):
         """Execute code with tracing enabled."""
         # Set up stdin
         if stdin_data:
@@ -143,8 +143,15 @@ class ExecutionTracer:
             # Set up tracing
             sys.settrace(self.trace_function)
 
+            # Build execution namespace, optionally seeding the RNG.
+            exec_globals = {'__name__': '__main__'}
+            if random_seed is not None:
+                import random
+                random.seed(random_seed)
+                exec_globals['random'] = random
+
             # Execute code
-            exec(code, {'__name__': '__main__'})
+            exec(code, exec_globals)
 
         except Exception as e:
             exit_code = 1
@@ -174,9 +181,10 @@ def main():
     code = sys.argv[1]
     stdin_data = sys.argv[2] if len(sys.argv) > 2 else ''
     max_steps = int(sys.argv[3]) if len(sys.argv) > 3 else MAX_STEPS
+    random_seed = int(sys.argv[4]) if len(sys.argv) > 4 else None
 
     tracer = ExecutionTracer(max_steps=max_steps)
-    result = tracer.execute(code, stdin_data)
+    result = tracer.execute(code, stdin_data, random_seed=random_seed)
 
     # Output as JSON
     print(json.dumps(result))

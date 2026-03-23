@@ -246,3 +246,45 @@ func TestInputEcho_NoStdin_NoPreamble(t *testing.T) {
 		t.Errorf("expected passed, got %q; actual=%q stderr=%q", r.Status, r.Actual, r.Stderr)
 	}
 }
+
+func TestStudentError_ErrnoSanitized(t *testing.T) {
+	// Opening a nonexistent file produces [Errno 2]. Students should see [Error].
+	code := "open('/nonexistent/file.txt')\n"
+	tests := []map[string]any{{
+		"name":  "errno",
+		"input": "",
+	}}
+
+	results := runScript(t, code, tests)
+	r := results[0]
+
+	if r.Status != "error" {
+		t.Fatalf("expected error status, got %q", r.Status)
+	}
+	if strings.Contains(r.Stderr, "[Errno") {
+		t.Errorf("stderr contains raw errno:\n%s", r.Stderr)
+	}
+	if !strings.Contains(r.Stderr, "[Error]") {
+		t.Errorf("expected [Error] in stderr, got:\n%s", r.Stderr)
+	}
+}
+
+func TestStudentError_EOFErrorRewritten(t *testing.T) {
+	// Calling input() with no stdin triggers EOFError. Students should see
+	// a friendly message instead of a raw traceback.
+	code := "x = input()\n"
+	tests := []map[string]any{{
+		"name":  "eof",
+		"input": "",
+	}}
+
+	results := runScript(t, code, tests)
+	r := results[0]
+
+	if r.Status != "error" {
+		t.Fatalf("expected error status, got %q", r.Status)
+	}
+	if !strings.Contains(r.Stderr, "waiting for input") {
+		t.Errorf("expected friendly EOFError message, got:\n%s", r.Stderr)
+	}
+}

@@ -89,6 +89,22 @@ def matches(actual, expected, match_type):
     return actual.rstrip("\n") == expected.rstrip("\n")
 
 
+def sanitize_stderr(stderr):
+    """Clean up stderr for student readability.
+
+    1. Replace [Errno N] with [Error] to hide OS-specific errno numbers.
+    2. Rewrite EOFError about 'reading a line' to a friendly message.
+    """
+    # Replace [Errno N] patterns.
+    stderr = re.sub(r"\[Errno \d+\]", "[Error]", stderr)
+
+    # Rewrite EOFError to a friendly message.
+    if "EOFError" in stderr and "reading a line" in stderr:
+        stderr = "Program appears to be waiting for input, but no more input was provided."
+
+    return stderr
+
+
 def run_test(code_path, test, language):
     """Run a single test case against the student code.
 
@@ -180,6 +196,10 @@ def run_test(code_path, test, language):
                     adjust_line,
                     stderr_output,
                 )
+
+        # Sanitize errno numbers and rewrite EOFError for readability.
+        if stderr_output:
+            stderr_output = sanitize_stderr(stderr_output)
 
         if proc.returncode != 0:
             # Student code crashed.

@@ -124,9 +124,12 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Build the sandbox request based on language.
 	// Both Python and Java tracers accept the same Args convention:
-	//   [student_code, stdin, maxSteps]
+	//   [student_code, stdin, maxSteps, random_seed?]
 	// The difference is which tracer binary/script is invoked.
 	tracerArgs := []string{req.Code, req.Stdin, strconv.Itoa(maxSteps)}
+	if req.RandomSeed != nil {
+		tracerArgs = append(tracerArgs, strconv.Itoa(*req.RandomSeed))
+	}
 
 	var sandboxReq sandbox.Request
 	if req.Language == "java" {
