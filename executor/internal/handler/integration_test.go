@@ -151,8 +151,10 @@ func TestIntegration_InputEcho_WithPrompt(t *testing.T) {
 	if r.Status == "error" {
 		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	if !strings.Contains(r.Actual, "Alice") {
-		t.Errorf("expected echoed 'Alice' in output, got %q", r.Actual)
+	// Expect: prompt printed, then echoed value, then student greeting.
+	want := "Enter name: Alice\nHello, Alice"
+	if strings.TrimSpace(r.Actual) != want {
+		t.Errorf("expected %q, got %q", want, r.Actual)
 	}
 }
 
