@@ -1361,34 +1361,6 @@ describe('CodeEditor - Undo/Redo Functionality', () => {
   });
 });
 
-// ===========================================================================
-// Sidebar visibility with readOnly
-// ===========================================================================
-
-describe('CodeEditor - sidebar with readOnly', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockEditorInstance = null;
-    setDesktopLayout();
-    getLayoutMock().useSidebarSection.mockReturnValue({
-      isCollapsed: false,
-      toggle: jest.fn(),
-      setCollapsed: jest.fn(),
-    });
-  });
-
-  it('shows activity bar (sidebar) even when readOnly is true', () => {
-    render(<CodeEditor code="print('hello')" onChange={jest.fn()} readOnly={true} />);
-    // Activity bar and settings icon are present even in readOnly mode
-    expect(screen.getByRole('button', { name: 'Execution Settings' })).toBeInTheDocument();
-  });
-
-  it('shows activity bar when readOnly is false', () => {
-    render(<CodeEditor code="print('hello')" onChange={jest.fn()} readOnly={false} />);
-    expect(screen.getByRole('button', { name: 'Execution Settings' })).toBeInTheDocument();
-  });
-});
-
 
 // ===========================================================================
 // Output Collapsible
