@@ -48,7 +48,7 @@ func TestSanitizeStderr(t *testing.T) {
 		{
 			"replace file path double quotes",
 			`Traceback:\n  File "/tmp/work/main.py", line 5`,
-			`Traceback:\n  File "<student code>", line 5`,
+			`Traceback:\n  File "main.py", line 5`,
 		},
 		{
 			"replace errno",
@@ -88,12 +88,12 @@ func TestSanitizeStderr(t *testing.T) {
 		{
 			"replace main.py unquoted",
 			`Error in /tmp/work/main.py while running`,
-			`Error in <student code> while running`,
+			`Error in main.py while running`,
 		},
 		{
 			"multiple paths in one line",
 			`"/tmp/work/main.py" imports "/tmp/work/utils.py"`,
-			`"<student code>" imports "utils.py"`,
+			`"main.py" imports "utils.py"`,
 		},
 	}
 
@@ -286,7 +286,7 @@ func TestLimitedBufferZeroMax(t *testing.T) {
 func TestSanitizeStderrSingleQuotePath(t *testing.T) {
 	input := `File '/tmp/work/main.py', line 3`
 	got := sanitizeStderr(input)
-	expected := `File '<student code>', line 3`
+	expected := `File 'main.py', line 3`
 	if got != expected {
 		t.Errorf("got %q, want %q", got, expected)
 	}

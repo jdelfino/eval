@@ -908,13 +908,12 @@ var tmpWorkPathRe = regexp.MustCompile(`/tmp/work/([^\s"',;:)\]]+)`)
 
 // sanitizeStderr cleans error output to hide internal paths and OS details.
 func sanitizeStderr(stderr string) string {
-	// Replace all /tmp/work/<file> paths.
+	// Strip /tmp/work/ prefix from file paths so helper filenames are visible
+	// but the sandbox path is hidden. main.py is the iotestrunner script (not
+	// student code), so we let it through as-is — sandbox-level stderr only
+	// appears when the runner itself crashes, not for student errors.
 	result := tmpWorkPathRe.ReplaceAllStringFunc(stderr, func(match string) string {
-		filename := match[len("/tmp/work/"):]
-		if filename == "main.py" {
-			return "<student code>"
-		}
-		return filename
+		return match[len("/tmp/work/"):]
 	})
 
 	// Replace [Errno N] with [Error].
