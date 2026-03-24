@@ -56,5 +56,14 @@ fi
 # Refresh GitHub App token (expires hourly, sessions often start later)
 "$main_repo/.devcontainer/setup-github-app.sh"
 
+# Persist GH_TOKEN for all Bash tool calls in this session.
+# CLAUDE_ENV_FILE is the only way to set env vars that survive across Bash calls.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  token=$(cat "$main_repo/.gh-app-token" 2>/dev/null || true)
+  if [ -n "$token" ]; then
+    echo "export GH_TOKEN='$token'" >> "$CLAUDE_ENV_FILE"
+  fi
+fi
+
 # Always output AGENTS.md
 cat "$main_repo/AGENTS.md"
