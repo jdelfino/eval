@@ -48,7 +48,7 @@ func TestSanitizeStderr(t *testing.T) {
 		{
 			"replace file path double quotes",
 			`Traceback:\n  File "/tmp/work/main.py", line 5`,
-			`Traceback:\n  File "<student code>", line 5`,
+			`Traceback:\n  File "main.py", line 5`,
 		},
 		{
 			"replace errno",
@@ -88,12 +88,12 @@ func TestSanitizeStderr(t *testing.T) {
 		{
 			"replace main.py unquoted",
 			`Error in /tmp/work/main.py while running`,
-			`Error in <student code> while running`,
+			`Error in main.py while running`,
 		},
 		{
 			"multiple paths in one line",
 			`"/tmp/work/main.py" imports "/tmp/work/utils.py"`,
-			`"<student code>" imports "utils.py"`,
+			`"main.py" imports "utils.py"`,
 		},
 	}
 
@@ -286,7 +286,7 @@ func TestLimitedBufferZeroMax(t *testing.T) {
 func TestSanitizeStderrSingleQuotePath(t *testing.T) {
 	input := `File '/tmp/work/main.py', line 3`
 	got := sanitizeStderr(input)
-	expected := `File '<student code>', line 3`
+	expected := `File 'main.py', line 3`
 	if got != expected {
 		t.Errorf("got %q, want %q", got, expected)
 	}
@@ -385,187 +385,6 @@ func TestRunUnsafeExecutesPython(t *testing.T) {
 	}
 }
 
-func TestRunUnsafeInputEcho(t *testing.T) {
-	pythonPath, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not found")
-	}
-
-	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
-
-	t.Run("with prompt", func(t *testing.T) {
-		req := Request{
-			Code:      "name = input('Enter name: ')\nage = input('Enter age: ')\nprint(f'{name} is {age}')",
-			Stdin:     "Alice\n25\n",
-			TimeoutMs: 5000,
-		}
-
-		result, err := RunUnsafe(context.Background(), cfg, req)
-		if err != nil {
-			t.Fatalf("RunUnsafe error: %v", err)
-		}
-		if result.ExitCode != 0 {
-			t.Fatalf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
-		}
-		// Verify output reads like a terminal session in correct order.
-		want := "Enter name: Alice\nEnter age: 25\nAlice is 25\n"
-		if result.Stdout != want {
-			t.Errorf("stdout = %q, want %q", result.Stdout, want)
-		}
-	})
-
-	t.Run("without prompt", func(t *testing.T) {
-		req := Request{
-			Code:      "x = input()\nprint(f'got {x}')",
-			Stdin:     "hello\n",
-			TimeoutMs: 5000,
-		}
-
-		result, err := RunUnsafe(context.Background(), cfg, req)
-		if err != nil {
-			t.Fatalf("RunUnsafe error: %v", err)
-		}
-		if result.ExitCode != 0 {
-			t.Fatalf("exit code = %d, want 0; stderr: %s", result.ExitCode, result.Stderr)
-		}
-		want := "hello\ngot hello\n"
-		if result.Stdout != want {
-			t.Errorf("stdout = %q, want %q", result.Stdout, want)
-		}
-	})
-
-	t.Run("stdin exhausted raises EOFError", func(t *testing.T) {
-		req := Request{
-			Code:      "x = input()\ny = input()",
-			Stdin:     "one\n",
-			TimeoutMs: 5000,
-		}
-
-		result, err := RunUnsafe(context.Background(), cfg, req)
-		if err != nil {
-			t.Fatalf("RunUnsafe error: %v", err)
-		}
-		if result.ExitCode == 0 {
-			t.Error("expected non-zero exit code when stdin exhausted")
-		}
-		if !strings.Contains(result.Stderr, "EOFError") {
-			t.Errorf("expected EOFError in stderr, got %q", result.Stderr)
-		}
-	})
-}
-
-func TestRunUnsafeNoInputEchoWithoutStdin(t *testing.T) {
-	pythonPath, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not found")
-	}
-
-	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
-	req := Request{
-		Code:      "print('hello')",
-		TimeoutMs: 5000,
-	}
-
-	result, err := RunUnsafe(context.Background(), cfg, req)
-	if err != nil {
-		t.Fatalf("RunUnsafe error: %v", err)
-	}
-	if strings.TrimSpace(result.Stdout) != "hello" {
-		t.Errorf("stdout = %q, want %q", result.Stdout, "hello\n")
-	}
-}
-
-func TestPrepareCode(t *testing.T) {
-	seed := 42
-
-	tests := []struct {
-		name         string
-		code         string
-		stdin        string
-		randomSeed   *int
-		wantPreamble bool
-		wantSeed     bool
-	}{
-		{
-			name: "no stdin no seed",
-			code: "print('hi')",
-		},
-		{
-			name:         "with stdin",
-			code:         "print('hi')",
-			stdin:        "input\n",
-			wantPreamble: true,
-		},
-		{
-			name:       "with seed",
-			code:       "print('hi')",
-			randomSeed: &seed,
-			wantSeed:   true,
-		},
-		{
-			name:         "with stdin and seed",
-			code:         "print('hi')",
-			stdin:        "input\n",
-			randomSeed:   &seed,
-			wantPreamble: true,
-			wantSeed:     true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, _ := prepareCode(tt.code, tt.stdin, tt.randomSeed, "")
-
-			// Must always end with the original code.
-			if !strings.HasSuffix(got, tt.code) {
-				t.Errorf("prepareCode() = %q, want suffix %q", got, tt.code)
-			}
-
-			hasPreamble := strings.Contains(got, "_original_input = input")
-			if tt.wantPreamble && !hasPreamble {
-				t.Errorf("expected input echo preamble, got %q", got)
-			}
-			if !tt.wantPreamble && hasPreamble {
-				t.Errorf("did not expect input echo preamble, got %q", got)
-			}
-
-			hasSeed := strings.Contains(got, "random.seed(42)")
-			if tt.wantSeed && !hasSeed {
-				t.Errorf("expected random seed injection, got %q", got)
-			}
-			if !tt.wantSeed && hasSeed {
-				t.Errorf("did not expect random seed injection, got %q", got)
-			}
-		})
-	}
-}
-
-// TestPrepareCodePreambleLineCount verifies that prepareCode returns the correct
-// number of preamble lines prepended to the user's code.
-func TestPrepareCodePreambleLineCount(t *testing.T) {
-	seed := 42
-	tests := []struct {
-		name      string
-		stdin     string
-		seed      *int
-		language  string
-		wantLines int
-	}{
-		{"no preamble", "", nil, "", 0},
-		{"input echo preamble only", "hello\n", nil, "", 5},
-		{"seed only", "", &seed, "", 2},
-		{"input echo + seed", "hello\n", &seed, "", 7},
-		{"java no preamble", "hello\n", &seed, "java", 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, lines := prepareCode("print('hi')", tt.stdin, tt.seed, tt.language)
-			if lines != tt.wantLines {
-				t.Errorf("preambleLines = %d, want %d", lines, tt.wantLines)
-			}
-		})
-	}
-}
 
 func TestRunUnsafeWithArgs(t *testing.T) {
 	pythonPath, err := exec.LookPath("python3")
@@ -624,72 +443,6 @@ func TestRunUnsafeRejectsMainPy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "reserved") {
 		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-// TestPrepareCodeLanguageGuard verifies that preambles are skipped for Java.
-func TestPrepareCodeLanguageGuard(t *testing.T) {
-	seed := 42
-	tests := []struct {
-		name         string
-		language     string
-		stdin        string
-		randomSeed   *int
-		wantPreamble bool
-		wantSeed     bool
-	}{
-		{
-			name:         "python with stdin gets preamble",
-			language:     "python",
-			stdin:        "hello\n",
-			wantPreamble: true,
-		},
-		{
-			name:         "empty language with stdin gets preamble",
-			language:     "",
-			stdin:        "hello\n",
-			wantPreamble: true,
-		},
-		{
-			name:         "java with stdin skips preamble",
-			language:     "java",
-			stdin:        "hello\n",
-			wantPreamble: false,
-		},
-		{
-			name:       "python with seed gets seed injection",
-			language:   "python",
-			randomSeed: &seed,
-			wantSeed:   true,
-		},
-		{
-			name:       "java with seed skips seed injection",
-			language:   "java",
-			randomSeed: &seed,
-			wantSeed:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, _ := prepareCode("print('hi')", tt.stdin, tt.randomSeed, tt.language)
-
-			hasPreamble := strings.Contains(got, "_original_input = input")
-			if tt.wantPreamble && !hasPreamble {
-				t.Errorf("expected input echo preamble, got %q", got)
-			}
-			if !tt.wantPreamble && hasPreamble {
-				t.Errorf("did not expect input echo preamble, got %q", got)
-			}
-
-			hasSeed := strings.Contains(got, "random.seed(42)")
-			if tt.wantSeed && !hasSeed {
-				t.Errorf("expected random seed injection, got %q", got)
-			}
-			if !tt.wantSeed && hasSeed {
-				t.Errorf("did not expect random seed injection, got %q", got)
-			}
-		})
 	}
 }
 
@@ -1312,106 +1065,6 @@ func TestRunJavaCommand_NsjailEmptyStderr_ReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nsjail") {
 		t.Errorf("expected error to mention nsjail, got: %v", err)
-	}
-}
-
-// TestAdjustPythonLineNumbers verifies that preamble line offsets are correctly
-// subtracted from Python traceback line numbers, and that helper file references
-// are left untouched.
-func TestAdjustPythonLineNumbers(t *testing.T) {
-	tests := []struct {
-		name          string
-		stderr        string
-		preambleLines int
-		want          string
-	}{
-		{
-			name:          "standard traceback offset 5",
-			stderr:        `Traceback (most recent call last):` + "\n" + `  File "/tmp/work/main.py", line 8, in <module>` + "\n" + `NameError: name 'x' is not defined`,
-			preambleLines: 5,
-			want:          `Traceback (most recent call last):` + "\n" + `  File "/tmp/work/main.py", line 3, in <module>` + "\n" + `NameError: name 'x' is not defined`,
-		},
-		{
-			name:          "SyntaxError format",
-			stderr:        `  File "/tmp/work/main.py", line 7` + "\n" + `    print("hi"` + "\n" + `         ^` + "\n" + `SyntaxError: invalid syntax`,
-			preambleLines: 5,
-			want:          `  File "/tmp/work/main.py", line 2` + "\n" + `    print("hi"` + "\n" + `         ^` + "\n" + `SyntaxError: invalid syntax`,
-		},
-		{
-			name: "multi-frame traceback",
-			stderr: `Traceback (most recent call last):` + "\n" +
-				`  File "/tmp/work/main.py", line 8, in <module>` + "\n" +
-				`  File "/tmp/work/main.py", line 12, in foo` + "\n" +
-				`ZeroDivisionError: division by zero`,
-			preambleLines: 5,
-			want: `Traceback (most recent call last):` + "\n" +
-				`  File "/tmp/work/main.py", line 3, in <module>` + "\n" +
-				`  File "/tmp/work/main.py", line 7, in foo` + "\n" +
-				`ZeroDivisionError: division by zero`,
-		},
-		{
-			name:          "offset 0 no change",
-			stderr:        `  File "/tmp/work/main.py", line 3, in <module>`,
-			preambleLines: 0,
-			want:          `  File "/tmp/work/main.py", line 3, in <module>`,
-		},
-		{
-			name:          "clamp to 1 when offset exceeds line number",
-			stderr:        `  File "/tmp/work/main.py", line 2, in <module>`,
-			preambleLines: 5,
-			want:          `  File "/tmp/work/main.py", line 1, in <module>`,
-		},
-		{
-			name:          "helper file reference unchanged",
-			stderr:        `  File "/tmp/work/helper.py", line 3, in foo` + "\n" + `  File "/tmp/work/main.py", line 8, in <module>`,
-			preambleLines: 5,
-			want:          `  File "/tmp/work/helper.py", line 3, in foo` + "\n" + `  File "/tmp/work/main.py", line 3, in <module>`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := adjustPythonLineNumbers(tt.stderr, tt.preambleLines)
-			if got != tt.want {
-				t.Errorf("adjustPythonLineNumbers(%q, %d)\ngot  %q\nwant %q", tt.stderr, tt.preambleLines, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestRunUnsafeLineNumberAdjustment verifies that RunUnsafe corrects traceback
-// line numbers when stdin preamble is injected, so that user-visible line numbers
-// match the source code the user wrote.
-func TestRunUnsafeLineNumberAdjustment(t *testing.T) {
-	pythonPath, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not found")
-	}
-
-	cfg := Config{PythonPath: pythonPath, MaxOutputBytes: MaxOutputBytes}
-
-	// User code: line 1 calls input(), line 2 has the error (TypeError).
-	// With the 5-line input echo preamble prepended, Python sees the error
-	// at line 7 (5 + 2). After adjustment it must report line 2.
-	req := Request{
-		Code:      "x = input('Enter: ')\ny = x + 1\n",
-		Stdin:     "hello\n",
-		TimeoutMs: 5000,
-	}
-
-	result, err := RunUnsafe(context.Background(), cfg, req)
-	if err != nil {
-		t.Fatalf("RunUnsafe error: %v", err)
-	}
-	if result.ExitCode == 0 {
-		t.Fatal("expected non-zero exit code (TypeError)")
-	}
-	// After adjustment the error must reference line 2 (the y = x + 1 line).
-	if strings.Contains(result.Stderr, "line 7") || strings.Contains(result.Stderr, "line 8") {
-		t.Errorf("stderr still contains preamble-shifted line number: %q", result.Stderr)
-	}
-	if !strings.Contains(result.Stderr, "line 2") {
-		t.Errorf("expected adjusted line 2 in stderr, got: %q", result.Stderr)
 	}
 }
 

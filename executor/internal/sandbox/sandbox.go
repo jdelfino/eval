@@ -13,31 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
 
 // MaxOutputBytes is the maximum size of stdout/stderr before truncation.
 const MaxOutputBytes = 1024 * 1024 // 1 MB
-
-// inputEchoPreamble overrides Python's input() to print each value after
-// reading it — the same behavior a terminal provides. Without this, piped
-// stdin is invisible in stdout, producing hard-to-read output like:
-//
-//	Enter name: Enter age: Hello Alice, you are 25
-//
-// With the preamble the output reads naturally:
-//
-//	Enter name: Alice
-//	Enter age: 25
-//	Hello Alice, you are 25
-const inputEchoPreamble = `_original_input = input
-def input(prompt=''):
-    value = _original_input(prompt)
-    print(value)
-    return value
-`
 
 // chrootDir is the empty directory used as the chroot root for nsjail.
 // Only explicitly bind-mounted paths are visible inside the jail.
@@ -78,7 +59,6 @@ type Request struct {
 	Code          string
 	Stdin         string
 	Files         []File
-	RandomSeed    *int
 	TimeoutMs     int
 	Args          []string // Additional arguments passed to the Python script.
 	Language      string   // Target language: "", "python", or "java".
@@ -101,56 +81,6 @@ type Result struct {
 	DurationMs int64
 }
 
-// prepareCode prepends the input echo preamble (when stdin is provided) and
-// random seed injection to the student's code. Preambles are Python-specific
-// and are skipped when language is "java".
-// It returns the prepared code and the number of preamble lines prepended.
-func prepareCode(code string, stdin string, randomSeed *int, language string) (string, int) {
-	// Preambles only apply to Python (empty language defaults to Python).
-	if language == "" || language == "python" {
-		var prefix string
-		if stdin != "" {
-			prefix += inputEchoPreamble
-		}
-		if randomSeed != nil {
-			prefix += fmt.Sprintf("import random\nrandom.seed(%d)\n", *randomSeed)
-		}
-		return prefix + code, strings.Count(prefix, "\n")
-	}
-	return code, 0
-}
-
-// adjustPythonLineNumbers subtracts preambleLines from every line number in
-// Python traceback lines that reference main.py.  Other files (helper modules,
-// stdlib) are left untouched.  Line numbers are clamped to a minimum of 1.
-//
-// The regex matches the nsjail sandbox path (/tmp/work/main.py) used by Run as
-// well as any absolute path ending with /main.py used by RunUnsafe (temp dirs
-// vary).
-var mainPyLineRe = regexp.MustCompile(`(File ".*?/main\.py", line )(\d+)`)
-
-func adjustPythonLineNumbers(stderr string, preambleLines int) string {
-	if preambleLines == 0 {
-		return stderr
-	}
-	return mainPyLineRe.ReplaceAllStringFunc(stderr, func(match string) string {
-		m := mainPyLineRe.FindStringSubmatch(match)
-		if m == nil {
-			return match
-		}
-		prefix := m[1]
-		lineNum, err := strconv.Atoi(m[2])
-		if err != nil {
-			return match
-		}
-		adjusted := lineNum - preambleLines
-		if adjusted < 1 {
-			adjusted = 1
-		}
-		return fmt.Sprintf("%s%d", prefix, adjusted)
-	})
-}
-
 // RunUnsafe executes code directly without nsjail sandboxing.
 // Use only in environments where nsjail cannot run (CI, devcontainers).
 // Provides timeout enforcement and output capture but no isolation.
@@ -168,10 +98,8 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	code, preambleLines := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
-
 	mainPath := filepath.Join(tempDir, "main.py")
-	if err := os.WriteFile(mainPath, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(req.Code), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write main.py: %w", err)
 	}
 
@@ -235,11 +163,9 @@ func RunUnsafe(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		timedOut = true
 	}
 
-	stderr := adjustPythonLineNumbers(stderrBuf.String(), preambleLines)
-
 	return &Result{
 		Stdout:     stdoutBuf.String(),
-		Stderr:     stderr,
+		Stderr:     stderrBuf.String(),
 		ExitCode:   exitCode,
 		TimedOut:   timedOut,
 		DurationMs: duration.Milliseconds(),
@@ -465,12 +391,9 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 		return nil, fmt.Errorf("failed to chmod temp directory: %w", err)
 	}
 
-	// Prepare code with input echo preamble and optional random seed.
-	code, preambleLines := prepareCode(req.Code, req.Stdin, req.RandomSeed, req.Language)
-
 	// Write main.py.
 	mainPath := filepath.Join(tempDir, "main.py")
-	if err := os.WriteFile(mainPath, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(req.Code), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write main.py: %w", err)
 	}
 
@@ -629,9 +552,6 @@ func Run(ctx context.Context, cfg Config, req Request) (*Result, error) {
 	if stderrBuf.truncated {
 		stderr += truncationSuffix
 	}
-
-	// Adjust Python traceback line numbers to account for the preamble.
-	stderr = adjustPythonLineNumbers(stderr, preambleLines)
 
 	// Sanitize stderr.
 	stderr = sanitizeStderr(stderr)
@@ -988,13 +908,12 @@ var tmpWorkPathRe = regexp.MustCompile(`/tmp/work/([^\s"',;:)\]]+)`)
 
 // sanitizeStderr cleans error output to hide internal paths and OS details.
 func sanitizeStderr(stderr string) string {
-	// Replace all /tmp/work/<file> paths.
+	// Strip /tmp/work/ prefix from file paths so helper filenames are visible
+	// but the sandbox path is hidden. main.py is the iotestrunner script (not
+	// student code), so we let it through as-is — sandbox-level stderr only
+	// appears when the runner itself crashes, not for student errors.
 	result := tmpWorkPathRe.ReplaceAllStringFunc(stderr, func(match string) string {
-		filename := match[len("/tmp/work/"):]
-		if filename == "main.py" {
-			return "<student code>"
-		}
-		return filename
+		return match[len("/tmp/work/"):]
 	})
 
 	// Replace [Errno N] with [Error].

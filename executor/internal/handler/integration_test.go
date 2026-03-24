@@ -124,16 +124,145 @@ func TestIntegration_HelloWorld(t *testing.T) {
 }
 
 func TestIntegration_Stdin(t *testing.T) {
+	// Verifies that input() echoes stdin values to stdout via the INPUT_ECHO_PREAMBLE.
+	// When stdin is piped, terminals echo typed input automatically; the preamble replicates
+	// this so student output is readable. Without echo, output like "hi Alice" has no visible
+	// "Alice" line, which is confusing in assignment feedback.
 	u := executorURL(t)
 	resp := executeRequest(t, u, singleCase("name = input()\nprint(f'hi {name}')", "python", "Alice\n", nil, nil, nil))
 	r := firstResult(t, resp)
 	if r.Status == "error" {
 		t.Fatalf("expected success, got error: %s", r.Stderr)
 	}
-	// iotestrunner runs student code as a subprocess (no echo preamble).
-	want := "hi Alice"
+	// Echo preamble prints the input value, then student code prints the greeting.
+	want := "Alice\nhi Alice"
 	if strings.TrimSpace(r.Actual) != want {
 		t.Errorf("expected %q, got %q", want, r.Actual)
+	}
+}
+
+func TestIntegration_InputEcho_WithPrompt(t *testing.T) {
+	// Verifies that even when input() is called with a prompt argument, the entered value
+	// is echoed to stdout. The prompt itself goes to stdout via Python's input() behavior;
+	// the preamble additionally prints the value so it appears in the output stream.
+	u := executorURL(t)
+	resp := executeRequest(t, u, singleCase("name = input(\"Enter name: \")\nprint(f\"Hello, {name}\")", "python", "Alice\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
+	}
+	// Expect: prompt printed, then echoed value, then student greeting.
+	want := "Enter name: Alice\nHello, Alice"
+	if strings.TrimSpace(r.Actual) != want {
+		t.Errorf("expected %q, got %q", want, r.Actual)
+	}
+}
+
+func TestIntegration_InputEcho_NoStdin(t *testing.T) {
+	// Verifies that when no stdin is provided (empty input), the echo preamble is NOT
+	// prepended. This prevents unnecessary preamble overhead and avoids any interference
+	// with code that does not use input().
+	u := executorURL(t)
+	resp := executeRequest(t, u, singleCase(`print("hello")`, "python", "", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
+	}
+	if strings.TrimSpace(r.Actual) != "hello" {
+		t.Errorf("expected 'hello', got %q", r.Actual)
+	}
+}
+
+func TestIntegration_InputEcho_MultipleInputs(t *testing.T) {
+	// Verifies that multiple sequential input() calls each echo their value.
+	// Students often provide multiple inputs; all should appear in output.
+	u := executorURL(t)
+	code := "a = input()\nb = input()\nprint(f'{a} and {b}')"
+	resp := executeRequest(t, u, singleCase(code, "python", "foo\nbar\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status == "error" {
+		t.Fatalf("expected success, got error: %s", r.Stderr)
+	}
+	if !strings.Contains(r.Actual, "foo") || !strings.Contains(r.Actual, "bar") {
+		t.Errorf("expected both inputs echoed, got %q", r.Actual)
+	}
+	if !strings.Contains(r.Actual, "foo and bar") {
+		t.Errorf("expected student output 'foo and bar', got %q", r.Actual)
+	}
+}
+
+func TestIntegration_ErrorLineNumbers_WithStdin(t *testing.T) {
+	// Verifies that when stdin is provided (and the echo preamble is prepended),
+	// line numbers in error messages reference the student's code, not the preamble-offset lines.
+	// A student whose code errors on line 2 should see "line 2", not "line 7" (preamble is 5 lines).
+	u := executorURL(t)
+	code := "name = input()\nraise ValueError('oops')"
+	resp := executeRequest(t, u, singleCase(code, "python", "Alice\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
+		t.Fatal("expected error from raised ValueError")
+	}
+	if strings.Contains(r.Stderr, "line 7") {
+		t.Errorf("stderr contains preamble-offset line number 'line 7'; expected student-visible 'line 2': %q", r.Stderr)
+	}
+	if !strings.Contains(r.Stderr, "line 2") {
+		t.Errorf("expected 'line 2' in stderr for student code error, got %q", r.Stderr)
+	}
+}
+
+func TestIntegration_ErrorLineNumbers_WithSeed(t *testing.T) {
+	// Verifies that when random_seed is provided (seed line prepended), line numbers in
+	// error messages still reference the student's code lines (not offset by seed line).
+	u := executorURL(t)
+	seed := 42
+	code := "import random\nraise ValueError('seeded error')"
+	resp := executeRequest(t, u, singleCase(code, "python", "", nil, &seed, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
+		t.Fatal("expected error from raised ValueError")
+	}
+	// seed prefix is 2 lines ("import random\nrandom.seed(N)\n"); student's error on line 2 becomes internal line 4
+	if strings.Contains(r.Stderr, "line 4") {
+		t.Errorf("stderr contains seed-offset line number 'line 4'; expected student-visible 'line 2': %q", r.Stderr)
+	}
+	if !strings.Contains(r.Stderr, "line 2") {
+		t.Errorf("expected 'line 2' in stderr for student code error, got %q", r.Stderr)
+	}
+}
+
+func TestIntegration_ErrorLineNumbers_WithStdinAndSeed(t *testing.T) {
+	// Verifies that when both stdin and random_seed are provided (7 preamble lines total:
+	// 5 for echo preamble + 2 seed lines), error line numbers are correctly adjusted.
+	// Student code erroring on line 1 should show "line 1", not "line 8".
+	u := executorURL(t)
+	seed := 42
+	code := "raise ValueError('combined preamble error')"
+	resp := executeRequest(t, u, singleCase(code, "python", "Alice\n", nil, &seed, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
+		t.Fatal("expected error from raised ValueError")
+	}
+	if !strings.Contains(r.Stderr, "line 1") {
+		t.Errorf("expected 'line 1' in stderr for student code error on first line, got %q", r.Stderr)
+	}
+}
+
+func TestIntegration_ErrorStderrPathSanitization(t *testing.T) {
+	// Verifies that when a temp wrapper file is created (for stdin echo preamble or seed),
+	// error tracebacks reference "solution.py" rather than the temp file path (e.g. tmpXXXXXX.py).
+	// Students should not see internal temp file paths in error messages.
+	u := executorURL(t)
+	code := "name = input()\nraise RuntimeError('path test')"
+	resp := executeRequest(t, u, singleCase(code, "python", "Alice\n", nil, nil, nil))
+	r := firstResult(t, resp)
+	if r.Status != "error" {
+		t.Fatal("expected error from raised RuntimeError")
+	}
+	if strings.Contains(r.Stderr, "tmp") {
+		t.Errorf("stderr should not contain temp file paths, got %q", r.Stderr)
+	}
+	if !strings.Contains(r.Stderr, "solution.py") {
+		t.Errorf("stderr should reference 'solution.py', got %q", r.Stderr)
 	}
 }
 

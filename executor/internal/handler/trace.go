@@ -124,9 +124,12 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Build the sandbox request based on language.
 	// Both Python and Java tracers accept the same Args convention:
-	//   [student_code, stdin, maxSteps]
+	//   [student_code, stdin, maxSteps, random_seed?]
 	// The difference is which tracer binary/script is invoked.
 	tracerArgs := []string{req.Code, req.Stdin, strconv.Itoa(maxSteps)}
+	if req.RandomSeed != nil {
+		tracerArgs = append(tracerArgs, strconv.Itoa(*req.RandomSeed))
+	}
 
 	var sandboxReq sandbox.Request
 	if req.Language == "java" {
@@ -143,25 +146,21 @@ func (h *TraceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			javaPath = "/usr/bin/java"
 		}
 		sandboxReq = sandbox.Request{
-			Code:       fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
-			Stdin:      "", // tracer reads stdin via argv, not actual stdin
-			Files:      files,
-			RandomSeed: req.RandomSeed,
-			TimeoutMs:  traceTimeoutMs,
-			Args:       tracerArgs,
-			Language:   "java",
-			IsCommand:  true,
+			Code:      fmt.Sprintf("%s -cp %s JavaTracer", javaPath, jarPath),
+			Files:     files,
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
+			Language:  "java",
+			IsCommand: true,
 		}
 	} else {
 		// Python path (default): the tracer script becomes main.py,
 		// and the student code, stdin, and maxSteps are passed as arguments.
 		sandboxReq = sandbox.Request{
-			Code:       tracer.Script,
-			Stdin:      "", // tracer reads stdin via argv, not actual stdin
-			Files:      files,
-			RandomSeed: req.RandomSeed,
-			TimeoutMs:  traceTimeoutMs,
-			Args:       tracerArgs,
+			Code:      tracer.Script,
+			Files:     files,
+			TimeoutMs: traceTimeoutMs,
+			Args:      tracerArgs,
 		}
 	}
 
