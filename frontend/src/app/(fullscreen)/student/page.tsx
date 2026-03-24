@@ -462,11 +462,12 @@ function StudentPage() {
           onChange={setCode}
           onRun={handleRunCode}
           isRunning={isRunning}
-          exampleInput={sessionExecutionSettings.stdin}
-          random_seed={studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed}
-          onRandomSeedChange={(seed) => setStudentExecutionSettings(prev => ({ ...prev, random_seed: seed }))}
-          attached_files={studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files}
-          onAttachedFilesChange={(files) => setStudentExecutionSettings(prev => ({ ...prev, attached_files: files }))}
+          defaultExecutionSettings={{
+            stdin: sessionExecutionSettings.stdin,
+            random_seed: studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed,
+            attached_files: studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files,
+          }}
+          onExecutionSettingsChange={(settings) => setStudentExecutionSettings(prev => ({ ...prev, random_seed: settings.random_seed, attached_files: settings.attached_files }))}
           execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
