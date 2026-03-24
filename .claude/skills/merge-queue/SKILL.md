@@ -205,6 +205,15 @@ Always include beads issue IDs so the user can dispatch `/work` for fixes.
 
 If there are no open PRs, report "No open PRs."
 
+## GitHub Authentication
+
+If `git push` or `gh` commands fail with 401/403, refresh the GitHub App token:
+
+```bash
+WORKSPACE_DIR=/workspaces/eval /workspaces/eval/.devcontainer/refresh-github-app-token.sh
+export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
+```
+
 ## What This Agent Does NOT Do
 
 - Write code or fix test failures (file issues for `/work` instead)

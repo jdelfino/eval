@@ -269,6 +269,15 @@ gh pr checks <number> --watch
 
 ---
 
+## GitHub Authentication
+
+If `git push` or `gh` commands fail with 401/403, refresh the GitHub App token:
+
+```bash
+WORKSPACE_DIR=/workspaces/eval /workspaces/eval/.devcontainer/refresh-github-app-token.sh
+export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
+```
+
 ## Anti-Patterns
 
 - Committing directly to main (branch is protected — all changes require a PR)
