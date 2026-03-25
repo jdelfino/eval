@@ -18,6 +18,9 @@ pre-commit:
     check-api-imports:
       glob: "frontend/{,**/}*.{ts,tsx,js,jsx}"
       run: make check-api-imports
+    check-unknown-wire-types:
+      glob: "frontend/src/types/{api,realtime-events}.ts"
+      run: make check-unknown-wire-types
     gitleaks:
       run: gitleaks git --pre-commit --staged --no-banner
 

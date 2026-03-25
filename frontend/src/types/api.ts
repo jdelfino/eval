@@ -134,7 +134,7 @@ export interface Revision {
   diff: string | null;
   full_code: string | null;
   base_revision_id: string | null;
-  execution_result: unknown;
+  execution_result: TestResponse | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +211,33 @@ export interface PublicProblem {
 }
 
 // ---------------------------------------------------------------------------
+// Wire types for JSONB fields — IOTestCase and File
+// ---------------------------------------------------------------------------
+
+/** WireFile — matches Go store.File. Auxiliary file attached to a test case. */
+export interface WireFile {
+  name: string;
+  content: string;
+}
+
+/**
+ * IOTestCase — matches Go store.IOTestCase (JSON wire format).
+ *
+ * Used as the element type of the JSONB test_cases column in both
+ * `problems` and `student_work` tables. Optional fields use omitempty
+ * in Go, so they may be absent on the wire.
+ */
+export interface IOTestCase {
+  name: string;
+  input: string;
+  expected_output?: string;
+  match_type: string;
+  random_seed?: number;
+  attached_files?: WireFile[];
+  order: number;
+}
+
+// ---------------------------------------------------------------------------
 // Student work
 // ---------------------------------------------------------------------------
 
@@ -221,7 +248,7 @@ export interface StudentWork {
   section_id: string;
   problem_id: string;
   code: string;
-  test_cases: unknown[];
+  test_cases: IOTestCase[];
   last_update: string;
   created_at: string;
 }
