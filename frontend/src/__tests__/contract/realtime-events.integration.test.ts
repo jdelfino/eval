@@ -448,6 +448,51 @@ describe('Realtime event contract tests', () => {
         unsubscribe();
       }
     });
+
+    it('publishes test_cases field when provided in feature request', async () => {
+      const { sessionId, instructorToken } = setupState;
+
+      const sessionChannel = `session:${sessionId}`;
+      const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
+
+      try {
+        // Feature with execution settings (test_cases)
+        const executionSettings = {
+          stdin: 'contract-test-input',
+          random_seed: 42,
+          attached_files: [{ name: 'test.txt', content: 'test content' }],
+        };
+
+        const featureRes = await apiFetch(`/sessions/${sessionId}/feature`, instructorToken, {
+          method: 'POST',
+          body: JSON.stringify({
+            student_id: joinedStudentUserId || undefined,
+            code: 'print("with-settings")',
+            test_cases: executionSettings,
+          }),
+        });
+        if (!featureRes.ok) {
+          const body = await featureRes.text();
+          throw new Error(`Failed to feature with test_cases: ${featureRes.status} ${body}`);
+        }
+
+        const envelope = await collectNext();
+
+        expect(envelope.type).toBe('featured_student_changed');
+        const data = envelope.data as FeaturedStudentChangedData;
+        validateFeaturedStudentChangedShape(data);
+        expect(data.code).toBe('print("with-settings")');
+
+        // Verify test_cases field exists and matches what we sent
+        expect(data.test_cases).toBeDefined();
+        expect(data.test_cases).toEqual(executionSettings);
+
+        // Ensure execution_settings does NOT exist (wrong field name)
+        expect('execution_settings' in data).toBe(false);
+      } finally {
+        unsubscribe();
+      }
+    });
   });
 
   // -------------------------------------------------------------------------

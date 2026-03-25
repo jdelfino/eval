@@ -124,7 +124,7 @@ function PublicViewContent() {
 
   // Derive featured stdin for the CodeEditor
   const featuredStdin = (() => {
-    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
+    const settings = state?.featured_test_cases;
     return settings?.stdin;
   })();
 
@@ -139,7 +139,7 @@ function PublicViewContent() {
       setLocalCode(state?.featured_code ?? '');
       hasUserEdited.current = false;
     }
-  }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
+  }, [state?.featured_student_id, state?.featured_code, state?.featured_test_cases, state?.problem]);
 
   // Track user edits to the scratch pad
   const handleCodeChange = (code: string) => {

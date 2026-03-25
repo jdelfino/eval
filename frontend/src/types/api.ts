@@ -97,7 +97,7 @@ export interface Session {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases?: import('./problem').ExecutionSettings; // Matches Go FeaturedTestCases field
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -112,7 +112,7 @@ export interface SessionStudent {
   user_id: string;
   name: string;
   code: string;
-  execution_settings: unknown;
+  test_cases: import('./problem').ExecutionSettings | null; // Matches Go TestCases field
   joined_at: string;
 }
 
@@ -168,7 +168,7 @@ export interface SessionPublicState {
   problem: SessionPublicProblem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: unknown;
+  featured_test_cases: import('./problem').ExecutionSettings | null; // Matches Go FeaturedTestCases field
   join_code: string;
   status: string;
 }

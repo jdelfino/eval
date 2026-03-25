@@ -213,6 +213,10 @@ export function validateStudentCodeUpdatedShape(obj: StudentCodeUpdatedData) {
   if ('test_cases' in obj) {
     expect(obj.test_cases !== undefined).toBe(true);
   }
+  // Verify the TS interface declares test_cases, not execution_settings
+  // This is a compile-time check — if the interface has the wrong field name,
+  // TypeScript will allow accessing fields that don't exist on the wire.
+  expect('execution_settings' in obj).toBe(false);
   expectSnakeCaseKeys(obj, 'StudentCodeUpdatedData');
 }
 
@@ -238,6 +242,8 @@ export function validateFeaturedStudentChangedShape(obj: FeaturedStudentChangedD
   if ('test_cases' in obj) {
     expect(obj.test_cases !== undefined).toBe(true);
   }
+  // Verify the TS interface declares test_cases, not execution_settings
+  expect('execution_settings' in obj).toBe(false);
   expectSnakeCaseKeys(obj, 'FeaturedStudentChangedData');
 }
 

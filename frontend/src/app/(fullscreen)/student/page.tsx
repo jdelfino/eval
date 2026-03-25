@@ -203,8 +203,8 @@ function StudentPage() {
         if (result.code) {
           setCode(result.code);
         }
-        if (result.execution_settings) {
-          setStudentExecutionSettings(result.execution_settings as typeof studentExecutionSettings);
+        if (result.test_cases) {
+          setStudentExecutionSettings(result.test_cases as typeof studentExecutionSettings);
         }
 
         // Check if session is already completed

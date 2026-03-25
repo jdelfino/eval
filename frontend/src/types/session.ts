@@ -62,7 +62,7 @@ export interface Session {
   students: Map<string, Student>;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_execution_settings?: import('./problem').ExecutionSettings | null;
+  featured_test_cases?: import('./problem').ExecutionSettings | null;
   created_at: Date;
   last_activity: Date;
   creator_id: string;
