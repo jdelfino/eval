@@ -31,10 +31,12 @@ describe('useInvitations', () => {
   const mockInvitation: SerializedInvitation = {
     id: 'inv-1',
     email: 'instructor@example.com',
+    user_id: null,
     target_role: 'instructor',
     namespace_id: TEST_NAMESPACE,
     created_by: 'admin-1',
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     expires_at: '2024-01-08T00:00:00Z',
     consumed_at: null,
     consumed_by: null,

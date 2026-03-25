@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Problem as ApiProblem } from './api';
+import type { Problem as ApiProblem, IOTestCase } from './api';
 
 // ---------------------------------------------------------------------------
 // Execution settings
@@ -100,11 +100,15 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 
 /**
  * Convert an API wire-format Problem to a rich client Problem with Date timestamps.
+ * Note: test_cases may be IOTestCase[] (wire format) or ExecutionSettings (legacy).
+ * The rich client Problem.test_cases accepts TestCase[] | ExecutionSettings | null;
+ * IOTestCase[] is cast since the runtime handler (extractExecutionSettingsFromTestCases)
+ * handles both formats via the `as any` access pattern.
  */
 export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
-    test_cases: api.test_cases,
+    test_cases: api.test_cases as Problem['test_cases'],
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),
   };
@@ -125,7 +129,7 @@ export function mapApiProblem(api: ApiProblem): Problem {
  * @returns ExecutionSettings object with stdin, random_seed, attached_files
  */
 export function extractExecutionSettingsFromTestCases(
-  testCases: TestCase[] | ExecutionSettings | null | undefined
+  testCases: TestCase[] | IOTestCase[] | ExecutionSettings | null | undefined
 ): ExecutionSettings {
   if (!testCases || (Array.isArray(testCases) && testCases.length === 0)) {
     return {

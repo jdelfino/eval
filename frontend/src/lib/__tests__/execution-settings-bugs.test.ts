@@ -37,21 +37,11 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
-          id: 'tc-1',
-          problem_id: 'prob-123',
-          type: 'input-output' as const,
           name: 'Test 1',
-          description: 'Basic test',
-          visible: true,
+          input: '5',
+          expected_output: '42',
+          match_type: 'exact',
           order: 0,
-          config: {
-            type: 'input-output' as const,
-            data: {
-              input: '5',
-              expected_output: '42',
-              match_type: 'exact' as const,
-            },
-          },
         },
       ],
     };
@@ -121,21 +111,11 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
-          id: 'tc-1',
-          problem_id: 'prob-123',
-          type: 'input-output' as const,
           name: 'Test 1',
-          description: 'Test description',
-          visible: true,
+          input: 'input',
+          expected_output: 'output',
+          match_type: 'exact',
           order: 0,
-          config: {
-            type: 'input-output' as const,
-            data: {
-              input: 'input',
-              expected_output: 'output',
-              match_type: 'exact' as const,
-            },
-          },
         },
       ],
     };

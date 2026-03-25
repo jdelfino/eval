@@ -78,7 +78,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: import('./problem').TestCase[] | import('./problem').ExecutionSettings | null;
+  test_cases: IOTestCase[] | import('./problem').ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -86,6 +86,8 @@ export interface Problem {
   language: string;
   created_at: string;
   updated_at: string;
+  /** Legacy field: present in old session Problem snapshots stored before migration 020. */
+  execution_settings?: import('./problem').ExecutionSettings;
 }
 
 export interface Session {
@@ -111,8 +113,9 @@ export interface SessionStudent {
   user_id: string;
   name: string;
   code: string;
-  test_cases: import('./problem').ExecutionSettings | null; // Matches Go TestCases field
+  test_cases: IOTestCase[] | null; // Matches Go TestCases json.RawMessage (IOTestCase[] from student_work)
   joined_at: string;
+  student_work_id?: string; // omitempty in Go — present when student has linked work
 }
 
 export interface SectionMembership {
@@ -155,7 +158,11 @@ export interface SessionState {
   join_code: string;
 }
 
-/** Subset of Problem fields exposed by the public-state endpoint. */
+/**
+ * Subset of Problem fields exposed publicly in session state.
+ * Used as the prop type for CodeEditor when full Problem is not available.
+ * Note: the actual backend sends a full Problem JSON snapshot; see SessionPublicState.
+ */
 export interface SessionPublicProblem {
   title: string;
   description: string | null;
@@ -164,7 +171,7 @@ export interface SessionPublicProblem {
 }
 
 export interface SessionPublicState {
-  problem: SessionPublicProblem | null;
+  problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
   featured_test_cases: import('./problem').ExecutionSettings | null; // Matches Go FeaturedTestCases field
@@ -243,6 +250,7 @@ export interface IOTestCase {
 /** StudentWork — student's persistent work on a problem in a section. */
 export interface StudentWork {
   id: string;
+  namespace_id: string;
   user_id: string;
   section_id: string;
   problem_id: string;

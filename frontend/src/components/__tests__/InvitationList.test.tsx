@@ -11,9 +11,11 @@ import { InvitationList, Invitation, NamespaceOption } from '../InvitationList';
 const mockPendingInvitation: Invitation = {
   id: 'inv-1',
   email: 'pending@example.com',
+  user_id: null,
   namespace_id: 'ns-1',
   target_role: 'instructor',
   created_at: '2026-01-15T10:00:00Z',
+  updated_at: '2026-01-15T10:00:00Z',
   expires_at: '2027-02-15T10:00:00Z', // Far future - always pending
   created_by: 'admin-1',
   consumed_at: null,
@@ -25,9 +27,11 @@ const mockPendingInvitation: Invitation = {
 const mockConsumedInvitation: Invitation = {
   id: 'inv-2',
   email: 'consumed@example.com',
+  user_id: 'user-1',
   namespace_id: 'ns-1',
   target_role: 'namespace-admin',
   created_at: '2026-01-10T10:00:00Z',
+  updated_at: '2026-01-12T10:00:00Z',
   expires_at: '2027-02-10T10:00:00Z',
   consumed_at: '2026-01-12T10:00:00Z',
   consumed_by: 'user-1',
@@ -39,9 +43,11 @@ const mockConsumedInvitation: Invitation = {
 const mockRevokedInvitation: Invitation = {
   id: 'inv-3',
   email: 'revoked@example.com',
+  user_id: null,
   namespace_id: 'ns-2',
   target_role: 'instructor',
   created_at: '2026-01-05T10:00:00Z',
+  updated_at: '2026-01-08T10:00:00Z',
   expires_at: '2027-02-05T10:00:00Z',
   consumed_at: null,
   consumed_by: null,
@@ -53,9 +59,11 @@ const mockRevokedInvitation: Invitation = {
 const mockExpiredInvitation: Invitation = {
   id: 'inv-4',
   email: 'expired@example.com',
+  user_id: null,
   namespace_id: 'ns-1',
   target_role: 'instructor',
   created_at: '2024-12-01T10:00:00Z',
+  updated_at: '2024-12-01T10:00:00Z',
   expires_at: '2024-12-15T10:00:00Z', // Already expired
   consumed_at: null,
   consumed_by: null,

@@ -16,14 +16,17 @@ export type InvitationStatus = 'pending' | 'consumed' | 'revoked' | 'expired';
 /**
  * Serialized invitation as returned from the API (snake_case).
  * Dates are ISO strings.
+ * Matches Go store.Invitation JSON tags exactly.
  */
 export interface SerializedInvitation {
   id: string;
   email: string;
+  user_id: string | null;
   target_role: 'instructor' | 'namespace-admin';
   namespace_id: string;
   created_by: string;
   created_at: string;
+  updated_at: string;
   expires_at: string;
   consumed_at: string | null;
   consumed_by: string | null;

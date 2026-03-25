@@ -11,7 +11,7 @@ import {
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
 import { Session, Student } from '@/types/session';
-import { ExecutionSettings } from '@/types/problem';
+import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
@@ -119,7 +119,7 @@ export function useRealtimeSession({
     name: s.name,
     code: s.code || '',
     last_update: new Date(s.joined_at),
-    execution_settings: s.test_cases ?? undefined,
+    execution_settings: s.test_cases ? extractExecutionSettingsFromTestCases(s.test_cases) : undefined,
   }), []);
 
   /**
@@ -317,7 +317,7 @@ export function useRealtimeSession({
               ...prev,
               featured_student_id: studentId,
               featured_code: code,
-              featured_test_cases: executionSettings,
+              featured_test_cases: executionSettings ?? null,
             };
           });
           setFeaturedStudent({
