@@ -93,7 +93,6 @@ const loadedState = {
     featured_student_id: null,
     featured_code: null,
     status: 'active',
-    featured_execution_settings: null,
   },
   loading: false,
   error: null,

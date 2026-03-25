@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings } from '@/types/problem';
+import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import type { TestResponse } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
@@ -117,6 +117,11 @@ function StudentPage() {
         setProblemId(data.problem_id);
         setProblem(data.problem);
         setCode(data.code);
+
+        // Restore execution settings from test_cases
+        if (data.test_cases) {
+          setStudentExecutionSettings(data.test_cases as typeof studentExecutionSettings);
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
         setMode('error');
@@ -235,7 +240,7 @@ function StudentPage() {
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        execution_settings: studentExecutionSettings || undefined,
+        test_cases: studentExecutionSettings || undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });
@@ -406,7 +411,7 @@ function StudentPage() {
     );
   }
 
-  const sessionExecutionSettings = problem?.execution_settings || {};
+  const sessionExecutionSettings = extractExecutionSettingsFromTestCases(problem?.test_cases) || {};
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">

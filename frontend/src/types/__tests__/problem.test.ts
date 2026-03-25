@@ -18,7 +18,6 @@ describe('Problem type hierarchy', () => {
     description: 'Find two numbers',
     starter_code: 'def solve():',
     test_cases: [{ id: 'tc-1', problem_id: 'p-1', type: 'input-output', name: 'basic', description: 'basic test', visible: true, order: 0, config: { type: 'input-output', data: { input: '1 2', expected_output: '3', match_type: 'exact' } } }],
-    execution_settings: { stdin: 'hello' },
     author_id: 'u-1',
     class_id: 'c-1',
     tags: ['arrays'],
@@ -58,19 +57,12 @@ describe('Problem type hierarchy', () => {
     expect(tcArray[0].type).toBe('input-output');
   });
 
-  it('mapApiProblem types execution_settings as ExecutionSettings', () => {
-    const client = mapApiProblem(apiProblem);
-    expect(client.execution_settings).toBeDefined();
-    expect(client.execution_settings!.stdin).toBe('hello');
-  });
-
   it('mapApiProblem handles null optional fields', () => {
     const minimal: ApiProblem = {
       ...apiProblem,
       description: null,
       starter_code: null,
       test_cases: null,
-      execution_settings: null,
       class_id: null,
       solution: null,
     };
@@ -78,7 +70,6 @@ describe('Problem type hierarchy', () => {
     expect(client.description).toBeNull();
     expect(client.starter_code).toBeNull();
     expect(client.test_cases).toBeNull();
-    expect(client.execution_settings).toBeNull();
     expect(client.class_id).toBeNull();
     expect(client.solution).toBeNull();
   });

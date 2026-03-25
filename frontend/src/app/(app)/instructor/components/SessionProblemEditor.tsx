@@ -132,7 +132,6 @@ export default function SessionProblemEditor({
       author_id: '',
       class_id: null,
       tags: [],
-      execution_settings: null,
       created_at: '',
       updated_at: '',
       // Spread original problem to preserve all existing fields.

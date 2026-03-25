@@ -33,7 +33,6 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       author_id: 'user-1',
       class_id: null,
       tags: [],
-      execution_settings: null,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
@@ -89,7 +88,6 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       author_id: 'user-1',
       class_id: null,
       tags: [],
-      execution_settings: null,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [],
@@ -119,7 +117,6 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       author_id: 'user-1',
       class_id: null,
       tags: ['tag1'],
-      execution_settings: null,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
@@ -273,5 +270,149 @@ describe('PLAT-fun: Public view passes all execution settings', () => {
     expect(executionSettings.stdin).toBe('only stdin');
     expect(executionSettings.random_seed).toBeUndefined();
     expect(executionSettings.attached_files).toBeUndefined();
+  });
+});
+
+describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
+  /**
+   * Verifies the helper function extracts ExecutionSettings from IOTestCase format.
+   * Critical contract: After migration 020, execution settings live in test_cases[0] with
+   * field mappings: input→stdin, random_seed→random_seed, attached_files→attached_files.
+   * Breaking this would cause attached_files and other settings to be lost on problem reload.
+   */
+  it('should extract stdin, random_seed, and attached_files from test_cases[0]', () => {
+    const testCases = [
+      {
+        id: 'tc-1',
+        problem_id: 'prob-1',
+        type: 'input-output' as const,
+        name: 'Default',
+        description: '',
+        visible: true,
+        order: 0,
+        config: {
+          type: 'input-output' as const,
+          data: {
+            input: '5\n10\n',
+            expected_output: '15',
+            match_type: 'exact' as const,
+          },
+        },
+        // ExecutionSettings fields in IOTestCase
+        random_seed: 42,
+        attached_files: [
+          { name: 'data.txt', content: 'test content' },
+          { name: 'config.json', content: '{}' },
+        ],
+      },
+    ];
+
+    // This is what the helper should extract
+    const expectedSettings: ExecutionSettings = {
+      stdin: '5\n10\n',
+      random_seed: 42,
+      attached_files: [
+        { name: 'data.txt', content: 'test content' },
+        { name: 'config.json', content: '{}' },
+      ],
+    };
+
+    // Import the helper function (will be created in types/problem.ts)
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+    const result = extractExecutionSettingsFromTestCases(testCases);
+
+    expect(result).toEqual(expectedSettings);
+  });
+
+  it('should handle test_cases with no execution settings', () => {
+    const testCases = [
+      {
+        id: 'tc-1',
+        problem_id: 'prob-1',
+        type: 'input-output' as const,
+        name: 'Test 1',
+        description: 'Basic test',
+        visible: true,
+        order: 0,
+        config: {
+          type: 'input-output' as const,
+          data: {
+            input: '',
+            expected_output: 'output',
+            match_type: 'exact' as const,
+          },
+        },
+      },
+    ];
+
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+    const result = extractExecutionSettingsFromTestCases(testCases);
+
+    expect(result).toEqual({
+      stdin: '',
+      random_seed: undefined,
+      attached_files: undefined,
+    });
+  });
+
+  it('should return empty settings for empty test_cases array', () => {
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+    const result = extractExecutionSettingsFromTestCases([]);
+
+    expect(result).toEqual({
+      stdin: undefined,
+      random_seed: undefined,
+      attached_files: undefined,
+    });
+  });
+
+  it('should return empty settings for null/undefined test_cases', () => {
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+
+    expect(extractExecutionSettingsFromTestCases(null)).toEqual({
+      stdin: undefined,
+      random_seed: undefined,
+      attached_files: undefined,
+    });
+
+    expect(extractExecutionSettingsFromTestCases(undefined)).toEqual({
+      stdin: undefined,
+      random_seed: undefined,
+      attached_files: undefined,
+    });
+  });
+
+  /**
+   * Verifies that updateStudentWork sends test_cases instead of execution_settings.
+   * Critical contract: Backend expects test_cases field, not execution_settings.
+   * Breaking this would cause student execution settings to be silently dropped on save.
+   */
+  it('should send test_cases field to updateStudentWork, not execution_settings', async () => {
+    const { updateStudentWork } = require('@/lib/api/student-work');
+    const { apiPatch } = require('@/lib/api-client');
+
+    jest.clearAllMocks();
+
+    const workId = 'work-123';
+    const executionSettings: ExecutionSettings = {
+      stdin: 'test input',
+      random_seed: 99,
+      attached_files: [{ name: 'file.txt', content: 'data' }],
+    };
+
+    await updateStudentWork(workId, {
+      code: 'def solve(): pass',
+      test_cases: executionSettings,
+    });
+
+    expect(apiPatch).toHaveBeenCalledWith(`/student-work/${workId}`, {
+      code: 'def solve(): pass',
+      test_cases: executionSettings,
+    });
+
+    // Verify execution_settings is NOT sent
+    const callArgs = (apiPatch as jest.Mock).mock.calls[0][1] as any;
+    expect(callArgs).not.toHaveProperty('execution_settings');
+    expect(callArgs).toHaveProperty('test_cases');
   });
 });
