@@ -5,6 +5,28 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SessionProblemEditor from '../SessionProblemEditor';
+import type { Problem } from '@/types/problem';
+
+/** Build a full Problem with sensible defaults, overriding specific fields. */
+function makeProblem(overrides: Partial<Problem> = {}): Problem {
+  return {
+    id: 'test-id',
+    namespace_id: 'test-ns',
+    title: '',
+    description: null,
+    starter_code: null,
+    solution: null,
+    language: 'python',
+    test_cases: null,
+    execution_settings: null,
+    author_id: 'test-author',
+    class_id: null,
+    tags: [],
+    created_at: new Date('2024-01-01'),
+    updated_at: new Date('2024-01-01'),
+    ...overrides,
+  };
+}
 
 // Mock useApiDebugger hook
 jest.mock('@/hooks/useApiDebugger', () => ({
@@ -32,23 +54,59 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 }));
 
 // Mock the CodeEditor component
+// Simulates Monaco's behavior: without a key prop to force remount, switching from
+// non-empty to empty content may not properly update the editor state
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({
-    code,
-    onChange,
-    readOnly,
-    onExecutionSettingsChange,
-    title,
-    problem,
-    onProblemEdit,
-    editableProblem
-  }: any) {
+  const editorInstances = new Map<string, string>();
+
+  return React.forwardRef(function MockCodeEditor(props: any, ref: any) {
+    const {
+      code,
+      onChange,
+      readOnly,
+      onExecutionSettingsChange,
+      title,
+      problem,
+      onProblemEdit,
+      editableProblem
+    } = props;
+
+    // Use a ref to simulate Monaco's internal state that persists across renders
+    const instanceIdRef = React.useRef<string | undefined>(undefined);
+    const [displayedCode, setDisplayedCode] = React.useState(code);
+
+    // On mount, create or retrieve instance
+    React.useEffect(() => {
+      const instanceId = Math.random().toString(36);
+      instanceIdRef.current = instanceId;
+      editorInstances.set(instanceId, code);
+      setDisplayedCode(code);
+
+      return () => {
+        if (instanceIdRef.current) {
+          editorInstances.delete(instanceIdRef.current);
+        }
+      };
+    }, []); // Empty deps = only runs on mount/unmount (simulating Monaco instance lifecycle)
+
+    // Update displayed code only if instance has been remounted (via key change)
+    // Otherwise, simulate Monaco bug: empty string doesn't trigger update
+    React.useEffect(() => {
+      if (instanceIdRef.current) {
+        // Simulate Monaco bug: when code becomes empty, the editor doesn't update unless remounted
+        if (code !== '' || !editorInstances.get(instanceIdRef.current)) {
+          editorInstances.set(instanceIdRef.current, code);
+          setDisplayedCode(code);
+        }
+      }
+    }, [code]);
+
     return (
       <div data-testid="code-editor" data-readonly={readOnly ? 'true' : 'false'}>
         <div>{title}</div>
         <textarea
           data-testid="code-textarea"
-          value={code}
+          value={displayedCode}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
         />
@@ -83,7 +141,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         )}
       </div>
     );
-  };
+  });
 });
 
 describe('SessionProblemEditor', () => {
@@ -107,11 +165,11 @@ describe('SessionProblemEditor', () => {
   });
 
   it('renders with initial problem data', () => {
-    const initialProblem = {
+    const initialProblem = makeProblem({
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'print("hello")',
-    };
+    });
 
     render(
       <SessionProblemEditor
@@ -204,12 +262,13 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         title: 'My Title',
         description: 'My description',
         starter_code: 'print("code")',
-      },
-      undefined // No execution settings set
+        solution: null,
+        language: 'python',
+      })
     );
   });
 
@@ -229,9 +288,10 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.any(Object),
       expect.objectContaining({
-        stdin: 'test input',
+        test_cases: expect.objectContaining({
+          stdin: 'test input',
+        }),
       })
     );
   });
@@ -252,9 +312,10 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.any(Object),
       expect.objectContaining({
-        random_seed: 42,
+        test_cases: expect.objectContaining({
+          random_seed: 42,
+        }),
       })
     );
   });
@@ -279,12 +340,13 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         title: 'Title with spaces',
         description: 'Description with spaces',
         starter_code: 'code with spaces',
-      },
-      undefined
+        solution: null,
+        language: 'python',
+      })
     );
   });
 
@@ -292,11 +354,11 @@ describe('SessionProblemEditor', () => {
     const { rerender } = render(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={{
+        initialProblem={makeProblem({
           title: 'Initial',
           description: 'Initial desc',
           starter_code: 'initial code',
-        }}
+        })}
       />
     );
 
@@ -306,11 +368,11 @@ describe('SessionProblemEditor', () => {
     rerender(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={{
+        initialProblem={makeProblem({
           title: 'Updated',
           description: 'Updated desc',
           starter_code: 'updated code',
-        }}
+        })}
       />
     );
 
@@ -319,11 +381,11 @@ describe('SessionProblemEditor', () => {
   });
 
   it('uses CodeEditor component with correct props', () => {
-    const initialProblem = {
+    const initialProblem = makeProblem({
       title: 'Test',
       description: 'Test',
       starter_code: 'test code',
-    };
+    });
     const initialSettings = {
       stdin: 'input',
       random_seed: 123,
@@ -384,12 +446,12 @@ describe('SessionProblemEditor', () => {
     });
 
     it('shows starter code in editor on Starter Code tab', () => {
-      const initialProblem = {
+      const initialProblem = makeProblem({
         title: 'Test',
         description: 'Test',
         starter_code: 'starter code here',
         solution: 'solution code here',
-      } as any;
+      });
 
       render(
         <SessionProblemEditor
@@ -403,12 +465,12 @@ describe('SessionProblemEditor', () => {
     });
 
     it('solution tab is read-only', () => {
-      const initialProblem = {
+      const initialProblem = makeProblem({
         title: 'Test',
         description: 'Test',
         starter_code: 'starter code here',
         solution: 'solution code here',
-      } as any;
+      });
 
       render(
         <SessionProblemEditor
@@ -426,12 +488,12 @@ describe('SessionProblemEditor', () => {
     });
 
     it('shows solution code in editor on Solution tab', () => {
-      const initialProblem = {
+      const initialProblem = makeProblem({
         title: 'Test',
         description: 'Test',
         starter_code: 'starter code here',
         solution: 'solution code here',
-      } as any;
+      });
 
       render(
         <SessionProblemEditor
@@ -444,26 +506,47 @@ describe('SessionProblemEditor', () => {
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
       expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
     });
+
+    it('switches from solution to empty starter code correctly', () => {
+      // Regression test for PLAT-m8d: Solution stays visible when switching to empty Starter Code tab
+      // This verifies that the CodeEditor properly updates when switching from a populated Solution
+      // tab to an empty Starter Code tab. Without a key prop forcing remount, Monaco may retain
+      // the previous buffer instead of showing empty content.
+      const initialProblem = makeProblem({
+        title: 'Test',
+        description: 'Test',
+        starter_code: '',
+        solution: 'solution code here',
+      });
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Start on Starter Code tab (default) - should be empty
+      expect(screen.getByTestId('code-textarea')).toHaveValue('');
+
+      // Switch to Solution tab - should show solution
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+
+      // Switch back to Starter Code tab - should be empty again
+      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('');
+    });
   });
 
   describe('solution state', () => {
     it('initializes solution from initialProblem.solution', () => {
-      const initialProblem = {
-        id: 'p1',
+      const initialProblem = makeProblem({
         title: 'Test',
         description: 'Test',
         starter_code: 'starter',
         solution: 'the solution code',
-        namespace_id: 'ns1',
-        author_id: 'a1',
-        class_id: null,
-        tags: [],
-        test_cases: null,
-        execution_settings: null,
-        language: 'python',
-        created_at: new Date(),
-        updated_at: new Date(),
-      } as any;
+      });
 
       render(
         <SessionProblemEditor
@@ -481,24 +564,24 @@ describe('SessionProblemEditor', () => {
       const { rerender } = render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{
+          initialProblem={makeProblem({
             title: 'Initial',
             description: 'Initial desc',
             starter_code: 'initial code',
             solution: 'initial solution',
-          } as any}
+          })}
         />
       );
 
       rerender(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{
+          initialProblem={makeProblem({
             title: 'Updated',
             description: 'Updated desc',
             starter_code: 'updated code',
             solution: 'updated solution',
-          } as any}
+          })}
         />
       );
 
@@ -513,7 +596,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '' }}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '' })}
         />
       );
 
@@ -524,7 +607,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'solution code' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'solution code' })}
         />
       );
 
@@ -535,7 +618,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
         />
       );
 
@@ -548,7 +631,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
         />
       );
 
@@ -563,7 +646,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
         />
       );
 
@@ -578,7 +661,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
         />
       );
 
@@ -595,7 +678,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'my solution' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
         />
       );
 
@@ -616,7 +699,7 @@ describe('SessionProblemEditor', () => {
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
           onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '' }}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '' })}
         />
       );
 
@@ -627,7 +710,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
         />
       );
 
@@ -640,7 +723,7 @@ describe('SessionProblemEditor', () => {
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
           onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
         />
       );
 
@@ -653,7 +736,7 @@ describe('SessionProblemEditor', () => {
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
           onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={{ title: 'T', description: 'D', starter_code: '', solution: 'sol' } as any}
+          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
         />
       );
 

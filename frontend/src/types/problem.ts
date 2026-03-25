@@ -72,7 +72,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: TestCase[] | null;
+  test_cases: TestCase[] | ExecutionSettings | null;
   execution_settings: ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
@@ -103,7 +103,7 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
-    test_cases: api.test_cases as TestCase[] | null,
+    test_cases: api.test_cases,
     execution_settings: api.execution_settings as ExecutionSettings | null,
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),

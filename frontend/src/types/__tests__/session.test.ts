@@ -95,6 +95,7 @@ describe('SessionPublicState type', () => {
       problem: { title: 'Test Problem', description: 'desc', starter_code: 'code', language: 'python' },
       featured_student_id: null,
       featured_code: null,
+      featured_test_cases: null,
       join_code: 'ABC',
       status: 'active',
     };
@@ -111,6 +112,7 @@ describe('SessionPublicState type', () => {
       problem: null,
       featured_student_id: null,
       featured_code: null,
+      featured_test_cases: null,
       join_code: 'ABC',
       status: 'active',
     };

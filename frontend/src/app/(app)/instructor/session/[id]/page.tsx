@@ -21,6 +21,7 @@ import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem, ExecutionSettings } from '@/types/problem';
+import type { Problem as ApiProblem } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -173,17 +174,12 @@ export default function InstructorSessionPage() {
   }, [session_id, apiEndSession, router]);
 
   const handleUpdateProblem = useCallback(async (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
+    problem: ApiProblem
   ) => {
     if (!session_id) return;
 
     try {
-      await apiUpdateProblem(session_id, problem, execution_settings);
+      await apiUpdateProblem(session_id, problem);
     } catch (err: any) {
       setError(err.message || 'Failed to update problem');
     }

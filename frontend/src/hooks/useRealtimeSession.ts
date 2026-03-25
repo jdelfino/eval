@@ -119,7 +119,7 @@ export function useRealtimeSession({
     name: s.name,
     code: s.code || '',
     last_update: new Date(s.joined_at),
-    execution_settings: s.execution_settings as ExecutionSettings | undefined,
+    execution_settings: s.test_cases ?? undefined,
   }), []);
 
   /**
@@ -261,9 +261,9 @@ export function useRealtimeSession({
         }
 
         case 'student_code_updated': {
-          // data: StudentCodeUpdatedData{user_id, code, execution_settings?}
-          const { user_id: studentId, code, execution_settings: rawExecutionSettings } = parsed.data;
-          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          // data: StudentCodeUpdatedData{user_id, code, test_cases?}
+          const { user_id: studentId, code, test_cases } = parsed.data;
+          const executionSettings = test_cases;
           setStudents(prev => {
             const updated = new Map(prev);
             const student = updated.get(studentId);
@@ -301,13 +301,13 @@ export function useRealtimeSession({
         }
 
         case 'featured_student_changed': {
-          // data: FeaturedStudentChangedData{user_id, code, execution_settings?}
+          // data: FeaturedStudentChangedData{user_id, code, test_cases?}
           const {
             user_id: studentId,
             code,
-            execution_settings: rawExecutionSettings,
+            test_cases,
           } = parsed.data;
-          const executionSettings = rawExecutionSettings as ExecutionSettings | undefined;
+          const executionSettings = test_cases;
           setSession(prev => {
             if (!prev) {
               console.warn('[useRealtimeSession] Dropping featured_student_changed event: state not yet initialized');
@@ -317,7 +317,7 @@ export function useRealtimeSession({
               ...prev,
               featured_student_id: studentId,
               featured_code: code,
-              featured_execution_settings: executionSettings,
+              featured_test_cases: executionSettings,
             };
           });
           setFeaturedStudent({

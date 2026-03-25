@@ -401,8 +401,11 @@ describe('InstructorSessionPage', () => {
       await waitFor(() => {
         expect(mockUpdateProblem).toHaveBeenCalledWith(
           'session-123',
-          { title: 'Updated', description: '', starter_code: '' },
-          undefined
+          expect.objectContaining({
+            title: 'Updated',
+            description: '',
+            starter_code: '',
+          })
         );
       });
     });

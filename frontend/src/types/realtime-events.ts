@@ -8,6 +8,9 @@
  * collision with the discriminated union defined in lib/api/realtime-events.ts (PLAT-pp4r.2).
  */
 
+import type { ExecutionSettings } from './problem';
+import type { Problem as ApiProblem } from './api';
+
 // ---------------------------------------------------------------------------
 // Event type string literals (match Go EventType constants)
 // ---------------------------------------------------------------------------
@@ -46,7 +49,7 @@ export interface StudentJoinedData {
 export interface StudentCodeUpdatedData {
   user_id: string;
   code: string;
-  execution_settings?: unknown; // json.RawMessage, omitempty
+  test_cases?: ExecutionSettings; // json.RawMessage → ExecutionSettings (stdin, random_seed, attached_files)
 }
 
 /** Payload for session_ended — matches Go SessionEndedData. */
@@ -64,7 +67,7 @@ export interface SessionReplacedData {
 export interface FeaturedStudentChangedData {
   user_id: string;
   code: string;
-  execution_settings?: unknown; // json.RawMessage, omitempty
+  test_cases?: ExecutionSettings; // json.RawMessage → ExecutionSettings (stdin, random_seed, attached_files)
 }
 
 /** Payload for problem_updated — matches Go ProblemUpdatedData. */
@@ -75,7 +78,7 @@ export interface ProblemUpdatedData {
 /** Payload for session_started_in_section — matches Go SessionStartedInSectionData. */
 export interface SessionStartedInSectionData {
   session_id: string;
-  problem: unknown; // json.RawMessage — full problem JSON blob
+  problem: ApiProblem; // Full problem object from the backend
 }
 
 /** Payload for session_ended_in_section — matches Go SessionEndedInSectionData. */

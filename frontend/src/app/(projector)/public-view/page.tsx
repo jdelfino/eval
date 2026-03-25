@@ -122,10 +122,16 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Derive featured stdin for the CodeEditor
-  const featuredStdin = (() => {
-    const settings = state?.featured_execution_settings as ExecutionSettings | null | undefined;
-    return settings?.stdin;
+  // Extract complete execution settings from featured_test_cases
+  const featuredExecutionSettings: ExecutionSettings = (() => {
+    const settings = state?.featured_test_cases;
+    if (!settings) return {};
+
+    return {
+      stdin: settings.stdin,
+      random_seed: settings.random_seed,
+      attached_files: settings.attached_files,
+    };
   })();
 
   // Reset local code when featured student or their code changes
@@ -139,7 +145,7 @@ function PublicViewContent() {
       setLocalCode(state?.featured_code ?? '');
       hasUserEdited.current = false;
     }
-  }, [state?.featured_student_id, state?.featured_code, state?.featured_execution_settings, state?.problem]);
+  }, [state?.featured_student_id, state?.featured_code, state?.featured_test_cases, state?.problem]);
 
   // Track user edits to the scratch pad
   const handleCodeChange = (code: string) => {
@@ -234,7 +240,7 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
-            defaultExecutionSettings={{ stdin: featuredStdin }}
+            defaultExecutionSettings={featuredExecutionSettings}
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
             execution_result={executionResult}

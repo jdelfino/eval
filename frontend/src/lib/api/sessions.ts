@@ -7,7 +7,8 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Session, Revision, SessionPublicState } from '@/types/api';
+import type { Session, Revision, SessionPublicState, Problem } from '@/types/api';
+import type { ExecutionSettings } from '@/types/problem';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -22,7 +23,9 @@ export async function createSession(
   problemId?: string,
   showSolution?: boolean
 ): Promise<Session> {
-  const body: Record<string, unknown> = { section_id: sectionId };
+  const body: { section_id: string; problem_id?: string; show_solution?: boolean } = {
+    section_id: sectionId,
+  };
   if (problemId) {
     body.problem_id = problemId;
   }
@@ -51,17 +54,14 @@ export async function completeSession(sessionId: string): Promise<void> {
 /**
  * Update a session's problem inline.
  * @param sessionId - The session ID
- * @param problem - The problem object to set
- * @param executionSettings - Optional execution settings
+ * @param problem - The complete problem object to set (must include all fields)
  */
 export async function updateSessionProblem(
   sessionId: string,
-  problem: Record<string, unknown>,
-  executionSettings?: Record<string, unknown>
+  problem: Problem
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/update-problem`, {
     problem,
-    execution_settings: executionSettings,
   });
 }
 
@@ -198,9 +198,18 @@ export async function analyzeSession(
  * Feature code in a session (show to all students).
  * @param sessionId - The session ID
  * @param code - The code to feature
+ * @param testCases - Optional test cases (execution settings) to feature with the code
  */
-export async function featureCode(sessionId: string, code: string): Promise<void> {
-  await apiPost(`/sessions/${sessionId}/feature`, { code });
+export async function featureCode(
+  sessionId: string,
+  code: string,
+  testCases?: ExecutionSettings
+): Promise<void> {
+  const body: { code: string; test_cases?: ExecutionSettings } = { code };
+  if (testCases !== undefined) {
+    body.test_cases = testCases;
+  }
+  await apiPost(`/sessions/${sessionId}/feature`, body);
 }
 
 /**
