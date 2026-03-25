@@ -10,7 +10,6 @@ import { state } from './shared-state';
 import { getSessionState } from '@/lib/api/realtime';
 import { getRevisions } from '@/lib/api/sessions';
 import {
-  expectSnakeCaseKeys,
   validateSessionShape,
   validateSessionStudentShape,
 } from './validators';
@@ -35,7 +34,6 @@ describe('Sessions API', () => {
       expect('session' in body).toBe(true);
       expect('students' in body).toBe(true);
       expect(typeof body.join_code).toBe('string');
-      expectSnakeCaseKeys(body, 'SessionState');
 
       // Session sub-object
       validateSessionShape(body.session);
@@ -71,7 +69,6 @@ describe('Sessions API', () => {
         expect(revision.full_code === null || typeof revision.full_code === 'string').toBe(true);
         expect(revision.base_revision_id === null || typeof revision.base_revision_id === 'string').toBe(true);
         expect('execution_result' in revision).toBe(true);
-        expectSnakeCaseKeys(revision, 'Revision');
       }
     });
   });

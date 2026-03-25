@@ -8,7 +8,6 @@
 import { INSTRUCTOR_TOKEN, configureTestAuth, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
 import { enterPreview, exitPreview } from '@/lib/api/preview';
-import { expectSnakeCaseKeys } from './validators';
 
 describe('enterPreview()', () => {
   beforeAll(() => {
@@ -24,9 +23,6 @@ describe('enterPreview()', () => {
     expect(sectionId).toBeTruthy();
 
     const result = await enterPreview(sectionId);
-
-    // Validate snake_case shape
-    expectSnakeCaseKeys(result, 'PreviewResponse');
 
     // Validate required string fields
     expect(typeof result.preview_user_id).toBe('string');

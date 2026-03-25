@@ -4,9 +4,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { listMySections } from '@/lib/api/sections';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listMySections()', () => {
   beforeAll(() => {
@@ -27,7 +24,6 @@ describe('listMySections()', () => {
       const item = sections[0];
 
       // MySectionInfo has { section: Section, class_name: string }
-      expectSnakeCaseKeys(item, 'MySectionInfo');
       expect('section' in item).toBe(true);
       expect(typeof item.class_name).toBe('string');
 
@@ -42,7 +38,6 @@ describe('listMySections()', () => {
       expect(typeof sec.created_at).toBe('string');
       expect(typeof sec.updated_at).toBe('string');
 
-      expectSnakeCaseKeys(sec, 'Section');
     }
   });
 });

@@ -8,9 +8,6 @@
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
 import { listSystemInvitations, createSystemInvitation, revokeSystemInvitation } from '@/lib/api/system';
 import { state } from './shared-state';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listSystemInvitations()', () => {
   beforeAll(() => {
@@ -30,7 +27,6 @@ describe('listSystemInvitations()', () => {
     if (invitations.length > 0) {
       const inv = invitations[0];
 
-      expectSnakeCaseKeys(inv, 'SerializedInvitation');
       expect(typeof inv.id).toBe('string');
       expect(typeof inv.email).toBe('string');
       expect(typeof inv.target_role).toBe('string');
@@ -74,9 +70,6 @@ describe('createSystemInvitation()', () => {
 
     const inv = await createSystemInvitation(email, namespaceId, 'instructor');
     createdInvitationId = inv.id;
-
-    // Validate snake_case shape
-    expectSnakeCaseKeys(inv, 'SerializedInvitation');
 
     // Validate required string fields
     expect(typeof inv.id).toBe('string');

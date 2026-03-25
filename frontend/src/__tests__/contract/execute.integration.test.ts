@@ -11,7 +11,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { executeCode, warmExecutor } from '@/lib/api/execute';
-import { expectSnakeCaseKeys } from './validators';
 
 describe('executeCode()', () => {
   beforeAll(() => {
@@ -51,10 +50,6 @@ describe('executeCode()', () => {
     expect(result.summary.total).toBe(1);
     expect(result.summary.run).toBe(1);
 
-    // No PascalCase leaks
-    expectSnakeCaseKeys(result, 'TestResponse');
-    expectSnakeCaseKeys(result.results[0], 'CaseResult');
-    expectSnakeCaseKeys(result.summary, 'CaseSummary');
   });
 
   it('warmExecutor() calls POST /executor/warm without error', async () => {

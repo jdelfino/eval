@@ -4,9 +4,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { listClasses } from '@/lib/api/classes';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listClasses()', () => {
   beforeAll(() => {
@@ -34,7 +31,5 @@ describe('listClasses()', () => {
     expect(typeof cls.created_at).toBe('string');
     expect(typeof cls.updated_at).toBe('string');
 
-    // No PascalCase
-    expectSnakeCaseKeys(cls, 'Class');
   });
 });

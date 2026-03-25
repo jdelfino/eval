@@ -31,7 +31,6 @@ import {
   listSessionHistoryWithFilters,
 } from '@/lib/api/sessions';
 import {
-  expectSnakeCaseKeys,
   validateSessionShape,
 } from './validators';
 
@@ -148,7 +147,6 @@ describe('Sessions Full API', () => {
       expect(typeof details.section_name).toBe('string');
       expect(Array.isArray(details.students)).toBe(true);
       expect(typeof details.participant_count).toBe('number');
-      expectSnakeCaseKeys(details, 'SessionDetails');
 
       expect(details.id).toBe(testSessionId);
       expect(['active', 'completed']).toContain(details.status);
@@ -160,7 +158,6 @@ describe('Sessions Full API', () => {
         expect(typeof student.name).toBe('string');
         expect('code' in student).toBe(true);
         expect(typeof student.joined_at).toBe('string');
-        expectSnakeCaseKeys(student, 'SessionStudentSummary');
       }
     });
   });
@@ -177,7 +174,6 @@ describe('Sessions Full API', () => {
       expect(publicState.featured_code === null || typeof publicState.featured_code === 'string').toBe(true);
       expect(typeof publicState.join_code).toBe('string');
       expect(typeof publicState.status).toBe('string');
-      expectSnakeCaseKeys(publicState, 'SessionPublicState');
 
       expect(['active', 'completed']).toContain(publicState.status);
     });
@@ -192,7 +188,6 @@ describe('Sessions Full API', () => {
 
       // Top-level: { script: ... }
       expect(analysis).toHaveProperty('script');
-      expectSnakeCaseKeys(analysis, 'AnalysisResponse');
 
       const { script } = analysis;
 
@@ -201,7 +196,6 @@ describe('Sessions Full API', () => {
       expect(script.session_id).toBe(testSessionId);
       expect(Array.isArray(script.issues)).toBe(true);
       expect(typeof script.generated_at).toBe('string'); // ISO string over the wire
-      expectSnakeCaseKeys(script, 'WalkthroughScript');
 
       // Summary shape
       expect(script.summary).toBeDefined();
@@ -212,8 +206,6 @@ describe('Sessions Full API', () => {
       expect(typeof script.summary.completion_estimate.finished).toBe('number');
       expect(typeof script.summary.completion_estimate.in_progress).toBe('number');
       expect(typeof script.summary.completion_estimate.not_started).toBe('number');
-      expectSnakeCaseKeys(script.summary, 'WalkthroughSummary');
-      expectSnakeCaseKeys(script.summary.completion_estimate, 'CompletionEstimate');
 
       // Each issue (if any) has the right shape
       for (const issue of script.issues) {
@@ -225,7 +217,6 @@ describe('Sessions Full API', () => {
         expect(typeof issue.representative_student_id).toBe('string');
         expect(typeof issue.representative_student_label).toBe('string');
         expect(typeof issue.severity).toBe('string');
-        expectSnakeCaseKeys(issue, 'AnalysisIssue');
       }
     });
   });

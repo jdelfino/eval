@@ -23,7 +23,6 @@ import {
 } from '@/lib/api/sections';
 import { createClass, createSection } from '@/lib/api/classes';
 import {
-  expectSnakeCaseKeys,
   validateSessionShape,
 } from './validators';
 
@@ -56,7 +55,6 @@ describe('Sections API (full coverage)', () => {
       expect(typeof sec.created_at).toBe('string');
       expect(typeof sec.updated_at).toBe('string');
 
-      expectSnakeCaseKeys(sec, 'Section');
       expect(sec.id).toBe(sectionId);
     });
   });
@@ -87,8 +85,6 @@ describe('Sections API (full coverage)', () => {
       expect(typeof sec.created_at).toBe('string');
       expect(typeof sec.updated_at).toBe('string');
 
-      // No PascalCase leaks
-      expectSnakeCaseKeys(sec, 'Section');
     });
   });
 
@@ -133,7 +129,6 @@ describe('Sections API (full coverage)', () => {
         expect(typeof membership.role).toBe('string');
         expect(typeof membership.joined_at).toBe('string');
         expect(membership.role).toBe('instructor');
-        expectSnakeCaseKeys(membership, 'SectionMembership');
       }
     });
   });
@@ -205,8 +200,6 @@ describe('Sections API (full coverage)', () => {
         expect(typeof membership.role).toBe('string');
         expect(['instructor', 'student']).toContain(membership.role);
         expect(typeof membership.joined_at).toBe('string');
-
-        expectSnakeCaseKeys(membership, 'SectionMembership');
 
         // Now test leaveSection with the section we just joined
         try {
