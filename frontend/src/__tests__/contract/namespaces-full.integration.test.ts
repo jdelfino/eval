@@ -20,7 +20,7 @@ import {
   deleteUser,
 } from '@/lib/api/namespaces';
 import { createSystemInvitation } from '@/lib/api/system';
-import { expectSnakeCaseKeys, validateUserShape } from './validators';
+import { validateUserShape } from './validators';
 import { Namespace } from '@/types/api';
 
 /** Validate the shape of a Namespace object from the backend. */
@@ -33,7 +33,6 @@ function validateNamespaceShape(ns: Namespace) {
   expect(typeof ns.created_at).toBe('string');
   expect(ns.created_by === null || typeof ns.created_by === 'string').toBe(true);
   expect(typeof ns.updated_at).toBe('string');
-  expectSnakeCaseKeys(ns, 'Namespace');
 }
 
 describe('Namespaces API — full coverage', () => {

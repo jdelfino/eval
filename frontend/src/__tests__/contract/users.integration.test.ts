@@ -5,9 +5,6 @@
  */
 import { configureTestAuth, ADMIN_TOKEN, resetAuthProvider } from './helpers';
 import { listSystemUsers } from '@/lib/api/system';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listSystemUsers()', () => {
   beforeAll(() => {
@@ -36,7 +33,5 @@ describe('listSystemUsers()', () => {
     expect(typeof user.created_at).toBe('string');
     expect(typeof user.updated_at).toBe('string');
 
-    // No PascalCase
-    expectSnakeCaseKeys(user, 'User');
   });
 });

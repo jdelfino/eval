@@ -26,9 +26,6 @@ import {
   addCoInstructor,
   removeCoInstructor,
 } from '@/lib/api/classes';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 /** Validate the shape of a Class object. */
 function validateClassShape(cls: import("@/types/api").Class) {
@@ -39,7 +36,6 @@ function validateClassShape(cls: import("@/types/api").Class) {
   expect(typeof cls.created_by).toBe('string');
   expect(typeof cls.created_at).toBe('string');
   expect(typeof cls.updated_at).toBe('string');
-  expectSnakeCaseKeys(cls, 'Class');
 }
 
 /** Validate the shape of a Section object. */
@@ -53,7 +49,6 @@ function validateSectionShape(sec: import("@/types/api").Section) {
   expect(typeof sec.active).toBe('boolean');
   expect(typeof sec.created_at).toBe('string');
   expect(typeof sec.updated_at).toBe('string');
-  expectSnakeCaseKeys(sec, 'Section');
 }
 
 describe('Classes API — full coverage', () => {

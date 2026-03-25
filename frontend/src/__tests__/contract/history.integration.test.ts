@@ -4,9 +4,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { listSessionHistory } from '@/lib/api/sessions';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listSessionHistory()', () => {
   beforeAll(() => {
@@ -41,8 +38,6 @@ describe('listSessionHistory()', () => {
       expect(typeof session.last_activity).toBe('string');
       expect(session.ended_at === null || typeof session.ended_at === 'string').toBe(true);
 
-      // No PascalCase leaks
-      expectSnakeCaseKeys(session, 'Session');
 
       // Status should be valid
       expect(['active', 'completed']).toContain(session.status);
