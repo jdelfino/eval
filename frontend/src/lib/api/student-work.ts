@@ -7,7 +7,6 @@
 
 import { apiGet, apiPost, apiPatch } from '@/lib/api-client';
 import type { StudentWork, StudentWorkWithProblem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
 
 /**
  * Get or create student work for a problem in a section.

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Problem, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { Problem } from '@/types/problem';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {
@@ -21,7 +21,6 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   const testCasesArray = Array.isArray(problem.test_cases) ? problem.test_cases : null;
   const hasTestCases = testCasesArray && testCasesArray.length > 0;
   const hasDescription = !!problem.description;
-  const executionSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
