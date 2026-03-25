@@ -12,7 +12,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem, ExecutionSettings, buildTestCasesFromExecutionSettings } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
@@ -113,17 +113,16 @@ export default function SessionProblemEditor({
     // The backend stores the full object as-is in session JSONB.
     const base = initialProblem;
 
-    // Build execution settings from form state
-    const execSettings: ExecutionSettings = {};
-    if (stdin.trim()) execSettings.stdin = stdin.trim();
-    if (random_seed !== undefined) execSettings.random_seed = random_seed;
-    if (attached_files.length > 0) execSettings.attached_files = attached_files;
+    // Build test_cases from execution settings (IOTestCase[] wire format).
+    const newTestCases = buildTestCasesFromExecutionSettings({
+      stdin,
+      random_seed,
+      attached_files,
+    });
 
-    // Determine test_cases: new execution settings, or preserve existing.
-    // Cast through unknown since base may use rich client TestCase[] while wire format expects IOTestCase[].
-    const hasNewSettings = Object.keys(execSettings).length > 0;
-    const test_cases = (hasNewSettings
-      ? execSettings
+    // Use new settings if any are set, otherwise preserve existing test_cases.
+    const test_cases = (newTestCases.length > 0
+      ? newTestCases
       : (base?.test_cases ?? null)) as ApiProblem['test_cases'];
 
     const problem: ApiProblem = {

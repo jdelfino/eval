@@ -288,9 +288,12 @@ describe('SessionProblemEditor', () => {
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
       expect.objectContaining({
-        test_cases: expect.objectContaining({
-          stdin: 'test input',
-        }),
+        test_cases: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Default',
+            input: 'test input',
+          }),
+        ]),
       })
     );
   });
@@ -312,9 +315,11 @@ describe('SessionProblemEditor', () => {
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
       expect.objectContaining({
-        test_cases: expect.objectContaining({
-          random_seed: 42,
-        }),
+        test_cases: expect.arrayContaining([
+          expect.objectContaining({
+            random_seed: 42,
+          }),
+        ]),
       })
     );
   });

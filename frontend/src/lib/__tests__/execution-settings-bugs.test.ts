@@ -442,7 +442,7 @@ describe('PLAT-e4m: ProblemCreator save payload puts execution settings into tes
     class_id?: string | null;
     tags?: string[];
   }) {
-    const { buildTestCasesFromExecutionSettings } = require('@/app/(app)/instructor/components/ProblemCreator');
+    const { buildTestCasesFromExecutionSettings } = require('@/types/problem');
 
     const testCases = buildTestCasesFromExecutionSettings({
       stdin: opts.stdin,

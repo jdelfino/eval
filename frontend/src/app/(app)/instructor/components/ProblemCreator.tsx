@@ -19,40 +19,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
-import { extractExecutionSettingsFromTestCases } from '@/types/problem';
-import type { IOTestCase, WireFile } from '@/types/api';
-
-/**
- * Build a test_cases array from execution settings (stdin, random_seed, attached_files).
- * When any execution setting is present, returns a single-element IOTestCase array.
- * When no settings are present, returns an empty array.
- *
- * Exported for testing.
- */
-export function buildTestCasesFromExecutionSettings(opts: {
-  stdin?: string;
-  random_seed?: number;
-  attached_files?: WireFile[];
-}): IOTestCase[] {
-  const hasStdin = opts.stdin !== undefined && opts.stdin.trim() !== '';
-  const hasRandomSeed = opts.random_seed !== undefined;
-  const hasFiles = opts.attached_files !== undefined && opts.attached_files.length > 0;
-
-  if (!hasStdin && !hasRandomSeed && !hasFiles) {
-    return [];
-  }
-
-  const tc: IOTestCase = {
-    name: 'Default',
-    input: opts.stdin?.trim() || '',
-    match_type: 'exact',
-    order: 0,
-  };
-  if (hasRandomSeed) tc.random_seed = opts.random_seed;
-  if (hasFiles) tc.attached_files = opts.attached_files;
-
-  return [tc];
-}
+import { extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
