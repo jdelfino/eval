@@ -15,7 +15,6 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     description: 'A test problem description',
     starter_code: null,
     test_cases: null,
-    execution_settings: null,
     solution: null,
     namespace_id: 'test-namespace',
     author_id: 'author-1',
@@ -237,7 +236,26 @@ factorial(5)  # Returns 120
   describe('Execution settings', () => {
     it('displays random seed when set', () => {
       const problem = createProblem({
-        execution_settings: { random_seed: 42 },
+        test_cases: [
+          {
+            id: 'tc-1',
+            problem_id: 'test-problem-1',
+            type: 'input-output',
+            name: 'Default',
+            description: '',
+            visible: true,
+            order: 0,
+            config: {
+              type: 'input-output',
+              data: {
+                input: '',
+                expected_output: '',
+                match_type: 'exact',
+              },
+            },
+            random_seed: 42,
+          },
+        ],
       });
       render(<ProblemDisplay problem={problem} />);
       expect(screen.getByText(/Random seed: 42/)).toBeInTheDocument();
@@ -245,12 +263,29 @@ factorial(5)  # Returns 120
 
     it('displays attached files count when files exist', () => {
       const problem = createProblem({
-        execution_settings: {
-          attached_files: [
-            { name: 'data.txt', content: 'data' },
-            { name: 'config.json', content: '{}' },
-          ],
-        },
+        test_cases: [
+          {
+            id: 'tc-1',
+            problem_id: 'test-problem-1',
+            type: 'input-output',
+            name: 'Default',
+            description: '',
+            visible: true,
+            order: 0,
+            config: {
+              type: 'input-output',
+              data: {
+                input: '',
+                expected_output: '',
+                match_type: 'exact',
+              },
+            },
+            attached_files: [
+              { name: 'data.txt', content: 'data' },
+              { name: 'config.json', content: '{}' },
+            ],
+          },
+        ],
       });
       render(<ProblemDisplay problem={problem} />);
       expect(screen.getByText(/2 file\(s\) attached/)).toBeInTheDocument();

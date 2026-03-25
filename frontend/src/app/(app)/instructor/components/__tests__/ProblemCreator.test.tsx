@@ -491,13 +491,6 @@ describe('ProblemCreator Component', () => {
     it('should load execution settings when editing and pass to CodeEditor', async () => {
       const problemWithExecSettings = {
         ...mockExistingProblem,
-        execution_settings: {
-          stdin: '1\n2\n3\n',
-          random_seed: 99,
-          attached_files: [
-            { name: 'input.txt', content: 'file content here' }
-          ],
-        },
       };
 
       const { getProblem } = require('@/lib/api/problems');

@@ -132,7 +132,6 @@ describe('InstructorSessionPage', () => {
       title: 'Test Problem',
       description: 'A test problem',
       starter_code: 'print("Hello")',
-      execution_settings: { stdin: 'test' },
     },
   };
 
@@ -510,7 +509,6 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
-          execution_settings: { stdin: 'test input', random_seed: 42 },
         },
       ];
 
@@ -532,7 +530,6 @@ describe('InstructorSessionPage', () => {
           user_id: 'student-1',
           name: 'Alice',
           code: 'print("Hello")',
-          execution_settings: {},
           last_update: lastUpdate,
         },
       ];

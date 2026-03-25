@@ -17,7 +17,6 @@ describe('Session type hierarchy', () => {
       description: 'A test problem',
       starter_code: 'print("hello")',
       test_cases: null,
-      execution_settings: null,
       author_id: 'u-1',
       class_id: null,
       tags: [],

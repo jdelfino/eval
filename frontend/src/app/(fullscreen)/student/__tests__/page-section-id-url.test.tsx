@@ -102,7 +102,6 @@ const fakeStudentWork = {
   section_id: 'section-1',
   problem_id: 'problem-1',
   code: 'print("hello")',
-  execution_settings: null,
   last_update: '2024-01-01T00:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
   problem: {
@@ -112,7 +111,6 @@ const fakeStudentWork = {
     description: 'Test description',
     starter_code: '',
     test_cases: null,
-    execution_settings: {},
     author_id: 'instructor-1',
     class_id: 'class-1',
     tags: [],

@@ -135,7 +135,6 @@ describe('useSessionOperations', () => {
       class_id: null,
       tags: [],
       test_cases: null,
-      execution_settings: null,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     };

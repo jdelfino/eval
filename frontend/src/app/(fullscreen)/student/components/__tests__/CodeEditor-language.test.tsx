@@ -71,7 +71,6 @@ describe('CodeEditor - Language Awareness', () => {
     description: 'Test description',
     starter_code: 'print("hello")',
     test_cases: [],
-    execution_settings: null,
     author_id: 'test-author',
     namespace_id: 'ns-1',
     class_id: null,

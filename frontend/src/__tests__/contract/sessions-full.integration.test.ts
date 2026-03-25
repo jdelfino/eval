@@ -90,7 +90,6 @@ describe('Sessions Full API', () => {
         class_id: null,
         tags: [],
         test_cases: null,
-        execution_settings: null,
         created_at: '',
         updated_at: '',
       };
@@ -113,7 +112,6 @@ describe('Sessions Full API', () => {
         class_id: null,
         tags: [],
         test_cases: { stdin: 'test input', random_seed: 42 },
-        execution_settings: null,
         created_at: '',
         updated_at: '',
       };

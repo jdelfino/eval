@@ -19,6 +19,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
+import { extractExecutionSettingsFromTestCases } from '@/types/problem';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -108,8 +109,8 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings
-      const execSettings = problem.execution_settings;
+      // Load execution settings from test_cases[0]
+      const execSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
       setStdin(execSettings?.stdin || '');
       setRandomSeed(execSettings?.random_seed);
       setAttachedFiles(execSettings?.attached_files || []);

@@ -20,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
@@ -127,7 +127,9 @@ export default function InstructorSessionPage() {
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    setSessionExecutionSettings(realtimeSession.problem?.execution_settings || {});
+    setSessionExecutionSettings(
+      extractExecutionSettingsFromTestCases(realtimeSession.problem?.test_cases) || {}
+    );
   }, [realtimeSession]);
 
   // Show connection status in the global header

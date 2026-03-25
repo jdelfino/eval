@@ -60,6 +60,8 @@ export interface TestCase {
   visible: boolean;
   order: number;
   config: TestConfig;
+  random_seed?: number;
+  attached_files?: Array<{ name: string; content: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +75,6 @@ export interface Problem {
   description: string | null;
   starter_code: string | null;
   test_cases: TestCase[] | ExecutionSettings | null;
-  execution_settings: ExecutionSettings | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -104,8 +105,54 @@ export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
     test_cases: api.test_cases,
-    execution_settings: api.execution_settings as ExecutionSettings | null,
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Execution Settings Extraction (PLAT-u90)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract ExecutionSettings from test_cases[0].
+ *
+ * After migration 020, execution_settings was consolidated into test_cases.
+ * The backend stores stdin as `input`, random_seed, and attached_files in test_cases[0].
+ * This helper extracts those fields back into ExecutionSettings format for the frontend.
+ *
+ * @param testCases - The test_cases array from a Problem
+ * @returns ExecutionSettings object with stdin, random_seed, attached_files
+ */
+export function extractExecutionSettingsFromTestCases(
+  testCases: TestCase[] | ExecutionSettings | null | undefined
+): ExecutionSettings {
+  if (!testCases || (Array.isArray(testCases) && testCases.length === 0)) {
+    return {
+      stdin: undefined,
+      random_seed: undefined,
+      attached_files: undefined,
+    };
+  }
+
+  // If testCases is already ExecutionSettings format, return as-is
+  if (!Array.isArray(testCases)) {
+    return testCases;
+  }
+
+  // Backend IOTestCase wire format has top-level fields: input, random_seed, attached_files.
+  // The rich client TestCase type nests input inside config.data — check both shapes.
+  const firstCase = testCases[0] as any;
+
+  // Prefer top-level input (IOTestCase wire format), fall back to config.data.input (rich TestCase)
+  const stdin: string | undefined =
+    firstCase.input !== undefined ? firstCase.input :
+    firstCase.config?.data?.input !== undefined ? firstCase.config.data.input :
+    undefined;
+
+  return {
+    stdin,
+    random_seed: firstCase.random_seed,
+    attached_files: firstCase.attached_files,
   };
 }

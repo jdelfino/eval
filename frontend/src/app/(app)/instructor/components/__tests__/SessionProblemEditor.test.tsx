@@ -18,7 +18,6 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     solution: null,
     language: 'python',
     test_cases: null,
-    execution_settings: null,
     author_id: 'test-author',
     class_id: null,
     tags: [],

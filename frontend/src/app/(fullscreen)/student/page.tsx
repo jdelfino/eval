@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings } from '@/types/problem';
+import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import type { TestResponse } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
@@ -37,10 +37,7 @@ function StudentPage() {
   const [problemId, setProblemId] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
-  const [studentExecutionSettings, setStudentExecutionSettings] = useState<{
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  } | null>(null);
+  const [studentExecutionSettings, setStudentExecutionSettings] = useState<ExecutionSettings | null>(null);
 
   // Breadcrumb state
   const [sectionName, setSectionName] = useState<string | null>(null);
@@ -117,6 +114,11 @@ function StudentPage() {
         setProblemId(data.problem_id);
         setProblem(data.problem);
         setCode(data.code);
+
+        // Restore execution settings from test_cases (IOTestCase wire format)
+        if (data.test_cases && Array.isArray(data.test_cases) && data.test_cases.length > 0) {
+          setStudentExecutionSettings(extractExecutionSettingsFromTestCases(data.test_cases as any));
+        }
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
         setMode('error');
@@ -235,7 +237,7 @@ function StudentPage() {
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        execution_settings: studentExecutionSettings || undefined,
+        test_cases: studentExecutionSettings || undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });
@@ -406,7 +408,7 @@ function StudentPage() {
     );
   }
 
-  const sessionExecutionSettings = problem?.execution_settings || {};
+  const sessionExecutionSettings = extractExecutionSettingsFromTestCases(problem?.test_cases) || {};
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
@@ -463,11 +465,11 @@ function StudentPage() {
           onRun={handleRunCode}
           isRunning={isRunning}
           defaultExecutionSettings={{
-            stdin: sessionExecutionSettings.stdin,
+            stdin: studentExecutionSettings?.stdin !== undefined ? studentExecutionSettings.stdin : sessionExecutionSettings.stdin,
             random_seed: studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed,
             attached_files: studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files,
           }}
-          onExecutionSettingsChange={(settings) => setStudentExecutionSettings(prev => ({ ...prev, random_seed: settings.random_seed, attached_files: settings.attached_files }))}
+          onExecutionSettingsChange={setStudentExecutionSettings}
           execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}
