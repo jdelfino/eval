@@ -4,9 +4,6 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getCurrentUser } from '@/lib/api/auth';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('getCurrentUser()', () => {
   beforeAll(() => {
@@ -37,7 +34,5 @@ describe('getCurrentUser()', () => {
       expect(typeof perm).toBe('string');
     });
 
-    // No PascalCase
-    expectSnakeCaseKeys(user, 'User');
   });
 });

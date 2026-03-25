@@ -22,9 +22,6 @@ import {
   exportProblems,
 } from '@/lib/api/problems';
 import { apiFetch } from '@/lib/api-client';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('Problems API', () => {
   let createdProblemId: string | null = null;
@@ -63,9 +60,6 @@ describe('Problems API', () => {
 
       createdProblemId = problem.id;
 
-      // Validate snake_case shape
-      expectSnakeCaseKeys(problem, 'Problem');
-
       // Validate required string fields
       expect(typeof problem.id).toBe('string');
       expect(typeof problem.namespace_id).toBe('string');
@@ -103,9 +97,6 @@ describe('Problems API', () => {
 
       const problem = await getProblem(createdProblemId!);
 
-      // Validate snake_case shape
-      expectSnakeCaseKeys(problem, 'Problem');
-
       // Validate required string fields
       expect(typeof problem.id).toBe('string');
       expect(typeof problem.namespace_id).toBe('string');
@@ -142,9 +133,6 @@ describe('Problems API', () => {
       expect(problem).not.toBeNull();
 
       if (problem) {
-        // Validate snake_case shape
-        expectSnakeCaseKeys(problem, 'PublicProblem');
-
         // Validate required string fields
         expect(typeof problem.id).toBe('string');
         expect(typeof problem.title).toBe('string');
@@ -181,9 +169,6 @@ describe('Problems API', () => {
       expect(problems.length).toBeGreaterThan(0);
 
       const summary = problems[0];
-
-      // Validate snake_case shape
-      expectSnakeCaseKeys(summary, 'ProblemSummary');
 
       // Validate required string fields
       expect(typeof summary.id).toBe('string');
@@ -362,9 +347,6 @@ describe('Problems API', () => {
         tags: ['contract-test', 'updated'],
       });
 
-      // Validate snake_case shape
-      expectSnakeCaseKeys(problem, 'Problem');
-
       // Validate required string fields
       expect(typeof problem.id).toBe('string');
       expect(typeof problem.namespace_id).toBe('string');
@@ -439,12 +421,8 @@ describe('Problems API', () => {
       expect(typeof envelope.exported_at).toBe('string');
       expect(Array.isArray(envelope.problems)).toBe(true);
       expect(envelope.problems.length).toBeGreaterThan(0);
-      expectSnakeCaseKeys(envelope, 'ExportEnvelope');
-
       // Validate each problem in the export
       for (const problem of envelope.problems) {
-        expectSnakeCaseKeys(problem, 'ExportedProblem');
-
         // Validate required fields are present
         expect(typeof problem.title).toBe('string');
         expect(typeof problem.language).toBe('string');

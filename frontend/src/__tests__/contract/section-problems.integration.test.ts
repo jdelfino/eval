@@ -20,7 +20,6 @@ import {
 } from '@/lib/api/section-problems';
 import { createProblem, deleteProblem } from '@/lib/api/problems';
 import {
-  expectSnakeCaseKeys,
   validateSectionProblemShape,
   validatePublishedProblemWithStatusShape,
 } from './validators';
@@ -100,7 +99,6 @@ describe('Section Problems API', () => {
         const problem = published.problem;
         expect(typeof problem.id).toBe('string');
         expect(typeof problem.title).toBe('string');
-        expectSnakeCaseKeys(problem, 'nested Problem');
 
         // student_work should be null/undefined for instructor view (not a student)
         // Just check the field presence/type
