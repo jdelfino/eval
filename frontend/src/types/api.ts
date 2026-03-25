@@ -136,7 +136,7 @@ export interface Revision {
   diff: string | null;
   full_code: string | null;
   base_revision_id: string | null;
-  execution_result: TestResponse | null;
+  execution_result: import('@/lib/api/tests').TestResponse | null;
   student_work_id: string | null; // Go *uuid.UUID, always serialized (no omitempty)
 }
 
@@ -310,8 +310,9 @@ export interface StudentWorkSummary {
 // Execution — Cases[] protocol
 // ---------------------------------------------------------------------------
 
-// TestResponse, TestSummary, and TestResult are defined in @/lib/api/tests
-// (strict types with TestStatus union). Import from there, not from here.
+// Re-export TestResponse and TestSummary from @/lib/api/tests for consumers
+// that import from @/types/api (e.g. validators, Revision.execution_result).
+export type { TestResponse, TestSummary } from '@/lib/api/tests';
 
 /** @deprecated Use TestResponse instead. Legacy flat execution result shape. */
 export interface ExecutionResult {

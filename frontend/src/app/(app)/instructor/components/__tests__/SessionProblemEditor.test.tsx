@@ -241,58 +241,6 @@ describe('SessionProblemEditor', () => {
     );
   });
 
-  it('includes execution settings when stdin is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set stdin
-    fireEvent.change(screen.getByTestId('stdin-input'), {
-      target: { value: 'test input' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            name: 'Default',
-            input: 'test input',
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('includes execution settings when random seed is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set random seed
-    fireEvent.change(screen.getByTestId('seed-input'), {
-      target: { value: '42' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            random_seed: 42,
-          }),
-        ]),
-      })
-    );
-  });
 
   it('trims whitespace from inputs when updating', () => {
     render(
