@@ -66,6 +66,22 @@ export async function updateSessionProblem(
 }
 
 /**
+ * Update a session's problem inline with partial problem data.
+ * Used when only some problem fields (e.g. title, description, starter_code) need updating.
+ * The backend accepts any JSON object for the problem field (stored as raw JSON).
+ * @param sessionId - The session ID
+ * @param problem - Partial problem fields to set
+ */
+export async function updateSessionProblemPartial(
+  sessionId: string,
+  problem: Partial<Pick<Problem, 'title' | 'description' | 'starter_code' | 'solution' | 'tags' | 'language' | 'test_cases' | 'execution_settings'>>
+): Promise<void> {
+  await apiPost(`/sessions/${sessionId}/update-problem`, {
+    problem,
+  });
+}
+
+/**
  * List session history for the current user.
  * @returns Array of Session objects (backend returns plain array)
  */
