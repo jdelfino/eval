@@ -18,7 +18,8 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   }
 
   const hasStarterCode = !!problem.starter_code;
-  const hasTestCases = problem.test_cases && problem.test_cases.length > 0;
+  const testCasesArray = Array.isArray(problem.test_cases) ? problem.test_cases : null;
+  const hasTestCases = testCasesArray && testCasesArray.length > 0;
   const hasDescription = !!problem.description;
 
   return (
@@ -76,11 +77,11 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
               className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
             >
               <span>{showTestCases ? '▼' : '▶'}</span>
-              <span>Test Cases ({problem.test_cases!.length})</span>
+              <span>Test Cases ({testCasesArray!.length})</span>
             </button>
             {showTestCases && (
               <div className="mt-2 space-y-2">
-                {problem.test_cases!.map((testCase, index) => (
+                {testCasesArray!.map((testCase, index) => (
                   <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">

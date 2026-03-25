@@ -8,6 +8,8 @@
 
 import { updateSessionProblem, featureCode } from '@/lib/api/sessions';
 import { apiPost } from '@/lib/api-client';
+import type { Problem } from '@/types/api';
+import type { ExecutionSettings } from '@/types/problem';
 
 jest.mock('@/lib/api-client');
 
@@ -20,12 +22,20 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
 
   it('should send complete problem object including solution, language, and test_cases', async () => {
     const sessionId = 'session-123';
-    const completeProblem = {
+    const completeProblem: Problem = {
+      id: 'prob-123',
+      namespace_id: 'ns-1',
       title: 'Updated Problem',
       description: 'Updated description',
       starter_code: 'def solve():\n    pass',
       solution: 'def solve():\n    return 42',
       language: 'python',
+      author_id: 'user-1',
+      class_id: null,
+      tags: [],
+      execution_settings: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
           id: 'tc-1',
@@ -68,12 +78,20 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
 
   it('should NOT send execution_settings as a separate field', async () => {
     const sessionId = 'session-123';
-    const problem = {
+    const problem: Problem = {
+      id: 'prob-1',
+      namespace_id: 'ns-1',
       title: 'Problem',
       description: 'Description',
       starter_code: 'code',
       solution: 'solution',
       language: 'python',
+      author_id: 'user-1',
+      class_id: null,
+      tags: [],
+      execution_settings: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
       test_cases: [],
     };
 
@@ -90,12 +108,20 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
     const sessionId = 'session-123';
     // Simulating an update scenario where we have an initial problem
     // and we're only changing title, but must send ALL fields
-    const initialProblem = {
+    const initialProblem: Problem = {
+      id: 'prob-123',
+      namespace_id: 'ns-1',
       title: 'Original Title',
       description: 'Original description',
       starter_code: 'original code',
       solution: 'original solution',
       language: 'python',
+      author_id: 'user-1',
+      class_id: null,
+      tags: ['tag1'],
+      execution_settings: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
           id: 'tc-1',
@@ -145,7 +171,7 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
   it('should accept and send test_cases parameter when featuring code', async () => {
     const sessionId = 'session-123';
     const code = 'def solution():\n    return 42';
-    const testCases = {
+    const testCases: ExecutionSettings = {
       stdin: 'input data',
       random_seed: 42,
       attached_files: [{ name: 'data.txt', content: 'test data' }],
@@ -177,7 +203,7 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
   it('should send test_cases when featuring solution with execution settings', async () => {
     const sessionId = 'session-123';
     const solution = 'def solve(n):\n    return n * 2';
-    const testCases = {
+    const testCases: ExecutionSettings = {
       stdin: '5\n',
       random_seed: 99,
     };
@@ -224,24 +250,24 @@ describe('PLAT-fun: Public view passes all execution settings', () => {
   });
 
   it('should handle missing execution settings gracefully', () => {
-    const featuredTestCases: Record<string, unknown> | null = null;
+    const featuredTestCases: ExecutionSettings | null = null;
 
-    const executionSettings = featuredTestCases || {} as Record<string, unknown>;
+    const executionSettings: ExecutionSettings = featuredTestCases || {};
 
-    expect(executionSettings['stdin']).toBeUndefined();
-    expect(executionSettings['random_seed']).toBeUndefined();
-    expect(executionSettings['attached_files']).toBeUndefined();
+    expect(executionSettings.stdin).toBeUndefined();
+    expect(executionSettings.random_seed).toBeUndefined();
+    expect(executionSettings.attached_files).toBeUndefined();
   });
 
   it('should handle partial execution settings', () => {
-    const featuredTestCases: Record<string, unknown> = {
+    const featuredTestCases: ExecutionSettings = {
       stdin: 'only stdin',
     };
 
-    const executionSettings = {
-      stdin: featuredTestCases['stdin'],
-      random_seed: featuredTestCases['random_seed'],
-      attached_files: featuredTestCases['attached_files'],
+    const executionSettings: ExecutionSettings = {
+      stdin: featuredTestCases.stdin,
+      random_seed: featuredTestCases.random_seed,
+      attached_files: featuredTestCases.attached_files,
     };
 
     expect(executionSettings.stdin).toBe('only stdin');

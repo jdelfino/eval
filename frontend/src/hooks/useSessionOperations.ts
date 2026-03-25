@@ -13,7 +13,7 @@ import {
   endSession as apiEndSession,
   updateSessionProblem as apiUpdateSessionProblem,
 } from '@/lib/api/sessions';
-import type { Session } from '@/types/api';
+import type { Session, Problem } from '@/types/api';
 
 export function useSessionOperations() {
   const [loading, setLoading] = useState(false);
@@ -71,7 +71,7 @@ export function useSessionOperations() {
   const updateProblem = useCallback(
     async (
       session_id: string,
-      problem: Record<string, unknown>
+      problem: Problem
     ): Promise<void> => {
       setLoading(true);
       setError(null);

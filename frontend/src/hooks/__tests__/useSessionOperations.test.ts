@@ -123,15 +123,21 @@ describe('useSessionOperations', () => {
   });
 
   describe('updateProblem', () => {
-    const mockProblem = {
+    const mockProblem: import('@/types/api').Problem = {
+      id: 'prob-1',
+      namespace_id: 'ns-1',
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'print("test")',
-    };
-
-    const mockSettings = {
-      stdin: 'test input',
-      random_seed: 42,
+      solution: null,
+      language: 'python',
+      author_id: 'user-1',
+      class_id: null,
+      tags: [],
+      test_cases: null,
+      execution_settings: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
     };
 
     it('updates a problem successfully', async () => {
@@ -148,7 +154,7 @@ describe('useSessionOperations', () => {
       });
     });
 
-    it('updates problem without execution settings', async () => {
+    it('sends only the problem field (no separate execution_settings)', async () => {
       mockApiPost.mockResolvedValueOnce({});
 
       const { result } = renderHook(() => useSessionOperations());
@@ -157,10 +163,9 @@ describe('useSessionOperations', () => {
         await result.current.updateProblem('session-1', mockProblem);
       });
 
-      expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
-        problem: mockProblem,
-        execution_settings: undefined,
-      });
+      const callArgs = mockApiPost.mock.calls[0][1] as { problem: import('@/types/api').Problem };
+      expect(callArgs).toHaveProperty('problem');
+      expect(callArgs).not.toHaveProperty('execution_settings');
     });
 
     it('sets error when update fails', async () => {

@@ -53,8 +53,9 @@ describe('Problem type hierarchy', () => {
     const client = mapApiProblem(apiProblem);
     expect(client.test_cases).toBeDefined();
     expect(Array.isArray(client.test_cases)).toBe(true);
-    expect(client.test_cases![0].id).toBe('tc-1');
-    expect(client.test_cases![0].type).toBe('input-output');
+    const tcArray = client.test_cases as import('@/types/problem').TestCase[];
+    expect(tcArray[0].id).toBe('tc-1');
+    expect(tcArray[0].type).toBe('input-output');
   });
 
   it('mapApiProblem types execution_settings as ExecutionSettings', () => {

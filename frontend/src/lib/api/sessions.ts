@@ -7,7 +7,8 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Session, Revision, SessionPublicState } from '@/types/api';
+import type { Session, Revision, SessionPublicState, Problem } from '@/types/api';
+import type { ExecutionSettings } from '@/types/problem';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -22,7 +23,9 @@ export async function createSession(
   problemId?: string,
   showSolution?: boolean
 ): Promise<Session> {
-  const body: Record<string, unknown> = { section_id: sectionId };
+  const body: { section_id: string; problem_id?: string; show_solution?: boolean } = {
+    section_id: sectionId,
+  };
   if (problemId) {
     body.problem_id = problemId;
   }
@@ -55,7 +58,7 @@ export async function completeSession(sessionId: string): Promise<void> {
  */
 export async function updateSessionProblem(
   sessionId: string,
-  problem: Record<string, unknown>
+  problem: Problem
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/update-problem`, {
     problem,
@@ -200,9 +203,9 @@ export async function analyzeSession(
 export async function featureCode(
   sessionId: string,
   code: string,
-  testCases?: Record<string, unknown>
+  testCases?: ExecutionSettings
 ): Promise<void> {
-  const body: Record<string, unknown> = { code };
+  const body: { code: string; test_cases?: ExecutionSettings } = { code };
   if (testCases !== undefined) {
     body.test_cases = testCases;
   }

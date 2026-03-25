@@ -12,18 +12,15 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem } from '@/types/problem';
+import { Problem, ExecutionSettings } from '@/types/problem';
+import type { Problem as ApiProblem } from '@/types/api';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
-  onUpdateProblem: (problem: Record<string, unknown>) => void;
-  initialProblem?: Problem | { title: string; description: string; starter_code: string; solution?: string | null } | null;
-  initialExecutionSettings?: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
+  onUpdateProblem: (problem: ApiProblem) => void;
+  initialProblem?: Problem | null;
+  initialExecutionSettings?: ExecutionSettings;
   onFeatureSolution?: () => void;
 }
 
@@ -36,11 +33,11 @@ export default function SessionProblemEditor({
   const [title, setTitle] = useState(initialProblem?.title || '');
   const [description, setDescription] = useState(initialProblem?.description || '');
   const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
-  const initialSolution = useMemo(() => (initialProblem as Problem | null)?.solution ?? '', [initialProblem]);
+  const initialSolution = useMemo(() => initialProblem?.solution ?? '', [initialProblem]);
   const [solution, setSolution] = useState<string>(initialSolution);
   const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
-  const language = (initialProblem as Problem | null)?.language ?? 'python';
+  const language = initialProblem?.language ?? 'python';
 
   // Execution settings
   const [stdin, setStdin] = useState(initialExecutionSettings?.stdin || '');
@@ -111,34 +108,50 @@ export default function SessionProblemEditor({
   }, [showSolutionViewer, handleCloseSolutionViewer]);
 
   const handleUpdate = () => {
-    // Build complete problem object including ALL fields from initialProblem
-    // plus any edited fields. The backend stores this as-is, so we must send
-    // a complete snapshot to avoid data loss.
-    const completeProblem: Record<string, unknown> = {
+    // Build complete problem by spreading the initial problem (preserves id,
+    // namespace_id, author_id, tags, etc.) then overriding with form values.
+    // The backend stores the full object as-is in session JSONB.
+    const base = initialProblem;
+
+    // Build execution settings from form state
+    const execSettings: ExecutionSettings = {};
+    if (stdin.trim()) execSettings.stdin = stdin.trim();
+    if (random_seed !== undefined) execSettings.random_seed = random_seed;
+    if (attached_files.length > 0) execSettings.attached_files = attached_files;
+
+    // Determine test_cases: new execution settings, or preserve existing
+    const hasNewSettings = Object.keys(execSettings).length > 0;
+    const test_cases = hasNewSettings
+      ? execSettings
+      : (base?.test_cases ?? null);
+
+    const problem: ApiProblem = {
+      // Defaults for inline problem creation (no initial problem)
+      id: '',
+      namespace_id: '',
+      author_id: '',
+      class_id: null,
+      tags: [],
+      execution_settings: null,
+      created_at: '',
+      updated_at: '',
+      // Spread original problem to preserve all existing fields.
+      // Convert Date timestamps to ISO strings for the wire format.
+      ...(base ? {
+        ...base,
+        created_at: base.created_at instanceof Date ? base.created_at.toISOString() : String(base.created_at),
+        updated_at: base.updated_at instanceof Date ? base.updated_at.toISOString() : String(base.updated_at),
+      } : {}),
+      // Override with edited form values
       title: title.trim(),
-      description: description.trim(),
-      starter_code: starter_code.trim(),
-      solution: solution,
+      description: description.trim() || null,
+      starter_code: starter_code.trim() || null,
+      solution: solution || null,
       language: language,
+      test_cases,
     };
 
-    // Convert execution settings state to test_cases format
-    // The problem snapshot stores test_cases, not a separate execution_settings field
-    const execution_settings: any = {};
-    if (stdin.trim()) execution_settings.stdin = stdin.trim();
-    if (random_seed !== undefined) execution_settings.random_seed = random_seed;
-    if (attached_files.length > 0) execution_settings.attached_files = attached_files;
-
-    // If we have execution settings, include them as test_cases
-    // The backend stores test_cases in the problem JSONB
-    if (Object.keys(execution_settings).length > 0) {
-      completeProblem.test_cases = execution_settings;
-    } else if ((initialProblem as Problem | null)?.test_cases) {
-      // Preserve existing test_cases if no new execution settings
-      completeProblem.test_cases = (initialProblem as Problem).test_cases;
-    }
-
-    onUpdateProblem(completeProblem);
+    onUpdateProblem(problem);
   };
 
   const debuggerHook = useApiDebugger();

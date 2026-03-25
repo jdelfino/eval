@@ -11,10 +11,11 @@ import { Card } from '@/components/ui/Card';
 import { PanelErrorBoundary } from './PanelError';
 import SessionProblemEditor from './SessionProblemEditor';
 import { Problem } from '@/types/problem';
+import type { Problem as ApiProblem } from '@/types/api';
 
 interface ProblemSetupPanelProps {
   /** Callback when problem is updated (receives complete problem snapshot) */
-  onUpdateProblem: (problem: Record<string, unknown>) => void;
+  onUpdateProblem: (problem: ApiProblem) => void;
   /** Initial problem data */
   initialProblem?: Problem | null;
   /** Initial execution settings */

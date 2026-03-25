@@ -78,10 +78,21 @@ describe('Sessions Full API', () => {
   // -----------------------------------------------------------------------
   describe('updateSessionProblem()', () => {
     it('resolves without throwing when updating problem', async () => {
-      const problem = {
+      const problem: import('@/types/api').Problem = {
+        id: '',
+        namespace_id: '',
         title: 'Contract Test Problem',
         description: 'A problem created during contract testing',
         starter_code: 'print("hello")',
+        solution: null,
+        language: 'python',
+        author_id: '',
+        class_id: null,
+        tags: [],
+        test_cases: null,
+        execution_settings: null,
+        created_at: '',
+        updated_at: '',
       };
 
       await expect(
@@ -90,12 +101,21 @@ describe('Sessions Full API', () => {
     });
 
     it('resolves without throwing when updating problem with execution settings in test_cases', async () => {
-      const problem = {
+      const problem: import('@/types/api').Problem = {
+        id: '',
+        namespace_id: '',
         title: 'Contract Test Problem v2',
         description: 'Updated problem with execution settings',
         starter_code: 'print("world")',
+        solution: null,
         language: 'python',
+        author_id: '',
+        class_id: null,
+        tags: [],
         test_cases: { stdin: 'test input', random_seed: 42 },
+        execution_settings: null,
+        created_at: '',
+        updated_at: '',
       };
 
       await expect(

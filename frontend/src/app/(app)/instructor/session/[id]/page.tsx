@@ -21,6 +21,7 @@ import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { Problem, ExecutionSettings } from '@/types/problem';
+import type { Problem as ApiProblem } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -173,7 +174,7 @@ export default function InstructorSessionPage() {
   }, [session_id, apiEndSession, router]);
 
   const handleUpdateProblem = useCallback(async (
-    problem: Record<string, unknown>
+    problem: ApiProblem
   ) => {
     if (!session_id) return;
 
