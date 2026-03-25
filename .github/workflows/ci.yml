@@ -427,6 +427,7 @@ jobs:
           DATABASE_PASSWORD: eval_local_password
           CENTRIFUGO_TOKEN_SECRET: test-contract-secret
           EXECUTOR_URL: http://localhost:8081
+          RATE_LIMIT_DISABLED: 'true'
         run: |
           PORT=$(shuf -i 10000-60000 -n 1)
           echo "PORT=$PORT" >> "$GITHUB_ENV"
