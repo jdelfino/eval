@@ -251,6 +251,44 @@ describe('PLAT-fun: Public view passes all execution settings', () => {
     expect(executionSettings.random_seed).toBeUndefined();
     expect(executionSettings.attached_files).toBeUndefined();
   });
+
+  it('should extract attached_files from IOTestCase[] format (PLAT-ao5)', () => {
+    // When featuring a solution, featured_test_cases may arrive as IOTestCase[]
+    // (the wire format from the backend), not as an ExecutionSettings object.
+    // extractExecutionSettingsFromTestCases must handle both shapes.
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+
+    const ioTestCases = [
+      {
+        name: 'Default',
+        input: 'test stdin',
+        match_type: 'exact',
+        random_seed: 42,
+        attached_files: [{ name: 'data.txt', content: 'hello' }],
+      },
+    ];
+
+    const result = extractExecutionSettingsFromTestCases(ioTestCases);
+    expect(result.stdin).toBe('test stdin');
+    expect(result.random_seed).toBe(42);
+    expect(result.attached_files).toEqual([{ name: 'data.txt', content: 'hello' }]);
+  });
+
+  it('should extract attached_files from ExecutionSettings format (PLAT-ao5)', () => {
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+
+    // When featured_test_cases is already ExecutionSettings shape
+    const execSettings = {
+      stdin: 'test stdin',
+      random_seed: 42,
+      attached_files: [{ name: 'data.txt', content: 'hello' }],
+    };
+
+    const result = extractExecutionSettingsFromTestCases(execSettings);
+    expect(result.stdin).toBe('test stdin');
+    expect(result.random_seed).toBe(42);
+    expect(result.attached_files).toEqual([{ name: 'data.txt', content: 'hello' }]);
+  });
 });
 
 describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
