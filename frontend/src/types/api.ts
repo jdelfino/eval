@@ -95,10 +95,10 @@ export interface Session {
   namespace_id: string;
   section_id: string;
   section_name: string;
-  problem: Problem | null;
+  problem: Problem | null; // full Problem, or null/empty for blank sessions
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases?: import('./problem').ExecutionSettings; // Matches Go FeaturedTestCases field
+  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized (no omitempty)
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -137,6 +137,7 @@ export interface Revision {
   full_code: string | null;
   base_revision_id: string | null;
   execution_result: TestResponse | null;
+  student_work_id: string | null; // Go *uuid.UUID, always serialized (no omitempty)
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +175,7 @@ export interface SessionPublicState {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Matches Go FeaturedTestCases field
+  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized
   join_code: string;
   status: string;
 }

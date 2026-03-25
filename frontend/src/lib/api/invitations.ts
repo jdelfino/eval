@@ -32,6 +32,7 @@ export interface SerializedInvitation {
   consumed_by: string | null;
   revoked_at: string | null;
   status: InvitationStatus;
+  email_sent?: boolean; // Present on create/resend responses (Go createInvitationResponse wrapper)
 }
 
 /**

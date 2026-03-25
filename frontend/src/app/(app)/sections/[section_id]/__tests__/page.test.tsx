@@ -92,6 +92,7 @@ const activeSession = {
   participants: ['student-1'],
   featured_student_id: null,
   featured_code: null,
+  featured_test_cases: null,
   creator_id: 'user-1',
 };
 
@@ -108,6 +109,7 @@ const pastSession = {
   participants: ['student-1', 'student-2'],
   featured_student_id: null,
   featured_code: null,
+  featured_test_cases: null,
   creator_id: 'user-1',
 };
 

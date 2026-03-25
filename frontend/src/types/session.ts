@@ -90,6 +90,7 @@ export function mapApiSession(api: ApiSession): {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
+  featured_test_cases: import('./problem').ExecutionSettings | null;
   creator_id: string;
   participants: string[];
   status: 'active' | 'completed';

@@ -27,6 +27,7 @@ describe('Session type hierarchy', () => {
     },
     featured_student_id: 'u-2',
     featured_code: 'print("hi")',
+    featured_test_cases: null,
     creator_id: 'u-1',
     participants: ['u-1', 'u-2'],
     status: 'active',
