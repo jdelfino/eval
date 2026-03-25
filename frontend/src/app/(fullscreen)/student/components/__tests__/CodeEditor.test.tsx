@@ -62,10 +62,13 @@ jest.mock('@monaco-editor/react', () => {
 // ---------------------------------------------------------------------------
 
 jest.mock('../ExecutionSettings', () => {
-  return function MockExecutionSettings({ inSidebar }: { inSidebar?: boolean }) {
+  return function MockExecutionSettings({ inSidebar, onStdinChange, onRandomSeedChange, onAttachedFilesChange }: { inSidebar?: boolean; onStdinChange?: (v: string) => void; onRandomSeedChange?: (v: number | undefined) => void; onAttachedFilesChange?: (v: Array<{ name: string; content: string }>) => void }) {
     return (
       <div data-testid="execution-settings" data-in-sidebar={inSidebar}>
         Execution Settings {inSidebar ? '(Sidebar)' : '(Bottom)'}
+        <button data-testid="mock-change-stdin" onClick={() => onStdinChange?.('test-input')}>Change Stdin</button>
+        <button data-testid="mock-change-seed" onClick={() => onRandomSeedChange?.(99)}>Change Seed</button>
+        <button data-testid="mock-change-files" onClick={() => onAttachedFilesChange?.([{ name: 'f.txt', content: 'data' }])}>Change Files</button>
       </div>
     );
   };
@@ -1429,10 +1432,10 @@ describe('CodeEditor - execution settings internal state', () => {
     });
   });
 
-  it('passes random_seed prop to onRun', () => {
+  it('passes random_seed from defaultExecutionSettings to onRun', () => {
     const mockOnRun = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={42} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 42 }} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     expect(mockOnRun).toHaveBeenCalledWith({
@@ -1442,11 +1445,11 @@ describe('CodeEditor - execution settings internal state', () => {
     });
   });
 
-  it('passes attached_files prop to onRun', () => {
+  it('passes attached_files from defaultExecutionSettings to onRun', () => {
     const mockOnRun = jest.fn();
     const files = [{ name: 'data.txt', content: 'hello' }];
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} attached_files={files} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ attached_files: files }} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     expect(mockOnRun).toHaveBeenCalledWith({
@@ -1456,19 +1459,75 @@ describe('CodeEditor - execution settings internal state', () => {
     });
   });
 
-  it('uses updated random_seed when prop changes', () => {
+  it('uses updated random_seed when defaultExecutionSettings changes', () => {
     const mockOnRun = jest.fn();
     const { rerender } = render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={1} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 1 }} />
     );
     rerender(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} random_seed={99} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 99 }} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     expect(mockOnRun).toHaveBeenCalledWith({
       stdin: undefined,
       random_seed: 99,
       attached_files: undefined,
+    });
+  });
+});
+
+// ===========================================================================
+// Execution settings change callback
+// ===========================================================================
+
+describe('CodeEditor - onExecutionSettingsChange callback', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: false,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('calls onExecutionSettingsChange with full settings when stdin changes', () => {
+    const mockOnChange = jest.fn();
+    render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ random_seed: 42, attached_files: [{ name: 'a.txt', content: 'x' }] }} onExecutionSettingsChange={mockOnChange} />
+    );
+    fireEvent.click(screen.getAllByTestId('mock-change-stdin')[0]);
+    expect(mockOnChange).toHaveBeenCalledWith({
+      stdin: 'test-input',
+      random_seed: 42,
+      attached_files: [{ name: 'a.txt', content: 'x' }],
+    });
+  });
+
+  it('calls onExecutionSettingsChange with full settings when seed changes', () => {
+    const mockOnChange = jest.fn();
+    render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ stdin: 'initial', attached_files: [{ name: 'b.txt', content: 'y' }] }} onExecutionSettingsChange={mockOnChange} />
+    );
+    fireEvent.click(screen.getAllByTestId('mock-change-seed')[0]);
+    expect(mockOnChange).toHaveBeenCalledWith({
+      stdin: 'initial',
+      random_seed: 99,
+      attached_files: [{ name: 'b.txt', content: 'y' }],
+    });
+  });
+
+  it('calls onExecutionSettingsChange with full settings when files change', () => {
+    const mockOnChange = jest.fn();
+    render(
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ stdin: 'hello', random_seed: 7 }} onExecutionSettingsChange={mockOnChange} />
+    );
+    fireEvent.click(screen.getAllByTestId('mock-change-files')[0]);
+    expect(mockOnChange).toHaveBeenCalledWith({
+      stdin: 'hello',
+      random_seed: 7,
+      attached_files: [{ name: 'f.txt', content: 'data' }],
     });
   });
 });

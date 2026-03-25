@@ -18,12 +18,8 @@ interface CodeEditorProps {
   onChange: (code: string) => void;
   onRun?: (execution_settings: ExecutionSettings) => void;
   isRunning?: boolean;
-  exampleInput?: string;
-  onStdinChange?: (stdin: string) => void;
-  random_seed?: number;
-  onRandomSeedChange?: (seed: number | undefined) => void;
-  attached_files?: Array<{ name: string; content: string }>;
-  onAttachedFilesChange?: (files: Array<{ name: string; content: string }>) => void;
+  defaultExecutionSettings?: ExecutionSettings;
+  onExecutionSettingsChange?: (settings: ExecutionSettings) => void;
   readOnly?: boolean;
   execution_result?: TestResponse | null;
   title?: string;
@@ -45,12 +41,8 @@ export default function CodeEditor({
   onChange,
   onRun,
   isRunning = false,
-  exampleInput,
-  onStdinChange,
-  random_seed,
-  onRandomSeedChange,
-  attached_files,
-  onAttachedFilesChange,
+  defaultExecutionSettings,
+  onExecutionSettingsChange,
   readOnly = false,
   execution_result = null,
   title = 'Your Code',
@@ -75,9 +67,12 @@ export default function CodeEditor({
   const outputTextSm = fontSize ? '' : (largeOutput ? 'text-base' : 'text-sm');
   const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
-  const [stdin, setStdin] = useState('');
-  const [localRandomSeed, setLocalRandomSeed] = useState<number | undefined>(random_seed);
-  const [localAttachedFiles, setLocalAttachedFiles] = useState<Array<{ name: string; content: string }> | undefined>(attached_files);
+  const [stdin, setStdin] = useState(defaultExecutionSettings?.stdin || '');
+  const [localRandomSeed, setLocalRandomSeed] = useState<number | undefined>(defaultExecutionSettings?.random_seed);
+  const [localAttachedFiles, setLocalAttachedFiles] = useState<Array<{ name: string; content: string }> | undefined>(defaultExecutionSettings?.attached_files);
+  // Ref tracks latest execution settings to avoid stale closures in change handlers
+  const executionSettingsRef = useRef<ExecutionSettings>({ stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles });
+  executionSettingsRef.current = { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles };
   const decorationsRef = useRef<string[]>([]);
   const errorDecorationsRef = useRef<string[]>([]);
 
@@ -235,17 +230,23 @@ export default function CodeEditor({
   // Wrapper to call both internal state and parent callback
   const handleStdinChange = (value: string) => {
     setStdin(value);
-    onStdinChange?.(value);
+    const updated = { ...executionSettingsRef.current, stdin: value || undefined };
+    executionSettingsRef.current = updated;
+    onExecutionSettingsChange?.(updated);
   };
 
   const handleRandomSeedChange = (seed: number | undefined) => {
     setLocalRandomSeed(seed);
-    onRandomSeedChange?.(seed);
+    const updated = { ...executionSettingsRef.current, random_seed: seed };
+    executionSettingsRef.current = updated;
+    onExecutionSettingsChange?.(updated);
   };
 
   const handleAttachedFilesChange = (files: Array<{ name: string; content: string }>) => {
     setLocalAttachedFiles(files);
-    onAttachedFilesChange?.(files);
+    const updated = { ...executionSettingsRef.current, attached_files: files };
+    executionSettingsRef.current = updated;
+    onExecutionSettingsChange?.(updated);
   };
 
   const handleOutputMouseDown = (e: React.MouseEvent) => {
@@ -297,21 +298,20 @@ export default function CodeEditor({
     }
   }, [firstResult, outputPosition]);
 
-  // Initialize stdin with example input if provided
+  // Sync local state when defaultExecutionSettings changes
   useEffect(() => {
-    if (exampleInput) {
-      setStdin(exampleInput);
+    if (defaultExecutionSettings?.stdin !== undefined) {
+      setStdin(defaultExecutionSettings.stdin);
     }
-  }, [exampleInput]);
-
-  // Sync local random_seed and attached_files when controlled props change
-  useEffect(() => {
-    setLocalRandomSeed(random_seed);
-  }, [random_seed]);
+  }, [defaultExecutionSettings?.stdin]);
 
   useEffect(() => {
-    setLocalAttachedFiles(attached_files);
-  }, [attached_files]);
+    setLocalRandomSeed(defaultExecutionSettings?.random_seed);
+  }, [defaultExecutionSettings?.random_seed]);
+
+  useEffect(() => {
+    setLocalAttachedFiles(defaultExecutionSettings?.attached_files);
+  }, [defaultExecutionSettings?.attached_files]);
 
   // Auto-open debugger sidebar when debugging starts (desktop only)
   useEffect(() => {
@@ -671,7 +671,7 @@ export default function CodeEditor({
               onRandomSeedChange={handleRandomSeedChange}
               attached_files={localAttachedFiles}
               onAttachedFilesChange={handleAttachedFilesChange}
-              exampleInput={exampleInput}
+              exampleInput={defaultExecutionSettings?.stdin}
               inSidebar={true}
               darkTheme={true}
             />
@@ -908,7 +908,7 @@ export default function CodeEditor({
                     onRandomSeedChange={handleRandomSeedChange}
                     attached_files={localAttachedFiles}
                     onAttachedFilesChange={handleAttachedFilesChange}
-                    exampleInput={exampleInput}
+                    exampleInput={defaultExecutionSettings?.stdin}
                     inSidebar={true}
                   />
                 </div>

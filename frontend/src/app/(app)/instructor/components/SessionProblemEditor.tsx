@@ -248,12 +248,12 @@ export default function SessionProblemEditor({
           isRunning={isRunning}
           execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          exampleInput={stdin}
-          onStdinChange={setStdin}
-          random_seed={random_seed}
-          onRandomSeedChange={setRandomSeed}
-          attached_files={attached_files}
-          onAttachedFilesChange={setAttachedFiles}
+          defaultExecutionSettings={{ stdin, random_seed, attached_files }}
+          onExecutionSettingsChange={(settings) => {
+            setStdin(settings.stdin || '');
+            setRandomSeed(settings.random_seed);
+            setAttachedFiles(settings.attached_files || []);
+          }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}

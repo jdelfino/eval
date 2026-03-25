@@ -136,8 +136,7 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          exampleInput="my input"
-          random_seed={42}
+          defaultExecutionSettings={{ stdin: "my input", random_seed: 42 }}
           problem={pythonProblem}
         />
       );
@@ -161,7 +160,7 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          attached_files={files}
+          defaultExecutionSettings={{ attached_files: files }}
         />
       );
 

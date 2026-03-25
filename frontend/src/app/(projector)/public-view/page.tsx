@@ -234,7 +234,7 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
-            exampleInput={featuredStdin}
+            defaultExecutionSettings={{ stdin: featuredStdin }}
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
             execution_result={executionResult}
