@@ -9,7 +9,7 @@ import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import type { ExecutionSettings } from '@/types/problem';
+import { extractExecutionSettingsFromTestCases, type ExecutionSettings } from '@/types/problem';
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -122,17 +122,10 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Extract complete execution settings from featured_test_cases
-  const featuredExecutionSettings: ExecutionSettings = (() => {
-    const settings = state?.featured_test_cases;
-    if (!settings) return {};
-
-    return {
-      stdin: settings.stdin,
-      random_seed: settings.random_seed,
-      attached_files: settings.attached_files,
-    };
-  })();
+  // Extract execution settings from featured_test_cases.
+  // May be ExecutionSettings object or IOTestCase[] — extractExecutionSettingsFromTestCases handles both.
+  const featuredExecutionSettings: ExecutionSettings =
+    extractExecutionSettingsFromTestCases(state?.featured_test_cases as any) ?? {};
 
   // Reset local code when featured student or their code changes
   useEffect(() => {

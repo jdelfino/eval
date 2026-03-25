@@ -13,7 +13,7 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, TestResponse } from '../types';
@@ -103,8 +103,11 @@ export function SessionView({
     if (!sessionProblem?.solution) return;
 
     try {
-      // Pass test_cases when featuring the solution so execution settings are preserved
-      const testCases: ExecutionSettings = (sessionProblem.test_cases as ExecutionSettings) || sessionExecutionSettings;
+      // Extract execution settings from test_cases[0] (IOTestCase wire format)
+      const extracted = extractExecutionSettingsFromTestCases(sessionProblem.test_cases as any);
+      const testCases: ExecutionSettings = (extracted.stdin || extracted.random_seed || extracted.attached_files)
+        ? extracted
+        : sessionExecutionSettings;
       await featureCode(session_id, sessionProblem.solution, testCases);
     } catch (error) {
       console.error('Failed to show solution:', error);
