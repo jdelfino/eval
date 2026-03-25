@@ -49,31 +49,6 @@ describe('Sessions API', () => {
   });
 
   describe('getRevisions()', () => {
-    it('returns Revision[] (not wrapped)', async () => {
-      const sessionId = state.sessionId;
-      expect(sessionId).toBeTruthy();
-
-      const revisions = await getRevisions(sessionId);
-
-      expect(Array.isArray(revisions)).toBe(true);
-
-      // If there are revisions, validate shape
-      if (revisions.length > 0) {
-        const revision = revisions[0];
-        expect(typeof revision.id).toBe('string');
-        expect(typeof revision.namespace_id).toBe('string');
-        expect(typeof revision.session_id).toBe('string');
-        expect(typeof revision.user_id).toBe('string');
-        expect(typeof revision.timestamp).toBe('string');
-        expect('is_diff' in revision).toBe(true);
-        expect(typeof revision.is_diff).toBe('boolean');
-        expect(revision.diff === null || typeof revision.diff === 'string').toBe(true);
-        expect(revision.full_code === null || typeof revision.full_code === 'string').toBe(true);
-        expect(revision.base_revision_id === null || typeof revision.base_revision_id === 'string').toBe(true);
-        expect('execution_result' in revision).toBe(true);
-      }
-    });
-
     it('validates full Revision shape including execution_result when present', async () => {
       /**
        * TC3: Verifies that every field in Revision matches the TypeScript interface,
