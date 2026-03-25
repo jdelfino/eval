@@ -140,12 +140,11 @@ describe('useSessionOperations', () => {
       const { result } = renderHook(() => useSessionOperations());
 
       await act(async () => {
-        await result.current.updateProblem('session-1', mockProblem, mockSettings);
+        await result.current.updateProblem('session-1', mockProblem);
       });
 
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
         problem: mockProblem,
-        execution_settings: mockSettings,
       });
     });
 

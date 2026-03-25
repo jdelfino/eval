@@ -17,14 +17,7 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
-  onUpdateProblem: (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
-  ) => void;
+  onUpdateProblem: (problem: Record<string, unknown>) => void;
   initialProblem?: Problem | { title: string; description: string; starter_code: string; solution?: string | null } | null;
   initialExecutionSettings?: {
     stdin?: string;
@@ -118,18 +111,34 @@ export default function SessionProblemEditor({
   }, [showSolutionViewer, handleCloseSolutionViewer]);
 
   const handleUpdate = () => {
-    const problem = {
+    // Build complete problem object including ALL fields from initialProblem
+    // plus any edited fields. The backend stores this as-is, so we must send
+    // a complete snapshot to avoid data loss.
+    const completeProblem: Record<string, unknown> = {
       title: title.trim(),
       description: description.trim(),
       starter_code: starter_code.trim(),
+      solution: solution,
+      language: language,
     };
 
+    // Convert execution settings state to test_cases format
+    // The problem snapshot stores test_cases, not a separate execution_settings field
     const execution_settings: any = {};
     if (stdin.trim()) execution_settings.stdin = stdin.trim();
     if (random_seed !== undefined) execution_settings.random_seed = random_seed;
     if (attached_files.length > 0) execution_settings.attached_files = attached_files;
 
-    onUpdateProblem(problem, Object.keys(execution_settings).length > 0 ? execution_settings : undefined);
+    // If we have execution settings, include them as test_cases
+    // The backend stores test_cases in the problem JSONB
+    if (Object.keys(execution_settings).length > 0) {
+      completeProblem.test_cases = execution_settings;
+    } else if ((initialProblem as Problem | null)?.test_cases) {
+      // Preserve existing test_cases if no new execution settings
+      completeProblem.test_cases = (initialProblem as Problem).test_cases;
+    }
+
+    onUpdateProblem(completeProblem);
   };
 
   const debuggerHook = useApiDebugger();

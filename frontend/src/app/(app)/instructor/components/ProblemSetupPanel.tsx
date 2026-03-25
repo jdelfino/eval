@@ -13,15 +13,8 @@ import SessionProblemEditor from './SessionProblemEditor';
 import { Problem } from '@/types/problem';
 
 interface ProblemSetupPanelProps {
-  /** Callback when problem is updated */
-  onUpdateProblem: (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
-  ) => void;
+  /** Callback when problem is updated (receives complete problem snapshot) */
+  onUpdateProblem: (problem: Record<string, unknown>) => void;
   /** Initial problem data */
   initialProblem?: Problem | null;
   /** Initial execution settings */

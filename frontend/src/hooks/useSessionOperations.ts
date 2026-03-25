@@ -71,14 +71,13 @@ export function useSessionOperations() {
   const updateProblem = useCallback(
     async (
       session_id: string,
-      problem: Record<string, unknown>,
-      execution_settings?: Record<string, unknown>
+      problem: Record<string, unknown>
     ): Promise<void> => {
       setLoading(true);
       setError(null);
 
       try {
-        await apiUpdateSessionProblem(session_id, problem, execution_settings);
+        await apiUpdateSessionProblem(session_id, problem);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to update problem';
         setError(errorMessage);

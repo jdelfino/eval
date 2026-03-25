@@ -240,12 +240,13 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         title: 'My Title',
         description: 'My description',
         starter_code: 'print("code")',
-      },
-      undefined // No execution settings set
+        solution: '',
+        language: 'python',
+      })
     );
   });
 
@@ -265,9 +266,10 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.any(Object),
       expect.objectContaining({
-        stdin: 'test input',
+        test_cases: expect.objectContaining({
+          stdin: 'test input',
+        }),
       })
     );
   });
@@ -288,9 +290,10 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.any(Object),
       expect.objectContaining({
-        random_seed: 42,
+        test_cases: expect.objectContaining({
+          random_seed: 42,
+        }),
       })
     );
   });
@@ -315,12 +318,13 @@ describe('SessionProblemEditor', () => {
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         title: 'Title with spaces',
         description: 'Description with spaces',
         starter_code: 'code with spaces',
-      },
-      undefined
+        solution: '',
+        language: 'python',
+      })
     );
   });
 

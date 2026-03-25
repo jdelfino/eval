@@ -44,14 +44,7 @@ interface SessionViewProps {
   /** Callback to end the session */
   onEndSession: () => Promise<void>;
   /** Callback to update problem */
-  onUpdateProblem: (
-    problem: { title: string; description: string; starter_code: string },
-    execution_settings?: {
-      stdin?: string;
-      random_seed?: number;
-      attached_files?: Array<{ name: string; content: string }>;
-    }
-  ) => Promise<void>;
+  onUpdateProblem: (problem: Record<string, unknown>) => Promise<void>;
   /** Callback to feature a student on public view */
   onFeatureStudent: (studentId: string) => Promise<void>;
   /** Callback to clear the public view */
@@ -109,11 +102,13 @@ export function SessionView({
     if (!sessionProblem?.solution) return;
 
     try {
-      await featureCode(session_id, sessionProblem.solution);
+      // Pass test_cases when featuring the solution so execution settings are preserved
+      const testCases = sessionProblem.test_cases || sessionExecutionSettings;
+      await featureCode(session_id, sessionProblem.solution, testCases as Record<string, unknown> | undefined);
     } catch (error) {
       console.error('Failed to show solution:', error);
     }
-  }, [session_id, sessionProblem?.solution]);
+  }, [session_id, sessionProblem?.solution, sessionProblem?.test_cases, sessionExecutionSettings]);
 
   // Handlers for student pane
   const handleViewRevisions = useCallback((studentId: string, studentName: string) => {

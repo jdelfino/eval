@@ -51,17 +51,14 @@ export async function completeSession(sessionId: string): Promise<void> {
 /**
  * Update a session's problem inline.
  * @param sessionId - The session ID
- * @param problem - The problem object to set
- * @param executionSettings - Optional execution settings
+ * @param problem - The complete problem object to set (must include all fields)
  */
 export async function updateSessionProblem(
   sessionId: string,
-  problem: Record<string, unknown>,
-  executionSettings?: Record<string, unknown>
+  problem: Record<string, unknown>
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/update-problem`, {
     problem,
-    execution_settings: executionSettings,
   });
 }
 
@@ -198,9 +195,18 @@ export async function analyzeSession(
  * Feature code in a session (show to all students).
  * @param sessionId - The session ID
  * @param code - The code to feature
+ * @param testCases - Optional test cases (execution settings) to feature with the code
  */
-export async function featureCode(sessionId: string, code: string): Promise<void> {
-  await apiPost(`/sessions/${sessionId}/feature`, { code });
+export async function featureCode(
+  sessionId: string,
+  code: string,
+  testCases?: Record<string, unknown>
+): Promise<void> {
+  const body: Record<string, unknown> = { code };
+  if (testCases !== undefined) {
+    body.test_cases = testCases;
+  }
+  await apiPost(`/sessions/${sessionId}/feature`, body);
 }
 
 /**
