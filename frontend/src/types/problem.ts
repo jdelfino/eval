@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Problem as ApiProblem, IOTestCase } from './api';
+import type { Problem as ApiProblem, IOTestCase, WireFile } from './api';
 
 // ---------------------------------------------------------------------------
 // Execution settings
@@ -128,6 +128,41 @@ export function mapApiProblem(api: ApiProblem): Problem {
  * @param testCases - The test_cases array from a Problem
  * @returns ExecutionSettings object with stdin, random_seed, attached_files
  */
+// ---------------------------------------------------------------------------
+// Execution Settings → IOTestCase[] (PLAT-e4m)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build an IOTestCase[] array from execution settings.
+ * Inverse of extractExecutionSettingsFromTestCases.
+ *
+ * Returns a single-element array when any setting is present, empty array otherwise.
+ */
+export function buildTestCasesFromExecutionSettings(opts: {
+  stdin?: string;
+  random_seed?: number;
+  attached_files?: WireFile[];
+}): IOTestCase[] {
+  const hasStdin = opts.stdin !== undefined && opts.stdin.trim() !== '';
+  const hasRandomSeed = opts.random_seed !== undefined;
+  const hasFiles = opts.attached_files !== undefined && opts.attached_files.length > 0;
+
+  if (!hasStdin && !hasRandomSeed && !hasFiles) {
+    return [];
+  }
+
+  const tc: IOTestCase = {
+    name: 'Default',
+    input: opts.stdin?.trim() || '',
+    match_type: 'exact',
+    order: 0,
+  };
+  if (hasRandomSeed) tc.random_seed = opts.random_seed;
+  if (hasFiles) tc.attached_files = opts.attached_files;
+
+  return [tc];
+}
+
 export function extractExecutionSettingsFromTestCases(
   testCases: TestCase[] | IOTestCase[] | ExecutionSettings | null | undefined
 ): ExecutionSettings {

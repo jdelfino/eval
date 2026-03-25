@@ -238,8 +238,10 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Compat bridge: if old frontend sent execution_settings and no test_cases,
 	// convert execution_settings to a single IOTestCase.
+	// Note: json.RawMessage("[]") has len==2 and "null" has len==4, so we must
+	// also check string equality to treat them as empty.
 	testCases := req.TestCases
-	if len(testCases) == 0 && len(req.ExecutionSettings) > 0 {
+	if (len(testCases) == 0 || string(testCases) == "[]" || string(testCases) == "null") && len(req.ExecutionSettings) > 0 {
 		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
 		if convErr != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")
@@ -310,8 +312,10 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Compat bridge: if old frontend sent execution_settings and no test_cases,
 	// convert execution_settings to a single IOTestCase.
+	// Note: json.RawMessage("[]") has len==2 and "null" has len==4, so we must
+	// also check string equality to treat them as empty.
 	testCases := req.TestCases
-	if len(testCases) == 0 && len(req.ExecutionSettings) > 0 {
+	if (len(testCases) == 0 || string(testCases) == "[]" || string(testCases) == "null") && len(req.ExecutionSettings) > 0 {
 		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
 		if convErr != nil {
 			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")

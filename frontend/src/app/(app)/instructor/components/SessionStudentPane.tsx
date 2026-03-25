@@ -313,11 +313,7 @@ export function SessionStudentPane({
                 onChange={() => {}} // Read-only for instructor
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
-                defaultExecutionSettings={{
-                  stdin: sessionExecutionSettings.stdin,
-                  random_seed: selectedStudent?.execution_settings?.random_seed,
-                  attached_files: selectedStudent?.execution_settings?.attached_files,
-                }}
+                defaultExecutionSettings={sessionExecutionSettings}
                 readOnly
                 problem={sessionProblem}
                 execution_result={execution_result}

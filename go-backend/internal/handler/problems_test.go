@@ -1752,3 +1752,190 @@ func TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases(t *testing.T) {
 		}
 	})
 }
+
+// TestConvertExecutionSettingsToTestCases tests the helper directly.
+func TestConvertExecutionSettingsToTestCases(t *testing.T) {
+	t.Run("converts stdin and attached_files to IOTestCase", func(t *testing.T) {
+		settings := json.RawMessage(`{"stdin":"hello","attached_files":[{"name":"f.txt","content":"data"}]}`)
+		got, err := convertExecutionSettingsToTestCases(settings)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		var cases []store.IOTestCase
+		if err := json.Unmarshal(got, &cases); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(cases) != 1 {
+			t.Fatalf("expected 1 case, got %d", len(cases))
+		}
+		if cases[0].Name != "Default" {
+			t.Errorf("expected name 'Default', got %q", cases[0].Name)
+		}
+		if cases[0].Input != "hello" {
+			t.Errorf("expected input 'hello', got %q", cases[0].Input)
+		}
+		if len(cases[0].AttachedFiles) != 1 || cases[0].AttachedFiles[0].Name != "f.txt" {
+			t.Errorf("expected 1 attached file named 'f.txt', got %+v", cases[0].AttachedFiles)
+		}
+	})
+
+	t.Run("returns nil for empty/null/empty-object settings", func(t *testing.T) {
+		for _, input := range []json.RawMessage{nil, json.RawMessage("null"), json.RawMessage("{}")} {
+			got, err := convertExecutionSettingsToTestCases(input)
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", string(input), err)
+			}
+			if got != nil {
+				t.Errorf("expected nil for %q, got %s", string(input), string(got))
+			}
+		}
+	})
+}
+
+// TestCompatBridge_EmptyArrayTestCases verifies that the compat bridge fires
+// when the frontend sends test_cases as an empty JSON array "[]" alongside
+// execution_settings. This is the bug: len(json.RawMessage("[]")) == 2, not 0.
+func TestCompatBridge_EmptyArrayTestCases(t *testing.T) {
+	classID := uuid.New()
+	userID := uuid.New()
+	var capturedParams store.CreateProblemParams
+
+	repo := &mockProblemRepo{
+		createProblemFn: func(_ context.Context, params store.CreateProblemParams) (*store.Problem, error) {
+			capturedParams = params
+			return &store.Problem{
+				ID:          uuid.New(),
+				NamespaceID: params.NamespaceID,
+				Title:       params.Title,
+				TestCases:   params.TestCases,
+				AuthorID:    params.AuthorID,
+				Language:    "python",
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			}, nil
+		},
+	}
+
+	tests := []struct {
+		name      string
+		testCases any // value for test_cases in request body
+	}{
+		{"empty array []", json.RawMessage(`[]`)},
+		{"null", json.RawMessage(`null`)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{
+				"title":    "Problem with " + tt.name,
+				"class_id": classID.String(),
+				"language": "python",
+				"test_cases": tt.testCases,
+				"execution_settings": map[string]any{
+					"stdin":          "test input",
+					"attached_files": []map[string]string{{"name": "data.txt", "content": "abc"}},
+				},
+			})
+
+			h := NewProblemHandler(nil)
+			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			ctx := auth.WithUser(req.Context(), &auth.User{
+				ID:          userID,
+				Role:        auth.RoleInstructor,
+				NamespaceID: "test-ns",
+			})
+			ctx = store.WithRepos(ctx, problemRepos(repo))
+			req = req.WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			h.Create(rec, req)
+
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			var cases []store.IOTestCase
+			if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+				t.Fatalf("unmarshal TestCases: %v", err)
+			}
+			if len(cases) != 1 {
+				t.Fatalf("expected compat bridge to produce 1 IOTestCase from execution_settings, got %d", len(cases))
+			}
+			if cases[0].Input != "test input" {
+				t.Errorf("expected input 'test input', got %q", cases[0].Input)
+			}
+			if len(cases[0].AttachedFiles) != 1 {
+				t.Errorf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
+			}
+		})
+	}
+}
+
+// TestCompatBridge_Update_EmptyArrayTestCases is the Update variant of the same bug.
+func TestCompatBridge_Update_EmptyArrayTestCases(t *testing.T) {
+	problemID := uuid.New()
+	userID := uuid.New()
+	var capturedParams store.UpdateProblemParams
+
+	repo := &mockProblemRepo{
+		updateProblemFn: func(_ context.Context, id uuid.UUID, params store.UpdateProblemParams) (*store.Problem, error) {
+			capturedParams = params
+			return &store.Problem{
+				ID:          id,
+				NamespaceID: "test-ns",
+				Title:       "Updated",
+				TestCases:   params.TestCases,
+				AuthorID:    userID,
+				Language:    "python",
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+			}, nil
+		},
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"title":      "Updated Problem",
+		"test_cases": json.RawMessage(`[]`),
+		"execution_settings": map[string]any{
+			"stdin":          "update input",
+			"attached_files": []map[string]string{{"name": "up.txt", "content": "xyz"}},
+		},
+	})
+
+	h := NewProblemHandler(nil)
+	req := httptest.NewRequest(http.MethodPatch, "/"+problemID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", problemID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{
+		ID:          userID,
+		Role:        auth.RoleInstructor,
+		NamespaceID: "test-ns",
+	})
+	ctx = store.WithRepos(ctx, problemRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var cases []store.IOTestCase
+	if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+		t.Fatalf("unmarshal TestCases: %v", err)
+	}
+	if len(cases) != 1 {
+		t.Fatalf("expected compat bridge to produce 1 IOTestCase, got %d", len(cases))
+	}
+	if cases[0].Input != "update input" {
+		t.Errorf("expected input 'update input', got %q", cases[0].Input)
+	}
+	if len(cases[0].AttachedFiles) != 1 {
+		t.Errorf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
+	}
+}

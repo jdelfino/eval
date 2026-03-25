@@ -418,3 +418,129 @@ describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
     expect(callArgs).toHaveProperty('test_cases');
   });
 });
+
+describe('PLAT-e4m: ProblemCreator save payload puts execution settings into test_cases[0]', () => {
+  /**
+   * Tests the payload construction logic that ProblemCreator.handleSubmit uses.
+   * When stdin, random_seed, or attached_files are set, they must be sent as
+   * test_cases[0] (an IOTestCase), NOT as a separate execution_settings field.
+   */
+
+  /**
+   * Builds the problem save payload the same way ProblemCreator.handleSubmit does.
+   * This is extracted here to test the logic without rendering the React component.
+   */
+  function buildProblemPayload(opts: {
+    title: string;
+    description?: string;
+    starter_code?: string;
+    solution?: string;
+    language: string;
+    stdin?: string;
+    random_seed?: number;
+    attached_files?: Array<{ name: string; content: string }>;
+    class_id?: string | null;
+    tags?: string[];
+  }) {
+    const { buildTestCasesFromExecutionSettings } = require('@/types/problem');
+
+    const testCases = buildTestCasesFromExecutionSettings({
+      stdin: opts.stdin,
+      random_seed: opts.random_seed,
+      attached_files: opts.attached_files,
+    });
+
+    return {
+      title: opts.title.trim(),
+      description: opts.description?.trim() || null,
+      starter_code: opts.starter_code?.trim() || null,
+      solution: opts.solution?.trim() || null,
+      language: opts.language,
+      test_cases: testCases,
+      class_id: opts.class_id || null,
+      tags: opts.tags || [],
+    };
+  }
+
+  it('should put stdin into test_cases[0].input, not execution_settings', () => {
+    const payload = buildProblemPayload({
+      title: 'Test Problem',
+      language: 'python',
+      stdin: 'hello world',
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toHaveLength(1);
+    expect(payload.test_cases[0]).toMatchObject({
+      name: 'Default',
+      input: 'hello world',
+      match_type: 'exact',
+    });
+  });
+
+  it('should put attached_files into test_cases[0].attached_files', () => {
+    const files = [{ name: 'data.txt', content: 'file content' }];
+    const payload = buildProblemPayload({
+      title: 'Test Problem',
+      language: 'python',
+      attached_files: files,
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toHaveLength(1);
+    expect(payload.test_cases[0].attached_files).toEqual(files);
+  });
+
+  it('should put random_seed into test_cases[0].random_seed', () => {
+    const payload = buildProblemPayload({
+      title: 'Test Problem',
+      language: 'python',
+      random_seed: 42,
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toHaveLength(1);
+    expect(payload.test_cases[0].random_seed).toBe(42);
+  });
+
+  it('should include all execution settings in a single test case', () => {
+    const payload = buildProblemPayload({
+      title: 'Full Settings',
+      language: 'python',
+      stdin: 'input data',
+      random_seed: 99,
+      attached_files: [
+        { name: 'a.txt', content: 'aaa' },
+        { name: 'b.txt', content: 'bbb' },
+      ],
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toHaveLength(1);
+    expect(payload.test_cases[0].input).toBe('input data');
+    expect(payload.test_cases[0].random_seed).toBe(99);
+    expect(payload.test_cases[0].attached_files).toHaveLength(2);
+  });
+
+  it('should send empty test_cases when no execution settings are set', () => {
+    const payload = buildProblemPayload({
+      title: 'No Settings',
+      language: 'python',
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toEqual([]);
+  });
+
+  it('should send empty test_cases when stdin is empty and no other settings', () => {
+    const payload = buildProblemPayload({
+      title: 'Empty Stdin',
+      language: 'python',
+      stdin: '',
+      attached_files: [],
+    });
+
+    expect(payload).not.toHaveProperty('execution_settings');
+    expect(payload.test_cases).toEqual([]);
+  });
+});

@@ -19,7 +19,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
-import { extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -156,11 +156,13 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // Only include execution_settings if at least one field is set
-      const execSettings: Record<string, unknown> = {};
-      if (stdin.trim()) execSettings.stdin = stdin.trim();
-      if (random_seed !== undefined) execSettings.random_seed = random_seed;
-      if (attached_files.length > 0) execSettings.attached_files = attached_files;
+      // Build test_cases from execution settings (stdin, random_seed, attached_files).
+      // These are stored as test_cases[0] in the backend, not as a separate field.
+      const testCases = buildTestCasesFromExecutionSettings({
+        stdin,
+        random_seed,
+        attached_files,
+      });
 
       const problemInput = {
         title: title.trim(),
@@ -168,10 +170,9 @@ export default function ProblemCreator({
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
         language,
-        test_cases: [] as unknown[], // Test cases added separately
+        test_cases: testCases,
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
-        ...(Object.keys(execSettings).length > 0 && { execution_settings: execSettings }),
       };
 
       let result;
