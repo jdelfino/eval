@@ -127,7 +127,7 @@ test-integration-store:
 # ──────────────────────────────────────────────
 # Frontend
 # ──────────────────────────────────────────────
-.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend check-contract-coverage check-api-imports
+.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend check-contract-coverage check-api-imports check-unknown-wire-types
 
 build-frontend:
 	cd frontend && npm run build
@@ -146,6 +146,9 @@ check-contract-coverage:
 
 check-api-imports:
 	cd frontend && npx tsx scripts/check-api-imports.ts
+
+check-unknown-wire-types:
+	cd frontend && npx tsx scripts/check-unknown-wire-types.ts
 
 # ──────────────────────────────────────────────
 # Migration lint
