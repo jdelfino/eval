@@ -38,6 +38,8 @@ type Config struct {
 	// Redis Configuration
 	RedisHost string `env:"REDIS_HOST"`
 	RedisPort int    `env:"REDIS_PORT" envDefault:"6379"`
+	// Set to "true" to disable rate limiting (for contract/integration tests)
+	RateLimitDisabled bool `env:"RATE_LIMIT_DISABLED" envDefault:"false"`
 
 	// Centrifugo Configuration
 	CentrifugoURL         string `env:"CENTRIFUGO_URL"`
