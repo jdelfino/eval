@@ -10,9 +10,10 @@ import { state } from './shared-state';
 import { getSessionState } from '@/lib/api/realtime';
 import { getRevisions } from '@/lib/api/sessions';
 import {
-  expectSnakeCaseKeys,
   validateSessionShape,
   validateSessionStudentShape,
+  validateRevisionShape,
+  validateTestResponseShape,
 } from './validators';
 
 describe('Sessions API', () => {
@@ -35,7 +36,6 @@ describe('Sessions API', () => {
       expect('session' in body).toBe(true);
       expect('students' in body).toBe(true);
       expect(typeof body.join_code).toBe('string');
-      expectSnakeCaseKeys(body, 'SessionState');
 
       // Session sub-object
       validateSessionShape(body.session);
@@ -49,30 +49,32 @@ describe('Sessions API', () => {
   });
 
   describe('getRevisions()', () => {
-    it('returns Revision[] (not wrapped)', async () => {
+    it('validates full Revision shape including execution_result when present', async () => {
+      /**
+       * TC3: Verifies that every field in Revision matches the TypeScript interface,
+       * including the optional execution_result field which must be null or TestResponse.
+       * Typia validates exact shape — missing fields or extra fields both cause failures.
+       * If execution_result is present, it is also validated as TestResponse.
+       */
       const sessionId = state.sessionId;
       expect(sessionId).toBeTruthy();
 
       const revisions = await getRevisions(sessionId);
-
       expect(Array.isArray(revisions)).toBe(true);
 
-      // If there are revisions, validate shape
-      if (revisions.length > 0) {
-        const revision = revisions[0];
-        expect(typeof revision.id).toBe('string');
-        expect(typeof revision.namespace_id).toBe('string');
-        expect(typeof revision.session_id).toBe('string');
-        expect(typeof revision.user_id).toBe('string');
-        expect(typeof revision.timestamp).toBe('string');
-        expect('is_diff' in revision).toBe(true);
-        expect(typeof revision.is_diff).toBe('boolean');
-        expect(revision.diff === null || typeof revision.diff === 'string').toBe(true);
-        expect(revision.full_code === null || typeof revision.full_code === 'string').toBe(true);
-        expect(revision.base_revision_id === null || typeof revision.base_revision_id === 'string').toBe(true);
-        expect('execution_result' in revision).toBe(true);
-        expectSnakeCaseKeys(revision, 'Revision');
+      // Validate the full Revision shape for all revisions (may be empty if no students)
+      for (const revision of revisions) {
+        validateRevisionShape(revision);
+        // execution_result is null or TestResponse — validate when present
+        if (revision.execution_result !== null) {
+          validateTestResponseShape(revision.execution_result);
+        }
       }
+
+      // Verify the Revision type structure is correct even with empty array
+      // by checking that revisions from history sessions can also be validated
+      // (this test passes vacuously if there are no revisions — see history tests
+      // in sessions-full.integration.test.ts for coverage with actual revisions)
     });
   });
 });

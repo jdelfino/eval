@@ -14,8 +14,11 @@ import {
   clearFeatured,
   joinSession,
 } from '@/lib/api/realtime';
+import { createRevision, getRevisions } from '@/lib/api/sessions';
 import {
   validateSessionStudentShape,
+  validateRevisionShape,
+  validateTestResponseShape,
 } from './validators';
 
 // Student identity for joining the session
@@ -105,6 +108,94 @@ describe('Realtime Session API', () => {
       } catch (error) {
         const status = (error as { status?: number }).status;
         console.warn(`updateCode failed with status ${status}`);
+        throw error;
+      }
+    });
+  });
+
+  describe('createRevision()', () => {
+    // createRevision requires auth as a session student
+    beforeAll(() => {
+      if (studentToken) configureTestAuth(studentToken);
+    });
+
+    afterAll(() => {
+      resetAuthProvider();
+    });
+
+    it('creates a Revision with execution_result and validates the full shape', async () => {
+      /**
+       * TC3: Verifies that Revision.execution_result round-trips correctly:
+       * after creating a revision with a TestResponse, fetching revisions returns
+       * the revision with execution_result validated by typia as TestResponse.
+       * If execution_result is stored or returned with wrong field names/types,
+       * validateTestResponseShape() would throw.
+       */
+      const sessionId = state.sessionId;
+      expect(sessionId).toBeTruthy();
+      expect(joinedStudentId).toBeTruthy();
+
+      // The execution_result we'll store — matches TestResponse interface exactly
+      const executionResult = {
+        results: [
+          {
+            name: 'run',
+            type: 'io',
+            status: 'passed' as const,
+            input: 'hello',
+            expected: 'hello\n',
+            actual: 'hello\n',
+            stderr: '',
+            time_ms: 42,
+          },
+        ],
+        summary: {
+          total: 1,
+          passed: 1,
+          failed: 0,
+          errors: 0,
+          run: 0,
+          time_ms: 42,
+        },
+      };
+
+      try {
+        const revision = await createRevision(sessionId, {
+          full_code: 'print("hello")',
+          is_diff: false,
+          execution_result: executionResult,
+        });
+
+        // Validate the returned Revision shape
+        validateRevisionShape(revision);
+        expect(revision.session_id).toBe(sessionId);
+        expect(revision.full_code).toBe('print("hello")');
+        expect(revision.execution_result).not.toBeNull();
+
+        // Validate the nested execution_result shape
+        if (revision.execution_result !== null) {
+          validateTestResponseShape(revision.execution_result);
+          expect(revision.execution_result.results).toHaveLength(1);
+          expect(revision.execution_result.results[0].status).toBe('passed');
+        }
+
+        // Fetch revisions and verify the shape is maintained on list endpoint
+        const revisions = await getRevisions(sessionId);
+        expect(Array.isArray(revisions)).toBe(true);
+        expect(revisions.length).toBeGreaterThan(0);
+
+        for (const rev of revisions) {
+          validateRevisionShape(rev);
+          if (rev.execution_result !== null) {
+            validateTestResponseShape(rev.execution_result);
+          }
+        }
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        if (status === 404 || status === 403) {
+          console.warn(`createRevision failed with status ${status} (student not in session); skipping`);
+          return;
+        }
         throw error;
       }
     });

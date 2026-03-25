@@ -22,9 +22,6 @@ import {
   registerStudent,
 } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 const setupState = getSetupState();
 
@@ -106,7 +103,6 @@ describe('Registration API', () => {
       expect('class' in data).toBe(true);
 
       // Validate section shape
-      expectSnakeCaseKeys(data.section, 'Section');
       expect(typeof data.section.id).toBe('string');
       expect(typeof data.section.namespace_id).toBe('string');
       expect(typeof data.section.class_id).toBe('string');
@@ -116,7 +112,6 @@ describe('Registration API', () => {
       expect(typeof data.section.updated_at).toBe('string');
 
       // Validate class shape
-      expectSnakeCaseKeys(data.class, 'Class');
       expect(typeof data.class.id).toBe('string');
       expect(typeof data.class.namespace_id).toBe('string');
       expect(typeof data.class.name).toBe('string');

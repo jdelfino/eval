@@ -82,15 +82,41 @@ module.exports = {
       },
     },
     {
+      // Validator unit tests — run typia-based validators against hand-crafted inputs to verify
+      // structural validation works correctly (extra fields, missing fields, wrong field names).
+      // No globalSetup required — pure unit tests with no backend dependency.
+      displayName: 'contract-validators',
+      preset: 'ts-jest',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/src/__tests__/contract/validators-typia.test.ts'],
+      testPathIgnorePatterns: ['/node_modules/'],
+      roots: ['<rootDir>/src'],
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+      testTimeout: 10000,
+      transform: {
+        '^.+\\.tsx?$': ['ts-jest', {
+          // isolatedModules must be false so ts-jest creates a language service with
+          // a real TypeScript program — required for typia's AST transformer to resolve
+          // generic type parameters at compile time.
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true, isolatedModules: false },
+          astTransformers: {
+            before: [{ path: '<rootDir>/src/__tests__/contract/typia-transformer.js' }]
+          }
+        }]
+      },
+    },
+    {
       displayName: 'contract',
       preset: 'ts-jest',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/src/__tests__/contract/**/*.integration.test.ts'],
-      // Exclude setup test and the realtime-events tests (handled by 'realtime-contract' project)
+      // Exclude setup test, realtime-events tests (handled by 'realtime-contract' project),
+      // and validator unit tests (handled by 'contract-validators' project).
       testPathIgnorePatterns: [
         '/node_modules/',
         '000-setup\\.integration\\.test\\.ts$',
         'realtime-events\\.integration\\.test\\.ts$',
+        'validators-typia\\.test\\.ts$',
       ],
       roots: ['<rootDir>/src'],
       moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
@@ -98,7 +124,13 @@ module.exports = {
       testTimeout: 30000,
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
-          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }
+          // isolatedModules must be false so ts-jest creates a language service with
+          // a real TypeScript program — required for typia's AST transformer to resolve
+          // generic type parameters at compile time.
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true, isolatedModules: false },
+          astTransformers: {
+            before: [{ path: '<rootDir>/src/__tests__/contract/typia-transformer.js' }]
+          }
         }]
       },
     },
@@ -133,7 +165,13 @@ module.exports = {
       testTimeout: 30000,
       transform: {
         '^.+\\.tsx?$': ['ts-jest', {
-          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true }
+          // isolatedModules must be false so ts-jest creates a language service with
+          // a real TypeScript program — required for typia's AST transformer to resolve
+          // generic type parameters at compile time.
+          tsconfig: { esModuleInterop: true, allowSyntheticDefaultImports: true, isolatedModules: false },
+          astTransformers: {
+            before: [{ path: '<rootDir>/src/__tests__/contract/typia-transformer.js' }]
+          }
         }]
       },
     },

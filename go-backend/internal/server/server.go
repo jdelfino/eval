@@ -112,24 +112,36 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 	r.Handle("/readyz", handler.NewReadyzHandler(pool))
 
 	// Create rate limiter
-	cats := ratelimit.Categories()
-	memLimiter := ratelimit.NewMemoryLimiter(cats)
-	memLimiter.Start()
 	var rl ratelimit.Limiter
 	var activationSvc *activation.Service
-	if cfg.RedisHost != "" {
+	var memLimiter *ratelimit.MemoryLimiter
+	if cfg.RateLimitDisabled {
+		logger.Info("rate limiting disabled (RATE_LIMIT_DISABLED=true)")
+		rl = ratelimit.NoopLimiter{}
+	} else {
+		cats := ratelimit.Categories()
+		memLimiter = ratelimit.NewMemoryLimiter(cats)
+		memLimiter.Start()
+		if cfg.RedisHost != "" {
+			redisClient := redis.NewClient(&redis.Options{
+				Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
+			})
+			rl = ratelimit.NewFallbackLimiter(
+				ratelimit.NewRedisLimiter(redisClient, cats),
+				memLimiter,
+				logger,
+			)
+			activationSvc = activation.NewService(redisClient, time.Hour)
+		} else {
+			rl = memLimiter
+		}
+	}
+	// When rate limiting is disabled but Redis is available, still create activation service
+	if activationSvc == nil && cfg.RedisHost != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr: fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort),
 		})
-		rl = ratelimit.NewFallbackLimiter(
-			ratelimit.NewRedisLimiter(redisClient, cats),
-			memLimiter,
-			logger,
-		)
 		activationSvc = activation.NewService(redisClient, time.Hour)
-	} else {
-		rl = memLimiter
-		// activationSvc remains nil — no-op in handlers
 	}
 
 	var revBuffer *revision.RevisionBuffer

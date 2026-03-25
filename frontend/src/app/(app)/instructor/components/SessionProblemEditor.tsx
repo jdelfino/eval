@@ -119,11 +119,12 @@ export default function SessionProblemEditor({
     if (random_seed !== undefined) execSettings.random_seed = random_seed;
     if (attached_files.length > 0) execSettings.attached_files = attached_files;
 
-    // Determine test_cases: new execution settings, or preserve existing
+    // Determine test_cases: new execution settings, or preserve existing.
+    // Cast through unknown since base may use rich client TestCase[] while wire format expects IOTestCase[].
     const hasNewSettings = Object.keys(execSettings).length > 0;
-    const test_cases = hasNewSettings
+    const test_cases = (hasNewSettings
       ? execSettings
-      : (base?.test_cases ?? null);
+      : (base?.test_cases ?? null)) as ApiProblem['test_cases'];
 
     const problem: ApiProblem = {
       // Defaults for inline problem creation (no initial problem)

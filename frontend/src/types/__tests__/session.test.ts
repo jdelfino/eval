@@ -27,6 +27,7 @@ describe('Session type hierarchy', () => {
     },
     featured_student_id: 'u-2',
     featured_code: 'print("hi")',
+    featured_test_cases: null,
     creator_id: 'u-1',
     participants: ['u-1', 'u-2'],
     status: 'active',
@@ -91,7 +92,21 @@ describe('Session type hierarchy', () => {
 describe('SessionPublicState type', () => {
   it('SessionPublicState.problem is typed with title/description/starter_code', () => {
     const state: SessionPublicState = {
-      problem: { title: 'Test Problem', description: 'desc', starter_code: 'code', language: 'python' },
+      problem: {
+        id: 'p-1',
+        namespace_id: 'ns-1',
+        title: 'Test Problem',
+        description: 'desc',
+        starter_code: 'code',
+        language: 'python',
+        test_cases: null,
+        author_id: 'u-1',
+        class_id: null,
+        tags: [],
+        solution: null,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      },
       featured_student_id: null,
       featured_code: null,
       featured_test_cases: null,

@@ -94,6 +94,7 @@ const activeSessionWithProblem: Session = {
   participants: ['student-1'],
   featured_student_id: null,
   featured_code: null,
+  featured_test_cases: null,
   creator_id: 'user-1',
 };
 
@@ -122,6 +123,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
     },
     student_work: {
       id: WORK_ID_1,
+      namespace_id: 'ns-1',
       user_id: 'user-1',
       section_id: SECTION_ID,
       problem_id: PROBLEM_ID_1,
@@ -644,6 +646,7 @@ describe('StudentSectionView', () => {
           },
           student_work: {
             id: WORK_ID_1,
+            namespace_id: 'ns-1',
             user_id: 'user-1',
             section_id: SECTION_ID,
             problem_id: PROBLEM_ID_1,
@@ -734,6 +737,7 @@ describe('StudentSectionView', () => {
         },
         student_work: {
           id: WORK_ID_1,
+          namespace_id: 'ns-1',
           user_id: 'user-1',
           section_id: SECTION_ID,
           problem_id: PROBLEM_ID_1,

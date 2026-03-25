@@ -18,6 +18,13 @@ type Result struct {
 	ResetAt   time.Time
 }
 
+// NoopLimiter always allows requests. Used in test environments.
+type NoopLimiter struct{}
+
+func (NoopLimiter) Allow(_ context.Context, _ string, _ string) (*Result, error) {
+	return &Result{Allowed: true, Remaining: 1}, nil
+}
+
 // Category defines a rate limit configuration.
 type Category struct {
 	Name      string

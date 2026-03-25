@@ -5,7 +5,7 @@
  * clean, typed interfaces for real-time session interactions.
  */
 
-import { apiGet, apiPost, apiFetch } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import type { SessionStudent, SessionState } from '@/types/api';
 import type { ExecutionSettings } from '@/types/problem';
 
@@ -19,7 +19,7 @@ export async function getSessionState(sessionId: string): Promise<SessionState> 
 }
 
 /**
- * Update a student's code in a session.
+ * Update a student's code in a session (instructor-facing: specifies which student).
  * @param sessionId - The session ID
  * @param studentId - The student's user ID
  * @param code - The code to save
@@ -30,36 +30,46 @@ export async function updateCode(
   sessionId: string,
   studentId: string,
   code: string,
-  executionSettings?: ExecutionSettings
+  testCases?: ExecutionSettings
 ): Promise<SessionStudent> {
-  // Use apiFetch directly for PUT since there's no apiPut helper
-  const response = await apiFetch(`/sessions/${sessionId}/code`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      student_id: studentId,
-      code,
-      execution_settings: executionSettings,
-    }),
+  return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
+    student_id: studentId,
+    code,
+    test_cases: testCases,
   });
-  return response.json();
 }
 
 /**
- * Feature a student's code for the session.
+ * Update the authenticated student's own code in a session (student-facing).
+ * The student is identified by the auth token; no student_id is needed.
+ * @param sessionId - The session ID
+ * @param code - The code to save
+ * @returns The updated SessionStudent object
+ */
+export async function updateStudentCode(
+  sessionId: string,
+  code: string
+): Promise<SessionStudent> {
+  return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, { code });
+}
+
+/**
+ * Feature a specific student's code for the session (instructor-facing).
  * @param sessionId - The session ID
  * @param studentId - The student's user ID to feature
+ * @param code - The code to feature
+ * @param testCases - Optional execution settings (test_cases) to feature alongside the code
  */
 export async function featureStudent(
   sessionId: string,
   studentId: string,
   code?: string,
-  executionSettings?: ExecutionSettings
+  testCases?: ExecutionSettings
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/feature`, {
     student_id: studentId,
     code: code ?? '',
-    execution_settings: executionSettings,
+    test_cases: testCases,
   });
 }
 
@@ -72,7 +82,7 @@ export async function clearFeatured(sessionId: string): Promise<void> {
 }
 
 /**
- * Join a session as a student.
+ * Join a session as a student (instructor-facing: specifies which student by ID).
  * @param sessionId - The session ID
  * @param studentId - The student's user ID
  * @param name - The student's display name
@@ -87,4 +97,18 @@ export async function joinSession(
     student_id: studentId,
     name,
   });
+}
+
+/**
+ * Join a session as the authenticated student (student-facing).
+ * The student is identified by the auth token; no student_id is needed.
+ * @param sessionId - The session ID
+ * @param name - The student's display name
+ * @returns The created SessionStudent object
+ */
+export async function joinSessionAsStudent(
+  sessionId: string,
+  name: string
+): Promise<SessionStudent> {
+  return apiPost<SessionStudent>(`/sessions/${sessionId}/join`, { name });
 }

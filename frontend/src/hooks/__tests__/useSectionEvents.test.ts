@@ -108,6 +108,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     problem: null,
     featured_student_id: null,
     featured_code: null,
+    featured_test_cases: null,
     creator_id: 'user-1',
     participants: [],
     status: 'active',

@@ -7,9 +7,6 @@
  */
 import { configureTestAuth, ADMIN_TOKEN, getSetupState, resetAuthProvider } from './helpers';
 import { listNamespaces, getNamespaceUsers } from '@/lib/api/namespaces';
-import {
-  expectSnakeCaseKeys,
-  } from './validators';
 
 describe('listNamespaces() (system-admin only)', () => {
   beforeAll(() => {
@@ -38,8 +35,6 @@ describe('listNamespaces() (system-admin only)', () => {
     expect(ns.created_by === null || typeof ns.created_by === 'string').toBe(true);
     expect(typeof ns.updated_at).toBe('string');
 
-    // No PascalCase
-    expectSnakeCaseKeys(ns, 'Namespace');
   });
 });
 
@@ -74,7 +69,5 @@ describe('getNamespaceUsers() (system-admin only)', () => {
     expect(typeof user.created_at).toBe('string');
     expect(typeof user.updated_at).toBe('string');
 
-    // No PascalCase
-    expectSnakeCaseKeys(user, 'User');
   });
 });

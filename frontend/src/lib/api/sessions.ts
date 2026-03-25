@@ -66,6 +66,22 @@ export async function updateSessionProblem(
 }
 
 /**
+ * Update a session's problem inline with partial problem data.
+ * Used when only some problem fields (e.g. title, description, starter_code) need updating.
+ * The backend accepts any JSON object for the problem field (stored as raw JSON).
+ * @param sessionId - The session ID
+ * @param problem - Partial problem fields to set
+ */
+export async function updateSessionProblemPartial(
+  sessionId: string,
+  problem: Partial<Pick<Problem, 'title' | 'description' | 'starter_code' | 'solution' | 'tags' | 'language' | 'test_cases' | 'execution_settings'>>
+): Promise<void> {
+  await apiPost(`/sessions/${sessionId}/update-problem`, {
+    problem,
+  });
+}
+
+/**
  * List session history for the current user.
  * @returns Array of Session objects (backend returns plain array)
  */
@@ -87,6 +103,31 @@ export async function getRevisions(
     ? `/sessions/${sessionId}/revisions?user_id=${userId}`
     : `/sessions/${sessionId}/revisions`;
   return apiGet<Revision[]>(path);
+}
+
+/**
+ * Parameters for creating a code revision.
+ */
+export interface CreateRevisionParams {
+  full_code?: string;
+  is_diff?: boolean;
+  diff?: string;
+  base_revision_id?: string;
+  execution_result?: import('@/types/api').TestResponse;
+}
+
+/**
+ * Create a code revision for a session.
+ * The caller must be a student in the session (backend uses auth token to identify student).
+ * @param sessionId - The session ID
+ * @param params - Revision data including optional execution result
+ * @returns The created Revision object
+ */
+export async function createRevision(
+  sessionId: string,
+  params: CreateRevisionParams
+): Promise<Revision> {
+  return apiPost<Revision>(`/sessions/${sessionId}/revisions`, params);
 }
 
 /**
