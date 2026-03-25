@@ -11,6 +11,7 @@
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { executeCode, warmExecutor } from '@/lib/api/execute';
+import { validateTestResponseShape } from './validators';
 
 describe('executeCode()', () => {
   beforeAll(() => {
@@ -121,6 +122,52 @@ describe('executeCode()', () => {
     expect(result.results.length).toBe(1);
     expect(result.results[0].status).toBe('failed');
     expect(result.results[0].actual).toBe('hello\n');
+  });
+
+  it('validates every field in CaseResult (input, expected, actual, stderr, time_ms, type, name, status)', async () => {
+    /**
+     * TC5: Verifies that CaseResult contains all fields defined in the TypeScript
+     * interface. Typia validator enforces exact shape — missing or unexpected fields
+     * both cause failures. Runs a case with expected_output to get a non-trivial
+     * result that exercises the input/expected/actual fields in the response.
+     */
+    const result = await executeCode('print("hello")', 'python3', {
+      cases: [
+        {
+          name: 'field-coverage',
+          input: 'some input',
+          expected_output: 'hello\n',
+          match_type: 'exact',
+        },
+      ],
+    });
+
+    // Validate the entire TestResponse shape with typia — catches missing or extra fields
+    validateTestResponseShape(result);
+
+    expect(result.results.length).toBe(1);
+    const r = result.results[0];
+
+    // Verify every CaseResult field is present and has the correct type
+    expect(typeof r.name).toBe('string');
+    expect(typeof r.type).toBe('string');
+    expect(typeof r.status).toBe('string');
+    expect(typeof r.time_ms).toBe('number');
+
+    // input/expected/actual/stderr are optional in the type but typically present for IO cases
+    // The executor returns them for passed/failed cases
+    if (r.input !== undefined) {
+      expect(typeof r.input).toBe('string');
+    }
+    if (r.expected !== undefined) {
+      expect(typeof r.expected).toBe('string');
+    }
+    if (r.actual !== undefined) {
+      expect(typeof r.actual).toBe('string');
+    }
+    if (r.stderr !== undefined) {
+      expect(typeof r.stderr).toBe('string');
+    }
   });
 
   it('returns all results and correct summary counts for multiple test cases', async () => {

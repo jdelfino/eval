@@ -12,6 +12,8 @@ import { getRevisions } from '@/lib/api/sessions';
 import {
   validateSessionShape,
   validateSessionStudentShape,
+  validateRevisionShape,
+  validateTestResponseShape,
 } from './validators';
 
 describe('Sessions API', () => {
@@ -70,6 +72,34 @@ describe('Sessions API', () => {
         expect(revision.base_revision_id === null || typeof revision.base_revision_id === 'string').toBe(true);
         expect('execution_result' in revision).toBe(true);
       }
+    });
+
+    it('validates full Revision shape including execution_result when present', async () => {
+      /**
+       * TC3: Verifies that every field in Revision matches the TypeScript interface,
+       * including the optional execution_result field which must be null or TestResponse.
+       * Typia validates exact shape — missing fields or extra fields both cause failures.
+       * If execution_result is present, it is also validated as TestResponse.
+       */
+      const sessionId = state.sessionId;
+      expect(sessionId).toBeTruthy();
+
+      const revisions = await getRevisions(sessionId);
+      expect(Array.isArray(revisions)).toBe(true);
+
+      // Validate the full Revision shape for all revisions (may be empty if no students)
+      for (const revision of revisions) {
+        validateRevisionShape(revision);
+        // execution_result is null or TestResponse — validate when present
+        if (revision.execution_result !== null) {
+          validateTestResponseShape(revision.execution_result);
+        }
+      }
+
+      // Verify the Revision type structure is correct even with empty array
+      // by checking that revisions from history sessions can also be validated
+      // (this test passes vacuously if there are no revisions — see history tests
+      // in sessions-full.integration.test.ts for coverage with actual revisions)
     });
   });
 });

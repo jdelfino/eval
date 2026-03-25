@@ -32,6 +32,7 @@ import {
 } from '@/lib/api/sessions';
 import {
   validateSessionShape,
+  validateSessionPublicStateShape,
 } from './validators';
 
 describe('Sessions Full API', () => {
@@ -178,6 +179,32 @@ describe('Sessions Full API', () => {
       expect(typeof publicState.status).toBe('string');
 
       expect(['active', 'completed']).toContain(publicState.status);
+    });
+
+    it('round-trips execution_settings: featured_test_cases appears in getSessionPublicState after featureCode with test_cases', async () => {
+      /**
+       * TC2: Verifies that execution_settings featured via featureCode() appear in the
+       * public state as featured_test_cases. The typia validator enforces exact shape
+       * of SessionPublicState including the optional featured_test_cases field.
+       * If the field is missing or renamed, this test catches it.
+       */
+      const executionSettings = {
+        stdin: 'round-trip-input',
+        random_seed: 99,
+        attached_files: [{ name: 'data.txt', content: 'hello' }],
+      };
+
+      await featureCode(testSessionId, 'print("round-trip")', executionSettings);
+
+      const publicState = await getSessionPublicState(testSessionId);
+
+      // Validate full SessionPublicState shape with typia
+      validateSessionPublicStateShape(publicState);
+
+      // Verify featured_test_cases round-trips correctly
+      expect(publicState.featured_code).toBe('print("round-trip")');
+      expect(publicState.featured_test_cases).toBeDefined();
+      expect(publicState.featured_test_cases).toEqual(executionSettings);
     });
   });
 

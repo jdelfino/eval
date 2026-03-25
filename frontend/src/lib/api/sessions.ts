@@ -106,6 +106,31 @@ export async function getRevisions(
 }
 
 /**
+ * Parameters for creating a code revision.
+ */
+export interface CreateRevisionParams {
+  full_code?: string;
+  is_diff?: boolean;
+  diff?: string;
+  base_revision_id?: string;
+  execution_result?: import('@/types/api').TestResponse;
+}
+
+/**
+ * Create a code revision for a session.
+ * The caller must be a student in the session (backend uses auth token to identify student).
+ * @param sessionId - The session ID
+ * @param params - Revision data including optional execution result
+ * @returns The created Revision object
+ */
+export async function createRevision(
+  sessionId: string,
+  params: CreateRevisionParams
+): Promise<Revision> {
+  return apiPost<Revision>(`/sessions/${sessionId}/revisions`, params);
+}
+
+/**
  * Summary of a student within a session details response.
  * This is a subset of the full SessionStudent type from types/api.ts,
  * used specifically for the session details endpoint which returns
