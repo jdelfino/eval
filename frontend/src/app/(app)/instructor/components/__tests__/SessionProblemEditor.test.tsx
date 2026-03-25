@@ -32,23 +32,59 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 }));
 
 // Mock the CodeEditor component
+// Simulates Monaco's behavior: without a key prop to force remount, switching from
+// non-empty to empty content may not properly update the editor state
 jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({
-    code,
-    onChange,
-    readOnly,
-    onExecutionSettingsChange,
-    title,
-    problem,
-    onProblemEdit,
-    editableProblem
-  }: any) {
+  const editorInstances = new Map<string, string>();
+
+  return React.forwardRef(function MockCodeEditor(props: any, ref: any) {
+    const {
+      code,
+      onChange,
+      readOnly,
+      onExecutionSettingsChange,
+      title,
+      problem,
+      onProblemEdit,
+      editableProblem
+    } = props;
+
+    // Use a ref to simulate Monaco's internal state that persists across renders
+    const instanceIdRef = React.useRef<string | undefined>(undefined);
+    const [displayedCode, setDisplayedCode] = React.useState(code);
+
+    // On mount, create or retrieve instance
+    React.useEffect(() => {
+      const instanceId = Math.random().toString(36);
+      instanceIdRef.current = instanceId;
+      editorInstances.set(instanceId, code);
+      setDisplayedCode(code);
+
+      return () => {
+        if (instanceIdRef.current) {
+          editorInstances.delete(instanceIdRef.current);
+        }
+      };
+    }, []); // Empty deps = only runs on mount/unmount (simulating Monaco instance lifecycle)
+
+    // Update displayed code only if instance has been remounted (via key change)
+    // Otherwise, simulate Monaco bug: empty string doesn't trigger update
+    React.useEffect(() => {
+      if (instanceIdRef.current) {
+        // Simulate Monaco bug: when code becomes empty, the editor doesn't update unless remounted
+        if (code !== '' || !editorInstances.get(instanceIdRef.current)) {
+          editorInstances.set(instanceIdRef.current, code);
+          setDisplayedCode(code);
+        }
+      }
+    }, [code]);
+
     return (
       <div data-testid="code-editor" data-readonly={readOnly ? 'true' : 'false'}>
         <div>{title}</div>
         <textarea
           data-testid="code-textarea"
-          value={code}
+          value={displayedCode}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
         />
@@ -83,7 +119,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         )}
       </div>
     );
-  };
+  });
 });
 
 describe('SessionProblemEditor', () => {
@@ -443,6 +479,37 @@ describe('SessionProblemEditor', () => {
       // Switch to Solution tab
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
       expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+    });
+
+    it('switches from solution to empty starter code correctly', () => {
+      // Regression test for PLAT-m8d: Solution stays visible when switching to empty Starter Code tab
+      // This verifies that the CodeEditor properly updates when switching from a populated Solution
+      // tab to an empty Starter Code tab. Without a key prop forcing remount, Monaco may retain
+      // the previous buffer instead of showing empty content.
+      const initialProblem = {
+        title: 'Test',
+        description: 'Test',
+        starter_code: '',
+        solution: 'solution code here',
+      } as any;
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Start on Starter Code tab (default) - should be empty
+      expect(screen.getByTestId('code-textarea')).toHaveValue('');
+
+      // Switch to Solution tab - should show solution
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+
+      // Switch back to Starter Code tab - should be empty again
+      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
+      expect(screen.getByTestId('code-textarea')).toHaveValue('');
     });
   });
 

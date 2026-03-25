@@ -229,6 +229,7 @@ export default function SessionProblemEditor({
       {/* Full-width code editor */}
       <EditorContainer variant="flex">
         <CodeEditor
+          key={activeTab}
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : () => {}}
           readOnly={activeTab === 'solution'}
