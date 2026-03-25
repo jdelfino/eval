@@ -366,6 +366,28 @@ describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
     });
   });
 
+  it('should extract from IOTestCase wire format (flat input field)', () => {
+    // This is the actual shape returned by the Go backend — IOTestCase with top-level input
+    const wireTestCases = [
+      {
+        name: 'Default',
+        input: 'hello world',
+        expected_output: '',
+        match_type: 'exact',
+        random_seed: 7,
+        attached_files: [{ name: 'data.csv', content: 'a,b,c' }],
+        order: 0,
+      },
+    ];
+
+    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+    const result = extractExecutionSettingsFromTestCases(wireTestCases);
+
+    expect(result.stdin).toBe('hello world');
+    expect(result.random_seed).toBe(7);
+    expect(result.attached_files).toEqual([{ name: 'data.csv', content: 'a,b,c' }]);
+  });
+
   it('should return empty settings for null/undefined test_cases', () => {
     const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
 

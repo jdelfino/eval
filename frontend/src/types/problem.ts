@@ -140,13 +140,15 @@ export function extractExecutionSettingsFromTestCases(
     return testCases;
   }
 
+  // Backend IOTestCase wire format has top-level fields: input, random_seed, attached_files.
+  // The rich client TestCase type nests input inside config.data — check both shapes.
   const firstCase = testCases[0] as any;
 
-  // Extract stdin from config.data.input for input-output test cases
-  let stdin: string | undefined;
-  if (firstCase.config?.type === 'input-output') {
-    stdin = firstCase.config.data?.input;
-  }
+  // Prefer top-level input (IOTestCase wire format), fall back to config.data.input (rich TestCase)
+  const stdin: string | undefined =
+    firstCase.input !== undefined ? firstCase.input :
+    firstCase.config?.data?.input !== undefined ? firstCase.config.data.input :
+    undefined;
 
   return {
     stdin,
