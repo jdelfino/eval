@@ -30,12 +30,12 @@ export async function updateCode(
   sessionId: string,
   studentId: string,
   code: string,
-  executionSettings?: ExecutionSettings
+  testCases?: ExecutionSettings
 ): Promise<SessionStudent> {
   return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
     student_id: studentId,
     code,
-    execution_settings: executionSettings,
+    test_cases: testCases,
   });
 }
 

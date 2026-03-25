@@ -50,6 +50,7 @@ import { registerStudent } from '@/lib/api/registration';
 import {
   joinSessionAsStudent,
   updateStudentCode,
+  updateCode,
   featureStudent,
 } from '@/lib/api/realtime';
 
@@ -303,6 +304,24 @@ describe('Realtime event contract tests', () => {
         expect(data.session_id).toBe(newSession.id);
         expect(data.problem).not.toBeNull();
 
+        // TC4: Validate the nested problem shape matches the concrete ApiProblem type.
+        // If the backend returns problem with wrong field names or missing fields,
+        // the shape check here catches it. We check key fields directly since
+        // the full Problem is validated via SessionStartedInSectionData's typia validator.
+        const p = data.problem;
+        expect(typeof p.id).toBe('string');
+        expect(typeof p.namespace_id).toBe('string');
+        expect(typeof p.title).toBe('string');
+        expect(typeof p.language).toBe('string');
+        expect(typeof p.author_id).toBe('string');
+        expect(typeof p.created_at).toBe('string');
+        expect(typeof p.updated_at).toBe('string');
+        expect(Array.isArray(p.tags)).toBe(true);
+        expect(p.description === null || typeof p.description === 'string').toBe(true);
+        expect(p.starter_code === null || typeof p.starter_code === 'string').toBe(true);
+        expect(p.class_id === null || typeof p.class_id === 'string').toBe(true);
+        expect(p.solution === null || typeof p.solution === 'string').toBe(true);
+
         // Clean up new session (DELETE triggers session_ended + session_ended_in_section)
         // We consume those events in the session_ended tests below, so just delete
         await endSession(newSession.id);
@@ -377,6 +396,55 @@ describe('Realtime event contract tests', () => {
         const data = envelope.data as StudentCodeUpdatedData;
         validateStudentCodeUpdatedShape(data);
         expect(data.code).toBe('print("rt-contract-test")');
+      } finally {
+        unsubscribe();
+        resetAuthProvider();
+      }
+    });
+
+    it('publishes test_cases field when student updates code with execution settings', async () => {
+      /**
+       * TC1/TC2: Verifies that student_code_updated event carries test_cases when
+       * code is saved with execution settings. The typia validator checks the full
+       * StudentCodeUpdatedData shape including the optional test_cases field.
+       * If the wire field is misnamed (e.g. execution_settings), the equality
+       * check against the sent settings would fail.
+       */
+      const { sessionId, instructorToken } = setupState;
+
+      const sessionChannel = `session:${sessionId}`;
+      const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
+
+      try {
+        const testCases = {
+          stdin: 'student-input',
+          random_seed: 7,
+          attached_files: [{ name: 'helper.py', content: 'def helper(): pass' }],
+        };
+
+        // Instructor updates student code with test_cases (instructor path sends test_cases field)
+        configureTestAuth(instructorToken);
+        if (joinedStudentUserId) {
+          await updateCode(sessionId, joinedStudentUserId, 'print("with-test-cases")', testCases);
+        } else {
+          // Can't run this test without a joined student — skip gracefully
+          unsubscribe();
+          return;
+        }
+
+        const envelope = await collectNext();
+
+        expect(envelope.type).toBe('student_code_updated');
+        const data = envelope.data as StudentCodeUpdatedData;
+        validateStudentCodeUpdatedShape(data);
+        expect(data.code).toBe('print("with-test-cases")');
+
+        // Verify test_cases contents are present and match what was sent
+        expect(data.test_cases).toBeDefined();
+        expect(data.test_cases).toEqual(testCases);
+
+        // Ensure execution_settings does NOT appear (wrong field name)
+        expect('execution_settings' in data).toBe(false);
       } finally {
         unsubscribe();
         resetAuthProvider();

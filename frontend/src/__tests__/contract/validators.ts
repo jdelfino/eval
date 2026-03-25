@@ -11,7 +11,7 @@
  */
 
 import typia from 'typia';
-import type { User, Session, SessionStudent, TestResponse, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentWorkWithProblem, StudentProgress, StudentWorkSummary } from '@/types/api';
+import type { User, Session, SessionStudent, TestResponse, SectionProblem, PublishedProblemWithStatus, StudentWork, StudentWorkWithProblem, StudentProgress, StudentWorkSummary, Revision, SessionPublicState } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
 import type {
   StudentJoinedData,
@@ -87,6 +87,16 @@ export function validateStudentProgressShape(obj: StudentProgress, _label = 'Stu
 /** Validate the shape of a StudentWorkSummary object from the backend. */
 export function validateStudentWorkSummaryShape(obj: StudentWorkSummary, _label = 'StudentWorkSummary'): void {
   typia.assertEquals<StudentWorkSummary>(obj);
+}
+
+/** Validate the shape of a Revision object from the backend. */
+export function validateRevisionShape(obj: Revision, _label = 'Revision'): void {
+  typia.assertEquals<Revision>(obj);
+}
+
+/** Validate the shape of a SessionPublicState object from the backend. */
+export function validateSessionPublicStateShape(obj: SessionPublicState, _label = 'SessionPublicState'): void {
+  typia.assertEquals<SessionPublicState>(obj);
 }
 
 // ---------------------------------------------------------------------------
