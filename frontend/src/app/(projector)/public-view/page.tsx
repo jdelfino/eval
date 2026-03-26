@@ -122,10 +122,15 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Extract execution settings from featured_test_cases.
-  // May be ExecutionSettings object or IOTestCase[] — extractExecutionSettingsFromTestCases handles both.
+  // Extract execution settings from problem's test_cases (baseline for the session).
+  const problemExecutionSettings: ExecutionSettings =
+    extractExecutionSettingsFromTestCases((state?.problem as any)?.test_cases) ?? {};
+
+  // When something is featured, use featured_test_cases; otherwise fall back to problem's settings.
   const featuredExecutionSettings: ExecutionSettings =
-    extractExecutionSettingsFromTestCases(state?.featured_test_cases as any) ?? {};
+    state?.featured_test_cases
+      ? (extractExecutionSettingsFromTestCases(state.featured_test_cases as any) ?? problemExecutionSettings)
+      : problemExecutionSettings;
 
   // Reset local code when featured student or their code changes
   useEffect(() => {
@@ -251,6 +256,7 @@ function PublicViewContent() {
             onChange={handleCodeChange}
             problem={problem || null}
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
+            defaultExecutionSettings={problemExecutionSettings}
             onRun={handleRunCode(scratchPadCode)}
             isRunning={isRunning}
             execution_result={executionResult}
