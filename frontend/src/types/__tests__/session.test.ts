@@ -1,7 +1,7 @@
 /**
  * Tests for session type hierarchy and mapper functions.
  */
-import type { Session as ApiSession, Problem, SessionPublicState } from '../api';
+import type { Session as ApiSession, SessionPublicState } from '../api';
 import { mapApiSession } from '../session';
 
 describe('Session type hierarchy', () => {
@@ -131,5 +131,18 @@ describe('SessionPublicState type', () => {
       status: 'active',
     };
     expect(state.problem).toBeNull();
+  });
+
+  it('SessionPublicState has featured_test_cases field, not featured_execution_settings', () => {
+    const state: SessionPublicState = {
+      problem: null,
+      featured_student_id: 'u-1',
+      featured_code: 'print("hi")',
+      featured_test_cases: [{ name: 'Case 1', input: 'x', match_type: 'exact', order: 0 }],
+      join_code: 'XYZ',
+      status: 'active',
+    };
+    expect(state.featured_test_cases).toHaveLength(1);
+    expect('featured_execution_settings' in state).toBe(false);
   });
 });

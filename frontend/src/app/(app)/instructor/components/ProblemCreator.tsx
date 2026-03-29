@@ -11,21 +11,22 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
+import type { IOTestCase, TestResult } from '@/types/problem';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
-import { extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
+import { executeCode, FREE_RUN_CASE } from '@/lib/api/execute';
+import { CasesPanel } from '@/app/(fullscreen)/student/components/CasesPanel';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
   onProblemCreated?: (problem_id: string) => void;
   onCancel?: () => void;
   class_id?: string | null;
+  classes?: Class[];
 }
 
 const JAVA_DEFAULT_STARTER = `public class Main {
@@ -39,13 +40,14 @@ export default function ProblemCreator({
   onProblemCreated,
   onCancel,
   class_id = null,
+  classes = [],
 }: ProblemCreatorProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
   const [language, setLanguage] = useState('python');
-  const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
+  const [activeTab, setActiveTab] = useState<'starter' | 'solution' | 'cases'>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
@@ -55,39 +57,21 @@ export default function ProblemCreator({
   const [generateModalError, setGenerateModalError] = useState<string | null>(null);
 
   // Class and tags state
-  const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(class_id || '');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  // Execution settings
-  const [stdin, setStdin] = useState('');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
-  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
+  // I/O test cases
+  const [test_cases, setTestCases] = useState<IOTestCase[]>([]);
+  // Selected case in CasesPanel (for detail view)
+  const [selectedCase, setSelectedCase] = useState<string | null>(null);
 
   // Execution state for code editor
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [runResult, setRunResult] = useState<TestResult | null>(null);
 
   const isEditMode = !!problem_id;
-
-  // Load classes on mount
-  useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        const loadedClasses = await listClasses();
-        setClasses(loadedClasses);
-        // Pre-populate if class_id prop provided
-        if (class_id) {
-          setSelectedClassId(class_id);
-        }
-      } catch {
-        // Classes won't be populated but form still works
-      }
-    };
-    fetchClasses();
-  }, [class_id]);
 
   // Load problem data when editing
   useEffect(() => {
@@ -109,11 +93,8 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings from test_cases[0]
-      const execSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
-      setStdin(execSettings?.stdin || '');
-      setRandomSeed(execSettings?.random_seed);
-      setAttachedFiles(execSettings?.attached_files || []);
+      // Load I/O test cases
+      setTestCases((problem.test_cases as IOTestCase[]) || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -156,21 +137,13 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // Build test_cases from execution settings (stdin, random_seed, attached_files).
-      // These are stored as test_cases[0] in the backend, not as a separate field.
-      const testCases = buildTestCasesFromExecutionSettings({
-        stdin,
-        random_seed,
-        attached_files,
-      });
-
       const problemInput = {
         title: title.trim(),
         description: description.trim() || null,
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
         language,
-        test_cases: testCases,
+        test_cases: test_cases as unknown[],
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
       };
@@ -189,11 +162,10 @@ export default function ProblemCreator({
         setStarterCode('');
         setSolution('');
         setLanguage('python');
-        setStdin('');
-        setRandomSeed(undefined);
-        setAttachedFiles([]);
         setTags([]);
         setTagInput('');
+        setTestCases([]);
+        setSelectedCase(null);
       }
 
       // Notify parent
@@ -255,6 +227,32 @@ export default function ProblemCreator({
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // CasesPanel handlers (instructor authoring mode)
+  const handleAddCase = () => {
+    const newCase: IOTestCase = {
+      name: `Case ${test_cases.length + 1}`,
+      input: '',
+      match_type: 'exact',
+      order: test_cases.length,
+    };
+    setTestCases(prev => [...prev, newCase]);
+    setSelectedCase(newCase.name);
+  };
+
+  const handleUpdateInstructorCase = (name: string, updates: Partial<IOTestCase>) => {
+    setTestCases(prev =>
+      prev.map(c => (c.name === name ? { ...c, ...updates } : c))
+    );
+  };
+
+  const handleDeleteInstructorCase = (name: string) => {
+    setTestCases(prev => {
+      const filtered = prev.filter(c => c.name !== name);
+      return filtered.map((c, i) => ({ ...c, order: i }));
+    });
+    setSelectedCase(null);
   };
 
   const debuggerHook = useApiDebugger();
@@ -341,6 +339,25 @@ export default function ProblemCreator({
         gap: '1.5rem',
         flexWrap: 'wrap',
       }}>
+        {/* Title input */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+          <label htmlFor="creator-title" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Title *</label>
+          <input
+            id="creator-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Problem title..."
+            style={{
+              flex: 1,
+              padding: '0.375rem 0.5rem',
+              fontSize: '0.875rem',
+              border: '1px solid #ced4da',
+              borderRadius: '0.25rem',
+            }}
+          />
+        </div>
+
         {/* Class selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <label htmlFor="problem-class" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Class *</label>
@@ -445,48 +462,74 @@ export default function ProblemCreator({
         </div>
       </div>}
 
-      {/* Tab bar for Starter Code / Solution */}
-      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
+      {/* Tab bar for Starter Code / Solution / Cases */}
+      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution' | 'cases')} className="flex-shrink-0">
         <Tabs.List className="items-center">
           <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
           <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
-          <button
-            type="button"
-            onClick={handleOpenGenerateModal}
-            disabled={!description.trim() || isGenerating || isSubmitting}
-            className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Generate Solution
-          </button>
+          <Tabs.Tab tabId="cases">Cases</Tabs.Tab>
+          {activeTab !== 'cases' && (
+            <button
+              type="button"
+              onClick={handleOpenGenerateModal}
+              disabled={!description.trim() || isGenerating || isSubmitting}
+              className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Generate Solution
+            </button>
+          )}
         </Tabs.List>
       </Tabs>}
 
-      {/* Full-width code editor */}
-      {!isLoading && <EditorContainer variant="flex">
+      {/* Cases tab content — uses the same CasesPanel pattern as the student view */}
+      {!isLoading && activeTab === 'cases' && (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <CasesPanel
+            instructorCases={test_cases}
+            studentCases={[]}
+            caseResults={{}}
+            selectedCase={selectedCase}
+            isRunning={false}
+            onSelectCase={setSelectedCase}
+            onRunCase={() => {}}
+            onRunAll={() => {}}
+            onAddCase={handleAddCase}
+            onUpdateStudentCase={() => {}}
+            onDeleteStudentCase={() => {}}
+            onUpdateInstructorCase={handleUpdateInstructorCase}
+            onDeleteInstructorCase={handleDeleteInstructorCase}
+            darkTheme={false}
+          />
+        </div>
+      )}
+
+      {/* Full-width code editor — shown for starter and solution tabs */}
+      {!isLoading && activeTab !== 'cases' && <EditorContainer variant="flex">
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(execution_settings) => {
+          onRun={() => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
-            setExecutionResult(null);
+            setRunResult(null);
             executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
-            }).then(setExecutionResult).catch((err: any) => {
-              setError(err?.message || 'Failed to run code');
+              cases: [FREE_RUN_CASE],
+            }).then(response => {
+              setRunResult(response.results[0] ?? null);
+            }).catch((err) => {
+              setRunResult({
+                name: 'run',
+                type: 'io',
+                status: 'error',
+                actual: '',
+                stderr: err.message || 'Execution failed',
+                time_ms: 0,
+              });
             }).finally(() => setIsRunning(false));
           }}
           isRunning={isRunning}
-          execution_result={executionResult}
+          runResult={runResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          defaultExecutionSettings={{ stdin, random_seed, attached_files }}
-          onExecutionSettingsChange={(settings) => {
-            setStdin(settings.stdin || '');
-            setRandomSeed(settings.random_seed);
-            setAttachedFiles(settings.attached_files || []);
-          }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
           debugger={debuggerHook}

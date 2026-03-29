@@ -43,35 +43,6 @@ type ExportProblem struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
-// legacyExecutionSettings is the pre-migration shape of execution_settings JSON.
-// Used by the compat bridge to convert old frontend requests to IOTestCase[].
-// This bridge is removed in PR 3 when the frontend is updated.
-type legacyExecutionSettings struct {
-	Stdin         string                   `json:"stdin"`
-	RandomSeed    *int                     `json:"random_seed"`
-	AttachedFiles []store.File             `json:"attached_files"`
-}
-
-// convertExecutionSettingsToTestCases converts a legacy execution_settings JSON object
-// into a single-element IOTestCase JSON array. Returns nil when settings is nil or empty.
-func convertExecutionSettingsToTestCases(settings json.RawMessage) (json.RawMessage, error) {
-	if len(settings) == 0 || string(settings) == "null" || string(settings) == "{}" {
-		return nil, nil
-	}
-	var es legacyExecutionSettings
-	if err := json.Unmarshal(settings, &es); err != nil {
-		return nil, fmt.Errorf("parse execution_settings: %w", err)
-	}
-	tc := store.IOTestCase{
-		Name:          "Default",
-		Input:         es.Stdin,
-		MatchType:     "exact",
-		RandomSeed:    es.RandomSeed,
-		AttachedFiles: es.AttachedFiles,
-	}
-	return json.Marshal([]store.IOTestCase{tc})
-}
-
 // ProblemsExport is the envelope for exported problems.
 type ProblemsExport struct {
 	ExportedAt time.Time       `json:"exported_at"`
@@ -203,13 +174,10 @@ type createProblemRequest struct {
 	Description *string         `json:"description" validate:"omitempty,max=5000"`
 	StarterCode *string         `json:"starter_code" validate:"omitempty"`
 	TestCases   json.RawMessage `json:"test_cases"`
-	// ExecutionSettings is accepted for backward compatibility with the old frontend
-	// and converted to a single IOTestCase. Removed in PR 3 when the frontend is updated.
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	ClassID           *uuid.UUID      `json:"class_id"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          string          `json:"language,omitempty"`
+	ClassID     *uuid.UUID      `json:"class_id"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    string          `json:"language,omitempty"`
 }
 
 // Create handles POST /api/v1/problems — creates a new problem (instructor+).
@@ -236,19 +204,9 @@ func (h *ProblemHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Compat bridge: if old frontend sent execution_settings and no test_cases,
-	// convert execution_settings to a single IOTestCase.
-	// Note: json.RawMessage("[]") has len==2 and "null" has len==4, so we must
-	// also check string equality to treat them as empty.
+	// Default to empty array when test_cases is not provided.
+	// The DB column is NOT NULL, so nil would violate the constraint.
 	testCases := req.TestCases
-	if (len(testCases) == 0 || string(testCases) == "[]" || string(testCases) == "null") && len(req.ExecutionSettings) > 0 {
-		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
-		if convErr != nil {
-			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")
-			return
-		}
-		testCases = converted
-	}
 	if len(testCases) == 0 {
 		testCases = json.RawMessage("[]")
 	}
@@ -280,13 +238,10 @@ type updateProblemRequest struct {
 	Description *string         `json:"description" validate:"omitempty,max=5000"`
 	StarterCode *string         `json:"starter_code" validate:"omitempty"`
 	TestCases   json.RawMessage `json:"test_cases"`
-	// ExecutionSettings is accepted for backward compatibility with the old frontend
-	// and converted to a single IOTestCase. Removed in PR 3 when the frontend is updated.
-	ExecutionSettings json.RawMessage `json:"execution_settings"`
-	ClassID           *uuid.UUID      `json:"class_id"`
-	Tags              []string        `json:"tags"`
-	Solution          *string         `json:"solution"`
-	Language          *string         `json:"language,omitempty"`
+	ClassID     *uuid.UUID      `json:"class_id"`
+	Tags        []string        `json:"tags"`
+	Solution    *string         `json:"solution"`
+	Language    *string         `json:"language,omitempty"`
 }
 
 // Update handles PATCH /api/v1/problems/{id} — updates a problem (author or system-admin, enforced by RLS).
@@ -310,26 +265,12 @@ func (h *ProblemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Language = &normalized
 	}
 
-	// Compat bridge: if old frontend sent execution_settings and no test_cases,
-	// convert execution_settings to a single IOTestCase.
-	// Note: json.RawMessage("[]") has len==2 and "null" has len==4, so we must
-	// also check string equality to treat them as empty.
-	testCases := req.TestCases
-	if (len(testCases) == 0 || string(testCases) == "[]" || string(testCases) == "null") && len(req.ExecutionSettings) > 0 {
-		converted, convErr := convertExecutionSettingsToTestCases(req.ExecutionSettings)
-		if convErr != nil {
-			httputil.WriteError(w, http.StatusBadRequest, "invalid execution_settings")
-			return
-		}
-		testCases = converted
-	}
-
 	repos := store.ReposFromContext(r.Context())
 	problem, err := repos.UpdateProblem(r.Context(), id, store.UpdateProblemParams{
 		Title:       req.Title,
 		Description: req.Description,
 		StarterCode: req.StarterCode,
-		TestCases:   testCases,
+		TestCases:   req.TestCases,
 		ClassID:     req.ClassID,
 		Tags:        req.Tags,
 		Solution:    req.Solution,

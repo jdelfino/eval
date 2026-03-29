@@ -41,6 +41,7 @@ describe('Section Problems API', () => {
       tags: ['contract-section-problem-test'],
       starter_code: 'print("hello")',
       language: 'python',
+      test_cases: [],
     });
     createdProblemId = problem.id;
   });

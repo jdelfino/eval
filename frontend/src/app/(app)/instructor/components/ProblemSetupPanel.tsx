@@ -18,12 +18,6 @@ interface ProblemSetupPanelProps {
   onUpdateProblem: (problem: ApiProblem) => void;
   /** Initial problem data */
   initialProblem?: Problem | null;
-  /** Initial execution settings */
-  initialExecutionSettings?: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
   /** Whether the panel is loading */
   isLoading?: boolean;
   /** Whether to render in full-width mode (no panel wrapper) */
@@ -40,7 +34,6 @@ interface ProblemSetupPanelProps {
 export function ProblemSetupPanel({
   onUpdateProblem,
   initialProblem,
-  initialExecutionSettings,
   isLoading = false,
   isFullWidth = false,
   onFeatureSolution,
@@ -53,7 +46,6 @@ export function ProblemSetupPanel({
           <SessionProblemEditor
             onUpdateProblem={onUpdateProblem}
             initialProblem={initialProblem}
-            initialExecutionSettings={initialExecutionSettings}
             onFeatureSolution={onFeatureSolution}
           />
         </Card>
@@ -74,7 +66,6 @@ export function ProblemSetupPanel({
       <SessionProblemEditor
         onUpdateProblem={onUpdateProblem}
         initialProblem={initialProblem}
-        initialExecutionSettings={initialExecutionSettings}
         onFeatureSolution={onFeatureSolution}
       />
     </div>

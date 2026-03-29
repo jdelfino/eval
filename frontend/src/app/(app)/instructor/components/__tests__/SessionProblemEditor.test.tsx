@@ -63,7 +63,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
       code,
       onChange,
       readOnly,
-      onExecutionSettingsChange,
       title,
       problem,
       onProblemEdit,
@@ -108,17 +107,6 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
           value={displayedCode}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
-        />
-        <input
-          data-testid="stdin-input"
-          placeholder="stdin"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: e.target.value, random_seed: undefined, attached_files: undefined })}
-        />
-        <input
-          data-testid="seed-input"
-          type="number"
-          placeholder="seed"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: undefined, random_seed: e.target.value ? Number(e.target.value) : undefined, attached_files: undefined })}
         />
         {editableProblem && (
           <div data-testid="editable-problem-sidebar">
@@ -180,24 +168,6 @@ describe('SessionProblemEditor', () => {
     expect(screen.getByTestId('problem-title-input')).toHaveValue('Test Problem');
     expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Test description');
     expect(screen.getByTestId('code-textarea')).toHaveValue('print("hello")');
-  });
-
-  it('renders with initial execution settings', () => {
-    const initialExecutionSettings = {
-      stdin: 'test input',
-      random_seed: 42,
-      attached_files: [{ name: 'test.txt', content: 'content' }],
-    };
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialExecutionSettings={initialExecutionSettings}
-      />
-    );
-
-    // CodeEditor should receive these settings as props
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
   });
 
   it('updates title when user types', () => {
@@ -271,58 +241,6 @@ describe('SessionProblemEditor', () => {
     );
   });
 
-  it('includes execution settings when stdin is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set stdin
-    fireEvent.change(screen.getByTestId('stdin-input'), {
-      target: { value: 'test input' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            name: 'Default',
-            input: 'test input',
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('includes execution settings when random seed is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set random seed
-    fireEvent.change(screen.getByTestId('seed-input'), {
-      target: { value: '42' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            random_seed: 42,
-          }),
-        ]),
-      })
-    );
-  });
 
   it('trims whitespace from inputs when updating', () => {
     render(
@@ -400,7 +318,6 @@ describe('SessionProblemEditor', () => {
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
         initialProblem={initialProblem}
-        initialExecutionSettings={initialSettings}
       />
     );
 

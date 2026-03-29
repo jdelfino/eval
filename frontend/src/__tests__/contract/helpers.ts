@@ -11,6 +11,7 @@ interface SetupState {
   instructorUserId: string;
   classId: string;
   sectionId: string;
+  problemId: string;
   sessionId: string;
   joinCode: string;
   instructorExternalId: string;

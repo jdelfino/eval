@@ -145,6 +145,7 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
           const { user_id, code, test_cases } = parsed.data;
           const userId = user_id || null;
           const hasCode = typeof code === 'string' && code.length > 0;
+          const parsedCases = Array.isArray(test_cases) ? test_cases : null;
           setState(prev => {
             if (!prev) {
               console.warn('[useRealtimePublicView] Dropping featured_student_changed event: state not yet initialized');
@@ -154,7 +155,7 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
               ...prev,
               featured_student_id: userId,
               featured_code: hasCode ? code : (userId ? '' : null),
-              featured_test_cases: (hasCode || userId) ? (test_cases ?? null) : null,
+              featured_test_cases: (hasCode || userId) ? parsedCases : null,
             };
           });
           break;
@@ -256,13 +257,14 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
         case 'featured_student_changed': {
           const { user_id, code, test_cases } = parsed.data;
           const userId = user_id || null;
+          const parsedCases = Array.isArray(test_cases) ? test_cases : null;
           setState(prev => {
             if (!prev) return prev;
             return {
               ...prev,
               featured_student_id: userId,
               featured_code: userId ? (code ?? '') : null,
-              featured_test_cases: userId ? (test_cases ?? null) : null,
+              featured_test_cases: userId ? parsedCases : null,
             };
           });
           break;

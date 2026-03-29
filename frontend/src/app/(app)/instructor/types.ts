@@ -4,7 +4,7 @@
  * Re-exports and extensions of canonical types from types/api.ts and types/problem.ts.
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/problem';
 
 /** Common class fields used across instructor UI components. */
 export interface ClassInfo {
@@ -23,7 +23,7 @@ export interface Student {
   id: string;
   name: string;
   has_code: boolean;
-  execution_settings?: ExecutionSettings;
+  test_cases?: IOTestCase[];
   last_code_update?: Date;
 }
 
@@ -31,7 +31,7 @@ export interface RealtimeStudent {
   id: string;
   name: string;
   code?: string;
-  execution_settings?: ExecutionSettings;
+  test_cases?: IOTestCase[];
 }
 
 /**
@@ -39,7 +39,3 @@ export interface RealtimeStudent {
  */
 export type { ProblemSummary } from '@/lib/api/problems';
 
-/**
- * Re-export execution response types from api.ts to avoid duplication.
- */
-export type { CaseResult, CaseSummary, TestResponse } from '@/types/api';

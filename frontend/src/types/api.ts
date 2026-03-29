@@ -98,7 +98,7 @@ export interface Session {
   problem: Problem | null; // full Problem, or null/empty for blank sessions
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized (no omitempty)
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized (no omitempty)
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -136,7 +136,7 @@ export interface Revision {
   diff: string | null;
   full_code: string | null;
   base_revision_id: string | null;
-  execution_result: TestResponse | null;
+  execution_result: import('@/lib/api/tests').TestResponse | null;
   student_work_id: string | null; // Go *uuid.UUID, always serialized (no omitempty)
 }
 
@@ -175,7 +175,7 @@ export interface SessionPublicState {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized
   join_code: string;
   status: string;
 }
@@ -310,31 +310,15 @@ export interface StudentWorkSummary {
 // Execution — Cases[] protocol
 // ---------------------------------------------------------------------------
 
-/** CaseResult — outcome of a single test case execution. */
-export interface CaseResult {
-  name: string;
-  type: string;
-  /** "run" | "passed" | "failed" | "error" */
-  status: string;
-  input?: string;
-  expected?: string;
-  actual?: string;
-  stderr?: string;
-  time_ms: number;
-}
+// Re-export TestResponse and TestSummary from @/lib/api/tests for consumers
+// that import from @/types/api (e.g. validators, Revision.execution_result).
+export type { TestResponse, TestSummary } from '@/lib/api/tests';
 
-/** CaseSummary — aggregate counts across all case results. */
-export interface CaseSummary {
-  total: number;
-  passed: number;
-  failed: number;
-  errors: number;
-  run: number;
-  time_ms: number;
-}
-
-/** TestResponse — the response shape for POST /execute. */
-export interface TestResponse {
-  results: CaseResult[];
-  summary: CaseSummary;
+/** @deprecated Use TestResponse instead. Legacy flat execution result shape. */
+export interface ExecutionResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+  execution_time_ms: number;
+  stdin?: string;
 }

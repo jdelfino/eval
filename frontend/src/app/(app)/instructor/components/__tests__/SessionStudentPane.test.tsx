@@ -110,7 +110,6 @@ describe('SessionStudentPane', () => {
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: null,
-    sessionExecutionSettings: {},
     join_code: 'ABC123',
   };
 

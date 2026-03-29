@@ -9,7 +9,7 @@
 import { updateSessionProblem, featureCode } from '@/lib/api/sessions';
 import { apiPost } from '@/lib/api-client';
 import type { Problem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase, ExecutionSettings } from '@/types/problem';
 
 jest.mock('@/lib/api-client');
 
@@ -148,11 +148,16 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
   it('should accept and send test_cases parameter when featuring code', async () => {
     const sessionId = 'session-123';
     const code = 'def solution():\n    return 42';
-    const testCases: ExecutionSettings = {
-      stdin: 'input data',
-      random_seed: 42,
-      attached_files: [{ name: 'data.txt', content: 'test data' }],
-    };
+    const testCases: IOTestCase[] = [
+      {
+        name: 'case-1',
+        input: 'input data',
+        match_type: 'exact',
+        random_seed: 42,
+        attached_files: [{ name: 'data.txt', content: 'test data' }],
+        order: 0,
+      },
+    ];
 
     mockApiPost.mockResolvedValue(undefined);
 
@@ -180,10 +185,15 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
   it('should send test_cases when featuring solution with execution settings', async () => {
     const sessionId = 'session-123';
     const solution = 'def solve(n):\n    return n * 2';
-    const testCases: ExecutionSettings = {
-      stdin: '5\n',
-      random_seed: 99,
-    };
+    const testCases: IOTestCase[] = [
+      {
+        name: 'case-1',
+        input: '5\n',
+        match_type: 'exact',
+        random_seed: 99,
+        order: 0,
+      },
+    ];
 
     mockApiPost.mockResolvedValue(undefined);
 
@@ -192,8 +202,8 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
     const callArgs = mockApiPost.mock.calls[0][1] as any;
     expect(callArgs.code).toBe(solution);
     expect(callArgs.test_cases).toEqual(testCases);
-    expect(callArgs.test_cases.stdin).toBe('5\n');
-    expect(callArgs.test_cases.random_seed).toBe(99);
+    expect(callArgs.test_cases[0].input).toBe('5\n');
+    expect(callArgs.test_cases[0].random_seed).toBe(99);
   });
 });
 

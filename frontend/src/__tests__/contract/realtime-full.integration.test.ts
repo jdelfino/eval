@@ -140,7 +140,7 @@ describe('Realtime Session API', () => {
         results: [
           {
             name: 'run',
-            type: 'io',
+            type: 'io' as const,
             status: 'passed' as const,
             input: 'hello',
             expected: 'hello\n',

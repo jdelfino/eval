@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Problem, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { Problem } from '@/types/problem';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {
@@ -21,7 +21,6 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   const testCasesArray = Array.isArray(problem.test_cases) ? problem.test_cases : null;
   const hasTestCases = testCasesArray && testCasesArray.length > 0;
   const hasDescription = !!problem.description;
-  const executionSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
@@ -83,17 +82,17 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
             {showTestCases && (
               <div className="mt-2 space-y-2">
                 {testCasesArray!.map((testCase, index) => (
-                  <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
+                  <div key={testCase.name || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">
                         {testCase.name || `Test ${index + 1}`}
                       </span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                        {testCase.type.toUpperCase()}
+                        {testCase.expected_output !== undefined ? 'TEST' : 'RUN-ONLY'}
                       </span>
                     </div>
-                    {testCase.description && (
-                      <p className="text-sm text-gray-600 mt-1">{testCase.description}</p>
+                    {testCase.input && (
+                      <p className="text-sm text-gray-600 mt-1 font-mono">Input: {testCase.input}</p>
                     )}
                   </div>
                 ))}
@@ -102,17 +101,7 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
           </div>
         )}
 
-        {/* Execution Settings Info */}
-        {executionSettings && (
-          <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-            {executionSettings.random_seed !== undefined && (
-              <p>🎲 Random seed: {executionSettings.random_seed}</p>
-            )}
-            {executionSettings.attached_files && executionSettings.attached_files.length > 0 && (
-              <p>📎 {executionSettings.attached_files.length} file(s) attached</p>
-            )}
-          </div>
-        )}
+        {/* TODO(PLAT-oztv.7): Test case info shown in CasesPanel instead */}
       </div>
     </div>
   );

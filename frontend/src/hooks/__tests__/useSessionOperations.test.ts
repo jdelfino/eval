@@ -129,17 +129,17 @@ describe('useSessionOperations', () => {
       title: 'Test Problem',
       description: 'Test description',
       starter_code: 'print("test")',
-      solution: null,
-      language: 'python',
-      author_id: 'user-1',
+      test_cases: null,
+      author_id: 'author-1',
       class_id: null,
       tags: [],
-      test_cases: null,
+      solution: null,
+      language: 'python',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     };
 
-    it('updates a problem successfully', async () => {
+    it('updates a problem successfully without execution_settings', async () => {
       mockApiPost.mockResolvedValueOnce({});
 
       const { result } = renderHook(() => useSessionOperations());
@@ -151,6 +151,9 @@ describe('useSessionOperations', () => {
       expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
         problem: mockProblem,
       });
+      // execution_settings should NOT be sent
+      const callArgs = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+      expect('execution_settings' in callArgs).toBe(false);
     });
 
     it('sends only the problem field (no separate execution_settings)', async () => {

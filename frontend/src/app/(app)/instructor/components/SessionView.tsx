@@ -13,10 +13,11 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { featureCode } from '@/lib/api/sessions';
-import { Student, RealtimeStudent, TestResponse } from '../types';
+import { Student, RealtimeStudent } from '../types';
+import type { TestResult } from '@/types/problem';
 
 interface SessionContext {
   section_id: string;
@@ -36,12 +37,6 @@ interface SessionViewProps {
   realtimeStudents: RealtimeStudent[];
   /** Current session problem */
   sessionProblem: Problem | null;
-  /** Session execution settings */
-  sessionExecutionSettings: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
   /** Callback to end the session */
   onEndSession: () => Promise<void>;
   /** Callback to update problem */
@@ -53,9 +48,8 @@ interface SessionViewProps {
   /** Callback to execute student code */
   executeCode: (
     studentId: string,
-    code: string,
-    execution_settings: ExecutionSettings
-  ) => Promise<TestResponse>;
+    code: string
+  ) => Promise<TestResult>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -82,7 +76,6 @@ export function SessionView({
   students,
   realtimeStudents,
   sessionProblem,
-  sessionExecutionSettings,
   onEndSession,
   onUpdateProblem,
   onFeatureStudent,
@@ -103,16 +96,11 @@ export function SessionView({
     if (!sessionProblem?.solution) return;
 
     try {
-      // Extract execution settings from test_cases[0] (IOTestCase wire format)
-      const extracted = extractExecutionSettingsFromTestCases(sessionProblem.test_cases as any);
-      const testCases: ExecutionSettings = (extracted.stdin || extracted.random_seed || extracted.attached_files)
-        ? extracted
-        : sessionExecutionSettings;
-      await featureCode(session_id, sessionProblem.solution, testCases);
+      await featureCode(session_id, sessionProblem.solution);
     } catch (error) {
       console.error('Failed to show solution:', error);
     }
-  }, [session_id, sessionProblem?.solution, sessionProblem?.test_cases, sessionExecutionSettings]);
+  }, [session_id, sessionProblem?.solution]);
 
   // Handlers for student pane
   const handleViewRevisions = useCallback((studentId: string, studentName: string) => {
@@ -125,11 +113,10 @@ export function SessionView({
 
   const handleExecuteCode = useCallback(async (
     studentId: string,
-    code: string,
-    settings: ExecutionSettings
-  ): Promise<TestResponse | undefined> => {
+    code: string
+  ): Promise<TestResult | undefined> => {
     try {
-      return await executeCode(studentId, code, settings);
+      return await executeCode(studentId, code);
     } catch (error) {
       console.error('Error executing code:', error);
       return undefined;
@@ -167,7 +154,6 @@ export function SessionView({
             students={students}
             realtimeStudents={realtimeStudents}
             sessionProblem={sessionProblem}
-            sessionExecutionSettings={sessionExecutionSettings}
             join_code={join_code || undefined}
             onShowOnPublicView={onFeatureStudent}
             onClearPublicView={onClearPublicView}
@@ -183,7 +169,6 @@ export function SessionView({
           <ProblemSetupPanel
             onUpdateProblem={onUpdateProblem}
             initialProblem={sessionProblem}
-            initialExecutionSettings={sessionExecutionSettings}
             isFullWidth
             onFeatureSolution={sessionProblem?.solution && onClearPublicView ? handleShowSolution : undefined}
           />

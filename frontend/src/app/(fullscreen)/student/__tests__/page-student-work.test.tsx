@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import StudentPageWrapper from '../page';
 
 // Mock dependencies
@@ -83,10 +83,31 @@ jest.mock('@/hooks/useApiDebugger', () => ({
   useApiDebugger: jest.fn(() => ({})),
 }));
 
+const mockCaseRunner = {
+  caseResults: {},
+  selectedCase: null,
+  isRunning: false,
+  error: null,
+  selectCase: jest.fn(),
+  runCase: jest.fn(),
+  runAllCases: jest.fn(),
+  clearResults: jest.fn(),
+};
+
+jest.mock('@/hooks/useCaseRunner', () => ({
+  useCaseRunner: jest.fn(() => mockCaseRunner),
+}));
+
+// Capture CodeEditor props for assertion
+let lastCodeEditorProps: any = null;
+
 // Mock CodeEditor component
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
-  default: () => <div data-testid="code-editor">CodeEditor</div>,
+  default: (props: any) => {
+    lastCodeEditorProps = props;
+    return <div data-testid="code-editor">CodeEditor</div>;
+  },
 }));
 
 jest.mock('../components/EditorContainer', () => ({
@@ -106,6 +127,7 @@ const fakeStudentWorkWithProblem = {
   section_id: 'section-1',
   problem_id: 'problem-1',
   code: 'print("existing code")',
+  test_cases: null,
   last_update: '2024-01-01T00:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
   problem: {
@@ -114,11 +136,14 @@ const fakeStudentWorkWithProblem = {
     title: 'Test Problem',
     description: 'Test description',
     starter_code: 'print("start")',
-    test_cases: null,
+    test_cases: [
+      { name: 'case1', input: 'hello', match_type: 'exact', order: 0 },
+    ],
     author_id: 'instructor-1',
     class_id: 'class-1',
     tags: ['python'],
     solution: null,
+    language: 'python',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
   },
@@ -138,6 +163,63 @@ describe('StudentPage (student_work-centric)', () => {
       updateCode: mockUpdateCode,
       joinSession: mockJoinSession,
       replacementInfo: null,
+    });
+  });
+
+  describe('Test case runner integration', () => {
+    it('passes caseRunner to CodeEditor', async () => {
+      lastCodeEditorProps = null;
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.caseRunner).toBeDefined();
+      expect(lastCodeEditorProps.caseRunner.runCase).toBeDefined();
+      expect(lastCodeEditorProps.caseRunner.runAllCases).toBeDefined();
+    });
+
+    it('passes instructor test cases to CodeEditor', async () => {
+      lastCodeEditorProps = null;
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.instructorCases).toEqual(
+        fakeStudentWorkWithProblem.problem.test_cases
+      );
+    });
+
+    it('passes student test cases to CodeEditor when loaded from student work', async () => {
+      lastCodeEditorProps = null;
+      const workWithStudentCases = {
+        ...fakeStudentWorkWithProblem,
+        test_cases: [
+          { name: 'my-case', input: '10', match_type: 'exact', order: 0 },
+        ],
+      };
+      mockGetStudentWork.mockResolvedValue(workWithStudentCases);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(lastCodeEditorProps.studentCases).toEqual(workWithStudentCases.test_cases);
     });
   });
 
@@ -168,18 +250,28 @@ describe('StudentPage (student_work-centric)', () => {
 
       render(<StudentPageWrapper />);
 
+      // Wait for the editor to load (practice mode active)
       await waitFor(() => {
         expect(screen.getByTestId('code-editor')).toBeInTheDocument();
       });
 
-      // Code changes trigger auto-save (tested via mock - implementation uses debounce)
+      // Allow debounce timer to fire (500ms in production code)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      });
+
+      // Verify updateStudentWork was called with the code and test_cases payload
+      expect(mockUpdateStudentWork).toHaveBeenCalledWith(
+        'work-123',
+        expect.objectContaining({
+          code: fakeStudentWorkWithProblem.code,
+        })
+      );
     });
 
-    it('executes code via POST /execute', async () => {
+    it('executes code via POST /execute — onRun wired to caseRunner.runAllCases', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
       mockGetActiveSessions.mockResolvedValue([]);
-      // mockExecuteCode is from @/lib/api/execute - not needed for this smoke test
-      // The actual execution flow is tested via the warmup tests
 
       render(<StudentPageWrapper />);
 
@@ -187,7 +279,16 @@ describe('StudentPage (student_work-centric)', () => {
         expect(screen.getByTestId('code-editor')).toBeInTheDocument();
       });
 
-      // Execution tested via mock
+      // onRun prop must be wired to caseRunner.runAllCases
+      expect(lastCodeEditorProps).not.toBeNull();
+      expect(typeof lastCodeEditorProps.onRun).toBe('function');
+
+      // Invoking onRun should trigger caseRunner.runAllCases
+      await act(async () => {
+        lastCodeEditorProps.onRun();
+      });
+
+      expect(mockCaseRunner.runAllCases).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -200,6 +301,8 @@ describe('StudentPage (student_work-centric)', () => {
         section_id: 'section-1',
       };
 
+      // joinSession must resolve so the auto-join effect completes
+      mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: [] });
       mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
       mockGetActiveSessions.mockResolvedValue([activeSession]);
 
@@ -209,7 +312,16 @@ describe('StudentPage (student_work-centric)', () => {
         expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
       });
 
-      // Mode switches to live when active session is detected
+      // Mode switches to live: auto-join triggers joinSession with the active session id
+      await waitFor(() => {
+        expect(mockJoinSession).toHaveBeenCalledWith(
+          'user-1',
+          expect.any(String)
+        );
+      });
+
+      // joinSession being called confirms live mode is active with the correct session.
+      // useCaseRunner now uses /execute directly and no longer receives sessionId.
     });
   });
 

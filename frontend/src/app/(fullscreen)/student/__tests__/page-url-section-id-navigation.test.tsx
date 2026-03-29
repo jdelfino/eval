@@ -69,6 +69,7 @@ const activeSessionWithProblem: Session = {
     description: 'Write a FizzBuzz solution',
     starter_code: null,
     test_cases: null,
+
     author_id: 'user-1',
     class_id: 'class-abc-123',
     tags: ['loops'],
@@ -99,6 +100,7 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       description: 'Implement binary search',
       starter_code: null,
       test_cases: [],
+
       author_id: 'user-1',
       class_id: null,
       tags: [],
@@ -128,6 +130,7 @@ describe('StudentSectionView — navigation includes section_id (PLAT-6y2j.1)', 
       section_id: SECTION_ID,
       problem_id: PROBLEM_ID_2,
       code: '',
+  
       last_update: '2026-02-20T10:00:00Z',
       created_at: '2026-02-20T10:00:00Z',
     });
@@ -158,6 +161,7 @@ describe('StudentSectionView — navigation includes section_id (PLAT-6y2j.1)', 
       section_id: SECTION_ID,
       problem_id: PROBLEM_ID_1,
       code: '',
+  
       last_update: '2026-02-20T10:00:00Z',
       created_at: '2026-02-20T10:00:00Z',
     });

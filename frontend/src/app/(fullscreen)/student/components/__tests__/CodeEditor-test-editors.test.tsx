@@ -50,12 +50,6 @@ jest.mock('@monaco-editor/react', () => {
   };
 });
 
-jest.mock('../ExecutionSettings', () => {
-  return function MockExecutionSettings() {
-    return <div data-testid="execution-settings" />;
-  };
-});
-
 jest.mock('@/hooks/useResponsiveLayout', () => ({
   useResponsiveLayout: () => true,
   useSidebarSection: () => ({

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import type { TestResponse } from '@/types/api';
+import type { TestResponse } from '@/lib/api/tests';
 
 interface OutputPanelProps {
   result: TestResponse | null;

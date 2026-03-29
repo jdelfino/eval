@@ -56,6 +56,7 @@ describe('Problems API', () => {
         starter_code: 'print("hello")',
         solution: 'print("hello world")',
         language: 'python',
+        test_cases: [],
       });
 
       createdProblemId = problem.id;
@@ -472,39 +473,6 @@ describe('Problems API', () => {
       const envelope = await response.json();
       expect(Array.isArray(envelope.problems)).toBe(true);
       expect(envelope.problems).toEqual([]);
-    });
-
-    it('GET /problems/export?format=pdf returns PDF response', async () => {
-      expect(createdProblemId).toBeTruthy();
-
-      // Request PDF format
-      const response = await apiFetch('/problems/export?format=pdf');
-      expect(response.ok).toBe(true);
-
-      // Verify Content-Type is application/pdf
-      const contentType = response.headers.get('Content-Type');
-      expect(contentType).toBe('application/pdf');
-
-      // Verify Content-Disposition filename ends with .pdf
-      const contentDisposition = response.headers.get('Content-Disposition');
-      expect(contentDisposition).toBeTruthy();
-      expect(contentDisposition).toMatch(/attachment/);
-      expect(contentDisposition).toMatch(/\.pdf/);
-    });
-
-    it('GET /problems/export without format defaults to JSON', async () => {
-      expect(createdProblemId).toBeTruthy();
-
-      // Request without format parameter
-      const response = await apiFetch('/problems/export');
-      expect(response.ok).toBe(true);
-
-      // Verify it's JSON by parsing
-      const envelope = await response.json();
-
-      // Validate envelope structure matches JSON export contract
-      expect(typeof envelope.exported_at).toBe('string');
-      expect(Array.isArray(envelope.problems)).toBe(true);
     });
   });
 
