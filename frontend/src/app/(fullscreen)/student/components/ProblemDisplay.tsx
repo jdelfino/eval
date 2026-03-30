@@ -18,8 +18,8 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   }
 
   const hasStarterCode = !!problem.starter_code;
-  const testCasesArray = Array.isArray(problem.test_cases) ? problem.test_cases : null;
-  const hasTestCases = testCasesArray && testCasesArray.length > 0;
+  const testCasesArray = problem.test_cases;
+  const hasTestCases = testCasesArray.length > 0;
   const hasDescription = !!problem.description;
   const executionSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
 
@@ -82,19 +82,16 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
             </button>
             {showTestCases && (
               <div className="mt-2 space-y-2">
-                {testCasesArray!.map((testCase, index) => (
-                  <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
+                {testCasesArray.map((testCase, index) => (
+                  <div key={testCase.name || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">
                         {testCase.name || `Test ${index + 1}`}
                       </span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                        {testCase.type.toUpperCase()}
+                        IO
                       </span>
                     </div>
-                    {testCase.description && (
-                      <p className="text-sm text-gray-600 mt-1">{testCase.description}</p>
-                    )}
                   </div>
                 ))}
               </div>

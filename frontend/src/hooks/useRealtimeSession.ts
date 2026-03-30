@@ -11,7 +11,7 @@ import {
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
 import { Session, Student } from '@/types/session';
-import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { ExecutionSettings, extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
@@ -421,7 +421,7 @@ export function useRealtimeSession({
     execution_settings?: ExecutionSettings
   ) => {
     try {
-      await apiUpdateCode(session_id, studentId, code, execution_settings);
+      await apiUpdateCode(session_id, studentId, code, execution_settings ? buildTestCasesFromExecutionSettings(execution_settings) : undefined);
 
       // Optimistically update local state
       setStudents(prev => {
@@ -470,7 +470,7 @@ export function useRealtimeSession({
       const student = students.get(studentId);
       const studentCode = student?.code;
       const studentExecutionSettings = student?.execution_settings;
-      await apiFeatureStudent(session_id, studentId, studentCode, studentExecutionSettings);
+      await apiFeatureStudent(session_id, studentId, studentCode, studentExecutionSettings ? buildTestCasesFromExecutionSettings(studentExecutionSettings) : undefined);
 
       // Optimistically update local state
       setFeaturedStudent({

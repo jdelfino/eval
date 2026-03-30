@@ -20,51 +20,6 @@ export interface ExecutionSettings {
 }
 
 // ---------------------------------------------------------------------------
-// Test case types (kept lightweight for client-side usage)
-// ---------------------------------------------------------------------------
-
-export type TestCaseType = 'input-output' | 'pytest' | 'property-based';
-
-export type OutputMatchType = 'exact' | 'contains' | 'regex';
-
-export interface InputOutputTestConfig {
-  input: string;
-  expected_output: string;
-  match_type: OutputMatchType;
-  ignore_whitespace?: boolean;
-}
-
-export interface PyTestConfig {
-  test_code: string;
-  target_function?: string;
-  timeout?: number;
-}
-
-export interface PropertyTestConfig {
-  property_code: string;
-  strategy_config?: Record<string, unknown>;
-  max_examples?: number;
-}
-
-export type TestConfig =
-  | { type: 'input-output'; data: InputOutputTestConfig }
-  | { type: 'pytest'; data: PyTestConfig }
-  | { type: 'property-based'; data: PropertyTestConfig };
-
-export interface TestCase {
-  id: string;
-  problem_id: string;
-  type: TestCaseType;
-  name: string;
-  description: string;
-  visible: boolean;
-  order: number;
-  config: TestConfig;
-  random_seed?: number;
-  attached_files?: Array<{ name: string; content: string }>;
-}
-
-// ---------------------------------------------------------------------------
 // Problem (rich client type with Date timestamps)
 // ---------------------------------------------------------------------------
 
@@ -74,7 +29,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: TestCase[] | ExecutionSettings | null;
+  test_cases: IOTestCase[];
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -89,7 +44,7 @@ export interface StudentProblem {
   title: string;
   description: string;
   starter_code?: string;
-  test_cases: TestCase[];
+  test_cases: IOTestCase[];
 }
 
 export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
@@ -100,15 +55,13 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 
 /**
  * Convert an API wire-format Problem to a rich client Problem with Date timestamps.
- * Note: test_cases may be IOTestCase[] (wire format) or ExecutionSettings (legacy).
- * The rich client Problem.test_cases accepts TestCase[] | ExecutionSettings | null;
- * IOTestCase[] is cast since the runtime handler (extractExecutionSettingsFromTestCases)
- * handles both formats via the `as any` access pattern.
+ * test_cases is normalized to IOTestCase[] — null/undefined from legacy wire data
+ * becomes an empty array.
  */
 export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
-    test_cases: api.test_cases as Problem['test_cases'],
+    test_cases: (api.test_cases as IOTestCase[] | null) ?? [],
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),
   };
@@ -164,7 +117,7 @@ export function buildTestCasesFromExecutionSettings(opts: {
 }
 
 export function extractExecutionSettingsFromTestCases(
-  testCases: TestCase[] | IOTestCase[] | ExecutionSettings | null | undefined
+  testCases: IOTestCase[] | ExecutionSettings | null | undefined
 ): ExecutionSettings {
   if (!testCases || (Array.isArray(testCases) && testCases.length === 0)) {
     return {
