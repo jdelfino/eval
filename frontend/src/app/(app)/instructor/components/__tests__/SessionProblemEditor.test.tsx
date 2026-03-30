@@ -63,7 +63,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
       code,
       onChange,
       readOnly,
-      onExecutionSettingsChange,
+      onTestCasesChange,
       title,
       problem,
       onProblemEdit,
@@ -112,13 +112,13 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         <input
           data-testid="stdin-input"
           placeholder="stdin"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: e.target.value, random_seed: undefined, attached_files: undefined })}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
         />
         <input
           data-testid="seed-input"
           type="number"
           placeholder="seed"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: undefined, random_seed: e.target.value ? Number(e.target.value) : undefined, attached_files: undefined })}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
         />
         {editableProblem && (
           <div data-testid="editable-problem-sidebar">

@@ -94,9 +94,9 @@ jest.mock('../StudentAnalysisDetails', () => {
 
 describe('SessionStudentPane', () => {
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', has_code: true, execution_settings: {} },
-    { id: 'student-2', name: 'Bob', has_code: false, execution_settings: {} },
-    { id: 'student-3', name: 'Carol', has_code: true, execution_settings: { random_seed: 42 } },
+    { id: 'student-1', name: 'Alice', has_code: true },
+    { id: 'student-2', name: 'Bob', has_code: false },
+    { id: 'student-3', name: 'Carol', has_code: true, test_cases: [{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: 42 }] },
   ];
 
   const mockRealtimeStudents = [

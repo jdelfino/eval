@@ -126,7 +126,7 @@ describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
     sessionStorage.clear();
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
     mockGetActiveSessions.mockResolvedValue([]);
-    mockJoinSession.mockResolvedValue({ code: '', execution_settings: null });
+    mockJoinSession.mockResolvedValue({ code: '', test_cases: null });
     mockUseRealtimeSession.mockReturnValue({
       session: null,
       loading: false,

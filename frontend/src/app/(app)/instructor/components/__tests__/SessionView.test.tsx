@@ -113,8 +113,8 @@ jest.mock('../RevisionViewer', () => {
 
 describe('SessionView', () => {
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', has_code: true, execution_settings: {} },
-    { id: 'student-2', name: 'Bob', has_code: false, execution_settings: {} },
+    { id: 'student-1', name: 'Alice', has_code: true },
+    { id: 'student-2', name: 'Bob', has_code: false },
   ];
 
   const mockRealtimeStudents = [

@@ -9,7 +9,7 @@ import type { TestResponse, CaseResult, CaseSummary } from '../api';
 
 // Task PLAT-uum.49: instructor types should re-export from canonical sources
 import type { ClassInfo, ClassWithSections, ProblemSummary, Student as InstructorStudent, RealtimeStudent } from '../../app/(app)/instructor/types';
-import type { ExecutionSettings } from '../problem';
+import type { IOTestCase } from '../api';
 
 describe('TestResponse consolidation (cases[] protocol)', () => {
   it('TestResponse from api.ts has results[] and summary', () => {
@@ -39,26 +39,26 @@ describe('TestResponse consolidation (cases[] protocol)', () => {
 });
 
 describe('Instructor types consolidation (PLAT-uum.49)', () => {
-  it('Student uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'test', random_seed: 42 };
+  it('Student uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Default', input: 'test', match_type: 'exact', order: 0, random_seed: 42 }];
     const student: InstructorStudent = {
       id: 'u-1',
       name: 'Alice',
       has_code: true,
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('test');
+    expect(student.test_cases?.[0]?.input).toBe('test');
   });
 
-  it('RealtimeStudent uses ExecutionSettings from types/problem', () => {
-    const settings: ExecutionSettings = { stdin: 'input' };
+  it('RealtimeStudent uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
+    const testCases: IOTestCase[] = [{ name: 'Default', input: 'input', match_type: 'exact', order: 0 }];
     const student: RealtimeStudent = {
       id: 'u-2',
       name: 'Bob',
       code: 'print(1)',
-      execution_settings: settings,
+      test_cases: testCases,
     };
-    expect(student.execution_settings?.stdin).toBe('input');
+    expect(student.test_cases?.[0]?.input).toBe('input');
   });
 
   it('ClassInfo has the expected shape', () => {

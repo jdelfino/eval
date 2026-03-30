@@ -163,7 +163,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
           section_id: 'section-1',
         },
       ]);
-      mockJoinSession.mockResolvedValue({ code: 'print("hello")', execution_settings: null });
+      mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
       mockUseRealtimeSession.mockReturnValue({
         ...defaultRealtimeSession,
         joinSession: mockJoinSession,

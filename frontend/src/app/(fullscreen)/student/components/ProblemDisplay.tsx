@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Problem, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import type { Problem } from '@/types/problem';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {
@@ -21,7 +21,7 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   const testCasesArray = problem.test_cases;
   const hasTestCases = testCasesArray.length > 0;
   const hasDescription = !!problem.description;
-  const executionSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
+  const firstCase = problem.test_cases[0];
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
@@ -99,14 +99,14 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
           </div>
         )}
 
-        {/* Execution Settings Info */}
-        {executionSettings && (
+        {/* Test Case Info */}
+        {firstCase && (firstCase.random_seed !== undefined || (firstCase.attached_files?.length ?? 0) > 0) && (
           <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-            {executionSettings.random_seed !== undefined && (
-              <p>🎲 Random seed: {executionSettings.random_seed}</p>
+            {firstCase.random_seed !== undefined && (
+              <p>🎲 Random seed: {firstCase.random_seed}</p>
             )}
-            {executionSettings.attached_files && executionSettings.attached_files.length > 0 && (
-              <p>📎 {executionSettings.attached_files.length} file(s) attached</p>
+            {firstCase.attached_files && firstCase.attached_files.length > 0 && (
+              <p>📎 {firstCase.attached_files.length} file(s) attached</p>
             )}
           </div>
         )}
