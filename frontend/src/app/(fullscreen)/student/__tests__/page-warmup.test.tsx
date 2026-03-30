@@ -37,6 +37,8 @@ jest.mock('@/lib/api/sections', () => ({
 jest.mock('@/lib/api/execute', () => ({
   warmExecutor: (...args: unknown[]) => mockWarmExecutor(...args),
   executeCode: (...args: unknown[]) => mockExecuteCode(...args),
+  // Re-export the real helper so page.tsx can call it during tests
+  ioTestCasesToCaseDefs: jest.requireActual('@/lib/api/execute').ioTestCasesToCaseDefs,
 }));
 
 const mockUseRealtimeSession = jest.fn();
@@ -72,11 +74,11 @@ jest.mock('@/hooks/useApiDebugger', () => ({
 }));
 
 // Track onRun callback from CodeEditor to trigger execution in tests
-let capturedOnRun: ((settings: Record<string, unknown>) => void) | null = null;
+let capturedOnRun: ((testCases: unknown[]) => void) | null = null;
 
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
-  default: ({ onRun }: { onRun: (settings: Record<string, unknown>) => void }) => {
+  default: ({ onRun }: { onRun: (testCases: unknown[]) => void }) => {
     capturedOnRun = onRun;
     return <div data-testid="code-editor">CodeEditor</div>;
   },
@@ -215,7 +217,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
 
       // Trigger execution
       act(() => {
-        capturedOnRun?.({});
+        capturedOnRun?.([]);
       });
 
       await waitFor(() => {
@@ -240,7 +242,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       });
 
       act(() => {
-        capturedOnRun?.({});
+        capturedOnRun?.([]);
       });
 
       await waitFor(() => {
