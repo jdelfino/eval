@@ -136,8 +136,8 @@ describe('InstructorSessionPage', () => {
   };
 
   const mockStudents = [
-    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', execution_settings: {} },
-    { user_id: 'student-2', name: 'Bob', code: '', execution_settings: {} },
+    { user_id: 'student-1', name: 'Alice', code: 'print("Hello")', last_update: new Date(), test_cases: [] },
+    { user_id: 'student-2', name: 'Bob', code: '', last_update: new Date(), test_cases: [] },
   ];
 
   const mockClearFeaturedStudent = jest.fn();

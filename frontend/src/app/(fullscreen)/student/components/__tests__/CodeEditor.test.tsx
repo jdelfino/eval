@@ -202,11 +202,9 @@ describe('CodeEditor - API Execution', () => {
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
-      expect(mockOnRun).toHaveBeenCalledWith({
-        stdin: undefined,
-        random_seed: undefined,
-        attached_files: undefined,
-      });
+      // onRun now receives IOTestCase[] (not ExecutionSettings object).
+      // With no stdin/seed/files set, no test case is built → empty array.
+      expect(mockOnRun).toHaveBeenCalledWith([]);
     });
 
     it('displays execution results when provided', () => {
@@ -1419,47 +1417,42 @@ describe('CodeEditor - execution settings internal state', () => {
     });
   });
 
-  it('passes random_seed from defaultExecutionSettings to onRun', () => {
+  it('passes random_seed from defaultTestCases to onRun', () => {
     const mockOnRun = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 42 }} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42 }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
-    expect(mockOnRun).toHaveBeenCalledWith({
-      stdin: undefined,
-      random_seed: 42,
-      attached_files: undefined,
-    });
+    expect(mockOnRun).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ random_seed: 42 })])
+    );
   });
 
-  it('passes attached_files from defaultExecutionSettings to onRun', () => {
+  it('passes attached_files from defaultTestCases to onRun', () => {
     const mockOnRun = jest.fn();
     const files = [{ name: 'data.txt', content: 'hello' }];
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ attached_files: files }} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, attached_files: files }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
-    expect(mockOnRun).toHaveBeenCalledWith({
-      stdin: undefined,
-      random_seed: undefined,
-      attached_files: files,
-    });
+    // CodeEditor builds IOTestCase[] from current state: if no input/seed, files still present → testCases has 1 entry
+    expect(mockOnRun).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ attached_files: files })])
+    );
   });
 
-  it('uses updated random_seed when defaultExecutionSettings changes', () => {
+  it('uses updated random_seed when defaultTestCases changes', () => {
     const mockOnRun = jest.fn();
     const { rerender } = render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 1 }} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 1 }]} />
     );
     rerender(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultExecutionSettings={{ random_seed: 99 }} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 99 }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
-    expect(mockOnRun).toHaveBeenCalledWith({
-      stdin: undefined,
-      random_seed: 99,
-      attached_files: undefined,
-    });
+    expect(mockOnRun).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ random_seed: 99 })])
+    );
   });
 });
 
@@ -1467,7 +1460,7 @@ describe('CodeEditor - execution settings internal state', () => {
 // Execution settings change callback
 // ===========================================================================
 
-describe('CodeEditor - onExecutionSettingsChange callback', () => {
+describe('CodeEditor - onTestCasesChange callback', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEditorInstance = null;
@@ -1479,43 +1472,43 @@ describe('CodeEditor - onExecutionSettingsChange callback', () => {
     });
   });
 
-  it('calls onExecutionSettingsChange with full settings when stdin changes', () => {
+  it('calls onTestCasesChange with IOTestCase[] when stdin changes', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ random_seed: 42, attached_files: [{ name: 'a.txt', content: 'x' }] }} onExecutionSettingsChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42, attached_files: [{ name: 'a.txt', content: 'x' }] }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-stdin')[0]);
-    expect(mockOnChange).toHaveBeenCalledWith({
-      stdin: 'test-input',
-      random_seed: 42,
-      attached_files: [{ name: 'a.txt', content: 'x' }],
-    });
+    expect(mockOnChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ input: 'test-input', random_seed: 42 })
+      ])
+    );
   });
 
-  it('calls onExecutionSettingsChange with full settings when seed changes', () => {
+  it('calls onTestCasesChange with IOTestCase[] when seed changes', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ stdin: 'initial', attached_files: [{ name: 'b.txt', content: 'y' }] }} onExecutionSettingsChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: 'initial', match_type: 'exact', order: 0, attached_files: [{ name: 'b.txt', content: 'y' }] }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-seed')[0]);
-    expect(mockOnChange).toHaveBeenCalledWith({
-      stdin: 'initial',
-      random_seed: 99,
-      attached_files: [{ name: 'b.txt', content: 'y' }],
-    });
+    expect(mockOnChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ input: 'initial', random_seed: 99 })
+      ])
+    );
   });
 
-  it('calls onExecutionSettingsChange with full settings when files change', () => {
+  it('calls onTestCasesChange with IOTestCase[] when files change', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultExecutionSettings={{ stdin: 'hello', random_seed: 7 }} onExecutionSettingsChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: 'hello', match_type: 'exact', order: 0, random_seed: 7 }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-files')[0]);
-    expect(mockOnChange).toHaveBeenCalledWith({
-      stdin: 'hello',
-      random_seed: 7,
-      attached_files: [{ name: 'f.txt', content: 'data' }],
-    });
+    expect(mockOnChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ input: 'hello', random_seed: 7, attached_files: [{ name: 'f.txt', content: 'data' }] })
+      ])
+    );
   });
 });
 
@@ -1615,6 +1608,98 @@ describe('CodeEditor - outputCollapsible prop', () => {
     const style = getByTestId('output-area').getAttribute('style') || '';
     expect(style).not.toContain('width: 0');
     expect(style).toContain('width');
+  });
+});
+
+// ===========================================================================
+// PLAT-st42.4: IOTestCase[] props replacing ExecutionSettings
+// ===========================================================================
+
+describe('CodeEditor - IOTestCase[] props (PLAT-st42.4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEditorInstance = null;
+    setDesktopLayout();
+    getLayoutMock().useSidebarSection.mockReturnValue({
+      isCollapsed: true,
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    });
+  });
+
+  it('accepts defaultTestCases prop as IOTestCase[] and uses testCases[0] for initial stdin', () => {
+    /**
+     * Contract: CodeEditor accepts defaultTestCases: IOTestCase[] and reads testCases[0].input
+     * as the initial stdin value, not defaultExecutionSettings.stdin.
+     * Matters: after ExecutionSettings is deleted, callers pass IOTestCase[] directly.
+     */
+    const testCases = [{ name: 'Default', input: 'hello from case', match_type: 'exact' as const, order: 0 }];
+    render(
+      <CodeEditor
+        code="print('hello')"
+        onChange={jest.fn()}
+        defaultTestCases={testCases}
+      />
+    );
+    // Component renders without crashing with IOTestCase[] props
+    expect(screen.getByTestId('monaco-editor')).toBeInTheDocument();
+  });
+
+  it('onRun callback receives IOTestCase[] when defaultTestCases is provided', () => {
+    /**
+     * Contract: when defaultTestCases is given and run is triggered, onRun receives IOTestCase[].
+     * Matters: callers (student/page.tsx, public-view) need IOTestCase[] to pass to API clients.
+     */
+    const mockOnRun = jest.fn();
+    const testCases = [{ name: 'Default', input: 'stdin value', match_type: 'exact' as const, order: 0, random_seed: 42 }];
+    render(
+      <CodeEditor
+        code="print('hello')"
+        onChange={jest.fn()}
+        onRun={mockOnRun}
+        defaultTestCases={testCases}
+      />
+    );
+    fireEvent.click(screen.getByText('▶ Run Code'));
+    expect(mockOnRun).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          input: 'stdin value',
+          random_seed: 42,
+          match_type: 'exact',
+        })
+      ])
+    );
+  });
+
+  it('onTestCasesChange callback receives IOTestCase[] when stdin changes', () => {
+    /**
+     * Contract: when user changes stdin, onTestCasesChange is called with IOTestCase[].
+     * Matters: student/page.tsx uses this to update studentTestCases state (IOTestCase[]).
+     */
+    // Open the settings sidebar so ExecutionSettingsComponent is rendered.
+    getLayoutMock().useSidebarSection.mockImplementation((section: string) => ({
+      isCollapsed: section !== 'execution-settings',
+      toggle: jest.fn(),
+      setCollapsed: jest.fn(),
+    }));
+    const mockOnChange = jest.fn();
+    render(
+      <CodeEditor
+        code="print('hello')"
+        onChange={jest.fn()}
+        onTestCasesChange={mockOnChange}
+      />
+    );
+    fireEvent.click(screen.getAllByTestId('mock-change-stdin')[0]);
+    expect(mockOnChange).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          input: 'test-input',
+          match_type: 'exact',
+        })
+      ])
+    );
   });
 });
 

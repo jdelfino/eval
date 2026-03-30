@@ -85,36 +85,24 @@ export default function InstructorSessionPage() {
 
   // Derive students array from realtime data (map user_id to id for UI components)
   const students = useMemo(() =>
-    realtimeStudents.map(s => {
-      const firstCase = s.test_cases?.[0];
-      return {
-        id: s.user_id,
-        name: s.name,
-        has_code: !!s.code,
-        execution_settings: {
-          random_seed: firstCase?.random_seed,
-          stdin: firstCase?.input,
-          attached_files: firstCase?.attached_files,
-        },
-        last_code_update: s.last_update,
-      };
-    }),
+    realtimeStudents.map(s => ({
+      id: s.user_id,
+      name: s.name,
+      has_code: !!s.code,
+      test_cases: s.test_cases,
+      last_code_update: s.last_update,
+    })),
     [realtimeStudents]
   );
 
   // Map user_id to id for UI component compatibility
   const mappedRealtimeStudents = useMemo(() =>
-    realtimeStudents.map(s => {
-      const firstCase = s.test_cases?.[0];
-      return {
-        id: s.user_id,
-        name: s.name,
-        code: s.code,
-        execution_settings: firstCase
-          ? { stdin: firstCase.input, random_seed: firstCase.random_seed, attached_files: firstCase.attached_files }
-          : undefined,
-      };
-    }),
+    realtimeStudents.map(s => ({
+      id: s.user_id,
+      name: s.name,
+      code: s.code,
+      test_cases: s.test_cases,
+    })),
     [realtimeStudents]
   );
 

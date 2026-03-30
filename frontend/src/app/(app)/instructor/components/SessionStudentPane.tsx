@@ -12,7 +12,7 @@ import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import type { Problem } from '@/types/problem';
 import type { IOTestCase } from '@/types/api';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, TestResponse } from '../types';
@@ -138,25 +138,13 @@ export function SessionStudentPane({
     onSelectStudent?.(studentId);
   };
 
-  const handleExecuteStudentCode = async (execution_settings: ExecutionSettings) => {
+  const handleExecuteStudentCode = async (testCases: IOTestCase[]) => {
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
     setExecutionResult(null);
 
     try {
-      // Build IOTestCase[] from CodeEditor's ExecutionSettings output
-      const testCases: IOTestCase[] = [];
-      if (execution_settings.stdin?.trim() || execution_settings.random_seed !== undefined || execution_settings.attached_files?.length) {
-        testCases.push({
-          name: 'Default',
-          input: execution_settings.stdin?.trim() ?? '',
-          match_type: 'exact',
-          order: 0,
-          ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
-          ...(execution_settings.attached_files?.length && { attached_files: execution_settings.attached_files }),
-        });
-      }
       const result = await onExecuteCode(selectedStudentId, selectedStudentCode, testCases);
       if (result) {
         setExecutionResult(result);
@@ -322,11 +310,7 @@ export function SessionStudentPane({
                 onChange={() => {}} // Read-only for instructor
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
-                defaultExecutionSettings={sessionTestCases[0] ? {
-                  stdin: sessionTestCases[0].input,
-                  random_seed: sessionTestCases[0].random_seed,
-                  attached_files: sessionTestCases[0].attached_files,
-                } : {}}
+                defaultTestCases={sessionTestCases}
                 readOnly
                 problem={sessionProblem}
                 execution_result={execution_result}

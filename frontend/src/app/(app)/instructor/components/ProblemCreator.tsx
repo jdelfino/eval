@@ -264,6 +264,11 @@ export default function ProblemCreator({
 
   const debuggerHook = useApiDebugger();
 
+  // Build current execution test cases for CodeEditor default
+  const currentTestCases: IOTestCase[] = (stdin.trim() !== '' || random_seed !== undefined || attached_files.length > 0)
+    ? [{ name: 'Default', input: stdin, match_type: 'exact', order: 0, ...(random_seed !== undefined && { random_seed }), ...(attached_files.length > 0 && { attached_files }) }]
+    : [];
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {/* Compact header bar matching student view style */}
@@ -471,17 +476,18 @@ export default function ProblemCreator({
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(execution_settings) => {
+          onRun={(testCases) => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
+            const firstCase = testCases[0];
             setIsRunning(true);
             setExecutionResult(null);
             executeCode(codeToRun, language, {
               cases: [{
                 name: 'run',
-                input: execution_settings.stdin ?? '',
+                input: firstCase?.input ?? '',
                 match_type: 'exact',
-                ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
-                ...(execution_settings.attached_files && { attached_files: execution_settings.attached_files }),
+                ...(firstCase?.random_seed !== undefined && { random_seed: firstCase.random_seed }),
+                ...(firstCase?.attached_files && { attached_files: firstCase.attached_files }),
               }],
             }).then(setExecutionResult).catch((err: any) => {
               setError(err?.message || 'Failed to run code');
@@ -490,11 +496,12 @@ export default function ProblemCreator({
           isRunning={isRunning}
           execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          defaultExecutionSettings={{ stdin, random_seed, attached_files }}
-          onExecutionSettingsChange={(settings) => {
-            setStdin(settings.stdin || '');
-            setRandomSeed(settings.random_seed);
-            setAttachedFiles(settings.attached_files || []);
+          defaultTestCases={currentTestCases}
+          onTestCasesChange={(testCases) => {
+            const first = testCases[0];
+            setStdin(first?.input || '');
+            setRandomSeed(first?.random_seed);
+            setAttachedFiles(first?.attached_files || []);
           }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
