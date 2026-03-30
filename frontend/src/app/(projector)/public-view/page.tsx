@@ -77,10 +77,15 @@ function PublicViewContent() {
 
   const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
     const language = (state?.problem as any)?.language || 'python';
-    const options: ExecuteOptions = {};
-    if (execution_settings.stdin) options.stdin = execution_settings.stdin;
-    if (execution_settings.random_seed !== undefined) options.random_seed = execution_settings.random_seed;
-    if (execution_settings.attached_files) options.attached_files = execution_settings.attached_files;
+    const options: ExecuteOptions = {
+      cases: [{
+        name: 'run',
+        input: execution_settings.stdin ?? '',
+        match_type: 'exact',
+        ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
+        ...(execution_settings.attached_files && { attached_files: execution_settings.attached_files }),
+      }],
+    };
     setIsRunning(true);
     setExecutionResult(null);
     executeCode(codeToRun, language, options)

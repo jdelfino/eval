@@ -693,7 +693,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles })}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -953,7 +953,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles })}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}

@@ -1,7 +1,13 @@
 /**
  * Tests for session type hierarchy and mapper functions.
+ *
+ * After PLAT-st42.2:
+ * - Student.test_cases is IOTestCase[] (replaces execution_settings?: ExecutionSettings)
+ * - Session.featured_test_cases is IOTestCase[] | null (replaces ExecutionSettings | null)
+ * - api.ts Session and SessionPublicState.featured_test_cases are IOTestCase[] | null
  */
-import type { Session as ApiSession, Problem, SessionPublicState } from '../api';
+import type { Session as ApiSession, Problem, SessionPublicState, IOTestCase } from '../api';
+import type { Student, Session as ClientSession } from '../session';
 import { mapApiSession } from '../session';
 
 describe('Session type hierarchy', () => {
@@ -87,6 +93,86 @@ describe('Session type hierarchy', () => {
       expect(mapped.problem.starter_code).toBe('print("hello")');
     }
   });
+
+  it('ApiSession.featured_test_cases accepts IOTestCase[] | null', () => {
+    const testCases: IOTestCase[] = [
+      { name: 'case 1', input: 'hello', match_type: 'exact', order: 0 },
+    ];
+    const sessionWithCases: ApiSession = { ...apiSession, featured_test_cases: testCases };
+    expect(sessionWithCases.featured_test_cases).toEqual(testCases);
+  });
+
+  it('ApiSession.featured_test_cases accepts null', () => {
+    const sessionNullCases: ApiSession = { ...apiSession, featured_test_cases: null };
+    expect(sessionNullCases.featured_test_cases).toBeNull();
+  });
+});
+
+describe('Student type', () => {
+  it('Student has test_cases field typed as IOTestCase[]', () => {
+    const testCases: IOTestCase[] = [
+      { name: 'default', input: 'hello', match_type: 'exact', order: 0 },
+    ];
+    const student: Student = {
+      user_id: 'u-1',
+      name: 'Alice',
+      code: 'print("hi")',
+      last_update: new Date(),
+      test_cases: testCases,
+    };
+    expect(student.test_cases).toEqual(testCases);
+  });
+
+  it('Student test_cases can be empty array', () => {
+    const student: Student = {
+      user_id: 'u-1',
+      name: 'Alice',
+      code: '',
+      last_update: new Date(),
+      test_cases: [],
+    };
+    expect(student.test_cases).toEqual([]);
+  });
+
+  it('Student.test_cases is optional (can be omitted)', () => {
+    const student: Student = {
+      user_id: 'u-1',
+      name: 'Alice',
+      code: '',
+      last_update: new Date(),
+    };
+    expect(student.test_cases).toBeUndefined();
+  });
+
+  it('Student does NOT have execution_settings field', () => {
+    const student: Student = {
+      user_id: 'u-1',
+      name: 'Alice',
+      code: '',
+      last_update: new Date(),
+    };
+    // @ts-expect-error execution_settings should not exist on Student
+    expect(student.execution_settings).toBeUndefined();
+  });
+});
+
+describe('ClientSession type', () => {
+  it('Session.featured_test_cases accepts IOTestCase[]', () => {
+    const testCases: IOTestCase[] = [
+      { name: 'case', input: 'input', match_type: 'exact', order: 0 },
+    ];
+    const session: Partial<ClientSession> = {
+      featured_test_cases: testCases,
+    };
+    expect(session.featured_test_cases).toEqual(testCases);
+  });
+
+  it('Session.featured_test_cases can be null', () => {
+    const session: Partial<ClientSession> = {
+      featured_test_cases: null,
+    };
+    expect(session.featured_test_cases).toBeNull();
+  });
 });
 
 describe('SessionPublicState type', () => {
@@ -131,5 +217,20 @@ describe('SessionPublicState type', () => {
       status: 'active',
     };
     expect(state.problem).toBeNull();
+  });
+
+  it('SessionPublicState.featured_test_cases accepts IOTestCase[]', () => {
+    const testCases: IOTestCase[] = [
+      { name: 'case', input: 'input', match_type: 'exact', order: 0 },
+    ];
+    const state: SessionPublicState = {
+      problem: null,
+      featured_student_id: 'u-1',
+      featured_code: 'print("hello")',
+      featured_test_cases: testCases,
+      join_code: 'ABC',
+      status: 'active',
+    };
+    expect(state.featured_test_cases).toEqual(testCases);
   });
 });

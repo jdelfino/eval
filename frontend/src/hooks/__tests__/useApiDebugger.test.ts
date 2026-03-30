@@ -51,10 +51,10 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('print("hello")', 'python', {});
+        await result.current.requestTrace('print("hello")', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
-      expect(mockTraceCode).toHaveBeenCalledWith('print("hello")', 'python', {});
+      expect(mockTraceCode).toHaveBeenCalledWith('print("hello")', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       expect(result.current.trace).toEqual(mockTrace);
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
@@ -72,7 +72,7 @@ describe('useApiDebugger', () => {
       // Start request without awaiting
       let promise: Promise<void>;
       act(() => {
-        promise = result.current.requestTrace('code', 'python', {});
+        promise = result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.isLoading).toBe(true);
@@ -92,7 +92,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.error).toBe('Unauthorized');
@@ -106,23 +106,23 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.error).toBe('Failed to trace code execution');
     });
 
-    it('passes execution settings to traceCode', async () => {
+    it('passes IOTestCase to traceCode', async () => {
       mockTraceCode.mockResolvedValueOnce(mockTrace as never);
 
       const { result } = renderHook(() => useApiDebugger());
 
-      const settings = { stdin: 'hello', random_seed: 42, attached_files: [{ name: 'f.txt', content: 'data' }] };
+      const testCase = { name: 'default', input: 'hello', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'f.txt', content: 'data' }] };
       await act(async () => {
-        await result.current.requestTrace('print("hello")', 'python', settings);
+        await result.current.requestTrace('print("hello")', 'python', testCase);
       });
 
-      expect(mockTraceCode).toHaveBeenCalledWith('print("hello")', 'python', settings);
+      expect(mockTraceCode).toHaveBeenCalledWith('print("hello")', 'python', testCase);
     });
 
     it('propagates trace.error from response', async () => {
@@ -132,7 +132,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('bad code', 'python', {});
+        await result.current.requestTrace('bad code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.error).toBe('SyntaxError: invalid syntax');
@@ -145,7 +145,7 @@ describe('useApiDebugger', () => {
       mockTraceCode.mockResolvedValueOnce(mockTrace as never);
       const hook = renderHook(() => useApiDebugger());
       await act(async () => {
-        await hook.result.current.requestTrace('code', 'python', {});
+        await hook.result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
       return hook;
     }
@@ -262,7 +262,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.getCurrentStep()).toEqual(mockTrace.steps[0]);
@@ -281,7 +281,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.getCurrentLocals()).toEqual({ x: 1 });
@@ -300,7 +300,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.getCurrentGlobals()).toEqual({ __name__: '__main__' });
@@ -311,7 +311,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.getCurrentCallStack()).toEqual(['<module>']);
@@ -325,7 +325,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       expect(result.current.getPreviousStep()).toBeNull();
@@ -336,7 +336,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       act(() => result.current.stepForward());
@@ -350,7 +350,7 @@ describe('useApiDebugger', () => {
       const { result } = renderHook(() => useApiDebugger());
 
       await act(async () => {
-        await result.current.requestTrace('code', 'python', {});
+        await result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
 
       act(() => result.current.stepForward());
@@ -404,7 +404,7 @@ describe('useApiDebugger', () => {
       mockTraceCode.mockResolvedValueOnce(mockTrace as never);
       const hook = renderHook(() => useApiDebugger());
       await act(async () => {
-        await hook.result.current.requestTrace('code', 'python', {});
+        await hook.result.current.requestTrace('code', 'python', { name: 'default', input: '', match_type: 'exact', order: 0 });
       });
       return hook;
     }
