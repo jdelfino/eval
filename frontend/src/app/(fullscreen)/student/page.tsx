@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import { ExecutionSettings, extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
 import type { Problem } from '@/types/api';
 import type { TestResponse } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
@@ -237,7 +237,7 @@ function StudentPage() {
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        test_cases: studentExecutionSettings || undefined,
+        test_cases: studentExecutionSettings ? buildTestCasesFromExecutionSettings(studentExecutionSettings) : undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });

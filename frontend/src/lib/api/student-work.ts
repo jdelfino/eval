@@ -6,8 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPatch } from '@/lib/api-client';
-import type { StudentWork, StudentWorkWithProblem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { StudentWork, StudentWorkWithProblem, IOTestCase } from '@/types/api';
 
 /**
  * Get or create student work for a problem in a section.
@@ -40,7 +39,7 @@ export async function updateStudentWork(
   workId: string,
   data: {
     code?: string;
-    test_cases?: ExecutionSettings;
+    test_cases?: IOTestCase[];
   }
 ): Promise<void> {
   await apiPatch(`/student-work/${workId}`, data);

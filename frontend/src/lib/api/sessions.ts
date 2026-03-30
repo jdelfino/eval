@@ -7,8 +7,7 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Session, Revision, SessionPublicState, Problem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { Session, Revision, SessionPublicState, Problem, IOTestCase } from '@/types/api';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -74,7 +73,7 @@ export async function updateSessionProblem(
  */
 export async function updateSessionProblemPartial(
   sessionId: string,
-  problem: Partial<Pick<Problem, 'title' | 'description' | 'starter_code' | 'solution' | 'tags' | 'language' | 'test_cases' | 'execution_settings'>>
+  problem: Partial<Pick<Problem, 'title' | 'description' | 'starter_code' | 'solution' | 'tags' | 'language' | 'test_cases'>>
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/update-problem`, {
     problem,
@@ -239,14 +238,14 @@ export async function analyzeSession(
  * Feature code in a session (show to all students).
  * @param sessionId - The session ID
  * @param code - The code to feature
- * @param testCases - Optional test cases (execution settings) to feature with the code
+ * @param testCases - Optional test cases to feature with the code
  */
 export async function featureCode(
   sessionId: string,
   code: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<void> {
-  const body: { code: string; test_cases?: ExecutionSettings } = { code };
+  const body: { code: string; test_cases?: IOTestCase[] } = { code };
   if (testCases !== undefined) {
     body.test_cases = testCases;
   }
