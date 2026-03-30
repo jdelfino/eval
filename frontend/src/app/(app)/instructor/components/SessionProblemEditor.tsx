@@ -260,9 +260,13 @@ export default function SessionProblemEditor({
             setExecutionResult(null);
             setExecutionError(null);
             executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
+              cases: [{
+                name: 'run',
+                input: execution_settings.stdin ?? '',
+                match_type: 'exact',
+                ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
+                ...(execution_settings.attached_files && { attached_files: execution_settings.attached_files }),
+              }],
             }).then(setExecutionResult).catch((err: any) => {
               setExecutionError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));

@@ -471,9 +471,13 @@ export default function ProblemCreator({
             setIsRunning(true);
             setExecutionResult(null);
             executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
+              cases: [{
+                name: 'run',
+                input: execution_settings.stdin ?? '',
+                match_type: 'exact',
+                ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
+                ...(execution_settings.attached_files && { attached_files: execution_settings.attached_files }),
+              }],
             }).then(setExecutionResult).catch((err: any) => {
               setError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));

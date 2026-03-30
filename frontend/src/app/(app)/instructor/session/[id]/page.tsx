@@ -89,28 +89,36 @@ export default function InstructorSessionPage() {
 
   // Derive students array from realtime data (map user_id to id for UI components)
   const students = useMemo(() =>
-    realtimeStudents.map(s => ({
-      id: s.user_id,
-      name: s.name,
-      has_code: !!s.code,
-      execution_settings: {
-        random_seed: s.execution_settings?.random_seed,
-        stdin: s.execution_settings?.stdin,
-        attached_files: s.execution_settings?.attached_files,
-      },
-      last_code_update: s.last_update,
-    })),
+    realtimeStudents.map(s => {
+      const firstCase = s.test_cases?.[0];
+      return {
+        id: s.user_id,
+        name: s.name,
+        has_code: !!s.code,
+        execution_settings: {
+          random_seed: firstCase?.random_seed,
+          stdin: firstCase?.input,
+          attached_files: firstCase?.attached_files,
+        },
+        last_code_update: s.last_update,
+      };
+    }),
     [realtimeStudents]
   );
 
   // Map user_id to id for UI component compatibility
   const mappedRealtimeStudents = useMemo(() =>
-    realtimeStudents.map(s => ({
-      id: s.user_id,
-      name: s.name,
-      code: s.code,
-      execution_settings: s.execution_settings,
-    })),
+    realtimeStudents.map(s => {
+      const firstCase = s.test_cases?.[0];
+      return {
+        id: s.user_id,
+        name: s.name,
+        code: s.code,
+        execution_settings: firstCase
+          ? { stdin: firstCase.input, random_seed: firstCase.random_seed, attached_files: firstCase.attached_files }
+          : undefined,
+      };
+    }),
     [realtimeStudents]
   );
 
@@ -214,9 +222,13 @@ export default function InstructorSessionPage() {
   ) => {
     const language = sessionProblem?.language || 'python';
     return apiExecuteCode(code, language, {
-      stdin: execution_settings.stdin,
-      random_seed: execution_settings.random_seed,
-      attached_files: execution_settings.attached_files,
+      cases: [{
+        name: 'run',
+        input: execution_settings.stdin ?? '',
+        match_type: 'exact',
+        ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
+        ...(execution_settings.attached_files !== undefined && { attached_files: execution_settings.attached_files }),
+      }],
     });
   }, [sessionProblem?.language]);
 

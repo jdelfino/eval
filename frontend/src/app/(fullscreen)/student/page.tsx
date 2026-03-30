@@ -251,7 +251,7 @@ function StudentPage() {
     if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
 
     const timeout = setTimeout(() => {
-      realtimeUpdateCode(user.id, code, studentExecutionSettings || undefined);
+      realtimeUpdateCode(user.id, code, studentExecutionSettings ? buildTestCasesFromExecutionSettings(studentExecutionSettings) : undefined);
     }, 500);
 
     return () => clearTimeout(timeout);
@@ -325,9 +325,13 @@ function StudentPage() {
 
     try {
       const result = await executeCode(code, problem.language, {
-        stdin: execution_settings.stdin,
-        random_seed: execution_settings.random_seed,
-        attached_files: execution_settings.attached_files,
+        cases: [{
+          name: 'run',
+          input: execution_settings.stdin ?? '',
+          match_type: 'exact',
+          ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
+          ...(execution_settings.attached_files !== undefined && { attached_files: execution_settings.attached_files }),
+        }],
       });
       setExecutionResult(result);
       setIsRunning(false);

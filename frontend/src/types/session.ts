@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Session as ApiSession, Problem } from './api';
+import type { Session as ApiSession, Problem, IOTestCase } from './api';
 
 export interface CallFrame {
   function_name: string;
@@ -49,7 +49,7 @@ export interface Student {
   name: string;
   code: string;
   last_update: Date;
-  execution_settings?: import('./problem').ExecutionSettings;
+  test_cases?: IOTestCase[];
 }
 
 /**
@@ -62,7 +62,7 @@ export interface Session {
   students: Map<string, Student>;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases?: import('./problem').ExecutionSettings | null;
+  featured_test_cases?: IOTestCase[] | null;
   created_at: Date;
   last_activity: Date;
   creator_id: string;
@@ -90,7 +90,7 @@ export function mapApiSession(api: ApiSession): {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null;
+  featured_test_cases: IOTestCase[] | null;
   creator_id: string;
   participants: string[];
   status: 'active' | 'completed';

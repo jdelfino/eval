@@ -96,7 +96,7 @@ export interface Session {
   problem: Problem | null; // full Problem, or null/empty for blank sessions
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized (no omitempty)
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized (no omitempty)
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -173,7 +173,7 @@ export interface SessionPublicState {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized
   join_code: string;
   status: string;
 }

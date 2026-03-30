@@ -1,6 +1,9 @@
 /**
  * Unit tests for the execute API client.
  *
+ * ExecuteOptions only accepts { cases?: CaseDef[] } — legacy stdin/random_seed/attached_files
+ * fields have been removed. All execution data must be passed via cases[].
+ *
  * @jest-environment jsdom
  */
 
@@ -44,34 +47,6 @@ describe('executeCode', () => {
     });
   });
 
-  it('wraps legacy stdin into cases[].input', async () => {
-    await executeCode('print("hi")', 'python', { stdin: 'input text' });
-
-    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
-    expect(body).not.toHaveProperty('stdin');
-    expect(body.cases).toEqual([{ name: 'run', input: 'input text', match_type: 'exact' }]);
-  });
-
-  it('wraps legacy random_seed into cases[].random_seed', async () => {
-    await executeCode('print("hi")', 'python', { random_seed: 42 });
-
-    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
-    expect(body).not.toHaveProperty('random_seed');
-    const casesDef = body.cases as any[];
-    expect(casesDef[0].random_seed).toBe(42);
-  });
-
-  it('wraps legacy attached_files into cases[].attached_files', async () => {
-    const files = [{ name: 'data.txt', content: 'hello' }];
-
-    await executeCode('print("hi")', 'python', { attached_files: files });
-
-    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
-    expect(body).not.toHaveProperty('attached_files');
-    const casesDef = body.cases as any[];
-    expect(casesDef[0].attached_files).toEqual(files);
-  });
-
   it('does not include cases when no options are provided', async () => {
     await executeCode('print("hi")', 'python', {});
 
@@ -80,6 +55,27 @@ describe('executeCode', () => {
     expect(body).not.toHaveProperty('stdin');
     expect(body).not.toHaveProperty('random_seed');
     expect(body).not.toHaveProperty('files');
+    expect(body).not.toHaveProperty('attached_files');
+  });
+
+  it('sends cases with random_seed when provided in CaseDef', async () => {
+    const cases = [{ name: 'test', input: 'hi', match_type: 'exact' as const, random_seed: 42 }];
+
+    await executeCode('print("hi")', 'python', { cases });
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect((body.cases as any[])[0].random_seed).toBe(42);
+    expect(body).not.toHaveProperty('random_seed');
+  });
+
+  it('sends cases with attached_files when provided in CaseDef', async () => {
+    const files = [{ name: 'data.txt', content: 'hello' }];
+    const cases = [{ name: 'test', input: '', match_type: 'exact' as const, attached_files: files }];
+
+    await executeCode('print("hi")', 'python', { cases });
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect((body.cases as any[])[0].attached_files).toEqual(files);
     expect(body).not.toHaveProperty('attached_files');
   });
 });
