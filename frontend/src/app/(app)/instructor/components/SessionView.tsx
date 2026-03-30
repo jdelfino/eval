@@ -13,7 +13,7 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
+import { Problem, ExecutionSettings, buildTestCasesFromExecutionSettings } from '@/types/problem';
 import type { Problem as ApiProblem } from '@/types/api';
 import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, TestResponse } from '../types';
