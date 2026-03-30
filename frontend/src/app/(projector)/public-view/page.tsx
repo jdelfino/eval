@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
+import { executeCode, ioTestCasesToCaseDefs, type ExecuteOptions } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
@@ -77,15 +77,8 @@ function PublicViewContent() {
 
   const handleRunCode = (codeToRun: string) => (testCases: IOTestCase[]) => {
     const language = (state?.problem as any)?.language || 'python';
-    const firstCase = testCases[0];
     const options: ExecuteOptions = {
-      cases: [{
-        name: 'run',
-        input: firstCase?.input ?? '',
-        match_type: 'exact',
-        ...(firstCase?.random_seed !== undefined && { random_seed: firstCase.random_seed }),
-        ...(firstCase?.attached_files && { attached_files: firstCase.attached_files }),
-      }],
+      cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
     };
     setIsRunning(true);
     setExecutionResult(null);

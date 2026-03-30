@@ -15,7 +15,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
+import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (problem: ApiProblem) => void;
@@ -113,17 +113,7 @@ export default function SessionProblemEditor({
     const base = initialProblem;
 
     // Build test_cases directly as IOTestCase[].
-    const hasStdin = stdin.trim() !== '';
-    const hasSeed = random_seed !== undefined;
-    const hasFiles = attached_files.length > 0;
-    const newTestCases: IOTestCase[] = (hasStdin || hasSeed || hasFiles) ? [{
-      name: 'Default',
-      input: stdin.trim(),
-      match_type: 'exact',
-      order: 0,
-      ...(hasSeed && { random_seed }),
-      ...(hasFiles && { attached_files }),
-    }] : [];
+    const newTestCases = buildIOTestCases({ stdin: stdin.trim(), random_seed, attached_files });
 
     // Use new settings if any are set, otherwise preserve existing test_cases.
     const test_cases = (newTestCases.length > 0
@@ -161,9 +151,7 @@ export default function SessionProblemEditor({
   const debuggerHook = useApiDebugger();
 
   // Build current execution test cases for CodeEditor default
-  const currentTestCases: IOTestCase[] = (stdin.trim() !== '' || random_seed !== undefined || (attached_files?.length ?? 0) > 0)
-    ? [{ name: 'Default', input: stdin, match_type: 'exact', order: 0, ...(random_seed !== undefined && { random_seed }), ...((attached_files?.length ?? 0) > 0 && { attached_files }) }]
-    : [];
+  const currentTestCases: IOTestCase[] = buildIOTestCases({ stdin, random_seed, attached_files });
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
@@ -266,18 +254,11 @@ export default function SessionProblemEditor({
           readOnly={activeTab === 'solution'}
           onRun={(testCases) => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
-            const firstCase = testCases[0];
             setIsRunning(true);
             setExecutionResult(null);
             setExecutionError(null);
             executeCode(codeToRun, language, {
-              cases: [{
-                name: 'run',
-                input: firstCase?.input ?? '',
-                match_type: 'exact',
-                ...(firstCase?.random_seed !== undefined && { random_seed: firstCase.random_seed }),
-                ...(firstCase?.attached_files && { attached_files: firstCase.attached_files }),
-              }],
+              cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
             }).then(setExecutionResult).catch((err: any) => {
               setExecutionError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));

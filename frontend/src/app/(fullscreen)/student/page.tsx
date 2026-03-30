@@ -10,7 +10,7 @@ import type { Problem } from '@/types/api';
 import type { TestResponse, IOTestCase } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor, executeCode } from '@/lib/api/execute';
+import { warmExecutor, executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
@@ -322,16 +322,9 @@ function StudentPage() {
     setIsRunning(true);
     setExecutionResult(null);
 
-    const firstCase = testCases[0];
     try {
       const result = await executeCode(code, problem.language, {
-        cases: [{
-          name: 'run',
-          input: firstCase?.input ?? '',
-          match_type: 'exact',
-          ...(firstCase?.random_seed !== undefined && { random_seed: firstCase.random_seed }),
-          ...(firstCase?.attached_files !== undefined && { attached_files: firstCase.attached_files }),
-        }],
+        cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
       });
       setExecutionResult(result);
       setIsRunning(false);

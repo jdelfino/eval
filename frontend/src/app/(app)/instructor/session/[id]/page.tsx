@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
-import { executeCode as apiExecuteCode } from '@/lib/api/execute';
+import { executeCode as apiExecuteCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
@@ -203,15 +203,8 @@ export default function InstructorSessionPage() {
     testCases: IOTestCase[]
   ) => {
     const language = sessionProblem?.language || 'python';
-    const firstCase = testCases[0];
     return apiExecuteCode(code, language, {
-      cases: firstCase ? [{
-        name: 'run',
-        input: firstCase.input ?? '',
-        match_type: 'exact',
-        ...(firstCase.random_seed !== undefined && { random_seed: firstCase.random_seed }),
-        ...(firstCase.attached_files !== undefined && { attached_files: firstCase.attached_files }),
-      }] : [],
+      cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
     });
   }, [sessionProblem?.language]);
 
