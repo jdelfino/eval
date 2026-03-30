@@ -19,7 +19,7 @@ import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorCon
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
-import { extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/api';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -109,11 +109,11 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings from test_cases[0]
-      const execSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
-      setStdin(execSettings?.stdin || '');
-      setRandomSeed(execSettings?.random_seed);
-      setAttachedFiles(execSettings?.attached_files || []);
+      // Load execution settings from test_cases[0] directly
+      const firstCase = problem.test_cases?.[0];
+      setStdin(firstCase?.input || '');
+      setRandomSeed(firstCase?.random_seed);
+      setAttachedFiles(firstCase?.attached_files || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -156,13 +156,18 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // Build test_cases from execution settings (stdin, random_seed, attached_files).
-      // These are stored as test_cases[0] in the backend, not as a separate field.
-      const testCases = buildTestCasesFromExecutionSettings({
-        stdin,
-        random_seed,
-        attached_files,
-      });
+      // Build test_cases directly as IOTestCase[].
+      const hasStdin = stdin.trim() !== '';
+      const hasSeed = random_seed !== undefined;
+      const hasFiles = attached_files.length > 0;
+      const testCases: IOTestCase[] = (hasStdin || hasSeed || hasFiles) ? [{
+        name: 'Default',
+        input: stdin.trim(),
+        match_type: 'exact',
+        order: 0,
+        ...(hasSeed && { random_seed }),
+        ...(hasFiles && { attached_files }),
+      }] : [];
 
       const problemInput = {
         title: title.trim(),

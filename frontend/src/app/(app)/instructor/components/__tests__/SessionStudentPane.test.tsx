@@ -110,7 +110,7 @@ describe('SessionStudentPane', () => {
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: null,
-    sessionExecutionSettings: {},
+    sessionTestCases: [],
     join_code: 'ABC123',
   };
 
@@ -754,6 +754,34 @@ describe('SessionStudentPane', () => {
       const leftPanel = pane.firstElementChild as HTMLElement;
       expect(leftPanel).toHaveClass('lg:w-2/5');
       expect(leftPanel).not.toHaveClass('w-2/5');
+    });
+  });
+
+  describe('sessionTestCases prop (PLAT-st42.3)', () => {
+    /**
+     * Verifies SessionStudentPane accepts sessionTestCases: IOTestCase[] instead of
+     * sessionExecutionSettings: ExecutionSettings. This eliminates the conversion
+     * layer that caused data loss bugs (PLAT-e4m).
+     */
+    it('renders with sessionTestCases instead of sessionExecutionSettings', () => {
+      const propsWithTestCases = {
+        ...defaultProps,
+        sessionTestCases: [{ name: 'Default', input: 'hello', match_type: 'exact' as const, order: 0 }],
+      };
+      // Drop sessionExecutionSettings — new API uses sessionTestCases
+      const { sessionExecutionSettings: _removed, ...cleanProps } = propsWithTestCases as any;
+      render(<SessionStudentPane {...cleanProps} />);
+      expect(screen.getByTestId('session-student-pane')).toBeInTheDocument();
+    });
+
+    it('renders with empty sessionTestCases array', () => {
+      const propsWithTestCases = {
+        ...defaultProps,
+        sessionTestCases: [],
+      };
+      const { sessionExecutionSettings: _removed, ...cleanProps } = propsWithTestCases as any;
+      render(<SessionStudentPane {...cleanProps} />);
+      expect(screen.getByTestId('session-student-pane')).toBeInTheDocument();
     });
   });
 });

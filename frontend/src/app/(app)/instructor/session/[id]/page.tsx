@@ -20,8 +20,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
-import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
-import type { Problem as ApiProblem } from '@/types/api';
+import { Problem } from '@/types/problem';
+import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode } from '@/lib/api/execute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -54,11 +54,7 @@ export default function InstructorSessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [reopening, setReopening] = useState(false);
   const [sessionProblem, setSessionProblem] = useState<Problem | null>(null);
-  const [sessionExecutionSettings, setSessionExecutionSettings] = useState<{
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  }>({});
+  const [sessionTestCases, setSessionTestCases] = useState<IOTestCase[]>([]);
 
   // Realtime session hook
   const {
@@ -135,9 +131,7 @@ export default function InstructorSessionPage() {
   useEffect(() => {
     if (!realtimeSession) return;
     setSessionProblem(realtimeSession.problem || null);
-    setSessionExecutionSettings(
-      extractExecutionSettingsFromTestCases(realtimeSession.problem?.test_cases) || {}
-    );
+    setSessionTestCases(realtimeSession.problem?.test_cases ?? []);
   }, [realtimeSession]);
 
   // Show connection status in the global header
@@ -218,17 +212,18 @@ export default function InstructorSessionPage() {
   const handleExecuteCode = useCallback(async (
     _studentId: string,
     code: string,
-    execution_settings: ExecutionSettings
+    testCases: IOTestCase[]
   ) => {
     const language = sessionProblem?.language || 'python';
+    const firstCase = testCases[0];
     return apiExecuteCode(code, language, {
-      cases: [{
+      cases: firstCase ? [{
         name: 'run',
-        input: execution_settings.stdin ?? '',
+        input: firstCase.input ?? '',
         match_type: 'exact',
-        ...(execution_settings.random_seed !== undefined && { random_seed: execution_settings.random_seed }),
-        ...(execution_settings.attached_files !== undefined && { attached_files: execution_settings.attached_files }),
-      }],
+        ...(firstCase.random_seed !== undefined && { random_seed: firstCase.random_seed }),
+        ...(firstCase.attached_files !== undefined && { attached_files: firstCase.attached_files }),
+      }] : [],
     });
   }, [sessionProblem?.language]);
 
@@ -325,7 +320,7 @@ export default function InstructorSessionPage() {
           students={students}
           realtimeStudents={mappedRealtimeStudents}
           sessionProblem={sessionProblem}
-          sessionExecutionSettings={sessionExecutionSettings}
+          sessionTestCases={sessionTestCases}
           onEndSession={handleEndSession}
           onUpdateProblem={handleUpdateProblem}
           onFeatureStudent={handleFeatureStudent}

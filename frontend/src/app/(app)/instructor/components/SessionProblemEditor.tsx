@@ -12,22 +12,22 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings, buildTestCasesFromExecutionSettings } from '@/types/problem';
-import type { Problem as ApiProblem } from '@/types/api';
+import { Problem } from '@/types/problem';
+import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { executeCode } from '@/lib/api/execute';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (problem: ApiProblem) => void;
   initialProblem?: Problem | null;
-  initialExecutionSettings?: ExecutionSettings;
+  initialTestCases?: IOTestCase[];
   onFeatureSolution?: () => void;
 }
 
 export default function SessionProblemEditor({
   onUpdateProblem,
   initialProblem = null,
-  initialExecutionSettings = {},
+  initialTestCases = [],
   onFeatureSolution,
 }: SessionProblemEditorProps) {
   const [title, setTitle] = useState(initialProblem?.title || '');
@@ -39,11 +39,11 @@ export default function SessionProblemEditor({
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = initialProblem?.language ?? 'python';
 
-  // Execution settings
-  const [stdin, setStdin] = useState(initialExecutionSettings?.stdin || '');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(initialExecutionSettings?.random_seed);
+  // Execution settings (derived from initialTestCases[0])
+  const [stdin, setStdin] = useState(initialTestCases[0]?.input || '');
+  const [random_seed, setRandomSeed] = useState<number | undefined>(initialTestCases[0]?.random_seed);
   const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
-    initialExecutionSettings?.attached_files || []
+    initialTestCases[0]?.attached_files || []
   );
 
   // Execution state for code editor
@@ -61,17 +61,16 @@ export default function SessionProblemEditor({
     }
   }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
 
+  const firstTestCase = initialTestCases[0];
+  const firstTestCaseInput = firstTestCase?.input;
+  const firstTestCaseRandomSeed = firstTestCase?.random_seed;
+  const firstTestCaseAttachedFiles = firstTestCase?.attached_files;
+
   useEffect(() => {
-    if (initialExecutionSettings) {
-      setStdin(initialExecutionSettings.stdin || '');
-      setRandomSeed(initialExecutionSettings.random_seed);
-      setAttachedFiles(initialExecutionSettings.attached_files || []);
-    }
-  }, [
-    initialExecutionSettings?.stdin,
-    initialExecutionSettings?.random_seed,
-    initialExecutionSettings?.attached_files
-  ]);
+    setStdin(firstTestCaseInput || '');
+    setRandomSeed(firstTestCaseRandomSeed);
+    setAttachedFiles(firstTestCaseAttachedFiles || []);
+  }, [firstTestCaseInput, firstTestCaseRandomSeed, firstTestCaseAttachedFiles]);
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
@@ -113,12 +112,18 @@ export default function SessionProblemEditor({
     // The backend stores the full object as-is in session JSONB.
     const base = initialProblem;
 
-    // Build test_cases from execution settings (IOTestCase[] wire format).
-    const newTestCases = buildTestCasesFromExecutionSettings({
-      stdin,
-      random_seed,
-      attached_files,
-    });
+    // Build test_cases directly as IOTestCase[].
+    const hasStdin = stdin.trim() !== '';
+    const hasSeed = random_seed !== undefined;
+    const hasFiles = attached_files.length > 0;
+    const newTestCases: IOTestCase[] = (hasStdin || hasSeed || hasFiles) ? [{
+      name: 'Default',
+      input: stdin.trim(),
+      match_type: 'exact',
+      order: 0,
+      ...(hasSeed && { random_seed }),
+      ...(hasFiles && { attached_files }),
+    }] : [];
 
     // Use new settings if any are set, otherwise preserve existing test_cases.
     const test_cases = (newTestCases.length > 0
