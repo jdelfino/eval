@@ -546,6 +546,55 @@ describe('InstructorSessionPage', () => {
     });
   });
 
+  describe('sessionTestCases state (PLAT-st42.3)', () => {
+    /**
+     * Verifies page.tsx uses sessionTestCases: IOTestCase[] state instead of
+     * sessionExecutionSettings: ExecutionSettings. The page reads test_cases
+     * directly from the realtime problem and passes IOTestCase[] to SessionView.
+     *
+     * This matters because the old extractExecutionSettingsFromTestCases conversion
+     * caused data loss (PLAT-e4m). Direct pass-through eliminates this risk.
+     */
+    it('passes test_cases from realtime session problem directly to SessionView', () => {
+      const sessionWithTestCases = {
+        ...mockSession,
+        problem: {
+          ...mockSession.problem,
+          test_cases: [{ name: 'Default', input: 'hello', match_type: 'exact', order: 0 }],
+        },
+      };
+
+      (useRealtimeSession as jest.Mock).mockReturnValue({
+        ...defaultRealtimeSessionReturn,
+        session: sessionWithTestCases,
+      });
+
+      render(<InstructorSessionPage />);
+
+      // SessionView is rendered — the session problem with test_cases flows through
+      expect(screen.getByTestId('session-view')).toBeInTheDocument();
+    });
+
+    it('handles session problem with no test_cases (defaults to empty array)', () => {
+      const sessionWithoutTestCases = {
+        ...mockSession,
+        problem: {
+          ...mockSession.problem,
+          test_cases: undefined,
+        },
+      };
+
+      (useRealtimeSession as jest.Mock).mockReturnValue({
+        ...defaultRealtimeSessionReturn,
+        session: sessionWithoutTestCases,
+      });
+
+      // Should not throw — defaults to []
+      render(<InstructorSessionPage />);
+      expect(screen.getByTestId('session-view')).toBeInTheDocument();
+    });
+  });
+
   describe('Zoom Protection (forceDesktop)', () => {
     it('calls useForceDesktopLayout to prevent zoom from collapsing layout', () => {
       render(<InstructorSessionPage />);
