@@ -59,6 +59,8 @@ GCP-hosted platform with Go backend, Next.js frontend, GKE orchestration, and ma
 | State Storage | Cloud Storage (GCS) | < $1 |
 | **Total** | | **~$77** |
 
+For future per-student cost projections and comparison to alternatives, see [ECONOMICS.md](ECONOMICS.md).
+
 ## Technology Choices
 
 | Component | Choice | Rationale |
