@@ -12,7 +12,7 @@ The biggest planned expansion is support for take-home assignments with persiste
 
 **Browser-based development workspaces.** Students open their assignment directly in VS Code in the browser — no local setup, no package installation, no version conflicts. Environments are defined by devcontainers, so what a student sees matches exactly what the autograder sees.
 
-**Persistent student repos.** Each student gets their own repository per assignment, managed by the platform. Code persists between sessions; students pick up where they left off. They never interact with Git directly.
+**Persistent student repos.** Each student gets their own repository per assignment, managed by the platform. Code persists between sessions; students pick up where they left off. Git can be hidden entirely (students just see a code editor) or exposed as a teaching tool (students see commits, branches, and diffs). The choice is per-course — introductory courses can hide version control complexity while advanced courses use the platform to teach it.
 
 **Auto-commit for academic integrity.** The workspace commits student work every ~10 seconds in the background. This creates a fine-grained revision history that makes it straightforward to detect paste-in-complete-solution patterns and understand how a student's thinking evolved.
 
