@@ -33,8 +33,11 @@ bd show <task-id> --json
 
 ### 2. Identify Changed Production and Test Files
 
+```
+EnterWorktree(path: <WORKTREE>)
+```
+
 ```bash
-cd <worktree-path>
 git diff <base-branch>...HEAD --stat
 ```
 

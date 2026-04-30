@@ -11,12 +11,15 @@ You are a test runner sub-agent. Your job is to run quality gate commands and re
 ## Input
 
 You will receive:
-- **Working directory**: the path to run commands in
+- **WORKTREE**: the path to run commands in
 - **Commands**: one or more quality gate commands to run sequentially
 
 ## Execution
 
-1. `cd` to the working directory
+1. Enter the worktree:
+   ```
+   EnterWorktree(path: <WORKTREE>)
+   ```
 2. Run each command sequentially. Stop at the first failure.
 
 ## Output Protocol

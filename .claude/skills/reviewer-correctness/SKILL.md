@@ -23,10 +23,15 @@ You review the full branch diff for correctness issues. You read every changed l
 
 ## Review Process
 
+### 0. Enter Worktree
+
+```
+EnterWorktree(path: <WORKTREE>)
+```
+
 ### 1. Get the Full Diff
 
 ```bash
-cd <worktree-path>
 git diff <base-branch>...HEAD --stat
 git diff <base-branch>...HEAD
 ```

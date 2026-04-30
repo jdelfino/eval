@@ -45,7 +45,22 @@ This is collaborative. Do NOT silently make decisions — discuss with the user.
 4. Point out risks and tradeoffs proactively — don't wait to be asked
 5. Iterate until you and the user agree on the approach
 
-### Phase 3 — File Issues
+### Phase 3 — Present Acceptance Tests for Approval
+
+Before filing any issues, present all planned test cases to the user for explicit approval. Tests are the contract — they define what "done" means, and the user must agree.
+
+1. For each planned subtask, list its **task-level test cases** (scenario name, setup, assertions, what it catches)
+2. If the epic warrants acceptance tests, list those too
+3. If any task requires **modifying existing tests**, call these out separately and explicitly — which test file, which test case, what will change and why. Existing tests are human-approved contracts; changes need justification.
+4. Use AskUserQuestion to get explicit approval. The user may:
+   - Approve as-is
+   - Request changes (add/remove/modify test cases)
+   - Ask questions about coverage gaps
+5. Iterate until the user approves the test plan
+
+**Do NOT proceed to filing issues until tests are approved.** The test cases become the spec — changing them after filing means rewriting issues.
+
+### Phase 4 — File Issues
 
 Present the agreed approach as a concise summary and use AskUserQuestion to confirm before filing. **Do NOT use EnterPlanMode or ExitPlanMode** — those trigger Claude Code's built-in plan execution behavior.
 
@@ -73,6 +88,7 @@ After the user approves:
 - **Files to modify**: Exact paths (with line numbers if relevant)
 - **Files to read for context**: Paths the implementer will need to understand before coding
 - **Test cases**: Concrete acceptance tests for the task (see below)
+- **Existing test modifications**: If the task requires changing existing tests, list each modification explicitly — which test file, which test case, what changes and why. Implementers are NOT allowed to modify existing tests without this authorization.
 - **Implementation steps**: Numbered, specific actions
 - **Example**: Show before → after transformation when applicable
 
@@ -136,7 +152,7 @@ Each subtask must fit within a single implementer context window without compact
 
 If "Files to read for context" exceeds ~10 entries, the task is probably too large — consider splitting it. But if splitting would create awkward boundaries or tightly coupled tasks, it's better to leave a large task whole.
 
-### Phase 4 — Plan Review
+### Phase 5 — Plan Review
 
 After issues are filed, spawn a plan reviewer:
 
@@ -158,7 +174,7 @@ The reviewer checks the filed issues against the codebase for architectural issu
 
 ## Your Constraints
 
-- **MAY** use full beads access (create, update, close issues) — but only in Phases 3-4
+- **MAY** use full beads access (create, update, close issues) — but only in Phases 4-5
 - **NEVER** write code or create worktrees
 - **NEVER** skip the discussion phase — always get user input on key decisions
 - **ALWAYS** explore the codebase before proposing an approach
@@ -169,7 +185,7 @@ The reviewer checks the filed issues against the codebase for architectural issu
 - ❌ Write implementation code
 - ❌ Create worktrees or branches
 - ❌ Make architecture decisions without discussing with the user
-- ❌ File issues before the user approves the plan
+- ❌ File issues before the user approves the plan and test cases
 - ❌ Skip codebase exploration (guessing at patterns leads to bad plans)
 - ❌ Create vague subtasks ("implement the feature") — be specific
 - ❌ Use EnterPlanMode/ExitPlanMode (triggers unwanted auto-implementation)

@@ -9,7 +9,7 @@ You are the single entry point for all implementation work. You triage incoming 
 
 **Model guidance:** The coordinator should run on Opus 4.6. Implementer subagents should run on Sonnet 4.6 (`model: "sonnet"`).
 
-**IMPORTANT:** The main branch is protected. All changes MUST go through a feature branch and PR. Direct commits to main are not allowed.
+**IMPORTANT:** The `main` branch is protected. All changes MUST go through a feature branch and PR. Direct commits to main are not allowed.
 
 ## Phase 1: Triage
 
@@ -41,15 +41,30 @@ If the issue is a fix for code on an existing feature branch (e.g., CI failure o
 
 ## Branch Mode
 
-All work uses branches and PRs. Uses worktrees and subagents.
+All work uses branches and PRs. Uses worktree isolation for subagents.
 
 ### 1. Setup
 
+Create the feature branch from main:
+
 ```bash
-# Create feature branch from main
 git fetch origin main
 git branch feature/<work-name> origin/main
 ```
+
+Then enter a worktree for the coordinator session:
+
+```
+EnterWorktree(name: "<work-name>")
+```
+
+After `EnterWorktree` returns, install eval's per-worktree dependencies:
+
+```bash
+ln -s /workspaces/eval/frontend/node_modules ./frontend/node_modules
+```
+
+The coordinator works from its worktree for the rest of the session. Reviewers and the test-runner enter this same worktree.
 
 ### 2. Implement Tasks
 
@@ -63,6 +78,8 @@ bd update <task-id> --set-labels wip --json
 ```
 
 #### b. Create Per-Task Worktree
+
+Per-task worktrees are created manually so the eval-specific node_modules symlink is in place before the implementer subagent starts:
 
 ```bash
 git branch feature/<work-name>/<task-id> feature/<work-name>
@@ -143,21 +160,14 @@ Triage the "Concerns" section:
 
 Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
 
-After all tasks are merged into the feature branch, create a worktree for the feature branch to use for reviews and the test-runner:
-
-```bash
-git worktree add ../<project>-<work-name> feature/<work-name>
-ln -s /workspaces/eval/frontend/node_modules ../<project>-<work-name>/frontend/node_modules
-```
-
-Then run 3 specialized reviews **in parallel** using the Task tool:
+After all tasks are merged into the feature branch, run 3 specialized reviews **in parallel** using the Task tool. Each reviewer enters the coordinator's existing worktree (do NOT create a new worktree):
 
 **Correctness Reviewer:**
 ```
 ROLE: Correctness Reviewer
 SKILL: Read and follow .claude/skills/reviewer-correctness/SKILL.md
 
-WORKTREE: ../<project>-<work-name>
+WORKTREE: <coordinator's worktree path>
 BASE: origin/main
 SUMMARY: <what this PR implements>
 ```
@@ -167,7 +177,7 @@ SUMMARY: <what this PR implements>
 ROLE: Test Quality Reviewer
 SKILL: Read and follow .claude/skills/reviewer-tests/SKILL.md
 
-WORKTREE: ../<project>-<work-name>
+WORKTREE: <coordinator's worktree path>
 BASE: origin/main
 SUMMARY: <what this PR implements>
 ```
@@ -177,7 +187,7 @@ SUMMARY: <what this PR implements>
 ROLE: Architecture Reviewer
 SKILL: Read and follow .claude/skills/reviewer-architecture/SKILL.md
 
-WORKTREE: ../<project>-<work-name>
+WORKTREE: <coordinator's worktree path>
 BASE: origin/main
 SUMMARY: <what this PR implements>
 REFERENCE DIRS: <key directories in the existing codebase to compare against>
@@ -194,7 +204,7 @@ After all issues resolved, run quality gates via a test-runner sub-agent. **Run 
 ROLE: Test Runner
 SKILL: Read and follow .claude/skills/test-runner/SKILL.md
 
-WORKING DIRECTORY: ../<project>-<work-name>
+WORKTREE: <coordinator's worktree path>
 COMMANDS:
 - <integration test commands matching changed code — see Hooks section below>
 - <e2e acceptance test commands if the epic defined them — e.g., make test-e2e -- e2e/specific-test.spec.ts>
@@ -207,7 +217,6 @@ If the epic has e2e acceptance tests, run them here targeting the specific test 
 ### 4. Create PR, Monitor CI, and Hand Off
 
 ```bash
-cd ../<project>-<work-name>
 git push -u origin feature/<work-name>
 
 gh pr create --title "<type>: <title>" --body "$(cat <<'EOF'
@@ -243,9 +252,8 @@ gh pr checks <number> --watch
    gh run view <run-id> --log-failed
    ```
 2. **Trivial fix** (single-line, obvious test typo): fix inline, commit, push.
-3. **Non-trivial fix**: spawn an implementer in the existing feature worktree to fix the failures, then push:
+3. **Non-trivial fix**: spawn an implementer in the coordinator's worktree to fix the failures, then push:
    ```bash
-   cd ../<project>-<work-name>
    git push
    ```
 4. Re-run `gh pr checks <number> --watch` and repeat until CI passes.
@@ -293,6 +301,7 @@ export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
 - Spawning a rebase subagent when there are no conflicts (use inline fast-path first)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
+- Using `isolation: "worktree"` for rebase/reviewer/test-runner agents — they enter the coordinator's existing worktree
 
 ## Hooks — What's Automatic vs Manual
 
