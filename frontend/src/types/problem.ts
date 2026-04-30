@@ -7,62 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Problem as ApiProblem, IOTestCase, WireFile } from './api';
-
-// ---------------------------------------------------------------------------
-// Execution settings
-// ---------------------------------------------------------------------------
-
-export interface ExecutionSettings {
-  stdin?: string;
-  random_seed?: number;
-  attached_files?: Array<{ name: string; content: string }>;
-}
-
-// ---------------------------------------------------------------------------
-// Test case types (kept lightweight for client-side usage)
-// ---------------------------------------------------------------------------
-
-export type TestCaseType = 'input-output' | 'pytest' | 'property-based';
-
-export type OutputMatchType = 'exact' | 'contains' | 'regex';
-
-export interface InputOutputTestConfig {
-  input: string;
-  expected_output: string;
-  match_type: OutputMatchType;
-  ignore_whitespace?: boolean;
-}
-
-export interface PyTestConfig {
-  test_code: string;
-  target_function?: string;
-  timeout?: number;
-}
-
-export interface PropertyTestConfig {
-  property_code: string;
-  strategy_config?: Record<string, unknown>;
-  max_examples?: number;
-}
-
-export type TestConfig =
-  | { type: 'input-output'; data: InputOutputTestConfig }
-  | { type: 'pytest'; data: PyTestConfig }
-  | { type: 'property-based'; data: PropertyTestConfig };
-
-export interface TestCase {
-  id: string;
-  problem_id: string;
-  type: TestCaseType;
-  name: string;
-  description: string;
-  visible: boolean;
-  order: number;
-  config: TestConfig;
-  random_seed?: number;
-  attached_files?: Array<{ name: string; content: string }>;
-}
+import type { Problem as ApiProblem, IOTestCase } from './api';
 
 // ---------------------------------------------------------------------------
 // Problem (rich client type with Date timestamps)
@@ -74,7 +19,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: TestCase[] | ExecutionSettings | null;
+  test_cases: IOTestCase[];
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -89,7 +34,7 @@ export interface StudentProblem {
   title: string;
   description: string;
   starter_code?: string;
-  test_cases: TestCase[];
+  test_cases: IOTestCase[];
 }
 
 export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
@@ -100,98 +45,15 @@ export type ProblemInput = Omit<Problem, 'id' | 'created_at' | 'updated_at'>;
 
 /**
  * Convert an API wire-format Problem to a rich client Problem with Date timestamps.
- * Note: test_cases may be IOTestCase[] (wire format) or ExecutionSettings (legacy).
- * The rich client Problem.test_cases accepts TestCase[] | ExecutionSettings | null;
- * IOTestCase[] is cast since the runtime handler (extractExecutionSettingsFromTestCases)
- * handles both formats via the `as any` access pattern.
+ * test_cases is normalized to IOTestCase[] — null/undefined from legacy wire data
+ * becomes an empty array.
  */
 export function mapApiProblem(api: ApiProblem): Problem {
   return {
     ...api,
-    test_cases: api.test_cases as Problem['test_cases'],
+    test_cases: (api.test_cases as IOTestCase[] | null) ?? [],
     created_at: new Date(api.created_at),
     updated_at: new Date(api.updated_at),
   };
 }
 
-// ---------------------------------------------------------------------------
-// Execution Settings Extraction (PLAT-u90)
-// ---------------------------------------------------------------------------
-
-/**
- * Extract ExecutionSettings from test_cases[0].
- *
- * After migration 020, execution_settings was consolidated into test_cases.
- * The backend stores stdin as `input`, random_seed, and attached_files in test_cases[0].
- * This helper extracts those fields back into ExecutionSettings format for the frontend.
- *
- * @param testCases - The test_cases array from a Problem
- * @returns ExecutionSettings object with stdin, random_seed, attached_files
- */
-// ---------------------------------------------------------------------------
-// Execution Settings → IOTestCase[] (PLAT-e4m)
-// ---------------------------------------------------------------------------
-
-/**
- * Build an IOTestCase[] array from execution settings.
- * Inverse of extractExecutionSettingsFromTestCases.
- *
- * Returns a single-element array when any setting is present, empty array otherwise.
- */
-export function buildTestCasesFromExecutionSettings(opts: {
-  stdin?: string;
-  random_seed?: number;
-  attached_files?: WireFile[];
-}): IOTestCase[] {
-  const hasStdin = opts.stdin !== undefined && opts.stdin.trim() !== '';
-  const hasRandomSeed = opts.random_seed !== undefined;
-  const hasFiles = opts.attached_files !== undefined && opts.attached_files.length > 0;
-
-  if (!hasStdin && !hasRandomSeed && !hasFiles) {
-    return [];
-  }
-
-  const tc: IOTestCase = {
-    name: 'Default',
-    input: opts.stdin?.trim() || '',
-    match_type: 'exact',
-    order: 0,
-  };
-  if (hasRandomSeed) tc.random_seed = opts.random_seed;
-  if (hasFiles) tc.attached_files = opts.attached_files;
-
-  return [tc];
-}
-
-export function extractExecutionSettingsFromTestCases(
-  testCases: TestCase[] | IOTestCase[] | ExecutionSettings | null | undefined
-): ExecutionSettings {
-  if (!testCases || (Array.isArray(testCases) && testCases.length === 0)) {
-    return {
-      stdin: undefined,
-      random_seed: undefined,
-      attached_files: undefined,
-    };
-  }
-
-  // If testCases is already ExecutionSettings format, return as-is
-  if (!Array.isArray(testCases)) {
-    return testCases;
-  }
-
-  // Backend IOTestCase wire format has top-level fields: input, random_seed, attached_files.
-  // The rich client TestCase type nests input inside config.data — check both shapes.
-  const firstCase = testCases[0] as any;
-
-  // Prefer top-level input (IOTestCase wire format), fall back to config.data.input (rich TestCase)
-  const stdin: string | undefined =
-    firstCase.input !== undefined ? firstCase.input :
-    firstCase.config?.data?.input !== undefined ? firstCase.config.data.input :
-    undefined;
-
-  return {
-    stdin,
-    random_seed: firstCase.random_seed,
-    attached_files: firstCase.attached_files,
-  };
-}

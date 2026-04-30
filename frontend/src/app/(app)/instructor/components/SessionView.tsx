@@ -13,8 +13,8 @@ import { SessionStudentPane } from './SessionStudentPane';
 import { ProblemSetupPanel } from './ProblemSetupPanel';
 import RevisionViewer from './RevisionViewer';
 import { Tabs } from '@/components/ui/Tabs';
-import { Problem, ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
-import type { Problem as ApiProblem } from '@/types/api';
+import { Problem } from '@/types/problem';
+import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { featureCode } from '@/lib/api/sessions';
 import { Student, RealtimeStudent, TestResponse } from '../types';
 
@@ -36,12 +36,8 @@ interface SessionViewProps {
   realtimeStudents: RealtimeStudent[];
   /** Current session problem */
   sessionProblem: Problem | null;
-  /** Session execution settings */
-  sessionExecutionSettings: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
+  /** Session test cases (IOTestCase[] from the problem) */
+  sessionTestCases: IOTestCase[];
   /** Callback to end the session */
   onEndSession: () => Promise<void>;
   /** Callback to update problem */
@@ -54,7 +50,7 @@ interface SessionViewProps {
   executeCode: (
     studentId: string,
     code: string,
-    execution_settings: ExecutionSettings
+    testCases: IOTestCase[]
   ) => Promise<TestResponse>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
@@ -82,7 +78,7 @@ export function SessionView({
   students,
   realtimeStudents,
   sessionProblem,
-  sessionExecutionSettings,
+  sessionTestCases,
   onEndSession,
   onUpdateProblem,
   onFeatureStudent,
@@ -103,16 +99,15 @@ export function SessionView({
     if (!sessionProblem?.solution) return;
 
     try {
-      // Extract execution settings from test_cases[0] (IOTestCase wire format)
-      const extracted = extractExecutionSettingsFromTestCases(sessionProblem.test_cases as any);
-      const testCases: ExecutionSettings = (extracted.stdin || extracted.random_seed || extracted.attached_files)
-        ? extracted
-        : sessionExecutionSettings;
+      // Pass test_cases directly (already IOTestCase[])
+      const testCases = sessionProblem.test_cases.length > 0
+        ? sessionProblem.test_cases
+        : sessionTestCases;
       await featureCode(session_id, sessionProblem.solution, testCases);
     } catch (error) {
       console.error('Failed to show solution:', error);
     }
-  }, [session_id, sessionProblem?.solution, sessionProblem?.test_cases, sessionExecutionSettings]);
+  }, [session_id, sessionProblem?.solution, sessionProblem?.test_cases, sessionTestCases]);
 
   // Handlers for student pane
   const handleViewRevisions = useCallback((studentId: string, studentName: string) => {
@@ -126,10 +121,10 @@ export function SessionView({
   const handleExecuteCode = useCallback(async (
     studentId: string,
     code: string,
-    settings: ExecutionSettings
+    testCases: IOTestCase[]
   ): Promise<TestResponse | undefined> => {
     try {
-      return await executeCode(studentId, code, settings);
+      return await executeCode(studentId, code, testCases);
     } catch (error) {
       console.error('Error executing code:', error);
       return undefined;
@@ -167,7 +162,7 @@ export function SessionView({
             students={students}
             realtimeStudents={realtimeStudents}
             sessionProblem={sessionProblem}
-            sessionExecutionSettings={sessionExecutionSettings}
+            sessionTestCases={sessionTestCases}
             join_code={join_code || undefined}
             onShowOnPublicView={onFeatureStudent}
             onClearPublicView={onClearPublicView}
@@ -183,7 +178,7 @@ export function SessionView({
           <ProblemSetupPanel
             onUpdateProblem={onUpdateProblem}
             initialProblem={sessionProblem}
-            initialExecutionSettings={sessionExecutionSettings}
+            initialTestCases={sessionTestCases}
             isFullWidth
             onFeatureSolution={sessionProblem?.solution && onClearPublicView ? handleShowSolution : undefined}
           />

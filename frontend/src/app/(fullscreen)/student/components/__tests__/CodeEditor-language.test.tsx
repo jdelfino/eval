@@ -135,7 +135,7 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          defaultExecutionSettings={{ stdin: "my input", random_seed: 42 }}
+          defaultTestCases={[{ name: 'Default', input: 'my input', match_type: 'exact' as const, order: 0, random_seed: 42 }]}
           problem={pythonProblem}
         />
       );
@@ -143,10 +143,12 @@ describe('CodeEditor - Language Awareness', () => {
       fireEvent.click(screen.getByText('▶ Run Code'));
 
       expect(mockOnRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          stdin: 'my input',
-          random_seed: 42,
-        })
+        expect.arrayContaining([
+          expect.objectContaining({
+            input: 'my input',
+            random_seed: 42,
+          })
+        ])
       );
     });
 
@@ -159,16 +161,18 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          defaultExecutionSettings={{ attached_files: files }}
+          defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, attached_files: files }]}
         />
       );
 
       fireEvent.click(screen.getByText('▶ Run Code'));
 
       expect(mockOnRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          attached_files: files,
-        })
+        expect.arrayContaining([
+          expect.objectContaining({
+            attached_files: files,
+          })
+        ])
       );
     });
   });

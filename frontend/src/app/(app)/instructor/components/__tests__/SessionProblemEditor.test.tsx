@@ -17,7 +17,7 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
     starter_code: null,
     solution: null,
     language: 'python',
-    test_cases: null,
+    test_cases: [],
     author_id: 'test-author',
     class_id: null,
     tags: [],
@@ -63,7 +63,7 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
       code,
       onChange,
       readOnly,
-      onExecutionSettingsChange,
+      onTestCasesChange,
       title,
       problem,
       onProblemEdit,
@@ -112,13 +112,13 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         <input
           data-testid="stdin-input"
           placeholder="stdin"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: e.target.value, random_seed: undefined, attached_files: undefined })}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
         />
         <input
           data-testid="seed-input"
           type="number"
           placeholder="seed"
-          onChange={(e) => onExecutionSettingsChange?.({ stdin: undefined, random_seed: e.target.value ? Number(e.target.value) : undefined, attached_files: undefined })}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
         />
         {editableProblem && (
           <div data-testid="editable-problem-sidebar">
@@ -182,17 +182,15 @@ describe('SessionProblemEditor', () => {
     expect(screen.getByTestId('code-textarea')).toHaveValue('print("hello")');
   });
 
-  it('renders with initial execution settings', () => {
-    const initialExecutionSettings = {
-      stdin: 'test input',
-      random_seed: 42,
-      attached_files: [{ name: 'test.txt', content: 'content' }],
-    };
+  it('renders with initial test cases', () => {
+    const initialTestCases = [
+      { name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'test.txt', content: 'content' }] },
+    ];
 
     render(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
-        initialExecutionSettings={initialExecutionSettings}
+        initialTestCases={initialTestCases}
       />
     );
 
@@ -390,17 +388,15 @@ describe('SessionProblemEditor', () => {
       description: 'Test',
       starter_code: 'test code',
     });
-    const initialSettings = {
-      stdin: 'input',
-      random_seed: 123,
-      attached_files: [{ name: 'file.txt', content: 'content' }],
-    };
+    const initialTestCases = [
+      { name: 'Default', input: 'input', match_type: 'exact' as const, order: 0, random_seed: 123, attached_files: [{ name: 'file.txt', content: 'content' }] },
+    ];
 
     render(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
         initialProblem={initialProblem}
-        initialExecutionSettings={initialSettings}
+        initialTestCases={initialTestCases}
       />
     );
 
@@ -746,6 +742,78 @@ describe('SessionProblemEditor', () => {
 
       fireEvent.click(screen.getByTestId('feature-solution-button'));
       expect(mockOnFeatureSolution).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('initialTestCases prop (PLAT-st42.3)', () => {
+    /**
+     * Verifies SessionProblemEditor accepts initialTestCases: IOTestCase[] instead of
+     * initialExecutionSettings: ExecutionSettings. This eliminates the conversion
+     * step (buildTestCasesFromExecutionSettings) on save.
+     */
+    it('accepts initialTestCases instead of initialExecutionSettings', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialTestCases={[{ name: 'Default', input: 'hello', match_type: 'exact', order: 0 }]}
+        />
+      );
+      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    });
+
+    it('produces IOTestCase[] test_cases on save when stdin set', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+        />
+      );
+
+      // Set stdin via the mock CodeEditor
+      fireEvent.change(screen.getByTestId('stdin-input'), {
+        target: { value: 'test stdin' },
+      });
+
+      fireEvent.click(screen.getByText('Update Problem'));
+
+      expect(mockOnUpdateProblem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          test_cases: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'Default',
+              input: 'test stdin',
+              match_type: 'exact',
+            }),
+          ]),
+        })
+      );
+    });
+
+    it('produces null test_cases on save when no stdin/seed/files and no initial problem', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Update Problem'));
+
+      const call = mockOnUpdateProblem.mock.calls[0][0];
+      // No initial problem and no settings: test_cases falls back to base?.test_cases ?? null
+      expect(call.test_cases).toBeNull();
+    });
+
+    it('produces empty test_cases [] on save when initial problem has empty test_cases and no stdin/seed/files', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={makeProblem({ test_cases: [] })}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Update Problem'));
+
+      const call = mockOnUpdateProblem.mock.calls[0][0];
+      expect(call.test_cases).toEqual([]);
     });
   });
 });

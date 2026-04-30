@@ -18,8 +18,8 @@ import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
 import { Tabs } from '@/components/ui/Tabs';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
-import { executeCode } from '@/lib/api/execute';
-import { extractExecutionSettingsFromTestCases, buildTestCasesFromExecutionSettings } from '@/types/problem';
+import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
+import type { IOTestCase } from '@/types/api';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -109,11 +109,11 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings from test_cases[0]
-      const execSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
-      setStdin(execSettings?.stdin || '');
-      setRandomSeed(execSettings?.random_seed);
-      setAttachedFiles(execSettings?.attached_files || []);
+      // Load execution settings from test_cases[0] directly
+      const firstCase = problem.test_cases?.[0];
+      setStdin(firstCase?.input || '');
+      setRandomSeed(firstCase?.random_seed);
+      setAttachedFiles(firstCase?.attached_files || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -156,10 +156,9 @@ export default function ProblemCreator({
     setIsSubmitting(true);
 
     try {
-      // Build test_cases from execution settings (stdin, random_seed, attached_files).
-      // These are stored as test_cases[0] in the backend, not as a separate field.
-      const testCases = buildTestCasesFromExecutionSettings({
-        stdin,
+      // Build test_cases directly as IOTestCase[].
+      const testCases = buildIOTestCases({
+        stdin: stdin.trim(),
         random_seed,
         attached_files,
       });
@@ -258,6 +257,9 @@ export default function ProblemCreator({
   };
 
   const debuggerHook = useApiDebugger();
+
+  // Build current execution test cases for CodeEditor default
+  const currentTestCases: IOTestCase[] = buildIOTestCases({ stdin, random_seed, attached_files });
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -466,14 +468,12 @@ export default function ProblemCreator({
         <CodeEditor
           code={activeTab === 'starter' ? starter_code : solution}
           onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(execution_settings) => {
+          onRun={(testCases) => {
             const codeToRun = activeTab === 'starter' ? starter_code : solution;
             setIsRunning(true);
             setExecutionResult(null);
             executeCode(codeToRun, language, {
-              stdin: execution_settings.stdin,
-              random_seed: execution_settings.random_seed,
-              attached_files: execution_settings.attached_files,
+              cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
             }).then(setExecutionResult).catch((err: any) => {
               setError(err?.message || 'Failed to run code');
             }).finally(() => setIsRunning(false));
@@ -481,11 +481,12 @@ export default function ProblemCreator({
           isRunning={isRunning}
           execution_result={executionResult}
           title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          defaultExecutionSettings={{ stdin, random_seed, attached_files }}
-          onExecutionSettingsChange={(settings) => {
-            setStdin(settings.stdin || '');
-            setRandomSeed(settings.random_seed);
-            setAttachedFiles(settings.attached_files || []);
+          defaultTestCases={currentTestCases}
+          onTestCasesChange={(testCases) => {
+            const first = testCases[0];
+            setStdin(first?.input || '');
+            setRandomSeed(first?.random_seed);
+            setAttachedFiles(first?.attached_files || []);
           }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}

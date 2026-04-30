@@ -329,7 +329,7 @@ describe('useRealtimeSession', () => {
         'session-1',
         'student-1',
         'print("hello")',
-        undefined
+        [] // student.test_cases is [] when loaded from API with no test_cases
       );
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
@@ -523,7 +523,7 @@ describe('useRealtimeSession', () => {
       expect(result.current.students[0].code).toBe('print("updated")');
     });
 
-    it('should store execution_settings from student_code_updated event on the student', async () => {
+    it('should store test_cases from student_code_updated event on the student', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
           session_id: 'session-1',
@@ -543,22 +543,22 @@ describe('useRealtimeSession', () => {
         });
       });
 
-      expect(result.current.students[0].execution_settings).toBeUndefined();
+      expect(result.current.students[0].test_cases).toEqual([]);
 
-      const execSettings = { stdin: 'hello inputs', random_seed: 42 };
+      const testCases = [{ name: 'default', input: 'hello inputs', match_type: 'exact', order: 0, random_seed: 42 }];
       act(() => {
         simulatePublication('student_code_updated', {
           user_id: 'student-1',
           code: 'print("hello")',
-          test_cases: execSettings,
+          test_cases: testCases,
         });
       });
 
       expect(result.current.students[0].code).toBe('print("hello")');
-      expect(result.current.students[0].execution_settings).toEqual(execSettings);
+      expect(result.current.students[0].test_cases).toEqual(testCases);
     });
 
-    it('should store execution_settings from student_code_updated in pending updates (out-of-order)', async () => {
+    it('should store test_cases from student_code_updated in pending updates (out-of-order)', async () => {
       const { result } = renderHook(() =>
         useRealtimeSession({
           session_id: 'session-1',
@@ -570,20 +570,20 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const execSettings = { stdin: 'pending inputs' };
+      const testCases = [{ name: 'default', input: 'pending inputs', match_type: 'exact', order: 0 }];
 
-      // Code update (with execution_settings) arrives before student join
+      // Code update (with test_cases) arrives before student join
       act(() => {
         simulatePublication('student_code_updated', {
           user_id: 'student-1',
           code: 'print("early")',
-          test_cases: execSettings,
+          test_cases: testCases,
         });
       });
 
       expect(result.current.students).toHaveLength(0);
 
-      // Student join arrives after — should apply pending update including execution_settings
+      // Student join arrives after — should apply pending update including test_cases
       act(() => {
         simulatePublication('student_joined', {
           user_id: 'student-1',
@@ -593,7 +593,7 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].code).toBe('print("early")');
-      expect(result.current.students[0].execution_settings).toEqual(execSettings);
+      expect(result.current.students[0].test_cases).toEqual(testCases);
     });
 
     it('should handle out-of-order events (code update before student join)', async () => {
@@ -701,22 +701,22 @@ describe('useRealtimeSession', () => {
 
       expect(result.current.featuredStudent.studentId).toBeUndefined();
 
-      const execSettings = { stdin: 'hello world' };
+      const testCases = [{ name: 'default', input: 'hello world', match_type: 'exact', order: 0 }];
 
       act(() => {
         simulatePublication('featured_student_changed', {
           user_id: 'student-1',
           code: 'print("featured code")',
-          test_cases: execSettings,
+          test_cases: testCases,
         });
       });
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
       expect(result.current.featuredStudent.code).toBe('print("featured code")');
-      expect(result.current.featuredStudent.executionSettings).toEqual(execSettings);
+      expect(result.current.featuredStudent.testCases).toEqual(testCases);
       expect(result.current.session?.featured_student_id).toBe('student-1');
       expect(result.current.session?.featured_code).toBe('print("featured code")');
-      expect(result.current.session?.featured_test_cases).toEqual(execSettings);
+      expect(result.current.session?.featured_test_cases).toEqual(testCases);
     });
 
     it('should handle featured_student_changed event to clear featured student', async () => {

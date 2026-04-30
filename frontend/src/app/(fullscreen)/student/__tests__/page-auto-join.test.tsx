@@ -120,7 +120,7 @@ describe('StudentPage auto-join (PLAT-6y2j.1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionStorage.clear();
-    mockJoinSession.mockResolvedValue({ code: 'print("hello")', execution_settings: null });
+    mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
     mockGetActiveSessions.mockResolvedValue([activeSession]);
   });

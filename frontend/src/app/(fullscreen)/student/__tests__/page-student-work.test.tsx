@@ -127,6 +127,12 @@ const fakeStudentWorkWithProblem = {
 describe('StudentPage (student_work-centric)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset useSearchParams to default (work_id = 'work-123') after tests that override it.
+    const { useSearchParams, useRouter } = require('next/navigation');
+    useSearchParams.mockReturnValue({
+      get: (key: string) => (key === 'work_id' ? 'work-123' : null),
+    });
+    useRouter.mockReturnValue({ push: jest.fn(), replace: jest.fn() });
     // Reset useRealtimeSession to default implementation after each test
     mockUseRealtimeSession.mockReturnValue({
       session: null,
@@ -239,6 +245,70 @@ describe('StudentPage (student_work-centric)', () => {
       render(<StudentPageWrapper />);
 
       expect(screen.getByText(/No student work/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('PLAT-st42.4: IOTestCase[] state management', () => {
+    it('loads student work with test_cases as IOTestCase[] and passes them to CodeEditor', async () => {
+      /**
+       * Contract: when student work loads with test_cases, the page passes IOTestCase[]
+       * directly to CodeEditor, not via ExecutionSettings conversion.
+       * Matters because ExecutionSettings bridge loses data; IOTestCase[] is the canonical type.
+       */
+      const fakeWorkWithTestCases = {
+        ...fakeStudentWorkWithProblem,
+        test_cases: [{ name: 'Default', input: 'hello', match_type: 'exact', order: 0 }],
+      };
+
+      mockGetStudentWork.mockResolvedValue(fakeWorkWithTestCases);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(mockGetStudentWork).toHaveBeenCalledWith('work-123');
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+    });
+
+    it('auto-save in practice mode sends IOTestCase[] (not ExecutionSettings) to updateStudentWork', async () => {
+      /**
+       * Contract: auto-save passes test_cases as IOTestCase[] to updateStudentWork.
+       * Before this fix, it called buildTestCasesFromExecutionSettings(studentExecutionSettings)
+       * which is the bridge function being deleted. After fix, studentTestCases (IOTestCase[])
+       * is passed directly.
+       */
+      mockGetStudentWork.mockResolvedValue({
+        ...fakeStudentWorkWithProblem,
+        test_cases: [{ name: 'Default', input: 'hello', match_type: 'exact', order: 0 }],
+      });
+      mockGetActiveSessions.mockResolvedValue([]);
+      mockUpdateStudentWork.mockResolvedValue(undefined);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      });
+
+      // Wait for auto-save debounce (500ms)
+      await waitFor(() => {
+        expect(mockUpdateStudentWork).toHaveBeenCalled();
+      }, { timeout: 2000 });
+
+      const [, payload] = mockUpdateStudentWork.mock.calls[0];
+      // test_cases should be IOTestCase[] (or undefined), not ExecutionSettings object
+      if (payload.test_cases !== undefined) {
+        expect(Array.isArray(payload.test_cases)).toBe(true);
+        // Each item must be IOTestCase shape (has input/match_type/order)
+        if (payload.test_cases.length > 0) {
+          expect(payload.test_cases[0]).not.toHaveProperty('stdin');
+          expect(payload.test_cases[0]).toHaveProperty('match_type');
+        }
+      }
     });
   });
 
