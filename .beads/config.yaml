@@ -53,3 +53,9 @@
 # - linear.api-key
 # - github.org
 # - github.repo
+
+sync.remote: "https://github.com/jdelfino/eval.git"
+
+dolt.auto-push: "on"
+
+export.git-add: false
