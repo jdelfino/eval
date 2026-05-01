@@ -65,5 +65,8 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   fi
 fi
 
-# Always output AGENTS.md
-cat "$main_repo/AGENTS.md"
+# Inject up-to-date bd workflow guidance from the installed bd version.
+# Project-specific guidance lives in CLAUDE.md (auto-loaded by Claude Code).
+if command -v bd >/dev/null 2>&1; then
+  bd prime 2>/dev/null || true
+fi
