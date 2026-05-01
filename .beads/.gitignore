@@ -35,6 +35,13 @@ beads.right.meta.json
 
 # Export state (local-only, per-worktree tracking)
 export-state/
+export-state.json
+
+# Embedded Dolt database (machine-local; sync via 'bd dolt push/pull' or JSONL)
+embeddeddolt/
+
+# Backup snapshots (local-only)
+backup/
 
 # Sync state (local-only, per-machine)
 # These files are machine-specific and should not be shared across clones
