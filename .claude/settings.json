@@ -25,7 +25,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/block-no-verify.sh"
+            "command": "bash .claude/hooks/block-branch-switch.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-hook-bypass.sh"
           }
         ]
       }
