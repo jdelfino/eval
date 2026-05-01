@@ -79,12 +79,6 @@ Hooks scope to changed file types via glob patterns. Manual run: `lefthook run p
 
 ## Issue Tracking (beads)
 
-This project uses `bd` for ALL issue tracking. Do NOT use markdown TODO lists, external trackers, or duplicate tracking systems.
-
-Up-to-date bd workflow guidance is injected on session start via `bd prime` — refer to that for commands, rules, and the session-close protocol. Project-specific notes:
-
-- **Backend:** Dolt-embedded (`.beads/embeddeddolt/`). The on-disk `.beads/issues.jsonl` is an auto-export, auto-staged by the pre-commit hook. JSONL diffs ride along in normal feature-branch PRs to `main`. There is no separate `beads-sync` branch (legacy `bd sync` is gone in v1.0).
-- **Prefix:** existing issues use `PLAT-`; new issues mint as `eval-` (set during a v1.0 bootstrap from the directory name). Cross-prefix dependencies work transparently — `bd dep add eval-abc PLAT-xyz` resolves and renders correctly.
 - **Issue-writing standard:** every issue must be self-contained — readable cold from its description alone. Required: 1-2 sentence summary (what + why), exact file paths to modify, numbered implementation steps, before→after example when applicable.
 - **Dependency direction trap:** `bd dep add X Y` means "X needs Y" = Y blocks X. Temporal words ("Phase 1", "before", "first") invert your thinking. Verify with `bd blocked` (tasks blocked by prerequisites, not their dependents).
 

@@ -43,6 +43,17 @@ embeddeddolt/
 # Backup snapshots (local-only)
 backup/
 
+# Audit log: bd writes field-change events here, but the real audit
+# history lives in Dolt's events table. The file has only ever been
+# empty in git history — keep it out of PRs.
+interactions.jsonl
+
+# Issues snapshot: not load-bearing once Dolt remote sync is configured.
+# Source of truth is the Dolt store (refs/dolt/data on origin). bd bootstrap
+# fetches state from there. Keeping the JSONL local-only avoids polluting
+# feature PRs with state changes that should sync via bd dolt push.
+issues.jsonl
+
 # Sync state (local-only, per-machine)
 # These files are machine-specific and should not be shared across clones
 .sync.lock
