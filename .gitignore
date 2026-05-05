@@ -73,6 +73,10 @@ lefthook-local.yml
 *.tmp
 .cache/
 
+# Design handoff zips — extracted into docs/design/handoff/v3/
+/Eval.zip
+/Eval (*).zip
+
 # AI planning docs
 history/
 .history/
