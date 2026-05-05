@@ -1649,18 +1649,23 @@ func TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases(t *testing.T) {
 		}
 
 		// The store must receive test_cases, not execution_settings.
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+		// Compat bridge now produces kind-tagged output, so use UnmarshalIOTestCases.
+		cases, err := store.UnmarshalIOTestCases(capturedParams.TestCases)
+		if err != nil {
 			t.Fatalf("unmarshal TestCases: %v (raw: %s)", err, capturedParams.TestCases)
 		}
 		if len(cases) != 1 {
 			t.Fatalf("expected 1 IOTestCase, got %d", len(cases))
 		}
-		if cases[0].Input != "hi" {
-			t.Errorf("expected Input='hi', got %q", cases[0].Input)
+		ioCase, ok := cases[0].(*store.IOTestCaseIO)
+		if !ok {
+			t.Fatalf("expected *store.IOTestCaseIO, got %T", cases[0])
 		}
-		if cases[0].RandomSeed == nil || *cases[0].RandomSeed != 42 {
-			t.Errorf("expected RandomSeed=42, got %v", cases[0].RandomSeed)
+		if ioCase.Input != "hi" {
+			t.Errorf("expected Input='hi', got %q", ioCase.Input)
+		}
+		if ioCase.RandomSeed == nil || *ioCase.RandomSeed != 42 {
+			t.Errorf("expected RandomSeed=42, got %v", ioCase.RandomSeed)
 		}
 	})
 
@@ -1694,21 +1699,25 @@ func TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases(t *testing.T) {
 			t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 		}
 
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+		cases, err := store.UnmarshalIOTestCases(capturedParams.TestCases)
+		if err != nil {
 			t.Fatalf("unmarshal TestCases: %v", err)
 		}
 		if len(cases) != 1 {
 			t.Fatalf("expected 1 IOTestCase, got %d", len(cases))
 		}
-		if len(cases[0].AttachedFiles) != 1 {
-			t.Fatalf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
+		ioCase, ok := cases[0].(*store.IOTestCaseIO)
+		if !ok {
+			t.Fatalf("expected *store.IOTestCaseIO, got %T", cases[0])
 		}
-		if cases[0].AttachedFiles[0].Name != "input.txt" {
-			t.Errorf("expected file name 'input.txt', got %q", cases[0].AttachedFiles[0].Name)
+		if len(ioCase.AttachedFiles) != 1 {
+			t.Fatalf("expected 1 attached file, got %d", len(ioCase.AttachedFiles))
 		}
-		if cases[0].AttachedFiles[0].Content != "hello" {
-			t.Errorf("expected file content 'hello', got %q", cases[0].AttachedFiles[0].Content)
+		if ioCase.AttachedFiles[0].Name != "input.txt" {
+			t.Errorf("expected file name 'input.txt', got %q", ioCase.AttachedFiles[0].Name)
+		}
+		if ioCase.AttachedFiles[0].Content != "hello" {
+			t.Errorf("expected file content 'hello', got %q", ioCase.AttachedFiles[0].Content)
 		}
 	})
 
@@ -1740,15 +1749,16 @@ func TestCreateProblem_CompatBridge_ExecutionSettingsToTestCases(t *testing.T) {
 		}
 
 		// test_cases must pass through unmodified; execution_settings must be ignored.
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+		// Use raw map parsing since legacy test_cases JSON may not have kind tags.
+		var rawCases []map[string]interface{}
+		if err := json.Unmarshal(capturedParams.TestCases, &rawCases); err != nil {
 			t.Fatalf("unmarshal TestCases: %v", err)
 		}
-		if len(cases) != 1 {
-			t.Fatalf("expected 1 case from test_cases, got %d", len(cases))
+		if len(rawCases) != 1 {
+			t.Fatalf("expected 1 case from test_cases, got %d", len(rawCases))
 		}
-		if cases[0].Name != "explicit" {
-			t.Errorf("expected case name 'explicit', got %q (execution_settings should have been ignored)", cases[0].Name)
+		if rawCases[0]["name"] != "explicit" {
+			t.Errorf("expected case name 'explicit', got %q (execution_settings should have been ignored)", rawCases[0]["name"])
 		}
 	})
 }
@@ -1761,21 +1771,25 @@ func TestConvertExecutionSettingsToTestCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		var cases []store.IOTestCase
-		if err := json.Unmarshal(got, &cases); err != nil {
+		cases, err := store.UnmarshalIOTestCases(got)
+		if err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
 		if len(cases) != 1 {
 			t.Fatalf("expected 1 case, got %d", len(cases))
 		}
-		if cases[0].Name != "Default" {
-			t.Errorf("expected name 'Default', got %q", cases[0].Name)
+		ioCase, ok := cases[0].(*store.IOTestCaseIO)
+		if !ok {
+			t.Fatalf("expected *store.IOTestCaseIO, got %T", cases[0])
 		}
-		if cases[0].Input != "hello" {
-			t.Errorf("expected input 'hello', got %q", cases[0].Input)
+		if ioCase.Name != "Default" {
+			t.Errorf("expected name 'Default', got %q", ioCase.Name)
 		}
-		if len(cases[0].AttachedFiles) != 1 || cases[0].AttachedFiles[0].Name != "f.txt" {
-			t.Errorf("expected 1 attached file named 'f.txt', got %+v", cases[0].AttachedFiles)
+		if ioCase.Input != "hello" {
+			t.Errorf("expected input 'hello', got %q", ioCase.Input)
+		}
+		if len(ioCase.AttachedFiles) != 1 || ioCase.AttachedFiles[0].Name != "f.txt" {
+			t.Errorf("expected 1 attached file named 'f.txt', got %+v", ioCase.AttachedFiles)
 		}
 	})
 
@@ -1855,18 +1869,22 @@ func TestCompatBridge_EmptyArrayTestCases(t *testing.T) {
 				t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 			}
 
-			var cases []store.IOTestCase
-			if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+			cases, err := store.UnmarshalIOTestCases(capturedParams.TestCases)
+			if err != nil {
 				t.Fatalf("unmarshal TestCases: %v", err)
 			}
 			if len(cases) != 1 {
 				t.Fatalf("expected compat bridge to produce 1 IOTestCase from execution_settings, got %d", len(cases))
 			}
-			if cases[0].Input != "test input" {
-				t.Errorf("expected input 'test input', got %q", cases[0].Input)
+			ioCase, ok := cases[0].(*store.IOTestCaseIO)
+			if !ok {
+				t.Fatalf("expected *store.IOTestCaseIO, got %T", cases[0])
 			}
-			if len(cases[0].AttachedFiles) != 1 {
-				t.Errorf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
+			if ioCase.Input != "test input" {
+				t.Errorf("expected input 'test input', got %q", ioCase.Input)
+			}
+			if len(ioCase.AttachedFiles) != 1 {
+				t.Errorf("expected 1 attached file, got %d", len(ioCase.AttachedFiles))
 			}
 		})
 	}
@@ -1925,17 +1943,21 @@ func TestCompatBridge_Update_EmptyArrayTestCases(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var cases []store.IOTestCase
-	if err := json.Unmarshal(capturedParams.TestCases, &cases); err != nil {
+	cases, err := store.UnmarshalIOTestCases(capturedParams.TestCases)
+	if err != nil {
 		t.Fatalf("unmarshal TestCases: %v", err)
 	}
 	if len(cases) != 1 {
 		t.Fatalf("expected compat bridge to produce 1 IOTestCase, got %d", len(cases))
 	}
-	if cases[0].Input != "update input" {
-		t.Errorf("expected input 'update input', got %q", cases[0].Input)
+	ioCase, ok := cases[0].(*store.IOTestCaseIO)
+	if !ok {
+		t.Fatalf("expected *store.IOTestCaseIO, got %T", cases[0])
 	}
-	if len(cases[0].AttachedFiles) != 1 {
-		t.Errorf("expected 1 attached file, got %d", len(cases[0].AttachedFiles))
+	if ioCase.Input != "update input" {
+		t.Errorf("expected input 'update input', got %q", ioCase.Input)
+	}
+	if len(ioCase.AttachedFiles) != 1 {
+		t.Errorf("expected 1 attached file, got %d", len(ioCase.AttachedFiles))
 	}
 }

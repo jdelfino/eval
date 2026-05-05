@@ -228,21 +228,44 @@ export interface WireFile {
 }
 
 /**
- * IOTestCase — matches Go store.IOTestCase (JSON wire format).
+ * IOTestCaseIO — the I/O test case variant (kind='io').
  *
- * Used as the element type of the JSONB test_cases column in both
- * `problems` and `student_work` tables. Optional fields use omitempty
- * in Go, so they may be absent on the wire.
+ * Matches Go store.IOTestCaseIO. Compares program stdout against expected_output.
+ * A case without expected_output is a "run-only" case (shows output, no pass/fail).
  */
-export interface IOTestCase {
-  name: string;
-  input: string;
+export interface IOTestCaseIO {
+  kind: 'io';
+  name?: string;
+  input?: string;
   expected_output?: string;
-  match_type: string;
+  match_type?: string;
   random_seed?: number;
   attached_files?: WireFile[];
   order: number;
 }
+
+/**
+ * IOTestCasePytest — the pytest test case variant (kind='pytest').
+ *
+ * Matches Go store.IOTestCasePytest. Runs a pytest test file against submitted code.
+ */
+export interface IOTestCasePytest {
+  kind: 'pytest';
+  name?: string;
+  target_path: string;  // e.g. "tests/test_foo.py::test_bar"
+  test_code: string;    // pytest test file content
+}
+
+/**
+ * IOTestCase — discriminated union keyed on `kind`.
+ *
+ * Used as the element type of the JSONB test_cases column in both
+ * `problems` and `student_work` tables.
+ *
+ * Narrow with `if (c.kind === 'io')` to access IOTestCaseIO fields,
+ * or `if (c.kind === 'pytest')` for IOTestCasePytest fields.
+ */
+export type IOTestCase = IOTestCaseIO | IOTestCasePytest;
 
 // ---------------------------------------------------------------------------
 // Student work

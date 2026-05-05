@@ -62,7 +62,7 @@ func convertExecutionSettingsToTestCases(settings json.RawMessage) (json.RawMess
 	if err := json.Unmarshal(settings, &es); err != nil {
 		return nil, fmt.Errorf("parse execution_settings: %w", err)
 	}
-	tc := store.IOTestCase{
+	tc := &store.IOTestCaseIO{
 		Name:          "Default",
 		Input:         es.Stdin,
 		MatchType:     "exact",

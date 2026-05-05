@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Problem as ApiProblem, IOTestCase, WireFile } from './api';
+import type { Problem as ApiProblem, IOTestCase, IOTestCaseIO, WireFile } from './api';
 
 // ---------------------------------------------------------------------------
 // Execution settings
@@ -151,7 +151,8 @@ export function buildTestCasesFromExecutionSettings(opts: {
     return [];
   }
 
-  const tc: IOTestCase = {
+  const tc: IOTestCaseIO = {
+    kind: 'io',
     name: 'Default',
     input: opts.stdin?.trim() || '',
     match_type: 'exact',
@@ -181,9 +182,10 @@ export function extractExecutionSettingsFromTestCases(
 
   // Backend IOTestCase wire format has top-level fields: input, random_seed, attached_files.
   // The rich client TestCase type nests input inside config.data — check both shapes.
+  // Use `as any` to handle both legacy untagged wire data and the typed discriminated union.
   const firstCase = testCases[0] as any;
 
-  // Prefer top-level input (IOTestCase wire format), fall back to config.data.input (rich TestCase)
+  // Prefer top-level input (IOTestCaseIO wire format), fall back to config.data.input (rich TestCase)
   const stdin: string | undefined =
     firstCase.input !== undefined ? firstCase.input :
     firstCase.config?.data?.input !== undefined ? firstCase.config.data.input :
