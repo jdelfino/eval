@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Eval — Redesign Tour v3</title>
+<meta name="viewport" content="width=1600" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  html, body, #root { width:100%; height:100%; margin:0; }
+  body { background:#f0eee9; color:#1a1814; font-family:'IBM Plex Sans', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="tokens.js"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="primitives.jsx"></script>
+
+<!-- Unified workspace: one shell, three skins -->
+<script type="text/babel" src="workspace-data.jsx"></script>
+<script type="text/babel" src="workspace-editor.jsx"></script>
+<script type="text/babel" src="workspace-test-rail.jsx"></script>
+<script type="text/babel" src="workspace-drawer.jsx"></script>
+<script type="text/babel" src="workspace-shell.jsx"></script>
+<script type="text/babel" src="workspace-artboards.jsx"></script>
+<script type="text/babel" src="workspace-artboards-student.jsx"></script>
+<script type="text/babel" src="workspace-artboards-author.jsx"></script>
+<script type="text/babel" src="workspace-artboards-instructor.jsx"></script>
+<script type="text/babel" src="artboards-sessions.jsx"></script>
+
+<script type="text/babel" src="instructor-roster-row.jsx"></script>
+<script type="text/babel" src="instructor-roster.jsx"></script>
+<script type="text/babel" src="instructor-minimap-peek.jsx"></script>
+<script type="text/babel" src="instructor-minimap.jsx"></script>
+<script type="text/babel" src="instructor-center.jsx"></script>
+<script type="text/babel" src="instructor-cards.jsx"></script>
+<script type="text/babel" src="instructor-signals.jsx"></script>
+<script type="text/babel" src="instructor-shell.jsx"></script>
+
+<script type="text/babel" src="library-tagbar.jsx"></script>
+<script type="text/babel" src="library-toolbar.jsx"></script>
+<script type="text/babel" src="library-row.jsx"></script>
+<script type="text/babel" src="library-table.jsx"></script>
+<script type="text/babel" src="library-shell.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+function App() {
+  return (
+    <DesignCanvas title="Eval — Redesign v3" subtitle="One workspace shell. Three skins: student, author, instructor. Same ribbon · editor · test rail · drawer.">
+      <DCSection id="public" title="Public problem view" subtitle="Static, shareable URL for any problem. Two link variants: a generic link that prompts which class to launch into, and a section-bound link that auto-starts a session in a specific class. Same page renders for three personas — anon / instructor / student. Solution can optionally be revealed if the problem is configured for it.">
+        <DCArtboard id="pub-anon" label="anon — guest viewer · sign-in CTA" width={1280} height={1100}>
+          <window.PublicProblemAnon/>
+        </DCArtboard>
+        <DCArtboard id="pub-instr" label="instructor · generic link — Start session… (prompts for class)" width={1280} height={1100}>
+          <window.PublicProblemInstructor/>
+        </DCArtboard>
+        <DCArtboard id="pub-autostart" label="instructor · section-bound link — auto-starts in Period 3" width={1280} height={1100}>
+          <window.PublicProblemAutostart/>
+        </DCArtboard>
+        <DCArtboard id="pub-student" label="student — Practice CTA" width={1280} height={1100}>
+          <window.PublicProblemStudent/>
+        </DCArtboard>
+        <DCArtboard id="pub-solution" label="instructor · solution revealed (problem allows it)" width={1280} height={1240}>
+          <window.PublicProblemSolution/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="sessions" title="Session lifecycle — instructor side" subtitle="A “session” = one problem opened live for one class. Today's app makes this messy when the instructor follows a slide URL on their projector. The redesign always routes session control through the instructor's private screen, with a class-picker if the entry point didn't already specify one.">
+        <DCArtboard id="sess-private" label="instructor's private screen — no live session yet · session composer on the right" width={1440} height={900}>
+          <window.InstrPrivateBeforeStart/>
+        </DCArtboard>
+        <DCArtboard id="sess-fromslide" label="followed a public link from slides — modal asks which class to launch into" width={1440} height={900}>
+          <window.InstrSessionFromSlide/>
+        </DCArtboard>
+        <DCArtboard id="sess-live" label="just launched — confirmation strip with join code · projector cast" width={1440} height={920}>
+          <window.InstrSessionLive/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="sessions-student" title="Session lifecycle — student side" subtitle="When the instructor moves on, every connected student gets a banner and a one-key jump. Between sessions, students land on their section overview — published problems for solo practice and a list of past sessions to review.">
+        <DCArtboard id="sess-banner" label="banner over a passing student — common case · they were done" width={1440} height={860}>
+          <window.StudentNewProblemBanner/>
+        </DCArtboard>
+        <DCArtboard id="sess-banner-failing" label="banner over a stuck student — mid-failure · ‘Stay here’ matters more" width={1440} height={860}>
+          <window.StudentBannerWhileFailing/>
+        </DCArtboard>
+        <DCArtboard id="sess-overview" label="section overview — no session live · published problems + past sessions" width={1280} height={1180}>
+          <window.StudentSectionOverview/>
+        </DCArtboard>
+        <DCArtboard id="sess-overview-live" label="section overview — live session active · jump-in card up top" width={1280} height={1180}>
+          <window.StudentSectionLive/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="practice" title="Student practicing solo" subtitle="Same workspace shell, no class session attached. Drops the “connected” chip; adds a dashed “practice · solo” chip. Breadcrumb routes through Library, not a class.">
+        <DCArtboard id="prac-idle" label="practice — idle · drawer collapsed" width={1440} height={860}>
+          <window.StudentPracticeIdle/>
+        </DCArtboard>
+        <DCArtboard id="prac-fail" label="practice — duplicate test failing · same failure inspector" width={1440} height={860}>
+          <window.StudentPracticeFail/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="library" title="Problem library — tags first-class">
+        <DCArtboard id="lib" label="Tag bar drives filtering · row chips reflect active tags" width={1280} height={760}>
+          <window.ProblemLibrary/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="student" title="Student workspace — skin: student" subtitle="Single editor file. Test rail (run/debug). Drawer collapses to a single status line when idle. Same shell across all states.">
+        <DCArtboard id="ws-idle"  label="idle — drawer collapsed; ribbon expanded for first read" width={1440} height={860}>
+          <window.ArtStudentIdle/>
+        </DCArtboard>
+        <DCArtboard id="ws-running" label="running all tests — output streaming" width={1440} height={860}>
+          <window.ArtStudentRunning/>
+        </DCArtboard>
+        <DCArtboard id="ws-allpass" label="all 5 visible tests passing — green output" width={1440} height={860}>
+          <window.ArtStudentAllPass/>
+        </DCArtboard>
+        <DCArtboard id="ws-fail-fn" label="fn failure — call · expected · got diff" width={1440} height={860}>
+          <window.ArtStudentFailFn/>
+        </DCArtboard>
+        <DCArtboard id="ws-fail-io" label="i/o failure — stdin · expected stdout · got" width={1440} height={860}>
+          <window.ArtStudentFailIO/>
+        </DCArtboard>
+        <DCArtboard id="ws-fail-pytest" label="pytest failure — assertion traceback" width={1440} height={860}>
+          <window.ArtStudentFailPytest/>
+        </DCArtboard>
+        <DCArtboard id="ws-runtime" label="runtime error — exception before any test logic" width={1440} height={860}>
+          <window.ArtStudentRuntimeError/>
+        </DCArtboard>
+        <DCArtboard id="ws-debug" label="debugging the failing test — drawer becomes locals + scrubber" width={1440} height={860}>
+          <window.ArtStudentDebug/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="author" title="Problem editor — skin: author" subtitle="Same shell. Editor gets Solution / Starter / Statement tabs. Test rail is editable; clicking ‘Edit body’ on a test row opens a kind-aware editor in the drawer.">
+        <DCArtboard id="ed-solution"  label="solution.py active — drawer collapsed" width={1440} height={900}>
+          <window.ArtAuthorSolution/>
+        </DCArtboard>
+        <DCArtboard id="ed-starter" label="starter.py active — what students see at t=0" width={1440} height={900}>
+          <window.ArtAuthorStarter/>
+        </DCArtboard>
+        <DCArtboard id="ed-statement-edit" label="statement.md edit (markdown source)" width={1440} height={900}>
+          <window.ArtAuthorStatementEdit/>
+        </DCArtboard>
+        <DCArtboard id="ed-statement" label="statement.md preview — failure detail in drawer" width={1440} height={900}>
+          <window.ArtAuthorStatement/>
+        </DCArtboard>
+        <DCArtboard id="ed-edit-fn" label="edit fn test — call · expected · last got" width={1440} height={900}>
+          <window.ArtAuthorEditFn/>
+        </DCArtboard>
+        <DCArtboard id="ed-edit-io" label="edit i/o test — stdin · expected · got + whitespace flags" width={1440} height={900}>
+          <window.ArtAuthorEditIO/>
+        </DCArtboard>
+        <DCArtboard id="ed-edit-pytest" label="edit pytest test — full code body + target + fixtures" width={1440} height={900}>
+          <window.ArtAuthorEditPytest/>
+        </DCArtboard>
+        <DCArtboard id="ed-edit-file" label="edit file-fixture — input file + expected output file" width={1440} height={900}>
+          <window.ArtAuthorEditFile/>
+        </DCArtboard>
+        <DCArtboard id="ed-edit-hidden" label="edit hidden test — backed by a kind, never shown to students" width={1440} height={900}>
+          <window.ArtAuthorEditHidden/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="instructor-focused" title="Instructor focused-student — skin: instructor (full size)" subtitle="The focused-student workspace at full screen. In practice this is embedded into the dashboard center column (see next section); shown standalone here so the layout is reviewable on its own.">
+        <DCArtboard id="instr-justconnected" label="student just connected — starter unchanged" width={1440} height={900}>
+          <window.ArtInstructorJustConnected/>
+        </DCArtboard>
+        <DCArtboard id="instr-allpass" label="student passes all tests — green output" width={1440} height={900}>
+          <window.ArtInstructorAllPass/>
+        </DCArtboard>
+        <DCArtboard id="instr-focused" label="student stuck — failure detail in drawer" width={1440} height={900}>
+          <window.ArtInstructorFocused/>
+        </DCArtboard>
+        <DCArtboard id="instr-debugging" label="debugging student's failing test — locals + scrubber" width={1440} height={900}>
+          <window.ArtInstructorDebugging/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="instructor" title="Instructor live session — full dashboard" subtitle="Roster + minimap + focused panel. Click a student in the minimap or roster — the focused workspace embeds inline; never leaves the dashboard.">
+        <DCArtboard id="instr-overview" label="overview — no student selected; minimap on top" width={1440} height={920}>
+          <window.InstructorLiveOverview/>
+        </DCArtboard>
+        <DCArtboard id="instr" label="focused — Maya selected; embedded workspace below minimap" width={1440} height={920}>
+          <window.InstructorLive/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
