@@ -2,16 +2,22 @@
 package executorapi
 
 // CaseDef defines a single test case sent to the executor.
-// Type is "io" for I/O test cases (the only supported type currently).
-// ExpectedOutput is optional — when absent the case is "run-only" (no assertion).
+// Kind discriminates between case types: "io" (default) or "pytest".
+// For io cases: Input, ExpectedOutput, MatchType, RandomSeed, and Files are used.
+// For pytest cases: TestCode and TargetPath are used.
+// ExpectedOutput is optional for io cases — when absent the case is "run-only" (no assertion).
 type CaseDef struct {
 	Name           string `json:"name"`
-	Type           string `json:"type"`                    // "io"
-	Input          string `json:"input"`
+	Kind           string `json:"kind,omitempty"`          // "io" | "pytest"; defaults to "io"
+	Type           string `json:"type,omitempty"`          // legacy alias for Kind; "io" only
+	Input          string `json:"input,omitempty"`
 	ExpectedOutput string `json:"expected_output,omitempty"`
 	MatchType      string `json:"match_type,omitempty"`
 	RandomSeed     *int   `json:"random_seed,omitempty"`
 	Files          []File `json:"files,omitempty"`
+	// Pytest-specific fields.
+	TestCode   string `json:"test_code,omitempty"`   // Content of the pytest test file.
+	TargetPath string `json:"target_path,omitempty"` // Relative path for the test file (e.g. "tests/test_foo.py").
 }
 
 // CaseResult holds the outcome of a single case execution.
@@ -25,6 +31,27 @@ type CaseResult struct {
 	Actual   string `json:"actual,omitempty"`
 	Stderr   string `json:"stderr,omitempty"`
 	TimeMs   int64  `json:"time_ms"`
+}
+
+// PytestAssertion represents the outcome of a single pytest test function (or
+// a single parametrize combination) within a pytest case.
+type PytestAssertion struct {
+	Name           string `json:"name"`
+	Passed         bool   `json:"passed"`
+	FailureMessage string `json:"failure_message,omitempty"`
+	Traceback      string `json:"traceback,omitempty"`
+}
+
+// PytestCaseResult holds the outcome of a single pytest case execution.
+// Assertions contains one entry per test function (or parametrize combination).
+// Stderr is populated when pytest itself errors (collection error, import error).
+type PytestCaseResult struct {
+	Kind       string            `json:"kind"`       // always "pytest"
+	Name       string            `json:"name"`
+	Passed     bool              `json:"passed"`     // true iff all assertions passed
+	DurationMs int               `json:"duration_ms"`
+	Assertions []PytestAssertion `json:"assertions"`
+	Stderr     string            `json:"stderr,omitempty"`
 }
 
 // CaseSummary aggregates counts and total elapsed time across all case results.
@@ -47,10 +74,14 @@ type ExecuteRequest struct {
 }
 
 // ExecuteResponse is the JSON response for code execution.
+// Results contains io (kind="io") case results.
+// PytestResults contains pytest (kind="pytest") case results.
+// F2.3 will unify these into a single discriminated union slice.
 // Always returns Results and Summary regardless of whether cases have expected output.
 type ExecuteResponse struct {
-	Results []CaseResult `json:"results"`
-	Summary CaseSummary  `json:"summary"`
+	Results       []CaseResult       `json:"results"`
+	PytestResults []PytestCaseResult `json:"pytest_results,omitempty"`
+	Summary       CaseSummary        `json:"summary"`
 }
 
 // File represents an auxiliary file provided to the execution environment.
