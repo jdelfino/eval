@@ -822,6 +822,190 @@ func TestExecute_Cases_TimeoutProducesErrorForAllCases(t *testing.T) {
 //
 // Without this check the student's file is silently dropped, causing confusing
 // failures where the file appears missing even though the request succeeds.
+// --- Pytest dispatch tests ---
+
+// TestExecute_Pytest_DispatchesToPytestRunner verifies that a case with kind="pytest"
+// is dispatched to the pytest sandbox runner (not the io runner).
+//
+// Contract: the handler must use kind to dispatch cases. If kind is ignored,
+// pytest cases fall through to the io runner which produces wrong/empty results.
+func TestExecute_Pytest_DispatchesToPytestRunner(t *testing.T) {
+	pytestCallCount := 0
+	ioCallCount := 0
+
+	// The runner that tracks which kind of case was received by checking
+	// if test_code is in the files (pytest) or io_tests.json format (io).
+	trackingRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		// Detect pytest dispatch by looking for pytest_cases.json in files.
+		isPytest := false
+		for _, f := range req.Files {
+			if f.Name == "pytest_cases.json" {
+				isPytest = true
+				break
+			}
+		}
+		if isPytest {
+			pytestCallCount++
+			out, _ := json.Marshal([]map[string]any{{
+				"kind":        "pytest",
+				"name":        "test_add",
+				"passed":      true,
+				"duration_ms": 100,
+				"assertions":  []map[string]any{{"name": "test_add", "passed": true}},
+			}})
+			return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 100}, nil
+		}
+		ioCallCount++
+		out, _ := json.Marshal([]map[string]any{{
+			"name": "run", "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io",
+		}})
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 1}, nil
+	}
+
+	h := newHandler(trackingRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [{"name": "test_add", "kind": "pytest", "test_code": "def test_add(): assert True", "target_path": "tests/test_add.py"}]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if pytestCallCount != 1 {
+		t.Errorf("expected pytest runner called once, got %d", pytestCallCount)
+	}
+	if ioCallCount != 0 {
+		t.Errorf("expected io runner not called, got %d", ioCallCount)
+	}
+}
+
+// TestExecute_Pytest_ResultShapeInResponse verifies that the handler returns
+// PytestCaseResult-shaped results in resp.PytestResults for pytest cases.
+//
+// Contract: F2.3 reads resp.PytestResults to get pytest outcomes.
+// If PytestResults is empty or kind is wrong, F2.3 cannot process the results.
+func TestExecute_Pytest_ResultShapeInResponse(t *testing.T) {
+	pytestRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		// Return a pytest result shaped like what script.py emits.
+		out, _ := json.Marshal([]map[string]any{{
+			"kind":        "pytest",
+			"name":        "test_add",
+			"passed":      true,
+			"duration_ms": 55,
+			"assertions":  []map[string]any{{"name": "test_add", "passed": true, "failure_message": "", "traceback": ""}},
+			"stderr":      "",
+		}})
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 55}, nil
+	}
+
+	h := newHandler(pytestRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [{"name": "test_add", "kind": "pytest", "test_code": "def test_add(): assert True", "target_path": "tests/test_add.py"}]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.PytestResults) != 1 {
+		t.Fatalf("expected 1 pytest result in PytestResults, got %d (Results=%d)", len(resp.PytestResults), len(resp.Results))
+	}
+	pytestResult := resp.PytestResults[0]
+	if pytestResult.Kind != "pytest" {
+		t.Errorf("expected kind='pytest', got %q", pytestResult.Kind)
+	}
+	if !pytestResult.Passed {
+		t.Errorf("expected passed=true, got false")
+	}
+	if len(pytestResult.Assertions) == 0 {
+		t.Errorf("expected assertions in result, got none")
+	}
+}
+
+// TestExecute_Pytest_MixedCasesDispatch verifies that a request with both io and pytest
+// cases dispatches each case to its correct runner and returns results in separate slices.
+//
+// Contract: the handler must process each case independently by kind.
+// Without this, mixed requests send all cases to the wrong runner.
+func TestExecute_Pytest_MixedCasesDispatch(t *testing.T) {
+	callLog := []string{}
+
+	mixedRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		// Detect by file presence.
+		for _, f := range req.Files {
+			if f.Name == "pytest_cases.json" {
+				callLog = append(callLog, "pytest")
+				out, _ := json.Marshal([]map[string]any{{
+					"kind": "pytest", "name": "test_x", "passed": true,
+					"duration_ms": 10,
+					"assertions":  []map[string]any{{"name": "test_x", "passed": true}},
+				}})
+				return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+			}
+		}
+		callLog = append(callLog, "io")
+		cases := parseCasesFromFiles(req.Files)
+		results := make([]map[string]any, len(cases))
+		for i, name := range cases {
+			results[i] = map[string]any{"name": name, "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io"}
+		}
+		out, _ := json.Marshal(results)
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+	}
+
+	h := newHandler(mixedRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [
+			{"name": "io_case", "kind": "io", "input": ""},
+			{"name": "pytest_case", "kind": "pytest", "test_code": "def test_x(): pass", "target_path": "tests/test_x.py"}
+		]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// io case in Results, pytest case in PytestResults.
+	if len(resp.Results) != 1 {
+		t.Errorf("expected 1 io result, got %d", len(resp.Results))
+	}
+	if len(resp.PytestResults) != 1 {
+		t.Errorf("expected 1 pytest result, got %d", len(resp.PytestResults))
+	}
+	// Verify we had both dispatch types.
+	ioCount := 0
+	pytestCount := 0
+	for _, k := range callLog {
+		if k == "io" {
+			ioCount++
+		} else {
+			pytestCount++
+		}
+	}
+	if ioCount == 0 {
+		t.Errorf("expected io runner to be called, callLog=%v", callLog)
+	}
+	if pytestCount == 0 {
+		t.Errorf("expected pytest runner to be called, callLog=%v", callLog)
+	}
+}
+
 func TestExecute_Cases_ReservedFilenameRejected(t *testing.T) {
 	tests := []struct {
 		name         string
