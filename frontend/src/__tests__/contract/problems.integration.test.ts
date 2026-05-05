@@ -377,6 +377,42 @@ describe('Problems API', () => {
     });
   });
 
+  describe('IOTestCase kind field — round-trip through API', () => {
+    /**
+     * Verifies that GET /problems/:id returns test_cases with kind on every element.
+     *
+     * Contract: after migration 021, all IOTestCase JSONB elements have an explicit
+     * kind field. Creating a problem with kind-tagged test cases and reading it back
+     * must preserve the kind discriminator.
+     *
+     * Catches: handler not propagating kind, or serialization stripping it.
+     */
+    it('GET /problems/:id returns test_cases[] with kind on every element', async () => {
+      const classId = state.classId;
+      expect(classId).toBeTruthy();
+
+      const title = `contract-kind-test-${Date.now()}`;
+      const created = await createProblem({
+        title,
+        class_id: classId,
+        language: 'python',
+        test_cases: [
+          { kind: 'io', name: 'tc1', input: 'hello', match_type: 'exact', order: 0 },
+        ],
+      });
+
+      try {
+        const fetched = await getProblem(created.id);
+        expect(Array.isArray(fetched.test_cases)).toBe(true);
+        const tc = (fetched.test_cases as any[])[0];
+        expect(tc).toBeDefined();
+        expect(tc.kind).toBe('io');
+      } finally {
+        await deleteProblem(created.id).catch(() => {});
+      }
+    });
+  });
+
   describe('deleteProblem()', () => {
     it('deletes a problem without throwing', async () => {
       const classId = state.classId;

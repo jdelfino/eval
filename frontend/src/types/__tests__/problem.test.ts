@@ -17,7 +17,7 @@ describe('Problem type hierarchy', () => {
     title: 'Two Sum',
     description: 'Find two numbers',
     starter_code: 'def solve():',
-    test_cases: [{ name: 'basic', input: '1 2', expected_output: '3', match_type: 'exact', order: 0 }],
+    test_cases: [{ kind: 'io' as const, name: 'basic', input: '1 2', expected_output: '3', match_type: 'exact', order: 0 }],
     author_id: 'u-1',
     class_id: 'c-1',
     tags: ['arrays'],
@@ -54,8 +54,10 @@ describe('Problem type hierarchy', () => {
     expect(Array.isArray(client.test_cases)).toBe(true);
     const tcArray = client.test_cases as import('@/types/api').IOTestCase[];
     expect(tcArray[0].name).toBe('basic');
-    expect(tcArray[0].input).toBe('1 2');
-    expect(tcArray[0].match_type).toBe('exact');
+    // Narrow to io variant to access io-specific fields
+    const ioCase = tcArray[0] as import('@/types/api').IOTestCaseIO;
+    expect(ioCase.input).toBe('1 2');
+    expect(ioCase.match_type).toBe('exact');
   });
 
   it('mapApiProblem handles null optional fields', () => {

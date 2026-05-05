@@ -38,6 +38,7 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
+          kind: 'io' as const,
           name: 'Test 1',
           input: '5',
           expected_output: '42',
@@ -112,6 +113,7 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
+          kind: 'io' as const,
           name: 'Test 1',
           input: 'input',
           expected_output: 'output',
