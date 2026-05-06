@@ -2,13 +2,13 @@
 
 import React from 'react';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import type { TestResponse } from '@/types/api';
+import type { TestResponse, IOTestCase } from '@/types/api';
 
 interface CodeViewerProps {
   code: string;
   studentName?: string;
   execution_result?: TestResponse;
-  onRun?: (execution_settings: import('@/types/problem').ExecutionSettings) => void;
+  onRun?: (testCases: IOTestCase[]) => void;
   isRunning?: boolean;
 }
 

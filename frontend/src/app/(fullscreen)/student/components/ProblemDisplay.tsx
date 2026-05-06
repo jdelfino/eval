@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Problem, extractExecutionSettingsFromTestCases } from '@/types/problem';
+import type { Problem } from '@/types/problem';
 import MarkdownContent from '@/components/MarkdownContent';
 
 interface ProblemDisplayProps {
@@ -18,10 +18,10 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
   }
 
   const hasStarterCode = !!problem.starter_code;
-  const testCasesArray = Array.isArray(problem.test_cases) ? problem.test_cases : null;
-  const hasTestCases = testCasesArray && testCasesArray.length > 0;
+  const testCasesArray = problem.test_cases;
+  const hasTestCases = testCasesArray.length > 0;
   const hasDescription = !!problem.description;
-  const executionSettings = extractExecutionSettingsFromTestCases(problem.test_cases);
+  const firstCase = problem.test_cases[0];
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
@@ -82,19 +82,16 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
             </button>
             {showTestCases && (
               <div className="mt-2 space-y-2">
-                {testCasesArray!.map((testCase, index) => (
-                  <div key={testCase.id || index} className="bg-gray-50 border border-gray-200 rounded p-3">
+                {testCasesArray.map((testCase, index) => (
+                  <div key={testCase.name || index} className="bg-gray-50 border border-gray-200 rounded p-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-gray-900">
                         {testCase.name || `Test ${index + 1}`}
                       </span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                        {testCase.type.toUpperCase()}
+                        IO
                       </span>
                     </div>
-                    {testCase.description && (
-                      <p className="text-sm text-gray-600 mt-1">{testCase.description}</p>
-                    )}
                   </div>
                 ))}
               </div>
@@ -102,14 +99,14 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
           </div>
         )}
 
-        {/* Execution Settings Info */}
-        {executionSettings && (
+        {/* Test Case Info */}
+        {firstCase && (firstCase.random_seed !== undefined || (firstCase.attached_files?.length ?? 0) > 0) && (
           <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
-            {executionSettings.random_seed !== undefined && (
-              <p>🎲 Random seed: {executionSettings.random_seed}</p>
+            {firstCase.random_seed !== undefined && (
+              <p>🎲 Random seed: {firstCase.random_seed}</p>
             )}
-            {executionSettings.attached_files && executionSettings.attached_files.length > 0 && (
-              <p>📎 {executionSettings.attached_files.length} file(s) attached</p>
+            {firstCase.attached_files && firstCase.attached_files.length > 0 && (
+              <p>📎 {firstCase.attached_files.length} file(s) attached</p>
             )}
           </div>
         )}

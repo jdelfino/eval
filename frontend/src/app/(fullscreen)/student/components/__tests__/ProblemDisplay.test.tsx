@@ -5,7 +5,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProblemDisplay from '../ProblemDisplay';
 import { Problem } from '@/types/problem';
-import { TestCase } from '@/types/problem';
+import type { IOTestCase } from '@/types/api';
 
 // Helper to create a minimal problem
 function createProblem(overrides: Partial<Problem> = {}): Problem {
@@ -14,7 +14,7 @@ function createProblem(overrides: Partial<Problem> = {}): Problem {
     title: 'Test Problem',
     description: 'A test problem description',
     starter_code: null,
-    test_cases: null,
+    test_cases: [],
     solution: null,
     namespace_id: 'test-namespace',
     author_id: 'author-1',
@@ -194,26 +194,20 @@ factorial(5)  # Returns 120
 
   describe('Test cases section', () => {
     it('toggles test cases visibility', () => {
-      const test_cases: TestCase[] = [
+      const test_cases: IOTestCase[] = [
         {
-          id: 'tc1',
-          problem_id: 'test-problem-1',
           name: 'Test 1',
-          type: 'input-output',
-          description: 'Test adding 1 and 2',
-          visible: true,
+          input: '1 2',
+          expected_output: '3',
+          match_type: 'exact',
           order: 1,
-          config: { type: 'input-output', data: { input: '1 2', expected_output: '3', match_type: 'exact' } },
         },
         {
-          id: 'tc2',
-          problem_id: 'test-problem-1',
           name: 'Test 2',
-          type: 'input-output',
-          description: 'Test adding 0 and 0',
-          visible: true,
+          input: '0 0',
+          expected_output: '0',
+          match_type: 'exact',
           order: 2,
-          config: { type: 'input-output', data: { input: '0 0', expected_output: '0', match_type: 'exact' } },
         },
       ];
       const problem = createProblem({ test_cases });
@@ -238,21 +232,10 @@ factorial(5)  # Returns 120
       const problem = createProblem({
         test_cases: [
           {
-            id: 'tc-1',
-            problem_id: 'test-problem-1',
-            type: 'input-output',
             name: 'Default',
-            description: '',
-            visible: true,
+            input: '',
+            match_type: 'exact',
             order: 0,
-            config: {
-              type: 'input-output',
-              data: {
-                input: '',
-                expected_output: '',
-                match_type: 'exact',
-              },
-            },
             random_seed: 42,
           },
         ],
@@ -265,21 +248,10 @@ factorial(5)  # Returns 120
       const problem = createProblem({
         test_cases: [
           {
-            id: 'tc-1',
-            problem_id: 'test-problem-1',
-            type: 'input-output',
             name: 'Default',
-            description: '',
-            visible: true,
+            input: '',
+            match_type: 'exact',
             order: 0,
-            config: {
-              type: 'input-output',
-              data: {
-                input: '',
-                expected_output: '',
-                match_type: 'exact',
-              },
-            },
             attached_files: [
               { name: 'data.txt', content: 'data' },
               { name: 'config.json', content: '{}' },

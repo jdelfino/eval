@@ -12,7 +12,8 @@ import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Problem, ExecutionSettings } from '@/types/problem';
+import type { Problem } from '@/types/problem';
+import type { IOTestCase } from '@/types/api';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { Student, RealtimeStudent, TestResponse } from '../types';
 
@@ -46,12 +47,8 @@ interface SessionStudentPaneProps {
   realtimeStudents: RealtimeStudent[];
   /** Current session problem */
   sessionProblem: Problem | null;
-  /** Session execution settings */
-  sessionExecutionSettings: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
+  /** Session test cases (IOTestCase[] from the problem) */
+  sessionTestCases: IOTestCase[];
   /** Join code for the session */
   join_code?: string;
   /** Callback when a student is selected */
@@ -63,7 +60,7 @@ interface SessionStudentPaneProps {
   /** Callback to view student history */
   onViewHistory?: (studentId: string, studentName: string) => void;
   /** Callback to execute student code */
-  onExecuteCode?: (studentId: string, code: string, settings: ExecutionSettings) => Promise<TestResponse | undefined>;
+  onExecuteCode?: (studentId: string, code: string, testCases: IOTestCase[]) => Promise<TestResponse | undefined>;
   /** ID of the currently featured student */
   featured_student_id?: string | null;
   /**
@@ -83,7 +80,7 @@ export function SessionStudentPane({
   students,
   realtimeStudents,
   sessionProblem,
-  sessionExecutionSettings,
+  sessionTestCases,
   join_code,
   onSelectStudent,
   onShowOnPublicView,
@@ -141,14 +138,14 @@ export function SessionStudentPane({
     onSelectStudent?.(studentId);
   };
 
-  const handleExecuteStudentCode = async (execution_settings: ExecutionSettings) => {
+  const handleExecuteStudentCode = async (testCases: IOTestCase[]) => {
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
     setExecutionResult(null);
 
     try {
-      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, execution_settings);
+      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, testCases);
       if (result) {
         setExecutionResult(result);
       }
@@ -313,7 +310,7 @@ export function SessionStudentPane({
                 onChange={() => {}} // Read-only for instructor
                 onRun={handleExecuteStudentCode}
                 isRunning={isExecutingCode}
-                defaultExecutionSettings={sessionExecutionSettings}
+                defaultTestCases={sessionTestCases}
                 readOnly
                 problem={sessionProblem}
                 execution_result={execution_result}

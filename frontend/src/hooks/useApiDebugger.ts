@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ExecutionTrace, TraceStep } from '@/types/session';
 import { traceCode } from '@/lib/api/trace';
-import type { ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/api';
 
 export interface DebuggerState {
   trace: ExecutionTrace | null;
@@ -22,11 +22,11 @@ export function useApiDebugger() {
     error: null
   });
 
-  const requestTrace = useCallback(async (code: string, language: string, settings: ExecutionSettings) => {
+  const requestTrace = useCallback(async (code: string, language: string, testCase: IOTestCase) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const trace = await traceCode(code, language, settings);
+      const trace = await traceCode(code, language, testCase);
       setState({
         trace,
         currentStep: 0,

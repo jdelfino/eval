@@ -11,19 +11,15 @@ import { Card } from '@/components/ui/Card';
 import { PanelErrorBoundary } from './PanelError';
 import SessionProblemEditor from './SessionProblemEditor';
 import { Problem } from '@/types/problem';
-import type { Problem as ApiProblem } from '@/types/api';
+import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 
 interface ProblemSetupPanelProps {
   /** Callback when problem is updated (receives complete problem snapshot) */
   onUpdateProblem: (problem: ApiProblem) => void;
   /** Initial problem data */
   initialProblem?: Problem | null;
-  /** Initial execution settings */
-  initialExecutionSettings?: {
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-  };
+  /** Initial test cases (IOTestCase[] from the problem) */
+  initialTestCases?: IOTestCase[];
   /** Whether the panel is loading */
   isLoading?: boolean;
   /** Whether to render in full-width mode (no panel wrapper) */
@@ -40,7 +36,7 @@ interface ProblemSetupPanelProps {
 export function ProblemSetupPanel({
   onUpdateProblem,
   initialProblem,
-  initialExecutionSettings,
+  initialTestCases,
   isLoading = false,
   isFullWidth = false,
   onFeatureSolution,
@@ -53,7 +49,7 @@ export function ProblemSetupPanel({
           <SessionProblemEditor
             onUpdateProblem={onUpdateProblem}
             initialProblem={initialProblem}
-            initialExecutionSettings={initialExecutionSettings}
+            initialTestCases={initialTestCases}
             onFeatureSolution={onFeatureSolution}
           />
         </Card>
@@ -74,7 +70,7 @@ export function ProblemSetupPanel({
       <SessionProblemEditor
         onUpdateProblem={onUpdateProblem}
         initialProblem={initialProblem}
-        initialExecutionSettings={initialExecutionSettings}
+        initialTestCases={initialTestCases}
         onFeatureSolution={onFeatureSolution}
       />
     </div>

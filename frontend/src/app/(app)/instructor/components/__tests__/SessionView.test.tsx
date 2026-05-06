@@ -113,8 +113,8 @@ jest.mock('../RevisionViewer', () => {
 
 describe('SessionView', () => {
   const mockStudents = [
-    { id: 'student-1', name: 'Alice', has_code: true, execution_settings: {} },
-    { id: 'student-2', name: 'Bob', has_code: false, execution_settings: {} },
+    { id: 'student-1', name: 'Alice', has_code: true },
+    { id: 'student-2', name: 'Bob', has_code: false },
   ];
 
   const mockRealtimeStudents = [
@@ -131,7 +131,7 @@ describe('SessionView', () => {
     author_id: 'author-1',
     class_id: 'test-class-id',
     tags: [],
-    test_cases: null,
+    test_cases: [],
     solution: null,
     language: 'python',
     created_at: new Date('2024-01-01'),
@@ -145,7 +145,7 @@ describe('SessionView', () => {
     students: mockStudents,
     realtimeStudents: mockRealtimeStudents,
     sessionProblem: mockProblem,
-    sessionExecutionSettings: { stdin: 'test input' },
+    sessionTestCases: [{ name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0 }],
     onEndSession: jest.fn().mockResolvedValue(undefined),
     onUpdateProblem: jest.fn().mockResolvedValue(undefined),
     onFeatureStudent: jest.fn().mockResolvedValue(undefined),
@@ -272,6 +272,26 @@ describe('SessionView', () => {
       expect(defaultProps.onUpdateProblem).toHaveBeenCalledWith(
         { title: 'Updated', description: '', starter_code: '' }
       );
+    });
+  });
+
+  describe('sessionTestCases prop (PLAT-st42.3)', () => {
+    /**
+     * Verifies SessionView accepts sessionTestCases: IOTestCase[] instead of
+     * sessionExecutionSettings. This is the central prop rename that eliminates
+     * the ExecutionSettings conversion layer.
+     */
+    it('renders without sessionExecutionSettings prop (sessionTestCases replaces it)', () => {
+      // SessionView should no longer require sessionExecutionSettings prop
+      // It should work with sessionTestCases: IOTestCase[]
+      const propsWithTestCases = {
+        ...defaultProps,
+        sessionTestCases: [{ name: 'Default', input: 'hello', match_type: 'exact' as const, order: 0 }],
+      };
+      // Remove sessionExecutionSettings if it exists - the new API doesn't have it
+      const { sessionExecutionSettings: _removed, ...cleanProps } = propsWithTestCases as any;
+      render(<SessionView {...cleanProps} />);
+      expect(screen.getByTestId('session-view')).toBeInTheDocument();
     });
   });
 

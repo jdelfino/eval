@@ -70,7 +70,8 @@ describe('Problem type hierarchy', () => {
     const client = mapApiProblem(minimal);
     expect(client.description).toBeNull();
     expect(client.starter_code).toBeNull();
-    expect(client.test_cases).toBeNull();
+    // test_cases null → empty array (Problem.test_cases is IOTestCase[], non-nullable)
+    expect(client.test_cases).toEqual([]);
     expect(client.class_id).toBeNull();
     expect(client.solution).toBeNull();
   });
@@ -84,5 +85,28 @@ describe('Problem type hierarchy', () => {
     const javaApiProblem: ApiProblem = { ...apiProblem, language: 'java' };
     const client = mapApiProblem(javaApiProblem);
     expect(client.language).toBe('java');
+  });
+
+  it('mapApiProblem preserves test_cases as IOTestCase[] (PLAT-st42.1)', () => {
+    /**
+     * After PLAT-st42.1, Problem.test_cases is IOTestCase[] (never null, never ExecutionSettings).
+     * mapApiProblem should pass through the array without unsafe casts.
+     */
+    const client = mapApiProblem(apiProblem);
+    expect(Array.isArray(client.test_cases)).toBe(true);
+    expect(client.test_cases).toHaveLength(1);
+    expect(client.test_cases[0].name).toBe('basic');
+    expect(client.test_cases[0].input).toBe('1 2');
+  });
+
+  it('mapApiProblem defaults null test_cases to empty array (PLAT-st42.1)', () => {
+    /**
+     * Problem.test_cases is IOTestCase[] (non-nullable). When the wire sends null
+     * (e.g. legacy problem), mapApiProblem must return [] not null.
+     */
+    const withNull: ApiProblem = { ...apiProblem, test_cases: null };
+    const client = mapApiProblem(withNull);
+    expect(Array.isArray(client.test_cases)).toBe(true);
+    expect(client.test_cases).toEqual([]);
   });
 });

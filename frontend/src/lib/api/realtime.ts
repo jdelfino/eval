@@ -6,8 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
-import type { SessionStudent, SessionState } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import type { SessionStudent, SessionState, IOTestCase } from '@/types/api';
 
 /**
  * Get the current state of a session, including session details, students, and join code.
@@ -30,7 +29,7 @@ export async function updateCode(
   sessionId: string,
   studentId: string,
   code: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<SessionStudent> {
   return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
     student_id: studentId,
@@ -64,7 +63,7 @@ export async function featureStudent(
   sessionId: string,
   studentId: string,
   code?: string,
-  testCases?: ExecutionSettings
+  testCases?: IOTestCase[]
 ): Promise<void> {
   await apiPost(`/sessions/${sessionId}/feature`, {
     student_id: studentId,

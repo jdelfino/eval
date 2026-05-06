@@ -78,7 +78,7 @@ export interface Problem {
   title: string;
   description: string | null;
   starter_code: string | null;
-  test_cases: IOTestCase[] | import('./problem').ExecutionSettings | null;
+  test_cases: IOTestCase[] | null;
   author_id: string;
   class_id: string | null;
   tags: string[];
@@ -86,8 +86,6 @@ export interface Problem {
   language: string;
   created_at: string;
   updated_at: string;
-  /** Legacy field: present in old session Problem snapshots stored before migration 020. */
-  execution_settings?: import('./problem').ExecutionSettings;
 }
 
 export interface Session {
@@ -98,7 +96,7 @@ export interface Session {
   problem: Problem | null; // full Problem, or null/empty for blank sessions
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized (no omitempty)
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized (no omitempty)
   creator_id: string;
   participants: string[];
   status: SessionStatus;
@@ -175,7 +173,7 @@ export interface SessionPublicState {
   problem: Problem | null;
   featured_student_id: string | null;
   featured_code: string | null;
-  featured_test_cases: import('./problem').ExecutionSettings | null; // Go json.RawMessage, always serialized
+  featured_test_cases: IOTestCase[] | null; // Go json.RawMessage, always serialized
   join_code: string;
   status: string;
 }

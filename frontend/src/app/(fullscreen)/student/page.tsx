@@ -6,12 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
-import { ExecutionSettings, extractExecutionSettingsFromTestCases } from '@/types/problem';
 import type { Problem } from '@/types/api';
-import type { TestResponse } from '@/types/api';
+import type { TestResponse, IOTestCase } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor, executeCode } from '@/lib/api/execute';
+import { warmExecutor, executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
@@ -37,7 +36,7 @@ function StudentPage() {
   const [problemId, setProblemId] = useState<string | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [code, setCode] = useState('');
-  const [studentExecutionSettings, setStudentExecutionSettings] = useState<ExecutionSettings | null>(null);
+  const [studentTestCases, setStudentTestCases] = useState<IOTestCase[]>([]);
 
   // Breadcrumb state
   const [sectionName, setSectionName] = useState<string | null>(null);
@@ -54,8 +53,8 @@ function StudentPage() {
   const [error, setError] = useState<string | null>(null);
   // True when executor returned 503 (cold-starting) — shown as a distinct warming-up banner
   const [warmingUp, setWarmingUp] = useState(false);
-  // Last execution settings used, to support retry from the warming-up banner
-  const lastExecutionSettingsRef = useRef<ExecutionSettings | null>(null);
+  // Last test cases used, to support retry from the warming-up banner
+  const lastRunTestCasesRef = useRef<IOTestCase[]>([]);
 
   // Join state
   const [joined, setJoined] = useState(false);
@@ -115,9 +114,9 @@ function StudentPage() {
         setProblem(data.problem);
         setCode(data.code);
 
-        // Restore execution settings from test_cases (IOTestCase wire format)
-        if (data.test_cases && Array.isArray(data.test_cases) && data.test_cases.length > 0) {
-          setStudentExecutionSettings(extractExecutionSettingsFromTestCases(data.test_cases as any));
+        // Restore test cases directly as IOTestCase[]
+        if (data.test_cases && Array.isArray(data.test_cases)) {
+          setStudentTestCases(data.test_cases as IOTestCase[]);
         }
       } catch (err: any) {
         setError(err.message || 'Failed to load student work');
@@ -205,8 +204,8 @@ function StudentPage() {
         if (result.code) {
           setCode(result.code);
         }
-        if (result.test_cases) {
-          setStudentExecutionSettings(extractExecutionSettingsFromTestCases(result.test_cases));
+        if (result.test_cases && Array.isArray(result.test_cases)) {
+          setStudentTestCases(result.test_cases as IOTestCase[]);
         }
 
         // Check if session is already completed
@@ -237,25 +236,25 @@ function StudentPage() {
     const timeout = setTimeout(() => {
       updateStudentWork(workId, {
         code,
-        test_cases: studentExecutionSettings || undefined,
+        test_cases: studentTestCases.length > 0 ? studentTestCases : undefined,
       }).catch((err) => {
         console.error('Failed to save code:', err);
       });
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [mode, workId, code, studentExecutionSettings]);
+  }, [mode, workId, code, studentTestCases]);
 
   // Auto-save code in live mode (via realtime)
   useEffect(() => {
     if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
 
     const timeout = setTimeout(() => {
-      realtimeUpdateCode(user.id, code, studentExecutionSettings || undefined);
+      realtimeUpdateCode(user.id, code, studentTestCases.length > 0 ? studentTestCases : undefined);
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentExecutionSettings, realtimeUpdateCode]);
+  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentTestCases, realtimeUpdateCode]);
 
   // Handlers
   const handleLeaveSession = useCallback(() => {
@@ -307,7 +306,7 @@ function StudentPage() {
     }
   }, [pendingStarterCode, applyStarterCode]);
 
-  const handleRunCode = async (execution_settings: ExecutionSettings) => {
+  const handleRunCode = async (testCases: IOTestCase[]) => {
     if (!code || code.trim().length === 0) {
       setError('Please write some code before running');
       return;
@@ -317,7 +316,7 @@ function StudentPage() {
       return;
     }
 
-    lastExecutionSettingsRef.current = execution_settings;
+    lastRunTestCasesRef.current = testCases;
     setError(null);
     setWarmingUp(false);
     setIsRunning(true);
@@ -325,9 +324,7 @@ function StudentPage() {
 
     try {
       const result = await executeCode(code, problem.language, {
-        stdin: execution_settings.stdin,
-        random_seed: execution_settings.random_seed,
-        attached_files: execution_settings.attached_files,
+        cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
       });
       setExecutionResult(result);
       setIsRunning(false);
@@ -408,7 +405,8 @@ function StudentPage() {
     );
   }
 
-  const sessionExecutionSettings = extractExecutionSettingsFromTestCases(problem?.test_cases) || {};
+  // Merge: student's saved test cases take priority, fall back to problem's test cases
+  const effectiveDefaultTestCases = studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
@@ -433,9 +431,7 @@ function StudentPage() {
           title="Code Execution Warming Up"
           variant="warning"
           onDismiss={() => setWarmingUp(false)}
-          onRetry={lastExecutionSettingsRef.current !== null
-            ? () => handleRunCode(lastExecutionSettingsRef.current!)
-            : undefined}
+          onRetry={() => handleRunCode(lastRunTestCasesRef.current)}
           isRetrying={isRunning}
           className="mx-3 my-1 flex-shrink-0"
         />
@@ -464,12 +460,8 @@ function StudentPage() {
           onChange={setCode}
           onRun={handleRunCode}
           isRunning={isRunning}
-          defaultExecutionSettings={{
-            stdin: studentExecutionSettings?.stdin !== undefined ? studentExecutionSettings.stdin : sessionExecutionSettings.stdin,
-            random_seed: studentExecutionSettings?.random_seed !== undefined ? studentExecutionSettings.random_seed : sessionExecutionSettings.random_seed,
-            attached_files: studentExecutionSettings?.attached_files !== undefined ? studentExecutionSettings.attached_files : sessionExecutionSettings.attached_files,
-          }}
-          onExecutionSettingsChange={setStudentExecutionSettings}
+          defaultTestCases={effectiveDefaultTestCases}
+          onTestCasesChange={setStudentTestCases}
           execution_result={execution_result}
           problem={problem}
           onLoadStarterCode={handleLoadStarterCode}

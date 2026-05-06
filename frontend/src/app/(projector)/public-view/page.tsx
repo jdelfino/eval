@@ -5,11 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode, type ExecuteOptions } from '@/lib/api/execute';
+import { executeCode, ioTestCasesToCaseDefs, type ExecuteOptions } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import { extractExecutionSettingsFromTestCases, type ExecutionSettings } from '@/types/problem';
+import type { IOTestCase } from '@/types/api';
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -75,12 +75,11 @@ function PublicViewContent() {
   const [isRunning, setIsRunning] = useState(false);
   const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
 
-  const handleRunCode = (codeToRun: string) => (execution_settings: ExecutionSettings) => {
+  const handleRunCode = (codeToRun: string) => (testCases: IOTestCase[]) => {
     const language = (state?.problem as any)?.language || 'python';
-    const options: ExecuteOptions = {};
-    if (execution_settings.stdin) options.stdin = execution_settings.stdin;
-    if (execution_settings.random_seed !== undefined) options.random_seed = execution_settings.random_seed;
-    if (execution_settings.attached_files) options.attached_files = execution_settings.attached_files;
+    const options: ExecuteOptions = {
+      cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
+    };
     setIsRunning(true);
     setExecutionResult(null);
     executeCode(codeToRun, language, options)
@@ -122,15 +121,12 @@ function PublicViewContent() {
   // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Extract execution settings from problem's test_cases (baseline for the session).
-  const problemExecutionSettings: ExecutionSettings =
-    extractExecutionSettingsFromTestCases((state?.problem as any)?.test_cases) ?? {};
+  // Test cases from problem (baseline for the session).
+  const problemTestCases: IOTestCase[] = ((state?.problem as any)?.test_cases as IOTestCase[]) ?? [];
 
-  // When something is featured, use featured_test_cases; otherwise fall back to problem's settings.
-  const featuredExecutionSettings: ExecutionSettings =
-    state?.featured_test_cases
-      ? (extractExecutionSettingsFromTestCases(state.featured_test_cases as any) ?? problemExecutionSettings)
-      : problemExecutionSettings;
+  // When something is featured, use featured_test_cases; otherwise fall back to problem's test cases.
+  const featuredTestCases: IOTestCase[] = (state?.featured_test_cases as IOTestCase[] | null | undefined)
+    ?? problemTestCases;
 
   // Reset local code when featured student or their code changes
   useEffect(() => {
@@ -238,7 +234,7 @@ function PublicViewContent() {
             onChange={setLocalCode}
             problem={problem || null}
             title="Featured Code"
-            defaultExecutionSettings={featuredExecutionSettings}
+            defaultTestCases={featuredTestCases}
             onRun={handleRunCode(localCode)}
             isRunning={isRunning}
             execution_result={executionResult}
@@ -256,7 +252,7 @@ function PublicViewContent() {
             onChange={handleCodeChange}
             problem={problem || null}
             title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
-            defaultExecutionSettings={problemExecutionSettings}
+            defaultTestCases={problemTestCases}
             onRun={handleRunCode(scratchPadCode)}
             isRunning={isRunning}
             execution_result={executionResult}

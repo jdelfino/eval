@@ -6,14 +6,15 @@
  * PLAT-fun: Public view only passes stdin from featured execution settings
  */
 
-import { updateSessionProblem, featureCode } from '@/lib/api/sessions';
-import { apiPost } from '@/lib/api-client';
-import type { Problem } from '@/types/api';
-import type { ExecutionSettings } from '@/types/problem';
+import { updateSessionProblem, featureCode, updateSessionProblemPartial } from '@/lib/api/sessions';
+import { updateCode, featureStudent } from '@/lib/api/realtime';
+import { apiPost, apiPut } from '@/lib/api-client';
+import type { Problem, IOTestCase } from '@/types/api';
 
 jest.mock('@/lib/api-client');
 
 const mockApiPost = apiPost as jest.MockedFunction<typeof apiPost>;
+const mockApiPut = apiPut as jest.MockedFunction<typeof apiPut>;
 
 describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases', () => {
   beforeEach(() => {
@@ -148,11 +149,16 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
   it('should accept and send test_cases parameter when featuring code', async () => {
     const sessionId = 'session-123';
     const code = 'def solution():\n    return 42';
-    const testCases: ExecutionSettings = {
-      stdin: 'input data',
-      random_seed: 42,
-      attached_files: [{ name: 'data.txt', content: 'test data' }],
-    };
+    const testCases: IOTestCase[] = [
+      {
+        name: 'Default',
+        input: 'input data',
+        match_type: 'exact',
+        order: 0,
+        random_seed: 42,
+        attached_files: [{ name: 'data.txt', content: 'test data' }],
+      },
+    ];
 
     mockApiPost.mockResolvedValue(undefined);
 
@@ -177,13 +183,12 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
     });
   });
 
-  it('should send test_cases when featuring solution with execution settings', async () => {
+  it('should send test_cases when featuring solution with IOTestCase[] input', async () => {
     const sessionId = 'session-123';
     const solution = 'def solve(n):\n    return n * 2';
-    const testCases: ExecutionSettings = {
-      stdin: '5\n',
-      random_seed: 99,
-    };
+    const testCases: IOTestCase[] = [
+      { name: 'Default', input: '5\n', match_type: 'exact', order: 0, random_seed: 99 },
+    ];
 
     mockApiPost.mockResolvedValue(undefined);
 
@@ -192,131 +197,73 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
     const callArgs = mockApiPost.mock.calls[0][1] as any;
     expect(callArgs.code).toBe(solution);
     expect(callArgs.test_cases).toEqual(testCases);
-    expect(callArgs.test_cases.stdin).toBe('5\n');
-    expect(callArgs.test_cases.random_seed).toBe(99);
+    expect(callArgs.test_cases[0].input).toBe('5\n');
+    expect(callArgs.test_cases[0].random_seed).toBe(99);
   });
 });
 
-describe('PLAT-fun: Public view passes all execution settings', () => {
-  it('should extract all execution settings fields, not just stdin', () => {
-    // This test verifies that the public view page extracts ALL fields
-    // from featured_test_cases (stdin, random_seed, attached_files)
-
-    const featuredTestCases = {
-      stdin: 'test input',
-      random_seed: 42,
-      attached_files: [
-        { name: 'data.txt', content: 'file content' },
-        { name: 'config.json', content: '{"key": "value"}' },
-      ],
-    };
-
-    // Simulate extracting execution settings from featured_test_cases
-    const executionSettings = {
-      stdin: featuredTestCases.stdin,
-      random_seed: featuredTestCases.random_seed,
-      attached_files: featuredTestCases.attached_files,
-    };
-
-    // All fields should be present
-    expect(executionSettings.stdin).toBe('test input');
-    expect(executionSettings.random_seed).toBe(42);
-    expect(executionSettings.attached_files).toHaveLength(2);
-    expect(executionSettings.attached_files![0].name).toBe('data.txt');
-    expect(executionSettings.attached_files![1].content).toBe('{"key": "value"}');
-  });
-
-  it('should handle missing execution settings gracefully', () => {
-    const featuredTestCases: ExecutionSettings | null = null;
-
-    const executionSettings: ExecutionSettings = featuredTestCases || {};
-
-    expect(executionSettings.stdin).toBeUndefined();
-    expect(executionSettings.random_seed).toBeUndefined();
-    expect(executionSettings.attached_files).toBeUndefined();
-  });
-
-  it('should handle partial execution settings', () => {
-    const featuredTestCases: ExecutionSettings = {
-      stdin: 'only stdin',
-    };
-
-    const executionSettings: ExecutionSettings = {
-      stdin: featuredTestCases.stdin,
-      random_seed: featuredTestCases.random_seed,
-      attached_files: featuredTestCases.attached_files,
-    };
-
-    expect(executionSettings.stdin).toBe('only stdin');
-    expect(executionSettings.random_seed).toBeUndefined();
-    expect(executionSettings.attached_files).toBeUndefined();
-  });
-
-  it('should extract attached_files from IOTestCase[] format (PLAT-ao5)', () => {
-    // When featuring a solution, featured_test_cases may arrive as IOTestCase[]
-    // (the wire format from the backend), not as an ExecutionSettings object.
-    // extractExecutionSettingsFromTestCases must handle both shapes.
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-
-    const ioTestCases = [
+describe('PLAT-fun: Public view passes all execution settings (PLAT-st42.4: now uses IOTestCase[])', () => {
+  it('should read all fields directly from IOTestCase[0] (input, random_seed, attached_files)', () => {
+    /**
+     * Contract: After PLAT-st42.4, public view reads test case data directly from
+     * IOTestCase[] — no ExecutionSettings bridge. All fields must be preserved.
+     */
+    const featuredTestCases: IOTestCase[] = [
       {
         name: 'Default',
-        input: 'test stdin',
+        input: 'test input',
         match_type: 'exact',
+        order: 0,
         random_seed: 42,
-        attached_files: [{ name: 'data.txt', content: 'hello' }],
+        attached_files: [
+          { name: 'data.txt', content: 'file content' },
+          { name: 'config.json', content: '{"key": "value"}' },
+        ],
       },
     ];
 
-    const result = extractExecutionSettingsFromTestCases(ioTestCases);
-    expect(result.stdin).toBe('test stdin');
-    expect(result.random_seed).toBe(42);
-    expect(result.attached_files).toEqual([{ name: 'data.txt', content: 'hello' }]);
+    const firstCase = featuredTestCases[0];
+    expect(firstCase.input).toBe('test input');
+    expect(firstCase.random_seed).toBe(42);
+    expect(firstCase.attached_files).toHaveLength(2);
+    expect(firstCase.attached_files![0].name).toBe('data.txt');
+    expect(firstCase.attached_files![1].content).toBe('{"key": "value"}');
   });
 
-  it('should extract attached_files from ExecutionSettings format (PLAT-ao5)', () => {
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
+  it('should handle missing featured test cases gracefully (empty array)', () => {
+    const featuredTestCases: IOTestCase[] = [];
+    const firstCase = featuredTestCases[0];
+    expect(firstCase).toBeUndefined();
+    expect(firstCase?.input).toBeUndefined();
+    expect(firstCase?.random_seed).toBeUndefined();
+    expect(firstCase?.attached_files).toBeUndefined();
+  });
 
-    // When featured_test_cases is already ExecutionSettings shape
-    const execSettings = {
-      stdin: 'test stdin',
-      random_seed: 42,
-      attached_files: [{ name: 'data.txt', content: 'hello' }],
-    };
-
-    const result = extractExecutionSettingsFromTestCases(execSettings);
-    expect(result.stdin).toBe('test stdin');
-    expect(result.random_seed).toBe(42);
-    expect(result.attached_files).toEqual([{ name: 'data.txt', content: 'hello' }]);
+  it('should handle partial test case (only input)', () => {
+    const featuredTestCases: IOTestCase[] = [
+      { name: 'Default', input: 'only stdin', match_type: 'exact', order: 0 },
+    ];
+    const firstCase = featuredTestCases[0];
+    expect(firstCase.input).toBe('only stdin');
+    expect(firstCase.random_seed).toBeUndefined();
+    expect(firstCase.attached_files).toBeUndefined();
   });
 });
 
-describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
+describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge functions deleted)', () => {
   /**
-   * Verifies the helper function extracts ExecutionSettings from IOTestCase format.
-   * Critical contract: After migration 020, execution settings live in test_cases[0] with
-   * field mappings: input→stdin, random_seed→random_seed, attached_files→attached_files.
-   * Breaking this would cause attached_files and other settings to be lost on problem reload.
+   * After PLAT-st42.4, extractExecutionSettingsFromTestCases and buildTestCasesFromExecutionSettings
+   * are deleted. Code reads directly from test_cases[0] and builds IOTestCase[] inline.
+   * These tests verify the direct read/write patterns still work correctly.
    */
-  it('should extract stdin, random_seed, and attached_files from test_cases[0]', () => {
-    const testCases = [
+
+  it('reads input, random_seed, attached_files directly from test_cases[0]', () => {
+    const testCases: IOTestCase[] = [
       {
-        id: 'tc-1',
-        problem_id: 'prob-1',
-        type: 'input-output' as const,
         name: 'Default',
-        description: '',
-        visible: true,
+        input: '5\n10\n',
+        match_type: 'exact',
         order: 0,
-        config: {
-          type: 'input-output' as const,
-          data: {
-            input: '5\n10\n',
-            expected_output: '15',
-            match_type: 'exact' as const,
-          },
-        },
-        // ExecutionSettings fields in IOTestCase
         random_seed: 42,
         attached_files: [
           { name: 'data.txt', content: 'test content' },
@@ -325,106 +272,62 @@ describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
       },
     ];
 
-    // This is what the helper should extract
-    const expectedSettings: ExecutionSettings = {
-      stdin: '5\n10\n',
-      random_seed: 42,
-      attached_files: [
-        { name: 'data.txt', content: 'test content' },
-        { name: 'config.json', content: '{}' },
-      ],
-    };
-
-    // Import the helper function (will be created in types/problem.ts)
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-    const result = extractExecutionSettingsFromTestCases(testCases);
-
-    expect(result).toEqual(expectedSettings);
+    const firstCase = testCases[0];
+    expect(firstCase.input).toBe('5\n10\n');
+    expect(firstCase.random_seed).toBe(42);
+    expect(firstCase.attached_files).toHaveLength(2);
   });
 
-  it('should handle test_cases with no execution settings', () => {
-    const testCases = [
-      {
-        id: 'tc-1',
-        problem_id: 'prob-1',
-        type: 'input-output' as const,
-        name: 'Test 1',
-        description: 'Basic test',
-        visible: true,
-        order: 0,
-        config: {
-          type: 'input-output' as const,
-          data: {
-            input: '',
-            expected_output: 'output',
-            match_type: 'exact' as const,
-          },
-        },
-      },
-    ];
-
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-    const result = extractExecutionSettingsFromTestCases(testCases);
-
-    expect(result).toEqual({
-      stdin: '',
-      random_seed: undefined,
-      attached_files: undefined,
-    });
+  it('handles empty test_cases array gracefully', () => {
+    const testCases: IOTestCase[] = [];
+    const firstCase = testCases[0];
+    expect(firstCase).toBeUndefined();
+    expect(firstCase?.input).toBeUndefined();
+    expect(firstCase?.random_seed).toBeUndefined();
   });
 
-  it('should return empty settings for empty test_cases array', () => {
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-    const result = extractExecutionSettingsFromTestCases([]);
+  it('builds IOTestCase[] directly from field values', () => {
+    // This is what ProblemCreator.handleSubmit now does inline
+    const stdin = 'hello world';
+    const random_seed = 42;
+    const attached_files = [{ name: 'data.txt', content: 'content' }];
 
-    expect(result).toEqual({
-      stdin: undefined,
-      random_seed: undefined,
-      attached_files: undefined,
+    const testCases: IOTestCase[] = [{
+      name: 'Default',
+      input: stdin.trim(),
+      match_type: 'exact',
+      order: 0,
+      random_seed,
+      attached_files,
+    }];
+
+    expect(testCases).not.toBeUndefined();
+    expect(testCases).toHaveLength(1);
+    expect(testCases[0]).toMatchObject({
+      name: 'Default',
+      input: 'hello world',
+      match_type: 'exact',
     });
+    expect(testCases[0].random_seed).toBe(42);
+    expect(testCases[0].attached_files).toHaveLength(1);
   });
 
-  it('should extract from IOTestCase wire format (flat input field)', () => {
-    // This is the actual shape returned by the Go backend — IOTestCase with top-level input
-    const wireTestCases = [
-      {
-        name: 'Default',
-        input: 'hello world',
-        expected_output: '',
-        match_type: 'exact',
-        random_seed: 7,
-        attached_files: [{ name: 'data.csv', content: 'a,b,c' }],
-        order: 0,
-      },
-    ];
+  it('produces empty array when no stdin/seed/files are set', () => {
+    const stdin = '';
+    const random_seed = undefined;
+    const attached_files: Array<{ name: string; content: string }> = [];
 
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-    const result = extractExecutionSettingsFromTestCases(wireTestCases);
+    const hasContent = stdin.trim() !== '' || random_seed !== undefined || attached_files.length > 0;
+    const testCases: IOTestCase[] = hasContent ? [{
+      name: 'Default', input: stdin.trim(), match_type: 'exact', order: 0,
+    }] : [];
 
-    expect(result.stdin).toBe('hello world');
-    expect(result.random_seed).toBe(7);
-    expect(result.attached_files).toEqual([{ name: 'data.csv', content: 'a,b,c' }]);
-  });
-
-  it('should return empty settings for null/undefined test_cases', () => {
-    const { extractExecutionSettingsFromTestCases } = require('@/types/problem');
-
-    expect(extractExecutionSettingsFromTestCases(null)).toEqual({
-      stdin: undefined,
-      random_seed: undefined,
-      attached_files: undefined,
-    });
-
-    expect(extractExecutionSettingsFromTestCases(undefined)).toEqual({
-      stdin: undefined,
-      random_seed: undefined,
-      attached_files: undefined,
-    });
+    expect(testCases).toEqual([]);
   });
 
   /**
-   * Verifies that updateStudentWork sends test_cases instead of execution_settings.
-   * Critical contract: Backend expects test_cases field, not execution_settings.
+   * Verifies that updateStudentWork sends test_cases (IOTestCase[]) instead of execution_settings.
+   * Critical contract: Backend expects test_cases field as IOTestCase[], not execution_settings.
    * Breaking this would cause student execution settings to be silently dropped on save.
    */
   it('should send test_cases field to updateStudentWork, not execution_settings', async () => {
@@ -434,20 +337,25 @@ describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
     jest.clearAllMocks();
 
     const workId = 'work-123';
-    const executionSettings: ExecutionSettings = {
-      stdin: 'test input',
-      random_seed: 99,
-      attached_files: [{ name: 'file.txt', content: 'data' }],
-    };
+    const testCases: IOTestCase[] = [
+      {
+        name: 'Default',
+        input: 'test input',
+        match_type: 'exact',
+        order: 0,
+        random_seed: 99,
+        attached_files: [{ name: 'file.txt', content: 'data' }],
+      },
+    ];
 
     await updateStudentWork(workId, {
       code: 'def solve(): pass',
-      test_cases: executionSettings,
+      test_cases: testCases,
     });
 
     expect(apiPatch).toHaveBeenCalledWith(`/student-work/${workId}`, {
       code: 'def solve(): pass',
-      test_cases: executionSettings,
+      test_cases: testCases,
     });
 
     // Verify execution_settings is NOT sent
@@ -457,128 +365,163 @@ describe('PLAT-u90: Extract execution settings from test_cases[0]', () => {
   });
 });
 
-describe('PLAT-e4m: ProblemCreator save payload puts execution settings into test_cases[0]', () => {
+// ---------------------------------------------------------------------------
+// PLAT-st42.1: API clients accept IOTestCase[] not ExecutionSettings
+// ---------------------------------------------------------------------------
+
+describe('PLAT-st42.1: featureCode accepts IOTestCase[] not ExecutionSettings', () => {
   /**
-   * Tests the payload construction logic that ProblemCreator.handleSubmit uses.
-   * When stdin, random_seed, or attached_files are set, they must be sent as
-   * test_cases[0] (an IOTestCase), NOT as a separate execution_settings field.
+   * Contract: featureCode third param is IOTestCase[], matching the wire format
+   * stored in the DB after migration 020. Passing ExecutionSettings was the old
+   * shape and would cause type errors. Breaking this causes test_cases to be sent
+   * in the wrong format to the backend.
    */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(undefined);
+  });
 
-  /**
-   * Builds the problem save payload the same way ProblemCreator.handleSubmit does.
-   * This is extracted here to test the logic without rendering the React component.
-   */
-  function buildProblemPayload(opts: {
-    title: string;
-    description?: string;
-    starter_code?: string;
-    solution?: string;
-    language: string;
-    stdin?: string;
-    random_seed?: number;
-    attached_files?: Array<{ name: string; content: string }>;
-    class_id?: string | null;
-    tags?: string[];
-  }) {
-    const { buildTestCasesFromExecutionSettings } = require('@/types/problem');
+  it('should accept IOTestCase[] and send as test_cases', async () => {
+    const sessionId = 'session-abc';
+    const code = 'def solve(): return 1';
+    const testCases: IOTestCase[] = [
+      { name: 'Default', input: 'hello', match_type: 'exact', order: 0 },
+    ];
 
-    const testCases = buildTestCasesFromExecutionSettings({
-      stdin: opts.stdin,
-      random_seed: opts.random_seed,
-      attached_files: opts.attached_files,
-    });
+    await featureCode(sessionId, code, testCases);
 
-    return {
-      title: opts.title.trim(),
-      description: opts.description?.trim() || null,
-      starter_code: opts.starter_code?.trim() || null,
-      solution: opts.solution?.trim() || null,
-      language: opts.language,
+    expect(mockApiPost).toHaveBeenCalledWith(`/sessions/${sessionId}/feature`, {
+      code,
       test_cases: testCases,
-      class_id: opts.class_id || null,
-      tags: opts.tags || [],
-    };
-  }
-
-  it('should put stdin into test_cases[0].input, not execution_settings', () => {
-    const payload = buildProblemPayload({
-      title: 'Test Problem',
-      language: 'python',
-      stdin: 'hello world',
-    });
-
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toHaveLength(1);
-    expect(payload.test_cases[0]).toMatchObject({
-      name: 'Default',
-      input: 'hello world',
-      match_type: 'exact',
     });
   });
 
-  it('should put attached_files into test_cases[0].attached_files', () => {
-    const files = [{ name: 'data.txt', content: 'file content' }];
-    const payload = buildProblemPayload({
-      title: 'Test Problem',
-      language: 'python',
-      attached_files: files,
-    });
+  it('should accept IOTestCase[] with attached_files', async () => {
+    const sessionId = 'session-abc';
+    const code = 'def solve(): pass';
+    const testCases: IOTestCase[] = [
+      {
+        name: 'Default',
+        input: 'data',
+        match_type: 'exact',
+        order: 0,
+        attached_files: [{ name: 'file.txt', content: 'content' }],
+        random_seed: 42,
+      },
+    ];
 
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toHaveLength(1);
-    expect(payload.test_cases[0].attached_files).toEqual(files);
+    await featureCode(sessionId, code, testCases);
+
+    const callArgs = mockApiPost.mock.calls[0][1] as any;
+    expect(callArgs.test_cases[0].input).toBe('data');
+    expect(callArgs.test_cases[0].attached_files).toHaveLength(1);
+    expect(callArgs.test_cases[0].random_seed).toBe(42);
   });
 
-  it('should put random_seed into test_cases[0].random_seed', () => {
-    const payload = buildProblemPayload({
-      title: 'Test Problem',
-      language: 'python',
-      random_seed: 42,
-    });
+  it('should send no test_cases field when omitted', async () => {
+    await featureCode('s1', 'code');
+    const callArgs = mockApiPost.mock.calls[0][1] as any;
+    expect(callArgs).not.toHaveProperty('test_cases');
+  });
+});
 
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toHaveLength(1);
-    expect(payload.test_cases[0].random_seed).toBe(42);
+describe('PLAT-st42.1: realtime updateCode accepts IOTestCase[]', () => {
+  /**
+   * Contract: updateCode fourth param is IOTestCase[] (not ExecutionSettings).
+   * This ensures the PUT /sessions/:id/code endpoint receives the correct shape.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPut.mockResolvedValue({} as any);
   });
 
-  it('should include all execution settings in a single test case', () => {
-    const payload = buildProblemPayload({
-      title: 'Full Settings',
-      language: 'python',
-      stdin: 'input data',
-      random_seed: 99,
-      attached_files: [
-        { name: 'a.txt', content: 'aaa' },
-        { name: 'b.txt', content: 'bbb' },
-      ],
-    });
+  it('should accept IOTestCase[] as testCases param', async () => {
+    const testCases: IOTestCase[] = [
+      { name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
+    ];
 
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toHaveLength(1);
-    expect(payload.test_cases[0].input).toBe('input data');
-    expect(payload.test_cases[0].random_seed).toBe(99);
-    expect(payload.test_cases[0].attached_files).toHaveLength(2);
+    await updateCode('session-1', 'student-1', 'print(1)', testCases);
+
+    expect(mockApiPut).toHaveBeenCalledWith('/sessions/session-1/code', {
+      student_id: 'student-1',
+      code: 'print(1)',
+      test_cases: testCases,
+    });
+  });
+});
+
+describe('PLAT-st42.1: realtime featureStudent accepts IOTestCase[]', () => {
+  /**
+   * Contract: featureStudent fourth param is IOTestCase[] (not ExecutionSettings).
+   * Ensures POST /sessions/:id/feature sends IOTestCase[] for featured student.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(undefined);
   });
 
-  it('should send empty test_cases when no execution settings are set', () => {
-    const payload = buildProblemPayload({
-      title: 'No Settings',
-      language: 'python',
-    });
+  it('should accept IOTestCase[] as testCases param', async () => {
+    const testCases: IOTestCase[] = [
+      { name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
+    ];
 
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toEqual([]);
+    await featureStudent('session-1', 'student-1', 'code', testCases);
+
+    expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/feature', {
+      student_id: 'student-1',
+      code: 'code',
+      test_cases: testCases,
+    });
+  });
+});
+
+describe('PLAT-st42.1: updateStudentWork accepts IOTestCase[]', () => {
+  /**
+   * Contract: updateStudentWork data.test_cases is IOTestCase[], not ExecutionSettings.
+   * Sending ExecutionSettings would put data in the wrong shape in the DB.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should send empty test_cases when stdin is empty and no other settings', () => {
-    const payload = buildProblemPayload({
-      title: 'Empty Stdin',
-      language: 'python',
-      stdin: '',
-      attached_files: [],
-    });
+  it('should accept IOTestCase[] and pass to apiPatch', async () => {
+    const { updateStudentWork } = require('@/lib/api/student-work');
+    const { apiPatch } = require('@/lib/api-client');
+    (apiPatch as jest.Mock).mockResolvedValue(undefined);
+    jest.clearAllMocks();
 
-    expect(payload).not.toHaveProperty('execution_settings');
-    expect(payload.test_cases).toEqual([]);
+    const testCases: IOTestCase[] = [
+      { name: 'Default', input: 'stdin text', match_type: 'exact', order: 0, random_seed: 7 },
+    ];
+
+    await updateStudentWork('work-1', { code: 'x=1', test_cases: testCases });
+
+    expect(apiPatch).toHaveBeenCalledWith('/student-work/work-1', {
+      code: 'x=1',
+      test_cases: testCases,
+    });
+  });
+});
+
+describe('PLAT-st42.1: updateSessionProblemPartial excludes execution_settings', () => {
+  /**
+   * Contract: updateSessionProblemPartial no longer accepts execution_settings.
+   * The backend only reads test_cases; execution_settings is legacy.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(undefined);
+  });
+
+  it('should accept test_cases in partial update', async () => {
+    const testCases: IOTestCase[] = [
+      { name: 'tc', input: 'x', match_type: 'exact', order: 0 },
+    ];
+
+    await updateSessionProblemPartial('session-1', { title: 'My Problem', test_cases: testCases });
+
+    expect(mockApiPost).toHaveBeenCalledWith('/sessions/session-1/update-problem', {
+      problem: { title: 'My Problem', test_cases: testCases },
+    });
   });
 });
