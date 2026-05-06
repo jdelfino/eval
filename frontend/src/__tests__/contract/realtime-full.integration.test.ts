@@ -135,12 +135,13 @@ describe('Realtime Session API', () => {
       expect(sessionId).toBeTruthy();
       expect(joinedStudentId).toBeTruthy();
 
-      // The execution_result we'll store — matches TestResponse interface exactly
+      // The execution_result we'll store — matches TestResponse interface exactly.
+      // CaseResult is now a discriminated union keyed on 'kind' (F2.3).
       const executionResult = {
         results: [
           {
+            kind: 'io' as const,
             name: 'run',
-            type: 'io',
             status: 'passed' as const,
             input: 'hello',
             expected: 'hello\n',
@@ -176,7 +177,10 @@ describe('Realtime Session API', () => {
         if (revision.execution_result !== null) {
           validateTestResponseShape(revision.execution_result);
           expect(revision.execution_result.results).toHaveLength(1);
-          expect(revision.execution_result.results[0].status).toBe('passed');
+          const r = revision.execution_result.results[0];
+          if (r.kind === 'io') {
+            expect(r.status).toBe('passed');
+          }
         }
 
         // Fetch revisions and verify the shape is maintained on list endpoint

@@ -43,7 +43,9 @@ export default function OutputPanel({ result, isConnected = true, isRunning = fa
   }
 
   // Use the first result for display (free-run mode sends one case).
-  const r = result.results[0];
+  // Only io results are rendered here; pytest results are rendered in a future UI (G1/G2).
+  const rawResult = result.results[0];
+  const r = rawResult?.kind === 'io' ? rawResult : undefined;
   const isSuccess = r ? (r.status === 'run' || r.status === 'passed') : false;
   const output = r?.actual ?? '';
   const errorOutput = r?.stderr ?? '';

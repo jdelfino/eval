@@ -256,7 +256,9 @@ export default function CodeEditor({
 
   // Use local state for API execution, or passed props for WebSocket execution
   // Derive first result from TestResponse for display and decoration logic.
-  const firstResult = execution_result?.results?.[0] ?? null;
+  // Only io results are rendered here; pytest results are rendered in a future UI (G1/G2).
+  const rawFirstResult = execution_result?.results?.[0] ?? null;
+  const firstResult = rawFirstResult?.kind === 'io' ? rawFirstResult : null;
   const resultIsError = firstResult ? (firstResult.status === 'error' || firstResult.status === 'failed') : false;
   const resultStderr = firstResult?.stderr ?? '';
 

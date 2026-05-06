@@ -46,7 +46,7 @@ describe('OutputPanel', () => {
     const successResult: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'run',
         input: '',
         actual: 'Hello, World!',
@@ -74,7 +74,7 @@ describe('OutputPanel', () => {
     const errorResult: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'error',
         input: '',
         stderr: 'SyntaxError: invalid syntax',
@@ -96,7 +96,7 @@ describe('OutputPanel', () => {
     const resultWithInput: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'run',
         input: '5\n5',
         actual: '10',

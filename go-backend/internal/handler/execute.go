@@ -20,6 +20,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// executeResponse is the unified response shape for POST /execute.
+// results[] is a discriminated union of CaseResultIO and CaseResultPytest.
+type executeResponse struct {
+	Results []store.CaseResult    `json:"results"`
+	Summary executorapi.CaseSummary `json:"summary"`
+}
+
 // ExecutorClient is the interface for sending code to the executor service.
 type ExecutorClient interface {
 	Execute(ctx context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error)
@@ -47,25 +54,50 @@ func (h *ExecuteHandler) SetActivation(svc ActivationService) {
 // executeCaseDef is the frontend-facing representation of a test case in POST /execute.
 // Uses attached_files (matching store.IOTestCase) rather than files (executor wire format);
 // the handler translates between the two before calling the executor.
+// Kind discriminates between io and pytest cases; omitted/empty defaults to "io".
 type executeCaseDef struct {
 	Name           string             `json:"name"`
-	Input          string             `json:"input"`
-	MatchType      string             `json:"match_type"`
+	Kind           string             `json:"kind,omitempty"`           // "io" | "pytest"; defaults to "io"
+	Input          string             `json:"input,omitempty"`
+	MatchType      string             `json:"match_type,omitempty"`
 	ExpectedOutput string             `json:"expected_output,omitempty"`
 	RandomSeed     *int               `json:"random_seed,omitempty"`
 	AttachedFiles  []executorapi.File `json:"attached_files,omitempty"`
+	// Pytest-specific fields.
+	TestCode   string `json:"test_code,omitempty"`   // Content of the pytest test file.
+	TargetPath string `json:"target_path,omitempty"` // Relative path for the test file.
+}
+
+// effectiveKind returns the effective kind for dispatch. Empty or unset defaults to "io".
+func (c executeCaseDef) effectiveKind() string {
+	if c.Kind == "" {
+		return "io"
+	}
+	return c.Kind
 }
 
 // toExecutorCaseDef converts a frontend case def to the executor wire format.
 func (c executeCaseDef) toExecutorCaseDef() executorapi.CaseDef {
-	return executorapi.CaseDef{
-		Name:           c.Name,
-		Type:           "io",
-		Input:          c.Input,
-		MatchType:      c.MatchType,
-		ExpectedOutput: c.ExpectedOutput,
-		RandomSeed:     c.RandomSeed,
-		Files:          c.AttachedFiles,
+	kind := c.effectiveKind()
+	switch kind {
+	case "pytest":
+		return executorapi.CaseDef{
+			Name:       c.Name,
+			Kind:       "pytest",
+			TestCode:   c.TestCode,
+			TargetPath: c.TargetPath,
+		}
+	default: // "io"
+		return executorapi.CaseDef{
+			Name:           c.Name,
+			Kind:           "io",
+			Type:           "io",
+			Input:          c.Input,
+			MatchType:      c.MatchType,
+			ExpectedOutput: c.ExpectedOutput,
+			RandomSeed:     c.RandomSeed,
+			Files:          c.AttachedFiles,
+		}
 	}
 }
 
@@ -103,7 +135,7 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	var cases []executorapi.CaseDef
 	if len(req.Cases) == 0 {
 		// Synthesize a free-run case when none are given.
-		cases = []executorapi.CaseDef{{Name: "run", Type: "io", Input: ""}}
+		cases = []executorapi.CaseDef{{Name: "run", Kind: "io", Type: "io", Input: ""}}
 	} else {
 		cases = make([]executorapi.CaseDef, len(req.Cases))
 		for i, c := range req.Cases {
@@ -133,12 +165,60 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure Results is never serialized as JSON null.
-	if execResp.Results == nil {
-		execResp.Results = []executorapi.CaseResult{}
+	// Unify executor Results (io) + PytestResults (pytest) into a single discriminated union slice.
+	// Ordering: io results come first (in the order returned), then pytest results.
+	// This matches the order cases were submitted: io cases precede pytest cases when mixed.
+	unified := make([]store.CaseResult, 0, len(execResp.Results)+len(execResp.PytestResults))
+
+	for _, r := range execResp.Results {
+		unified = append(unified, ioResultToCaseResult(r))
+	}
+	for _, pr := range execResp.PytestResults {
+		unified = append(unified, pytestResultToCaseResult(pr))
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, execResp)
+	resp := executeResponse{
+		Results: unified,
+		Summary: execResp.Summary,
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, resp)
+}
+
+// ioResultToCaseResult maps an executor CaseResult (io) to a store.CaseResultIO.
+func ioResultToCaseResult(r executorapi.CaseResult) *store.CaseResultIO {
+	return store.NewCaseResultIO(
+		r.Name,
+		r.Status == "passed",
+		int(r.TimeMs),
+		r.Actual,
+		r.Stderr,
+		0, // exit code not in executorapi.CaseResult
+		r.Expected,
+		r.Status == "passed",
+		r.Input,
+		r.Status,
+	)
+}
+
+// pytestResultToCaseResult maps an executor PytestCaseResult to a store.CaseResultPytest.
+func pytestResultToCaseResult(pr executorapi.PytestCaseResult) *store.CaseResultPytest {
+	assertions := make([]store.PytestAssertion, len(pr.Assertions))
+	for i, a := range pr.Assertions {
+		assertions[i] = store.PytestAssertion{
+			Name:           a.Name,
+			Passed:         a.Passed,
+			FailureMessage: a.FailureMessage,
+			Traceback:      a.Traceback,
+		}
+	}
+	return store.NewCaseResultPytest(
+		pr.Name,
+		pr.Passed,
+		pr.DurationMs,
+		pr.Stderr,
+		assertions,
+	)
 }
 
 // isConnectionError reports whether err is a network-layer connection failure,
