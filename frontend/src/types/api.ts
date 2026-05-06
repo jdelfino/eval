@@ -331,10 +331,26 @@ export interface StudentWorkSummary {
 // Execution — Cases[] protocol
 // ---------------------------------------------------------------------------
 
-/** CaseResult — outcome of a single test case execution. */
-export interface CaseResult {
+/**
+ * PytestAssertion — outcome of a single pytest test function (or parametrize combination).
+ *
+ * Matches Go store.PytestAssertion.
+ */
+export interface PytestAssertion {
   name: string;
-  type: string;
+  passed: boolean;
+  failure_message?: string;
+  traceback?: string;
+}
+
+/**
+ * CaseResultIO — outcome of a single I/O test case execution (kind='io').
+ *
+ * Matches Go store.CaseResultIO. Carries stdout/stderr/exit_code/match fields.
+ */
+export interface CaseResultIO {
+  kind: 'io';
+  name: string;
   /** "run" | "passed" | "failed" | "error" */
   status: string;
   input?: string;
@@ -343,6 +359,28 @@ export interface CaseResult {
   stderr?: string;
   time_ms: number;
 }
+
+/**
+ * CaseResultPytest — outcome of a single pytest case execution (kind='pytest').
+ *
+ * Matches Go store.CaseResultPytest. Carries per-assertion results and optional stderr.
+ */
+export interface CaseResultPytest {
+  kind: 'pytest';
+  name: string;
+  passed: boolean;
+  duration_ms: number;
+  assertions: PytestAssertion[];
+  stderr?: string;
+}
+
+/**
+ * CaseResult — discriminated union keyed on `kind`.
+ *
+ * Narrow with `if (r.kind === 'io')` to access CaseResultIO fields,
+ * or `if (r.kind === 'pytest')` for CaseResultPytest fields.
+ */
+export type CaseResult = CaseResultIO | CaseResultPytest;
 
 /** CaseSummary — aggregate counts across all case results. */
 export interface CaseSummary {

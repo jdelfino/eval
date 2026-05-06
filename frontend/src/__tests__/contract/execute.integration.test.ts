@@ -36,16 +36,22 @@ describe('executeCode()', () => {
     expect(result.results.length).toBe(1);
     expect(typeof result.summary).toBe('object');
 
-    // results[0] must have the correct shape
+    // results[0] must have the correct shape — free-run synthesizes kind='io'.
     const r = result.results[0];
     expect(typeof r.name).toBe('string');
-    expect(typeof r.status).toBe('string');
-    expect(typeof r.actual).toBe('string');
-    expect(typeof r.time_ms).toBe('number');
+    expect(typeof r.kind).toBe('string');
+    expect(r.kind).toBe('io');
 
-    // Free-run case: status should be 'run'
-    expect(r.status).toBe('run');
-    expect(r.actual).toBe('hello\n');
+    // Narrow to io to access io-specific fields.
+    if (r.kind === 'io') {
+      expect(typeof r.status).toBe('string');
+      expect(typeof r.actual).toBe('string');
+      expect(typeof r.time_ms).toBe('number');
+
+      // Free-run case: status should be 'run'
+      expect(r.status).toBe('run');
+      expect(r.actual).toBe('hello\n');
+    }
 
     // Summary counts
     expect(result.summary.total).toBe(1);
@@ -73,7 +79,12 @@ describe('executeCode()', () => {
     );
 
     expect(result.results.length).toBe(1);
-    expect(result.results[0].actual).toBe('test input\n');
+    const r = result.results[0];
+    if (r.kind === 'io') {
+      expect(r.actual).toBe('test input\n');
+    } else {
+      throw new Error('expected io result');
+    }
   });
 
   it('returns status=passed when expected_output matches actual output', async () => {
@@ -96,8 +107,10 @@ describe('executeCode()', () => {
     });
 
     expect(result.results.length).toBe(1);
-    expect(result.results[0].status).toBe('passed');
-    expect(result.results[0].actual).toBe('hello\n');
+    const r = result.results[0];
+    if (r.kind !== 'io') throw new Error('expected io result');
+    expect(r.status).toBe('passed');
+    expect(r.actual).toBe('hello\n');
   });
 
   it('returns status=failed when expected_output does not match actual output', async () => {
@@ -120,16 +133,20 @@ describe('executeCode()', () => {
     });
 
     expect(result.results.length).toBe(1);
-    expect(result.results[0].status).toBe('failed');
-    expect(result.results[0].actual).toBe('hello\n');
+    const r = result.results[0];
+    if (r.kind !== 'io') throw new Error('expected io result');
+    expect(r.status).toBe('failed');
+    expect(r.actual).toBe('hello\n');
   });
 
-  it('validates every field in CaseResult (input, expected, actual, stderr, time_ms, type, name, status)', async () => {
+  it('validates every field in CaseResult (kind discriminator, name, status, io fields)', async () => {
     /**
-     * TC5: Verifies that CaseResult contains all fields defined in the TypeScript
-     * interface. Typia validator enforces exact shape — missing or unexpected fields
-     * both cause failures. Runs a case with expected_output to get a non-trivial
-     * result that exercises the input/expected/actual fields in the response.
+     * TC5 (updated for F2.3): Verifies that CaseResult is a discriminated union
+     * with a "kind" field on every result. Typia validator enforces exact shape —
+     * missing or unexpected fields both cause failures.
+     *
+     * With F2.3, CaseResult is CaseResultIO | CaseResultPytest keyed on "kind".
+     * CaseResultIO carries: kind='io', name, status, input?, expected?, actual?, stderr?, time_ms.
      */
     const result = await executeCode('print("hello")', 'python3', {
       cases: [
@@ -148,25 +165,29 @@ describe('executeCode()', () => {
     expect(result.results.length).toBe(1);
     const r = result.results[0];
 
-    // Verify every CaseResult field is present and has the correct type
-    expect(typeof r.name).toBe('string');
-    expect(typeof r.type).toBe('string');
-    expect(typeof r.status).toBe('string');
-    expect(typeof r.time_ms).toBe('number');
+    // Every result must have a kind discriminator.
+    expect(typeof r.kind).toBe('string');
+    expect(r.kind).toBe('io');
 
-    // input/expected/actual/stderr are optional in the type but typically present for IO cases
-    // The executor returns them for passed/failed cases
-    if (r.input !== undefined) {
-      expect(typeof r.input).toBe('string');
-    }
-    if (r.expected !== undefined) {
-      expect(typeof r.expected).toBe('string');
-    }
-    if (r.actual !== undefined) {
-      expect(typeof r.actual).toBe('string');
-    }
-    if (r.stderr !== undefined) {
-      expect(typeof r.stderr).toBe('string');
+    // Narrow to CaseResultIO to access io-specific fields.
+    if (r.kind === 'io') {
+      expect(typeof r.name).toBe('string');
+      expect(typeof r.status).toBe('string');
+      expect(typeof r.time_ms).toBe('number');
+
+      // input/expected/actual/stderr are optional but present for IO cases with expected_output
+      if (r.input !== undefined) {
+        expect(typeof r.input).toBe('string');
+      }
+      if (r.expected !== undefined) {
+        expect(typeof r.expected).toBe('string');
+      }
+      if (r.actual !== undefined) {
+        expect(typeof r.actual).toBe('string');
+      }
+      if (r.stderr !== undefined) {
+        expect(typeof r.stderr).toBe('string');
+      }
     }
   });
 
@@ -192,9 +213,38 @@ describe('executeCode()', () => {
     expect(result.summary.passed).toBe(2);
     expect(result.summary.failed).toBe(1);
 
-    // Verify individual statuses.
-    const statuses = result.results.map((r) => r.status);
+    // Verify individual statuses — all are io cases so narrow with kind discriminator.
+    const statuses = result.results
+      .filter((r): r is import('@/types/api').CaseResultIO => r.kind === 'io')
+      .map((r) => r.status);
     expect(statuses.filter((s) => s === 'passed').length).toBe(2);
     expect(statuses.filter((s) => s === 'failed').length).toBe(1);
+  });
+
+  it('every result in the response has a kind discriminator field', async () => {
+    /**
+     * TC7 (F2.3 contract): Verifies that POST /execute response wire format includes
+     * a "kind" discriminator on every result entry.
+     *
+     * Contract: all results[] entries must carry the kind discriminator so consumers
+     * can narrow the type. Without this, consumers cannot determine the result shape.
+     * Catches: handler emitting un-tagged results.
+     */
+    const result = await executeCode('print("hello")', 'python3', {
+      cases: [
+        { name: 'case-1', input: '', expected_output: 'hello\n', match_type: 'exact' },
+      ],
+    });
+
+    // Validate entire TestResponse shape with typia.
+    validateTestResponseShape(result);
+
+    expect(result.results.length).toBe(1);
+
+    // Every result must have kind='io' (io case sent).
+    for (const r of result.results) {
+      expect(typeof r.kind).toBe('string');
+      expect(r.kind).toBe('io');
+    }
   });
 });

@@ -64,7 +64,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
     const execution_result: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'run',
         input: '',
         actual: 'Hello from student code!',
@@ -96,7 +96,7 @@ describe('Instructor Session - Student Code Output (coding-tool-ahs)', () => {
     const execution_result: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'error',
         input: '',
         stderr: 'NameError: name "undefined_var" is not defined',

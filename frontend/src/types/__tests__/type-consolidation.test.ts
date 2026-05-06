@@ -13,9 +13,10 @@ import type { IOTestCase } from '../api';
 
 describe('TestResponse consolidation (cases[] protocol)', () => {
   it('TestResponse from api.ts has results[] and summary', () => {
+    // CaseResult is now a discriminated union: CaseResultIO | CaseResultPytest keyed on 'kind'.
     const caseResult: CaseResult = {
+      kind: 'io',
       name: 'run',
-      type: 'io',
       status: 'run',
       input: '',
       actual: 'hello\n',
@@ -33,7 +34,11 @@ describe('TestResponse consolidation (cases[] protocol)', () => {
       results: [caseResult],
       summary,
     };
-    expect(result.results[0].actual).toBe('hello\n');
+    // Narrow via kind discriminator to access io-specific fields.
+    const r = result.results[0];
+    if (r.kind === 'io') {
+      expect(r.actual).toBe('hello\n');
+    }
     expect(result.summary.total).toBe(1);
   });
 });

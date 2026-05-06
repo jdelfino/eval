@@ -214,7 +214,7 @@ describe('CodeEditor - API Execution', () => {
           onChange={jest.fn()}
           onRun={jest.fn()}
           execution_result={{
-            results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello, World!\n', time_ms: 125 }],
+            results: [{ name: 'run', kind: 'io' as const, status: 'run', input: '', actual: 'Hello, World!\n', time_ms: 125 }],
             summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 125 },
           }}
         />
@@ -233,7 +233,7 @@ describe('CodeEditor - API Execution', () => {
           onChange={jest.fn()}
           onRun={jest.fn()}
           execution_result={{
-            results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'NameError: name "x" is not defined', time_ms: 100 }],
+            results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'NameError: name "x" is not defined', time_ms: 100 }],
             summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 100 },
           }}
         />
@@ -638,7 +638,7 @@ describe('CodeEditor - Debugger Output Display', () => {
         <CodeEditor
           code="print('Hello')"
           onChange={jest.fn()}
-          execution_result={{ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello\n', time_ms: 100 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 100 } }}
+          execution_result={{ results: [{ name: 'run', kind: 'io' as const, status: 'run', input: '', actual: 'Hello\n', time_ms: 100 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 100 } }}
         />
       );
       expect(screen.getByText('✓ Success')).toBeInTheDocument();
@@ -1242,7 +1242,7 @@ describe('CodeEditor - Empty States', () => {
           code="print('Hello, World!')"
           onChange={jest.fn()}
           problem={{ title: 'Test Problem', description: null, starter_code: null, language: 'python' }}
-          execution_result={{ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'Hello, World!', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }}
+          execution_result={{ results: [{ name: 'run', kind: 'io' as const, status: 'run', input: '', actual: 'Hello, World!', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }}
         />
       );
 
@@ -1725,7 +1725,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
         code={'x = 1\ny = x + undefined_var\nprint(y)'}
         onChange={jest.fn()}
         execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'Traceback (most recent call last):\n  File "<student code>", line 2, in <module>\nNameError: name \'undefined_var\' is not defined', time_ms: 50 }],
+          results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'Traceback (most recent call last):\n  File "<student code>", line 2, in <module>\nNameError: name \'undefined_var\' is not defined', time_ms: 50 }],
           summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
         }}
       />
@@ -1762,7 +1762,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
         code={'def foo():\n    raise ValueError("bad")\n\nfoo()'}
         onChange={jest.fn()}
         execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: multiFrameError, time_ms: 50 }],
+          results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: multiFrameError, time_ms: 50 }],
           summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
         }}
       />
@@ -1779,7 +1779,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
 
   it('clears error decorations when execution result becomes null', () => {
     const errorResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 3\nNameError: name "x" is not defined', time_ms: 50 }],
+      results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'File "<student code>", line 3\nNameError: name "x" is not defined', time_ms: 50 }],
       summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
     };
     const { rerender } = render(
@@ -1812,7 +1812,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
 
   it('clears error decorations when execution result becomes successful', () => {
     const errorResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 2\nNameError: name "x" is not defined', time_ms: 50 }],
+      results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'File "<student code>", line 2\nNameError: name "x" is not defined', time_ms: 50 }],
       summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
     };
     const { rerender } = render(
@@ -1831,7 +1831,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
         code={'print("hello")'}
         onChange={jest.fn()}
         execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'hello\n', time_ms: 50 }],
+          results: [{ name: 'run', kind: 'io' as const, status: 'run', input: '', actual: 'hello\n', time_ms: 50 }],
           summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 50 },
         }}
       />
@@ -1849,7 +1849,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
         code={'print("hello")'}
         onChange={jest.fn()}
         execution_result={{
-          results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'Killed: execution timeout', time_ms: 10000 }],
+          results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'Killed: execution timeout', time_ms: 10000 }],
           summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 10000 },
         }}
       />
@@ -1866,7 +1866,7 @@ describe('CodeEditor - Error Line Highlighting', () => {
   it('clears error decorations when debugger activates', () => {
     const activeDebugger = makeActiveDebugger();
     const errResult = {
-      results: [{ name: 'run', type: 'io', status: 'error', input: '', stderr: 'File "<student code>", line 1\nNameError: ...', time_ms: 50 }],
+      results: [{ name: 'run', kind: 'io' as const, status: 'error', input: '', stderr: 'File "<student code>", line 1\nNameError: ...', time_ms: 50 }],
       summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 50 },
     };
     const { rerender } = render(
