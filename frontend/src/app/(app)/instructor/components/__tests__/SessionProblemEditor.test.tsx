@@ -112,13 +112,13 @@ jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
         <input
           data-testid="stdin-input"
           placeholder="stdin"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
         />
         <input
           data-testid="seed-input"
           type="number"
           placeholder="seed"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
+          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
         />
         {editableProblem && (
           <div data-testid="editable-problem-sidebar">
@@ -184,7 +184,7 @@ describe('SessionProblemEditor', () => {
 
   it('renders with initial test cases', () => {
     const initialTestCases = [
-      { name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'test.txt', content: 'content' }] },
+      { kind: 'io' as const, name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'test.txt', content: 'content' }] },
     ];
 
     render(
@@ -389,7 +389,7 @@ describe('SessionProblemEditor', () => {
       starter_code: 'test code',
     });
     const initialTestCases = [
-      { name: 'Default', input: 'input', match_type: 'exact' as const, order: 0, random_seed: 123, attached_files: [{ name: 'file.txt', content: 'content' }] },
+      { kind: 'io' as const, name: 'Default', input: 'input', match_type: 'exact' as const, order: 0, random_seed: 123, attached_files: [{ name: 'file.txt', content: 'content' }] },
     ];
 
     render(
@@ -755,7 +755,7 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialTestCases={[{ name: 'Default', input: 'hello', match_type: 'exact', order: 0 }]}
+          initialTestCases={[{ kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact', order: 0 }]}
         />
       );
       expect(screen.getByTestId('code-editor')).toBeInTheDocument();

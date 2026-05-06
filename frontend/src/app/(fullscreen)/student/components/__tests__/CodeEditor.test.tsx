@@ -1420,7 +1420,7 @@ describe('CodeEditor - execution settings internal state', () => {
   it('passes random_seed from defaultTestCases to onRun', () => {
     const mockOnRun = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42 }]} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42 }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     expect(mockOnRun).toHaveBeenCalledWith(
@@ -1432,7 +1432,7 @@ describe('CodeEditor - execution settings internal state', () => {
     const mockOnRun = jest.fn();
     const files = [{ name: 'data.txt', content: 'hello' }];
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, attached_files: files }]} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0, attached_files: files }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     // CodeEditor builds IOTestCase[] from current state: if no input/seed, files still present → testCases has 1 entry
@@ -1444,10 +1444,10 @@ describe('CodeEditor - execution settings internal state', () => {
   it('uses updated random_seed when defaultTestCases changes', () => {
     const mockOnRun = jest.fn();
     const { rerender } = render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 1 }]} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 1 }]} />
     );
     rerender(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 99 }]} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} onRun={mockOnRun} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 99 }]} />
     );
     fireEvent.click(screen.getByText('▶ Run Code'));
     expect(mockOnRun).toHaveBeenCalledWith(
@@ -1475,7 +1475,7 @@ describe('CodeEditor - onTestCasesChange callback', () => {
   it('calls onTestCasesChange with IOTestCase[] when stdin changes', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42, attached_files: [{ name: 'a.txt', content: 'x' }] }]} onTestCasesChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0, random_seed: 42, attached_files: [{ name: 'a.txt', content: 'x' }] }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-stdin')[0]);
     expect(mockOnChange).toHaveBeenCalledWith(
@@ -1488,7 +1488,7 @@ describe('CodeEditor - onTestCasesChange callback', () => {
   it('calls onTestCasesChange with IOTestCase[] when seed changes', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: 'initial', match_type: 'exact', order: 0, attached_files: [{ name: 'b.txt', content: 'y' }] }]} onTestCasesChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: 'initial', match_type: 'exact', order: 0, attached_files: [{ name: 'b.txt', content: 'y' }] }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-seed')[0]);
     expect(mockOnChange).toHaveBeenCalledWith(
@@ -1501,7 +1501,7 @@ describe('CodeEditor - onTestCasesChange callback', () => {
   it('calls onTestCasesChange with IOTestCase[] when files change', () => {
     const mockOnChange = jest.fn();
     render(
-      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ name: 'Default', input: 'hello', match_type: 'exact', order: 0, random_seed: 7 }]} onTestCasesChange={mockOnChange} />
+      <CodeEditor code="print('hello')" onChange={jest.fn()} defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact', order: 0, random_seed: 7 }]} onTestCasesChange={mockOnChange} />
     );
     fireEvent.click(screen.getAllByTestId('mock-change-files')[0]);
     expect(mockOnChange).toHaveBeenCalledWith(
@@ -1633,7 +1633,7 @@ describe('CodeEditor - IOTestCase[] props (PLAT-st42.4)', () => {
      * as the initial stdin value, not defaultExecutionSettings.stdin.
      * Matters: after ExecutionSettings is deleted, callers pass IOTestCase[] directly.
      */
-    const testCases = [{ name: 'Default', input: 'hello from case', match_type: 'exact' as const, order: 0 }];
+    const testCases = [{ kind: 'io' as const, name: 'Default', input: 'hello from case', match_type: 'exact' as const, order: 0 }];
     render(
       <CodeEditor
         code="print('hello')"
@@ -1651,7 +1651,7 @@ describe('CodeEditor - IOTestCase[] props (PLAT-st42.4)', () => {
      * Matters: callers (student/page.tsx, public-view) need IOTestCase[] to pass to API clients.
      */
     const mockOnRun = jest.fn();
-    const testCases = [{ name: 'Default', input: 'stdin value', match_type: 'exact' as const, order: 0, random_seed: 42 }];
+    const testCases = [{ kind: 'io' as const, name: 'Default', input: 'stdin value', match_type: 'exact' as const, order: 0, random_seed: 42 }];
     render(
       <CodeEditor
         code="print('hello')"

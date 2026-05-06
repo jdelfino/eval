@@ -21,11 +21,13 @@ describe('Realtime event types', () => {
       const data: StudentCodeUpdatedData = {
         user_id: 'user-1',
         code: 'print("test")',
-        test_cases: [{ name: 'default', input: 'hello', match_type: 'exact', order: 0 }],
+        test_cases: [{ kind: 'io' as const, name: 'default', input: 'hello', match_type: 'exact', order: 0 }],
       };
 
       expect(data.test_cases).toHaveLength(1);
-      expect((data.test_cases as IOTestCase[])[0].input).toBe('hello');
+      expect((data.test_cases as IOTestCase[])[0].kind).toBe('io');
+      const ioCase = (data.test_cases as IOTestCase[])[0];
+      expect(ioCase.kind === 'io' ? ioCase.input : undefined).toBe('hello');
       // @ts-expect-error execution_settings should not exist
       expect(data.execution_settings).toBeUndefined();
     });
@@ -33,6 +35,7 @@ describe('Realtime event types', () => {
     it('should accept IOTestCase[] type for test_cases field', () => {
       const testCases: IOTestCase[] = [
         {
+          kind: 'io',
           name: 'case 1',
           input: 'test input',
           match_type: 'exact',
@@ -76,11 +79,12 @@ describe('Realtime event types', () => {
       const data: FeaturedStudentChangedData = {
         user_id: 'user-1',
         code: 'print("featured")',
-        test_cases: [{ name: 'default', input: 'input value', match_type: 'exact', order: 0 }],
+        test_cases: [{ kind: 'io' as const, name: 'default', input: 'input value', match_type: 'exact', order: 0 }],
       };
 
       expect(data.test_cases).toHaveLength(1);
-      expect((data.test_cases as IOTestCase[])[0].input).toBe('input value');
+      const featuredCase = (data.test_cases as IOTestCase[])[0];
+      expect(featuredCase.kind === 'io' ? featuredCase.input : undefined).toBe('input value');
       // @ts-expect-error execution_settings should not exist
       expect(data.execution_settings).toBeUndefined();
     });
@@ -88,6 +92,7 @@ describe('Realtime event types', () => {
     it('should accept IOTestCase[] type for test_cases field', () => {
       const testCases: IOTestCase[] = [
         {
+          kind: 'io',
           name: 'featured case',
           input: 'featured input',
           match_type: 'exact',

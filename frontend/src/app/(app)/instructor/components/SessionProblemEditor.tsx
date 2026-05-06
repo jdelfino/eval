@@ -39,11 +39,12 @@ export default function SessionProblemEditor({
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = initialProblem?.language ?? 'python';
 
-  // Execution settings (derived from initialTestCases[0])
-  const [stdin, setStdin] = useState(initialTestCases[0]?.input || '');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(initialTestCases[0]?.random_seed);
+  // Execution settings (derived from initialTestCases[0], io kind only)
+  const firstIoCase = initialTestCases[0]?.kind === 'io' ? initialTestCases[0] : undefined;
+  const [stdin, setStdin] = useState(firstIoCase?.input || '');
+  const [random_seed, setRandomSeed] = useState<number | undefined>(firstIoCase?.random_seed);
   const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
-    initialTestCases[0]?.attached_files || []
+    firstIoCase?.attached_files || []
   );
 
   // Execution state for code editor
@@ -62,9 +63,10 @@ export default function SessionProblemEditor({
   }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
 
   const firstTestCase = initialTestCases[0];
-  const firstTestCaseInput = firstTestCase?.input;
-  const firstTestCaseRandomSeed = firstTestCase?.random_seed;
-  const firstTestCaseAttachedFiles = firstTestCase?.attached_files;
+  const firstIoTestCase = firstTestCase?.kind === 'io' ? firstTestCase : undefined;
+  const firstTestCaseInput = firstIoTestCase?.input;
+  const firstTestCaseRandomSeed = firstIoTestCase?.random_seed;
+  const firstTestCaseAttachedFiles = firstIoTestCase?.attached_files;
 
   useEffect(() => {
     setStdin(firstTestCaseInput || '');
@@ -269,9 +271,10 @@ export default function SessionProblemEditor({
           defaultTestCases={currentTestCases}
           onTestCasesChange={(testCases) => {
             const first = testCases[0];
-            setStdin(first?.input || '');
-            setRandomSeed(first?.random_seed);
-            setAttachedFiles(first?.attached_files || []);
+            const ioFirst = first?.kind === 'io' ? first : undefined;
+            setStdin(ioFirst?.input || '');
+            setRandomSeed(ioFirst?.random_seed);
+            setAttachedFiles(ioFirst?.attached_files || []);
           }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}

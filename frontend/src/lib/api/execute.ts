@@ -6,7 +6,7 @@
  */
 
 import { apiFetch, apiPost } from '@/lib/api-client';
-import type { TestResponse, IOTestCase } from '@/types/api';
+import type { TestResponse, IOTestCase, IOTestCaseIO } from '@/types/api';
 
 /**
  * A single test case definition sent to the execute endpoint.
@@ -56,7 +56,10 @@ export interface ExecuteOptions {
  *   and public-view/page.
  */
 export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
-  return testCases.map((tc) => {
+  return testCases.flatMap((tc) => {
+    if (tc.kind !== 'io') {
+      return [];
+    }
     const def: CaseDef = {
       name: 'run',
       input: tc.input ?? '',
@@ -68,7 +71,7 @@ export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
     if (tc.attached_files !== undefined) {
       def.attached_files = tc.attached_files;
     }
-    return def;
+    return [def];
   });
 }
 
@@ -97,7 +100,8 @@ export function buildIOTestCases(opts: {
     return [];
   }
 
-  const tc: IOTestCase = {
+  const tc: IOTestCaseIO = {
+    kind: 'io',
     name: 'Default',
     input: stdin,
     match_type: 'exact',

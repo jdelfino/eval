@@ -89,7 +89,7 @@ describe('ioTestCasesToCaseDefs', () => {
 
   it('maps input and name from IOTestCase', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: 'hello', match_type: 'exact', order: 0 },
     ]);
     expect(result).toEqual([
       { name: 'run', input: 'hello', match_type: 'exact' },
@@ -102,21 +102,21 @@ describe('ioTestCasesToCaseDefs', () => {
 
   it('uses empty string for input when IOTestCase input is empty', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Default', input: '', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0 },
     ]);
     expect(result[0].input).toBe('');
   });
 
   it('includes random_seed when present', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'x', match_type: 'exact', order: 0, random_seed: 42 },
+      { kind: 'io' as const, name: 'Test', input: 'x', match_type: 'exact', order: 0, random_seed: 42 },
     ]);
     expect(result[0].random_seed).toBe(42);
   });
 
   it('omits random_seed when absent', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'x', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: 'x', match_type: 'exact', order: 0 },
     ]);
     expect(result[0]).not.toHaveProperty('random_seed');
   });
@@ -124,22 +124,22 @@ describe('ioTestCasesToCaseDefs', () => {
   it('includes attached_files when present', () => {
     const files = [{ name: 'data.txt', content: 'hello' }];
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: '', match_type: 'exact', order: 0, attached_files: files },
+      { kind: 'io' as const, name: 'Test', input: '', match_type: 'exact', order: 0, attached_files: files },
     ]);
     expect(result[0].attached_files).toEqual(files);
   });
 
   it('omits attached_files when absent', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: '', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: '', match_type: 'exact', order: 0 },
     ]);
     expect(result[0]).not.toHaveProperty('attached_files');
   });
 
   it('only converts first test case (run mode uses single case)', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'A', input: 'first', match_type: 'exact', order: 0 },
-      { name: 'B', input: 'second', match_type: 'exact', order: 1 },
+      { kind: 'io' as const, name: 'A', input: 'first', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'B', input: 'second', match_type: 'exact', order: 1 },
     ]);
     // All cases are converted — caller picks [0] for run mode
     expect(result).toHaveLength(2);
@@ -169,14 +169,16 @@ describe('buildIOTestCases', () => {
   it('returns a single IOTestCase when random_seed is set', () => {
     const result = buildIOTestCases({ stdin: '', random_seed: 42, attached_files: [] });
     expect(result).toHaveLength(1);
-    expect(result[0].random_seed).toBe(42);
+    const tc = result[0];
+    expect(tc.kind === 'io' ? tc.random_seed : undefined).toBe(42);
   });
 
   it('returns a single IOTestCase when attached_files is non-empty', () => {
     const files = [{ name: 'f.txt', content: 'data' }];
     const result = buildIOTestCases({ stdin: '', random_seed: undefined, attached_files: files });
     expect(result).toHaveLength(1);
-    expect(result[0].attached_files).toEqual(files);
+    const tc = result[0];
+    expect(tc.kind === 'io' ? tc.attached_files : undefined).toEqual(files);
   });
 
   it('omits random_seed from the IOTestCase when not set', () => {

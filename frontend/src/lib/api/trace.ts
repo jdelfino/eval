@@ -4,7 +4,7 @@
 
 import { apiPost } from '@/lib/api-client';
 import type { ExecutionTrace } from '@/types/session';
-import type { IOTestCase } from '@/types/api';
+import type { IOTestCase, IOTestCaseIO } from '@/types/api';
 
 /**
  * Request a step-by-step execution trace for code.
@@ -21,15 +21,18 @@ export async function traceCode(
   maxSteps?: number,
 ): Promise<ExecutionTrace> {
   const body: Record<string, unknown> = { code, language };
-  if (testCase.input) {
-    body.stdin = testCase.input;
-  }
-  if (testCase.random_seed !== undefined) {
-    body.random_seed = testCase.random_seed;
-  }
-  if (testCase.attached_files !== undefined) {
-    // Backend expects "files" not "attached_files"
-    body.files = testCase.attached_files;
+  if (testCase.kind === 'io') {
+    const ioCase = testCase as IOTestCaseIO;
+    if (ioCase.input) {
+      body.stdin = ioCase.input;
+    }
+    if (ioCase.random_seed !== undefined) {
+      body.random_seed = ioCase.random_seed;
+    }
+    if (ioCase.attached_files !== undefined) {
+      // Backend expects "files" not "attached_files"
+      body.files = ioCase.attached_files;
+    }
   }
   if (maxSteps !== undefined) {
     body.max_steps = maxSteps;

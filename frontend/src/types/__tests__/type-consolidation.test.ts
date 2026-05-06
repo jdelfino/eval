@@ -45,25 +45,27 @@ describe('TestResponse consolidation (cases[] protocol)', () => {
 
 describe('Instructor types consolidation (PLAT-uum.49)', () => {
   it('Student uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
-    const testCases: IOTestCase[] = [{ name: 'Default', input: 'test', match_type: 'exact', order: 0, random_seed: 42 }];
+    const testCases: IOTestCase[] = [{ kind: 'io', name: 'Default', input: 'test', match_type: 'exact', order: 0, random_seed: 42 }];
     const student: InstructorStudent = {
       id: 'u-1',
       name: 'Alice',
       has_code: true,
       test_cases: testCases,
     };
-    expect(student.test_cases?.[0]?.input).toBe('test');
+    const tc = student.test_cases?.[0];
+    expect(tc?.kind === 'io' ? tc.input : undefined).toBe('test');
   });
 
   it('RealtimeStudent uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
-    const testCases: IOTestCase[] = [{ name: 'Default', input: 'input', match_type: 'exact', order: 0 }];
+    const testCases: IOTestCase[] = [{ kind: 'io', name: 'Default', input: 'input', match_type: 'exact', order: 0 }];
     const student: RealtimeStudent = {
       id: 'u-2',
       name: 'Bob',
       code: 'print(1)',
       test_cases: testCases,
     };
-    expect(student.test_cases?.[0]?.input).toBe('input');
+    const tc = student.test_cases?.[0];
+    expect(tc?.kind === 'io' ? tc.input : undefined).toBe('input');
   });
 
   it('ClassInfo has the expected shape', () => {

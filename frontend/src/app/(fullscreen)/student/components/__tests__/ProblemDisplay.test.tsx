@@ -196,6 +196,7 @@ factorial(5)  # Returns 120
     it('toggles test cases visibility', () => {
       const test_cases: IOTestCase[] = [
         {
+          kind: 'io' as const,
           name: 'Test 1',
           input: '1 2',
           expected_output: '3',
@@ -203,6 +204,7 @@ factorial(5)  # Returns 120
           order: 1,
         },
         {
+          kind: 'io' as const,
           name: 'Test 2',
           input: '0 0',
           expected_output: '0',
@@ -232,6 +234,7 @@ factorial(5)  # Returns 120
       const problem = createProblem({
         test_cases: [
           {
+            kind: 'io' as const,
             name: 'Default',
             input: '',
             match_type: 'exact',
@@ -248,6 +251,7 @@ factorial(5)  # Returns 120
       const problem = createProblem({
         test_cases: [
           {
+            kind: 'io' as const,
             name: 'Default',
             input: '',
             match_type: 'exact',

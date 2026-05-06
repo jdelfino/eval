@@ -135,7 +135,7 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          defaultTestCases={[{ name: 'Default', input: 'my input', match_type: 'exact' as const, order: 0, random_seed: 42 }]}
+          defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: 'my input', match_type: 'exact' as const, order: 0, random_seed: 42 }]}
           problem={pythonProblem}
         />
       );
@@ -161,7 +161,7 @@ describe('CodeEditor - Language Awareness', () => {
           code="print('hello')"
           onChange={jest.fn()}
           onRun={mockOnRun}
-          defaultTestCases={[{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, attached_files: files }]}
+          defaultTestCases={[{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact' as const, order: 0, attached_files: files }]}
         />
       );
 

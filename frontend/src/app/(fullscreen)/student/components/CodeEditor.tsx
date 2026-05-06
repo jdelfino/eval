@@ -9,7 +9,7 @@ import { useResponsiveLayout, useSidebarSection, useMobileViewport } from '@/hoo
 import type { Problem } from '@/types/problem';
 import type * as Monaco from 'monaco-editor';
 import { Undo2, Redo2, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { TestResponse, SessionPublicProblem, IOTestCase } from '@/types/api';
+import type { TestResponse, SessionPublicProblem, IOTestCase, IOTestCaseIO } from '@/types/api';
 import { parseErrorLineNumber } from '@/lib/parse-error-line';
 
 interface CodeEditorProps {
@@ -68,9 +68,10 @@ export default function CodeEditor({
   const outputTextXs = fontSize ? '' : (largeOutput ? 'text-sm' : 'text-xs');
   const editorRef = useRef<any>(null);
   const firstCase = defaultTestCases?.[0];
-  const [stdin, setStdin] = useState(firstCase?.input || '');
-  const [localRandomSeed, setLocalRandomSeed] = useState<number | undefined>(firstCase?.random_seed);
-  const [localAttachedFiles, setLocalAttachedFiles] = useState<Array<{ name: string; content: string }> | undefined>(firstCase?.attached_files);
+  const firstIoCase = firstCase?.kind === 'io' ? (firstCase as IOTestCaseIO) : undefined;
+  const [stdin, setStdin] = useState(firstIoCase?.input || '');
+  const [localRandomSeed, setLocalRandomSeed] = useState<number | undefined>(firstIoCase?.random_seed);
+  const [localAttachedFiles, setLocalAttachedFiles] = useState<Array<{ name: string; content: string }> | undefined>(firstIoCase?.attached_files);
   // Ref tracks latest values to avoid stale closures in change handlers
   const latestValuesRef = useRef({ stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles });
   latestValuesRef.current = { stdin: stdin || undefined, random_seed: localRandomSeed, attached_files: localAttachedFiles };
@@ -234,7 +235,7 @@ export default function CodeEditor({
     const input = vals.stdin ?? '';
     const hasContent = input.trim() !== '' || vals.random_seed !== undefined || (vals.attached_files?.length ?? 0) > 0;
     if (!hasContent) return [];
-    const tc: IOTestCase = { name: 'Default', input, match_type: 'exact', order: 0 };
+    const tc: IOTestCaseIO = { kind: 'io', name: 'Default', input, match_type: 'exact', order: 0 };
     if (vals.random_seed !== undefined) tc.random_seed = vals.random_seed;
     if (vals.attached_files?.length) tc.attached_files = vals.attached_files;
     return [tc];
@@ -313,21 +314,26 @@ export default function CodeEditor({
   // Sync local state when defaultTestCases changes
   useEffect(() => {
     const first = defaultTestCases?.[0];
-    if (first?.input !== undefined) {
-      setStdin(first.input);
+    const ioFirst = first?.kind === 'io' ? (first as IOTestCaseIO) : undefined;
+    if (ioFirst?.input !== undefined) {
+      setStdin(ioFirst.input);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultTestCases?.[0]?.input]);
+  }, [defaultTestCases?.[0]?.kind === 'io' ? (defaultTestCases?.[0] as IOTestCaseIO | undefined)?.input : undefined]);
 
   useEffect(() => {
-    setLocalRandomSeed(defaultTestCases?.[0]?.random_seed);
+    const first = defaultTestCases?.[0];
+    const ioFirst = first?.kind === 'io' ? (first as IOTestCaseIO) : undefined;
+    setLocalRandomSeed(ioFirst?.random_seed);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultTestCases?.[0]?.random_seed]);
+  }, [defaultTestCases?.[0]?.kind === 'io' ? (defaultTestCases?.[0] as IOTestCaseIO | undefined)?.random_seed : undefined]);
 
   useEffect(() => {
-    setLocalAttachedFiles(defaultTestCases?.[0]?.attached_files);
+    const first = defaultTestCases?.[0];
+    const ioFirst = first?.kind === 'io' ? (first as IOTestCaseIO) : undefined;
+    setLocalAttachedFiles(ioFirst?.attached_files);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultTestCases?.[0]?.attached_files]);
+  }, [defaultTestCases?.[0]?.kind === 'io' ? (defaultTestCases?.[0] as IOTestCaseIO | undefined)?.attached_files : undefined]);
 
   // Auto-open debugger sidebar when debugging starts (desktop only)
   useEffect(() => {
@@ -687,7 +693,7 @@ export default function CodeEditor({
               onRandomSeedChange={handleRandomSeedChange}
               attached_files={localAttachedFiles}
               onAttachedFilesChange={handleAttachedFilesChange}
-              exampleInput={defaultTestCases?.[0]?.input}
+              exampleInput={defaultTestCases?.[0]?.kind === 'io' ? (defaultTestCases[0] as IOTestCaseIO).input : undefined}
               inSidebar={true}
               darkTheme={true}
             />
@@ -709,7 +715,7 @@ export default function CodeEditor({
               onJumpToLast={debuggerHook.jumpToLast}
               onExit={debuggerHook.reset}
               truncated={debuggerHook.trace?.truncated}
-              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
+              onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { kind: 'io' as const, name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
               hasTrace={debuggerHook.hasTrace}
               isLoading={debuggerHook.isLoading}
               darkTheme={true}
@@ -924,7 +930,7 @@ export default function CodeEditor({
                     onRandomSeedChange={handleRandomSeedChange}
                     attached_files={localAttachedFiles}
                     onAttachedFilesChange={handleAttachedFilesChange}
-                    exampleInput={defaultTestCases?.[0]?.input}
+                    exampleInput={defaultTestCases?.[0]?.kind === 'io' ? (defaultTestCases[0] as IOTestCaseIO).input : undefined}
                     inSidebar={true}
                   />
                 </div>
@@ -969,7 +975,7 @@ export default function CodeEditor({
                     onJumpToLast={debuggerHook.jumpToLast}
                     onExit={debuggerHook.reset}
                     truncated={debuggerHook.trace?.truncated}
-                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
+                    onRequestTrace={() => debuggerHook.requestTrace(code, (problem && 'language' in problem) ? problem.language : '', { kind: 'io' as const, name: 'default', input: stdin || '', match_type: 'exact', order: 0, ...(localRandomSeed !== undefined && { random_seed: localRandomSeed }), ...(localAttachedFiles?.length && { attached_files: localAttachedFiles }) })}
                     hasTrace={debuggerHook.hasTrace}
                     isLoading={debuggerHook.isLoading}
                     darkTheme={true}

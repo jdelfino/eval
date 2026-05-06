@@ -98,7 +98,8 @@ describe('Problem type hierarchy', () => {
     expect(Array.isArray(client.test_cases)).toBe(true);
     expect(client.test_cases).toHaveLength(1);
     expect(client.test_cases[0].name).toBe('basic');
-    expect(client.test_cases[0].input).toBe('1 2');
+    const tc = client.test_cases[0];
+    expect(tc.kind === 'io' ? tc.input : undefined).toBe('1 2');
   });
 
   it('mapApiProblem defaults null test_cases to empty array (PLAT-st42.1)', () => {
