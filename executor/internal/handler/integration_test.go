@@ -76,13 +76,16 @@ func executeRequest(t *testing.T, baseURL string, req executorapi.ExecuteRequest
 	return result
 }
 
-// firstResult returns the first CaseResult from a response, or fails the test.
+// firstResult returns the first io CaseResult from the unified Results slice, or fails the test.
 func firstResult(t *testing.T, resp executorapi.ExecuteResponse) executorapi.CaseResult {
 	t.Helper()
-	if len(resp.Results) == 0 {
-		t.Fatal("expected at least one result in response")
+	for _, u := range resp.Results {
+		if u.Kind == "io" && u.IO != nil {
+			return *u.IO
+		}
 	}
-	return resp.Results[0]
+	t.Fatal("expected at least one io result in response")
+	return executorapi.CaseResult{}
 }
 
 // singleCase builds an ExecuteRequest with a single I/O case.
@@ -706,13 +709,16 @@ func pytestCase(studentCode, testCode, name, targetPath string, timeoutMs *int) 
 	return req
 }
 
-// firstPytestResult returns the first PytestCaseResult or fails the test.
+// firstPytestResult returns the first pytest result from the unified Results slice, or fails the test.
 func firstPytestResult(t *testing.T, resp executorapi.ExecuteResponse) executorapi.PytestCaseResult {
 	t.Helper()
-	if len(resp.PytestResults) == 0 {
-		t.Fatal("expected at least one pytest result in response")
+	for _, u := range resp.Results {
+		if u.Kind == "pytest" && u.Pytest != nil {
+			return *u.Pytest
+		}
 	}
-	return resp.PytestResults[0]
+	t.Fatal("expected at least one pytest result in response")
+	return executorapi.PytestCaseResult{}
 }
 
 // TestIntegration_Pytest_PassingTest verifies that a passing pytest case returns

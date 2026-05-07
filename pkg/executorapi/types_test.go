@@ -60,10 +60,9 @@ func TestExecuteRequest_OmitsEmptyFields(t *testing.T) {
 }
 
 func TestExecuteResponse_JSON(t *testing.T) {
+	r := CaseResult{Name: "run", Type: "io", Status: "passed", TimeMs: 42}
 	resp := ExecuteResponse{
-		Results: []CaseResult{
-			{Name: "run", Type: "io", Status: "passed", TimeMs: 42},
-		},
+		Results: []ExecuteResultUnion{{Kind: "io", IO: &r}},
 		Summary: CaseSummary{Total: 1, Passed: 1, TimeMs: 42},
 	}
 
@@ -80,12 +79,80 @@ func TestExecuteResponse_JSON(t *testing.T) {
 	if len(decoded.Results) != 1 {
 		t.Fatalf("results: got %d, want 1", len(decoded.Results))
 	}
-	if decoded.Results[0].Status != "passed" {
-		t.Errorf("status: got %q, want 'passed'", decoded.Results[0].Status)
+	u := decoded.Results[0]
+	if u.Kind != "io" || u.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", u.Kind)
+	}
+	if u.IO.Status != "passed" {
+		t.Errorf("status: got %q, want 'passed'", u.IO.Status)
 	}
 	if decoded.Summary.Total != 1 {
 		t.Errorf("summary.total: got %d, want 1", decoded.Summary.Total)
 	}
+}
+
+// TestExecuteResultUnion_RoundTrip verifies that ExecuteResultUnion correctly round-trips
+// both io and pytest variants through JSON using the kind discriminator.
+//
+// Contract: the JSON marshal/unmarshal must dispatch on kind to the correct concrete type.
+// Catches: missing or broken UnmarshalJSON/MarshalJSON dispatch.
+func TestExecuteResultUnion_RoundTrip(t *testing.T) {
+	t.Run("io variant", func(t *testing.T) {
+		r := CaseResult{Name: "c1", Type: "io", Status: "passed", TimeMs: 10}
+		u := ExecuteResultUnion{Kind: "io", IO: &r}
+
+		data, err := json.Marshal(u)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+
+		var decoded ExecuteResultUnion
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if decoded.Kind != "io" || decoded.IO == nil {
+			t.Fatalf("expected io variant, got kind=%q", decoded.Kind)
+		}
+		if decoded.IO.Name != "c1" {
+			t.Errorf("name: got %q, want 'c1'", decoded.IO.Name)
+		}
+		if decoded.IO.Status != "passed" {
+			t.Errorf("status: got %q, want 'passed'", decoded.IO.Status)
+		}
+	})
+
+	t.Run("pytest variant", func(t *testing.T) {
+		pr := PytestCaseResult{
+			Kind:       "pytest",
+			Name:       "test_add",
+			Passed:     true,
+			DurationMs: 50,
+			Assertions: []PytestAssertion{{Name: "test_add", Passed: true}},
+		}
+		u := ExecuteResultUnion{Kind: "pytest", Pytest: &pr}
+
+		data, err := json.Marshal(u)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+
+		var decoded ExecuteResultUnion
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if decoded.Kind != "pytest" || decoded.Pytest == nil {
+			t.Fatalf("expected pytest variant, got kind=%q", decoded.Kind)
+		}
+		if decoded.Pytest.Name != "test_add" {
+			t.Errorf("name: got %q, want 'test_add'", decoded.Pytest.Name)
+		}
+		if !decoded.Pytest.Passed {
+			t.Errorf("passed: got false, want true")
+		}
+		if len(decoded.Pytest.Assertions) != 1 {
+			t.Errorf("assertions: got %d, want 1", len(decoded.Pytest.Assertions))
+		}
+	})
 }
 
 // TestPytestCaseResult_JSON verifies that PytestCaseResult round-trips through JSON

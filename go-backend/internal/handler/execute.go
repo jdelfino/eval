@@ -165,16 +165,19 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Unify executor Results (io) + PytestResults (pytest) into a single discriminated union slice.
-	// Ordering: io results come first (in the order returned), then pytest results.
-	// This matches the order cases were submitted: io cases precede pytest cases when mixed.
-	unified := make([]store.CaseResult, 0, len(execResp.Results)+len(execResp.PytestResults))
-
-	for _, r := range execResp.Results {
-		unified = append(unified, ioResultToCaseResult(r))
-	}
-	for _, pr := range execResp.PytestResults {
-		unified = append(unified, pytestResultToCaseResult(pr))
+	// Map executor unified results into the store discriminated union, preserving submission order.
+	unified := make([]store.CaseResult, 0, len(execResp.Results))
+	for _, u := range execResp.Results {
+		switch u.Kind {
+		case "pytest":
+			if u.Pytest != nil {
+				unified = append(unified, pytestResultToCaseResult(*u.Pytest))
+			}
+		default: // "io"
+			if u.IO != nil {
+				unified = append(unified, ioResultToCaseResult(*u.IO))
+			}
+		}
 	}
 
 	resp := executeResponse{

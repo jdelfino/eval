@@ -1,6 +1,11 @@
 // Package executorapi defines the shared request/response types for the executor service API.
 package executorapi
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // CaseDef defines a single test case sent to the executor.
 // Kind discriminates between case types: "io" (default) or "pytest".
 // For io cases: Input, ExpectedOutput, MatchType, RandomSeed, and Files are used.
@@ -73,15 +78,61 @@ type ExecuteRequest struct {
 	Cases     []CaseDef `json:"cases,omitempty"`
 }
 
+// ExecuteResultUnion is a discriminated union that holds either an io or a pytest case result.
+// The kind field determines which concrete type is present.
+// JSON round-trips via custom MarshalJSON/UnmarshalJSON that dispatch on kind.
+type ExecuteResultUnion struct {
+	// Exactly one of IO or Pytest is non-nil, determined by Kind.
+	Kind   string            // "io" or "pytest"
+	IO     *CaseResult       // non-nil iff Kind=="io"
+	Pytest *PytestCaseResult // non-nil iff Kind=="pytest"
+}
+
+// discriminatorOnly is used to read just the kind field from JSON.
+type discriminatorOnly struct {
+	Kind string `json:"kind"`
+}
+
+// MarshalJSON serialises the union by delegating to the concrete value.
+func (u ExecuteResultUnion) MarshalJSON() ([]byte, error) {
+	switch u.Kind {
+	case "pytest":
+		if u.Pytest == nil {
+			return nil, fmt.Errorf("executorapi: ExecuteResultUnion kind=pytest but Pytest is nil")
+		}
+		return json.Marshal(u.Pytest)
+	default: // "io"
+		if u.IO == nil {
+			return nil, fmt.Errorf("executorapi: ExecuteResultUnion kind=%q but IO is nil", u.Kind)
+		}
+		return json.Marshal(u.IO)
+	}
+}
+
+// UnmarshalJSON deserialises the union by peeking at the kind field.
+func (u *ExecuteResultUnion) UnmarshalJSON(data []byte) error {
+	var disc discriminatorOnly
+	if err := json.Unmarshal(data, &disc); err != nil {
+		return err
+	}
+	switch disc.Kind {
+	case "pytest":
+		u.Kind = "pytest"
+		u.Pytest = &PytestCaseResult{}
+		return json.Unmarshal(data, u.Pytest)
+	default: // "io" or legacy empty kind
+		u.Kind = "io"
+		u.IO = &CaseResult{}
+		return json.Unmarshal(data, u.IO)
+	}
+}
+
 // ExecuteResponse is the JSON response for code execution.
-// Results contains io (kind="io") case results.
-// PytestResults contains pytest (kind="pytest") case results.
-// F2.3 will unify these into a single discriminated union slice.
-// Always returns Results and Summary regardless of whether cases have expected output.
+// Results is a single discriminated-union slice preserving submission order.
+// Each element carries a kind discriminator ("io" or "pytest").
 type ExecuteResponse struct {
-	Results       []CaseResult       `json:"results"`
-	PytestResults []PytestCaseResult `json:"pytest_results,omitempty"`
-	Summary       CaseSummary        `json:"summary"`
+	Results []ExecuteResultUnion `json:"results"`
+	Summary CaseSummary          `json:"summary"`
 }
 
 // File represents an auxiliary file provided to the execution environment.

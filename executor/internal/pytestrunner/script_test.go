@@ -334,47 +334,7 @@ func TestPytestRunner_TimeoutEnforcement(t *testing.T) {
 	}
 }
 
-// TestPytestRunner_SandboxIsolation_EtcPasswd verifies that a test attempting to
-// read /etc/passwd fails (file not accessible in the sandbox working directory).
-//
-// Contract: sandbox isolation must extend through pytest invocation. A test
-// that tries to read /etc/passwd must fail, not succeed. If violated, the
-// sandbox is bypassed via pytest and host secrets leak to students.
-//
-// Note: This test runs outside of nsjail (unit test context), so /etc/passwd
-// IS accessible. The test verifies that the pytest test ITSELF fails (the
-// assertion about password content fails because the student module doesn't
-// have the leaked content). Full isolation is only enforced in the nsjail
-// integration tests.
-func TestPytestRunner_SandboxIsolation_EtcPasswd(t *testing.T) {
-	// Student code doesn't expose /etc/passwd content.
-	studentCode := "secret = 'not_the_password_file'\n"
-	// Test tries to read /etc/passwd and assert its content matches student_module.secret.
-	testCode := `from student_module import secret
-
-def test_cannot_leak_etc_passwd():
-    try:
-        with open('/etc/passwd') as f:
-            content = f.read()
-        # Even if readable (non-nsjail env), student code shouldn't match it.
-        assert secret == content, "student code should not expose /etc/passwd"
-    except (OSError, PermissionError, FileNotFoundError):
-        # In sandbox: file not accessible — test fails due to exception.
-        # But we want the test to "fail" (assert), not error.
-        # Treat inaccessibility as isolation working correctly.
-        pass
-`
-
-	r := runPytestScript(t, studentCode, testCode, "test_isolation", "tests/test_isolation.py")
-
-	// In a non-sandbox environment, /etc/passwd is readable but the assertion
-	// should fail (content != 'not_the_password_file').
-	// In a sandbox, the file is inaccessible → test passes the except branch.
-	// Either way, the overall test result should indicate the isolation contract
-	// is checked (we verify the runner handled it without crashing).
-	if r.Kind != "pytest" {
-		t.Errorf("expected kind='pytest', got %q", r.Kind)
-	}
-	// The runner should complete without crashing regardless of environment.
-	// (Passed/failed depends on whether /etc/passwd is accessible — we don't assert that here.)
-}
+// TestPytestRunner_SandboxIsolation_EtcPasswd was removed because it made no
+// meaningful assertion about isolation (it only checked r.Kind == "pytest", which
+// is always true). Full filesystem isolation is exercised by the nsjail integration
+// test at executor/internal/handler/integration_test.go:TestIntegration_Pytest_FilesystemIsolation.

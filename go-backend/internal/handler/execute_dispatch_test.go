@@ -28,11 +28,14 @@ func TestExecute_AllIOCases_DispatchesToIOPath(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
+			r1 := executorapi.CaseResult{Name: "case1", Type: "io", Status: "passed", TimeMs: 10}
+			r2 := executorapi.CaseResult{Name: "case2", Type: "io", Status: "passed", TimeMs: 15}
+			r3 := executorapi.CaseResult{Name: "case3", Type: "io", Status: "failed", TimeMs: 20}
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{
-					{Name: "case1", Type: "io", Status: "passed", TimeMs: 10},
-					{Name: "case2", Type: "io", Status: "passed", TimeMs: 15},
-					{Name: "case3", Type: "io", Status: "failed", TimeMs: 20},
+				Results: []executorapi.ExecuteResultUnion{
+					{Kind: "io", IO: &r1},
+					{Kind: "io", IO: &r2},
+					{Kind: "io", IO: &r3},
 				},
 				Summary: executorapi.CaseSummary{Total: 3, Passed: 2, Failed: 1},
 			}, nil
@@ -105,30 +108,32 @@ func TestExecute_AllPytestCases_DispatchesToPytestPath(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
+			p1 := executorapi.PytestCaseResult{
+				Kind:       "pytest",
+				Name:       "case1",
+				Passed:     true,
+				DurationMs: 30,
+				Assertions: []executorapi.PytestAssertion{{Name: "test_add", Passed: true}},
+			}
+			p2 := executorapi.PytestCaseResult{
+				Kind:       "pytest",
+				Name:       "case2",
+				Passed:     false,
+				DurationMs: 25,
+				Assertions: []executorapi.PytestAssertion{{Name: "test_sub", Passed: false, FailureMessage: "AssertionError"}},
+			}
+			p3 := executorapi.PytestCaseResult{
+				Kind:       "pytest",
+				Name:       "case3",
+				Passed:     true,
+				DurationMs: 20,
+				Assertions: []executorapi.PytestAssertion{{Name: "test_mul", Passed: true}},
+			}
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{},
-				PytestResults: []executorapi.PytestCaseResult{
-					{
-						Kind:       "pytest",
-						Name:       "case1",
-						Passed:     true,
-						DurationMs: 30,
-						Assertions: []executorapi.PytestAssertion{{Name: "test_add", Passed: true}},
-					},
-					{
-						Kind:       "pytest",
-						Name:       "case2",
-						Passed:     false,
-						DurationMs: 25,
-						Assertions: []executorapi.PytestAssertion{{Name: "test_sub", Passed: false, FailureMessage: "AssertionError"}},
-					},
-					{
-						Kind:       "pytest",
-						Name:       "case3",
-						Passed:     true,
-						DurationMs: 20,
-						Assertions: []executorapi.PytestAssertion{{Name: "test_mul", Passed: true}},
-					},
+				Results: []executorapi.ExecuteResultUnion{
+					{Kind: "pytest", Pytest: &p1},
+					{Kind: "pytest", Pytest: &p2},
+					{Kind: "pytest", Pytest: &p3},
 				},
 				Summary: executorapi.CaseSummary{Total: 3, Passed: 2, Failed: 1},
 			}, nil
@@ -207,31 +212,31 @@ func TestExecute_MixedCases_DispatchesCorrectly(t *testing.T) {
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
-			// Build response based on what was sent.
-			var ioResults []executorapi.CaseResult
-			var pytestResults []executorapi.PytestCaseResult
-			for _, c := range req.Cases {
+			// Build unified response preserving submission order.
+			unified := make([]executorapi.ExecuteResultUnion, len(req.Cases))
+			for i, c := range req.Cases {
 				if c.Kind == "pytest" {
-					pytestResults = append(pytestResults, executorapi.PytestCaseResult{
+					pr := executorapi.PytestCaseResult{
 						Kind:       "pytest",
 						Name:       c.Name,
 						Passed:     true,
 						DurationMs: 10,
 						Assertions: []executorapi.PytestAssertion{{Name: "test_fn", Passed: true}},
-					})
+					}
+					unified[i] = executorapi.ExecuteResultUnion{Kind: "pytest", Pytest: &pr}
 				} else {
-					ioResults = append(ioResults, executorapi.CaseResult{
+					r := executorapi.CaseResult{
 						Name:   c.Name,
 						Type:   "io",
 						Status: "passed",
 						TimeMs: 5,
-					})
+					}
+					unified[i] = executorapi.ExecuteResultUnion{Kind: "io", IO: &r}
 				}
 			}
 			return &executor.ExecuteResponse{
-				Results:       ioResults,
-				PytestResults: pytestResults,
-				Summary:       executorapi.CaseSummary{Total: len(req.Cases)},
+				Results: unified,
+				Summary: executorapi.CaseSummary{Total: len(req.Cases)},
 			}, nil
 		},
 	}
@@ -328,11 +333,12 @@ func TestExecute_MixedCases_DispatchesCorrectly(t *testing.T) {
 // narrow the type. This is the contract test for the wire format (test case #7 from issue).
 // Catches: handler emitting un-tagged results.
 func TestExecute_KindDiscriminatorOnEveryResult(t *testing.T) {
+	r := executorapi.CaseResult{Name: "run", Type: "io", Status: "passed", TimeMs: 5}
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{
-					{Name: "run", Type: "io", Status: "passed", TimeMs: 5},
+				Results: []executorapi.ExecuteResultUnion{
+					{Kind: "io", IO: &r},
 				},
 				Summary: executorapi.CaseSummary{Total: 1, Passed: 1},
 			}, nil
@@ -380,26 +386,26 @@ func TestExecute_KindDiscriminatorOnEveryResult(t *testing.T) {
 // Contract: CaseResultPytest must include assertions[] and stderr in the wire format.
 // Catches: field mapping errors when converting PytestCaseResult → CaseResultPytest JSON.
 func TestExecute_PytestCaseFields(t *testing.T) {
+	pr := executorapi.PytestCaseResult{
+		Kind:       "pytest",
+		Name:       "pytest-case",
+		Passed:     false,
+		DurationMs: 50,
+		Stderr:     "ImportError: no module named 'foo'",
+		Assertions: []executorapi.PytestAssertion{
+			{
+				Name:           "test_foo",
+				Passed:         false,
+				FailureMessage: "AssertionError: 1 != 2",
+				Traceback:      "traceback...",
+			},
+		},
+	}
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{},
-				PytestResults: []executorapi.PytestCaseResult{
-					{
-						Kind:       "pytest",
-						Name:       "pytest-case",
-						Passed:     false,
-						DurationMs: 50,
-						Stderr:     "ImportError: no module named 'foo'",
-						Assertions: []executorapi.PytestAssertion{
-							{
-								Name:           "test_foo",
-								Passed:         false,
-								FailureMessage: "AssertionError: 1 != 2",
-								Traceback:      "traceback...",
-							},
-						},
-					},
+				Results: []executorapi.ExecuteResultUnion{
+					{Kind: "pytest", Pytest: &pr},
 				},
 				Summary: executorapi.CaseSummary{Total: 1, Failed: 1},
 			}, nil
@@ -481,12 +487,13 @@ func TestExecute_PytestCaseFields(t *testing.T) {
 // 'kind' field default to io dispatch (backwards compatibility).
 func TestExecute_IOCaseBackwardsCompat(t *testing.T) {
 	var capturedReq executor.ExecuteRequest
+	r := executorapi.CaseResult{Name: "case1", Type: "io", Status: "passed", TimeMs: 5}
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{
-					{Name: "case1", Type: "io", Status: "passed", TimeMs: 5},
+				Results: []executorapi.ExecuteResultUnion{
+					{Kind: "io", IO: &r},
 				},
 				Summary: executorapi.CaseSummary{Total: 1, Passed: 1},
 			}, nil
@@ -534,5 +541,104 @@ func TestExecute_IOCaseBackwardsCompat(t *testing.T) {
 	var kind string
 	if err := json.Unmarshal(results[0]["kind"], &kind); err != nil || kind != "io" {
 		t.Errorf("expected kind='io', got %q", kind)
+	}
+}
+
+// TestExecute_InterleavedCases_OrderPreserved verifies that submitting interleaved
+// io and pytest cases (e.g. pytest, io, pytest, io) returns results in the same
+// position order — result[i] corresponds to cases[i], not "all io first then pytest".
+//
+// Contract: go-backend must pass through executor results in submission order.
+// If violated, position-based result↔case correspondence breaks for mixed case lists.
+func TestExecute_InterleavedCases_OrderPreserved(t *testing.T) {
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			// Simulate executor returning results in submission order.
+			unified := make([]executorapi.ExecuteResultUnion, len(req.Cases))
+			for i, c := range req.Cases {
+				if c.Kind == "pytest" {
+					pr := executorapi.PytestCaseResult{
+						Kind:       "pytest",
+						Name:       c.Name,
+						Passed:     true,
+						DurationMs: 5,
+						Assertions: []executorapi.PytestAssertion{{Name: "test_fn", Passed: true}},
+					}
+					unified[i] = executorapi.ExecuteResultUnion{Kind: "pytest", Pytest: &pr}
+				} else {
+					r := executorapi.CaseResult{Name: c.Name, Type: "io", Status: "passed", TimeMs: 5}
+					unified[i] = executorapi.ExecuteResultUnion{Kind: "io", IO: &r}
+				}
+			}
+			return &executor.ExecuteResponse{
+				Results: unified,
+				Summary: executorapi.CaseSummary{Total: len(req.Cases)},
+			}, nil
+		},
+	}
+
+	handler := setupExecuteHandler(execClient)
+	// Submit: pytest1, io1, pytest2, io2.
+	body, _ := json.Marshal(map[string]any{
+		"code":     "def f(): pass",
+		"language": "python",
+		"cases": []map[string]any{
+			{"name": "pytest1", "kind": "pytest", "test_code": "def test_p1(): pass", "target_path": "t.py"},
+			{"name": "io1", "kind": "io", "input": "a"},
+			{"name": "pytest2", "kind": "pytest", "test_code": "def test_p2(): pass", "target_path": "t.py"},
+			{"name": "io2", "kind": "io", "input": "b"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testCreatorID, Role: auth.RoleInstructor})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	var results []map[string]json.RawMessage
+	if err := json.Unmarshal(resp["results"], &results); err != nil {
+		t.Fatalf("unmarshal results: %v", err)
+	}
+	if len(results) != 4 {
+		t.Fatalf("expected 4 results, got %d", len(results))
+	}
+
+	// Assert per-position kind and name correspondence.
+	expected := []struct {
+		kind string
+		name string
+	}{
+		{"pytest", "pytest1"},
+		{"io", "io1"},
+		{"pytest", "pytest2"},
+		{"io", "io2"},
+	}
+	for i, e := range expected {
+		var gotKind string
+		if err := json.Unmarshal(results[i]["kind"], &gotKind); err != nil {
+			t.Errorf("results[%d]: missing kind: %v", i, err)
+			continue
+		}
+		if gotKind != e.kind {
+			t.Errorf("results[%d].kind: expected %q, got %q", i, e.kind, gotKind)
+		}
+		var gotName string
+		if err := json.Unmarshal(results[i]["name"], &gotName); err != nil {
+			t.Errorf("results[%d]: missing name: %v", i, err)
+			continue
+		}
+		if gotName != e.name {
+			t.Errorf("results[%d].name: expected %q, got %q", i, e.name, gotName)
+		}
 	}
 }

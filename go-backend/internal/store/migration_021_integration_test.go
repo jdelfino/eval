@@ -184,4 +184,53 @@ func TestIntegration_Migration021_Down(t *testing.T) {
 			t.Errorf("expected kind to be stripped by down migration, but got kind=%v", cases[0]["kind"])
 		}
 	})
+
+	t.Run("down migration strips kind from student_work.test_cases", func(t *testing.T) {
+		db := testutil.SetupMigrationTestDB(t, 21)
+
+		nsID := "ns-mig021-down-sw"
+		db.Exec(t, `INSERT INTO namespaces (id, display_name, active) VALUES ($1, 'Mig021 Down SW NS', true)`, nsID)
+		userID := uuid.New()
+		db.Exec(t, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'mig021dwni@test.com', 'instructor', $2)`,
+			userID, nsID)
+		studentID := uuid.New()
+		db.Exec(t, `INSERT INTO users (id, email, role, namespace_id) VALUES ($1, 'mig021dwns@test.com', 'student', $2)`,
+			studentID, nsID)
+
+		classID := uuid.New()
+		db.Exec(t, `INSERT INTO classes (id, namespace_id, name, created_by) VALUES ($1, $2, 'Class021Down', $3)`,
+			classID, nsID, userID)
+		sectionID := uuid.New()
+		db.Exec(t, `INSERT INTO sections (id, namespace_id, class_id, name, join_code) VALUES ($1, $2, $3, 'Sec021Down', 'join021d')`,
+			sectionID, nsID, classID)
+		problemID := uuid.New()
+		db.Exec(t, `INSERT INTO problems (id, namespace_id, title, author_id, test_cases) VALUES ($1, $2, 'Prob021Down', $3, '[]'::jsonb)`,
+			problemID, nsID, userID)
+		workID := uuid.New()
+		// Insert student_work with kind already set (as migration 021 up would produce).
+		db.Exec(t, `
+			INSERT INTO student_work (id, namespace_id, user_id, problem_id, section_id, code, test_cases)
+			VALUES ($1, $2, $3, $4, $5, '', '[{"kind":"io","name":"sw-down-case","input":"stdin","match_type":"exact","order":0}]'::jsonb)
+		`, workID, nsID, studentID, problemID, sectionID)
+
+		// Roll back to migration 20.
+		db.MigrateTo(t, 20)
+
+		var rawTestCases []byte
+		row := db.QueryRow(t, `SELECT test_cases FROM student_work WHERE id = $1`, workID)
+		if err := row.Scan(&rawTestCases); err != nil {
+			t.Fatalf("scan test_cases: %v", err)
+		}
+
+		var cases []map[string]interface{}
+		if err := json.Unmarshal(rawTestCases, &cases); err != nil {
+			t.Fatalf("unmarshal test_cases: %v", err)
+		}
+		if len(cases) != 1 {
+			t.Fatalf("expected 1 test case in student_work, got %d", len(cases))
+		}
+		if _, hasKind := cases[0]["kind"]; hasKind {
+			t.Errorf("expected kind to be stripped by down migration from student_work, but got kind=%v", cases[0]["kind"])
+		}
+	})
 }

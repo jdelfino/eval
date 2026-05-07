@@ -142,7 +142,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer h.metrics.ActiveExecutions.Dec()
 
 	start := time.Now()
-	results, pytestResults, timedOut, sandboxErr := h.runCases(r.Context(), sandboxCfg, req, timeoutMs)
+	results, timedOut, sandboxErr := h.runCases(r.Context(), sandboxCfg, req, timeoutMs)
 	duration := time.Since(start)
 
 	// Observe duration.
@@ -161,7 +161,7 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary := buildCaseSummary(results, pytestResults)
+	summary := buildCaseSummary(results)
 
 	if timedOut {
 		h.metrics.ExecutionsTotal.WithLabelValues("timeout").Inc()
@@ -181,64 +181,79 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	resp := executorapi.ExecuteResponse{
-		Results:       results,
-		PytestResults: pytestResults,
-		Summary:       summary,
+		Results: results,
+		Summary: summary,
 	}
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// runCases dispatches cases to the appropriate sandbox runner and returns results.
-// io cases go to the iotestrunner; pytest cases go to the pytestrunner.
-// Returns (ioResults, pytestResults, timedOut, error).
+// runCases dispatches cases to the appropriate sandbox runner and returns results
+// in the same order as the input cases (preserving interleaving of io and pytest).
+// io cases are batched into a single iotestrunner call; pytest cases into a single
+// pytestrunner call. Results are stitched back into submission order.
+// Returns (results, timedOut, error).
 func (h *ExecuteHandler) runCases(
 	ctx context.Context,
 	sandboxCfg sandbox.Config,
 	req executorapi.ExecuteRequest,
 	timeoutMs int,
-) ([]executorapi.CaseResult, []executorapi.PytestCaseResult, bool, error) {
-	// Split cases by kind.
-	var ioCases, pytestCases []executorapi.CaseDef
-	for _, c := range req.Cases {
+) ([]executorapi.ExecuteResultUnion, bool, error) {
+	// Separate cases by kind, recording original indices for order reconstruction.
+	type indexedCase struct {
+		originalIdx int
+		def         executorapi.CaseDef
+	}
+	var ioCases, pytestCases []indexedCase
+	for i, c := range req.Cases {
 		if c.Kind == "pytest" {
-			pytestCases = append(pytestCases, c)
+			pytestCases = append(pytestCases, indexedCase{i, c})
 		} else {
-			// Default: io (kind="" or kind="io")
-			ioCases = append(ioCases, c)
+			ioCases = append(ioCases, indexedCase{i, c})
 		}
 	}
 
-	var ioResults []executorapi.CaseResult
-	var pytestResults []executorapi.PytestCaseResult
+	unified := make([]executorapi.ExecuteResultUnion, len(req.Cases))
 	var timedOut bool
 
 	// Run io cases.
 	if len(ioCases) > 0 {
-		results, to, err := h.runIOCases(ctx, sandboxCfg, req, ioCases, timeoutMs)
-		if err != nil {
-			return nil, nil, false, err
+		defs := make([]executorapi.CaseDef, len(ioCases))
+		for j, ic := range ioCases {
+			defs[j] = ic.def
 		}
-		ioResults = results
+		ioResults, to, err := h.runIOCases(ctx, sandboxCfg, req, defs, timeoutMs)
+		if err != nil {
+			return nil, false, err
+		}
 		if to {
 			timedOut = true
+		}
+		for j, ic := range ioCases {
+			unified[ic.originalIdx] = executorapi.ExecuteResultUnion{Kind: "io", IO: &ioResults[j]}
 		}
 	}
 
 	// Run pytest cases.
 	if len(pytestCases) > 0 {
-		results, to, err := h.runPytestCases(ctx, sandboxCfg, req, pytestCases, timeoutMs)
-		if err != nil {
-			return nil, nil, false, err
+		defs := make([]executorapi.CaseDef, len(pytestCases))
+		for j, ic := range pytestCases {
+			defs[j] = ic.def
 		}
-		pytestResults = results
+		pytestResults, to, err := h.runPytestCases(ctx, sandboxCfg, req, defs, timeoutMs)
+		if err != nil {
+			return nil, false, err
+		}
 		if to {
 			timedOut = true
 		}
+		for j, ic := range pytestCases {
+			unified[ic.originalIdx] = executorapi.ExecuteResultUnion{Kind: "pytest", Pytest: &pytestResults[j]}
+		}
 	}
 
-	return ioResults, pytestResults, timedOut, nil
+	return unified, timedOut, nil
 }
 
 // runIOCases runs the given io-kind cases through the iotestrunner sandbox.
@@ -404,8 +419,6 @@ func (h *ExecuteHandler) runPytestCases(
 
 	files := []sandbox.File{
 		{Name: studentFilename, Content: req.Code},
-		// pytest_cases.json is used by the handler tests to detect pytest dispatch.
-		{Name: "pytest_cases.json", Content: string(casesJSON)},
 	}
 
 	sandboxReq := sandbox.Request{
@@ -504,35 +517,37 @@ func parseCaseResults(stdout string) ([]executorapi.CaseResult, error) {
 	return results, nil
 }
 
-// buildCaseSummary aggregates CaseResult and PytestCaseResult entries into a CaseSummary.
-func buildCaseSummary(ioResults []executorapi.CaseResult, pytestResults []executorapi.PytestCaseResult) executorapi.CaseSummary {
+// buildCaseSummary aggregates unified ExecuteResultUnion entries into a CaseSummary.
+func buildCaseSummary(results []executorapi.ExecuteResultUnion) executorapi.CaseSummary {
 	s := executorapi.CaseSummary{
-		Total: len(ioResults) + len(pytestResults),
+		Total: len(results),
 	}
-	for _, r := range ioResults {
-		s.TimeMs += r.TimeMs
-		switch r.Status {
-		case "passed":
-			s.Passed++
-		case "failed":
-			s.Failed++
-		case "run":
-			s.Run++
-		default:
-			s.Errors++
-		}
-	}
-	for _, r := range pytestResults {
-		s.TimeMs += int64(r.DurationMs)
-		if r.Stderr != "" && len(r.Assertions) == 0 {
-			// Collection/import error.
-			s.Errors++
-		} else if r.Passed {
-			s.Passed++
-		} else if r.Stderr == "execution timed out" {
-			s.Errors++
-		} else {
-			s.Failed++
+	for _, u := range results {
+		switch u.Kind {
+		case "pytest":
+			r := u.Pytest
+			s.TimeMs += int64(r.DurationMs)
+			if r.Stderr != "" && len(r.Assertions) == 0 {
+				// Collection/import error.
+				s.Errors++
+			} else if r.Passed {
+				s.Passed++
+			} else {
+				s.Failed++
+			}
+		default: // "io"
+			r := u.IO
+			s.TimeMs += r.TimeMs
+			switch r.Status {
+			case "passed":
+				s.Passed++
+			case "failed":
+				s.Failed++
+			case "run":
+				s.Run++
+			default:
+				s.Errors++
+			}
 		}
 	}
 	return s
