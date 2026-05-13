@@ -28,27 +28,16 @@ if [ -n "$git_common" ] && [ -n "$git_dir" ] && [ "$git_common" != "$git_dir" ];
   in_worktree=true
 fi
 
-if [ "$in_worktree" = true ]; then
+# In-worktree case is handled deterministically by mark-stale-worktree.sh +
+# block-stale-worktree.sh. Only the stale-branch-in-main-checkout case needs a
+# text warning here.
+if [ "$in_worktree" = false ] && [ -n "$current_branch" ] && [ "$current_branch" != "main" ]; then
   cat <<EOF
-# WARNING: session started in a worktree
+CRITICAL FIRST INSTRUCTION: You are on branch '$current_branch' from a previous session.
 
-You are in a worktree, likely left over from a previous session.
-  Current directory: $current_dir
-  Branch: $current_branch
-  Main repository: $main_repo
-
-**Unless the user explicitly asks you to work in this worktree**, return to main first:
-  cd $main_repo && git checkout main
-
-EOF
-elif [ -n "$current_branch" ] && [ "$current_branch" != "main" ]; then
-  cat <<EOF
-# WARNING: session started on branch '$current_branch'
-
-You are on a non-main branch, likely left over from a previous session.
-
-**Unless the user explicitly asks you to work on this branch**, return to main first:
-  git checkout main
+Before doing ANYTHING else, run: git checkout main
+Continuing on a stale branch will lead to wrong diffs and lost work.
+Do NOT respond to the user's message until you have returned to main (unless the user explicitly asks you to work on this branch).
 
 EOF
 fi

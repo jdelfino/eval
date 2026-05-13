@@ -112,7 +112,13 @@ git rebase --abort
 ```
 Then output `RESULT: FAIL`.
 
-### 4. Advance target ref
+### 4. Run quality gates
+
+After a successful rebase, verify the result still passes. Pull the gate command from the **Quality Gates** table in CLAUDE.md (the same gate the implementer ran in Phase 3 — typically `make test-*` for the affected service, or pre-push equivalent).
+
+If it fails, the conflict resolution introduced an error. Fix it, amend the relevant commit, and re-run. If the fix is non-trivial, abort and escalate (`RESULT: FAIL`).
+
+### 5. Advance target ref
 
 ```bash
 git branch -f <target> HEAD
@@ -123,7 +129,7 @@ If `<target>` tracks a remote, also push:
 git push origin <target>
 ```
 
-### 5. Cleanup (if enabled)
+### 6. Cleanup (if enabled)
 
 ```bash
 git worktree remove <worktree> --force 2>/dev/null

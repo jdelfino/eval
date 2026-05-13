@@ -18,6 +18,7 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - **Test cases from the issue are your spec.** The planner defines concrete test cases on each task. Implement those first, then add high-value coverage for gaps. Focus on tests that catch real bugs — avoid exhaustive, duplicative unit tests that test constructors, wiring, or things the compiler already guarantees.
 - **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
 - **Lint and typecheck are enforced by lefthook git hooks at commit time.** Do not run lint or typecheck commands manually — focus on tests in Phase 3.
+- **If a hook blocks a tool call, stop.** Never work around it with scripts, `sed`, or other indirect tricks. Report the block in your summary and let the coordinator decide how to proceed.
 
 ## Phase 1: Write Failing Tests
 

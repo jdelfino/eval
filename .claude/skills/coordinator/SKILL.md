@@ -15,9 +15,9 @@ You are the single entry point for all implementation work. You triage incoming 
 
 ### 1. Parse Input
 
-The input is either a beads ID or an ad-hoc description.
+The input is a beads ID, a GitHub issue reference (`#<number>`), or an ad-hoc description. When the input could plausibly be a beads ID, try `bd show <input> --json` first; if it returns an issue, treat it as one. Otherwise fall through.
 
-**If beads ID:**
+**Beads ID:**
 ```bash
 bd show <id> --json
 ```
@@ -27,8 +27,15 @@ If it's an epic, also fetch subtasks:
 bd list --parent <id> --json
 ```
 
-**If ad-hoc description (no beads ID):**
-Create a beads issue first:
+**GitHub issue (`#<number>`):** Fetch and convert to a beads issue:
+```bash
+gh issue view <number> --json title,body,labels,number
+bd create "<title>" -d "GitHub: #<number> — <description>" -t <type> -p <priority> --json
+```
+
+Map GitHub labels to beads types. Priority 1 for bugs, 2 for features/tasks.
+
+**Ad-hoc description:** Create a beads issue:
 ```bash
 bd create "<description>" -t <task|bug|feature> -p 2 --json
 ```
@@ -41,32 +48,9 @@ If the issue is a fix for code on an existing feature branch (e.g., CI failure o
 
 ## Branch Mode
 
-All work uses branches and PRs. Uses worktree isolation for subagents.
+You're in your worktree from `/work` — `pwd` is its path. Implementer subagents spawn with `isolation: "worktree"` (the `WorktreeCreate` hook handles branch + frontend/node_modules symlink). Rebase, reviewer, and test-runner subagents enter your existing worktree via a `WORKTREE` field — do NOT use `isolation: "worktree"` for those.
 
-### 1. Setup
-
-Create the feature branch from main:
-
-```bash
-git fetch origin main
-git branch feature/<work-name> origin/main
-```
-
-Then enter a worktree for the coordinator session:
-
-```
-EnterWorktree(name: "<work-name>")
-```
-
-After `EnterWorktree` returns, install eval's per-worktree dependencies:
-
-```bash
-ln -s /workspaces/eval/frontend/node_modules ./frontend/node_modules
-```
-
-The coordinator works from its worktree for the rest of the session. Reviewers and the test-runner enter this same worktree.
-
-### 2. Implement Tasks
+### 1. Implement Tasks
 
 **Follow the dependency graph from beads.** Spawn all currently-unblocked tasks in parallel. When a task completes, check if any blocked tasks are now unblocked and spawn those.
 
@@ -77,67 +61,48 @@ For each task:
 bd update <task-id> --set-labels wip --json
 ```
 
-#### b. Create Per-Task Worktree
+#### b. Spawn Implementer Subagent
 
-Per-task worktrees are created manually so the eval-specific node_modules symlink is in place before the implementer subagent starts:
-
-```bash
-git branch feature/<work-name>/<task-id> feature/<work-name>
-git worktree add ../<project>-<task-id> feature/<work-name>/<task-id>
-ln -s /workspaces/eval/frontend/node_modules ../<project>-<task-id>/frontend/node_modules
-```
-
-#### c. Spawn Implementer Subagent
-
-Use the Task tool with `subagent_type: "general-purpose"` and `model: "sonnet"`:
+Use the Agent tool with `isolation: "worktree"` and `model: "sonnet"`:
 
 ```
 ROLE: Implementer
 SKILL: Read and follow .claude/skills/implementer/SKILL.md
 
-WORKTREE: ../<project>-<task-id>
 TASK: <task-id>
 Read the task description: bd show <task-id> --json
-
-CONSTRAINTS:
-- Work ONLY in the worktree path above
-- Do NOT modify beads issues
-- Commit and push your work when implementer phases are complete
-- Phase 5 of the implementer skill produces a structured summary — that is your final output
 ```
 
-#### d. Handle Result
+#### c. Handle Result
 
-The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent.
+The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent. The Agent tool's result metadata exposes `worktree_path` and `branch` for integration.
 
 **On SUCCESS:** integrate into the feature branch (sequential — do NOT run in parallel with other integrations).
 
-**Try fast-path rebase first** (inline bash — no subagent):
+**Try fast-path rebase first** (inline — no subagent):
 
 ```bash
-cd ../<project>-<task-id>
-git rebase <target-branch> && \
-  git branch -f <target-branch> HEAD && \
-  git worktree remove ../<project>-<task-id> --force 2>/dev/null; \
-  git branch -D <source-branch> 2>/dev/null; \
+cd <worktree_path>
+git rebase feature/<work-name> && \
+  git branch -f feature/<work-name> HEAD && \
+  git worktree remove <worktree_path> --force 2>/dev/null && \
+  git branch -D <branch> 2>/dev/null && \
   echo "REBASE: OK"
 ```
 
-If the rebase command fails (conflict), abort and fall back to a rebase subagent:
+If the rebase command fails (conflict), abort and fall back to a rebase subagent (no `isolation: "worktree"` — it enters the implementer's existing worktree):
 
 ```bash
 git rebase --abort
 ```
 
-Then spawn the rebase subagent to resolve conflicts:
-
 ```
 ROLE: Rebase Agent (Conflict Resolution)
 SKILL: Read and follow .claude/skills/rebase/SKILL.md
 
-SOURCE: <source-branch>
-TARGET: <target-branch>
-WORKTREE: ../<project>-<task-id>
+SOURCE: <branch>
+TARGET: feature/<work-name>
+WORKTREE: <worktree_path>
 CLEANUP: true
 BEADS_IDS: <comma-separated task IDs whose changes are on the source branch>
 ```
@@ -156,7 +121,7 @@ Triage the "Concerns" section:
 - If blocked: note the blocker, move to next task
 - Do NOT close the task
 
-### 3. Pre-PR Review
+### 2. Pre-PR Review
 
 Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
 
@@ -214,7 +179,7 @@ If the epic has e2e acceptance tests, run them here targeting the specific test 
 
 **Skip the test-runner entirely** if no integration tests or acceptance tests are needed (e.g., frontend-only changes with no store layer involvement and no e2e acceptance tests). **Do NOT create PR if the test-runner reports FAIL.** Fix locally first (spawn implementer if non-trivial).
 
-### 4. Create PR, Monitor CI, and Hand Off
+### 3. Create PR, Monitor CI, and Hand Off
 
 ```bash
 git push -u origin feature/<work-name>
@@ -301,6 +266,7 @@ export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
 - Spawning a rebase subagent when there are no conflicts (use inline fast-path first)
 - Fixing non-trivial review issues inline — file issues and spawn implementers instead
 - Running quality gates directly in coordinator context — always delegate to test-runner sub-agents
+- Manually creating worktrees with `git worktree add` for subagents — use `isolation: "worktree"` so the `WorktreeCreate` hook handles setup
 - Using `isolation: "worktree"` for rebase/reviewer/test-runner agents — they enter the coordinator's existing worktree
 
 ## Hooks — What's Automatic vs Manual
