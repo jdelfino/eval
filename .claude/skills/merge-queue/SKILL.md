@@ -15,8 +15,12 @@ Run this in a dedicated terminal window. Invoke periodically with `/merge` while
 # Check CI status on main — failing main blocks the entire queue
 gh run list --branch main --limit 1 --json status,conclusion
 
-# List open PRs
-gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews,labels
+# List open PRs. Drafts are excluded — `isDraft: true` is an explicit
+# author signal of "not ready for merge", and some long-lived draft PRs
+# exist as deploy targets (e.g. the `redesign` branch deploy target) that
+# must never be merged or rebased by this skill.
+gh pr list --json number,title,headRefName,statusCheckRollup,mergeable,body,reviewRequests,reviews,labels,isDraft \
+  --jq 'map(select(.isDraft | not))'
 ```
 
 **If main CI is failing:** file a P0 beads issue (if one doesn't already exist), report prominently, and stop. Nothing can merge until main is green.
