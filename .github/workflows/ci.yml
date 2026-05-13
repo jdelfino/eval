@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, redesign]
   workflow_call:
     inputs:
       run-all:
@@ -477,10 +477,12 @@ jobs:
   system-playwright:
     needs: changes
     if: |
-      needs.changes.outputs.go-backend == 'true' ||
-      needs.changes.outputs.frontend == 'true' ||
-      needs.changes.outputs.executor == 'true' ||
-      needs.changes.outputs.migrations == 'true'
+      github.base_ref != 'redesign' && (
+        needs.changes.outputs.go-backend == 'true' ||
+        needs.changes.outputs.frontend == 'true' ||
+        needs.changes.outputs.executor == 'true' ||
+        needs.changes.outputs.migrations == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
