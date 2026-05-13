@@ -49,7 +49,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		p, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "Python Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "python",
@@ -69,7 +69,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		p, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "Java Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "java",
@@ -107,7 +107,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		created, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "Get Lang Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "java",
@@ -132,7 +132,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		created, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "Update Lang Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "python",
@@ -163,7 +163,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		created, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "No Change Lang Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "java",
@@ -193,7 +193,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		_, err := s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "List Python Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "python",
@@ -205,7 +205,7 @@ func TestIntegration_Migration018_LanguageField(t *testing.T) {
 		_, err = s.CreateProblem(ctx, CreateProblemParams{
 			NamespaceID:       nsID,
 			Title:             "List Java Problem",
-			TestCases:         []byte(`{}`),
+			TestCases:         []byte(`[]`),
 			
 			AuthorID:          authorID,
 			Language:          "java",
@@ -285,7 +285,7 @@ func TestIntegration_Migration018_LanguageInJoinedQueries(t *testing.T) {
 	javaProblem, err := setupStore.CreateProblem(ctx, CreateProblemParams{
 		NamespaceID:       nsID,
 		Title:             "Java Join Problem",
-		TestCases:         json.RawMessage(`{}`),
+		TestCases:         json.RawMessage(`[]`),
 		
 		AuthorID:          instructorID,
 		Language:          "java",
