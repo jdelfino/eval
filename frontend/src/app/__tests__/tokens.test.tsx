@@ -20,18 +20,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// __dirname = frontend/src/components/ui/__tests__
-// globals.css is at frontend/src/app/globals.css (3 levels up from __tests__, then into app/)
-const GLOBALS_CSS_PATH = path.resolve(
-  __dirname,
-  '../../../app/globals.css'
-);
-
-// tailwind.config.js is at frontend/tailwind.config.js (4 levels up from __tests__)
-const TAILWIND_CONFIG_PATH = path.resolve(
-  __dirname,
-  '../../../../tailwind.config.js'
-);
+// __dirname = frontend/src/app/__tests__
+const GLOBALS_CSS_PATH = path.resolve(__dirname, '../globals.css');
+const TAILWIND_CONFIG_PATH = path.resolve(__dirname, '../../../tailwind.config.js');
 
 /**
  * Extracts all CSS custom property declarations from `:root { ... }` blocks
@@ -148,27 +139,25 @@ describe('tailwind.config.js token mappings', () => {
   const borderRadius = config.theme.extend.borderRadius ?? {};
 
   it('maps bg token colors to var(--bg*) variables', () => {
-    // The token layer should expose semantic color names as Tailwind utilities
-    // so designers can write `bg-surface-1` instead of `bg-[var(--bg)]`.
-    expect(colors).toHaveProperty('bg');
-    expect(colors).toHaveProperty('bg-raised');
-    expect(colors).toHaveProperty('bg-sunken');
-    expect(colors).toHaveProperty('bg-inverse');
+    expect(String(colors.bg)).toContain('var(--bg)');
+    expect(String(colors['bg-raised'])).toContain('var(--bg-raised)');
+    expect(String(colors['bg-sunken'])).toContain('var(--bg-sunken)');
+    expect(String(colors['bg-inverse'])).toContain('var(--bg-inverse)');
   });
 
   it('maps fg token colors to var(--fg*) variables', () => {
-    expect(colors).toHaveProperty('fg');
-    expect(colors).toHaveProperty('fg-muted');
-    expect(colors).toHaveProperty('fg-subtle');
-    expect(colors).toHaveProperty('fg-inverse');
+    expect(String(colors.fg)).toContain('var(--fg)');
+    expect(String(colors['fg-muted'])).toContain('var(--fg-muted)');
+    expect(String(colors['fg-subtle'])).toContain('var(--fg-subtle)');
+    expect(String(colors['fg-inverse'])).toContain('var(--fg-inverse)');
   });
 
   it('maps accent, run, danger, info, warn to var() values', () => {
-    expect(colors).toHaveProperty('accent');
-    expect(colors).toHaveProperty('run');
-    expect(colors).toHaveProperty('danger');
-    expect(colors).toHaveProperty('info');
-    expect(colors).toHaveProperty('warn');
+    expect(String(colors.accent)).toContain('var(--accent)');
+    expect(String(colors.run)).toContain('var(--run)');
+    expect(String(colors.danger)).toContain('var(--danger)');
+    expect(String(colors.info)).toContain('var(--info)');
+    expect(String(colors.warn)).toContain('var(--warn)');
   });
 
   it('maps fontFamily.sans to var(--font-sans)', () => {
