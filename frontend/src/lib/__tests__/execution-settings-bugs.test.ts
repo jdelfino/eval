@@ -38,6 +38,7 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
+          kind: 'io' as const,
           name: 'Test 1',
           input: '5',
           expected_output: '42',
@@ -112,6 +113,7 @@ describe('PLAT-a4d: updateSessionProblem sends complete problem with test_cases'
       updated_at: '2024-01-01T00:00:00Z',
       test_cases: [
         {
+          kind: 'io' as const,
           name: 'Test 1',
           input: 'input',
           expected_output: 'output',
@@ -151,6 +153,7 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
     const code = 'def solution():\n    return 42';
     const testCases: IOTestCase[] = [
       {
+        kind: 'io',
         name: 'Default',
         input: 'input data',
         match_type: 'exact',
@@ -187,7 +190,7 @@ describe('PLAT-kir: featureCode() sends test_cases to backend', () => {
     const sessionId = 'session-123';
     const solution = 'def solve(n):\n    return n * 2';
     const testCases: IOTestCase[] = [
-      { name: 'Default', input: '5\n', match_type: 'exact', order: 0, random_seed: 99 },
+      { kind: 'io', name: 'Default', input: '5\n', match_type: 'exact', order: 0, random_seed: 99 },
     ];
 
     mockApiPost.mockResolvedValue(undefined);
@@ -210,6 +213,7 @@ describe('PLAT-fun: Public view passes all execution settings (PLAT-st42.4: now 
      */
     const featuredTestCases: IOTestCase[] = [
       {
+        kind: 'io',
         name: 'Default',
         input: 'test input',
         match_type: 'exact',
@@ -223,30 +227,33 @@ describe('PLAT-fun: Public view passes all execution settings (PLAT-st42.4: now 
     ];
 
     const firstCase = featuredTestCases[0];
-    expect(firstCase.input).toBe('test input');
-    expect(firstCase.random_seed).toBe(42);
-    expect(firstCase.attached_files).toHaveLength(2);
-    expect(firstCase.attached_files![0].name).toBe('data.txt');
-    expect(firstCase.attached_files![1].content).toBe('{"key": "value"}');
+    const ioFirst = firstCase?.kind === 'io' ? firstCase : undefined;
+    expect(ioFirst?.input).toBe('test input');
+    expect(ioFirst?.random_seed).toBe(42);
+    expect(ioFirst?.attached_files).toHaveLength(2);
+    expect(ioFirst?.attached_files![0].name).toBe('data.txt');
+    expect(ioFirst?.attached_files![1].content).toBe('{"key": "value"}');
   });
 
   it('should handle missing featured test cases gracefully (empty array)', () => {
     const featuredTestCases: IOTestCase[] = [];
     const firstCase = featuredTestCases[0];
+    const ioFirst = firstCase?.kind === 'io' ? firstCase : undefined;
     expect(firstCase).toBeUndefined();
-    expect(firstCase?.input).toBeUndefined();
-    expect(firstCase?.random_seed).toBeUndefined();
-    expect(firstCase?.attached_files).toBeUndefined();
+    expect(ioFirst?.input).toBeUndefined();
+    expect(ioFirst?.random_seed).toBeUndefined();
+    expect(ioFirst?.attached_files).toBeUndefined();
   });
 
   it('should handle partial test case (only input)', () => {
     const featuredTestCases: IOTestCase[] = [
-      { name: 'Default', input: 'only stdin', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Default', input: 'only stdin', match_type: 'exact', order: 0 },
     ];
     const firstCase = featuredTestCases[0];
-    expect(firstCase.input).toBe('only stdin');
-    expect(firstCase.random_seed).toBeUndefined();
-    expect(firstCase.attached_files).toBeUndefined();
+    const ioFirst = firstCase?.kind === 'io' ? firstCase : undefined;
+    expect(ioFirst?.input).toBe('only stdin');
+    expect(ioFirst?.random_seed).toBeUndefined();
+    expect(ioFirst?.attached_files).toBeUndefined();
   });
 });
 
@@ -260,6 +267,7 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
   it('reads input, random_seed, attached_files directly from test_cases[0]', () => {
     const testCases: IOTestCase[] = [
       {
+        kind: 'io' as const,
         name: 'Default',
         input: '5\n10\n',
         match_type: 'exact',
@@ -273,17 +281,19 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
     ];
 
     const firstCase = testCases[0];
-    expect(firstCase.input).toBe('5\n10\n');
-    expect(firstCase.random_seed).toBe(42);
-    expect(firstCase.attached_files).toHaveLength(2);
+    const ioFirst = firstCase?.kind === 'io' ? firstCase : undefined;
+    expect(ioFirst?.input).toBe('5\n10\n');
+    expect(ioFirst?.random_seed).toBe(42);
+    expect(ioFirst?.attached_files).toHaveLength(2);
   });
 
   it('handles empty test_cases array gracefully', () => {
     const testCases: IOTestCase[] = [];
     const firstCase = testCases[0];
+    const ioFirst = firstCase?.kind === 'io' ? firstCase : undefined;
     expect(firstCase).toBeUndefined();
-    expect(firstCase?.input).toBeUndefined();
-    expect(firstCase?.random_seed).toBeUndefined();
+    expect(ioFirst?.input).toBeUndefined();
+    expect(ioFirst?.random_seed).toBeUndefined();
   });
 
   it('builds IOTestCase[] directly from field values', () => {
@@ -293,6 +303,7 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
     const attached_files = [{ name: 'data.txt', content: 'content' }];
 
     const testCases: IOTestCase[] = [{
+      kind: 'io' as const,
       name: 'Default',
       input: stdin.trim(),
       match_type: 'exact',
@@ -308,8 +319,9 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
       input: 'hello world',
       match_type: 'exact',
     });
-    expect(testCases[0].random_seed).toBe(42);
-    expect(testCases[0].attached_files).toHaveLength(1);
+    const tc0 = testCases[0].kind === 'io' ? testCases[0] : undefined;
+    expect(tc0?.random_seed).toBe(42);
+    expect(tc0?.attached_files).toHaveLength(1);
   });
 
   it('produces empty array when no stdin/seed/files are set', () => {
@@ -319,7 +331,7 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
 
     const hasContent = stdin.trim() !== '' || random_seed !== undefined || attached_files.length > 0;
     const testCases: IOTestCase[] = hasContent ? [{
-      name: 'Default', input: stdin.trim(), match_type: 'exact', order: 0,
+      kind: 'io' as const, name: 'Default', input: stdin.trim(), match_type: 'exact', order: 0,
     }] : [];
 
     expect(testCases).toEqual([]);
@@ -339,6 +351,7 @@ describe('PLAT-u90/PLAT-e4m: IOTestCase[] direct access (PLAT-st42.4: bridge fun
     const workId = 'work-123';
     const testCases: IOTestCase[] = [
       {
+        kind: 'io' as const,
         name: 'Default',
         input: 'test input',
         match_type: 'exact',
@@ -385,7 +398,7 @@ describe('PLAT-st42.1: featureCode accepts IOTestCase[] not ExecutionSettings', 
     const sessionId = 'session-abc';
     const code = 'def solve(): return 1';
     const testCases: IOTestCase[] = [
-      { name: 'Default', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact', order: 0 },
     ];
 
     await featureCode(sessionId, code, testCases);
@@ -401,6 +414,7 @@ describe('PLAT-st42.1: featureCode accepts IOTestCase[] not ExecutionSettings', 
     const code = 'def solve(): pass';
     const testCases: IOTestCase[] = [
       {
+        kind: 'io' as const,
         name: 'Default',
         input: 'data',
         match_type: 'exact',
@@ -437,7 +451,7 @@ describe('PLAT-st42.1: realtime updateCode accepts IOTestCase[]', () => {
 
   it('should accept IOTestCase[] as testCases param', async () => {
     const testCases: IOTestCase[] = [
-      { name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
     ];
 
     await updateCode('session-1', 'student-1', 'print(1)', testCases);
@@ -462,7 +476,7 @@ describe('PLAT-st42.1: realtime featureStudent accepts IOTestCase[]', () => {
 
   it('should accept IOTestCase[] as testCases param', async () => {
     const testCases: IOTestCase[] = [
-      { name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'tc1', input: 'in', match_type: 'exact', order: 0 },
     ];
 
     await featureStudent('session-1', 'student-1', 'code', testCases);
@@ -491,7 +505,7 @@ describe('PLAT-st42.1: updateStudentWork accepts IOTestCase[]', () => {
     jest.clearAllMocks();
 
     const testCases: IOTestCase[] = [
-      { name: 'Default', input: 'stdin text', match_type: 'exact', order: 0, random_seed: 7 },
+      { kind: 'io' as const, name: 'Default', input: 'stdin text', match_type: 'exact', order: 0, random_seed: 7 },
     ];
 
     await updateStudentWork('work-1', { code: 'x=1', test_cases: testCases });
@@ -515,7 +529,7 @@ describe('PLAT-st42.1: updateSessionProblemPartial excludes execution_settings',
 
   it('should accept test_cases in partial update', async () => {
     const testCases: IOTestCase[] = [
-      { name: 'tc', input: 'x', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'tc', input: 'x', match_type: 'exact', order: 0 },
     ];
 
     await updateSessionProblemPartial('session-1', { title: 'My Problem', test_cases: testCases });

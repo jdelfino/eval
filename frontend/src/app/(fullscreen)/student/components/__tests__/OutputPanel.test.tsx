@@ -46,7 +46,7 @@ describe('OutputPanel', () => {
     const successResult: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'run',
         input: '',
         actual: 'Hello, World!',
@@ -74,7 +74,7 @@ describe('OutputPanel', () => {
     const errorResult: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'error',
         input: '',
         stderr: 'SyntaxError: invalid syntax',
@@ -96,7 +96,7 @@ describe('OutputPanel', () => {
     const resultWithInput: TestResponse = {
       results: [{
         name: 'run',
-        type: 'io',
+        kind: 'io' as const,
         status: 'run',
         input: '5\n5',
         actual: '10',
@@ -114,6 +114,54 @@ describe('OutputPanel', () => {
       expect(inputSection).toBeInTheDocument();
       expect(inputSection?.querySelector('pre')).toBeInTheDocument();
       expect(screen.getByText('10')).toBeInTheDocument();
+    });
+  });
+
+  describe('TC4 — pytest CaseResultPytest defensive rendering', () => {
+    /**
+     * TC4: Existing UI components render without crashing when given a pytest
+     * CaseResultPytest in their results[] data prop.
+     *
+     * OutputPanel must not crash when results[0].kind === 'pytest'. The pytest
+     * test rail UI is owned by G1/G2 — OutputPanel must defensively fall back
+     * (show the output panel header, no crash) rather than trying to access
+     * io-specific fields on a pytest result.
+     *
+     * Catches: components silently breaking when pytest result lands in their data.
+     */
+    const pytestResult: TestResponse = {
+      results: [{
+        kind: 'pytest' as const,
+        name: 'tests/test_foo.py::test_bar',
+        passed: true,
+        duration_ms: 120,
+        assertions: [{ name: 'test_bar', passed: true }],
+      }],
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 120 },
+    };
+
+    it('renders without crashing when result is CaseResultPytest', () => {
+      // Must not throw
+      expect(() => render(<OutputPanel result={pytestResult} />)).not.toThrow();
+    });
+
+    it('shows Output heading when pytest result is present', () => {
+      render(<OutputPanel result={pytestResult} />);
+      expect(screen.getByRole('heading', { name: 'Output' })).toBeInTheDocument();
+    });
+
+    it('does not crash with empty assertions list', () => {
+      const emptyAssertions: TestResponse = {
+        results: [{
+          kind: 'pytest' as const,
+          name: 'tests/t.py::fn',
+          passed: false,
+          duration_ms: 5,
+          assertions: [],
+        }],
+        summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 5 },
+      };
+      expect(() => render(<OutputPanel result={emptyAssertions} />)).not.toThrow();
     });
   });
 });

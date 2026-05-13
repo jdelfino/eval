@@ -15,6 +15,7 @@ import (
 
 	"github.com/jdelfino/eval/executor/internal/handler"
 	"github.com/jdelfino/eval/executor/internal/metrics"
+	"github.com/jdelfino/eval/executor/internal/pytestrunner"
 	"github.com/jdelfino/eval/executor/internal/sandbox"
 	"github.com/jdelfino/eval/pkg/executorapi"
 	"github.com/prometheus/client_golang/prometheus"
@@ -169,14 +170,18 @@ func TestExecute_Success(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Results[0].Status != "run" {
-		t.Errorf("expected status 'run', got %q", resp.Results[0].Status)
+	r := resp.Results[0]
+	if r.Kind != "io" || r.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", r.Kind)
 	}
-	if resp.Results[0].Actual != "hello\n" {
-		t.Errorf("expected actual 'hello\\n', got %q", resp.Results[0].Actual)
+	if r.IO.Status != "run" {
+		t.Errorf("expected status 'run', got %q", r.IO.Status)
 	}
-	if resp.Results[0].TimeMs != 45 {
-		t.Errorf("expected 45ms, got %d", resp.Results[0].TimeMs)
+	if r.IO.Actual != "hello\n" {
+		t.Errorf("expected actual 'hello\\n', got %q", r.IO.Actual)
+	}
+	if r.IO.TimeMs != 45 {
+		t.Errorf("expected 45ms, got %d", r.IO.TimeMs)
 	}
 }
 
@@ -196,10 +201,14 @@ func TestExecute_CodeFailure(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Results[0].Status != "error" {
-		t.Errorf("expected status 'error', got %q", resp.Results[0].Status)
+	r := resp.Results[0]
+	if r.Kind != "io" || r.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", r.Kind)
 	}
-	if resp.Results[0].Stderr == "" {
+	if r.IO.Status != "error" {
+		t.Errorf("expected status 'error', got %q", r.IO.Status)
+	}
+	if r.IO.Stderr == "" {
 		t.Error("expected non-empty stderr")
 	}
 }
@@ -219,11 +228,15 @@ func TestExecute_Timeout(t *testing.T) {
 	if len(resp.Results) == 0 {
 		t.Fatal("expected at least one result for timeout")
 	}
-	if resp.Results[0].Status != "error" {
-		t.Errorf("expected status 'error' for timeout, got %q", resp.Results[0].Status)
+	r := resp.Results[0]
+	if r.Kind != "io" || r.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", r.Kind)
 	}
-	if resp.Results[0].Stderr != "execution timed out" {
-		t.Errorf("expected timeout error in Stderr, got %q", resp.Results[0].Stderr)
+	if r.IO.Status != "error" {
+		t.Errorf("expected status 'error' for timeout, got %q", r.IO.Status)
+	}
+	if r.IO.Stderr != "execution timed out" {
+		t.Errorf("expected timeout error in Stderr, got %q", r.IO.Stderr)
 	}
 }
 
@@ -624,8 +637,12 @@ func TestExecute_Cases_SingleRunOnly(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Results[0].Status != "run" {
-		t.Errorf("expected status 'run' for case without expected_output, got %q", resp.Results[0].Status)
+	r := resp.Results[0]
+	if r.Kind != "io" || r.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", r.Kind)
+	}
+	if r.IO.Status != "run" {
+		t.Errorf("expected status 'run' for case without expected_output, got %q", r.IO.Status)
 	}
 }
 
@@ -666,6 +683,11 @@ func TestExecute_Cases_MultipleCases(t *testing.T) {
 	}
 	if resp.Summary.Total != 3 {
 		t.Errorf("expected total=3, got %d", resp.Summary.Total)
+	}
+	for i, r := range resp.Results {
+		if r.Kind != "io" || r.IO == nil {
+			t.Errorf("results[%d]: expected io result, got kind=%q", i, r.Kind)
+		}
 	}
 }
 
@@ -769,8 +791,12 @@ func TestExecute_Cases_SandboxTimeout(t *testing.T) {
 	if resp.Summary.Errors == 0 {
 		t.Error("expected at least one error in summary for timed-out execution")
 	}
-	if resp.Results[0].Status != "error" {
-		t.Errorf("expected status 'error' for timed-out case, got %q", resp.Results[0].Status)
+	r := resp.Results[0]
+	if r.Kind != "io" || r.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", r.Kind)
+	}
+	if r.IO.Status != "error" {
+		t.Errorf("expected status 'error' for timed-out case, got %q", r.IO.Status)
 	}
 }
 
@@ -805,9 +831,13 @@ func TestExecute_Cases_TimeoutProducesErrorForAllCases(t *testing.T) {
 	if len(resp.Results) != 2 {
 		t.Errorf("expected 2 error results (one per case), got %d", len(resp.Results))
 	}
-	for _, r := range resp.Results {
-		if r.Status != "error" {
-			t.Errorf("expected status 'error' for timed-out case %q, got %q", r.Name, r.Status)
+	for _, u := range resp.Results {
+		if u.Kind != "io" || u.IO == nil {
+			t.Errorf("expected io result, got kind=%q", u.Kind)
+			continue
+		}
+		if u.IO.Status != "error" {
+			t.Errorf("expected status 'error' for timed-out case %q, got %q", u.IO.Name, u.IO.Status)
 		}
 	}
 }
@@ -822,6 +852,302 @@ func TestExecute_Cases_TimeoutProducesErrorForAllCases(t *testing.T) {
 //
 // Without this check the student's file is silently dropped, causing confusing
 // failures where the file appears missing even though the request succeeds.
+// --- Pytest dispatch tests ---
+
+// TestExecute_Pytest_DispatchesToPytestRunner verifies that a case with kind="pytest"
+// is dispatched to the pytest sandbox runner (not the io runner).
+//
+// Contract: the handler must use kind to dispatch cases. If kind is ignored,
+// pytest cases fall through to the io runner which produces wrong/empty results.
+func TestExecute_Pytest_DispatchesToPytestRunner(t *testing.T) {
+	pytestCallCount := 0
+	ioCallCount := 0
+
+	// The runner that tracks which kind of case was received by checking
+	// if the sandbox code is the pytestrunner script (pytest) or the iotestrunner (io).
+	trackingRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		if req.Code == pytestrunner.Script {
+			pytestCallCount++
+			out, _ := json.Marshal([]map[string]any{{
+				"kind":        "pytest",
+				"name":        "test_add",
+				"passed":      true,
+				"duration_ms": 100,
+				"assertions":  []map[string]any{{"name": "test_add", "passed": true}},
+			}})
+			return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 100}, nil
+		}
+		ioCallCount++
+		out, _ := json.Marshal([]map[string]any{{
+			"name": "run", "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io",
+		}})
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 1}, nil
+	}
+
+	h := newHandler(trackingRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [{"name": "test_add", "kind": "pytest", "test_code": "def test_add(): assert True", "target_path": "tests/test_add.py"}]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if pytestCallCount != 1 {
+		t.Errorf("expected pytest runner called once, got %d", pytestCallCount)
+	}
+	if ioCallCount != 0 {
+		t.Errorf("expected io runner not called, got %d", ioCallCount)
+	}
+}
+
+// TestExecute_Pytest_ResultShapeInResponse verifies that the handler returns
+// PytestCaseResult-shaped results in resp.Results for pytest cases.
+//
+// Contract: results[] is a unified discriminated union — pytest results appear
+// with kind="pytest" and the full PytestCaseResult payload.
+func TestExecute_Pytest_ResultShapeInResponse(t *testing.T) {
+	pytestRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		// Return a pytest result shaped like what script.py emits.
+		out, _ := json.Marshal([]map[string]any{{
+			"kind":        "pytest",
+			"name":        "test_add",
+			"passed":      true,
+			"duration_ms": 55,
+			"assertions":  []map[string]any{{"name": "test_add", "passed": true, "failure_message": "", "traceback": ""}},
+			"stderr":      "",
+		}})
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0, DurationMs: 55}, nil
+	}
+
+	h := newHandler(pytestRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [{"name": "test_add", "kind": "pytest", "test_code": "def test_add(): assert True", "target_path": "tests/test_add.py"}]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result in Results, got %d", len(resp.Results))
+	}
+	u := resp.Results[0]
+	if u.Kind != "pytest" || u.Pytest == nil {
+		t.Fatalf("expected pytest result, got kind=%q", u.Kind)
+	}
+	if u.Pytest.Kind != "pytest" {
+		t.Errorf("expected kind='pytest', got %q", u.Pytest.Kind)
+	}
+	if !u.Pytest.Passed {
+		t.Errorf("expected passed=true, got false")
+	}
+	if len(u.Pytest.Assertions) == 0 {
+		t.Errorf("expected assertions in result, got none")
+	}
+}
+
+// TestExecute_Pytest_MixedCasesDispatch verifies that a request with both io and pytest
+// cases dispatches each case to its correct runner and returns results in a unified slice.
+//
+// Contract: the handler must process each case independently by kind.
+// Without this, mixed requests send all cases to the wrong runner.
+func TestExecute_Pytest_MixedCasesDispatch(t *testing.T) {
+	callLog := []string{}
+
+	mixedRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		// Detect by whether the runner code is the pytestrunner script.
+		if req.Code == pytestrunner.Script {
+			callLog = append(callLog, "pytest")
+			out, _ := json.Marshal([]map[string]any{{
+				"kind": "pytest", "name": "test_x", "passed": true,
+				"duration_ms": 10,
+				"assertions":  []map[string]any{{"name": "test_x", "passed": true}},
+			}})
+			return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+		}
+		callLog = append(callLog, "io")
+		cases := parseCasesFromFiles(req.Files)
+		results := make([]map[string]any, len(cases))
+		for i, name := range cases {
+			results[i] = map[string]any{"name": name, "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io"}
+		}
+		out, _ := json.Marshal(results)
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+	}
+
+	h := newHandler(mixedRunner, metrics.NewNoop(), defaultConfig())
+	body := `{
+		"code": "def add(a,b): return a+b",
+		"language": "python",
+		"cases": [
+			{"name": "io_case", "kind": "io", "input": ""},
+			{"name": "pytest_case", "kind": "pytest", "test_code": "def test_x(): pass", "target_path": "tests/test_x.py"}
+		]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Both cases in unified Results[] slice.
+	if len(resp.Results) != 2 {
+		t.Errorf("expected 2 unified results, got %d", len(resp.Results))
+	}
+	ioCount := 0
+	pytestCount := 0
+	for _, u := range resp.Results {
+		switch u.Kind {
+		case "io":
+			ioCount++
+		case "pytest":
+			pytestCount++
+		}
+	}
+	if ioCount != 1 {
+		t.Errorf("expected 1 io result in unified Results, got %d", ioCount)
+	}
+	if pytestCount != 1 {
+		t.Errorf("expected 1 pytest result in unified Results, got %d", pytestCount)
+	}
+	// Verify we had both dispatch types.
+	ioDispatch := 0
+	pytestDispatch := 0
+	for _, k := range callLog {
+		if k == "io" {
+			ioDispatch++
+		} else {
+			pytestDispatch++
+		}
+	}
+	if ioDispatch == 0 {
+		t.Errorf("expected io runner to be called, callLog=%v", callLog)
+	}
+	if pytestDispatch == 0 {
+		t.Errorf("expected pytest runner to be called, callLog=%v", callLog)
+	}
+}
+
+// TestExecute_InterleavedCasesOrderPreserved verifies that when cases are submitted in
+// interleaved order (e.g. pytest, io, pytest, io), the results array preserves submission
+// order — result[i] corresponds to cases[i] regardless of kind.
+//
+// Contract: dispatch must not reorder results. If io results come first and pytest
+// results come last regardless of submission order, position-based result↔case
+// correspondence breaks and callers get wrong results for wrong cases.
+func TestExecute_InterleavedCasesOrderPreserved(t *testing.T) {
+	mixedRunner := func(_ context.Context, _ sandbox.Config, req sandbox.Request) (*sandbox.Result, error) {
+		if req.Code == pytestrunner.Script {
+			// Return pytest results in order of cases arg.
+			var cases []struct {
+				Name string `json:"name"`
+			}
+			if len(req.Args) >= 2 {
+				_ = json.Unmarshal([]byte(req.Args[1]), &cases)
+			}
+			results := make([]map[string]any, len(cases))
+			for i, c := range cases {
+				results[i] = map[string]any{
+					"kind":        "pytest",
+					"name":        c.Name,
+					"passed":      true,
+					"duration_ms": 10,
+					"assertions":  []map[string]any{{"name": c.Name, "passed": true}},
+				}
+			}
+			out, _ := json.Marshal(results)
+			return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+		}
+		// io: return results for each case in the io_tests.json file.
+		cases := parseCasesFromFiles(req.Files)
+		results := make([]map[string]any, len(cases))
+		for i, name := range cases {
+			results[i] = map[string]any{
+				"name": name, "status": "run", "actual": "ok\n", "time_ms": 1, "type": "io",
+			}
+		}
+		out, _ := json.Marshal(results)
+		return &sandbox.Result{Stdout: string(out), ExitCode: 0}, nil
+	}
+
+	h := newHandler(mixedRunner, metrics.NewNoop(), defaultConfig())
+	// Submit: pytest1, io1, pytest2, io2 — interleaved.
+	body := `{
+		"code": "def f(): pass",
+		"language": "python",
+		"cases": [
+			{"name": "pytest1", "kind": "pytest", "test_code": "def test_p1(): pass", "target_path": "t.py"},
+			{"name": "io1",     "kind": "io",     "input": "a"},
+			{"name": "pytest2", "kind": "pytest", "test_code": "def test_p2(): pass", "target_path": "t.py"},
+			{"name": "io2",     "kind": "io",     "input": "b"}
+		]
+	}`
+	w := doRequest(h, body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp executorapi.ExecuteResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if len(resp.Results) != 4 {
+		t.Fatalf("expected 4 results, got %d", len(resp.Results))
+	}
+
+	// Assert per-position kind and name correspondence with submission order.
+	expected := []struct {
+		kind string
+		name string
+	}{
+		{"pytest", "pytest1"},
+		{"io", "io1"},
+		{"pytest", "pytest2"},
+		{"io", "io2"},
+	}
+	for i, e := range expected {
+		u := resp.Results[i]
+		if u.Kind != e.kind {
+			t.Errorf("results[%d].kind: expected %q, got %q", i, e.kind, u.Kind)
+			continue
+		}
+		var gotName string
+		switch e.kind {
+		case "io":
+			if u.IO == nil {
+				t.Errorf("results[%d]: IO is nil", i)
+				continue
+			}
+			gotName = u.IO.Name
+		case "pytest":
+			if u.Pytest == nil {
+				t.Errorf("results[%d]: Pytest is nil", i)
+				continue
+			}
+			gotName = u.Pytest.Name
+		}
+		if gotName != e.name {
+			t.Errorf("results[%d].name: expected %q, got %q", i, e.name, gotName)
+		}
+	}
+}
+
 func TestExecute_Cases_ReservedFilenameRejected(t *testing.T) {
 	tests := []struct {
 		name         string

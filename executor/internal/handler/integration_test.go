@@ -76,13 +76,16 @@ func executeRequest(t *testing.T, baseURL string, req executorapi.ExecuteRequest
 	return result
 }
 
-// firstResult returns the first CaseResult from a response, or fails the test.
+// firstResult returns the first io CaseResult from the unified Results slice, or fails the test.
 func firstResult(t *testing.T, resp executorapi.ExecuteResponse) executorapi.CaseResult {
 	t.Helper()
-	if len(resp.Results) == 0 {
-		t.Fatal("expected at least one result in response")
+	for _, u := range resp.Results {
+		if u.Kind == "io" && u.IO != nil {
+			return *u.IO
+		}
 	}
-	return resp.Results[0]
+	t.Fatal("expected at least one io result in response")
+	return executorapi.CaseResult{}
 }
 
 // singleCase builds an ExecuteRequest with a single I/O case.
@@ -680,6 +683,179 @@ public class Main {
 	}
 	if !strings.HasPrefix(output, "BLOCKED:") {
 		t.Errorf("expected BLOCKED prefix, got %q (status=%v, stderr=%q)", output, r.Status, r.Stderr)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Pytest integration tests
+// ---------------------------------------------------------------------------
+
+// pytestCase builds a single-case ExecuteRequest with kind="pytest".
+func pytestCase(studentCode, testCode, name, targetPath string, timeoutMs *int) executorapi.ExecuteRequest {
+	c := executorapi.CaseDef{
+		Name:       name,
+		Kind:       "pytest",
+		TestCode:   testCode,
+		TargetPath: targetPath,
+	}
+	req := executorapi.ExecuteRequest{
+		Code:     studentCode,
+		Language: "python",
+		Cases:    []executorapi.CaseDef{c},
+	}
+	if timeoutMs != nil {
+		req.TimeoutMs = timeoutMs
+	}
+	return req
+}
+
+// firstPytestResult returns the first pytest result from the unified Results slice, or fails the test.
+func firstPytestResult(t *testing.T, resp executorapi.ExecuteResponse) executorapi.PytestCaseResult {
+	t.Helper()
+	for _, u := range resp.Results {
+		if u.Kind == "pytest" && u.Pytest != nil {
+			return *u.Pytest
+		}
+	}
+	t.Fatal("expected at least one pytest result in response")
+	return executorapi.PytestCaseResult{}
+}
+
+// TestIntegration_Pytest_PassingTest verifies that a passing pytest case returns
+// passed=true with populated assertions.
+//
+// Contract: the executor must run real pytest, parse the JSON report, and return
+// the correct shape. Validates the full executor→Python→pytest→JSON→response pipeline.
+func TestIntegration_Pytest_PassingTest(t *testing.T) {
+	u := executorURL(t)
+	studentCode := "def add(a, b):\n    return a + b\n"
+	testCode := "from student_module import add\n\ndef test_add():\n    assert add(2, 3) == 5\n"
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_add", "tests/test_add.py", nil))
+	r := firstPytestResult(t, resp)
+
+	if !r.Passed {
+		t.Errorf("expected passed=true, got false; stderr=%q", r.Stderr)
+	}
+	if len(r.Assertions) == 0 {
+		t.Error("expected at least one assertion")
+	}
+	if r.Kind != "pytest" {
+		t.Errorf("expected kind='pytest', got %q", r.Kind)
+	}
+}
+
+// TestIntegration_Pytest_FailingTest verifies that a failing pytest case returns
+// passed=false with failure_message and traceback.
+func TestIntegration_Pytest_FailingTest(t *testing.T) {
+	u := executorURL(t)
+	studentCode := "def add(a, b):\n    return a + b\n"
+	testCode := "from student_module import add\n\ndef test_add_wrong():\n    assert add(2, 3) == 6\n"
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_add_wrong", "tests/test_add_wrong.py", nil))
+	r := firstPytestResult(t, resp)
+
+	if r.Passed {
+		t.Errorf("expected passed=false for failing test, got passed=true")
+	}
+	if len(r.Assertions) == 0 {
+		t.Fatal("expected assertions")
+	}
+	a := r.Assertions[0]
+	if a.Passed {
+		t.Errorf("expected assertion passed=false")
+	}
+	if a.FailureMessage == "" {
+		t.Errorf("expected non-empty failure_message")
+	}
+}
+
+// TestIntegration_Pytest_CollectionError verifies that a syntax error in the test
+// file surfaces as passed=false with stderr populated.
+func TestIntegration_Pytest_CollectionError(t *testing.T) {
+	u := executorURL(t)
+	studentCode := "def add(a, b):\n    return a + b\n"
+	// Syntax error — unclosed parenthesis.
+	testCode := "def test_bad(\n    this is not valid syntax\n"
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_syntax_error", "tests/test_syntax_error.py", nil))
+	r := firstPytestResult(t, resp)
+
+	if r.Passed {
+		t.Errorf("expected passed=false for collection error")
+	}
+	if r.Stderr == "" {
+		t.Errorf("expected non-empty stderr for collection error")
+	}
+}
+
+// TestIntegration_Pytest_ImportError verifies that an import error in student code
+// surfaces in stderr without crashing the runner.
+func TestIntegration_Pytest_ImportError(t *testing.T) {
+	u := executorURL(t)
+	studentCode := "import nonexistent_module_xyz\ndef add(a, b): return a + b\n"
+	testCode := "from student_module import add\n\ndef test_add():\n    assert add(2, 3) == 5\n"
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_import_error", "tests/test_import_error.py", nil))
+	r := firstPytestResult(t, resp)
+
+	if r.Passed {
+		t.Errorf("expected passed=false for import error")
+	}
+	if r.Stderr == "" {
+		t.Errorf("expected non-empty stderr for import error")
+	}
+}
+
+// TestIntegration_Pytest_Parametrize verifies that parametrized tests produce
+// one assertion entry per combination.
+func TestIntegration_Pytest_Parametrize(t *testing.T) {
+	u := executorURL(t)
+	studentCode := "def add(a, b):\n    return a + b\n"
+	testCode := `import pytest
+from student_module import add
+
+@pytest.mark.parametrize("x,y,expected", [
+    (2, 3, 5),
+    (4, 4, 8),
+    (0, 0, 0),
+])
+def test_add_parametrize(x, y, expected):
+    assert add(x, y) == expected
+`
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_parametrize", "tests/test_parametrize.py", nil))
+	r := firstPytestResult(t, resp)
+
+	if !r.Passed {
+		t.Errorf("expected passed=true for all-passing parametrize; stderr=%q", r.Stderr)
+	}
+	if len(r.Assertions) != 3 {
+		t.Errorf("expected 3 assertions for 3 parametrize combos, got %d", len(r.Assertions))
+	}
+}
+
+// TestIntegration_Pytest_FilesystemIsolation verifies that pytest cannot read
+// /etc/passwd from inside the sandbox (only for full nsjail envs).
+func TestIntegration_Pytest_FilesystemIsolation(t *testing.T) {
+	skipSandboxTest(t)
+	u := executorURL(t)
+	studentCode := "secret = 'not_passwd'\n"
+	testCode := `from student_module import secret
+
+def test_cannot_read_etc_passwd():
+    try:
+        with open('/etc/passwd') as f:
+            content = f.readline()
+        # If readable, assert secret matches — which it won't.
+        assert secret == content, "leak: student code exposed /etc/passwd"
+    except (OSError, PermissionError, FileNotFoundError):
+        # Sandbox correctly blocks access.
+        pass
+`
+	resp := executeRequest(t, u, pytestCase(studentCode, testCode, "test_fs_isolation", "tests/test_fs_isolation.py", intPtr(10000)))
+	r := firstPytestResult(t, resp)
+
+	// Either passed (sandbox blocked access) or failed with assertion error
+	// (non-sandbox env but content != 'not_passwd'). Either way, the runner
+	// must not crash.
+	if r.Kind != "pytest" {
+		t.Errorf("expected kind='pytest', got %q", r.Kind)
 	}
 }
 

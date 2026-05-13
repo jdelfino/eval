@@ -45,19 +45,21 @@ func setupExecuteHandler(execClient ExecutorClient) http.Handler {
 // defaultTestResponse returns a minimal valid ExecuteResponse for tests that
 // don't care about the response content.
 func defaultTestResponse() *executor.ExecuteResponse {
+	r := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "ok\n", TimeMs: 10}
 	return &executor.ExecuteResponse{
-		Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n", TimeMs: 10}},
+		Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &r}},
 		Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 10},
 	}
 }
 
 func TestExecute_HappyPath(t *testing.T) {
 	var capturedReq executor.ExecuteRequest
+	r := executorapi.CaseResult{Name: "case1", Type: "io", Status: "run", Input: "hello", Actual: "HELLO", TimeMs: 30}
 	execClient := &mockExecutorClient{
 		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
 			capturedReq = req
 			return &executor.ExecuteResponse{
-				Results: []executorapi.CaseResult{{Name: "case1", Type: "io", Status: "run", Input: "hello", Actual: "HELLO", TimeMs: 30}},
+				Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &r}},
 				Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 30},
 			}, nil
 		},
@@ -83,22 +85,29 @@ func TestExecute_HappyPath(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Response must be native {results[], summary} shape
-	var resp executor.ExecuteResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	// Response must be native {results[], summary} shape — decode as raw JSON to inspect fields.
+	var rawResp map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &rawResp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(resp.Results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(resp.Results))
+	var results []map[string]json.RawMessage
+	if err := json.Unmarshal(rawResp["results"], &results); err != nil {
+		t.Fatalf("unmarshal results: %v", err)
 	}
-	if resp.Results[0].Name != "case1" {
-		t.Fatalf("expected results[0].name='case1', got %q", resp.Results[0].Name)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
 	}
-	if resp.Results[0].Status != "run" {
-		t.Fatalf("expected results[0].status='run', got %q", resp.Results[0].Status)
+	var name string
+	if err := json.Unmarshal(results[0]["name"], &name); err != nil || name != "case1" {
+		t.Fatalf("expected results[0].name='case1', got %q", name)
 	}
-	if resp.Results[0].Actual != "HELLO" {
-		t.Fatalf("expected results[0].actual='HELLO', got %q", resp.Results[0].Actual)
+	var status string
+	if err := json.Unmarshal(results[0]["status"], &status); err != nil || status != "run" {
+		t.Fatalf("expected results[0].status='run', got %q", status)
+	}
+	var actual string
+	if err := json.Unmarshal(results[0]["actual"], &actual); err != nil || actual != "HELLO" {
+		t.Fatalf("expected results[0].actual='HELLO', got %q", actual)
 	}
 	// Verify executor received correct fields
 	if capturedReq.Code != `print(input().upper())` {

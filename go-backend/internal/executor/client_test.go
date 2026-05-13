@@ -41,8 +41,9 @@ func TestExecute_Success(t *testing.T) {
 			t.Errorf("unexpected code: %s", req.Code)
 		}
 
+		cr := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 42}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "hello\n", TimeMs: 42}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &cr}},
 			Summary: executorapi.CaseSummary{Total: 1, Run: 1, TimeMs: 42},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -61,18 +62,23 @@ func TestExecute_Success(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(resp.Results))
 	}
-	if resp.Results[0].Actual != "hello\n" {
-		t.Errorf("unexpected actual: %q", resp.Results[0].Actual)
+	u := resp.Results[0]
+	if u.Kind != "io" || u.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", u.Kind)
 	}
-	if resp.Results[0].TimeMs != 42 {
-		t.Errorf("unexpected time_ms: %d", resp.Results[0].TimeMs)
+	if u.IO.Actual != "hello\n" {
+		t.Errorf("unexpected actual: %q", u.IO.Actual)
+	}
+	if u.IO.TimeMs != 42 {
+		t.Errorf("unexpected time_ms: %d", u.IO.TimeMs)
 	}
 }
 
 func TestExecute_FailedExecution(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r2 := executorapi.CaseResult{Name: "run", Type: "io", Status: "error", Stderr: "NameError: name 'foo' is not defined"}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "error", Stderr: "NameError: name 'foo' is not defined"}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &r2}},
 			Summary: executorapi.CaseSummary{Total: 1, Errors: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -91,11 +97,15 @@ func TestExecute_FailedExecution(t *testing.T) {
 	if len(resp.Results) == 0 {
 		t.Fatal("expected results")
 	}
-	if resp.Results[0].Status != "error" {
-		t.Errorf("expected status 'error', got %q", resp.Results[0].Status)
+	u := resp.Results[0]
+	if u.Kind != "io" || u.IO == nil {
+		t.Fatalf("expected io result, got kind=%q", u.Kind)
 	}
-	if resp.Results[0].Stderr != "NameError: name 'foo' is not defined" {
-		t.Errorf("unexpected error message: %s", resp.Results[0].Stderr)
+	if u.IO.Status != "error" {
+		t.Errorf("expected status 'error', got %q", u.IO.Status)
+	}
+	if u.IO.Stderr != "NameError: name 'foo' is not defined" {
+		t.Errorf("unexpected error message: %s", u.IO.Stderr)
 	}
 }
 
@@ -231,8 +241,9 @@ func TestExecute_PropagatesRequestID(t *testing.T) {
 		if got != reqID {
 			t.Errorf("X-Request-ID = %q, want %q", got, reqID)
 		}
+		rr := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &rr}},
 			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -255,8 +266,9 @@ func TestExecute_NoRequestIDHeader(t *testing.T) {
 		if got := r.Header.Get("X-Request-ID"); got != "" {
 			t.Errorf("unexpected X-Request-ID header: %q", got)
 		}
+		rr := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &rr}},
 			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -301,8 +313,9 @@ func TestExecute_InjectsTraceContext(t *testing.T) {
 	var receivedTraceparent string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedTraceparent = r.Header.Get("traceparent")
+		rr := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &rr}},
 			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -401,8 +414,9 @@ func TestExecute_RequestFields(t *testing.T) {
 			t.Errorf("unexpected timeout_ms: %v", req.TimeoutMs)
 		}
 
+		rr := executorapi.CaseResult{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}
 		resp := ExecuteResponse{
-			Results: []executorapi.CaseResult{{Name: "run", Type: "io", Status: "run", Actual: "ok\n"}},
+			Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &rr}},
 			Summary: executorapi.CaseSummary{Total: 1, Run: 1},
 		}
 		w.Header().Set("Content-Type", "application/json")

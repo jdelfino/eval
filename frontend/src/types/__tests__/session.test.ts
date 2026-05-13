@@ -96,7 +96,7 @@ describe('Session type hierarchy', () => {
 
   it('ApiSession.featured_test_cases accepts IOTestCase[] | null', () => {
     const testCases: IOTestCase[] = [
-      { name: 'case 1', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'case 1', input: 'hello', match_type: 'exact', order: 0 },
     ];
     const sessionWithCases: ApiSession = { ...apiSession, featured_test_cases: testCases };
     expect(sessionWithCases.featured_test_cases).toEqual(testCases);
@@ -111,7 +111,7 @@ describe('Session type hierarchy', () => {
 describe('Student type', () => {
   it('Student has test_cases field typed as IOTestCase[]', () => {
     const testCases: IOTestCase[] = [
-      { name: 'default', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'default', input: 'hello', match_type: 'exact', order: 0 },
     ];
     const student: Student = {
       user_id: 'u-1',
@@ -159,7 +159,7 @@ describe('Student type', () => {
 describe('ClientSession type', () => {
   it('Session.featured_test_cases accepts IOTestCase[]', () => {
     const testCases: IOTestCase[] = [
-      { name: 'case', input: 'input', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'case', input: 'input', match_type: 'exact', order: 0 },
     ];
     const session: Partial<ClientSession> = {
       featured_test_cases: testCases,
@@ -221,7 +221,7 @@ describe('SessionPublicState type', () => {
 
   it('SessionPublicState.featured_test_cases accepts IOTestCase[]', () => {
     const testCases: IOTestCase[] = [
-      { name: 'case', input: 'input', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'case', input: 'input', match_type: 'exact', order: 0 },
     ];
     const state: SessionPublicState = {
       problem: null,

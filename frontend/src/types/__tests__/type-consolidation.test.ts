@@ -13,9 +13,10 @@ import type { IOTestCase } from '../api';
 
 describe('TestResponse consolidation (cases[] protocol)', () => {
   it('TestResponse from api.ts has results[] and summary', () => {
+    // CaseResult is now a discriminated union: CaseResultIO | CaseResultPytest keyed on 'kind'.
     const caseResult: CaseResult = {
+      kind: 'io',
       name: 'run',
-      type: 'io',
       status: 'run',
       input: '',
       actual: 'hello\n',
@@ -33,32 +34,38 @@ describe('TestResponse consolidation (cases[] protocol)', () => {
       results: [caseResult],
       summary,
     };
-    expect(result.results[0].actual).toBe('hello\n');
+    // Narrow via kind discriminator to access io-specific fields.
+    const r = result.results[0];
+    if (r.kind === 'io') {
+      expect(r.actual).toBe('hello\n');
+    }
     expect(result.summary.total).toBe(1);
   });
 });
 
 describe('Instructor types consolidation (PLAT-uum.49)', () => {
   it('Student uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
-    const testCases: IOTestCase[] = [{ name: 'Default', input: 'test', match_type: 'exact', order: 0, random_seed: 42 }];
+    const testCases: IOTestCase[] = [{ kind: 'io', name: 'Default', input: 'test', match_type: 'exact', order: 0, random_seed: 42 }];
     const student: InstructorStudent = {
       id: 'u-1',
       name: 'Alice',
       has_code: true,
       test_cases: testCases,
     };
-    expect(student.test_cases?.[0]?.input).toBe('test');
+    const tc = student.test_cases?.[0];
+    expect(tc?.kind === 'io' ? tc.input : undefined).toBe('test');
   });
 
   it('RealtimeStudent uses IOTestCase[] from types/api (PLAT-st42.4: ExecutionSettings removed)', () => {
-    const testCases: IOTestCase[] = [{ name: 'Default', input: 'input', match_type: 'exact', order: 0 }];
+    const testCases: IOTestCase[] = [{ kind: 'io', name: 'Default', input: 'input', match_type: 'exact', order: 0 }];
     const student: RealtimeStudent = {
       id: 'u-2',
       name: 'Bob',
       code: 'print(1)',
       test_cases: testCases,
     };
-    expect(student.test_cases?.[0]?.input).toBe('input');
+    const tc = student.test_cases?.[0];
+    expect(tc?.kind === 'io' ? tc.input : undefined).toBe('input');
   });
 
   it('ClassInfo has the expected shape', () => {

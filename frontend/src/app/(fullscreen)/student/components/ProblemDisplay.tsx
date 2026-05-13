@@ -100,7 +100,7 @@ export default function ProblemDisplay({ problem, onLoadStarterCode }: ProblemDi
         )}
 
         {/* Test Case Info */}
-        {firstCase && (firstCase.random_seed !== undefined || (firstCase.attached_files?.length ?? 0) > 0) && (
+        {firstCase && firstCase.kind === 'io' && (firstCase.random_seed !== undefined || (firstCase.attached_files?.length ?? 0) > 0) && (
           <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
             {firstCase.random_seed !== undefined && (
               <p>🎲 Random seed: {firstCase.random_seed}</p>

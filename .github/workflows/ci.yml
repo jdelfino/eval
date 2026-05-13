@@ -267,6 +267,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Install pytest for executor integration
+        run: pip install pytest pytest-json-report
       - name: Build executor
         run: go build -o ./tmp/executor ./cmd/executor
         working-directory: executor

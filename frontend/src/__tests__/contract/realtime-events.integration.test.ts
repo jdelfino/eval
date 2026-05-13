@@ -418,6 +418,7 @@ describe('Realtime event contract tests', () => {
       try {
         const testCases = [
           {
+            kind: 'io' as const,
             name: 'Default',
             input: 'student-input',
             match_type: 'exact',
@@ -500,6 +501,7 @@ describe('Realtime event contract tests', () => {
         // Feature with test_cases
         const executionSettings = [
           {
+            kind: 'io' as const,
             name: 'Default',
             input: 'contract-test-input',
             match_type: 'exact',

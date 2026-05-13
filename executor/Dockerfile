@@ -60,9 +60,10 @@ RUN CGO_ENABLED=0 go build \
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 ca-certificates \
+    python3 python3-pip ca-certificates \
     libprotobuf32 libnl-3-200 libnl-route-3-200 \
-  && rm -rf /var/lib/apt/lists/*
+  && pip3 install --break-system-packages pytest pytest-json-report \
+  && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 # Copy JDK 21 from the Temurin builder stage (Debian bookworm only packages JDK 17).
 ENV JAVA_HOME=/usr/lib/jvm/temurin-21

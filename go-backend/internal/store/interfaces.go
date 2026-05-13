@@ -122,25 +122,13 @@ type ClassRepository interface {
 	ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 }
 
-// IOTestCase represents a single I/O test case stored as JSONB in the database.
-// It is used in both problems.test_cases (instructor-defined cases) and
-// student_work.test_cases (student-defined cases).
+// IOTestCase is the discriminated union interface for test cases.
 //
-// A case with ExpectedOutput set is a proper test (pass/fail comparison).
-// A case without ExpectedOutput is a "run-only" case that shows output without asserting correctness.
+// Use Kind() to discriminate between variants:
+//   - "io"     → *IOTestCaseIO
+//   - "pytest" → *IOTestCasePytest
 //
-// IOTestCase subsumes ExecutionSettings: a case carries its own Input (stdin),
-// RandomSeed, and AttachedFiles. The execution_settings columns have been removed;
-// all execution parameters live in test_cases.
-type IOTestCase struct {
-	Name           string `json:"name"`
-	Input          string `json:"input"`
-	ExpectedOutput string `json:"expected_output,omitempty"`
-	MatchType      string `json:"match_type"`
-	RandomSeed     *int   `json:"random_seed,omitempty"`
-	AttachedFiles  []File `json:"attached_files,omitempty"`
-	Order          int    `json:"order"`
-}
+// Defined and documented in iotestcase_json.go.
 
 // File represents an auxiliary file attached to a test case or execution environment.
 // Mirrors executorapi.File so the store layer has no dependency on the executorapi package.

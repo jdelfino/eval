@@ -125,7 +125,7 @@ describe('Sessions Full API', () => {
         author_id: '',
         class_id: null,
         tags: [],
-        test_cases: [{ name: 'Default', input: 'test input', match_type: 'exact', order: 0, random_seed: 42 }],
+        test_cases: [{ kind: 'io' as const, name: 'Default', input: 'test input', match_type: 'exact', order: 0, random_seed: 42 }],
         created_at: '',
         updated_at: '',
       };
@@ -202,6 +202,7 @@ describe('Sessions Full API', () => {
        */
       const testCases = [
         {
+          kind: 'io' as const,
           name: 'Default',
           input: 'round-trip-input',
           match_type: 'exact',

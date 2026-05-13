@@ -29,7 +29,7 @@ describe('traceCode', () => {
   });
 
   it('posts to /trace with code and language', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     await traceCode('print("hello")', 'python', testCase);
 
     expect(mockApiPost).toHaveBeenCalledWith('/trace', expect.objectContaining({
@@ -39,7 +39,7 @@ describe('traceCode', () => {
   });
 
   it('maps testCase.input to body.stdin', async () => {
-    const testCase: IOTestCase = { name: 'default', input: 'hello world', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: 'hello world', match_type: 'exact', order: 0 };
     await traceCode('print(input())', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -47,7 +47,7 @@ describe('traceCode', () => {
   });
 
   it('omits stdin when testCase.input is empty string', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -55,7 +55,7 @@ describe('traceCode', () => {
   });
 
   it('maps testCase.random_seed to body.random_seed', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0, random_seed: 42 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0, random_seed: 42 };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -63,7 +63,7 @@ describe('traceCode', () => {
   });
 
   it('omits random_seed when not present in testCase', async () => {
-    const testCase: IOTestCase = { name: 'default', input: 'x', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: 'x', match_type: 'exact', order: 0 };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -72,7 +72,7 @@ describe('traceCode', () => {
 
   it('maps testCase.attached_files to body.files', async () => {
     const files = [{ name: 'data.txt', content: 'hello' }];
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0, attached_files: files };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0, attached_files: files };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -81,7 +81,7 @@ describe('traceCode', () => {
   });
 
   it('omits files when testCase.attached_files is absent', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -90,7 +90,7 @@ describe('traceCode', () => {
   });
 
   it('passes maxSteps as max_steps in body', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     await traceCode('print("hi")', 'python', testCase, 500);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -98,7 +98,7 @@ describe('traceCode', () => {
   });
 
   it('omits max_steps when not provided', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     await traceCode('print("hi")', 'python', testCase);
 
     const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
@@ -106,7 +106,7 @@ describe('traceCode', () => {
   });
 
   it('returns the trace response', async () => {
-    const testCase: IOTestCase = { name: 'default', input: '', match_type: 'exact', order: 0 };
+    const testCase: IOTestCase = { kind: 'io', name: 'default', input: '', match_type: 'exact', order: 0 };
     const result = await traceCode('print("hi")', 'python', testCase);
 
     expect(result).toEqual(mockTrace);

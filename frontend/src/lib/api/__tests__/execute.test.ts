@@ -15,7 +15,7 @@ jest.mock('@/lib/api-client', () => ({
   apiPost: (...args: unknown[]) => mockApiPost(...args),
 }));
 
-import { warmExecutor, executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '../execute';
+import { warmExecutor, executeCode, ioTestCasesToCaseDefs, buildIOTestCases, type CaseDef, type CaseDefIO, type CaseDefPytest } from '../execute';
 
 const mockTestResponse = {
   results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'hello\n', time_ms: 50 }],
@@ -89,7 +89,7 @@ describe('ioTestCasesToCaseDefs', () => {
 
   it('maps input and name from IOTestCase', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: 'hello', match_type: 'exact', order: 0 },
     ]);
     expect(result).toEqual([
       { name: 'run', input: 'hello', match_type: 'exact' },
@@ -102,21 +102,21 @@ describe('ioTestCasesToCaseDefs', () => {
 
   it('uses empty string for input when IOTestCase input is empty', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Default', input: '', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Default', input: '', match_type: 'exact', order: 0 },
     ]);
-    expect(result[0].input).toBe('');
+    expect((result[0] as CaseDefIO).input).toBe('');
   });
 
   it('includes random_seed when present', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'x', match_type: 'exact', order: 0, random_seed: 42 },
+      { kind: 'io' as const, name: 'Test', input: 'x', match_type: 'exact', order: 0, random_seed: 42 },
     ]);
-    expect(result[0].random_seed).toBe(42);
+    expect((result[0] as CaseDefIO).random_seed).toBe(42);
   });
 
   it('omits random_seed when absent', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: 'x', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: 'x', match_type: 'exact', order: 0 },
     ]);
     expect(result[0]).not.toHaveProperty('random_seed');
   });
@@ -124,27 +124,27 @@ describe('ioTestCasesToCaseDefs', () => {
   it('includes attached_files when present', () => {
     const files = [{ name: 'data.txt', content: 'hello' }];
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: '', match_type: 'exact', order: 0, attached_files: files },
+      { kind: 'io' as const, name: 'Test', input: '', match_type: 'exact', order: 0, attached_files: files },
     ]);
-    expect(result[0].attached_files).toEqual(files);
+    expect((result[0] as CaseDefIO).attached_files).toEqual(files);
   });
 
   it('omits attached_files when absent', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'Test', input: '', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'Test', input: '', match_type: 'exact', order: 0 },
     ]);
     expect(result[0]).not.toHaveProperty('attached_files');
   });
 
   it('only converts first test case (run mode uses single case)', () => {
     const result = ioTestCasesToCaseDefs([
-      { name: 'A', input: 'first', match_type: 'exact', order: 0 },
-      { name: 'B', input: 'second', match_type: 'exact', order: 1 },
+      { kind: 'io' as const, name: 'A', input: 'first', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'B', input: 'second', match_type: 'exact', order: 1 },
     ]);
     // All cases are converted — caller picks [0] for run mode
     expect(result).toHaveLength(2);
-    expect(result[0].input).toBe('first');
-    expect(result[1].input).toBe('second');
+    expect((result[0] as CaseDefIO).input).toBe('first');
+    expect((result[1] as CaseDefIO).input).toBe('second');
   });
 });
 
@@ -169,14 +169,16 @@ describe('buildIOTestCases', () => {
   it('returns a single IOTestCase when random_seed is set', () => {
     const result = buildIOTestCases({ stdin: '', random_seed: 42, attached_files: [] });
     expect(result).toHaveLength(1);
-    expect(result[0].random_seed).toBe(42);
+    const tc = result[0];
+    expect(tc.kind === 'io' ? tc.random_seed : undefined).toBe(42);
   });
 
   it('returns a single IOTestCase when attached_files is non-empty', () => {
     const files = [{ name: 'f.txt', content: 'data' }];
     const result = buildIOTestCases({ stdin: '', random_seed: undefined, attached_files: files });
     expect(result).toHaveLength(1);
-    expect(result[0].attached_files).toEqual(files);
+    const tc = result[0];
+    expect(tc.kind === 'io' ? tc.attached_files : undefined).toEqual(files);
   });
 
   it('omits random_seed from the IOTestCase when not set', () => {
@@ -201,6 +203,118 @@ describe('buildIOTestCases', () => {
       random_seed: 7,
       attached_files: files,
     });
+  });
+});
+
+describe('executeCode — pytest cases (TC1)', () => {
+  /**
+   * TC1: executeCode request signature accepts pytest cases at the type level.
+   *
+   * Verifies that CaseDef supports kind='pytest' with test_code + target_path,
+   * and that executeCode sends these fields to the backend without mangling.
+   * Catches: CaseDef still being io-only, missing pytest fields on the wire.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(mockTestResponse);
+  });
+
+  it('accepts pytest CaseDef at the type level and sends it to the backend', async () => {
+    // TC1: TypeScript must allow a pytest CaseDef — this test compiles only if
+    // CaseDef includes kind, test_code, and target_path.
+    const pytestCase: CaseDef = {
+      kind: 'pytest',
+      name: 'test-bar',
+      test_code: 'def test_bar():\n    assert True',
+      target_path: 'tests/test_foo.py::test_bar',
+    };
+
+    await executeCode('def foo(): pass', 'python', { cases: [pytestCase] });
+
+    expect(mockApiPost).toHaveBeenCalledWith('/execute', {
+      code: 'def foo(): pass',
+      language: 'python',
+      cases: [pytestCase],
+    });
+  });
+
+  it('sends pytest case fields to backend verbatim', async () => {
+    const cases: CaseDef[] = [
+      { kind: 'pytest', name: 'my-test', test_code: 'def test_fn(): pass', target_path: 'tests/test.py::test_fn' },
+    ];
+
+    await executeCode('def foo(): pass', 'python', { cases });
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    const sentCase = (body.cases as CaseDef[])[0];
+    expect(sentCase.kind).toBe('pytest');
+    // Narrow to CaseDefPytest to access pytest-specific fields
+    const pytestSent = sentCase as CaseDefPytest;
+    expect(pytestSent.test_code).toBe('def test_fn(): pass');
+    expect(pytestSent.target_path).toBe('tests/test.py::test_fn');
+  });
+
+  it('accepts mixed io and pytest cases in the same request', async () => {
+    const cases: CaseDef[] = [
+      { kind: 'io', name: 'io-case', input: 'hello', match_type: 'exact' },
+      { kind: 'pytest', name: 'pytest-case', test_code: 'def test_fn(): pass', target_path: 'tests/t.py::test_fn' },
+    ];
+
+    await executeCode('code', 'python', { cases });
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect((body.cases as CaseDef[])).toHaveLength(2);
+    expect((body.cases as CaseDef[])[0].kind).toBe('io');
+    expect((body.cases as CaseDef[])[1].kind).toBe('pytest');
+  });
+});
+
+describe('ioTestCasesToCaseDefs — pytest dispatch (TC3)', () => {
+  /**
+   * TC3: ioTestCasesToCaseDefs dispatches on kind.
+   *
+   * Pass a mix of io + pytest IOTestCase; assert output preserves kind and
+   * translates fields appropriately. Pytest cases must produce CaseDef with
+   * kind='pytest', test_code, target_path — not be silently dropped.
+   * Catches: helper still assuming flat io shape and skipping/mangling pytest cases.
+   */
+
+  it('translates pytest IOTestCase to CaseDef with kind=pytest, test_code, target_path', () => {
+    const result = ioTestCasesToCaseDefs([
+      { kind: 'pytest' as const, name: 'my-test', target_path: 'tests/t.py::fn', test_code: 'def fn(): pass' },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      kind: 'pytest',
+      name: 'my-test',
+      test_code: 'def fn(): pass',
+      target_path: 'tests/t.py::fn',
+    });
+  });
+
+  it('handles a mix of io and pytest cases, preserving both', () => {
+    const result = ioTestCasesToCaseDefs([
+      { kind: 'io' as const, name: 'io-case', input: 'hello', match_type: 'exact', order: 0 },
+      { kind: 'pytest' as const, name: 'pytest-case', target_path: 'tests/t.py::fn', test_code: 'def fn(): pass' },
+    ]);
+    expect(result).toHaveLength(2);
+
+    // io cases: kind is optional on CaseDefIO; the output omits kind (undefined), which
+    // the backend defaults to 'io'. Verify io-specific fields are present.
+    const ioResult = result[0] as CaseDefIO;
+    expect(ioResult.kind).not.toBe('pytest');
+    expect(ioResult.input).toBe('hello');
+
+    expect(result[1].kind).toBe('pytest');
+    expect((result[1] as CaseDefPytest).test_code).toBe('def fn(): pass');
+    expect((result[1] as CaseDefPytest).target_path).toBe('tests/t.py::fn');
+  });
+
+  it('pytest case without a name uses the target_path as name', () => {
+    const result = ioTestCasesToCaseDefs([
+      { kind: 'pytest' as const, target_path: 'tests/t.py::fn', test_code: 'def fn(): pass' },
+    ]);
+    expect(result[0].name).toBeTruthy();
   });
 });
 

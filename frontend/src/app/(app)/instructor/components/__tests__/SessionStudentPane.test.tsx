@@ -96,7 +96,7 @@ describe('SessionStudentPane', () => {
   const mockStudents = [
     { id: 'student-1', name: 'Alice', has_code: true },
     { id: 'student-2', name: 'Bob', has_code: false },
-    { id: 'student-3', name: 'Carol', has_code: true, test_cases: [{ name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: 42 }] },
+    { id: 'student-3', name: 'Carol', has_code: true, test_cases: [{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: 42 }] },
   ];
 
   const mockRealtimeStudents = [
@@ -766,7 +766,7 @@ describe('SessionStudentPane', () => {
     it('renders with sessionTestCases instead of sessionExecutionSettings', () => {
       const propsWithTestCases = {
         ...defaultProps,
-        sessionTestCases: [{ name: 'Default', input: 'hello', match_type: 'exact' as const, order: 0 }],
+        sessionTestCases: [{ kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact' as const, order: 0 }],
       };
       // Drop sessionExecutionSettings — new API uses sessionTestCases
       const { sessionExecutionSettings: _removed, ...cleanProps } = propsWithTestCases as any;

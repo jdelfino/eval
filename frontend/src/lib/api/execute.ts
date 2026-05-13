@@ -6,12 +6,14 @@
  */
 
 import { apiFetch, apiPost } from '@/lib/api-client';
-import type { TestResponse, IOTestCase } from '@/types/api';
+import type { TestResponse, IOTestCase, IOTestCaseIO } from '@/types/api';
 
 /**
- * A single test case definition sent to the execute endpoint.
+ * An I/O test case definition sent to the execute endpoint (kind='io').
+ * Compares program stdout against expected_output using the specified match strategy.
  */
-export interface CaseDef {
+export interface CaseDefIO {
+  kind?: 'io';
   /** Display name for the test case. */
   name: string;
   /** Standard input for the program. */
@@ -25,6 +27,26 @@ export interface CaseDef {
   /** Optional files to attach for the execution context. */
   attached_files?: Array<{ name: string; content: string }>;
 }
+
+/**
+ * A pytest test case definition sent to the execute endpoint (kind='pytest').
+ * Runs a pytest test file against submitted code.
+ */
+export interface CaseDefPytest {
+  kind: 'pytest';
+  /** Display name for the test case. */
+  name: string;
+  /** Content of the pytest test file. */
+  test_code: string;
+  /** Relative path for the test file, e.g. "tests/test_foo.py::test_bar". */
+  target_path: string;
+}
+
+/**
+ * A single test case definition sent to the execute endpoint.
+ * Discriminated union keyed on `kind`. Omitted/empty kind defaults to 'io'.
+ */
+export type CaseDef = CaseDefIO | CaseDefPytest;
 
 /**
  * Synthetic case used for free-run execution (no expected output, no assertions).
@@ -47,9 +69,11 @@ export interface ExecuteOptions {
 /**
  * Convert IOTestCase[] to CaseDef[] for use in executeCode options.
  *
- * Extracts the fields relevant for execution (input, random_seed, attached_files)
- * and maps them to CaseDef shape. All cases are named 'run' since this is used
- * for ad-hoc execution (not graded test runs).
+ * Dispatches on kind:
+ * - 'io' cases are mapped to CaseDefIO with input/random_seed/attached_files.
+ *   Named 'run' since this is used for ad-hoc execution (not graded test runs).
+ * - 'pytest' cases are mapped to CaseDefPytest with test_code/target_path.
+ *   The original name is preserved (or falls back to target_path).
  *
  * Replaces the copy-pasted inline block that appeared in 5 onRun handlers:
  *   ProblemCreator, SessionProblemEditor, student/page, instructor session page,
@@ -57,7 +81,17 @@ export interface ExecuteOptions {
  */
 export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
   return testCases.map((tc) => {
-    const def: CaseDef = {
+    if (tc.kind === 'pytest') {
+      const def: CaseDefPytest = {
+        kind: 'pytest',
+        name: tc.name ?? tc.target_path,
+        test_code: tc.test_code,
+        target_path: tc.target_path,
+      };
+      return def;
+    }
+    // Default: 'io' case
+    const def: CaseDefIO = {
       name: 'run',
       input: tc.input ?? '',
       match_type: 'exact',
@@ -97,7 +131,8 @@ export function buildIOTestCases(opts: {
     return [];
   }
 
-  const tc: IOTestCase = {
+  const tc: IOTestCaseIO = {
+    kind: 'io',
     name: 'Default',
     input: stdin,
     match_type: 'exact',

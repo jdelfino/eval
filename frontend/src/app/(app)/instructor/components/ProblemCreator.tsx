@@ -109,11 +109,12 @@ export default function ProblemCreator({
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
 
-      // Load execution settings from test_cases[0] directly
+      // Load execution settings from test_cases[0] (io kind only)
       const firstCase = problem.test_cases?.[0];
-      setStdin(firstCase?.input || '');
-      setRandomSeed(firstCase?.random_seed);
-      setAttachedFiles(firstCase?.attached_files || []);
+      const ioCase = firstCase?.kind === 'io' ? firstCase : undefined;
+      setStdin(ioCase?.input || '');
+      setRandomSeed(ioCase?.random_seed);
+      setAttachedFiles(ioCase?.attached_files || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -484,9 +485,10 @@ export default function ProblemCreator({
           defaultTestCases={currentTestCases}
           onTestCasesChange={(testCases) => {
             const first = testCases[0];
-            setStdin(first?.input || '');
-            setRandomSeed(first?.random_seed);
-            setAttachedFiles(first?.attached_files || []);
+            const ioFirst = first?.kind === 'io' ? first : undefined;
+            setStdin(ioFirst?.input || '');
+            setRandomSeed(ioFirst?.random_seed);
+            setAttachedFiles(ioFirst?.attached_files || []);
           }}
           problem={{ title, description, starter_code, language }}
           onLoadStarterCode={setStarterCode}
