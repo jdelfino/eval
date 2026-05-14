@@ -18,9 +18,9 @@ import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
-import { toTestRailItems } from '@/lib/testRail';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
-import type { IOTestCase, TestResponse } from '@/types/api';
+import type { IOTestCase, CaseResult, TestResponse } from '@/types/api';
 import type { DrawerMode } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
 
@@ -112,8 +112,8 @@ export default function ProblemCreator({
       setLanguage(problem.language || 'python');
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load problem');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load problem');
     } finally {
       setIsLoading(false);
     }
@@ -185,8 +185,8 @@ export default function ProblemCreator({
       }
 
       onProblemCreated?.(result.id);
-    } catch (err: any) {
-      setError(err.message || `Failed to ${isEditMode ? 'update' : 'create'} problem`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} problem`);
     } finally {
       setIsSubmitting(false);
     }
@@ -237,8 +237,8 @@ export default function ProblemCreator({
       setActiveTab('solution');
       setShowGenerateModal(false);
       setCustomInstructions('');
-    } catch (err: any) {
-      setGenerateModalError(err.message || 'Failed to generate solution');
+    } catch (err: unknown) {
+      setGenerateModalError(err instanceof Error ? err.message : 'Failed to generate solution');
     } finally {
       setIsGenerating(false);
     }
@@ -269,8 +269,8 @@ export default function ProblemCreator({
         cases: ioTestCasesToCaseDefs(testCases),
       });
       setExecutionResult(result);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to run code');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to run code');
     } finally {
       setIsRunning(false);
     }
@@ -290,9 +290,12 @@ export default function ProblemCreator({
       const result = await executeCode(codeToRun, language, {
         cases: ioTestCasesToCaseDefs([singleCase]),
       });
-      setExecutionResult(result);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to run code');
+      // C2-equivalent: sparse results so the result lands on row idx
+      const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
+      sparseResults[idx] = result.results[0];
+      setExecutionResult({ ...result, results: sparseResults });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to run code');
     } finally {
       setIsRunning(false);
     }
@@ -332,18 +335,7 @@ export default function ProblemCreator({
   // Derive drawer mode from execution state
   const drawerMode: DrawerMode = executionResult ? 'output' : 'idle';
 
-  const drawerOutput = executionResult
-    ? {
-        lines: executionResult.results.flatMap((r) => {
-          if (r.kind === 'io' && 'actual' in r && r.actual) {
-            return [{ stream: 'out' as const, text: r.actual }];
-          }
-          return [];
-        }),
-        status: executionResult.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
-        summary: `${executionResult.summary.passed}/${executionResult.summary.total} passed`,
-      }
-    : undefined;
+  const drawerOutput = toDrawerOutput(executionResult);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">

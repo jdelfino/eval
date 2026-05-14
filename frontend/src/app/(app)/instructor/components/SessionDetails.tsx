@@ -9,9 +9,11 @@ import { BackButton } from '@/components/ui/BackButton';
 interface SessionDetailsProps {
   session_id: string;
   onClose: () => void;
+  /** Called with the selected student's code when the instructor triggers Run All. */
+  onExecuteCode?: (code: string) => void;
 }
 
-export default function SessionDetails({ session_id, onClose }: SessionDetailsProps) {
+export default function SessionDetails({ session_id, onClose, onExecuteCode }: SessionDetailsProps) {
   const _router = useRouter();
   const [session, setSession] = useState<SessionDetailsType | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -178,6 +180,7 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
                   activeTabId="main"
                   tests={[]}
                   drawerMode="idle"
+                  onRunAll={onExecuteCode ? () => onExecuteCode(studentCode) : undefined}
                   skinTopBar={
                     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-shrink-0">
                       <h3 className="font-semibold text-gray-900">

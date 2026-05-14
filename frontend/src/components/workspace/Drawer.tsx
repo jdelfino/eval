@@ -345,6 +345,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
           }}
         >
           <div
+            data-testid="scrubber-fill"
             style={{
               position: 'absolute',
               left: 0,

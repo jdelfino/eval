@@ -9,10 +9,11 @@ import { executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import { toTestRailItems } from '@/lib/testRail';
-import { adaptDebuggerState } from '@/lib/debuggerAdapter';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
+import { buildDrawerDebug } from '@/lib/debuggerAdapter';
+import { deriveDrawerModeBase } from '@/lib/drawerState';
 import type { IOTestCase, TestResponse } from '@/types/api';
-import type { DrawerMode, DrawerRuntimeError } from '@/components/workspace/Drawer';
+import type { DrawerRuntimeError } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -24,26 +25,6 @@ const FONT_SIZE_MIN = 12;
 const FONT_SIZE_MAX = 48;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Derives the DrawerMode for the projector based on execution state.
- * The projector never enters debug mode from its own UI, but the featured
- * student may have an active trace via useApiDebugger.
- */
-function deriveDrawerMode({
-  isDebugging,
-  executionResult,
-  runtimeError,
-}: {
-  isDebugging: boolean;
-  executionResult: TestResponse | null;
-  runtimeError: string | null;
-}): DrawerMode {
-  if (runtimeError) return 'runtime-error';
-  if (isDebugging) return 'debug';
-  if (executionResult) return 'output';
-  return 'idle';
-}
 
 // ─── PublicViewContent ────────────────────────────────────────────────────────
 
@@ -233,7 +214,7 @@ function PublicViewContent() {
       id: 'main',
       label: hasFeaturedSubmission ? 'Featured Code' : (problem?.starter_code ? 'Starter Code' : 'Scratch Pad'),
       kind: 'code',
-      language: ((problem as any)?.language ?? 'python') as 'python' | 'javascript' | 'java',
+      language: ((problem?.language as 'python' | 'javascript' | 'java') ?? 'python'),
       code: displayCode,
       readOnly: hasFeaturedSubmission,
     },
@@ -243,45 +224,22 @@ function PublicViewContent() {
   const tests = toTestRailItems(activeTestCases, executionResult?.results);
 
   // Debugger adapter
-  const currentStep = debuggerHook.getCurrentStep();
-  const previousStep = debuggerHook.getPreviousStep();
-  const drawerDebug = adaptDebuggerState({
-    currentStep,
-    previousStep,
-    stepIndex: debuggerHook.currentStep,
-    totalSteps: debuggerHook.total_steps,
-    onStep: (delta) => {
-      if (delta === 1) debuggerHook.stepForward();
-      else debuggerHook.stepBackward();
-    },
-    onPlay: undefined,
-  }) ?? undefined;
+  const drawerDebug = buildDrawerDebug(debuggerHook);
 
   // Drawer mode
-  const drawerMode = deriveDrawerMode({
+  const drawerMode = deriveDrawerModeBase({
     isDebugging: debuggerHook.hasTrace,
     executionResult,
     runtimeError,
   });
 
   // Output lines for the drawer
-  const drawerOutput = executionResult
-    ? {
-        lines: executionResult.results.flatMap((r) => {
-          if (r.kind === 'io' && (r as any).actual) {
-            return [{ stream: 'out' as const, text: (r as any).actual! }];
-          }
-          return [];
-        }),
-        status: executionResult.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
-        summary: `${executionResult.summary.passed}/${executionResult.summary.total} passed`,
-      }
-    : undefined;
+  const drawerOutput = toDrawerOutput(executionResult);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleRunAll = () => {
-    const language = (problem as any)?.language || 'python';
+    const language = problem?.language || 'python';
     const codeToRun = displayCode;
 
     setIsRunning(true);

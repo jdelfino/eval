@@ -12,9 +12,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
-import { toTestRailItems } from '@/lib/testRail';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { Problem } from '@/types/problem';
-import type { Problem as ApiProblem, IOTestCase, TestResponse } from '@/types/api';
+import type { Problem as ApiProblem, IOTestCase, CaseResult, TestResponse } from '@/types/api';
 import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
 import type { DrawerMode } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
@@ -166,8 +166,8 @@ export default function SessionProblemEditor({
         cases: ioTestCasesToCaseDefs(effectiveTestCases),
       });
       setExecutionResult(result);
-    } catch (err: any) {
-      setExecutionError(err?.message || 'Failed to run code');
+    } catch (err: unknown) {
+      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
     } finally {
       setIsRunning(false);
     }
@@ -188,9 +188,12 @@ export default function SessionProblemEditor({
       const result = await executeCode(codeToRun, language, {
         cases: ioTestCasesToCaseDefs([singleCase]),
       });
-      setExecutionResult(result);
-    } catch (err: any) {
-      setExecutionError(err?.message || 'Failed to run code');
+      // C2-equivalent: sparse results so the result lands on row idx
+      const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
+      sparseResults[idx] = result.results[0];
+      setExecutionResult({ ...result, results: sparseResults });
+    } catch (err: unknown) {
+      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
     } finally {
       setIsRunning(false);
     }
@@ -229,18 +232,7 @@ export default function SessionProblemEditor({
 
   const drawerMode: DrawerMode = executionResult ? 'output' : 'idle';
 
-  const drawerOutput = executionResult
-    ? {
-        lines: executionResult.results.flatMap((r) => {
-          if (r.kind === 'io' && 'actual' in r && r.actual) {
-            return [{ stream: 'out' as const, text: r.actual }];
-          }
-          return [];
-        }),
-        status: executionResult.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
-        summary: `${executionResult.summary.passed}/${executionResult.summary.total} passed`,
-      }
-    : undefined;
+  const drawerOutput = toDrawerOutput(executionResult);
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>

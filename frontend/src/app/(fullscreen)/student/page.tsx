@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Problem } from '@/types/api';
-import type { TestResponse, IOTestCase, CaseResultIO, CaseResultPytest } from '@/types/api';
+import type { TestResponse, IOTestCase, CaseResult, CaseResultIO, CaseResultPytest } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
 import { warmExecutor, executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
@@ -16,17 +16,21 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
-import { toTestRailItems } from '@/lib/testRail';
-import { adaptDebuggerState } from '@/lib/debuggerAdapter';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
+import { buildDrawerDebug } from '@/lib/debuggerAdapter';
+import { deriveDrawerModeBase } from '@/lib/drawerState';
 import SessionEndedNotification from './components/SessionEndedNotification';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import type { Session } from '@/types/api';
-import type { DrawerMode } from '@/components/workspace/Drawer';
-import type { DrawerFailure } from '@/components/workspace/Drawer';
+import type { DrawerMode, DrawerFailure, DrawerRuntimeError } from '@/components/workspace/Drawer';
 
 // ─── Drawer mode derivation ──────────────────────────────────────────────────
 
+/**
+ * Extends the base drawer mode logic with the student-specific focusedFailureId
+ * branch (not present in the projector variant).
+ */
 function deriveDrawerMode({
   isDebugging,
   focusedFailureId,
@@ -41,8 +45,7 @@ function deriveDrawerMode({
   if (runtimeError) return 'runtime-error';
   if (isDebugging) return 'debug';
   if (focusedFailureId) return 'failure';
-  if (executionResult) return 'output';
-  return 'idle';
+  return deriveDrawerModeBase({ isDebugging: false, executionResult, runtimeError: null });
 }
 
 // ─── Failure derivation ──────────────────────────────────────────────────────
@@ -374,7 +377,7 @@ function StudentPage() {
         setWarmingUp(true);
       } else {
         const message = err instanceof Error ? err.message : 'Code execution failed';
-        setError(message);
+        setRuntimeError(message);
       }
       setIsRunning(false);
     }
@@ -413,14 +416,21 @@ function StudentPage() {
         const result = await executeCode(code, problem.language, {
           cases: ioTestCasesToCaseDefs([singleCase]),
         });
-        setExecutionResult(result);
+        // C2 fix: build a sparse results array so the single result is attributed
+        // to position `idx` (matching the rail row), not position 0.
+        // The array has undefined slots at positions 0..idx-1; toTestRailItems handles
+        // missing results by leaving those rows as 'idle'. The cast is safe because all
+        // index reads in toTestRailItems are guarded by the `result &&` check.
+        const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
+        sparseResults[idx] = result.results[0];
+        setExecutionResult({ ...result, results: sparseResults });
         setIsRunning(false);
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 503) {
           setWarmingUp(true);
         } else {
           const message = err instanceof Error ? err.message : 'Code execution failed';
-          setError(message);
+          setRuntimeError(message);
         }
         setIsRunning(false);
       }
@@ -505,19 +515,7 @@ function StudentPage() {
   ];
 
   // Debugger adapter
-  const currentStep = debuggerHook.getCurrentStep();
-  const previousStep = debuggerHook.getPreviousStep();
-  const drawerDebug = adaptDebuggerState({
-    currentStep,
-    previousStep,
-    stepIndex: debuggerHook.currentStep,
-    totalSteps: debuggerHook.total_steps,
-    onStep: (delta) => {
-      if (delta === 1) debuggerHook.stepForward();
-      else debuggerHook.stepBackward();
-    },
-    onPlay: undefined,
-  }) ?? undefined;
+  const drawerDebug = buildDrawerDebug(debuggerHook);
 
   // Derive drawer mode
   const drawerMode = deriveDrawerMode({
@@ -531,19 +529,12 @@ function StudentPage() {
   const drawerFailure = deriveFailure(focusedFailureId, execution_result, effectiveTestCases);
 
   // Derive output lines from stdout (execution result gives us stdout via results)
-  const drawerOutput =
-    execution_result
-      ? {
-          lines: execution_result.results.flatMap((r) => {
-            if (r.kind === 'io' && (r as CaseResultIO).actual) {
-              return [{ stream: 'out' as const, text: (r as CaseResultIO).actual! }];
-            }
-            return [];
-          }),
-          status: execution_result.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
-          summary: `${execution_result.summary.passed}/${execution_result.summary.total} passed`,
-        }
-      : undefined;
+  const drawerOutput = toDrawerOutput(execution_result);
+
+  // Derive runtime error for drawer
+  const drawerRuntimeError: DrawerRuntimeError | undefined = runtimeError
+    ? { type: 'error', message: runtimeError }
+    : undefined;
 
   // ─── Early returns ────────────────────────────────────────────────────────
 
@@ -681,6 +672,7 @@ function StudentPage() {
         drawerOutput={drawerOutput}
         drawerFailure={drawerFailure}
         drawerDebug={drawerDebug}
+        drawerRuntimeError={drawerRuntimeError}
       />
 
       <ConfirmDialog

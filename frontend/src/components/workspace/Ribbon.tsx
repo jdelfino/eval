@@ -64,6 +64,7 @@ export function Ribbon({ open, onToggle, title, meta, body }: RibbonProps) {
     >
       {/* Header row — always visible */}
       <div
+        data-testid="ribbon-header"
         onClick={onToggle}
         style={{
           display: 'flex',
