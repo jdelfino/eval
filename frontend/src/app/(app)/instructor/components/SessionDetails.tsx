@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSessionDetails, type SessionDetails as SessionDetailsType } from '@/lib/api/sessions';
-import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
 import { BackButton } from '@/components/ui/BackButton';
 
 interface SessionDetailsProps {
@@ -60,7 +59,7 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
     const durationMs = end.getTime() - start.getTime();
     const minutes = Math.floor(durationMs / 60000);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes % 60}m`;
     }
@@ -90,6 +89,19 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
   }
 
   const selectedStudent = session.students.find(s => s.id === selectedStudentId);
+  const studentCode = selectedStudent?.code || session.starter_code || '';
+
+  // Build editorTabs for WorkspaceShell — single read-only tab with the selected student's code
+  const editorTabs = [
+    {
+      id: 'main',
+      label: 'main.py',
+      kind: 'code' as const,
+      language: 'python' as const,
+      code: studentCode,
+      readOnly: true,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -100,8 +112,8 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-900">{session.section_name}</h2>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                session.status === 'active' 
-                  ? 'bg-green-100 text-green-800' 
+                session.status === 'active'
+                  ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-800'
               }`}>
                 {session.status === 'active' ? 'Active' : 'Completed'}
@@ -125,7 +137,7 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
               </div>
             )}
           </div>
-          
+
           <BackButton onClick={onClose}>Back to Sessions</BackButton>
         </div>
       </div>
@@ -156,28 +168,29 @@ export default function SessionDetails({ session_id, onClose }: SessionDetailsPr
             </div>
           </div>
 
-          {/* Code Display */}
-          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm p-6">
+          {/* Code Display — WorkspaceShell embedded mode (read-only) */}
+          <div className="lg:col-span-3 bg-white rounded-lg shadow-sm overflow-hidden" style={{ minHeight: 500 }}>
             {selectedStudent ? (
               <>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-900">
-                    {selectedStudent.name}'s Code
-                  </h3>
-                  <span className="text-sm text-gray-500">
-                    Joined: {new Date(selectedStudent.joined_at).toLocaleString()}
-                  </span>
-                </div>
-                <EditorContainer height="500px">
-                  <CodeEditor
-                    code={selectedStudent.code || session.starter_code || '# No code submitted'}
-                    onChange={() => {}} // Read-only
-                    onRun={() => {}} // Read-only, no execution
-                    readOnly
-                  />
-                </EditorContainer>
+                <WorkspaceShell
+                  embedded={true}
+                  editorTabs={editorTabs}
+                  activeTabId="main"
+                  tests={[]}
+                  drawerMode="idle"
+                  skinTopBar={
+                    <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-shrink-0">
+                      <h3 className="font-semibold text-gray-900">
+                        {selectedStudent.name}'s Code
+                      </h3>
+                      <span className="text-sm text-gray-500">
+                        Joined: {new Date(selectedStudent.joined_at).toLocaleString()}
+                      </span>
+                    </div>
+                  }
+                />
                 {!selectedStudent.code && (
-                  <p className="text-sm text-gray-500 mt-2 text-center">
+                  <p className="text-sm text-gray-500 mt-2 text-center px-6 pb-4">
                     This student did not submit any code.
                   </p>
                 )}
