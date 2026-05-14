@@ -144,12 +144,13 @@ test.describe('README Screenshots', () => {
       await page.waitForTimeout(1000);
 
       // Run the code so we have execution output in the screenshot
-      const runButton = page.locator('button:has-text("Run Code")');
+      // Note: "Run Code" button removed in G1 WorkspaceShell redesign; now "Run all" in TestRail.
+      const runButton = page.locator('[data-testid="workspace-run-all"]');
       await runButton.waitFor({ state: 'visible' });
       await runButton.click();
 
-      // Wait for execution results to appear (output panel)
-      await page.locator('text=55').waitFor({ state: 'visible', timeout: 30000 });
+      // Wait for execution results to appear in the drawer output panel
+      await page.locator('[data-testid="workspace-drawer-output"]').waitFor({ state: 'visible', timeout: 30000 });
 
       // ===== SCREENSHOT 1: Student coding view =====
       await page.screenshot({

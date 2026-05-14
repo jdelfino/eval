@@ -205,6 +205,7 @@ function TabButton({ tab, active, dark, onClick }: TabButtonProps) {
   return (
     <button
       type="button"
+      data-testid={`editor-tab-${tab.id}`}
       onClick={onClick}
       aria-label={tab.label}
       style={{

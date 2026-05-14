@@ -6,7 +6,7 @@ import {
   createProblem,
   publishProblem,
 } from './fixtures/api-setup';
-import { waitForMonacoReady, getMonacoValue } from './fixtures/monaco';
+import { waitForMonacoReady, getMonacoValue, setMonacoValue } from './fixtures/monaco';
 
 /**
  * Problem Publishing + Student Practice E2E Tests
@@ -105,35 +105,34 @@ test.describe('Problem Publishing + Student Practice', () => {
       // Wait for the student workspace to load (Monaco editor visible)
       await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15000 });
 
-      // The "Run Code" button should be present in the workspace
+      // The "Run all" button should be present in the TestRail header (workspace loaded)
+      // Note: "Run Code" / "▶ Run Code" buttons are removed in G1 WorkspaceShell redesign.
       await expect(
-        page.locator('button:has-text("Run Code"), button:has-text("▶ Run Code")')
+        page.locator('[data-testid="workspace-run-all"]')
       ).toBeVisible({ timeout: 10000 });
 
-      // ===== PHASE 4: STUDENT RESTORES STARTER CODE AND RUNS IT =====
-      // Load the starter code via the "Restore Starter Code" button to avoid
-      // relying on starter code being pre-loaded (fresh work starts empty)
-      const restoreButton = page.locator('button:has-text("Restore Starter Code")');
-      await expect(restoreButton).toBeVisible({ timeout: 10000 });
-      await restoreButton.click();
+      // ===== PHASE 4: STUDENT SETS STARTER CODE AND RUNS IT =====
+      // Load the starter code via the Monaco API (the "Restore Starter Code" button
+      // was removed in G1 WorkspaceShell redesign; fresh work starts empty).
+      await waitForMonacoReady(page);
+      await setMonacoValue(page, 'print("hello from practice")\n');
 
       // Verify Monaco has the starter code via the Monaco API
-      await waitForMonacoReady(page);
       await expect.poll(() => getMonacoValue(page), {
         timeout: 5000,
-        message: 'Monaco should contain starter code after restore',
+        message: 'Monaco should contain starter code',
       }).toContain('hello from practice');
 
       // Wait for debounced auto-save before executing
       await page.waitForTimeout(1000);
 
-      // Click "Run Code"
-      await page.locator('button:has-text("Run Code"), button:has-text("▶ Run Code")').click();
+      // Click "Run all" button in the TestRail header
+      await page.locator('[data-testid="workspace-run-all"]').click();
 
-      // Wait for successful execution result
-      const outputArea = page.locator('[data-testid="output-area"]');
-      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
-      await expect(outputArea.locator('text=hello from practice')).toBeVisible();
+      // Wait for successful execution result — the drawer switches to output mode
+      const drawerOutput = page.locator('[data-testid="workspace-drawer-output"]');
+      await expect(drawerOutput.locator('[data-testid="output-status-pass"]')).toBeVisible({ timeout: 15000 });
+      await expect(drawerOutput.locator('text=hello from practice')).toBeVisible();
 
       // ===== PHASE 5: STUDENT VIEWS SOLUTION (show_solution=true) =====
       // Navigate back to section page to verify "View Solution" button is shown
