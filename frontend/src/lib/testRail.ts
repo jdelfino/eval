@@ -1,4 +1,5 @@
-import type { IOTestCase, CaseResult } from '@/types/api';
+import type { IOTestCase, CaseResult, CaseResultIO, TestResponse } from '@/types/api';
+import type { DrawerOutput } from '@/components/workspace/Drawer';
 
 /**
  * TestRailItem — the joined shape consumed by TestRail.
@@ -24,10 +25,14 @@ export type TestRailItem = {
  * Map a CaseResultIO status string to a TestRailItem state.
  *
  * The backend emits: "run" | "passed" | "failed" | "error"
+ *
+ * "run" means the executor ran the code with no expected output to compare —
+ * the case completed successfully, so it maps to 'pass' (not 'running', which
+ * would show a perpetual spinner).
  */
 function ioStatusToState(status: string): TestRailItem['state'] {
   if (status === 'passed') return 'pass';
-  if (status === 'run') return 'running';
+  if (status === 'run') return 'pass';
   // "failed" | "error" both map to fail
   return 'fail';
 }
@@ -103,4 +108,31 @@ export function toTestRailItems(
       };
     }
   });
+}
+
+/**
+ * toDrawerOutput — derives the DrawerOutput shape from a TestResponse.
+ *
+ * Extracts stdout lines from io results (actual field) and computes pass/fail
+ * status from the summary. Returns undefined when result is null (pre-run state),
+ * so callers can pass directly to drawerOutput without extra null checks.
+ *
+ * All four page consumers (student, public-view, ProblemCreator, SessionProblemEditor)
+ * previously inlined this same derivation. Centralising here ensures consistent
+ * behaviour across all surfaces.
+ */
+export function toDrawerOutput(result: TestResponse | null): DrawerOutput | undefined {
+  if (!result) return undefined;
+  return {
+    lines: result.results.flatMap((r) => {
+      // r may be undefined in a sparse results array (C2 single-run attribution fix)
+      if (!r) return [];
+      if (r.kind === 'io' && (r as CaseResultIO).actual) {
+        return [{ stream: 'out' as const, text: (r as CaseResultIO).actual! }];
+      }
+      return [];
+    }),
+    status: result.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
+    summary: `${result.summary.passed}/${result.summary.total} passed`,
+  };
 }

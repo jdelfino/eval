@@ -7,8 +7,8 @@
  * signals or missing data — a fundamental usability bug.
  */
 
-import { toTestRailItems } from '../testRail';
-import type { IOTestCase, CaseResult } from '@/types/api';
+import { toTestRailItems, toDrawerOutput } from '../testRail';
+import type { IOTestCase, CaseResult, TestResponse } from '@/types/api';
 
 describe('toTestRailItems', () => {
   describe('zips cases and results by index', () => {
@@ -106,13 +106,18 @@ describe('toTestRailItems', () => {
       expect(items[0].state).toBe('fail');
     });
 
-    it('status=run maps to state=running', () => {
+    it('status=run (run-only, no expected output) maps to state=pass — not running', () => {
+      /**
+       * Contract: a completed run-only test case with status='run' means the executor
+       * ran the code (no expected output to compare). It should display as 'pass', not
+       * as a perpetual spinner. If broken, run-only tests show a spinner forever.
+       */
       const cases: IOTestCase[] = [{ kind: 'io', name: 'c', order: 0 }];
       const results: CaseResult[] = [{ kind: 'io', name: 'c', status: 'run', time_ms: 0 }];
 
       const items = toTestRailItems(cases, results);
 
-      expect(items[0].state).toBe('running');
+      expect(items[0].state).toBe('pass');
     });
 
     it('status=failed maps to state=fail', () => {
@@ -190,5 +195,89 @@ describe('toTestRailItems', () => {
       expect(ids[1]).toBeTruthy();
       expect(ids[0]).not.toBe(ids[1]);
     });
+  });
+});
+
+/**
+ * Unit tests for toDrawerOutput utility (A1 extraction).
+ *
+ * Contract: toDrawerOutput(result) derives the DrawerOutput shape from a TestResponse.
+ * Returns undefined when result is null (pre-run state). All four consumers (student,
+ * public-view, ProblemCreator, SessionProblemEditor) previously inlined this same logic —
+ * if any one of them diverges, bugs appear inconsistently across surfaces.
+ */
+describe('toDrawerOutput', () => {
+  it('returns undefined when result is null', () => {
+    expect(toDrawerOutput(null)).toBeUndefined();
+  });
+
+  it('returns pass status when no failures', () => {
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'c', status: 'passed', actual: 'hello', time_ms: 5 },
+      ],
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 5 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output).toBeDefined();
+    expect(output!.status).toBe('pass');
+    expect(output!.summary).toBe('1/1 passed');
+  });
+
+  it('returns fail status when there are failures', () => {
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'c', status: 'failed', actual: 'wrong', time_ms: 3 },
+      ],
+      summary: { total: 1, passed: 0, failed: 1, errors: 0, run: 0, time_ms: 3 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.status).toBe('fail');
+    expect(output!.summary).toBe('0/1 passed');
+  });
+
+  it('includes actual output lines from io results', () => {
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'c', status: 'passed', actual: 'hello world', time_ms: 2 },
+      ],
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 2 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.lines).toHaveLength(1);
+    expect(output!.lines[0]).toEqual({ stream: 'out', text: 'hello world' });
+  });
+
+  it('skips io results with no actual output', () => {
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'c', status: 'passed', time_ms: 1 },
+      ],
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 1 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.lines).toHaveLength(0);
+  });
+
+  it('skips pytest results (no stdout captured)', () => {
+    const result: TestResponse = {
+      results: [
+        { kind: 'pytest', name: 'test_foo', passed: true, duration_ms: 10, assertions: [] },
+      ],
+      summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.lines).toHaveLength(0);
+    expect(output!.status).toBe('pass');
   });
 });

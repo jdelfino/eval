@@ -11,6 +11,10 @@
  *
  * Extracting this logic here (vs. inlining in page.tsx) lets T7 (projector) and
  * any future consumer import the same adapter without duplication.
+ *
+ * buildDrawerDebug is a convenience wrapper that accepts the hook return value directly
+ * and collapses the boilerplate getCurrentStep/getPreviousStep call-site pattern used
+ * identically in student/page.tsx and public-view/page.tsx.
  */
 
 import type { TraceStep } from '@/types/session';
@@ -66,4 +70,46 @@ export function adaptDebuggerState(input: DebuggerAdapterInput): DrawerDebug | n
     onStep,
     onPlay,
   };
+}
+
+/**
+ * Minimal interface for the useApiDebugger hook return that buildDrawerDebug needs.
+ * Avoids importing the full hook return type which would create a circular dependency.
+ */
+export interface DebuggerHookSlice {
+  getCurrentStep: () => import('@/types/session').TraceStep | null;
+  getPreviousStep: () => import('@/types/session').TraceStep | null;
+  currentStep: number;
+  total_steps: number;
+  stepForward: () => void;
+  stepBackward: () => void;
+}
+
+/**
+ * buildDrawerDebug — one-line boilerplate replacement for the identical pattern
+ * used in student/page.tsx and public-view/page.tsx.
+ *
+ * Before (duplicated verbatim at both call sites):
+ *   const currentStep = debuggerHook.getCurrentStep();
+ *   const previousStep = debuggerHook.getPreviousStep();
+ *   const drawerDebug = adaptDebuggerState({ currentStep, previousStep,
+ *     stepIndex: debuggerHook.currentStep, totalSteps: debuggerHook.total_steps,
+ *     onStep: (delta) => { if (delta === 1) debuggerHook.stepForward(); else debuggerHook.stepBackward(); },
+ *     onPlay: undefined }) ?? undefined;
+ *
+ * After:
+ *   const drawerDebug = buildDrawerDebug(debuggerHook);
+ */
+export function buildDrawerDebug(hook: DebuggerHookSlice): DrawerDebug | undefined {
+  return adaptDebuggerState({
+    currentStep: hook.getCurrentStep(),
+    previousStep: hook.getPreviousStep(),
+    stepIndex: hook.currentStep,
+    totalSteps: hook.total_steps,
+    onStep: (delta) => {
+      if (delta === 1) hook.stepForward();
+      else hook.stepBackward();
+    },
+    onPlay: undefined,
+  }) ?? undefined;
 }
