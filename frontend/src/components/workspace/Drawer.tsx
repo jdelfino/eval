@@ -170,6 +170,7 @@ function OutputView({ output }: { output?: DrawerOutput }) {
   if (!output) return <IdleView />;
   return (
     <div
+      data-testid="workspace-drawer-output"
       style={{
         flex: 1,
         overflow: 'auto',
@@ -179,6 +180,22 @@ function OutputView({ output }: { output?: DrawerOutput }) {
         lineHeight: 1.6,
       }}
     >
+      {output.status === 'pass' && (
+        <div
+          data-testid="output-status-pass"
+          style={{ color: 'var(--run)', fontWeight: 600, marginBottom: 6 }}
+        >
+          ✓ Success
+        </div>
+      )}
+      {output.status === 'fail' && (
+        <div
+          data-testid="output-status-fail"
+          style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 6 }}
+        >
+          ✗ Error
+        </div>
+      )}
       {output.lines.map((l, i) => (
         <div
           key={i}
@@ -277,7 +294,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
   const fillPct = total > 0 ? (step / total) * 100 : 0;
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <div data-testid="workspace-drawer-debug" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
       {/* Scrubber row */}
       <div
         style={{
@@ -289,6 +306,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
         }}
       >
         <button
+          data-testid="debug-step-prev"
           title="Previous step"
           onClick={() => onStep?.(-1)}
           style={debugBtnStyle}
@@ -296,6 +314,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
           ◀
         </button>
         <button
+          data-testid="debug-step-play"
           title="Play"
           onClick={() => onPlay?.()}
           style={{
@@ -308,6 +327,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
           ▶
         </button>
         <button
+          data-testid="debug-step-next"
           title="Next step"
           onClick={() => onStep?.(1)}
           style={debugBtnStyle}
@@ -337,6 +357,7 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
           />
         </div>
         <div
+          data-testid="debug-step-counter"
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
@@ -477,6 +498,9 @@ export function Drawer({
   if (collapsed) {
     return (
       <div
+        data-testid="workspace-drawer"
+        data-mode={mode}
+        data-collapsed="true"
         onClick={onToggleCollapsed}
         style={{
           flexShrink: 0,
@@ -515,6 +539,8 @@ export function Drawer({
 
   return (
     <div
+      data-testid="workspace-drawer"
+      data-mode={mode}
       style={{
         flexShrink: 0,
         display: 'flex',

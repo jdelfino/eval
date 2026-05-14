@@ -100,7 +100,8 @@ test.describe('Problem Management', () => {
     await editTitleInput.fill(`E2E Problem ${testNamespace} (edited)`);
 
     // Switch to Solution tab and add solution code
-    const solutionTab = page.locator('[role="tab"]:has-text("Solution")');
+    // (EditorPane renders tabs as <button> with aria-label, not role="tab")
+    const solutionTab = page.locator('[data-testid="editor-tab-solution"]');
     await expect(solutionTab).toBeVisible();
     await solutionTab.click();
 

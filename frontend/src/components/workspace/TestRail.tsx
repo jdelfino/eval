@@ -58,6 +58,7 @@ export function TestRail({
 }: TestRailProps) {
   return (
     <aside
+      data-testid="workspace-test-rail"
       style={{
         width: '100%',
         display: 'flex',
@@ -100,6 +101,7 @@ export function TestRail({
         </div>
         {onRunAll && (
           <Button
+            data-testid="workspace-run-all"
             variant="run"
             size="sm"
             onClick={onRunAll}
@@ -121,6 +123,7 @@ export function TestRail({
             onSelect={() => onSelectTest?.(test.id)}
             onRun={() => onRunTest?.(test.id)}
             onDebug={() => onDebugTest?.(test.id)}
+            testId={`testrail-row-${test.id}`}
           />
         ))}
         {tests.length === 0 && (
@@ -147,13 +150,15 @@ interface TestRowProps {
   onSelect: () => void;
   onRun: () => void;
   onDebug: () => void;
+  testId?: string;
 }
 
-function TestRow({ test, active, mode, onSelect, onRun, onDebug }: TestRowProps) {
+function TestRow({ test, active, mode, onSelect, onRun, onDebug, testId }: TestRowProps) {
   const showControls = active && mode !== 'view';
 
   return (
     <div
+      data-testid={testId}
       onClick={onSelect}
       style={{
         display: 'flex',
