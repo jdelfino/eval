@@ -9,6 +9,7 @@
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import type { WorkspaceShellProps } from '@/components/workspace/WorkspaceShell';
 
 // ---- Navigation mock (section_id param) ----
 const mockSearchParamsGet = jest.fn();
@@ -29,44 +30,58 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
   useHeaderSlot: () => ({ setHeaderSlot: mockSetHeaderSlot }),
 }));
 
-// ---- Debugger ----
-const mockDebuggerHook = {
-  trace: null,
-  currentStep: 0,
-  isLoading: false,
-  error: null,
-  requestTrace: jest.fn(),
-  setTrace: jest.fn(),
-  setError: jest.fn(),
-  stepForward: jest.fn(),
-  stepBackward: jest.fn(),
-  jumpToStep: jest.fn(),
-  jumpToFirst: jest.fn(),
-  jumpToLast: jest.fn(),
-  reset: jest.fn(),
-  getCurrentStep: jest.fn(),
-  getCurrentLocals: jest.fn(),
-  getCurrentGlobals: jest.fn(),
-  getCurrentCallStack: jest.fn(),
-  getPreviousStep: jest.fn(),
-  total_steps: 0,
-  hasTrace: false,
-  canStepForward: false,
-  canStepBackward: false,
-};
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: () => mockDebuggerHook,
+// ---- ConnectionStatus ----
+jest.mock('@/components/ConnectionStatus', () => ({
+  ConnectionStatus: () => null,
 }));
 
-// ---- CodeEditor ----
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor(props: any) {
-    return (
-      <div data-testid="code-editor">
-        <div data-testid="code-title">{props.title}</div>
-        <div data-testid="code-content">{props.code}</div>
-      </div>
-    );
+// ---- executeCode ----
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn().mockResolvedValue({ summary: { passed: 0, failed: 0, total: 0 }, results: [] }),
+  ioTestCasesToCaseDefs: (cases: any[]) => cases,
+}));
+
+// ---- Debugger ----
+jest.mock('@/hooks/useApiDebugger', () => ({
+  useApiDebugger: () => ({
+    trace: null,
+    currentStep: 0,
+    isLoading: false,
+    error: null,
+    requestTrace: jest.fn(),
+    setTrace: jest.fn(),
+    setError: jest.fn(),
+    stepForward: jest.fn(),
+    stepBackward: jest.fn(),
+    jumpToStep: jest.fn(),
+    jumpToFirst: jest.fn(),
+    jumpToLast: jest.fn(),
+    reset: jest.fn(),
+    getCurrentStep: () => null,
+    getCurrentLocals: jest.fn(),
+    getCurrentGlobals: jest.fn(),
+    getCurrentCallStack: jest.fn(),
+    getPreviousStep: () => null,
+    total_steps: 0,
+    hasTrace: false,
+    canStepForward: false,
+    canStepBackward: false,
+  }),
+}));
+
+// ---- WorkspaceShell ----
+jest.mock('@/components/workspace/WorkspaceShell', () => {
+  return {
+    __esModule: true,
+    default: function MockWorkspaceShell(props: WorkspaceShellProps) {
+      const tab = props.editorTabs[0];
+      return (
+        <div data-testid="workspace-shell">
+          <div data-testid="code-title">{tab?.label}</div>
+          <div data-testid="code-content">{'code' in tab ? tab.code : ''}</div>
+        </div>
+      );
+    },
   };
 });
 
@@ -144,9 +159,10 @@ describe('PublicInstructorView — section mode', () => {
   it('shows session content when active session is tracked', async () => {
     mockHookState = {
       state: {
-        problem: { title: 'Test Problem', description: 'desc', starter_code: 'x=1', language: 'python' },
+        problem: { title: 'Test Problem', description: 'desc', starter_code: 'x=1', language: 'python', test_cases: [] },
         featured_student_id: null,
         featured_code: null,
+        featured_test_cases: null,
         join_code: 'TST-001',
         status: 'active',
       },
@@ -162,7 +178,7 @@ describe('PublicInstructorView — section mode', () => {
     render(<PublicInstructorView />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     });
   });
 
