@@ -478,19 +478,6 @@ function StudentPage() {
     setCode(starter_code);
   }, []);
 
-  // _handleLoadStarterCode: kept for future wiring to EditorPane's "Restore starter code" button.
-  const _handleLoadStarterCode = useCallback(
-    (starter_code: string) => {
-      if (code.trim().length > 0) {
-        setPendingStarterCode(starter_code);
-        setShowReplaceCodeConfirm(true);
-      } else {
-        applyStarterCode(starter_code);
-      }
-    },
-    [code, applyStarterCode]
-  );
-
   const handleConfirmReplaceCode = useCallback(() => {
     setShowReplaceCodeConfirm(false);
     if (pendingStarterCode) {
