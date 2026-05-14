@@ -51,12 +51,17 @@ export default function SessionProblemEditor({
   const [executionError, setExecutionError] = useState<string | null>(null);
 
   // Test cases: G1 uses problem's existing test cases; per-test edit deferred to G2
-  const effectiveTestCases: IOTestCase[] =
-    initialTestCases.length > 0
-      ? initialTestCases
-      : (initialProblem?.test_cases as IOTestCase[] | undefined) ?? [];
+  const effectiveTestCases: IOTestCase[] = useMemo(
+    () =>
+      initialTestCases.length > 0
+        ? initialTestCases
+        : (initialProblem?.test_cases as IOTestCase[] | undefined) ?? [],
+    [initialTestCases, initialProblem?.test_cases]
+  );
 
-  // Sync state when initial values change (e.g., when problem is loaded)
+  // Sync state when initial values change (e.g., when problem is loaded).
+  // Intentionally tracks individual fields rather than the whole object to avoid
+  // re-running on every render when the parent re-creates the problem reference.
   useEffect(() => {
     if (initialProblem) {
       setTitle(initialProblem.title || '');
@@ -64,7 +69,7 @@ export default function SessionProblemEditor({
       setStarterCode(initialProblem.starter_code || '');
       setSolution(initialSolution);
     }
-  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
+  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
