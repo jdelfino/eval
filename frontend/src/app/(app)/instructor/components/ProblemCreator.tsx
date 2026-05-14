@@ -98,8 +98,7 @@ export default function ProblemCreator({
     if (problem_id) {
       loadProblem(problem_id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [problem_id]);
+  }, [problem_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadProblem = async (id: string) => {
     setIsLoading(true);
