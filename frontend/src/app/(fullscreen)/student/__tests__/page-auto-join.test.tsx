@@ -83,17 +83,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
-jest.mock('../components/CodeEditor', () => ({
-  __esModule: true,
-  default: () => <div data-testid="code-editor">CodeEditor</div>,
-}));
-
-jest.mock('../components/EditorContainer', () => ({
-  EditorContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="editor-container">{children}</div>
-  ),
-}));
-
 jest.mock('../components/SessionEndedNotification', () => ({
   __esModule: true,
   default: () => <div data-testid="session-ended">Session Ended</div>,

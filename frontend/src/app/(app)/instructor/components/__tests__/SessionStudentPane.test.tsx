@@ -41,24 +41,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   ),
 }));
 
-// Legacy mocks for old CodeEditor/EditorContainer (kept for existing tests that still reference them)
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, readOnly }: { code: string; readOnly?: boolean }) {
-    return (
-      <div data-testid="code-editor" data-readonly={readOnly}>
-        <pre>{code}</pre>
-      </div>
-    );
-  };
-});
-
-// Mock EditorContainer
-jest.mock('@/app/(fullscreen)/student/components/EditorContainer', () => ({
-  EditorContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="editor-container">{children}</div>
-  ),
-}));
-
 // Mock useAnalysisGroups hook
 const mockAnalyze = jest.fn();
 const mockNavigateGroup = jest.fn();
