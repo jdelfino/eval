@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'run' | 'quiet';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -74,6 +74,29 @@ const variantClasses: Record<ButtonVariant, string> = {
     'hover:bg-gray-100',
     'focus:ring-gray-500',
   ].join(' '),
+  // Token-driven variants: use CSS variables from F1 token layer (globals.css).
+  // Empty string here — styling applied via variantInlineStyles below.
+  run:   '',
+  quiet: '',
+};
+
+/**
+ * Inline styles for token-driven variants. These use CSS custom properties
+ * from the F1 design token layer (globals.css) which Tailwind utility classes
+ * cannot reference directly. Existing Tailwind variants are untouched.
+ */
+const variantInlineStyles: Partial<Record<ButtonVariant, React.CSSProperties>> = {
+  run: {
+    background: 'var(--run)',
+    color: 'var(--accent-fg)',
+    border: '1px solid var(--run)',
+    fontWeight: 600,
+  },
+  quiet: {
+    background: 'transparent',
+    color: 'var(--fg-muted)',
+    border: '1px solid var(--border)',
+  },
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -117,10 +140,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       .filter(Boolean)
       .join(' ');
 
+    const inlineStyle = variantInlineStyles[variant];
+
     // For asChild pattern, clone the child element with button props
     if (asChild && React.isValidElement(children)) {
       return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
         className: classes,
+        style: inlineStyle,
         ref,
         'aria-disabled': isDisabled || undefined,
         ...props,
@@ -131,6 +157,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={classes}
+        style={inlineStyle}
         disabled={isDisabled}
         aria-busy={loading || undefined}
         {...props}

@@ -142,4 +142,47 @@ describe('Button', () => {
       expect(screen.getByRole('button', { name: 'Close dialog' })).toBeInTheDocument();
     });
   });
+
+  describe('new token-driven variants', () => {
+    /**
+     * Verifies the `run` variant uses the --run CSS token for its background.
+     * If this breaks, the "Run all" button in the test rail loses its semantic
+     * green signal color and blends in with other buttons.
+     */
+    it('variant=run renders with --run background via inline style', () => {
+      render(<Button variant="run">Run all</Button>);
+      const button = screen.getByRole('button', { name: 'Run all' });
+      expect(button).toHaveStyle({ background: 'var(--run)' });
+    });
+
+    it('variant=run renders with --accent-fg text color', () => {
+      render(<Button variant="run">Run all</Button>);
+      const button = screen.getByRole('button', { name: 'Run all' });
+      expect(button).toHaveStyle({ color: 'var(--accent-fg)' });
+    });
+
+    /**
+     * Verifies the `quiet` variant uses transparent background with a border.
+     * If this breaks, quiet buttons lose their subtle appearance and may look
+     * identical to primary or secondary buttons.
+     */
+    it('variant=quiet renders with transparent background', () => {
+      render(<Button variant="quiet">Cancel</Button>);
+      const button = screen.getByRole('button', { name: 'Cancel' });
+      expect(button).toHaveStyle({ background: 'transparent' });
+    });
+
+    it('variant=quiet renders with --border token for border', () => {
+      render(<Button variant="quiet">Cancel</Button>);
+      const button = screen.getByRole('button', { name: 'Cancel' });
+      // border should reference the --border token
+      expect(button.style.border).toContain('var(--border)');
+    });
+
+    it('variant=quiet renders with --fg-muted text color', () => {
+      render(<Button variant="quiet">Cancel</Button>);
+      const button = screen.getByRole('button', { name: 'Cancel' });
+      expect(button).toHaveStyle({ color: 'var(--fg-muted)' });
+    });
+  });
 });
