@@ -80,10 +80,24 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 
 jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({})),
+  useApiDebugger: jest.fn(() => ({
+    trace: null, currentStep: 0, isLoading: false, error: null,
+    requestTrace: jest.fn(), setTrace: jest.fn(), setError: jest.fn(),
+    stepForward: jest.fn(), stepBackward: jest.fn(), jumpToStep: jest.fn(),
+    jumpToFirst: jest.fn(), jumpToLast: jest.fn(), reset: jest.fn(),
+    getCurrentStep: jest.fn(() => null), getCurrentLocals: jest.fn(() => ({})),
+    getCurrentGlobals: jest.fn(() => ({})), getCurrentCallStack: jest.fn(() => []),
+    getPreviousStep: jest.fn(() => null),
+    total_steps: 0, hasTrace: false, canStepForward: false, canStepBackward: false,
+  })),
 }));
 
-// Mock CodeEditor component
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
+  __esModule: true,
+  default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
+}));
+
+// Keep as no-ops — new page no longer imports these, but Jest won't error on unused mocks.
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
   default: () => <div data-testid="code-editor">CodeEditor</div>,
@@ -163,7 +177,7 @@ describe('StudentPage (student_work-centric)', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
     });
 
@@ -175,7 +189,7 @@ describe('StudentPage (student_work-centric)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Code changes trigger auto-save (tested via mock - implementation uses debounce)
@@ -190,7 +204,7 @@ describe('StudentPage (student_work-centric)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Execution tested via mock
@@ -270,7 +284,7 @@ describe('StudentPage (student_work-centric)', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
     });
 
@@ -291,7 +305,7 @@ describe('StudentPage (student_work-centric)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Wait for auto-save debounce (500ms)

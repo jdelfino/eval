@@ -70,18 +70,32 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 
 jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({})),
+  useApiDebugger: jest.fn(() => ({
+    trace: null, currentStep: 0, isLoading: false, error: null,
+    requestTrace: jest.fn(), setTrace: jest.fn(), setError: jest.fn(),
+    stepForward: jest.fn(), stepBackward: jest.fn(), jumpToStep: jest.fn(),
+    jumpToFirst: jest.fn(), jumpToLast: jest.fn(), reset: jest.fn(),
+    getCurrentStep: jest.fn(() => null), getCurrentLocals: jest.fn(() => ({})),
+    getCurrentGlobals: jest.fn(() => ({})), getCurrentCallStack: jest.fn(() => []),
+    getPreviousStep: jest.fn(() => null),
+    total_steps: 0, hasTrace: false, canStepForward: false, canStepBackward: false,
+  })),
 }));
 
-// Track onRun callback from CodeEditor to trigger execution in tests
-let capturedOnRun: ((testCases: unknown[]) => void) | null = null;
+// Track onRunAll callback from WorkspaceShell to trigger execution in tests
+let capturedOnRun: (() => void) | null = null;
+
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
+  __esModule: true,
+  default: ({ onRunAll }: { onRunAll: () => void }) => {
+    capturedOnRun = onRunAll;
+    return <div data-testid="workspace-shell">WorkspaceShell</div>;
+  },
+}));
 
 jest.mock('../components/CodeEditor', () => ({
   __esModule: true,
-  default: ({ onRun }: { onRun: (testCases: unknown[]) => void }) => {
-    capturedOnRun = onRun;
-    return <div data-testid="code-editor">CodeEditor</div>;
-  },
+  default: () => <div data-testid="code-editor">CodeEditor</div>,
 }));
 
 jest.mock('../components/EditorContainer', () => ({
@@ -149,7 +163,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
@@ -193,7 +207,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Page should load successfully despite warmExecutor failing
@@ -212,12 +226,12 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Trigger execution
       act(() => {
-        capturedOnRun?.([]);
+        capturedOnRun?.();
       });
 
       await waitFor(() => {
@@ -238,11 +252,11 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       act(() => {
-        capturedOnRun?.([]);
+        capturedOnRun?.();
       });
 
       await waitFor(() => {
