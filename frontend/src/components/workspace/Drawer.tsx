@@ -100,7 +100,7 @@ function drawerHeight(mode: DrawerMode): number | string {
 function drawerStatusColor(
   mode: DrawerMode,
   output?: DrawerOutput,
-  failure?: DrawerFailure
+  _failure?: DrawerFailure
 ): string {
   if (mode === 'failure')       return 'var(--danger)';
   if (mode === 'runtime-error') return 'var(--danger)';
