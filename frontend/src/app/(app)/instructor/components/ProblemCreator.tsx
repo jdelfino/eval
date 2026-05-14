@@ -4,22 +4,25 @@
  * Problem Creator Component
  *
  * Allows instructors to create or edit programming problems with:
- * - Title and description
- * - Starter code template (with Monaco editor and run capability)
+ * - Title and description (in page chrome above the shell)
+ * - Starter code and Solution tabs via WorkspaceShell (embedded mode)
  * - Test cases (added separately via test case UI)
  * - Visibility settings (public/class-specific)
+ *
+ * G1: WorkspaceShell embedded=true, railMode='run'. Per-test stdin/seed/files
+ * editing is intentionally unavailable (deferred to G2 per-test edit drawer).
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
-import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Tabs } from '@/components/ui/Tabs';
-import { useApiDebugger } from '@/hooks/useApiDebugger';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { toTestRailItems } from '@/lib/testRail';
 import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
-import type { IOTestCase } from '@/types/api';
+import type { IOTestCase, TestResponse } from '@/types/api';
+import type { DrawerMode } from '@/components/workspace/Drawer';
+import type { EditorTab } from '@/components/workspace/EditorPane';
 
 interface ProblemCreatorProps {
   problem_id?: string | null;
@@ -34,6 +37,8 @@ const JAVA_DEFAULT_STARTER = `public class Main {
     }
 }`;
 
+type ActiveTab = 'starter' | 'solution';
+
 export default function ProblemCreator({
   problem_id = null,
   onProblemCreated,
@@ -45,7 +50,7 @@ export default function ProblemCreator({
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
   const [language, setLanguage] = useState('python');
-  const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
@@ -61,14 +66,14 @@ export default function ProblemCreator({
   const [tagInput, setTagInput] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
 
-  // Execution settings
-  const [stdin, setStdin] = useState('');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(undefined);
-  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>([]);
-
-  // Execution state for code editor
+  // Execution state (for WorkspaceShell rail/drawer)
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [executionResult, setExecutionResult] = useState<TestResponse | null>(null);
+  const [activeTestId, setActiveTestId] = useState<string | undefined>(undefined);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+
+  // Test cases (G1: no per-test edit — deferred to G2)
+  const [testCases] = useState<IOTestCase[]>([]);
 
   const isEditMode = !!problem_id;
 
@@ -78,7 +83,6 @@ export default function ProblemCreator({
       try {
         const loadedClasses = await listClasses();
         setClasses(loadedClasses);
-        // Pre-populate if class_id prop provided
         if (class_id) {
           setSelectedClassId(class_id);
         }
@@ -94,6 +98,7 @@ export default function ProblemCreator({
     if (problem_id) {
       loadProblem(problem_id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problem_id]);
 
   const loadProblem = async (id: string) => {
@@ -108,13 +113,6 @@ export default function ProblemCreator({
       setLanguage(problem.language || 'python');
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
-
-      // Load execution settings from test_cases[0] (io kind only)
-      const firstCase = problem.test_cases?.[0];
-      const ioCase = firstCase?.kind === 'io' ? firstCase : undefined;
-      setStdin(ioCase?.input || '');
-      setRandomSeed(ioCase?.random_seed);
-      setAttachedFiles(ioCase?.attached_files || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load problem');
     } finally {
@@ -136,14 +134,13 @@ export default function ProblemCreator({
 
   const handleLanguageChange = (newLanguage: string) => {
     setLanguage(newLanguage);
-    // When switching to Java and starter code is empty, populate with Java default
     if (newLanguage === 'java' && !starter_code.trim()) {
       setStarterCode(JAVA_DEFAULT_STARTER);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError(null);
 
     if (!title.trim()) {
@@ -151,18 +148,11 @@ export default function ProblemCreator({
       return;
     }
 
-    // Commit any text left in the tag input field
     const finalTags = flushTagInput();
-
     setIsSubmitting(true);
 
     try {
-      // Build test_cases directly as IOTestCase[].
-      const testCases = buildIOTestCases({
-        stdin: stdin.trim(),
-        random_seed,
-        attached_files,
-      });
+      const testCasesPayload = buildIOTestCases({ stdin: '', random_seed: undefined, attached_files: [] });
 
       const problemInput = {
         title: title.trim(),
@@ -170,7 +160,7 @@ export default function ProblemCreator({
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
         language,
-        test_cases: testCases,
+        test_cases: testCasesPayload,
         class_id: selectedClassId || null,
         tags: finalTags.length > 0 ? finalTags : [],
       };
@@ -189,14 +179,12 @@ export default function ProblemCreator({
         setStarterCode('');
         setSolution('');
         setLanguage('python');
-        setStdin('');
-        setRandomSeed(undefined);
-        setAttachedFiles([]);
         setTags([]);
         setTagInput('');
+        setActiveTab('starter');
+        setExecutionResult(null);
       }
 
-      // Notify parent
       onProblemCreated?.(result.id);
     } catch (err: any) {
       setError(err.message || `Failed to ${isEditMode ? 'update' : 'create'} problem`);
@@ -257,14 +245,110 @@ export default function ProblemCreator({
     }
   };
 
-  const debuggerHook = useApiDebugger();
+  // ─── WorkspaceShell handlers ────────────────────────────────────────────────
 
-  // Build current execution test cases for CodeEditor default
-  const currentTestCases: IOTestCase[] = buildIOTestCases({ stdin, random_seed, attached_files });
+  const handleSelectTab = useCallback((id: string) => {
+    if (id === 'starter' || id === 'solution') {
+      setActiveTab(id);
+    }
+  }, []);
+
+  const handleChangeCode = useCallback((id: string, code: string) => {
+    if (id === 'starter') {
+      setStarterCode(code);
+    } else if (id === 'solution') {
+      setSolution(code);
+    }
+  }, []);
+
+  const handleRunAll = useCallback(async () => {
+    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    setIsRunning(true);
+    setExecutionResult(null);
+    try {
+      const result = await executeCode(codeToRun, language, {
+        cases: ioTestCasesToCaseDefs(testCases),
+      });
+      setExecutionResult(result);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to run code');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [activeTab, starter_code, solution, language, testCases]);
+
+  const handleRunTest = useCallback(async (testId: string) => {
+    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    const items = toTestRailItems(testCases);
+    const idx = items.findIndex((item) => item.id === testId);
+    if (idx === -1) return;
+    const singleCase = testCases[idx];
+    if (!singleCase) return;
+
+    setIsRunning(true);
+    setExecutionResult(null);
+    try {
+      const result = await executeCode(codeToRun, language, {
+        cases: ioTestCasesToCaseDefs([singleCase]),
+      });
+      setExecutionResult(result);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to run code');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [activeTab, starter_code, solution, language, testCases]);
+
+  const handleDebugTest = useCallback((_testId: string) => {
+    // Debug not wired in G1 author surface; G2 adds per-test edit drawer
+  }, []);
+
+  const handleSelectTest = useCallback((testId: string) => {
+    setActiveTestId(testId);
+  }, []);
+
+  // ─── Derived values ─────────────────────────────────────────────────────────
+
+  const tests = toTestRailItems(testCases, executionResult?.results);
+
+  const editorTabs: EditorTab[] = [
+    {
+      id: 'starter',
+      label: 'Starter Code',
+      kind: 'code',
+      language: language as 'python' | 'java' | 'javascript',
+      code: starter_code,
+      readOnly: false,
+    },
+    {
+      id: 'solution',
+      label: 'Solution',
+      kind: 'code',
+      language: language as 'python' | 'java' | 'javascript',
+      code: solution,
+      readOnly: false,
+    },
+  ];
+
+  // Derive drawer mode from execution state
+  const drawerMode: DrawerMode = executionResult ? 'output' : 'idle';
+
+  const drawerOutput = executionResult
+    ? {
+        lines: executionResult.results.flatMap((r) => {
+          if (r.kind === 'io' && 'actual' in r && r.actual) {
+            return [{ stream: 'out' as const, text: r.actual }];
+          }
+          return [];
+        }),
+        status: executionResult.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
+        summary: `${executionResult.summary.passed}/${executionResult.summary.total} passed`,
+      }
+    : undefined;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      {/* Compact header bar matching student view style */}
+      {/* Compact header bar */}
       <div style={{
         flexShrink: 0,
         padding: '0.75rem 1rem',
@@ -333,7 +417,7 @@ export default function ProblemCreator({
         </div>
       )}
 
-      {/* Class and Tags bar */}
+      {/* Class, Language and Tags bar */}
       {!isLoading && <div style={{
         flexShrink: 0,
         padding: '0.5rem 1rem',
@@ -448,58 +532,97 @@ export default function ProblemCreator({
         </div>
       </div>}
 
-      {/* Tab bar for Starter Code / Solution */}
-      {!isLoading && <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
-        <Tabs.List className="items-center">
-          <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
-          <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
+      {/* Title / Description fields — page chrome (G2 will move statement into a Monaco tab) */}
+      {!isLoading && (
+        <div style={{
+          flexShrink: 0,
+          padding: '0.5rem 1rem',
+          backgroundColor: '#fff',
+          borderBottom: '1px solid #dee2e6',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
+            <label htmlFor="problem-title" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Title *</label>
+            <input
+              id="problem-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Problem title..."
+              style={{
+                flex: 1,
+                padding: '0.375rem 0.5rem',
+                fontSize: '0.875rem',
+                border: '1px solid #ced4da',
+                borderRadius: '0.25rem',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 2, minWidth: '200px' }}>
+            <label htmlFor="problem-description" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Description</label>
+            <input
+              id="problem-description"
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Problem description..."
+              style={{
+                flex: 1,
+                padding: '0.375rem 0.5rem',
+                fontSize: '0.875rem',
+                border: '1px solid #ced4da',
+                borderRadius: '0.25rem',
+              }}
+            />
+          </div>
+          {/* Generate Solution button */}
           <button
             type="button"
             onClick={handleOpenGenerateModal}
             disabled={!description.trim() || isGenerating || isSubmitting}
-            className="ml-auto mr-2 px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              padding: '0.375rem 0.75rem',
+              fontSize: '0.75rem',
+              color: '#0d6efd',
+              backgroundColor: 'transparent',
+              border: '1px solid #0d6efd',
+              borderRadius: '0.25rem',
+              cursor: (!description.trim() || isGenerating || isSubmitting) ? 'not-allowed' : 'pointer',
+              opacity: (!description.trim() || isGenerating || isSubmitting) ? 0.5 : 1,
+              whiteSpace: 'nowrap',
+            }}
           >
             Generate Solution
           </button>
-        </Tabs.List>
-      </Tabs>}
+        </div>
+      )}
 
-      {/* Full-width code editor */}
-      {!isLoading && <EditorContainer variant="flex">
-        <CodeEditor
-          code={activeTab === 'starter' ? starter_code : solution}
-          onChange={activeTab === 'starter' ? setStarterCode : setSolution}
-          onRun={(testCases) => {
-            const codeToRun = activeTab === 'starter' ? starter_code : solution;
-            setIsRunning(true);
-            setExecutionResult(null);
-            executeCode(codeToRun, language, {
-              cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
-            }).then(setExecutionResult).catch((err: any) => {
-              setError(err?.message || 'Failed to run code');
-            }).finally(() => setIsRunning(false));
-          }}
-          isRunning={isRunning}
-          execution_result={executionResult}
-          title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          defaultTestCases={currentTestCases}
-          onTestCasesChange={(testCases) => {
-            const first = testCases[0];
-            const ioFirst = first?.kind === 'io' ? first : undefined;
-            setStdin(ioFirst?.input || '');
-            setRandomSeed(ioFirst?.random_seed);
-            setAttachedFiles(ioFirst?.attached_files || []);
-          }}
-          problem={{ title, description, starter_code, language }}
-          onLoadStarterCode={setStarterCode}
-          debugger={debuggerHook}
-          onProblemEdit={(updates) => {
-            if (updates.title !== undefined) setTitle(updates.title);
-            if (updates.description !== undefined) setDescription(updates.description);
-          }}
-          editableProblem={true}
+      {/* WorkspaceShell — embedded, author mode */}
+      {!isLoading && (
+        <WorkspaceShell
+          embedded={true}
+          editorTabs={editorTabs}
+          activeTabId={activeTab}
+          onSelectTab={handleSelectTab}
+          onChangeCode={handleChangeCode}
+          tests={tests}
+          activeTestId={activeTestId}
+          onSelectTest={handleSelectTest}
+          onRunAll={handleRunAll}
+          onRunTest={handleRunTest}
+          onDebugTest={handleDebugTest}
+          isRunningAll={isRunning}
+          railMode="run"
+          drawerMode={drawerMode}
+          drawerCollapsed={drawerCollapsed}
+          onToggleDrawer={() => setDrawerCollapsed((c) => !c)}
+          drawerOutput={drawerOutput}
         />
-      </EditorContainer>}
+      )}
 
       {/* Generate Solution Modal */}
       {showGenerateModal && (
@@ -598,7 +721,6 @@ export default function ProblemCreator({
           </div>
         </div>
       )}
-
     </div>
   );
 }
