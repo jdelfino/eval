@@ -25,6 +25,8 @@ export interface WorkspaceShellProps {
   onSelectTab?: (id: string) => void;
   onChangeCode?: (id: string, code: string) => void;
   highlight?: number;
+  /** Monaco editor font size in px; forwarded to EditorPane. Defaults to 14. */
+  fontSize?: number;
   editorRightControls?: React.ReactNode;
   editorFootnote?: React.ReactNode;
 
@@ -85,6 +87,7 @@ export default function WorkspaceShell({
   onSelectTab,
   onChangeCode,
   highlight,
+  fontSize,
   editorRightControls,
   editorFootnote,
 
@@ -168,6 +171,7 @@ export default function WorkspaceShell({
             onSelect={onSelectTab}
             onChangeCode={onChangeCode}
             highlight={highlight}
+            fontSize={fontSize}
             rightControls={editorRightControls}
             footnote={editorFootnote}
           />
