@@ -127,27 +127,39 @@ test-integration-store:
 # ──────────────────────────────────────────────
 # Frontend
 # ──────────────────────────────────────────────
-.PHONY: build-frontend test-frontend lint-frontend typecheck-frontend check-contract-coverage check-api-imports check-unknown-wire-types
+.PHONY: _check-frontend-deps build-frontend test-frontend lint-frontend typecheck-frontend check-contract-coverage check-api-imports check-unknown-wire-types
 
-build-frontend:
+# Bail early if frontend/node_modules is missing. Without this guard,
+# `npx` silently tries to fetch packages from the registry, which hangs
+# pre-push hooks for minutes. Hits worktrees that haven't symlinked
+# node_modules from the canonical checkout.
+_check-frontend-deps:
+	@test -d frontend/node_modules || { \
+	  echo "ERROR: frontend/node_modules missing — frontend Make targets need deps installed."; \
+	  echo "  Canonical checkout: cd frontend && npm ci"; \
+	  echo "  Devcontainer worktree: ln -s /workspaces/eval/frontend/node_modules ./frontend/node_modules"; \
+	  exit 1; \
+	}
+
+build-frontend: _check-frontend-deps
 	cd frontend && npm run build
 
-test-frontend:
+test-frontend: _check-frontend-deps
 	cd frontend && npx jest --selectProjects client contract-validators --no-coverage
 
-lint-frontend:
+lint-frontend: _check-frontend-deps
 	cd frontend && npm run lint
 
-typecheck-frontend:
+typecheck-frontend: _check-frontend-deps
 	cd frontend && npx tsc --noEmit
 
-check-contract-coverage:
+check-contract-coverage: _check-frontend-deps
 	cd frontend && npx tsx scripts/check-contract-coverage.ts
 
-check-api-imports:
+check-api-imports: _check-frontend-deps
 	cd frontend && npx tsx scripts/check-api-imports.ts
 
-check-unknown-wire-types:
+check-unknown-wire-types: _check-frontend-deps
 	cd frontend && npx tsx scripts/check-unknown-wire-types.ts
 
 # ──────────────────────────────────────────────
