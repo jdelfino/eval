@@ -122,6 +122,7 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: (props: WorkspaceShellProps) => {
     capturedShellProps = props;
     const firstTest = props.tests?.[0];
+    const thirdTest = props.tests?.[2];
     const firstTab = props.editorTabs?.[0];
     return (
       <div data-testid="workspace-shell">
@@ -147,13 +148,22 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
         >
           Debug
         </button>
-        {/* Run single test trigger */}
+        {/* Run single test trigger (first test) */}
         <button
           data-testid="run-single-btn"
           onClick={() => props.onRunTest?.(firstTest?.id ?? 'test-0')}
         >
           Run single
         </button>
+        {/* Run third test trigger (index 2) — used to verify index attribution */}
+        {thirdTest && (
+          <button
+            data-testid="run-third-btn"
+            onClick={() => props.onRunTest?.(thirdTest.id)}
+          >
+            Run third
+          </button>
+        )}
       </div>
     );
   },
@@ -200,6 +210,20 @@ const fakeStudentWork = {
     solution: null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
+  },
+};
+
+// Fixture with 3 test cases — needed to test C2 index-attribution bug.
+// The bug manifests when running test at index N>0: result[0] was attributed to row 0.
+const fakeStudentWorkThreeCases = {
+  ...fakeStudentWork,
+  problem: {
+    ...fakeStudentWork.problem,
+    test_cases: [
+      { kind: 'io' as const, name: 'case-1', input: '1 2', expected_output: '3', match_type: 'exact', order: 0 },
+      { kind: 'io' as const, name: 'case-2', input: '4 5', expected_output: '9', match_type: 'exact', order: 1 },
+      { kind: 'io' as const, name: 'case-3', input: '7 8', expected_output: '15', match_type: 'exact', order: 2 },
+    ],
   },
 };
 
@@ -460,9 +484,11 @@ describe('StudentPage wired to WorkspaceShell', () => {
       });
 
       // After run, drawer mode should reflect the execution result (output or failure)
+      // After run with a failure, drawer mode should be 'output' (result is available).
+      // The mode becomes 'failure' only after the user explicitly selects the failing test.
       await waitFor(() => {
         const mode = screen.getByTestId('drawer-mode').textContent;
-        expect(['output', 'failure']).toContain(mode);
+        expect(mode).toBe('output');
       });
     });
   });
@@ -559,9 +585,87 @@ describe('StudentPage wired to WorkspaceShell', () => {
         expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
-      // After joining, the session's test_cases should be passed to the rail
+      // After joining, the session's test_cases should be in the rail
       await waitFor(() => {
-        expect(capturedShellProps?.tests).toBeDefined();
+        const tests = capturedShellProps?.tests;
+        expect(tests).toBeDefined();
+        expect(tests?.some((t) => t.name === 'realtime-case')).toBe(true);
+      });
+    });
+  });
+
+  describe('C2: Run single test at index N — result attributed to row N, not row 0', () => {
+    /**
+     * Contract: when running the test at index 2, the returned result (in results[0]
+     * from the API) must be attributed to rail row 2, not row 0. The fix requires a
+     * sparse results array where position N holds the result and positions 0..N-1 are
+     * undefined. If broken, test at index 2 shows its pass/fail dot on the first row.
+     */
+    it('running test at index 2 sets state=pass on row 2, not row 0', async () => {
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkThreeCases);
+      // The API returns exactly 1 result — for the single case that was run
+      mockExecuteCode.mockResolvedValue({
+        results: [{ kind: 'io', name: 'case-3', status: 'passed', time_ms: 5 }],
+        summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 5 },
+      });
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      // Wait for the 3rd test button to appear (fixture has 3 cases)
+      await waitFor(() => {
+        expect(screen.getByTestId('run-third-btn')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        screen.getByTestId('run-third-btn').click();
+      });
+
+      await waitFor(() => {
+        expect(mockExecuteCode).toHaveBeenCalledTimes(1);
+      });
+
+      // Row 2 should be 'pass'; rows 0 and 1 should remain 'idle'
+      await waitFor(() => {
+        const tests = capturedShellProps?.tests;
+        expect(tests?.[2]?.state).toBe('pass');
+        expect(tests?.[0]?.state).toBe('idle');
+        expect(tests?.[1]?.state).toBe('idle');
+      });
+    });
+  });
+
+  describe('C3: Runtime error sets drawerMode to runtime-error', () => {
+    /**
+     * Contract: when executeCode rejects with a non-503 error, the student page
+     * sets runtimeError state, which causes deriveDrawerMode to return 'runtime-error'.
+     * If broken, runtime errors fall through to the generic ErrorAlert instead of
+     * the drawer's runtime-error mode — students see the wrong UI.
+     */
+    it('sets drawerMode=runtime-error when execution throws a non-503 error', async () => {
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
+      mockExecuteCode.mockRejectedValue(new Error('Traceback (most recent call last): NameError'));
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        screen.getByTestId('run-all-btn').click();
+      });
+
+      await waitFor(() => {
+        expect(mockExecuteCode).toHaveBeenCalledTimes(1);
+      });
+
+      await waitFor(() => {
+        const mode = screen.getByTestId('drawer-mode').textContent;
+        expect(mode).toBe('runtime-error');
       });
     });
   });

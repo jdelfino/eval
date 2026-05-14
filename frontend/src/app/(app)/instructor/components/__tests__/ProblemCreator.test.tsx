@@ -92,9 +92,18 @@ jest.mock('@/lib/testRail', () => ({
       name: c.name ?? `case-${i}`,
       kind: 'io',
       visible: true,
-      state: 'idle',
+      state: results?.[i] ? 'pass' : 'idle',
       t: '',
     }))
+  ),
+  toDrawerOutput: jest.fn((result) =>
+    result
+      ? {
+          lines: [],
+          status: result.summary?.failed > 0 ? 'fail' : 'pass',
+          summary: `${result.summary?.passed ?? 0}/${result.summary?.total ?? 0} passed`,
+        }
+      : undefined
   ),
 }));
 

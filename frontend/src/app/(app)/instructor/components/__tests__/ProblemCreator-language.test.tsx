@@ -73,6 +73,7 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
 
 jest.mock('@/lib/testRail', () => ({
   toTestRailItems: jest.fn(() => []),
+  toDrawerOutput: jest.fn(() => undefined),
 }));
 
 const JAVA_DEFAULT_STARTER = `public class Main {

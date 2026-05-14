@@ -174,16 +174,9 @@ describe('Drawer', () => {
         />
       );
 
-      // Scrubber fill bar should be at 30%
-      const fillBar = document.querySelector('[data-testid="scrubber-fill"]') as HTMLElement;
-      if (fillBar) {
-        expect(fillBar).toHaveStyle({ width: '30%' });
-      } else {
-        // Find by inline style if no test id
-        const allDivs = document.querySelectorAll('div');
-        const fill = Array.from(allDivs).find(d => d.style.width === '30%');
-        expect(fill).toBeTruthy();
-      }
+      // Scrubber fill bar should be at 30% (data-testid="scrubber-fill" is on the fill div)
+      const fillBar = screen.getByTestId('scrubber-fill') as HTMLElement;
+      expect(fillBar).toHaveStyle({ width: '30%' });
     });
 
     it('renders local variable with changed accent color', () => {

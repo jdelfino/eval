@@ -82,14 +82,21 @@ jest.mock('@/hooks/useApiDebugger', () => ({
   })),
 }));
 
-// Track onRunAll callback from WorkspaceShell to trigger execution in tests
+// Track onRunAll callback and drawerMode from WorkspaceShell
 let capturedOnRun: (() => void) | null = null;
+let capturedDrawerMode: string | null = null;
 
 jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: ({ onRunAll }: { onRunAll: () => void }) => {
+  default: ({ onRunAll, drawerMode }: { onRunAll: () => void; drawerMode?: string }) => {
     capturedOnRun = onRunAll;
-    return <div data-testid="workspace-shell">WorkspaceShell</div>;
+    capturedDrawerMode = drawerMode ?? null;
+    return (
+      <div data-testid="workspace-shell">
+        <div data-testid="drawer-mode">{drawerMode}</div>
+        WorkspaceShell
+      </div>
+    );
   },
 }));
 
@@ -139,6 +146,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedOnRun = null;
+    capturedDrawerMode = null;
     mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
     mockUpdateStudentWork.mockResolvedValue(undefined);
     mockWarmExecutor.mockResolvedValue(undefined);
@@ -231,7 +239,13 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       expect(alert.textContent).toMatch(/warming up/i);
     });
 
-    it('shows generic error message for non-503 errors', async () => {
+    it('routes non-503 errors to drawer runtime-error mode (not generic alert)', async () => {
+      /**
+       * C3 fix: non-503 errors now call setRuntimeError (not setError), which causes
+       * drawerMode='runtime-error' and the WorkspaceShell drawer to show the error.
+       * Previously, non-503 errors were shown via a generic ErrorAlert — this was wrong
+       * because runtime errors (NameError, SyntaxError etc.) belong in the drawer.
+       */
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
       mockExecuteCode.mockRejectedValue(
@@ -248,13 +262,10 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
         capturedOnRun?.();
       });
 
+      // Non-503 errors should set drawerMode='runtime-error', not show a generic alert
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByTestId('drawer-mode').textContent).toBe('runtime-error');
       });
-
-      const alert = screen.getByRole('alert');
-      // Should not show warming-up message for 500 errors
-      expect(alert.textContent).not.toMatch(/warming up/i);
     });
   });
 });

@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import SessionDetails from '../SessionDetails';
 import type { SessionDetails as SessionDetailsType } from '@/lib/api/sessions';
 
@@ -24,29 +24,42 @@ jest.mock('@/lib/api/sessions', () => ({
   getSessionDetails: jest.fn(),
 }));
 
+// Capture onRunAll so we can invoke it in TQ3 test
+let capturedOnRunAll: (() => void) | undefined;
+
 // Mock WorkspaceShell — the critical post-T8 assertion
 jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
   default: ({
     editorTabs,
     embedded,
+    onRunAll,
   }: {
     editorTabs: Array<{ id: string; code?: string; readOnly?: boolean }>;
     embedded?: boolean;
-  }) => (
-    <div data-testid="workspace-shell" data-embedded={String(!!embedded)}>
-      {editorTabs.map((tab) => (
-        <div
-          key={tab.id}
-          data-testid="editor-tab"
-          data-code={tab.code}
-          data-readonly={String(!!tab.readOnly)}
-        >
-          {tab.code}
-        </div>
-      ))}
-    </div>
-  ),
+    onRunAll?: () => void;
+  }) => {
+    capturedOnRunAll = onRunAll;
+    return (
+      <div data-testid="workspace-shell" data-embedded={String(!!embedded)}>
+        {editorTabs.map((tab) => (
+          <div
+            key={tab.id}
+            data-testid="editor-tab"
+            data-code={tab.code}
+            data-readonly={String(!!tab.readOnly)}
+          >
+            {tab.code}
+          </div>
+        ))}
+        {onRunAll && (
+          <button data-testid="run-all-btn" onClick={onRunAll}>
+            Run All
+          </button>
+        )}
+      </div>
+    );
+  },
 }));
 
 // BackButton mock
@@ -145,6 +158,30 @@ describe('SessionDetails', () => {
         expect(tab).toBeInTheDocument();
         expect(tab).toHaveAttribute('data-readonly', 'true');
       });
+    });
+  });
+
+  describe('TQ3 — Run all triggers onExecuteCode with historical student code', () => {
+    /**
+     * Contract: SessionDetails passes onRunAll to WorkspaceShell, and when invoked,
+     * it calls the parent's onExecuteCode prop with the selected student's historical code.
+     * Without this, the instructor cannot re-run student code from the history view —
+     * the "Run all" button in the shell would be inert or missing.
+     */
+    it('calls onExecuteCode with the selected student code when Run All is triggered', async () => {
+      const onExecuteCode = jest.fn();
+      render(<SessionDetails {...defaultProps} onExecuteCode={onExecuteCode} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      // Invoke onRunAll captured from the WorkspaceShell mock
+      await act(async () => {
+        capturedOnRunAll?.();
+      });
+
+      expect(onExecuteCode).toHaveBeenCalledWith('print("fizzbuzz")');
     });
   });
 

@@ -53,9 +53,9 @@ describe('Ribbon', () => {
     it('fires onToggle when header area is clicked', () => {
       const onToggle = jest.fn();
       render(<Ribbon {...baseProps} onToggle={onToggle} open={false} />);
-      // The header row is the clickable toggle area (has the onClick handler)
-      const header = screen.getByText('Two Sum').closest('[style]') as HTMLElement;
-      fireEvent.click(header!);
+      // The header row has data-testid="ribbon-header" with the onClick handler
+      const header = screen.getByTestId('ribbon-header');
+      fireEvent.click(header);
       expect(onToggle).toHaveBeenCalledTimes(1);
     });
   });
