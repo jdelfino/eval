@@ -330,8 +330,24 @@ function CodeBody({ tab, highlight, fontSize, onChangeCode }: CodeBodyProps) {
     decorationsRef.current = newDecorations;
   }, [highlight]);
 
+  // Unregister from window.__TEST_EDITORS on unmount. Registration happens in
+  // handleEditorDidMount below; the e2e Monaco fixtures (frontend/e2e/fixtures/monaco.ts)
+  // poll this array for programmatic access.
+  useEffect(() => {
+    return () => {
+      const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
+      if (w.__TEST_EDITORS && editorRef.current) {
+        const idx = w.__TEST_EDITORS.indexOf(editorRef.current);
+        if (idx >= 0) w.__TEST_EDITORS.splice(idx, 1);
+      }
+    };
+  }, []);
+
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
+    const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
+    if (!w.__TEST_EDITORS) w.__TEST_EDITORS = [];
+    w.__TEST_EDITORS.push(editor);
   };
 
   const handleChange = (value: string | undefined) => {
