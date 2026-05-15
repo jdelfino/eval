@@ -554,18 +554,20 @@ export default function ProblemCreator({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 2, minWidth: '200px' }}>
             <label htmlFor="problem-description" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Description</label>
-            <input
+            <textarea
               id="problem-description"
-              type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Problem description..."
+              rows={2}
               style={{
                 flex: 1,
                 padding: '0.375rem 0.5rem',
                 fontSize: '0.875rem',
                 border: '1px solid #ced4da',
                 borderRadius: '0.25rem',
+                resize: 'vertical',
+                fontFamily: 'inherit',
               }}
             />
           </div>
