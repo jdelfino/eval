@@ -179,6 +179,14 @@ test-run-e2e-tests:
 	bash scripts/test-run-e2e-tests.sh
 
 # ──────────────────────────────────────────────
+# Pre-push Playwright-fresh gate tests
+# ──────────────────────────────────────────────
+.PHONY: test-check-playwright-fresh
+
+test-check-playwright-fresh:
+	bash scripts/test-check-playwright-fresh.sh
+
+# ──────────────────────────────────────────────
 # Staging seed script tests
 # ──────────────────────────────────────────────
 .PHONY: test-seed-staging

@@ -46,6 +46,9 @@ pre-push:
     check-contract-coverage:
       glob: "{go-backend/{,**/}*.go,frontend/{,**/}*.{ts,tsx}}"
       run: make check-contract-coverage
+    playwright-fresh:
+      glob: "frontend/e2e/*.spec.ts"
+      run: ./scripts/check-playwright-fresh.sh {push_files}
 
 post-checkout:
   commands:
