@@ -245,6 +245,44 @@ assert_exit \
   "frontend/e2e/spec-b.spec.ts"
 
 # ────────────────────────────────────────────────────────────────────────────
+# .last-run.json has no status field (e.g. {}) → exit non-zero with a
+# distinct "missing or unreadable" message, not a confusing empty-quote one.
+# ────────────────────────────────────────────────────────────────────────────
+
+make_fake_repo "no_status_field"
+touch "$FAKE_REPO/frontend/e2e/critical-paths.spec.ts"
+printf '{}' > "$FAKE_REPO/frontend/test-results/.last-run.json"
+touch -t 202605172359 "$FAKE_REPO/frontend/test-results/.last-run.json"
+touch -t 202605170100 "$FAKE_REPO/frontend/e2e/critical-paths.spec.ts"
+
+assert_exit \
+  "status field absent → exits non-zero" \
+  1 "$FAKE_REPO" \
+  "frontend/e2e/critical-paths.spec.ts"
+
+assert_output_contains \
+  "status field absent → message says missing or unreadable" \
+  "missing or unreadable" \
+  "$FAKE_REPO" \
+  "frontend/e2e/critical-paths.spec.ts"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Deleted spec: spec path passed to script but file no longer on disk.
+# Should not block — there's no spec to be stale relative to .last-run.json.
+# ────────────────────────────────────────────────────────────────────────────
+
+make_fake_repo "deleted_spec"
+printf '{"status":"passed"}' \
+  > "$FAKE_REPO/frontend/test-results/.last-run.json"
+touch -t 202605172359 "$FAKE_REPO/frontend/test-results/.last-run.json"
+# Note: critical-paths.spec.ts is NOT created on disk
+
+assert_exit \
+  "deleted spec file → exit 0" \
+  0 "$FAKE_REPO" \
+  "frontend/e2e/critical-paths.spec.ts"
+
+# ────────────────────────────────────────────────────────────────────────────
 # Script is executable
 # ────────────────────────────────────────────────────────────────────────────
 

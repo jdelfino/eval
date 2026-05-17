@@ -38,8 +38,16 @@ fi
 if command -v jq >/dev/null 2>&1; then
   status=$(jq -r '.status // empty' "$LAST_RUN")
 else
-  # Portable fallback: extract "status":"<value>" from JSON
-  status=$(grep -o '"status":"[^"]*"' "$LAST_RUN" | sed 's/"status":"//;s/"//')
+  # Portable fallback: extract "status":"<value>" from JSON.
+  # `|| true` keeps an absent status field from killing the script silently
+  # under `set -euo pipefail` — we want the empty-string branch below to handle it.
+  status=$(grep -o '"status":"[^"]*"' "$LAST_RUN" | sed 's/"status":"//;s/"//' || true)
+fi
+
+if [ -z "$status" ]; then
+  echo "ERROR: Playwright last run status is missing or unreadable in $LAST_RUN." >&2
+  echo "       Run 'make test-e2e' and ensure all specs pass before pushing." >&2
+  exit 1
 fi
 
 if [ "$status" != "passed" ]; then
