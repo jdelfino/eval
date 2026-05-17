@@ -115,7 +115,8 @@ test.describe('Session Lifecycle', () => {
       await expect(page.locator('[data-testid="session-ended-notification"]')).toBeVisible();
 
       // In practice mode, the run button should still be available
-      const runButton = page.locator('button:has-text("Run Code")');
+      // Note: "Run Code" button removed in G1 WorkspaceShell redesign; now "Run all" in TestRail.
+      const runButton = page.locator('[data-testid="workspace-run-all"]');
       await expect(runButton).toBeVisible();
 
       // Verify Monaco still contains the student's code (guards against state loss)
@@ -126,13 +127,14 @@ test.describe('Session Lifecycle', () => {
       }).toContain('LIFECYCLE_TEST_2');
 
       // ===== STUDENT RUNS CODE IN PRACTICE MODE =====
-      // Click Run Code — this uses the practice API endpoint
+      // Click "Run all" — this uses the practice API endpoint
       await runButton.click();
 
       // Wait for successful execution result — practice mode must actually work
-      const outputArea = page.locator('[data-testid="output-area"]');
-      await expect(outputArea.locator('text=✓ Success')).toBeVisible({ timeout: 15000 });
-      await expect(outputArea.locator('text=LIFECYCLE_TEST_2')).toBeVisible();
+      // The drawer switches to output mode after execution
+      const drawerOutput = page.locator('[data-testid="workspace-drawer-output"]');
+      await expect(drawerOutput.locator('[data-testid="output-status-pass"]')).toBeVisible({ timeout: 15000 });
+      await expect(drawerOutput.locator('text=LIFECYCLE_TEST_2')).toBeVisible();
 
     } finally {
       await instructorContext.close();

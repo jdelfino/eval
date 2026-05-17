@@ -4,6 +4,15 @@
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 
+export { Pill } from './Pill';
+export type { PillProps, PillTone } from './Pill';
+
+export { Kbd } from './Kbd';
+export type { KbdProps } from './Kbd';
+
+export { StateDot } from './StateDot';
+export type { StateDotProps, DotState } from './StateDot';
+
 export { Card } from './Card';
 export type { CardProps, CardVariant, CardSectionProps } from './Card';
 

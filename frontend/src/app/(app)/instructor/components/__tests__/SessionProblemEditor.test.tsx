@@ -27,127 +27,159 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
   };
 }
 
-// Mock useApiDebugger hook
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({
-    isDebugging: false,
-    currentStep: 0,
-    total_steps: 0,
-    currentTrace: null,
-    startDebugging: jest.fn(),
-    stopDebugging: jest.fn(),
-    nextStep: jest.fn(),
-    previousStep: jest.fn(),
-    getCurrentStep: jest.fn(() => null),
-  })),
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn(),
+  ioTestCasesToCaseDefs: jest.fn((cases) => cases),
+  buildIOTestCases: jest.fn(({ stdin, random_seed, attached_files }) => {
+    if (!stdin && !random_seed && (!attached_files || attached_files.length === 0)) return [];
+    return [{ kind: 'io', name: 'Default', input: stdin || '', match_type: 'exact', order: 0 }];
+  }),
 }));
 
-// Mock useResponsiveLayout hook
-jest.mock('@/hooks/useResponsiveLayout', () => ({
+// Mock WorkspaceShell — integration tests focus on SessionProblemEditor wiring,
+// not WorkspaceShell internals.
+let capturedWorkspaceProps: any = null;
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: jest.fn(() => ({
-    isMobile: false,
-    isTablet: false,
-    isDesktop: true,
-  })),
-}));
-
-// Mock the CodeEditor component
-// Simulates Monaco's behavior: without a key prop to force remount, switching from
-// non-empty to empty content may not properly update the editor state
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  const editorInstances = new Map<string, string>();
-
-  return React.forwardRef(function MockCodeEditor(props: any, ref: any) {
-    const {
-      code,
-      onChange,
-      readOnly,
-      onTestCasesChange,
-      title,
-      problem,
-      onProblemEdit,
-      editableProblem
-    } = props;
-
-    // Use a ref to simulate Monaco's internal state that persists across renders
-    const instanceIdRef = React.useRef<string | undefined>(undefined);
-    const [displayedCode, setDisplayedCode] = React.useState(code);
-
-    // On mount, create or retrieve instance
-    React.useEffect(() => {
-      const instanceId = Math.random().toString(36);
-      instanceIdRef.current = instanceId;
-      editorInstances.set(instanceId, code);
-      setDisplayedCode(code);
-
-      return () => {
-        if (instanceIdRef.current) {
-          editorInstances.delete(instanceIdRef.current);
-        }
-      };
-    }, []); // Empty deps = only runs on mount/unmount (simulating Monaco instance lifecycle)
-
-    // Update displayed code only if instance has been remounted (via key change)
-    // Otherwise, simulate Monaco bug: empty string doesn't trigger update
-    React.useEffect(() => {
-      if (instanceIdRef.current) {
-        // Simulate Monaco bug: when code becomes empty, the editor doesn't update unless remounted
-        if (code !== '' || !editorInstances.get(instanceIdRef.current)) {
-          editorInstances.set(instanceIdRef.current, code);
-          setDisplayedCode(code);
-        }
-      }
-    }, [code]);
-
+  default: (props: any) => {
+    capturedWorkspaceProps = props;
+    const { editorTabs, activeTabId, onChangeCode, onRunAll, onSelectTab, railMode, embedded, tests } = props;
+    const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
-      <div data-testid="code-editor" data-readonly={readOnly ? 'true' : 'false'}>
-        <div>{title}</div>
-        <textarea
-          data-testid="code-textarea"
-          value={displayedCode}
-          readOnly={readOnly}
-          onChange={(e) => onChange?.(e.target.value)}
-        />
-        <input
-          data-testid="stdin-input"
-          placeholder="stdin"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
-        />
-        <input
-          data-testid="seed-input"
-          type="number"
-          placeholder="seed"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
-        />
-        {editableProblem && (
-          <div data-testid="editable-problem-sidebar">
-            <input
-              data-testid="problem-title-input"
-              aria-label="Problem Title"
-              placeholder="Problem Title"
-              value={problem?.title || ''}
-              onChange={(e) => onProblemEdit?.({ title: e.target.value })}
-            />
-            <textarea
-              data-testid="problem-description-textarea"
-              aria-label="Problem Description"
-              placeholder="Problem Description"
-              value={problem?.description || ''}
-              onChange={(e) => onProblemEdit?.({ description: e.target.value })}
-            />
-          </div>
+      <div data-testid="workspace-shell" data-embedded={String(embedded ?? false)}>
+        <div data-testid="editor-tabs">
+          {editorTabs.map((tab: any) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              onClick={() => onSelectTab?.(tab.id)}
+              data-readonly={String(tab.readOnly ?? false)}
+              data-kind={tab.kind}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {activeTab && (
+          <textarea
+            data-testid="active-code-area"
+            aria-label={activeTab.label}
+            value={activeTab.code}
+            readOnly={activeTab.readOnly}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
         )}
+        <button data-testid="run-all-btn" onClick={() => onRunAll?.()}>Run all</button>
+        <span data-testid="rail-mode">{railMode ?? 'run'}</span>
+        <span data-testid="tests-count">{tests?.length ?? 0}</span>
       </div>
     );
-  });
-});
+  },
+}));
+
+jest.mock('@/lib/testRail', () => ({
+  toTestRailItems: jest.fn((cases, results) =>
+    (cases ?? []).map((c: any, i: number) => ({
+      id: `io-${i}-${c.name ?? 'case-' + i}`,
+      name: c.name ?? `case-${i}`,
+      kind: 'io',
+      visible: true,
+      state: 'idle',
+      t: '',
+    }))
+  ),
+  toDrawerOutput: jest.fn((result) =>
+    result
+      ? {
+          lines: [],
+          status: result.summary?.failed > 0 ? 'fail' : 'pass',
+          summary: `${result.summary?.passed ?? 0}/${result.summary?.total ?? 0} passed`,
+        }
+      : undefined
+  ),
+}));
 
 describe('SessionProblemEditor', () => {
   const mockOnUpdateProblem = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
+    capturedWorkspaceProps = null;
+  });
+
+  describe('WorkspaceShell integration (T9)', () => {
+    /**
+     * Verifies SessionProblemEditor mounts WorkspaceShell in embedded mode.
+     * Author surfaces use WorkspaceShell, not the old CodeEditor/EditorContainer.
+     */
+    it('renders WorkspaceShell embedded=true', () => {
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+      );
+
+      const shell = screen.getByTestId('workspace-shell');
+      expect(shell).toBeInTheDocument();
+      expect(shell).toHaveAttribute('data-embedded', 'true');
+    });
+
+    /**
+     * Verifies no Ribbon is rendered in embedded mode.
+     */
+    it('no Ribbon rendered in embedded mode', () => {
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+      );
+      expect(screen.queryByTestId('ribbon')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Verifies both tabs are kind='code' and both editable.
+     * Authors must edit both Starter Code and Solution in G1.
+     */
+    it('Starter and Solution tabs are both kind=code and editable', () => {
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+      );
+
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs).toHaveLength(2);
+      tabs.forEach((tab) => {
+        expect(tab).toHaveAttribute('data-kind', 'code');
+        expect(tab).toHaveAttribute('data-readonly', 'false');
+      });
+    });
+
+    /**
+     * Verifies Run all calls executeCode for local execution.
+     */
+    it('Run all triggers local executeCode', async () => {
+      const { executeCode } = require('@/lib/api/execute');
+      executeCode.mockResolvedValue({
+        summary: { passed: 0, failed: 0, total: 0 },
+        results: [],
+      });
+
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+      );
+
+      fireEvent.click(screen.getByTestId('run-all-btn'));
+
+      await waitFor(() => {
+        expect(executeCode).toHaveBeenCalled();
+      });
+    });
+
+    /**
+     * Verifies rail mode is 'run'. G2 adds 'edit' mode.
+     */
+    it('rail mode is run', () => {
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+      );
+      expect(screen.getByTestId('rail-mode')).toHaveTextContent('run');
+    });
   });
 
   it('renders with empty initial state', () => {
@@ -157,13 +189,11 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('');
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     expect(screen.getByText('Update Problem')).toBeInTheDocument();
   });
 
-  it('renders with initial problem data', () => {
+  it('renders with initial problem data in editor', () => {
     const initialProblem = makeProblem({
       title: 'Test Problem',
       description: 'Test description',
@@ -177,51 +207,8 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Test Problem');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Test description');
-    expect(screen.getByTestId('code-textarea')).toHaveValue('print("hello")');
-  });
-
-  it('renders with initial test cases', () => {
-    const initialTestCases = [
-      { kind: 'io' as const, name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'test.txt', content: 'content' }] },
-    ];
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialTestCases={initialTestCases}
-      />
-    );
-
-    // CodeEditor should receive these settings as props
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-  });
-
-  it('updates title when user types', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    const titleInput = screen.getByTestId('problem-title-input');
-    fireEvent.change(titleInput, { target: { value: 'New Title' } });
-
-    expect(titleInput).toHaveValue('New Title');
-  });
-
-  it('updates description when user types', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    const descriptionInput = screen.getByTestId('problem-description-textarea');
-    fireEvent.change(descriptionInput, { target: { value: 'New description' } });
-
-    expect(descriptionInput).toHaveValue('New description');
+    // Starter Code tab is active by default, editor shows starter_code
+    expect(screen.getByTestId('active-code-area')).toHaveValue('print("hello")');
   });
 
   it('updates starter code when user types in editor', () => {
@@ -231,10 +218,10 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    const codeTextarea = screen.getByTestId('code-textarea');
-    fireEvent.change(codeTextarea, { target: { value: 'print("new code")' } });
+    const codeArea = screen.getByTestId('active-code-area');
+    fireEvent.change(codeArea, { target: { value: 'print("new code")' } });
 
-    expect(codeTextarea).toHaveValue('print("new code")');
+    expect(codeArea).toHaveValue('print("new code")');
   });
 
   it('calls onUpdateProblem with correct data when Update button is clicked', () => {
@@ -244,98 +231,28 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    // Fill in the form
-    fireEvent.change(screen.getByTestId('problem-title-input'), {
-      target: { value: 'My Title' }
-    });
-    fireEvent.change(screen.getByTestId('problem-description-textarea'), {
-      target: { value: 'My description' }
-    });
-    fireEvent.change(screen.getByTestId('code-textarea'), {
+    fireEvent.change(screen.getByTestId('active-code-area'), {
       target: { value: 'print("code")' }
     });
 
-    // Click update
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'My Title',
-        description: 'My description',
         starter_code: 'print("code")',
-        solution: null,
         language: 'python',
       })
     );
   });
 
-  it('includes execution settings when stdin is provided', () => {
+  it('trims whitespace from code when updating', () => {
     render(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
       />
     );
 
-    // Set stdin
-    fireEvent.change(screen.getByTestId('stdin-input'), {
-      target: { value: 'test input' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            name: 'Default',
-            input: 'test input',
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('includes execution settings when random seed is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set random seed
-    fireEvent.change(screen.getByTestId('seed-input'), {
-      target: { value: '42' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            random_seed: 42,
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('trims whitespace from inputs when updating', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    fireEvent.change(screen.getByTestId('problem-title-input'), {
-      target: { value: '  Title with spaces  ' }
-    });
-    fireEvent.change(screen.getByTestId('problem-description-textarea'), {
-      target: { value: '  Description with spaces  ' }
-    });
-    fireEvent.change(screen.getByTestId('code-textarea'), {
+    fireEvent.change(screen.getByTestId('active-code-area'), {
       target: { value: '  code with spaces  ' }
     });
 
@@ -343,11 +260,7 @@ describe('SessionProblemEditor', () => {
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Title with spaces',
-        description: 'Description with spaces',
         starter_code: 'code with spaces',
-        solution: null,
-        language: 'python',
       })
     );
   });
@@ -364,9 +277,8 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Initial');
+    expect(screen.getByTestId('active-code-area')).toHaveValue('initial code');
 
-    // Update the initial problem
     rerender(
       <SessionProblemEditor
         onUpdateProblem={mockOnUpdateProblem}
@@ -378,31 +290,7 @@ describe('SessionProblemEditor', () => {
       />
     );
 
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Updated');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Updated desc');
-  });
-
-  it('uses CodeEditor component with correct props', () => {
-    const initialProblem = makeProblem({
-      title: 'Test',
-      description: 'Test',
-      starter_code: 'test code',
-    });
-    const initialTestCases = [
-      { kind: 'io' as const, name: 'Default', input: 'input', match_type: 'exact' as const, order: 0, random_seed: 123, attached_files: [{ name: 'file.txt', content: 'content' }] },
-    ];
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={initialProblem}
-        initialTestCases={initialTestCases}
-      />
-    );
-
-    const editor = screen.getByTestId('code-editor');
-    expect(editor).toBeInTheDocument();
-    expect(screen.getByTestId('code-textarea')).toHaveValue('test code');
+    expect(screen.getByTestId('active-code-area')).toHaveValue('updated code');
   });
 
   describe('tab rendering', () => {
@@ -460,31 +348,7 @@ describe('SessionProblemEditor', () => {
         />
       );
 
-      // Default tab is Starter Code, should show starter_code
-      expect(screen.getByTestId('code-textarea')).toHaveValue('starter code here');
-    });
-
-    it('solution tab is read-only', () => {
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: 'starter code here',
-        solution: 'solution code here',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Starter Code tab should not be read-only
-      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'false');
-
-      // Switch to Solution tab — should be read-only
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'true');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('starter code here');
     });
 
     it('shows solution code in editor on Solution tab', () => {
@@ -502,19 +366,37 @@ describe('SessionProblemEditor', () => {
         />
       );
 
-      // Switch to Solution tab
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('solution code here');
+    });
+
+    it('both tabs are editable (readOnly=false) — authors edit both in G1', () => {
+      const initialProblem = makeProblem({
+        title: 'Test',
+        starter_code: 'starter',
+        solution: 'solution',
+      });
+
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={initialProblem}
+        />
+      );
+
+      // Starter Code tab
+      expect(screen.getByTestId('active-code-area')).not.toHaveAttribute('readonly');
+      expect(screen.getByRole('tab', { name: 'Starter Code' })).toHaveAttribute('data-readonly', 'false');
+
+      // Solution tab
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('active-code-area')).not.toHaveAttribute('readonly');
+      expect(screen.getByRole('tab', { name: 'Solution' })).toHaveAttribute('data-readonly', 'false');
     });
 
     it('switches from solution to empty starter code correctly', () => {
-      // Regression test for PLAT-m8d: Solution stays visible when switching to empty Starter Code tab
-      // This verifies that the CodeEditor properly updates when switching from a populated Solution
-      // tab to an empty Starter Code tab. Without a key prop forcing remount, Monaco may retain
-      // the previous buffer instead of showing empty content.
       const initialProblem = makeProblem({
         title: 'Test',
-        description: 'Test',
         starter_code: '',
         solution: 'solution code here',
       });
@@ -526,16 +408,16 @@ describe('SessionProblemEditor', () => {
         />
       );
 
-      // Start on Starter Code tab (default) - should be empty
-      expect(screen.getByTestId('code-textarea')).toHaveValue('');
+      // Start on Starter Code tab (default) — should be empty
+      expect(screen.getByTestId('active-code-area')).toHaveValue('');
 
-      // Switch to Solution tab - should show solution
+      // Switch to Solution tab
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('solution code here');
 
-      // Switch back to Starter Code tab - should be empty again
+      // Switch back to Starter Code tab
       fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('');
     });
   });
 
@@ -543,7 +425,6 @@ describe('SessionProblemEditor', () => {
     it('initializes solution from initialProblem.solution', () => {
       const initialProblem = makeProblem({
         title: 'Test',
-        description: 'Test',
         starter_code: 'starter',
         solution: 'the solution code',
       });
@@ -555,9 +436,8 @@ describe('SessionProblemEditor', () => {
         />
       );
 
-      // Switch to Solution tab to see solution
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('the solution code');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('the solution code');
     });
 
     it('syncs solution when initialProblem changes', () => {
@@ -566,7 +446,6 @@ describe('SessionProblemEditor', () => {
           onUpdateProblem={mockOnUpdateProblem}
           initialProblem={makeProblem({
             title: 'Initial',
-            description: 'Initial desc',
             starter_code: 'initial code',
             solution: 'initial solution',
           })}
@@ -578,16 +457,37 @@ describe('SessionProblemEditor', () => {
           onUpdateProblem={mockOnUpdateProblem}
           initialProblem={makeProblem({
             title: 'Updated',
-            description: 'Updated desc',
             starter_code: 'updated code',
             solution: 'updated solution',
           })}
         />
       );
 
-      // Switch to Solution tab to check updated solution
       fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('updated solution');
+      expect(screen.getByTestId('active-code-area')).toHaveValue('updated solution');
+    });
+
+    it('includes solution in onUpdateProblem when edited on Solution tab', () => {
+      render(
+        <SessionProblemEditor
+          onUpdateProblem={mockOnUpdateProblem}
+          initialProblem={makeProblem({ starter_code: 'starter', solution: 'old solution' })}
+        />
+      );
+
+      // Edit solution
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      fireEvent.change(screen.getByTestId('active-code-area'), {
+        target: { value: 'new solution code' }
+      });
+
+      fireEvent.click(screen.getByText('Update Problem'));
+
+      expect(mockOnUpdateProblem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          solution: 'new solution code',
+        })
+      );
     });
   });
 
@@ -685,7 +585,6 @@ describe('SessionProblemEditor', () => {
       fireEvent.click(screen.getByTestId('view-solution-button'));
       expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
 
-      // Click the backdrop (first child of the modal container)
       const backdrop = screen.getByTestId('solution-viewer-modal').querySelector('[aria-hidden="true"]')!;
       fireEvent.click(backdrop);
       expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
@@ -746,46 +645,14 @@ describe('SessionProblemEditor', () => {
   });
 
   describe('initialTestCases prop (PLAT-st42.3)', () => {
-    /**
-     * Verifies SessionProblemEditor accepts initialTestCases: IOTestCase[] instead of
-     * initialExecutionSettings: ExecutionSettings. This eliminates the conversion
-     * step (buildTestCasesFromExecutionSettings) on save.
-     */
-    it('accepts initialTestCases instead of initialExecutionSettings', () => {
+    it('accepts initialTestCases prop', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
           initialTestCases={[{ kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact', order: 0 }]}
         />
       );
-      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-    });
-
-    it('produces IOTestCase[] test_cases on save when stdin set', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-        />
-      );
-
-      // Set stdin via the mock CodeEditor
-      fireEvent.change(screen.getByTestId('stdin-input'), {
-        target: { value: 'test stdin' },
-      });
-
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          test_cases: expect.arrayContaining([
-            expect.objectContaining({
-              name: 'Default',
-              input: 'test stdin',
-              match_type: 'exact',
-            }),
-          ]),
-        })
-      );
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     });
 
     it('produces null test_cases on save when no stdin/seed/files and no initial problem', () => {
@@ -798,7 +665,6 @@ describe('SessionProblemEditor', () => {
       fireEvent.click(screen.getByText('Update Problem'));
 
       const call = mockOnUpdateProblem.mock.calls[0][0];
-      // No initial problem and no settings: test_cases falls back to base?.test_cases ?? null
       expect(call.test_cases).toBeNull();
     });
 

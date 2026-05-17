@@ -4,18 +4,20 @@
  * Session Problem Editor
  *
  * Provides an editor for creating/editing problems during an active session.
- * Similar to ProblemCreator but designed for live session updates rather than
- * database persistence. Uses Monaco editor and supports execution settings.
+ * Uses WorkspaceShell in embedded mode with Starter Code and Solution tabs.
+ *
+ * G1: railMode='run'. Per-test stdin/seed/files editing is intentionally
+ * unavailable (deferred to G2 per-test edit drawer).
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
-import { Tabs } from '@/components/ui/Tabs';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { Problem } from '@/types/problem';
-import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
-import { useApiDebugger } from '@/hooks/useApiDebugger';
+import type { Problem as ApiProblem, IOTestCase, CaseResult, TestResponse } from '@/types/api';
 import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
+import type { DrawerMode } from '@/components/workspace/Drawer';
+import type { EditorTab } from '@/components/workspace/EditorPane';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (problem: ApiProblem) => void;
@@ -23,6 +25,8 @@ interface SessionProblemEditorProps {
   initialTestCases?: IOTestCase[];
   onFeatureSolution?: () => void;
 }
+
+type ActiveTab = 'starter' | 'solution';
 
 export default function SessionProblemEditor({
   onUpdateProblem,
@@ -35,24 +39,29 @@ export default function SessionProblemEditor({
   const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
   const initialSolution = useMemo(() => initialProblem?.solution ?? '', [initialProblem]);
   const [solution, setSolution] = useState<string>(initialSolution);
-  const [activeTab, setActiveTab] = useState<'starter' | 'solution'>('starter');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('starter');
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = initialProblem?.language ?? 'python';
 
-  // Execution settings (derived from initialTestCases[0], io kind only)
-  const firstIoCase = initialTestCases[0]?.kind === 'io' ? initialTestCases[0] : undefined;
-  const [stdin, setStdin] = useState(firstIoCase?.input || '');
-  const [random_seed, setRandomSeed] = useState<number | undefined>(firstIoCase?.random_seed);
-  const [attached_files, setAttachedFiles] = useState<Array<{ name: string; content: string }>>(
-    firstIoCase?.attached_files || []
-  );
-
-  // Execution state for code editor
+  // Execution state (for WorkspaceShell rail/drawer)
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [executionResult, setExecutionResult] = useState<TestResponse | null>(null);
+  const [activeTestId, setActiveTestId] = useState<string | undefined>(undefined);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
-  // Sync state when initial values change (e.g., when problem is loaded)
+  // Test cases: G1 uses problem's existing test cases; per-test edit deferred to G2
+  const effectiveTestCases: IOTestCase[] = useMemo(
+    () =>
+      initialTestCases.length > 0
+        ? initialTestCases
+        : (initialProblem?.test_cases as IOTestCase[] | undefined) ?? [],
+    [initialTestCases, initialProblem?.test_cases]
+  );
+
+  // Sync state when initial values change (e.g., when problem is loaded).
+  // Intentionally tracks individual fields rather than the whole object to avoid
+  // re-running on every render when the parent re-creates the problem reference.
   useEffect(() => {
     if (initialProblem) {
       setTitle(initialProblem.title || '');
@@ -60,19 +69,7 @@ export default function SessionProblemEditor({
       setStarterCode(initialProblem.starter_code || '');
       setSolution(initialSolution);
     }
-  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]);
-
-  const firstTestCase = initialTestCases[0];
-  const firstIoTestCase = firstTestCase?.kind === 'io' ? firstTestCase : undefined;
-  const firstTestCaseInput = firstIoTestCase?.input;
-  const firstTestCaseRandomSeed = firstIoTestCase?.random_seed;
-  const firstTestCaseAttachedFiles = firstIoTestCase?.attached_files;
-
-  useEffect(() => {
-    setStdin(firstTestCaseInput || '');
-    setRandomSeed(firstTestCaseRandomSeed);
-    setAttachedFiles(firstTestCaseAttachedFiles || []);
-  }, [firstTestCaseInput, firstTestCaseRandomSeed, firstTestCaseAttachedFiles]);
+  }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
@@ -109,13 +106,10 @@ export default function SessionProblemEditor({
   }, [showSolutionViewer, handleCloseSolutionViewer]);
 
   const handleUpdate = () => {
-    // Build complete problem by spreading the initial problem (preserves id,
-    // namespace_id, author_id, tags, etc.) then overriding with form values.
-    // The backend stores the full object as-is in session JSONB.
     const base = initialProblem;
 
     // Build test_cases directly as IOTestCase[].
-    const newTestCases = buildIOTestCases({ stdin: stdin.trim(), random_seed, attached_files });
+    const newTestCases = buildIOTestCases({ stdin: '', random_seed: undefined, attached_files: [] });
 
     // Use new settings if any are set, otherwise preserve existing test_cases.
     const test_cases = (newTestCases.length > 0
@@ -123,7 +117,6 @@ export default function SessionProblemEditor({
       : (base?.test_cases ?? null)) as ApiProblem['test_cases'];
 
     const problem: ApiProblem = {
-      // Defaults for inline problem creation (no initial problem)
       id: '',
       namespace_id: '',
       author_id: '',
@@ -131,14 +124,11 @@ export default function SessionProblemEditor({
       tags: [],
       created_at: '',
       updated_at: '',
-      // Spread original problem to preserve all existing fields.
-      // Convert Date timestamps to ISO strings for the wire format.
       ...(base ? {
         ...base,
         created_at: base.created_at instanceof Date ? base.created_at.toISOString() : String(base.created_at),
         updated_at: base.updated_at instanceof Date ? base.updated_at.toISOString() : String(base.updated_at),
       } : {}),
-      // Override with edited form values
       title: title.trim(),
       description: description.trim() || null,
       starter_code: starter_code.trim() || null,
@@ -150,14 +140,103 @@ export default function SessionProblemEditor({
     onUpdateProblem(problem);
   };
 
-  const debuggerHook = useApiDebugger();
+  // ─── WorkspaceShell handlers ────────────────────────────────────────────────
 
-  // Build current execution test cases for CodeEditor default
-  const currentTestCases: IOTestCase[] = buildIOTestCases({ stdin, random_seed, attached_files });
+  const handleSelectTab = useCallback((id: string) => {
+    if (id === 'starter' || id === 'solution') {
+      setActiveTab(id);
+    }
+  }, []);
+
+  const handleChangeCode = useCallback((id: string, code: string) => {
+    if (id === 'starter') {
+      setStarterCode(code);
+    } else if (id === 'solution') {
+      setSolution(code);
+    }
+  }, []);
+
+  const handleRunAll = useCallback(async () => {
+    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    setIsRunning(true);
+    setExecutionResult(null);
+    setExecutionError(null);
+    try {
+      const result = await executeCode(codeToRun, language, {
+        cases: ioTestCasesToCaseDefs(effectiveTestCases),
+      });
+      setExecutionResult(result);
+    } catch (err: unknown) {
+      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [activeTab, starter_code, solution, language, effectiveTestCases]);
+
+  const handleRunTest = useCallback(async (testId: string) => {
+    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    const items = toTestRailItems(effectiveTestCases);
+    const idx = items.findIndex((item) => item.id === testId);
+    if (idx === -1) return;
+    const singleCase = effectiveTestCases[idx];
+    if (!singleCase) return;
+
+    setIsRunning(true);
+    setExecutionResult(null);
+    setExecutionError(null);
+    try {
+      const result = await executeCode(codeToRun, language, {
+        cases: ioTestCasesToCaseDefs([singleCase]),
+      });
+      // C2-equivalent: sparse results so the result lands on row idx
+      const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
+      sparseResults[idx] = result.results[0];
+      setExecutionResult({ ...result, results: sparseResults });
+    } catch (err: unknown) {
+      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [activeTab, starter_code, solution, language, effectiveTestCases]);
+
+  const handleDebugTest = useCallback((_testId: string) => {
+    // Debug not wired in G1 author surface; G2 adds per-test edit drawer
+  }, []);
+
+  const handleSelectTest = useCallback((testId: string) => {
+    setActiveTestId(testId);
+  }, []);
+
+  // ─── Derived values ─────────────────────────────────────────────────────────
+
+  const tests = toTestRailItems(effectiveTestCases, executionResult?.results);
+
+  const editorTabs: EditorTab[] = [
+    {
+      id: 'starter',
+      label: 'Starter Code',
+      kind: 'code',
+      language: language as 'python' | 'java' | 'javascript',
+      code: starter_code,
+      readOnly: false,
+    },
+    {
+      id: 'solution',
+      label: 'Solution',
+      kind: 'code',
+      language: language as 'python' | 'java' | 'javascript',
+      code: solution,
+      readOnly: false,
+    },
+  ];
+
+  const drawerMode: DrawerMode = executionResult ? 'output' : 'idle';
+
+  const drawerOutput = toDrawerOutput(executionResult);
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
-      {/* Compact header bar matching student view style */}
+      {/* Compact header bar */}
       <div style={{
         flexShrink: 0,
         padding: '0.75rem 1rem',
@@ -239,53 +318,26 @@ export default function SessionProblemEditor({
         </div>
       )}
 
-      {/* Tab bar for Starter Code / Solution */}
-      <Tabs activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'starter' | 'solution')} className="flex-shrink-0">
-        <Tabs.List>
-          <Tabs.Tab tabId="starter">Starter Code</Tabs.Tab>
-          <Tabs.Tab tabId="solution">Solution</Tabs.Tab>
-        </Tabs.List>
-      </Tabs>
-
-      {/* Full-width code editor */}
-      <EditorContainer variant="flex">
-        <CodeEditor
-          key={activeTab}
-          code={activeTab === 'starter' ? starter_code : solution}
-          onChange={activeTab === 'starter' ? setStarterCode : () => {}}
-          readOnly={activeTab === 'solution'}
-          onRun={(testCases) => {
-            const codeToRun = activeTab === 'starter' ? starter_code : solution;
-            setIsRunning(true);
-            setExecutionResult(null);
-            setExecutionError(null);
-            executeCode(codeToRun, language, {
-              cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
-            }).then(setExecutionResult).catch((err: any) => {
-              setExecutionError(err?.message || 'Failed to run code');
-            }).finally(() => setIsRunning(false));
-          }}
-          isRunning={isRunning}
-          execution_result={executionResult}
-          title={activeTab === 'starter' ? 'Starter Code' : 'Solution Code'}
-          defaultTestCases={currentTestCases}
-          onTestCasesChange={(testCases) => {
-            const first = testCases[0];
-            const ioFirst = first?.kind === 'io' ? first : undefined;
-            setStdin(ioFirst?.input || '');
-            setRandomSeed(ioFirst?.random_seed);
-            setAttachedFiles(ioFirst?.attached_files || []);
-          }}
-          problem={{ title, description, starter_code, language }}
-          onLoadStarterCode={setStarterCode}
-          debugger={debuggerHook}
-          onProblemEdit={(updates) => {
-            if (updates.title !== undefined) setTitle(updates.title);
-            if (updates.description !== undefined) setDescription(updates.description);
-          }}
-          editableProblem={true}
-        />
-      </EditorContainer>
+      {/* WorkspaceShell — embedded, author mode */}
+      <WorkspaceShell
+        embedded={true}
+        editorTabs={editorTabs}
+        activeTabId={activeTab}
+        onSelectTab={handleSelectTab}
+        onChangeCode={handleChangeCode}
+        tests={tests}
+        activeTestId={activeTestId}
+        onSelectTest={handleSelectTest}
+        onRunAll={handleRunAll}
+        onRunTest={handleRunTest}
+        onDebugTest={handleDebugTest}
+        isRunningAll={isRunning}
+        railMode="run"
+        drawerMode={drawerMode}
+        drawerCollapsed={drawerCollapsed}
+        onToggleDrawer={() => setDrawerCollapsed((c) => !c)}
+        drawerOutput={drawerOutput}
+      />
 
       {/* Solution viewer modal */}
       {showSolutionViewer && solution && (

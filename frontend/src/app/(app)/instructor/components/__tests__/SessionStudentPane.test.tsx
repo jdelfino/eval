@@ -9,21 +9,35 @@ import { SessionStudentPane } from '../SessionStudentPane';
 import { WalkthroughScript, AnalysisIssue } from '@/types/analysis';
 import { AnalysisGroup } from '../../hooks/useAnalysisGroups';
 
-// Mock the CodeEditor component since it depends on Monaco
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, readOnly }: { code: string; readOnly?: boolean }) {
-    return (
-      <div data-testid="code-editor" data-readonly={readOnly}>
-        <pre>{code}</pre>
-      </div>
-    );
-  };
-});
-
-// Mock EditorContainer
-jest.mock('@/app/(fullscreen)/student/components/EditorContainer', () => ({
-  EditorContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="editor-container">{children}</div>
+// Mock WorkspaceShell — primary mock for new wiring tests
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
+  __esModule: true,
+  default: ({
+    editorTabs,
+    embedded,
+    onRunAll,
+    isRunningAll,
+    skinTopBar,
+  }: {
+    editorTabs: Array<{ id: string; code?: string; readOnly?: boolean }>;
+    embedded?: boolean;
+    onRunAll?: () => void;
+    isRunningAll?: boolean;
+    skinTopBar?: React.ReactNode;
+  }) => (
+    <div data-testid="workspace-shell" data-embedded={String(!!embedded)}>
+      {editorTabs.map((tab) => (
+        <div key={tab.id} data-testid="editor-tab" data-code={tab.code} data-readonly={String(!!tab.readOnly)}>
+          {tab.code}
+        </div>
+      ))}
+      {onRunAll && (
+        <button data-testid="ws-run-all" onClick={onRunAll} disabled={!!isRunningAll}>
+          Run all
+        </button>
+      )}
+      {skinTopBar && <div data-testid="skin-top-bar">{skinTopBar}</div>}
+    </div>
   ),
 }));
 
@@ -520,14 +534,14 @@ describe('SessionStudentPane', () => {
   });
 
   describe('student selection', () => {
-    it('displays code editor when student is selected', async () => {
+    it('displays WorkspaceShell when student is selected', async () => {
       render(<SessionStudentPane {...defaultProps} />);
 
       const viewCodeButtons = screen.getAllByRole('button', { name: /^view$/i });
       fireEvent.click(viewCodeButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       expect(screen.queryByTestId('no-student-selected')).not.toBeInTheDocument();
@@ -590,15 +604,15 @@ describe('SessionStudentPane', () => {
   });
 
   describe('code editor', () => {
-    it('renders the code editor in read-only mode', async () => {
+    it('renders WorkspaceShell in read-only mode when student is selected', async () => {
       render(<SessionStudentPane {...defaultProps} />);
 
       const viewCodeButtons = screen.getAllByRole('button', { name: /^view$/i });
       fireEvent.click(viewCodeButtons[0]);
 
       await waitFor(() => {
-        const editor = screen.getByTestId('code-editor');
-        expect(editor).toHaveAttribute('data-readonly', 'true');
+        const tab = screen.getByTestId('editor-tab');
+        expect(tab).toHaveAttribute('data-readonly', 'true');
       });
     });
   });
@@ -782,6 +796,116 @@ describe('SessionStudentPane', () => {
       const { sessionExecutionSettings: _removed, ...cleanProps } = propsWithTestCases as any;
       render(<SessionStudentPane {...cleanProps} />);
       expect(screen.getByTestId('session-student-pane')).toBeInTheDocument();
+    });
+  });
+
+  describe('WorkspaceShell wiring (T8)', () => {
+    /**
+     * Contract: SessionStudentPane mounts WorkspaceShell in embedded=true mode (no Ribbon)
+     * when a student is selected. Instructor views are read-only; the host page provides chrome.
+     * Regressions here break the entire instructor focused-student view.
+     */
+    it('renders WorkspaceShell with embedded=true when a student is selected', async () => {
+      render(<SessionStudentPane {...defaultProps} />);
+
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]);
+
+      await waitFor(() => {
+        const shell = screen.getByTestId('workspace-shell');
+        expect(shell).toBeInTheDocument();
+        expect(shell).toHaveAttribute('data-embedded', 'true');
+      });
+    });
+
+    it('does not render Ribbon (workspace-shell embedded=true omits it)', async () => {
+      render(<SessionStudentPane {...defaultProps} />);
+
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('ribbon')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows selected student code in editorTab with readOnly=true', async () => {
+      /**
+       * Contract: when student A is selected, editorTabs[0].code = A's code, readOnly=true.
+       * If this breaks, instructor sees blank/wrong code or can accidentally edit it.
+       */
+      render(<SessionStudentPane {...defaultProps} />);
+
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]); // Alice
+
+      await waitFor(() => {
+        const tab = screen.getByTestId('editor-tab');
+        expect(tab).toHaveAttribute('data-code', 'print("Hello from Alice")');
+        expect(tab).toHaveAttribute('data-readonly', 'true');
+      });
+    });
+
+    it('Run all button calls onExecuteCode with selected student code and session test cases', async () => {
+      /**
+       * Contract: clicking Run all triggers onExecuteCode(studentId, code, testCases).
+       * If broken, instructor cannot run student code and see results.
+       */
+      const onExecuteCode = jest.fn().mockResolvedValue(undefined);
+      const testCases = [
+        { kind: 'io' as const, name: 'Test 1', input: 'hello', match_type: 'exact' as const, order: 0 },
+      ];
+      render(
+        <SessionStudentPane
+          {...defaultProps}
+          sessionTestCases={testCases}
+          onExecuteCode={onExecuteCode}
+        />
+      );
+
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]); // Alice
+
+      await waitFor(() => {
+        expect(screen.getByTestId('ws-run-all')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('ws-run-all'));
+
+      await waitFor(() => {
+        expect(onExecuteCode).toHaveBeenCalledWith(
+          'student-1',
+          'print("Hello from Alice")',
+          testCases
+        );
+      });
+    });
+
+    it('switching student updates editor tab to new student code', async () => {
+      /**
+       * Contract: switching from student A to student B updates editorTabs[0].code to B's code.
+       * If broken, instructor sees stale code from the previous student.
+       */
+      render(<SessionStudentPane {...defaultProps} />);
+
+      const viewButtons = screen.getAllByRole('button', { name: /^view$/i });
+      fireEvent.click(viewButtons[0]); // Alice
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-tab')).toHaveAttribute(
+          'data-code',
+          'print("Hello from Alice")'
+        );
+      });
+
+      fireEvent.click(viewButtons[2]); // Carol
+
+      await waitFor(() => {
+        expect(screen.getByTestId('editor-tab')).toHaveAttribute(
+          'data-code',
+          'def main():\n  pass'
+        );
+      });
     });
   });
 });

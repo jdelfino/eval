@@ -4,14 +4,16 @@
  * SessionStudentPane - Combined student list and code editor pane.
  * Displays the student list on the left and selected student's code on the right.
  * Integrates analysis groups for walkthrough navigation.
+ *
+ * The code editor section uses WorkspaceShell in embedded mode (read-only).
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import StudentList from './StudentList';
 import GroupNavigationHeader from './GroupNavigationHeader';
 import StudentAnalysisDetails from './StudentAnalysisDetails';
-import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
-import { EditorContainer } from '@/app/(fullscreen)/student/components/EditorContainer';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { toTestRailItems } from '@/lib/testRail';
 import type { Problem } from '@/types/problem';
 import type { IOTestCase } from '@/types/api';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
@@ -73,13 +75,13 @@ interface SessionStudentPaneProps {
 /**
  * SessionStudentPane displays students and their code in a two-column layout.
  * Left: Student list with actions and analysis controls
- * Right: Read-only code editor showing selected student's code
+ * Right: Read-only WorkspaceShell (embedded=true) showing selected student's code
  */
 export function SessionStudentPane({
   session_id,
   students,
   realtimeStudents,
-  sessionProblem,
+  sessionProblem: _sessionProblem,
   sessionTestCases,
   join_code,
   onSelectStudent,
@@ -138,14 +140,14 @@ export function SessionStudentPane({
     onSelectStudent?.(studentId);
   };
 
-  const handleExecuteStudentCode = async (testCases: IOTestCase[]) => {
+  const handleRunAll = async () => {
     if (!selectedStudentId || !onExecuteCode) return;
 
     setIsExecutingCode(true);
     setExecutionResult(null);
 
     try {
-      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, testCases);
+      const result = await onExecuteCode(selectedStudentId, selectedStudentCode, sessionTestCases);
       if (result) {
         setExecutionResult(result);
       }
@@ -180,6 +182,32 @@ export function SessionStudentPane({
     : analysisState === 'ready'
       ? 'Re-analyze'
       : `Analyze ${students.length} Submissions`;
+
+  // Build editorTabs for WorkspaceShell — single tab with selected student's code
+  const editorTabs = selectedStudentId
+    ? [
+        {
+          id: 'main',
+          label: 'main.py',
+          kind: 'code' as const,
+          language: 'python' as const,
+          code: selectedStudentCode,
+          readOnly: true,
+        },
+      ]
+    : [];
+
+  // Build test rail items from session test cases + execution results
+  const tests = toTestRailItems(sessionTestCases, execution_result?.results);
+
+  // Student-switcher row passed into WorkspaceShell as skinTopBar
+  const skinTopBar = selectedStudentId ? (
+    <div className="px-4 py-2 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+      <h3 className="text-sm font-medium text-gray-900 m-0">
+        {selectedStudent?.name || 'Student'}'s Code
+      </h3>
+    </div>
+  ) : undefined;
 
   return (
     <div className={`flex ${forceDesktop ? 'flex-row' : 'flex-col lg:flex-row'} gap-4`} data-testid="session-student-pane">
@@ -295,27 +323,29 @@ export function SessionStudentPane({
         />
       </div>
 
-      {/* Code Editor - Right Panel */}
+      {/* WorkspaceShell (embedded) - Right Panel */}
       <div className="lg:w-3/5 flex-1">
         {selectedStudentId ? (
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-              <h3 className="text-sm font-medium text-gray-900 m-0">
-                {selectedStudent?.name || 'Student'}'s Code
-              </h3>
-            </div>
-            <EditorContainer height="500px">
-              <CodeEditor
-                code={selectedStudentCode}
-                onChange={() => {}} // Read-only for instructor
-                onRun={handleExecuteStudentCode}
-                isRunning={isExecutingCode}
-                defaultTestCases={sessionTestCases}
-                readOnly
-                problem={sessionProblem}
-                execution_result={execution_result}
-              />
-            </EditorContainer>
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden" style={{ minHeight: 500 }}>
+            <WorkspaceShell
+              embedded={true}
+              editorTabs={editorTabs}
+              activeTabId="main"
+              tests={tests}
+              onRunAll={onExecuteCode ? handleRunAll : undefined}
+              isRunningAll={isExecutingCode}
+              drawerMode={execution_result ? 'output' : 'idle'}
+              drawerOutput={
+                execution_result
+                  ? {
+                      lines: [],
+                      status: execution_result.summary.failed > 0 ? 'fail' : 'pass',
+                      summary: `${execution_result.summary.passed}/${execution_result.summary.total} passed`,
+                    }
+                  : undefined
+              }
+              skinTopBar={skinTopBar}
+            />
           </div>
         ) : (
           <div

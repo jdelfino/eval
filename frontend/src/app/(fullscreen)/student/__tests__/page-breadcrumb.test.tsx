@@ -75,18 +75,21 @@ jest.mock('@/contexts/HeaderSlotContext', () => ({
 }));
 
 jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({})),
+  useApiDebugger: jest.fn(() => ({
+    trace: null, currentStep: 0, isLoading: false, error: null,
+    requestTrace: jest.fn(), setTrace: jest.fn(), setError: jest.fn(),
+    stepForward: jest.fn(), stepBackward: jest.fn(), jumpToStep: jest.fn(),
+    jumpToFirst: jest.fn(), jumpToLast: jest.fn(), reset: jest.fn(),
+    getCurrentStep: jest.fn(() => null), getCurrentLocals: jest.fn(() => ({})),
+    getCurrentGlobals: jest.fn(() => ({})), getCurrentCallStack: jest.fn(() => []),
+    getPreviousStep: jest.fn(() => null),
+    total_steps: 0, hasTrace: false, canStepForward: false, canStepBackward: false,
+  })),
 }));
 
-jest.mock('../components/CodeEditor', () => ({
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: () => <div data-testid="code-editor">CodeEditor</div>,
-}));
-
-jest.mock('../components/EditorContainer', () => ({
-  EditorContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="editor-container">{children}</div>
-  ),
+  default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
 jest.mock('../components/SessionEndedNotification', () => ({
@@ -204,7 +207,7 @@ describe('StudentPage breadcrumb', () => {
 
     // After student work loads but before section loads, breadcrumb shows fallback
     await waitFor(() => {
-      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     });
 
     // The breadcrumb should show a fallback while waiting
@@ -225,7 +228,7 @@ describe('StudentPage breadcrumb', () => {
     render(<StudentPageWrapper />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     });
 
     // Breadcrumb should still render with fallback text
