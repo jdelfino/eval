@@ -68,6 +68,9 @@ secrets.tfvars
 # Lefthook local overrides
 lefthook-local.yml
 
+# Stale-worktree marker (per-worktree, written by mark-stale-worktree.sh)
+.stale-worktree
+
 # Misc
 *.bak
 *.tmp
