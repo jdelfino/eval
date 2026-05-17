@@ -157,8 +157,8 @@ test.describe('Critical User Paths', () => {
       // Verify connected status (shown in global header badge)
       await expect(page.locator('text=Connected')).toBeVisible();
 
-      // Verify the Run Code button is present (confirms editor loaded)
-      await expect(page.locator('button:has-text("Run Code")')).toBeVisible();
+      // Verify the Run all button is present in the test rail (confirms workspace loaded)
+      await expect(page.locator('[data-testid="workspace-run-all"]')).toBeVisible();
 
       // Success! The complete flow works:
       // - Instructor created class + section from dashboard

@@ -26,85 +26,55 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
+  generateSolution: jest.fn(),
 }));
 
-// Mock useApiDebugger hook
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: () => ({
-    trace: null,
-    currentStep: 0,
-    isLoading: false,
-    error: null,
-    hasTrace: false,
-    total_steps: 0,
-    canStepForward: false,
-    canStepBackward: false,
-    requestTrace: jest.fn(),
-    setTrace: jest.fn(),
-    setError: jest.fn(),
-    stepForward: jest.fn(),
-    stepBackward: jest.fn(),
-    jumpToStep: jest.fn(),
-    jumpToFirst: jest.fn(),
-    jumpToLast: jest.fn(),
-    reset: jest.fn(),
-    getCurrentStep: jest.fn(() => null),
-    getCurrentLocals: jest.fn(() => ({})),
-    getCurrentGlobals: jest.fn(() => ({})),
-    getCurrentCallStack: jest.fn(() => []),
-    getPreviousStep: jest.fn(() => null),
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn(),
+  ioTestCasesToCaseDefs: jest.fn((cases) => cases),
+  buildIOTestCases: jest.fn(({ stdin, random_seed, attached_files }) => {
+    if (!stdin && !random_seed && (!attached_files || attached_files.length === 0)) return [];
+    return [{ kind: 'io', name: 'Default', input: stdin || '', match_type: 'exact', order: 0 }];
   }),
 }));
 
-// Mock useResponsiveLayout
-jest.mock('@/hooks/useResponsiveLayout', () => ({
-  useResponsiveLayout: () => true,
-  useSidebarSection: () => ({
-    isCollapsed: true,
-    toggle: jest.fn(),
-    setCollapsed: jest.fn(),
-  }),
-}));
-
-// Track starter code passed to CodeEditor
-let capturedStarterCode: string = '';
-let capturedOnLoadStarterCode: ((code: string) => void) | undefined;
-
-// Mock CodeEditor component - exposes problem and language props for testing
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem, onLoadStarterCode }: any) {
-    capturedStarterCode = code;
-    capturedOnLoadStarterCode = onLoadStarterCode;
+// Mock WorkspaceShell — language tests only care about language selector behavior
+// and that language flows into the editorTabs prop and submit payload.
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    const { editorTabs, activeTabId, onChangeCode, onSelectTab } = props;
+    const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
-      <div data-testid={`code-editor-${title}`}>
-        {editableProblem && problem && onProblemEdit && (
-          <div data-testid="editable-problem-sidebar">
-            <label htmlFor="problem-title">Title *</label>
-            <input
-              id="problem-title"
-              value={problem.title || ''}
-              onChange={(e) => onProblemEdit({ title: e.target.value })}
-            />
-            <label htmlFor="problem-description">Description</label>
-            <textarea
-              id="problem-description"
-              value={problem.description || ''}
-              onChange={(e) => onProblemEdit({ description: e.target.value })}
-            />
-          </div>
+      <div data-testid="workspace-shell">
+        <div>
+          {editorTabs.map((tab: any) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              onClick={() => onSelectTab?.(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {activeTab && (
+          <textarea
+            aria-label={activeTab.label}
+            value={activeTab.code}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
         )}
-        <label htmlFor={`code-${title}`}>{title}</label>
-        <textarea
-          id={`code-${title}`}
-          aria-label={title}
-          value={code}
-          onChange={(e) => onChange(e.target.value)}
-          data-has-run={!!onRun}
-        />
       </div>
     );
-  };
-});
+  },
+}));
+
+jest.mock('@/lib/testRail', () => ({
+  toTestRailItems: jest.fn(() => []),
+  toDrawerOutput: jest.fn(() => undefined),
+}));
 
 const JAVA_DEFAULT_STARTER = `public class Main {
     public static void main(String[] args) {
@@ -119,8 +89,6 @@ const DEFAULT_CLASSES = [
 describe('ProblemCreator - Language Selector', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedStarterCode = '';
-    capturedOnLoadStarterCode = undefined;
     const { listClasses } = require('@/lib/api/classes');
     listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
@@ -143,7 +111,6 @@ describe('ProblemCreator - Language Selector', () => {
     it('should have Python and Java options', () => {
       render(<ProblemCreator />);
 
-      const languageSelect = screen.getByLabelText('Language');
       expect(screen.getByRole('option', { name: 'Python' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Java' })).toBeInTheDocument();
     });
@@ -198,6 +165,7 @@ describe('ProblemCreator - Language Selector', () => {
         starter_code: 'def original():\n    pass',
         language: 'python',
         author_id: 'user-1',
+        test_cases: [],
       };
       getProblem.mockResolvedValue(existingProblem);
       updateProblem.mockResolvedValue(existingProblem);
@@ -274,6 +242,7 @@ describe('ProblemCreator - Language Selector', () => {
         starter_code: 'public class Main {}',
         language: 'java',
         author_id: 'user-1',
+        test_cases: [],
       });
 
       render(<ProblemCreator problem_id="problem-456" />);
