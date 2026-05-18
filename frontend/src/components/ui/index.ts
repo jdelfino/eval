@@ -61,3 +61,6 @@ export type { SignInButtonsProps } from './SignInButtons';
 
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusBadgeStatus } from './StatusBadge';
+
+export { Menu } from './Menu';
+export type { MenuProps, MenuItem } from './Menu';
