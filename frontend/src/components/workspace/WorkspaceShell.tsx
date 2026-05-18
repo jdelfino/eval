@@ -6,7 +6,7 @@ import EditorPane from '@/components/workspace/EditorPane';
 import { TestRail } from '@/components/workspace/TestRail';
 import { Drawer } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
-import type { DrawerMode, DrawerProps } from '@/components/workspace/Drawer';
+import type { DrawerMode, DrawerProps, DrawerEdit } from '@/components/workspace/Drawer';
 import type { TestRailItem } from '@/lib/testRail';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -52,6 +52,8 @@ export interface WorkspaceShellProps {
   drawerRuntimeError?: DrawerProps['runtimeError'];
   drawerSummary?: string;
   drawerCloseAction?: React.ReactNode;
+  drawerEdit?: DrawerEdit;
+  onDrawerEditChange?: (next: DrawerEdit) => void;
 
   // skin extras
   /** Optional row rendered between Ribbon (or shell top) and the editor/rail area */
@@ -113,6 +115,8 @@ export default function WorkspaceShell({
   drawerRuntimeError,
   drawerSummary,
   drawerCloseAction,
+  drawerEdit,
+  onDrawerEditChange,
 
   // extras
   skinTopBar,
@@ -213,6 +217,8 @@ export default function WorkspaceShell({
         runtimeError={drawerRuntimeError}
         summary={drawerSummary}
         closeAction={drawerCloseAction}
+        edit={drawerEdit}
+        onEditChange={onDrawerEditChange}
       />
     </div>
   );

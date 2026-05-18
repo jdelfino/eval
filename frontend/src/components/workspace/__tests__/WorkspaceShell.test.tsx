@@ -76,7 +76,7 @@ jest.mock('../TestRail', () => ({
 }));
 
 jest.mock('../Drawer', () => ({
-  Drawer: ({ mode, output, failure, debug, runtimeError, summary, closeAction, collapsed, onToggleCollapsed }: {
+  Drawer: ({ mode, output, failure, debug, runtimeError, summary, closeAction, collapsed, onToggleCollapsed, edit, onEditChange }: {
     mode: string;
     output?: unknown;
     failure?: unknown;
@@ -86,6 +86,8 @@ jest.mock('../Drawer', () => ({
     closeAction?: React.ReactNode;
     collapsed?: boolean;
     onToggleCollapsed?: () => void;
+    edit?: { kind: string; name: string; input?: string; expected_output?: string; match_type?: string };
+    onEditChange?: (next: unknown) => void;
   }) => (
     <div
       data-testid="drawer"
@@ -94,6 +96,14 @@ jest.mock('../Drawer', () => ({
       data-summary={summary || ''}
     >
       {closeAction && <div data-testid="close-action">{closeAction}</div>}
+      {edit && onEditChange && (
+        <button
+          data-testid="drawer-edit-change-trigger"
+          onClick={() => onEditChange({ ...edit, input: 'changed' })}
+        >
+          trigger edit change
+        </button>
+      )}
     </div>
   ),
 }));
@@ -273,6 +283,41 @@ describe('WorkspaceShell', () => {
         />
       );
       expect(screen.getByText('embedded-switcher')).toBeInTheDocument();
+    });
+  });
+
+  describe('drawerEdit threading', () => {
+    /**
+     * Contract: WorkspaceShell must thread drawerEdit and onDrawerEditChange props down to Drawer.
+     * Without this, the edit-test mode drawer can't receive field data or propagate changes back.
+     * Catches: WorkspaceShell pass-through missing for new edit props.
+     */
+    it('threads drawerEdit and onDrawerEditChange to Drawer — field change calls onDrawerEditChange', () => {
+      const onDrawerEditChange = jest.fn();
+      const drawerEdit = {
+        kind: 'io' as const,
+        name: 'test1',
+        input: 'hello',
+        expected_output: 'world',
+        match_type: 'exact' as const,
+      };
+
+      render(
+        <WorkspaceShell
+          {...baseProps}
+          drawerMode="edit-test"
+          drawerEdit={drawerEdit}
+          onDrawerEditChange={onDrawerEditChange}
+        />
+      );
+
+      // The mocked Drawer renders a button that triggers onEditChange when edit+onEditChange are both present
+      const trigger = screen.getByTestId('drawer-edit-change-trigger');
+      fireEvent.click(trigger);
+
+      expect(onDrawerEditChange).toHaveBeenCalledTimes(1);
+      const called = onDrawerEditChange.mock.calls[0][0];
+      expect(called.input).toBe('changed');
     });
   });
 });

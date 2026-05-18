@@ -1,10 +1,29 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type DrawerMode = 'idle' | 'output' | 'failure' | 'debug' | 'runtime-error';
+export type DrawerMode = 'idle' | 'output' | 'failure' | 'debug' | 'runtime-error' | 'edit-test';
+
+export type DrawerEditIO = {
+  kind: 'io';
+  name: string;
+  input: string;
+  expected_output: string;
+  match_type: 'exact' | 'contains' | 'regex';
+  random_seed?: number;
+  lastResult?: { stdout: string; passed: boolean };
+};
+
+export type DrawerEditPytest = {
+  kind: 'pytest';
+  name: string;
+  target_path: string;
+  test_code: string;
+};
+
+export type DrawerEdit = DrawerEditIO | DrawerEditPytest;
 
 /** Failure detail for an io test case. */
 export interface FailureIO {
@@ -73,31 +92,35 @@ export interface DrawerProps {
   debug?: DrawerDebug;
   runtimeError?: DrawerRuntimeError;
   closeAction?: React.ReactNode;
+  edit?: DrawerEdit;
+  onEditChange?: (next: DrawerEdit) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function drawerLabel(mode: DrawerMode): string {
+export function drawerLabel(mode: DrawerMode): string {
   switch (mode) {
     case 'output':        return 'Output';
     case 'failure':       return 'Failure detail';
     case 'debug':         return 'Debugger';
     case 'runtime-error': return 'Runtime error';
+    case 'edit-test':     return 'Test body';
     default:              return 'Console';
   }
 }
 
-function drawerHeight(mode: DrawerMode): number | string {
+export function drawerHeight(mode: DrawerMode): number | string {
   switch (mode) {
     case 'debug':         return 200;
     case 'failure':       return 200;
     case 'runtime-error': return 180;
     case 'output':        return 160;
+    case 'edit-test':     return 260;
     default:              return 30; // idle collapses to bar height
   }
 }
 
-function drawerStatusColor(
+export function drawerStatusColor(
   mode: DrawerMode,
   output?: DrawerOutput,
   _failure?: DrawerFailure
@@ -105,12 +128,13 @@ function drawerStatusColor(
   if (mode === 'failure')       return 'var(--danger)';
   if (mode === 'runtime-error') return 'var(--danger)';
   if (mode === 'debug')         return 'var(--accent)';
+  if (mode === 'edit-test')     return 'var(--accent)';
   if (mode === 'output' && output?.status === 'fail') return 'var(--danger)';
   if (mode === 'output' && output?.status === 'pass') return 'var(--run)';
   return 'var(--fg-subtle)';
 }
 
-function drawerAutoSummary(
+export function drawerAutoSummary(
   mode: DrawerMode,
   output?: DrawerOutput,
   failure?: DrawerFailure,
@@ -120,6 +144,7 @@ function drawerAutoSummary(
   if (mode === 'failure')       return failure ? `${failure.name ?? '—'} — ${failure.kind}` : '—';
   if (mode === 'debug')         return debug ? `step ${debug.step}/${debug.total} · ${debug.testName ?? '—'}` : '—';
   if (mode === 'runtime-error') return 'unhandled exception — fix and re-run';
+  if (mode === 'edit-test')     return 'editing test body';
   return 'Idle. Run a test to see output here.';
 }
 
@@ -464,6 +489,216 @@ function RuntimeErrorView({ err }: { err?: DrawerRuntimeError }) {
   );
 }
 
+// ─── Edit-test view ──────────────────────────────────────────────────────────
+
+const editInput: React.CSSProperties = {
+  height: 22,
+  padding: '0 8px',
+  background: 'var(--bg-inverse-raised)',
+  border: '1px solid var(--border-inverse)',
+  color: 'var(--fg-inverse)',
+  fontFamily: 'var(--font-mono)',
+  fontSize: 12,
+  borderRadius: 3,
+  outline: 'none',
+};
+
+const editArea: React.CSSProperties = {
+  ...editInput,
+  height: 'auto',
+  padding: '6px 8px',
+  width: '100%',
+  resize: 'vertical',
+  lineHeight: 1.55,
+};
+
+const editLabel: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: 0.4,
+  textTransform: 'uppercase',
+  color: 'var(--fg-inverse-muted)',
+  marginBottom: 4,
+};
+
+const kindPillStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '3px 8px',
+  borderRadius: 3,
+  background: 'var(--bg-inverse-raised)',
+  border: '1px solid var(--border-inverse)',
+  color: 'var(--fg-inverse)',
+};
+
+function EditIOBody({
+  edit,
+  onChange,
+}: {
+  edit: DrawerEditIO;
+  onChange: (next: DrawerEdit) => void;
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div>
+        <label style={editLabel} htmlFor="edit-stdin">stdin</label>
+        <textarea
+          id="edit-stdin"
+          rows={5}
+          style={editArea}
+          value={edit.input}
+          onChange={e => onChange({ ...edit, input: e.target.value })}
+        />
+        <div style={{ marginTop: 8 }}>
+          <label style={editLabel} htmlFor="edit-match-type">match type</label>
+          <select
+            id="edit-match-type"
+            style={{ ...editInput, width: '100%' }}
+            value={edit.match_type}
+            onChange={e =>
+              onChange({
+                ...edit,
+                match_type: e.target.value as 'exact' | 'contains' | 'regex',
+              })
+            }
+          >
+            <option value="exact">exact</option>
+            <option value="contains">contains</option>
+            <option value="regex">regex</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style={editLabel} htmlFor="edit-expected">expected stdout</label>
+        <textarea
+          id="edit-expected"
+          rows={5}
+          style={editArea}
+          value={edit.expected_output}
+          onChange={e => onChange({ ...edit, expected_output: e.target.value })}
+        />
+      </div>
+      <div>
+        <label style={{ ...editLabel, color: 'var(--accent)' }} htmlFor="edit-last-run">
+          last run · got
+        </label>
+        <textarea
+          id="edit-last-run"
+          rows={5}
+          readOnly
+          style={{ ...editArea, color: 'var(--fg-inverse-muted)' }}
+          value={edit.lastResult?.stdout ?? '(not run)'}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EditPytestBody({
+  edit,
+  onChange,
+}: {
+  edit: DrawerEditPytest;
+  onChange: (next: DrawerEdit) => void;
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+      <div>
+        <label style={editLabel} htmlFor="edit-test-body">test body (pytest)</label>
+        <textarea
+          id="edit-test-body"
+          rows={9}
+          style={{ ...editArea, fontSize: 12 }}
+          value={edit.test_code}
+          onChange={e => onChange({ ...edit, test_code: e.target.value })}
+        />
+      </div>
+      <div>
+        <label style={editLabel} htmlFor="edit-target-path">target</label>
+        <input
+          id="edit-target-path"
+          style={{ ...editInput, width: '100%' }}
+          value={edit.target_path}
+          onChange={e => onChange({ ...edit, target_path: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EditTestView({
+  edit,
+  onChange,
+}: {
+  edit?: DrawerEdit;
+  onChange?: (next: DrawerEdit) => void;
+}) {
+  const [localEdit, setLocalEdit] = useState<DrawerEdit | undefined>(edit);
+
+  // Reset local state when prop changes (new test selected)
+  useEffect(() => {
+    setLocalEdit(edit);
+  }, [edit]);
+
+  if (!localEdit) return <IdleView />;
+
+  function handleChange(next: DrawerEdit) {
+    setLocalEdit(next);
+    onChange?.(next);
+  }
+
+  return (
+    <div
+      data-testid="workspace-drawer-edit-test"
+      style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}
+    >
+      {/* Header row: kind pill · name input · seed input (io only) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={kindPillStyle}>{localEdit.kind}</span>
+        <input
+          aria-label="test name"
+          style={{ ...editInput, flex: 1, maxWidth: 240 }}
+          value={localEdit.name}
+          onChange={e => handleChange({ ...localEdit, name: e.target.value })}
+        />
+        {localEdit.kind === 'io' && (
+          <>
+            <label
+              htmlFor="edit-seed"
+              style={{ fontSize: 11, color: 'var(--fg-inverse-muted)', fontFamily: 'var(--font-mono)' }}
+            >
+              seed
+            </label>
+            <input
+              id="edit-seed"
+              type="number"
+              placeholder="—"
+              style={{ ...editInput, width: 90, textAlign: 'right' }}
+              value={localEdit.random_seed ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                handleChange({
+                  ...localEdit,
+                  random_seed: val === '' ? undefined : Number(val),
+                });
+              }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Body: kind-specific editor */}
+      {localEdit.kind === 'io' && (
+        <EditIOBody edit={localEdit} onChange={handleChange} />
+      )}
+      {localEdit.kind === 'pytest' && (
+        <EditPytestBody edit={localEdit} onChange={handleChange} />
+      )}
+    </div>
+  );
+}
+
 // ─── Drawer ───────────────────────────────────────────────────────────────────
 
 /**
@@ -485,12 +720,15 @@ export function Drawer({
   debug,
   runtimeError,
   closeAction,
+  edit,
+  onEditChange,
 }: DrawerProps) {
   const inverse =
     mode === 'debug' ||
     mode === 'output' ||
     mode === 'failure' ||
-    mode === 'runtime-error';
+    mode === 'runtime-error' ||
+    mode === 'edit-test';
 
   const statusColor = drawerStatusColor(mode, output, failure);
   const summaryText = summary ?? drawerAutoSummary(mode, output, failure, debug);
@@ -624,6 +862,7 @@ export function Drawer({
         {mode === 'debug'         && <DebugView debug={debug} />}
         {mode === 'runtime-error' && <RuntimeErrorView err={runtimeError} />}
         {mode === 'idle'          && <IdleView />}
+        {mode === 'edit-test'     && <EditTestView edit={edit} onChange={onEditChange} />}
       </div>
     </div>
   );
