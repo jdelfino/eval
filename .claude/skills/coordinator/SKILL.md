@@ -77,6 +77,8 @@ Read the task description: bd show <task-id> --json
 
 The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent. The Agent tool's result metadata exposes `worktree_path` and `branch` for integration.
 
+**On implementer FAILURE or STALL** (timeout, crash, incomplete summary): don't silently drop the work. Choose one — retry with continuation, finish the task inline, or ask the user how to proceed.
+
 **On SUCCESS:** integrate into the feature branch (sequential — do NOT run in parallel with other integrations).
 
 **Try fast-path rebase first** (inline — no subagent):
@@ -111,9 +113,9 @@ BEADS_IDS: <comma-separated task IDs whose changes are on the source branch>
 ```bash
 bd close <task-id> --reason "Implemented" --json
 ```
-Triage the "Concerns" section:
-- **Bugs or broken behavior introduced by this task** — must be fixed before the PR ships. File an issue, spawn an implementer, and fix it on the feature branch.
-- **Low-priority, non-behavioral issues** (naming nits, future optimization ideas, minor code smells) — file as follow-up issues.
+Triage the "Concerns" section. Filing follow-ups mid-implementation is fine — the gate is before reviewers (or before the PR if reviewers were skipped):
+- **Issues this PR's diff is the proximate cause of** — must be fixed in this PR or have explicit user approval to defer. Surface the list and ask; don't assume.
+- **Pre-existing issues this work surfaced** — file as follow-ups; no approval needed.
 - **Anything ambiguous** — ask the user whether to fix now or defer.
 
 **On rebase subagent FAILURE:**
@@ -270,6 +272,8 @@ export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
 - Skipping `/simplify` before reviewers — they should see post-cleanup code (only skip when the whole review gate is skipped for a trivial change)
 - Creating PR with failing tests
 - Shipping known bugs as follow-up issues — bugs introduced by the current work must be fixed before the PR ships
+- Filing introduced bugs (or nits) as follow-ups without explicit user approval to defer
+- Silently dropping a stalled or failed implementer's work and moving on
 - Merging PRs (that's `/merge`'s job)
 - Handing off to `/merge` before CI passes — coordinator owns CI failures and must fix them
 - Cleaning up worktrees before merge (that's `/merge`'s job)
