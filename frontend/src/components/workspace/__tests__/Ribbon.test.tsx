@@ -103,4 +103,143 @@ describe('Ribbon', () => {
       expect(screen.getByText('⌘1')).toBeInTheDocument();
     });
   });
+
+  describe('click-to-edit title (editable prop)', () => {
+    /**
+     * Contract: when editable=true, hovering the title reveals a pencil glyph and a dashed
+     * underline affordance. Clicking switches to an <input>. Enter/blur commits via onTitleChange;
+     * Esc reverts. stopPropagation prevents the ribbon-header onToggle from firing concurrently.
+     * Breaking any of these means authors cannot rename assignments inline.
+     */
+
+    it('TC1: shows pencil glyph and dashed-underline on title hover when editable=true', () => {
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Two Sum"
+          editable={true}
+          onTitleChange={jest.fn()}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.mouseEnter(titleWrapper);
+      expect(screen.getByTestId('ribbon-title-pencil')).toBeInTheDocument();
+      expect(titleWrapper).toHaveStyle({ borderBottom: '1px dashed var(--border)' });
+    });
+
+    it('TC2: non-editable Ribbon has no pencil glyph and no dashed underline on hover', () => {
+      render(<Ribbon {...baseProps} title="Two Sum" editable={false} />);
+      // Even if there were a wrapper, no pencil should appear
+      expect(screen.queryByTestId('ribbon-title-pencil')).not.toBeInTheDocument();
+      // No dashed-border element either — title is rendered as plain span
+      const titleEl = screen.getByText('Two Sum');
+      expect(titleEl).not.toHaveStyle({ borderBottom: '1px dashed var(--border)' });
+    });
+
+    it('TC3: click→type→Enter commits via onTitleChange and updates rendered title', () => {
+      const onTitleChange = jest.fn();
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Two Sum"
+          editable={true}
+          onTitleChange={onTitleChange}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.click(titleWrapper);
+
+      const input = screen.getByRole('textbox', { name: /edit title/i });
+      fireEvent.change(input, { target: { value: 'New Title' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onTitleChange).toHaveBeenCalledTimes(1);
+      expect(onTitleChange).toHaveBeenCalledWith('New Title');
+      // Input should be gone; title text should be updated
+      expect(screen.queryByRole('textbox', { name: /edit title/i })).not.toBeInTheDocument();
+      expect(screen.getByText('New Title')).toBeInTheDocument();
+    });
+
+    it('TC4: click→type→Esc reverts without firing onTitleChange', () => {
+      const onTitleChange = jest.fn();
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Old Title"
+          editable={true}
+          onTitleChange={onTitleChange}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.click(titleWrapper);
+
+      const input = screen.getByRole('textbox', { name: /edit title/i });
+      fireEvent.change(input, { target: { value: 'Other Title' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(onTitleChange).not.toHaveBeenCalled();
+      expect(screen.queryByRole('textbox', { name: /edit title/i })).not.toBeInTheDocument();
+      expect(screen.getByText('Old Title')).toBeInTheDocument();
+    });
+
+    it('TC5: blur commits like Enter', () => {
+      const onTitleChange = jest.fn();
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Two Sum"
+          editable={true}
+          onTitleChange={onTitleChange}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.click(titleWrapper);
+
+      const input = screen.getByRole('textbox', { name: /edit title/i });
+      fireEvent.change(input, { target: { value: 'Blurred Title' } });
+      fireEvent.blur(input);
+
+      expect(onTitleChange).toHaveBeenCalledTimes(1);
+      expect(onTitleChange).toHaveBeenCalledWith('Blurred Title');
+    });
+
+    it('TC6: empty value commit is prevented — onTitleChange not called, title reverts', () => {
+      const onTitleChange = jest.fn();
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Two Sum"
+          editable={true}
+          onTitleChange={onTitleChange}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.click(titleWrapper);
+
+      const input = screen.getByRole('textbox', { name: /edit title/i });
+      fireEvent.change(input, { target: { value: '' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onTitleChange).not.toHaveBeenCalled();
+      expect(screen.queryByRole('textbox', { name: /edit title/i })).not.toBeInTheDocument();
+      expect(screen.getByText('Two Sum')).toBeInTheDocument();
+    });
+
+    it('TC7: title click does NOT fire ribbon onToggle (stopPropagation)', () => {
+      const onToggle = jest.fn();
+      render(
+        <Ribbon
+          {...baseProps}
+          title="Two Sum"
+          editable={true}
+          onTitleChange={jest.fn()}
+          onToggle={onToggle}
+        />
+      );
+      const titleWrapper = screen.getByTestId('ribbon-title-wrapper');
+      fireEvent.click(titleWrapper);
+
+      expect(onToggle).not.toHaveBeenCalled();
+    });
+  });
 });

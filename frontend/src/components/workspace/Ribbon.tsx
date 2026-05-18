@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import MarkdownContent from '@/components/MarkdownContent';
 import { Kbd } from '@/components/ui/Kbd';
 
@@ -14,6 +14,13 @@ export interface RibbonProps {
   meta?: string;
   /** Full markdown statement body */
   body: string;
+  /**
+   * Author-skin only: when true the title is click-to-edit.
+   * Non-author skins (student, instructor, projector) omit this prop or pass false.
+   */
+  editable?: boolean;
+  /** Called with the new title string when the author commits an edit. */
+  onTitleChange?: (title: string) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -35,6 +42,106 @@ function firstPreviewLine(body: string): string {
   return lines[0].replace(/^#+\s*/, '').replace(/`/g, '');
 }
 
+// ─── Editable title sub-component ────────────────────────────────────────────
+
+interface EditableTitleProps {
+  title: string;
+  onTitleChange?: (title: string) => void;
+}
+
+function EditableTitle({ title, onTitleChange }: EditableTitleProps) {
+  const [editing, setEditing] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  // Track local display title so the component reflects committed edits immediately,
+  // even if the parent hasn't yet re-rendered with the new prop value.
+  const [displayTitle, setDisplayTitle] = useState(title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Keep displayTitle in sync when the prop changes from outside
+  React.useEffect(() => {
+    setDisplayTitle(title);
+  }, [title]);
+
+  function commitEdit(value: string) {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== displayTitle) {
+      onTitleChange?.(trimmed);
+      setDisplayTitle(trimmed);
+    }
+    setEditing(false);
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditing(true);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      commitEdit(e.currentTarget.value);
+    } else if (e.key === 'Escape') {
+      setEditing(false);
+    }
+  }
+
+  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
+    commitEdit(e.currentTarget.value);
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        defaultValue={displayTitle}
+        aria-label="Edit title"
+        autoFocus
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'var(--fg)',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: '1px solid var(--fg)',
+          outline: 'none',
+          padding: 0,
+          minWidth: 80,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      data-testid="ribbon-title-wrapper"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        cursor: 'text',
+        borderBottom: hovered ? '1px dashed var(--border)' : '1px dashed transparent',
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+        {displayTitle}
+      </span>
+      {hovered && (
+        <span
+          data-testid="ribbon-title-pencil"
+          aria-hidden="true"
+          style={{ fontSize: 11, color: 'var(--fg-muted)' }}
+        >
+          ✏
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── Ribbon ──────────────────────────────────────────────────────────────────
 
 /**
@@ -45,8 +152,12 @@ function firstPreviewLine(body: string): string {
  * MarkdownContent rendering the full statement.
  *
  * Max-height transition provides smooth open/close animation.
+ *
+ * When editable=true (author skin only), the title becomes click-to-edit:
+ * hover shows a pencil glyph + dashed underline; click opens an <input>;
+ * Enter or blur commits via onTitleChange; Esc reverts.
  */
-export function Ribbon({ open, onToggle, title, meta, body }: RibbonProps) {
+export function Ribbon({ open, onToggle, title, meta, body, editable = false, onTitleChange }: RibbonProps) {
   const preview = firstPreviewLine(body);
 
   return (
@@ -90,9 +201,13 @@ export function Ribbon({ open, onToggle, title, meta, body }: RibbonProps) {
           Problem
         </span>
 
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
-          {title}
-        </span>
+        {editable ? (
+          <EditableTitle title={title} onTitleChange={onTitleChange} />
+        ) : (
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+            {title}
+          </span>
+        )}
 
         {meta && (
           <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
