@@ -18,6 +18,13 @@ export interface WorkspaceShellProps {
   problemTitle?: string;
   problemMeta?: string;
   statement?: string;
+  /**
+   * Author-skin only: when true the Ribbon title is click-to-edit.
+   * Non-author skins (student, instructor, projector) omit this prop or pass false.
+   */
+  ribbonEditable?: boolean;
+  /** Called with the new title string when the author commits a ribbon title edit. */
+  onTitleChange?: (title: string) => void;
 
   // editor
   editorTabs: EditorTab[];
@@ -36,11 +43,22 @@ export interface WorkspaceShellProps {
   onSelectTest?: (id: string) => void;
   onRunTest?: (id: string) => void;
   onDebugTest?: (id: string) => void;
+  /** Fired when the per-row "Edit body" button is clicked (edit mode only) */
+  onEditTest?: (id: string) => void;
   onRunAll?: () => void;
   isRunningAll?: boolean;
   railTitle?: string;
   railMode?: 'run' | 'edit' | 'view';
   railSummary?: string;
+  /** When true, renders a split-button "+ Add <kind> test" row at the bottom */
+  railShowAdd?: boolean;
+  /** Fired when the main add button or a menu item is clicked */
+  onAddTest?: (kind: 'io' | 'pytest') => void;
+  /**
+   * Sticky default kind for the main add button label.
+   * undefined → 'io' (first-use default).
+   */
+  lastCreatedKind?: 'io' | 'pytest';
 
   // drawer
   drawerMode: DrawerMode;
@@ -84,6 +102,8 @@ export default function WorkspaceShell({
   problemTitle = '',
   problemMeta,
   statement = '',
+  ribbonEditable = false,
+  onTitleChange,
 
   // editor
   editorTabs,
@@ -101,11 +121,15 @@ export default function WorkspaceShell({
   onSelectTest,
   onRunTest,
   onDebugTest,
+  onEditTest,
   onRunAll,
   isRunningAll,
   railTitle,
   railMode,
   railSummary,
+  railShowAdd = false,
+  onAddTest,
+  lastCreatedKind,
 
   // drawer
   drawerMode,
@@ -148,6 +172,8 @@ export default function WorkspaceShell({
           title={problemTitle}
           meta={problemMeta}
           body={statement}
+          editable={ribbonEditable}
+          onTitleChange={onTitleChange}
         />
       )}
 
@@ -204,10 +230,14 @@ export default function WorkspaceShell({
             onSelectTest={onSelectTest}
             onRunTest={onRunTest}
             onDebugTest={onDebugTest}
+            onEditTest={onEditTest}
             onRunAll={onRunAll}
             isRunningAll={isRunningAll}
             title={railTitle}
             selectedSummary={railSummary}
+            railShowAdd={railShowAdd}
+            onAddTest={onAddTest}
+            lastCreatedKind={lastCreatedKind}
           />
         </div>
       </div>

@@ -1,27 +1,30 @@
 'use client';
 
 /**
- * Problem Creator Component
+ * Problem Creator Component (G2 author-skin)
  *
  * Allows instructors to create or edit programming problems with:
- * - Title and description (in page chrome above the shell)
- * - Starter code and Solution tabs via WorkspaceShell (embedded mode)
- * - Test cases (added separately via test case UI)
- * - Visibility settings (public/class-specific)
+ * - Editable title via Ribbon (click-to-edit)
+ * - Class / Language / Tags via ProblemPropertiesBar (WorkspaceShell propertiesBar slot)
+ * - Starter code and Solution tabs + statement.md markdown tab via WorkspaceShell
+ * - Per-test edit drawer (edit-test mode) with Save & run / Cancel
+ * - Split-button "+ Add IO/Pytest test" via TestRail (edit mode)
  *
- * G1: WorkspaceShell embedded=true, railMode='run'. Per-test stdin/seed/files
- * editing is intentionally unavailable (deferred to G2 per-test edit drawer).
+ * G2: WorkspaceShell embedded=true, railMode='edit'.
+ *
+ * TODO(G7): Generate Solution feature lives in G7's modal.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { listClasses } from '@/lib/api/classes';
-import { getProblem, createProblem, updateProblem, generateSolution } from '@/lib/api/problems';
+import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { ProblemPropertiesBar } from '@/components/workspace/ProblemPropertiesBar';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
-import { executeCode, ioTestCasesToCaseDefs, buildIOTestCases } from '@/lib/api/execute';
-import type { IOTestCase, CaseResult, TestResponse } from '@/types/api';
-import type { DrawerMode } from '@/components/workspace/Drawer';
+import { executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
+import type { IOTestCase, IOTestCaseIO, IOTestCasePytest, CaseResult, TestResponse } from '@/types/api';
+import type { DrawerMode, DrawerEdit, DrawerEditIO, DrawerEditPytest } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
 
 interface ProblemCreatorProps {
@@ -37,7 +40,7 @@ const JAVA_DEFAULT_STARTER = `public class Main {
     }
 }`;
 
-type ActiveTab = 'starter' | 'solution';
+type ActiveTab = 'starter' | 'solution' | 'statement';
 
 export default function ProblemCreator({
   problem_id = null,
@@ -47,33 +50,33 @@ export default function ProblemCreator({
 }: ProblemCreatorProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [statementPreview, setStatementPreview] = useState(true);
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
-  const [language, setLanguage] = useState('python');
+  const [language, setLanguage] = useState<'python' | 'java'>('python');
   const [activeTab, setActiveTab] = useState<ActiveTab>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
   const [error, setError] = useState<string | null>(null);
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [customInstructions, setCustomInstructions] = useState('');
-  const [generateModalError, setGenerateModalError] = useState<string | null>(null);
 
   // Class and tags state
   const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>(class_id || '');
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
-  const tagInputRef = useRef<HTMLInputElement>(null);
+
+  // Test cases state (G2: has setter + loaded from problem)
+  const [testCases, setTestCases] = useState<IOTestCase[]>([]);
+
+  // Edit-test drawer state
+  const [editingTestIdx, setEditingTestIdx] = useState<number | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<DrawerEdit | null>(null);
+  const [lastCreatedKind, setLastCreatedKind] = useState<'io' | 'pytest' | null>(null);
 
   // Execution state (for WorkspaceShell rail/drawer)
   const [isRunning, setIsRunning] = useState(false);
   const [executionResult, setExecutionResult] = useState<TestResponse | null>(null);
   const [activeTestId, setActiveTestId] = useState<string | undefined>(undefined);
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
-
-  // Test cases (G1: no per-test edit — deferred to G2)
-  const [testCases] = useState<IOTestCase[]>([]);
 
   const isEditMode = !!problem_id;
 
@@ -109,9 +112,10 @@ export default function ProblemCreator({
       setDescription(problem.description || '');
       setStarterCode(problem.starter_code || '');
       setSolution(problem.solution || '');
-      setLanguage(problem.language || 'python');
+      setLanguage((problem.language as 'python' | 'java') || 'python');
       if (problem.class_id) setSelectedClassId(problem.class_id);
       if (problem.tags) setTags(problem.tags);
+      if (problem.test_cases) setTestCases(problem.test_cases);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load problem');
     } finally {
@@ -119,19 +123,7 @@ export default function ProblemCreator({
     }
   };
 
-  const flushTagInput = (): string[] => {
-    if (!tagInput.trim()) return tags;
-    const newTags = tagInput
-      .split(',')
-      .map(t => t.trim())
-      .filter(t => t && !tags.includes(t));
-    const flushed = [...tags, ...newTags];
-    setTags(flushed);
-    setTagInput('');
-    return flushed;
-  };
-
-  const handleLanguageChange = (newLanguage: string) => {
+  const handleLanguageChange = (newLanguage: 'python' | 'java') => {
     setLanguage(newLanguage);
     if (newLanguage === 'java' && !starter_code.trim()) {
       setStarterCode(JAVA_DEFAULT_STARTER);
@@ -147,21 +139,18 @@ export default function ProblemCreator({
       return;
     }
 
-    const finalTags = flushTagInput();
     setIsSubmitting(true);
 
     try {
-      const testCasesPayload = buildIOTestCases({ stdin: '', random_seed: undefined, attached_files: [] });
-
       const problemInput = {
         title: title.trim(),
         description: description.trim() || null,
         starter_code: starter_code.trim() || null,
         solution: solution.trim() || null,
         language,
-        test_cases: testCasesPayload,
+        test_cases: testCases,
         class_id: selectedClassId || null,
-        tags: finalTags.length > 0 ? finalTags : [],
+        tags: tags.length > 0 ? tags : [],
       };
 
       let result;
@@ -179,9 +168,9 @@ export default function ProblemCreator({
         setSolution('');
         setLanguage('python');
         setTags([]);
-        setTagInput('');
         setActiveTab('starter');
         setExecutionResult(null);
+        setTestCases([]);
       }
 
       onProblemCreated?.(result.id);
@@ -192,63 +181,11 @@ export default function ProblemCreator({
     }
   };
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const newTags = tagInput
-        .split(',')
-        .map(t => t.trim())
-        .filter(t => t && !tags.includes(t));
-      if (newTags.length > 0) {
-        setTags(prev => [...prev, ...newTags]);
-      }
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    setTags(prev => prev.filter(t => t !== tag));
-  };
-
-  const handleOpenGenerateModal = () => {
-    setShowGenerateModal(true);
-    setGenerateModalError(null);
-  };
-
-  const handleCancelGenerateModal = () => {
-    setShowGenerateModal(false);
-    setCustomInstructions('');
-    setGenerateModalError(null);
-  };
-
-  const handleGenerateSolution = async () => {
-    setIsGenerating(true);
-    setGenerateModalError(null);
-    try {
-      const requestData: { description: string; starter_code?: string; custom_instructions?: string } = {
-        description,
-        starter_code: starter_code || undefined,
-      };
-      if (customInstructions.trim()) {
-        requestData.custom_instructions = customInstructions.trim();
-      }
-      const result = await generateSolution(requestData);
-      setSolution(result.solution);
-      setActiveTab('solution');
-      setShowGenerateModal(false);
-      setCustomInstructions('');
-    } catch (err: unknown) {
-      setGenerateModalError(err instanceof Error ? err.message : 'Failed to generate solution');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   // ─── WorkspaceShell handlers ────────────────────────────────────────────────
 
   const handleSelectTab = useCallback((id: string) => {
-    if (id === 'starter' || id === 'solution') {
-      setActiveTab(id);
+    if (id === 'starter' || id === 'solution' || id === 'statement') {
+      setActiveTab(id as ActiveTab);
     }
   }, []);
 
@@ -257,11 +194,13 @@ export default function ProblemCreator({
       setStarterCode(code);
     } else if (id === 'solution') {
       setSolution(code);
+    } else if (id === 'statement') {
+      setDescription(code);
     }
   }, []);
 
   const handleRunAll = useCallback(async () => {
-    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    const codeToRun = activeTab === 'solution' ? solution : starter_code;
     setIsRunning(true);
     setExecutionResult(null);
     try {
@@ -277,7 +216,7 @@ export default function ProblemCreator({
   }, [activeTab, starter_code, solution, language, testCases]);
 
   const handleRunTest = useCallback(async (testId: string) => {
-    const codeToRun = activeTab === 'starter' ? starter_code : solution;
+    const codeToRun = activeTab === 'solution' ? solution : starter_code;
     const items = toTestRailItems(testCases);
     const idx = items.findIndex((item) => item.id === testId);
     if (idx === -1) return;
@@ -290,7 +229,7 @@ export default function ProblemCreator({
       const result = await executeCode(codeToRun, language, {
         cases: ioTestCasesToCaseDefs([singleCase]),
       });
-      // C2-equivalent: sparse results so the result lands on row idx
+      // Sparse results so the result lands on row idx
       const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
       sparseResults[idx] = result.results[0];
       setExecutionResult({ ...result, results: sparseResults });
@@ -302,12 +241,149 @@ export default function ProblemCreator({
   }, [activeTab, starter_code, solution, language, testCases]);
 
   const handleDebugTest = useCallback((_testId: string) => {
-    // Debug not wired in G1 author surface; G2 adds per-test edit drawer
+    // Debug deferred to G3
   }, []);
 
   const handleSelectTest = useCallback((testId: string) => {
     setActiveTestId(testId);
   }, []);
+
+  // ─── Edit-test drawer handlers ──────────────────────────────────────────────
+
+  const openEditDrawer = useCallback((testId: string) => {
+    const items = toTestRailItems(testCases);
+    const idx = items.findIndex((item) => item.id === testId);
+    if (idx === -1) return;
+    const tc = testCases[idx];
+    if (!tc) return;
+
+    setEditingTestIdx(idx);
+
+    if (tc.kind === 'io') {
+      const m = tc.match_type;
+      const narrowedMatchType: 'exact' | 'contains' | 'regex' =
+        m === 'contains' || m === 'regex' ? m : 'exact';
+      const edit: DrawerEditIO = {
+        kind: 'io',
+        name: tc.name ?? '',
+        input: tc.input ?? '',
+        expected_output: tc.expected_output ?? '',
+        match_type: narrowedMatchType,
+        random_seed: tc.random_seed,
+      };
+      setPendingEdit(edit);
+    } else {
+      const edit: DrawerEditPytest = {
+        kind: 'pytest',
+        name: tc.name ?? '',
+        target_path: tc.target_path,
+        test_code: tc.test_code,
+      };
+      setPendingEdit(edit);
+    }
+  }, [testCases]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingTestIdx(null);
+    setPendingEdit(null);
+  }, []);
+
+  const saveAndRun = useCallback(async () => {
+    if (editingTestIdx === null || pendingEdit === null || !problem_id) return;
+
+    let newTestCase: IOTestCase;
+    if (pendingEdit.kind === 'io') {
+      const ioEdit = pendingEdit;
+      const existing = testCases[editingTestIdx];
+      const order = existing?.kind === 'io' ? (existing.order ?? editingTestIdx) : editingTestIdx;
+      const newIo: IOTestCaseIO = {
+        kind: 'io',
+        name: ioEdit.name || undefined,
+        input: ioEdit.input,
+        expected_output: ioEdit.expected_output,
+        match_type: ioEdit.match_type,
+        random_seed: ioEdit.random_seed,
+        order,
+      };
+      newTestCase = newIo;
+    } else {
+      const pytestEdit = pendingEdit;
+      const newPytest: IOTestCasePytest = {
+        kind: 'pytest',
+        name: pytestEdit.name || undefined,
+        target_path: pytestEdit.target_path,
+        test_code: pytestEdit.test_code,
+      };
+      newTestCase = newPytest;
+    }
+
+    // Immutably replace test at editingTestIdx
+    const newTestCases = testCases.map((tc, i) =>
+      i === editingTestIdx ? newTestCase : tc
+    );
+
+    setTestCases(newTestCases);
+    setEditingTestIdx(null);
+    setPendingEdit(null);
+
+    try {
+      await updateProblem(problem_id, { test_cases: newTestCases });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update test case');
+      return;
+    }
+
+    // Run the updated test
+    const items = toTestRailItems(newTestCases);
+    if (items[editingTestIdx]) {
+      handleRunTest(items[editingTestIdx].id);
+    }
+  }, [editingTestIdx, pendingEdit, testCases, problem_id, handleRunTest]);
+
+  const addNewTest = useCallback((kind: 'io' | 'pytest') => {
+    const order = testCases.length;
+    let newTestCase: IOTestCase;
+    let newEdit: DrawerEdit;
+
+    if (kind === 'io') {
+      const tc: IOTestCaseIO = {
+        kind: 'io',
+        name: '',
+        input: '',
+        expected_output: '',
+        match_type: 'exact',
+        order,
+      };
+      newTestCase = tc;
+      newEdit = {
+        kind: 'io',
+        name: '',
+        input: '',
+        expected_output: '',
+        match_type: 'exact',
+      };
+    } else {
+      const tc: IOTestCasePytest = {
+        kind: 'pytest',
+        name: '',
+        target_path: 'tests/test.py::test_',
+        test_code: 'def test_():\n    assert ',
+      };
+      newTestCase = tc;
+      newEdit = {
+        kind: 'pytest',
+        name: '',
+        target_path: 'tests/test.py::test_',
+        test_code: 'def test_():\n    assert ',
+      };
+    }
+
+    const newTestCases = [...testCases, newTestCase];
+    setTestCases(newTestCases);
+    setEditingTestIdx(order);
+    setPendingEdit(newEdit);
+    setLastCreatedKind(kind);
+  }, [testCases]);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
 
@@ -330,12 +406,96 @@ export default function ProblemCreator({
       code: solution,
       readOnly: false,
     },
+    {
+      id: 'statement',
+      label: 'statement.md',
+      kind: 'markdown',
+      body: description,
+      preview: statementPreview,
+      dark: true,
+    },
   ];
 
-  // Derive drawer mode from execution state
-  const drawerMode: DrawerMode = executionResult ? 'output' : 'idle';
+  // MdToggle — shown only when statement tab is active
+  const MdToggle = activeTab === 'statement' ? (
+    <div style={{ display: 'flex', gap: 2 }}>
+      <button
+        type="button"
+        onClick={() => setStatementPreview(false)}
+        style={{
+          padding: '2px 8px',
+          fontSize: 11,
+          fontFamily: 'var(--font-sans)',
+          background: !statementPreview ? 'var(--accent)' : 'transparent',
+          color: !statementPreview ? 'var(--accent-fg)' : 'var(--fg-inverse-muted)',
+          border: '1px solid var(--border-inverse)',
+          borderRadius: '3px 0 0 3px',
+          cursor: 'pointer',
+        }}
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={() => setStatementPreview(true)}
+        style={{
+          padding: '2px 8px',
+          fontSize: 11,
+          fontFamily: 'var(--font-sans)',
+          background: statementPreview ? 'var(--accent)' : 'transparent',
+          color: statementPreview ? 'var(--accent-fg)' : 'var(--fg-inverse-muted)',
+          border: '1px solid var(--border-inverse)',
+          borderLeft: 'none',
+          borderRadius: '0 3px 3px 0',
+          cursor: 'pointer',
+        }}
+      >
+        Preview
+      </button>
+    </div>
+  ) : null;
+
+  // Derive drawer mode
+  const drawerMode: DrawerMode =
+    editingTestIdx !== null ? 'edit-test' : executionResult ? 'output' : 'idle';
 
   const drawerOutput = toDrawerOutput(executionResult);
+
+  // Drawer close actions (Cancel / Save & run)
+  const drawerCloseAction = editingTestIdx !== null ? (
+    <>
+      <button
+        type="button"
+        onClick={cancelEdit}
+        style={{
+          padding: '2px 10px',
+          fontSize: 11.5,
+          background: 'var(--bg-inverse-raised)',
+          border: '1px solid var(--border-inverse)',
+          borderRadius: 3,
+          color: 'var(--fg-inverse)',
+          cursor: 'pointer',
+        }}
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        onClick={saveAndRun}
+        style={{
+          padding: '2px 10px',
+          fontSize: 11.5,
+          background: 'var(--accent)',
+          border: 'none',
+          borderRadius: 3,
+          color: 'var(--accent-fg)',
+          cursor: 'pointer',
+        }}
+      >
+        Save & run
+      </button>
+    </>
+  ) : undefined;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -408,311 +568,58 @@ export default function ProblemCreator({
         </div>
       )}
 
-      {/* Class, Language and Tags bar */}
-      {!isLoading && <div style={{
-        flexShrink: 0,
-        padding: '0.5rem 1rem',
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #dee2e6',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1.5rem',
-        flexWrap: 'wrap',
-      }}>
-        {/* Class selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label htmlFor="problem-class" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Class *</label>
-          <select
-            id="problem-class"
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            style={{
-              padding: '0.375rem 0.5rem',
-              fontSize: '0.875rem',
-              border: `1px solid ${!isEditMode && !selectedClassId ? '#dc3545' : '#ced4da'}`,
-              borderRadius: '0.25rem',
-              minWidth: '150px',
-            }}
-          >
-            <option value="">Select a class...</option>
-            {classes.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {!isEditMode && !selectedClassId && (
-            <span style={{ fontSize: '0.75rem', color: '#dc3545' }}>Required</span>
-          )}
-        </div>
-
-        {/* Language selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label htmlFor="problem-language" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Language</label>
-          <select
-            id="problem-language"
-            value={language}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-            style={{
-              padding: '0.375rem 0.5rem',
-              fontSize: '0.875rem',
-              border: '1px solid #ced4da',
-              borderRadius: '0.25rem',
-              minWidth: '100px',
-            }}
-          >
-            <option value="python">Python</option>
-            <option value="java">Java</option>
-          </select>
-        </div>
-
-        {/* Tags input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-          <label htmlFor="problem-tags" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057' }}>Tags</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', flex: 1 }}>
-            {tags.map(tag => (
-              <span
-                key={tag}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                  padding: '0.125rem 0.5rem',
-                  fontSize: '0.75rem',
-                  backgroundColor: '#e9ecef',
-                  borderRadius: '9999px',
-                  color: '#495057',
-                }}
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontSize: '0.875rem',
-                    color: '#6c757d',
-                    lineHeight: 1,
-                  }}
-                  aria-label={`Remove tag ${tag}`}
-                >
-                  x
-                </button>
-              </span>
-            ))}
-            <input
-              id="problem-tags"
-              ref={tagInputRef}
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleTagKeyDown}
-              onBlur={flushTagInput}
-              placeholder="Add tags (comma-separated)..."
-              style={{
-                flex: 1,
-                minWidth: '120px',
-                padding: '0.375rem 0.5rem',
-                fontSize: '0.875rem',
-                border: '1px solid #ced4da',
-                borderRadius: '0.25rem',
-              }}
-            />
-          </div>
-        </div>
-      </div>}
-
-      {/* Title / Description fields — page chrome (G2 will move statement into a Monaco tab) */}
-      {!isLoading && (
-        <div style={{
-          flexShrink: 0,
-          padding: '0.5rem 1rem',
-          backgroundColor: '#fff',
-          borderBottom: '1px solid #dee2e6',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1rem',
-          flexWrap: 'wrap',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
-            <label htmlFor="problem-title" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Title *</label>
-            <input
-              id="problem-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Problem title..."
-              style={{
-                flex: 1,
-                padding: '0.375rem 0.5rem',
-                fontSize: '0.875rem',
-                border: '1px solid #ced4da',
-                borderRadius: '0.25rem',
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 2, minWidth: '200px' }}>
-            <label htmlFor="problem-description" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#495057', whiteSpace: 'nowrap' }}>Description</label>
-            <textarea
-              id="problem-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Problem description..."
-              rows={2}
-              style={{
-                flex: 1,
-                padding: '0.375rem 0.5rem',
-                fontSize: '0.875rem',
-                border: '1px solid #ced4da',
-                borderRadius: '0.25rem',
-                resize: 'vertical',
-                fontFamily: 'inherit',
-              }}
-            />
-          </div>
-          {/* Generate Solution button */}
-          <button
-            type="button"
-            onClick={handleOpenGenerateModal}
-            disabled={!description.trim() || isGenerating || isSubmitting}
-            className="px-3 py-1 text-xs text-primary-600 bg-transparent border border-primary-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{
-              padding: '0.375rem 0.75rem',
-              fontSize: '0.75rem',
-              color: '#0d6efd',
-              backgroundColor: 'transparent',
-              border: '1px solid #0d6efd',
-              borderRadius: '0.25rem',
-              cursor: (!description.trim() || isGenerating || isSubmitting) ? 'not-allowed' : 'pointer',
-              opacity: (!description.trim() || isGenerating || isSubmitting) ? 0.5 : 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Generate Solution
-          </button>
-        </div>
-      )}
-
-      {/* WorkspaceShell — embedded, author mode */}
+      {/* WorkspaceShell — embedded, G2 author mode */}
       {!isLoading && (
         <WorkspaceShell
           embedded={true}
+          // Ribbon — editable title (shown via WorkspaceShell even though embedded,
+          // because the Ribbon is inside WorkspaceShell in non-embedded mode only;
+          // we wire the title via ribbonEditable + problemTitle)
+          ribbonEditable={true}
+          problemTitle={title}
+          onTitleChange={(t) => setTitle(t)}
+          // Editor
           editorTabs={editorTabs}
           activeTabId={activeTab}
           onSelectTab={handleSelectTab}
           onChangeCode={handleChangeCode}
+          editorRightControls={MdToggle}
+          // Rail
           tests={tests}
           activeTestId={activeTestId}
           onSelectTest={handleSelectTest}
           onRunAll={handleRunAll}
           onRunTest={handleRunTest}
           onDebugTest={handleDebugTest}
+          onEditTest={openEditDrawer}
           isRunningAll={isRunning}
-          railMode="run"
+          railMode="edit"
+          railShowAdd={true}
+          onAddTest={addNewTest}
+          lastCreatedKind={lastCreatedKind ?? undefined}
+          // Drawer
           drawerMode={drawerMode}
           drawerCollapsed={drawerCollapsed}
           onToggleDrawer={() => setDrawerCollapsed((c) => !c)}
           drawerOutput={drawerOutput}
+          drawerEdit={pendingEdit ?? undefined}
+          onDrawerEditChange={setPendingEdit}
+          drawerCloseAction={drawerCloseAction}
+          // Properties bar
+          propertiesBar={
+            <ProblemPropertiesBar
+              problemClass={selectedClassId ? (classes.find((c) => c.id === selectedClassId) ?? null) : null}
+              classes={classes}
+              problemLanguage={language}
+              problemTags={tags}
+              onChangeProperties={({ class: c, language: l, tags: t }) => {
+                setSelectedClassId(c ?? '');
+                handleLanguageChange(l);
+                setTags(t);
+              }}
+            />
+          }
         />
-      )}
-
-      {/* Generate Solution Modal */}
-      {showGenerateModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: '0.5rem',
-              padding: '1.5rem',
-              width: '100%',
-              maxWidth: '480px',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-            }}
-          >
-            <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: 600, color: '#212529' }}>
-              Generate Solution
-            </h2>
-
-            {generateModalError && (
-              <div style={{ padding: '0.75rem', backgroundColor: '#f8d7da', borderRadius: '0.25rem', color: '#842029', marginBottom: '1rem', fontSize: '0.875rem' }}>
-                {generateModalError}
-              </div>
-            )}
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label
-                htmlFor="generate-custom-instructions"
-                style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#495057', marginBottom: '0.375rem' }}
-              >
-                Custom Instructions (optional)
-              </label>
-              <textarea
-                id="generate-custom-instructions"
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                placeholder="e.g., Don't use dicts or lists"
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  fontSize: '0.875rem',
-                  border: '1px solid #ced4da',
-                  borderRadius: '0.25rem',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={handleCancelGenerateModal}
-                disabled={isGenerating}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.875rem',
-                  color: '#495057',
-                  backgroundColor: '#e9ecef',
-                  border: '1px solid #ced4da',
-                  borderRadius: '0.25rem',
-                  cursor: isGenerating ? 'not-allowed' : 'pointer',
-                  opacity: isGenerating ? 0.5 : 1,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleGenerateSolution}
-                disabled={isGenerating}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.875rem',
-                  color: 'white',
-                  backgroundColor: '#0d6efd',
-                  border: 'none',
-                  borderRadius: '0.25rem',
-                  cursor: isGenerating ? 'not-allowed' : 'pointer',
-                  opacity: isGenerating ? 0.7 : 1,
-                }}
-              >
-                {isGenerating ? 'Generating...' : 'Generate'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

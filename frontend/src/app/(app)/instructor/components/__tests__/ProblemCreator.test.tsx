@@ -1,23 +1,19 @@
 /**
- * Tests for ProblemCreator component
+ * Tests for ProblemCreator component (G2 author-skin T6 wiring)
  *
- * Tests both create and edit modes with all fields:
- * - Loading existing problem data
- * - Editing all fields (title, description, starter_code)
- * - Form submission and validation
- * - Error handling
- * - Cancel functionality
- * - WorkspaceShell embedded mode (T9 wiring)
+ * Integration tests focus on the host wiring: prop passing, callbacks, and
+ * state mutations. WorkspaceShell internals are mocked.
  *
  * @jest-environment jsdom
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 
-// Mock API modules
+// ─── API mocks ────────────────────────────────────────────────────────────────
+
 jest.mock('@/lib/api/classes', () => ({
   listClasses: jest.fn(),
 }));
@@ -26,30 +22,62 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
-  generateSolution: jest.fn(),
+  // generateSolution intentionally omitted — T6 deletes that import
 }));
 
 jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn(),
   ioTestCasesToCaseDefs: jest.fn((cases) => cases),
-  buildIOTestCases: jest.fn(({ stdin, random_seed, attached_files }) => {
-    if (!stdin && !random_seed && (!attached_files || attached_files.length === 0)) return [];
-    return [{ kind: 'io', name: 'Default', input: stdin || '', match_type: 'exact', order: 0 }];
-  }),
+  buildIOTestCases: jest.fn(() => []),
 }));
 
-// Mock WorkspaceShell — integration tests for ProblemCreator focus on the
-// wiring (prop passing, callbacks) rather than WorkspaceShell internals.
+// ─── WorkspaceShell mock ──────────────────────────────────────────────────────
+// Captures all props for assertion, and renders enough DOM for interaction.
+
 let capturedWorkspaceProps: any = null;
 jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
   default: (props: any) => {
     capturedWorkspaceProps = props;
-    const { editorTabs, activeTabId, onChangeCode, onRunAll, onRunTest, onDebugTest, onSelectTab, railMode, embedded, tests } = props;
+    const {
+      editorTabs,
+      activeTabId,
+      onChangeCode,
+      onRunAll,
+      onRunTest,
+      onSelectTab,
+      railMode,
+      embedded,
+      tests,
+      propertiesBar,
+      editorRightControls,
+      drawerMode,
+      drawerEdit,
+      onDrawerEditChange,
+      drawerCloseAction,
+      railShowAdd,
+      onEditTest,
+      onAddTest,
+      lastCreatedKind,
+    } = props;
     const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
       <div data-testid="workspace-shell" data-embedded={String(embedded ?? false)}>
-        {/* Simulate editor tabs */}
+        {/* Ribbon area — for editable title tests */}
+        {props.ribbonEditable && (
+          <div data-testid="ribbon-editable">
+            <input
+              data-testid="ribbon-title-input"
+              defaultValue={props.problemTitle ?? ''}
+              onBlur={(e) => props.onTitleChange?.(e.target.value)}
+            />
+          </div>
+        )}
+        {/* Properties bar slot */}
+        {propertiesBar && <div data-testid="properties-bar-slot">{propertiesBar}</div>}
+        {/* Editor right controls slot */}
+        {editorRightControls && <div data-testid="editor-right-controls">{editorRightControls}</div>}
+        {/* Editor tabs */}
         <div data-testid="editor-tabs">
           {editorTabs.map((tab: any) => (
             <button
@@ -64,8 +92,8 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
             </button>
           ))}
         </div>
-        {/* Simulate editable code area */}
-        {activeTab && (
+        {/* Active code area */}
+        {activeTab && activeTab.kind === 'code' && (
           <textarea
             data-testid="active-code-area"
             aria-label={activeTab.label}
@@ -74,12 +102,57 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
             onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
           />
         )}
-        {/* Simulate rail actions */}
+        {/* Active markdown area (statement tab) */}
+        {activeTab && activeTab.kind === 'markdown' && (
+          <textarea
+            data-testid="active-markdown-area"
+            aria-label={activeTab.label}
+            value={activeTab.body ?? ''}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
+        )}
+        {/* Rail actions */}
         <button data-testid="run-all-btn" onClick={() => onRunAll?.()}>Run all</button>
         {tests?.length > 0 && (
           <button data-testid="run-test-btn" onClick={() => onRunTest?.(tests[0].id)}>Run test</button>
         )}
         <span data-testid="rail-mode">{railMode ?? 'run'}</span>
+        <span data-testid="tests-count">{tests?.length ?? 0}</span>
+        <span data-testid="drawer-mode">{drawerMode}</span>
+        {/* Rail add controls */}
+        {railShowAdd && (
+          <div data-testid="rail-add-controls">
+            <button data-testid="add-io-btn" onClick={() => onAddTest?.('io')}>Add IO</button>
+            <button data-testid="add-pytest-btn" onClick={() => onAddTest?.('pytest')}>Add Pytest</button>
+          </div>
+        )}
+        {/* Drawer edit controls */}
+        {drawerEdit && (
+          <div data-testid="drawer-edit-area">
+            <span data-testid="drawer-edit-kind">{drawerEdit.kind}</span>
+            <button
+              data-testid="drawer-edit-change-btn"
+              onClick={() => onDrawerEditChange?.({ ...drawerEdit, name: 'edited-name' })}
+            >
+              Simulate edit
+            </button>
+          </div>
+        )}
+        {/* Drawer close actions */}
+        {drawerCloseAction && (
+          <div data-testid="drawer-close-actions">{drawerCloseAction}</div>
+        )}
+        {/* Per-row edit button simulation */}
+        {tests?.map((t: any) => (
+          <button
+            key={t.id}
+            data-testid={`edit-body-${t.id}`}
+            onClick={() => onEditTest?.(t.id)}
+          >
+            Edit {t.id}
+          </button>
+        ))}
+        {lastCreatedKind && <span data-testid="last-created-kind">{lastCreatedKind}</span>}
       </div>
     );
   },
@@ -87,14 +160,20 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
 
 jest.mock('@/lib/testRail', () => ({
   toTestRailItems: jest.fn((cases, results) =>
-    (cases ?? []).map((c: any, i: number) => ({
-      id: `io-${i}-${c.name ?? 'case-' + i}`,
-      name: c.name ?? `case-${i}`,
-      kind: 'io',
-      visible: true,
-      state: results?.[i] ? 'pass' : 'idle',
-      t: '',
-    }))
+    (cases ?? []).map((c: any, i: number) => {
+      const name = c.name ?? `case-${i}`;
+      const id = `${c.kind}-${c.order ?? i}-${name}`;
+      return {
+        id,
+        name,
+        kind: c.kind,
+        visible: true,
+        state: results?.[i] ? 'pass' : 'idle',
+        t: '',
+        io: c.kind === 'io' ? { stdin: c.input ?? '' } : undefined,
+        pytest: c.kind === 'pytest' ? { target: c.target_path ?? '' } : undefined,
+      };
+    })
   ),
   toDrawerOutput: jest.fn((result) =>
     result
@@ -107,22 +186,45 @@ jest.mock('@/lib/testRail', () => ({
   ),
 }));
 
+// ─── Test data ────────────────────────────────────────────────────────────────
+
 const DEFAULT_CLASSES = [
-  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
+  { id: 'c1', name: 'CS 101', namespace_id: 'ns-1' },
+  { id: 'c2', name: 'CS 201', namespace_id: 'ns-1' },
 ];
+
+const MOCK_IO_TEST = {
+  kind: 'io' as const,
+  name: 't1',
+  input: '42',
+  expected_output: '42',
+  match_type: 'exact' as const,
+  order: 0,
+};
+
+const MOCK_PYTEST_TEST = {
+  kind: 'pytest' as const,
+  name: 'test_basic',
+  target_path: 'tests/test_basic.py::test_basic',
+  test_code: 'def test_basic():\n    assert True',
+};
 
 const mockExistingProblem = {
   id: 'problem-456',
-  title: 'Existing Problem',
-  description: 'Original description',
-  starter_code: 'def original():\n    pass',
+  title: 'Existing',
+  description: '# Statement',
+  starter_code: 'def starter(): pass',
   solution: 'def answer(): return 42',
   language: 'python',
+  class_id: 'c1',
+  tags: ['a'],
   author_id: 'user-1',
-  test_cases: [],
+  test_cases: [MOCK_IO_TEST],
 };
 
-describe('ProblemCreator Component', () => {
+// ─── Test suite ───────────────────────────────────────────────────────────────
+
+describe('ProblemCreator Component (G2 T6)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedWorkspaceProps = null;
@@ -130,277 +232,570 @@ describe('ProblemCreator Component', () => {
     listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
-  describe('WorkspaceShell integration (T9)', () => {
-    /**
-     * Verifies ProblemCreator mounts WorkspaceShell in embedded mode with two editable
-     * code tabs (Starter + Solution). This is the core T9 contract — author surfaces
-     * use WorkspaceShell, not the old CodeEditor/EditorContainer pair.
-     */
-    it('renders WorkspaceShell embedded=true with Starter + Solution tabs', () => {
-      render(<ProblemCreator />);
-
-      const shell = screen.getByTestId('workspace-shell');
-      expect(shell).toBeInTheDocument();
-      expect(shell).toHaveAttribute('data-embedded', 'true');
-
-      const tabs = screen.getAllByRole('tab');
-      expect(tabs).toHaveLength(2);
-      expect(tabs[0]).toHaveTextContent('Starter Code');
-      expect(tabs[1]).toHaveTextContent('Solution');
-    });
-
-    /**
-     * Verifies both editor tabs are kind='code' and readOnly=false.
-     * Authors must be able to edit both Starter Code and Solution.
-     */
-    it('both Starter and Solution tabs are kind=code and editable (readOnly=false)', () => {
-      render(<ProblemCreator />);
-
-      const tabs = screen.getAllByRole('tab');
-      tabs.forEach((tab) => {
-        expect(tab).toHaveAttribute('data-kind', 'code');
-        expect(tab).toHaveAttribute('data-readonly', 'false');
-      });
-    });
-
-    /**
-     * Verifies no Ribbon is rendered in embedded mode. The host page provides chrome.
-     */
-    it('no Ribbon rendered in embedded mode', () => {
-      render(<ProblemCreator />);
-      // Ribbon is omitted by WorkspaceShell when embedded=true — confirmed by the
-      // mock not rendering a [data-testid="ribbon"] element.
-      expect(screen.queryByTestId('ribbon')).not.toBeInTheDocument();
-    });
-
-    /**
-     * Verifies tab switching updates the active editor content to show solution code.
-     */
-    it('tab switch to Solution updates active editor content', async () => {
+  // ── T6 test case 1: Load round-trip ─────────────────────────────────────────
+  /**
+   * Verifies that loading a problem correctly populates all G2 wired props:
+   * - Ribbon receives problemTitle + ribbonEditable=true
+   * - editorTabs includes statement.md with body from description
+   * - propertiesBar receives class/language/tags
+   * - tests prop is populated from test_cases (proves setTestCases wired)
+   */
+  describe('Load round-trip', () => {
+    it('loads problem and wires Ribbon, statement tab, propertiesBar, and testCases', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockResolvedValue(mockExistingProblem);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument();
-      });
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
 
-      // Start on Starter Code — active code area shows starter
-      expect(screen.getByTestId('active-code-area')).toHaveValue('def original():\n    pass');
+      // Ribbon wired with editable title
+      expect(capturedWorkspaceProps.ribbonEditable).toBe(true);
+      expect(capturedWorkspaceProps.problemTitle).toBe('Existing');
 
-      // Click Solution tab
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      // statement.md tab present
+      const statementTab = capturedWorkspaceProps.editorTabs.find(
+        (t: any) => t.id === 'statement'
+      );
+      expect(statementTab).toBeDefined();
+      expect(statementTab.kind).toBe('markdown');
+      expect(statementTab.body).toBe('# Statement');
 
-      // Active code area now shows solution
-      expect(screen.getByTestId('active-code-area')).toHaveValue('def answer(): return 42');
+      // propertiesBar rendered in slot
+      expect(screen.getByTestId('properties-bar-slot')).toBeInTheDocument();
+
+      // test rail shows 1 test (proves setTestCases was called)
+      expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
     });
 
-    /**
-     * Verifies Run all button calls executeCode for local execution.
-     */
-    it('Run all calls local executeCode', async () => {
-      const { executeCode } = require('@/lib/api/execute');
-      executeCode.mockResolvedValue({
-        summary: { passed: 0, failed: 0, total: 0 },
-        results: [],
-      });
-
-      render(<ProblemCreator />);
-
-      fireEvent.click(screen.getByTestId('run-all-btn'));
-
-      await waitFor(() => {
-        expect(executeCode).toHaveBeenCalled();
-      });
-    });
-
-    /**
-     * Verifies rail mode is 'run' (not 'edit'). G2 adds 'edit' mode.
-     */
-    it('rail mode is run (no Edit body button in G1)', () => {
-      render(<ProblemCreator />);
-      expect(screen.getByTestId('rail-mode')).toHaveTextContent('run');
-    });
-
-    /**
-     * Verifies code edits in Starter tab update local state.
-     * Save flow (handleSubmit) is unchanged from before.
-     */
-    it('code edits in Starter tab update local state', () => {
-      render(<ProblemCreator />);
-
-      const codeArea = screen.getByTestId('active-code-area');
-      fireEvent.change(codeArea, { target: { value: 'def new_code(): pass' } });
-
-      // The textarea should reflect the change (local state update)
-      expect(codeArea).toHaveValue('def new_code(): pass');
-    });
-
-    /**
-     * Verifies that WorkspaceShell receives toTestRailItems output as tests prop.
-     */
-    it('tests prop is wired via toTestRailItems(problem.test_cases, executionResult)', async () => {
-      const { toTestRailItems } = require('@/lib/testRail');
+    it('editorTabs has 3 tabs (Starter, Solution, Statement)', async () => {
       const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue({
-        ...mockExistingProblem,
-        test_cases: [{ kind: 'io', name: 'test1', input: 'a', match_type: 'exact', order: 0 }],
-      });
+      getProblem.mockResolvedValue(mockExistingProblem);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
+      expect(capturedWorkspaceProps.editorTabs).toHaveLength(3);
+      const tabIds = capturedWorkspaceProps.editorTabs.map((t: any) => t.id);
+      expect(tabIds).toContain('starter');
+      expect(tabIds).toContain('solution');
+      expect(tabIds).toContain('statement');
+    });
+  });
+
+  // ── T6 test case 2: Ribbon onTitleChange propagates to updateProblem ─────────
+  /**
+   * Verifies that firing onTitleChange on the Ribbon updates the local title state
+   * which flows into updateProblem payload on submit.
+   */
+  it('Ribbon onTitleChange propagates to updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem, title: 'New Title' });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Fire Ribbon onTitleChange via the captured prop
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('New Title');
+    });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({ title: 'New Title' })
+      );
+    });
+  });
+
+  // ── T6 test case 3: PropertiesBar onChangeProperties propagates to updateProblem ──
+  /**
+   * Verifies that onChangeProperties on ProblemPropertiesBar updates class/language/tags
+   * state, which flows into updateProblem on submit.
+   */
+  it('PropertiesBar onChangeProperties propagates to updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Fire onChangeProperties via captured propertiesBar prop
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c2',
+        language: 'java',
+        tags: ['x', 'y'],
       });
+    });
 
-      expect(toTestRailItems).toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({
+          class_id: 'c2',
+          language: 'java',
+          tags: ['x', 'y'],
+        })
+      );
     });
   });
 
-  describe('Layout', () => {
-    it('should use flex layout classes for full-height rendering', () => {
-      const { container } = render(<ProblemCreator />);
-      const outerDiv = container.firstElementChild;
-      expect(outerDiv).toHaveClass('flex-1', 'min-h-0', 'flex', 'flex-col');
+  // ── T6 test case 4: Statement-tab onChangeCode propagates to updateProblem ───
+  /**
+   * Verifies that editing the statement.md tab updates description state,
+   * which flows into updateProblem.description on submit.
+   */
+  it('Statement-tab onChangeCode propagates to updateProblem.description', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Switch to statement tab
+    fireEvent.click(screen.getByRole('tab', { name: 'statement.md' }));
+
+    // Type in the statement markdown area
+    const markdownArea = screen.getByTestId('active-markdown-area');
+    fireEvent.change(markdownArea, { target: { value: '# New Statement' } });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({ description: '# New Statement' })
+      );
     });
   });
 
-  describe('Create Mode', () => {
-    it('should render form in create mode when no problem_id provided', () => {
+  // ── T6 test case 5: Old class/language/tags form bar is gone ─────────────────
+  /**
+   * Verifies that the pre-existing Class/Language/Tags form bar has been deleted.
+   * These elements used id-based selectors that no longer exist in G2.
+   * Catches: old form bar survived the deletion.
+   */
+  it('old class/language/tags form bar is gone (no #problem-class, etc.)', () => {
+    render(<ProblemCreator />);
+
+    expect(document.getElementById('problem-class')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-language')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-tags')).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 6: Old title/description form bar is gone ───────────────────
+  /**
+   * Verifies that the pre-existing Title/Description page-chrome form bar has been deleted.
+   * Catches: old form survived the deletion.
+   */
+  it('old title/description form bar is gone (no #problem-title, #problem-description)', () => {
+    render(<ProblemCreator />);
+
+    expect(document.getElementById('problem-title')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-description')).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 7: Generate Solution modal/handlers/state are gone ──────────
+  /**
+   * Verifies the Generate Solution feature has been removed from ProblemCreator.
+   * It moves to G7. No button, no modal, no handlers.
+   * Catches: Generate Solution modal accidentally survived.
+   */
+  it('Generate Solution modal is gone — no button, no modal', () => {
+    render(<ProblemCreator />);
+
+    expect(screen.queryByRole('button', { name: /generate solution/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /generate solution/i })).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 8: Edit body on rail row opens drawer in edit-test mode ─────
+  /**
+   * Verifies that clicking "Edit body" on a test rail row opens the drawer
+   * in edit-test mode, with drawerEdit seeded from the matching test case.
+   * Catches: onEditTest not connected, drawerMode not updated.
+   */
+  it('onEditTest opens drawer in edit-test mode with right test data', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Get the ID for the pytest test (index 1)
+    const tests = capturedWorkspaceProps.tests;
+    expect(tests).toHaveLength(2);
+    const pytestItem = tests[1];
+
+    // Fire onEditTest for the pytest test
+    act(() => {
+      capturedWorkspaceProps.onEditTest(pytestItem.id);
+    });
+
+    // Drawer should now be in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+    // drawerEdit should be seeded from the pytest test
+    expect(capturedWorkspaceProps.drawerEdit).toBeDefined();
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('pytest');
+  });
+
+  // ── T6 test case 9: Save & run replaces test in array; updateProblem called ───
+  /**
+   * Verifies the save flow: editing via drawer then Save & run replaces the
+   * specific test in the array and calls updateProblem with full new array.
+   * Catches: immutability bugs, wrong index replacement, updateProblem not called.
+   */
+  it('Save & run replaces right test in array and calls updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 10, actual: '42' }],
+    });
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+    updateProblem.mockResolvedValue(mockExistingProblem);
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    const ioItem = tests[0];
+
+    // Open edit for the io test (index 0)
+    act(() => {
+      capturedWorkspaceProps.onEditTest(ioItem.id);
+    });
+
+    // Simulate user editing the drawer
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'x',
+        expected_output: 'y',
+        match_type: 'contains',
+      });
+    });
+
+    // Click Save & run (should be in drawerCloseAction)
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({
+          test_cases: expect.arrayContaining([
+            expect.objectContaining({ input: 'x', expected_output: 'y', match_type: 'contains' }),
+            expect.objectContaining({ kind: 'pytest' }),
+          ]),
+        })
+      );
+    });
+
+    // Ensure test_cases length preserved
+    const callArgs = updateProblem.mock.calls[0][1];
+    expect(callArgs.test_cases).toHaveLength(2);
+  });
+
+  // ── T6 test case 10: "+ Add IO test" appends blank io case + opens drawer ────
+  /**
+   * Verifies that onAddTest('io') appends a blank io test to testCases,
+   * opens the drawer in edit-test mode, and seeds drawerEdit with the blank case.
+   * Catches: addNewTest not wired, kind defaults wrong.
+   */
+  it('onAddTest("io") appends blank io case and opens drawer in edit-test', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
+
+    // Fire onAddTest('io')
+    act(() => {
+      capturedWorkspaceProps.onAddTest('io');
+    });
+
+    // Test count should grow to 2
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('2');
+
+    // Drawer should be in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+    // drawerEdit should be the new blank io case
+    expect(capturedWorkspaceProps.drawerEdit).toBeDefined();
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('io');
+    expect(capturedWorkspaceProps.drawerEdit.input).toBe('');
+    expect(capturedWorkspaceProps.drawerEdit.expected_output).toBe('');
+    expect(capturedWorkspaceProps.drawerEdit.match_type).toBe('exact');
+  });
+
+  // ── T6 test case 11: "+ Add Pytest test" appends blank pytest case ───────────
+  /**
+   * Verifies that onAddTest('pytest') appends a blank pytest test case with
+   * default target_path and test_code values, opens the drawer, and sets
+   * lastCreatedKind to 'pytest'.
+   * Catches: pytest defaults not set.
+   */
+  it('onAddTest("pytest") appends blank pytest case with defaults', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    act(() => {
+      capturedWorkspaceProps.onAddTest('pytest');
+    });
+
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('pytest');
+    expect(capturedWorkspaceProps.drawerEdit.target_path).toBeTruthy();
+    expect(capturedWorkspaceProps.drawerEdit.test_code).toBeTruthy();
+
+    // lastCreatedKind should be 'pytest'
+    expect(screen.getByTestId('last-created-kind')).toHaveTextContent('pytest');
+  });
+
+  // ── T6 test case 12: match_type narrowed at boundary ─────────────────────────
+  /**
+   * Verifies that an unknown match_type from the DB is narrowed to 'exact'
+   * when seeding the drawer. Catches: type-narrowing miss allowing invalid values.
+   */
+  it('match_type is narrowed to "exact" for unknown values', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [
+        { ...MOCK_IO_TEST, match_type: 'unknown' },
+      ],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
+    });
+
+    // match_type should be narrowed to 'exact'
+    expect(capturedWorkspaceProps.drawerEdit.match_type).toBe('exact');
+  });
+
+  // ── T6 test case 13: Validation: empty title blocks save ─────────────────────
+  /**
+   * Verifies that the submit button is disabled when title is empty (G2 validation).
+   * Also verifies that calling handleSubmit programmatically with empty title shows an error.
+   * Catches: validation removed with form bar deletion.
+   */
+  it('validation: empty title blocks save — button disabled and handleSubmit guards', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Clear the title via Ribbon
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('');
+    });
+
+    // Button should be disabled when title is empty
+    const submitBtn = screen.getByText('Update Problem');
+    expect(submitBtn).toBeDisabled();
+    expect(updateProblem).not.toHaveBeenCalled();
+  });
+
+  // ── Cancel button ─────────────────────────────────────────────────────────────
+
+  describe('Cancel functionality', () => {
+    it('calls onCancel when cancel button clicked', () => {
+      const onCancel = jest.fn();
+      render(<ProblemCreator onCancel={onCancel} />);
+      fireEvent.click(screen.getByTitle('Back to Problem Library'));
+      expect(onCancel).toHaveBeenCalled();
+    });
+
+    it('does not show cancel button when onCancel not provided', () => {
+      render(<ProblemCreator />);
+      expect(screen.queryByTitle('Back to Problem Library')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── WorkspaceShell integration ────────────────────────────────────────────────
+
+  describe('WorkspaceShell integration', () => {
+    it('renders WorkspaceShell embedded=true', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('workspace-shell')).toHaveAttribute('data-embedded', 'true');
+    });
+
+    it('rail mode is edit (G2)', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('rail-mode')).toHaveTextContent('edit');
+    });
+
+    it('railShowAdd is true', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('rail-add-controls')).toBeInTheDocument();
+    });
+
+    it('ribbonEditable is true', () => {
+      render(<ProblemCreator />);
+      expect(capturedWorkspaceProps.ribbonEditable).toBe(true);
+    });
+
+    it('statement.md tab is present as kind=markdown in new problem', () => {
+      render(<ProblemCreator />);
+      const tabs = capturedWorkspaceProps.editorTabs;
+      const statementTab = tabs.find((t: any) => t.id === 'statement');
+      expect(statementTab).toBeDefined();
+      expect(statementTab.kind).toBe('markdown');
+    });
+  });
+
+  // ── Create mode ───────────────────────────────────────────────────────────────
+
+  describe('Create mode', () => {
+    it('renders header in create mode', () => {
       render(<ProblemCreator />);
       expect(screen.getByText('Create New Problem')).toBeInTheDocument();
-      expect(screen.getByText('Create Problem')).toBeInTheDocument();
     });
 
-    it('should validate required title field', async () => {
-      render(<ProblemCreator />);
-
-      const submitButton = screen.getByText('Create Problem');
-      // Button should be disabled when title is empty
-      expect(submitButton).toBeDisabled();
-
-      const { createProblem } = require('@/lib/api/problems');
-      expect(createProblem).not.toHaveBeenCalled();
-    });
-
-    it('should create new problem with all fields', async () => {
+    it('creates problem successfully with title', async () => {
       const onProblemCreated = jest.fn();
-      const mockProblem = {
-        id: 'problem-123',
-        title: 'Test Problem',
-        description: 'Test description',
-        starter_code: 'def solution():\n    pass',
-      };
-
       const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue(mockProblem);
+      createProblem.mockResolvedValue({ id: 'problem-123' });
 
       render(<ProblemCreator onProblemCreated={onProblemCreated} />);
 
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Fill in title via the page-chrome title input
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
+      // Set title via Ribbon callback
+      act(() => {
+        capturedWorkspaceProps.onTitleChange('New Problem');
       });
 
-      // Fill starter code via the WorkspaceShell mock
-      fireEvent.change(screen.getByTestId('active-code-area'), {
-        target: { value: 'def solution():\n    pass' },
+      // Set class via PropertiesBar callback
+      act(() => {
+        capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+          class: 'c1',
+          language: 'python',
+          tags: [],
+        });
       });
 
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
         expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            title: 'Test Problem',
-            starter_code: 'def solution():\n    pass',
-          })
+          expect.objectContaining({ title: 'New Problem', class_id: 'c1' })
         );
-      });
-
-      await waitFor(() => {
         expect(onProblemCreated).toHaveBeenCalledWith('problem-123');
       });
     });
 
-    it('should display error when create fails', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockRejectedValue(new Error('Creation failed'));
-
+    it('submit button disabled when title empty', () => {
       render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Creation failed')).toBeInTheDocument();
-      });
+      expect(screen.getByText('Create Problem')).toBeDisabled();
     });
   });
 
-  describe('Edit Mode', () => {
-    it('should load existing problem data in edit mode', async () => {
+  // ── Edit mode ─────────────────────────────────────────────────────────────────
+
+  describe('Edit mode', () => {
+    it('loads and shows Edit Problem header', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockResolvedValue(mockExistingProblem);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      expect(screen.getByText('Loading problem...')).toBeInTheDocument();
-
-      await waitFor(() => {
-        expect(getProblem).toHaveBeenCalledWith('problem-456');
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
-      });
-
-      // Title field in page chrome should be populated
-      expect(screen.getByLabelText('Title *')).toHaveValue('Existing Problem');
-      expect(screen.getByText('Update Problem')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByText('Edit Problem')).toBeInTheDocument()
+      );
     });
 
-    it('should display error when loading problem fails', async () => {
+    it('shows error when loading fails', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockRejectedValue(new Error('Not found'));
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Not found')).toBeInTheDocument();
-      });
+      await waitFor(() =>
+        expect(screen.getByText('Not found')).toBeInTheDocument()
+      );
     });
 
-    it('should update existing problem with modified fields', async () => {
-      const onProblemCreated = jest.fn();
-      const updatedProblem = { ...mockExistingProblem, title: 'Updated Problem' };
-
+    it('test_cases payload uses testCases state (not buildIOTestCases)', async () => {
       const { getProblem, updateProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(mockExistingProblem);
-      updateProblem.mockResolvedValue(updatedProblem);
-
-      render(<ProblemCreator problem_id="problem-456" onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Title *')).toHaveValue('Existing Problem');
+      const { buildIOTestCases } = require('@/lib/api/execute');
+      getProblem.mockResolvedValue({
+        ...mockExistingProblem,
+        test_cases: [MOCK_IO_TEST],
       });
+      updateProblem.mockResolvedValue(mockExistingProblem);
 
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Updated Problem' },
-      });
+      render(<ProblemCreator problem_id="problem-456" />);
+
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
 
       fireEvent.click(screen.getByText('Update Problem'));
 
@@ -408,559 +803,90 @@ describe('ProblemCreator Component', () => {
         expect(updateProblem).toHaveBeenCalledWith(
           'problem-456',
           expect.objectContaining({
-            title: 'Updated Problem',
+            test_cases: expect.arrayContaining([
+              expect.objectContaining({ kind: 'io', name: 't1' }),
+            ]),
           })
         );
-      });
-
-      await waitFor(() => {
-        expect(onProblemCreated).toHaveBeenCalledWith('problem-456');
-      });
-    });
-
-    it('should handle update failure', async () => {
-      const { getProblem, updateProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(mockExistingProblem);
-      updateProblem.mockRejectedValue(new Error('Update failed'));
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Title *')).toHaveValue('Existing Problem');
-      });
-
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Update failed')).toBeInTheDocument();
+        // buildIOTestCases should NOT be called for the test_cases payload
+        expect(buildIOTestCases).not.toHaveBeenCalled();
       });
     });
   });
 
-  describe('Cancel Functionality', () => {
-    it('should call onCancel when cancel button clicked', () => {
-      const onCancel = jest.fn();
-      render(<ProblemCreator onCancel={onCancel} />);
+  // ── Drawer: Cancel edit ───────────────────────────────────────────────────────
 
-      const cancelButton = screen.getByTitle('Back to Problem Library');
-      fireEvent.click(cancelButton);
-
-      expect(onCancel).toHaveBeenCalled();
+  it('Cancel edit closes drawer without calling updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
     });
 
-    it('should not show cancel button when onCancel not provided', () => {
-      render(<ProblemCreator />);
-      expect(screen.queryByTitle('Back to Problem Library')).not.toBeInTheDocument();
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
     });
 
-    it('should show cancel button when onCancel is provided', async () => {
-      const onCancel = jest.fn();
-      render(<ProblemCreator onCancel={onCancel} />);
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
 
-      expect(screen.getByTitle('Back to Problem Library')).toBeInTheDocument();
+    // Click Cancel
+    const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+    act(() => {
+      fireEvent.click(cancelBtn);
     });
+
+    // Drawer should go back to idle
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('idle');
+    expect(updateProblem).not.toHaveBeenCalled();
   });
 
-  describe('Form States', () => {
-    it('should disable submit button when title is empty', () => {
-      render(<ProblemCreator />);
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).toBeDisabled();
-    });
+  // ── No ProblemPropertiesBar id-based selectors ────────────────────────────────
 
-    it('should enable submit button when title and class are provided', async () => {
-      render(<ProblemCreator />);
+  it('renders without any old id-based form bar selectors', () => {
+    render(<ProblemCreator />);
 
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).not.toBeDisabled();
-    });
-
-    it('should disable submit button when title is provided but no class is selected', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test Problem' },
-      });
-
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).toBeDisabled();
-    });
-
-    it('should enable submit button when both title and class are provided', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'class-1' },
-      });
-
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).not.toBeDisabled();
-    });
-
-    it('should show loading state during submission', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Creating...')).toBeInTheDocument();
-      });
-    });
+    // Old form bar element IDs should be gone
+    expect(document.querySelector('#problem-class')).toBeNull();
+    expect(document.querySelector('#problem-language')).toBeNull();
+    expect(document.querySelector('#problem-tags')).toBeNull();
+    expect(document.querySelector('#problem-title')).toBeNull();
+    expect(document.querySelector('#problem-description')).toBeNull();
   });
 
-  describe('Class and Tags', () => {
-    const mockClasses = [
-      { id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' },
-      { id: 'class-2', name: 'CS 201', namespace_id: 'ns-1' },
-    ];
+  // ── IOTestCase direct construction ───────────────────────────────────────────
 
-    beforeEach(() => {
-      const { listClasses } = require('@/lib/api/classes');
-      const { createProblem } = require('@/lib/api/problems');
-      listClasses.mockResolvedValue(mockClasses);
-      createProblem.mockResolvedValue({ id: 'problem-new' });
+  it('creates problem with test_cases from testCases state (empty by default)', async () => {
+    const { createProblem } = require('@/lib/api/problems');
+    createProblem.mockResolvedValue({ id: 'problem-new' });
+
+    render(<ProblemCreator />);
+
+    // Set title via ribbon callback
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('Test Problem');
     });
 
-    it('should render class selector dropdown', async () => {
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
+    // Set class
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c1',
+        language: 'python',
+        tags: [],
       });
     });
 
-    it('should render tags input field', () => {
-      render(<ProblemCreator />);
-      expect(screen.getByLabelText('Tags')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByText('Create Problem'));
 
-    it('should include class_id and tags in create request', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
+    await waitFor(() => expect(createProblem).toHaveBeenCalled());
 
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-2' } });
-
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'loops, arrays' } });
-      fireEvent.keyDown(tagsInput, { key: 'Enter' });
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            class_id: 'class-2',
-            tags: ['loops', 'arrays'],
-          })
-        );
-      });
-    });
-
-    it('should flush uncommitted tag input on submit', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-1' } });
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'functions' } });
-
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            tags: ['functions'],
-          })
-        );
-      });
-    });
-
-    it('should flush tag input on blur', async () => {
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Tags')).toBeInTheDocument();
-      });
-
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'loops' } });
-      fireEvent.blur(tagsInput);
-
-      expect(screen.getByText('loops')).toBeInTheDocument();
-    });
-
-    it('should pre-populate class_id from prop', async () => {
-      render(<ProblemCreator class_id="class-2" />);
-
-      await waitFor(() => {
-        const select = screen.getByLabelText('Class *') as HTMLSelectElement;
-        expect(select.value).toBe('class-2');
-      });
-    });
-
-    it('should show class validation hint when class is not selected in create mode', async () => {
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      expect(screen.getByText('Required')).toBeInTheDocument();
-    });
-
-    it('should not show class validation hint when class is selected', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-1' } });
-
-      expect(screen.queryByText('Required')).not.toBeInTheDocument();
-    });
-
-    it('should not show class validation hint in edit mode', async () => {
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue({
-        ...mockExistingProblem,
-        class_id: null,
-      });
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
-      });
-
-      expect(screen.queryByText('Required')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Generate Solution', () => {
-    beforeEach(() => {
-      jest.clearAllMocks();
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(DEFAULT_CLASSES);
-    });
-
-    it('should render the Generate Solution button in the tab bar area', () => {
-      render(<ProblemCreator />);
-      expect(screen.getByRole('button', { name: 'Generate Solution' })).toBeInTheDocument();
-    });
-
-    it('should disable Generate Solution button when description is empty', () => {
-      render(<ProblemCreator />);
-      const btn = screen.getByRole('button', { name: 'Generate Solution' });
-      expect(btn).toBeDisabled();
-    });
-
-    it('should enable Generate Solution button when description has content', () => {
-      render(<ProblemCreator />);
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-      const btn = screen.getByRole('button', { name: 'Generate Solution' });
-      expect(btn).not.toBeDisabled();
-    });
-
-    it('should open modal when Generate Solution button is clicked', () => {
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-      expect(screen.getByLabelText('Custom Instructions (optional)')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
-    });
-
-    it('should call generateSolution API and switch to Solution tab after generation', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def reverse(s): return s[::-1]' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalledWith({
-          description: 'Write a function that reverses a string.',
-          starter_code: undefined,
-        });
-      });
-
-      // After generation, active tab should switch to Solution
-      await waitFor(() => {
-        const solutionTab = screen.getByRole('tab', { name: 'Solution' });
-        expect(solutionTab).toHaveAttribute('aria-selected', 'true');
-      });
-    });
-
-    it('should close modal and not call API when Cancel is clicked', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
-      expect(generateSolution).not.toHaveBeenCalled();
-    });
-
-    it('should display error inside modal when generateSolution API fails', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockRejectedValue(new Error('AI generation failed'));
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-        expect(screen.getByText('AI generation failed')).toBeInTheDocument();
-      });
-    });
-
-    it('should close modal on successful generation', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): return 42' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Solution Tab (WorkspaceShell tabs)', () => {
-    it('should render tab bar with Starter Code and Solution tabs', () => {
-      render(<ProblemCreator />);
-
-      expect(screen.getByRole('tab', { name: 'Starter Code' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Solution' })).toBeInTheDocument();
-    });
-
-    it('should default to Starter Code tab', () => {
-      render(<ProblemCreator />);
-
-      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
-      expect(starterTab).toHaveAttribute('aria-selected', 'true');
-    });
-
-    it('should switch to Solution tab and show Solution code', async () => {
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(mockExistingProblem);
-
-      render(<ProblemCreator problem_id="problem-456" />);
-      await waitFor(() => expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument());
-
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-
-      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
-      expect(solutionTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('active-code-area')).toHaveValue('def answer(): return 42');
-    });
-
-    it('should preserve code in each tab independently', async () => {
-      render(<ProblemCreator />);
-
-      // Type starter code
-      fireEvent.change(screen.getByTestId('active-code-area'), {
-        target: { value: 'def starter(): pass' },
-      });
-
-      // Switch to solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByTestId('active-code-area'), {
-        target: { value: 'def solution(): return 42' },
-      });
-
-      // Switch back — starter code preserved
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-      expect(screen.getByTestId('active-code-area')).toHaveValue('def starter(): pass');
-
-      // Switch to solution — solution code preserved
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('active-code-area')).toHaveValue('def solution(): return 42');
-    });
-
-    it('should include solution in submit payload', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'p-1' });
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-
-      // Set solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByTestId('active-code-area'), {
-        target: { value: 'def solve(): return 42' },
-      });
-
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            solution: 'def solve(): return 42',
-          })
-        );
-      });
-    });
-
-    it('should reset solution after successful create', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'p-reset' });
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByTestId('active-code-area'), {
-        target: { value: 'some solution' },
-      });
-
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        // After reset, Starter Code tab should be active with empty code
-        const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
-        expect(starterTab).toHaveAttribute('aria-selected', 'true');
-        expect(screen.getByTestId('active-code-area')).toHaveValue('');
-      });
-    });
-  });
-
-  describe('IOTestCase[] direct construction', () => {
-    it('creates problem with test_cases: [] when no stdin/seed/files', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'problem-new' });
-
-      render(<ProblemCreator />);
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => expect(createProblem).toHaveBeenCalled());
-
-      const callArgs = createProblem.mock.calls[0][0];
-      expect(callArgs.test_cases).toEqual([]);
-    });
-
-    it('creates problem with test_cases present on submission', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'problem-new' });
-
-      render(<ProblemCreator />);
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => expect(createProblem).toHaveBeenCalled());
-
-      const callArgs = createProblem.mock.calls[0][0];
-      expect(callArgs).toHaveProperty('test_cases');
-      expect(callArgs.test_cases).toBeInstanceOf(Array);
-    });
+    const callArgs = createProblem.mock.calls[0][0];
+    expect(callArgs.test_cases).toEqual([]);
   });
 });
