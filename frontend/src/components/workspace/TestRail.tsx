@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Pill } from '@/components/ui/Pill';
 import { StateDot } from '@/components/ui/StateDot';
 import { Button } from '@/components/ui/Button';
+import { Menu } from '@/components/ui/Menu';
 import type { TestRailItem } from '@/lib/testRail';
 
 /** KIND_TONE maps test kind to the Pill tone used in the rail. */
@@ -34,6 +35,18 @@ export interface TestRailProps {
   selectedSummary?: string;
   /** Text rendered when tests is empty */
   emptyHint?: string;
+  // ── G2 author affordances ─────────────────────────────────────────────────
+  /** Fired when the per-row "Edit body" button is clicked (edit mode only) */
+  onEditTest?: (id: string) => void;
+  /** When true, renders a split-button "+ Add <kind> test" row at the bottom */
+  railShowAdd?: boolean;
+  /** Fired when the main add button or a menu item is clicked */
+  onAddTest?: (kind: 'io' | 'pytest') => void;
+  /**
+   * Sticky default kind for the main add button label.
+   * undefined → 'io' (first-use default).
+   */
+  lastCreatedKind?: 'io' | 'pytest';
 }
 
 /**
@@ -55,7 +68,13 @@ export function TestRail({
   title = 'Tests',
   selectedSummary,
   emptyHint,
+  onEditTest,
+  railShowAdd = false,
+  onAddTest,
+  lastCreatedKind,
 }: TestRailProps) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const stickyKind: 'io' | 'pytest' = lastCreatedKind ?? 'io';
   return (
     <aside
       data-testid="workspace-test-rail"
@@ -123,6 +142,7 @@ export function TestRail({
             onSelect={() => onSelectTest?.(test.id)}
             onRun={() => onRunTest?.(test.id)}
             onDebug={() => onDebugTest?.(test.id)}
+            onEdit={() => onEditTest?.(test.id)}
             testId={`testrail-row-${test.id}`}
           />
         ))}
@@ -138,6 +158,45 @@ export function TestRail({
             {emptyHint ?? 'No tests yet.'}
           </div>
         )}
+
+        {/* Split-button add-test row — only when railShowAdd=true */}
+        {railShowAdd && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              borderBottom: '1px solid var(--border)',
+              padding: '8px 10px',
+            }}
+          >
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={() => onAddTest?.(stickyKind)}
+            >
+              Add {kindLabel(stickyKind)} test
+            </Button>
+            <Menu
+              anchor={
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  aria-label="▾"
+                >
+                  ▾
+                </Button>
+              }
+              items={[
+                { label: 'IO test', onSelect: () => onAddTest?.('io') },
+                { label: 'Pytest test', onSelect: () => onAddTest?.('pytest') },
+              ]}
+              open={addMenuOpen}
+              onOpenChange={setAddMenuOpen}
+              align="left"
+            />
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -150,10 +209,11 @@ interface TestRowProps {
   onSelect: () => void;
   onRun: () => void;
   onDebug: () => void;
+  onEdit: () => void;
   testId?: string;
 }
 
-function TestRow({ test, active, mode, onSelect, onRun, onDebug, testId }: TestRowProps) {
+function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId }: TestRowProps) {
   const showControls = active && mode !== 'view';
 
   return (
@@ -266,12 +326,32 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, testId }: TestR
             >
               Debug
             </Button>
-            {/* mode='edit' slot: G2 wires the "Edit body" button here */}
+            {/* Edit body button — only in edit mode */}
+            {mode === 'edit' && (
+              <Button
+                data-testid="edit-body-btn"
+                variant="quiet"
+                size="sm"
+                onClick={e => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                Edit body
+              </Button>
+            )}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * kindLabel — maps a test kind to its human-readable label for the split-button.
+ */
+function kindLabel(kind: 'io' | 'pytest'): string {
+  return kind === 'io' ? 'IO' : 'Pytest';
 }
 
 /**
