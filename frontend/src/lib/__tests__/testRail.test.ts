@@ -73,26 +73,31 @@ describe('toTestRailItems', () => {
     });
   });
 
-  describe('honors explicit visible=false', () => {
-    it('item.visible is false when case has visible=false', () => {
-      // IOTestCaseIO supports arbitrary extra fields — visible is a display flag
-      const cases: (IOTestCase & { visible?: boolean })[] = [
-        { kind: 'io', name: 'hidden-case', order: 0, visible: false },
-      ];
-
-      const items = toTestRailItems(cases as IOTestCase[]);
-
-      expect(items[0].visible).toBe(false);
-    });
-
-    it('item.visible defaults to true when visible is not set', () => {
+  describe('visible field is absent from returned items', () => {
+    /**
+     * Contract: toTestRailItems must not include a `visible` field on returned items.
+     * The field was dead frontend wiring with no backend source — removing it eliminates
+     * an unsafe `as unknown` cast. If re-introduced, it silently adds dead state to every
+     * TestRailItem and re-opens the type-safety hole.
+     */
+    it('does not include a visible property on io items', () => {
       const cases: IOTestCase[] = [
-        { kind: 'io', name: 'visible-case', order: 0 },
+        { kind: 'io', name: 'some-case', order: 0 },
       ];
 
       const items = toTestRailItems(cases);
 
-      expect(items[0].visible).toBe(true);
+      expect(Object.prototype.hasOwnProperty.call(items[0], 'visible')).toBe(false);
+    });
+
+    it('does not include a visible property on pytest items', () => {
+      const cases: IOTestCase[] = [
+        { kind: 'pytest', target_path: 'tests/foo.py::bar', test_code: '' },
+      ];
+
+      const items = toTestRailItems(cases);
+
+      expect(Object.prototype.hasOwnProperty.call(items[0], 'visible')).toBe(false);
     });
   });
 

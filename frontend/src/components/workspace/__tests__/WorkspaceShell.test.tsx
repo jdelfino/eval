@@ -110,7 +110,6 @@ const testItem: TestRailItem = {
   id: 't1',
   name: 'Test 1',
   kind: 'io',
-  visible: true,
   state: 'idle',
   t: '',
 };

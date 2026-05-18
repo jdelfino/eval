@@ -194,7 +194,7 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, testId }: TestR
           gap: 5,
         }}
       >
-        {/* Primary row: dot + name + kind pill + [hidden pill] + time */}
+        {/* Primary row: dot + name + kind pill + time */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span data-testid="state-dot">
             <StateDot state={test.state} />
@@ -216,9 +216,6 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, testId }: TestR
           <Pill tone={KIND_TONE[test.kind]} mono>
             {test.kind}
           </Pill>
-          {!test.visible && (
-            <Pill tone="warn">hidden</Pill>
-          )}
           <span
             style={{
               fontFamily: 'var(--font-mono)',

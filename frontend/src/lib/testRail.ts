@@ -11,7 +11,6 @@ export type TestRailItem = {
   id: string;
   name: string;
   kind: 'io' | 'pytest';
-  visible: boolean;
   state: 'idle' | 'running' | 'pass' | 'fail';
   /** Human-readable elapsed time, e.g. "5ms" or "" when idle */
   t: string;
@@ -64,10 +63,6 @@ export function toTestRailItems(
     const idBase = c.kind === 'io' && c.order !== undefined ? String(c.order) : String(index);
     const id = `${c.kind}-${idBase}-${name}`;
 
-    // Visible flag: some consumers annotate cases with visible for instructor view
-    // IOTestCase doesn't formally carry this field, but callers may extend cases with it.
-    const visible = (c as unknown as Record<string, unknown>)['visible'] !== false;
-
     // Kind-specific preview and state
     if (c.kind === 'io') {
       let state: TestRailItem['state'] = 'idle';
@@ -82,7 +77,6 @@ export function toTestRailItems(
         id,
         name,
         kind: 'io',
-        visible,
         state,
         t,
         io: { stdin: c.input ?? '' },
@@ -101,7 +95,6 @@ export function toTestRailItems(
         id,
         name,
         kind: 'pytest',
-        visible,
         state,
         t,
         pytest: { target: c.target_path },

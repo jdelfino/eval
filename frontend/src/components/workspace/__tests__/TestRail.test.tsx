@@ -15,7 +15,6 @@ import type { TestRailItem } from '@/lib/testRail';
 const makeItem = (overrides: Partial<TestRailItem> & { id: string }): TestRailItem => ({
   name: `Test ${overrides.id}`,
   kind: 'io',
-  visible: true,
   state: 'idle',
   t: '',
   ...overrides,
@@ -59,32 +58,15 @@ describe('TestRail', () => {
     });
   });
 
-  describe('renders hidden pill when item.visible=false', () => {
+  describe('never renders a hidden pill', () => {
     /**
-     * Hidden test cases must display a "hidden" Pill with warn tone so instructors
-     * can distinguish visible tests from hidden ones. Missing this means hidden
-     * tests are indistinguishable from visible ones.
+     * The "hidden" pill has been removed along with the visible field — hidden tests
+     * are not in scope for the redesign. This test guards against accidental re-introduction.
+     * If a "hidden" pill appears for any input, the dead wiring has leaked back in.
      */
-    it('shows hidden pill with warn tone for invisible items', () => {
-      const hiddenItem = makeItem({ id: 'h1', name: 'Hidden test', kind: 'io', visible: false });
-      render(<TestRail tests={[hiddenItem]} />);
-
-      const hiddenPill = screen.getByText('hidden');
-      expect(hiddenPill).toBeInTheDocument();
-    });
-
-    it('does not show hidden pill for visible items', () => {
-      render(<TestRail tests={[ioItem]} />);
+    it('never renders a "hidden" pill for any item', () => {
+      render(<TestRail tests={[ioItem, pytestItem]} />);
       expect(screen.queryByText('hidden')).not.toBeInTheDocument();
-    });
-
-    it('visible=false row has two pills: kind + hidden', () => {
-      const hiddenItem = makeItem({ id: 'h1', name: 'Hidden', kind: 'io', visible: false });
-      render(<TestRail tests={[hiddenItem]} />);
-
-      // Both "io" and "hidden" pills should be present
-      expect(screen.getByText('io')).toBeInTheDocument();
-      expect(screen.getByText('hidden')).toBeInTheDocument();
     });
   });
 
