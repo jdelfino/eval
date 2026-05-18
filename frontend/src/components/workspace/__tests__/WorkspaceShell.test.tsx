@@ -320,4 +320,34 @@ describe('WorkspaceShell', () => {
       expect(called.input).toBe('changed');
     });
   });
+
+  describe('propertiesBar slot', () => {
+    /**
+     * Contract: propertiesBar renders as a row after Ribbon (or skinTopBar) and before the
+     * editor/rail area. This is the slot the author skin uses for ProblemPropertiesBar.
+     * If the slot is not wired, the bar is silently missing from the author workspace.
+     */
+    it('renders propertiesBar slot content when prop provided', () => {
+      render(
+        <WorkspaceShell
+          {...baseProps}
+          problemTitle="Two Sum"
+          statement="stmt"
+          propertiesBar={<div data-testid="properties-bar-slot">properties bar</div>}
+        />
+      );
+      expect(screen.getByTestId('properties-bar-slot')).toBeInTheDocument();
+    });
+
+    it('does not render propertiesBar slot when prop is not provided', () => {
+      render(
+        <WorkspaceShell
+          {...baseProps}
+          problemTitle="Two Sum"
+          statement="stmt"
+        />
+      );
+      expect(screen.queryByTestId('properties-bar-slot')).not.toBeInTheDocument();
+    });
+  });
 });

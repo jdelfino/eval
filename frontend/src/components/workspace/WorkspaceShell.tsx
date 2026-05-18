@@ -58,6 +58,8 @@ export interface WorkspaceShellProps {
   // skin extras
   /** Optional row rendered between Ribbon (or shell top) and the editor/rail area */
   skinTopBar?: React.ReactNode;
+  /** Optional row rendered after skinTopBar and before the editor/rail area (author skin: ProblemPropertiesBar) */
+  propertiesBar?: React.ReactNode;
   /** When true, omits the Ribbon — host page provides its own chrome */
   embedded?: boolean;
 }
@@ -68,10 +70,10 @@ export interface WorkspaceShellProps {
  * WorkspaceShell — unified workspace surface consumed by all four host skins.
  *
  * Layout (non-embedded):
- *   Ribbon → skinTopBar? → [EditorPane (flex:1) | TestRail (340px)] → Drawer
+ *   Ribbon → skinTopBar? → propertiesBar? → [EditorPane (flex:1) | TestRail (340px)] → Drawer
  *
  * Layout (embedded):
- *   skinTopBar? → [EditorPane (flex:1) | TestRail (320px)] → Drawer
+ *   skinTopBar? → propertiesBar? → [EditorPane (flex:1) | TestRail (320px)] → Drawer
  *
  * embedded=true omits the Ribbon; the host page provides its own chrome.
  */
@@ -120,6 +122,7 @@ export default function WorkspaceShell({
 
   // extras
   skinTopBar,
+  propertiesBar,
   embedded = false,
 }: WorkspaceShellProps) {
   // TestRail width: 320px in embedded mode (host provides outer padding), 340px standalone
@@ -150,6 +153,9 @@ export default function WorkspaceShell({
 
       {/* Optional top bar between ribbon and editor (e.g. instructor student-switcher) */}
       {skinTopBar}
+
+      {/* Optional properties bar between skinTopBar and editor (e.g. author ProblemPropertiesBar) */}
+      {propertiesBar}
 
       {/* Main content row: editor + rail side-by-side */}
       <div
