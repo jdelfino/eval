@@ -173,12 +173,17 @@ export default function SessionProblemEditor({
     }
   }, [activeTab, starter_code, solution, language, testCases]);
 
-  const handleRunTest = useCallback(async (testId: string) => {
+  /**
+   * Pure run helper that takes an explicit testCases snapshot.
+   * Both handleRunTest (via current state) and saveAndRun (via newTestCases)
+   * call this to avoid the stale-closure bug (eval-5ez).
+   */
+  const runSingleTest = useCallback(async (testId: string, casesSnapshot: IOTestCase[]) => {
     const codeToRun = activeTab === 'solution' ? solution : starter_code;
-    const items = toTestRailItems(testCases);
+    const items = toTestRailItems(casesSnapshot);
     const idx = items.findIndex((item) => item.id === testId);
     if (idx === -1) return;
-    const singleCase = testCases[idx];
+    const singleCase = casesSnapshot[idx];
     if (!singleCase) return;
 
     setIsRunning(true);
@@ -197,7 +202,11 @@ export default function SessionProblemEditor({
     } finally {
       setIsRunning(false);
     }
-  }, [activeTab, starter_code, solution, language, testCases]);
+  }, [activeTab, starter_code, solution, language]);
+
+  const handleRunTest = useCallback(async (testId: string) => {
+    return runSingleTest(testId, testCases);
+  }, [runSingleTest, testCases]);
 
   const handleDebugTest = useCallback((_testId: string) => {
     // Debug deferred to G3
@@ -312,12 +321,12 @@ export default function SessionProblemEditor({
 
     onUpdateProblem(updatedProblem);
 
-    // Run the updated test
+    // Run the updated test using the fresh newTestCases snapshot (eval-5ez fix)
     const items = toTestRailItems(newTestCases);
     if (items[savedIdx]) {
-      handleRunTest(items[savedIdx].id);
+      runSingleTest(items[savedIdx].id, newTestCases);
     }
-  }, [editingTestIdx, pendingEdit, testCases, initialProblem, title, description, starter_code, solution, language, onUpdateProblem, handleRunTest]);
+  }, [editingTestIdx, pendingEdit, testCases, initialProblem, title, description, starter_code, solution, language, onUpdateProblem, runSingleTest]);
 
   const addNewTest = useCallback((kind: 'io' | 'pytest') => {
     const order = testCases.length;

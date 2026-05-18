@@ -552,4 +552,61 @@ describe('SessionProblemEditor (G2 T6)', () => {
       expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
     });
   });
+
+  // ── eval-5ez regression: stale closure in saveAndRun ─────────────────────────
+  /**
+   * Verifies that Save & run sends the EDITED stdin to executeCode, not the
+   * pre-edit value. The bug: handleRunTest closed over old testCases, so after
+   * setTestCases(newTestCases) the stale closure would run with the original stdin.
+   * Fix: saveAndRun must call the runner with the freshly-built newTestCases snapshot,
+   * bypassing the stale handleRunTest closure.
+   */
+  it('eval-5ez: Save & run passes NEW stdin to executeCode, not the stale pre-edit value', async () => {
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 5, actual: 'new' }],
+    });
+
+    const prob = makeProblem({
+      title: 'T',
+      test_cases: [{ ...MOCK_IO_TEST, input: 'original', name: 't1' }],
+    });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    // Open edit drawer for the io test
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
+    });
+
+    // Simulate user changing stdin from 'original' to 'new'
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'new',
+        expected_output: '42',
+        match_type: 'exact',
+      });
+    });
+
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => expect(executeCode).toHaveBeenCalled());
+
+    // executeCode must be called with the NEW stdin 'new', not the stale 'original'
+    const caseArgs = executeCode.mock.calls[0][2];
+    const cases = caseArgs.cases;
+    expect(cases).toHaveLength(1);
+    // ioTestCasesToCaseDefs is mocked as identity so the raw IOTestCase is passed
+    expect(cases[0].input).toBe('new');
+  });
 });

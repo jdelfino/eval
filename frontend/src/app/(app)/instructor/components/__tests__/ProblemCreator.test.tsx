@@ -462,9 +462,14 @@ describe('ProblemCreator Component (G2 T6)', () => {
     // Drawer should now be in edit-test mode
     expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
 
-    // drawerEdit should be seeded from the pytest test
+    // drawerEdit should be seeded from the pytest test — deep-equal to the seeded mock
     expect(capturedWorkspaceProps.drawerEdit).toBeDefined();
-    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('pytest');
+    expect(capturedWorkspaceProps.drawerEdit).toEqual({
+      kind: 'pytest',
+      name: MOCK_PYTEST_TEST.name,
+      target_path: MOCK_PYTEST_TEST.target_path,
+      test_code: MOCK_PYTEST_TEST.test_code,
+    });
   });
 
   // ── T6 test case 9: Save & run replaces test in array; updateProblem called ───
@@ -888,5 +893,135 @@ describe('ProblemCreator Component (G2 T6)', () => {
 
     const callArgs = createProblem.mock.calls[0][0];
     expect(callArgs.test_cases).toEqual([]);
+  });
+
+  // ── eval-5ez regression: stale closure in saveAndRun ─────────────────────────
+  /**
+   * Verifies that Save & run sends the EDITED stdin to executeCode, not the
+   * pre-edit value. The bug: handleRunTest closed over old testCases, so after
+   * setTestCases(newTestCases) the stale closure would run with the original stdin.
+   * Fix: saveAndRun must call the runner with the freshly-built newTestCases snapshot,
+   * bypassing the stale handleRunTest closure.
+   */
+  it('eval-5ez: Save & run passes NEW stdin to executeCode, not the stale pre-edit value', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 5, actual: 'new' }],
+    });
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [{ ...MOCK_IO_TEST, input: 'original', name: 't1' }],
+    });
+    updateProblem.mockResolvedValue(mockExistingProblem);
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Open edit drawer for the io test
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
+    });
+
+    // Simulate user changing stdin from 'original' to 'new'
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'new',
+        expected_output: '42',
+        match_type: 'exact',
+      });
+    });
+
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => expect(executeCode).toHaveBeenCalled());
+
+    // executeCode must be called with the NEW stdin 'new', not the stale 'original'
+    const caseArgs = executeCode.mock.calls[0][2];
+    const cases = caseArgs.cases;
+    expect(cases).toHaveLength(1);
+    // ioTestCasesToCaseDefs is mocked as identity so the raw IOTestCase is passed
+    expect(cases[0].input).toBe('new');
+  });
+
+  // ── eval-v0c regression: create mode silent return in saveAndRun ──────────────
+  /**
+   * Verifies that in create mode (no problem_id), clicking Save & run in the
+   * drawer flushes the pendingEdit into testCases and closes the drawer.
+   * The bug: saveAndRun returned early when !problem_id, so the edit was lost
+   * and the drawer stayed open. The final handleSubmit would ship the blank placeholder.
+   */
+  it('eval-v0c: create mode Save & run flushes edit into testCases and closes drawer', async () => {
+    const { createProblem } = require('@/lib/api/problems');
+    const { updateProblem } = require('@/lib/api/problems');
+    createProblem.mockResolvedValue({ id: 'problem-new' });
+
+    render(<ProblemCreator />);
+
+    // Add a new IO test in create mode
+    act(() => {
+      capturedWorkspaceProps.onAddTest('io');
+    });
+
+    // Drawer should be open in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+    // Simulate user editing the new test
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 'my-test',
+        input: 'hello',
+        expected_output: 'world',
+        match_type: 'exact',
+      });
+    });
+
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    // (a) Drawer must close — drawerMode back to idle
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('idle');
+
+    // (b) testCases should reflect the edit — visible in tests count
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
+
+    // (c) updateProblem must NOT be called in create mode
+    expect(updateProblem).not.toHaveBeenCalled();
+
+    // (d) On submit, createProblem receives the edited test, not the blank placeholder
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('New Problem');
+    });
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c1',
+        language: 'python',
+        tags: [],
+      });
+    });
+
+    fireEvent.click(screen.getByText('Create Problem'));
+
+    await waitFor(() => expect(createProblem).toHaveBeenCalled());
+
+    const callArgs = createProblem.mock.calls[0][0];
+    expect(callArgs.test_cases).toHaveLength(1);
+    expect(callArgs.test_cases[0].input).toBe('hello');
+    expect(callArgs.test_cases[0].expected_output).toBe('world');
   });
 });
