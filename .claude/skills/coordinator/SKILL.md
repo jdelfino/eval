@@ -123,9 +123,19 @@ Triage the "Concerns" section:
 
 ### 2. Pre-PR Review
 
-Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**.
+Reviews are **optional** for small, isolated changes (single-file fixes, typo corrections, config tweaks). For anything of any complexity — multi-file changes, new features, behavioral changes, refactors — reviews are **required**. The same condition gates the /simplify pass in 2a — skip both together for trivial changes.
 
-After all tasks are merged into the feature branch, run 3 specialized reviews **in parallel** using the Task tool. Each reviewer enters the coordinator's existing worktree (do NOT create a new worktree):
+#### 2a. Cleanup pass (/simplify)
+
+After all tasks are merged into the feature branch, invoke the Claude Code built-in `/simplify` skill via the Skill tool (`skill: "simplify"`). It spawns 3 parallel agents (reuse / quality / efficiency) over the changed files and **auto-commits** cleanup fixes directly to the feature branch.
+
+`/simplify` is bundled with Claude Code — there is no repo-local SKILL.md for it. Do not try to read it from `.claude/skills/`.
+
+Rationale: running the cleanup pass before the specialized reviewers means they assess post-cleanup code instead of wasting cycles on cruft `/simplify` already removed. Auto-fix is safe here — the 3 specialized reviewers in 2b inspect the post-cleanup diff, and the user inspects the final PR diff before merge.
+
+#### 2b. Specialized reviews
+
+After `/simplify` has committed its cleanup, run 3 specialized reviews **in parallel** using the Task tool. Each reviewer enters the coordinator's existing worktree (do NOT create a new worktree):
 
 **Correctness Reviewer:**
 ```
@@ -257,6 +267,7 @@ export GH_TOKEN=$(cat /workspaces/eval/.gh-app-token)
 - Creating a new branch/PR for a fix that belongs on an existing feature branch
 - Starting dependent task before blocker is closed
 - Creating PR before running specialized reviews
+- Skipping `/simplify` before reviewers — they should see post-cleanup code (only skip when the whole review gate is skipped for a trivial change)
 - Creating PR with failing tests
 - Shipping known bugs as follow-up issues — bugs introduced by the current work must be fixed before the PR ships
 - Merging PRs (that's `/merge`'s job)
