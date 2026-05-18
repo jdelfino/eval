@@ -51,6 +51,7 @@ export default function ProblemCreator({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [statementPreview, setStatementPreview] = useState(true);
+  const [ribbonOpen, setRibbonOpen] = useState(false);
   const [starter_code, setStarterCode] = useState('');
   const [solution, setSolution] = useState('');
   const [language, setLanguage] = useState<'python' | 'java'>('python');
@@ -585,12 +586,16 @@ export default function ProblemCreator({
       {!isLoading && (
         <WorkspaceShell
           embedded={true}
-          // Ribbon — editable title (shown via WorkspaceShell even though embedded,
-          // because the Ribbon is inside WorkspaceShell in non-embedded mode only;
-          // we wire the title via ribbonEditable + problemTitle)
+          // Ribbon — author hosts opt in via ribbonEditable so the Ribbon
+          // renders even in embedded mode (eval-af7). Expand body shows the
+          // rendered markdown statement; statement.md editor tab shows the
+          // raw source.
           ribbonEditable={true}
           problemTitle={title}
           onTitleChange={(t) => setTitle(t)}
+          statement={description}
+          ribbonOpen={ribbonOpen}
+          onToggleRibbon={() => setRibbonOpen((o) => !o)}
           // Editor
           editorTabs={editorTabs}
           activeTabId={activeTab}

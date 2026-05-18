@@ -110,6 +110,16 @@ test.describe('Problem Management', () => {
     // Wait for the problem to load (Monaco is ready when the problem loads)
     await waitForMonacoReady(page);
 
+    // G2: Edit the title via the Ribbon click-to-edit affordance (compact mode
+    // in the embedded ProblemCreator host — eval-af7 fix).
+    const titleWrapper = page.getByTestId('ribbon-title-wrapper');
+    await expect(titleWrapper).toContainText(`E2E Problem ${testNamespace}`);
+    await titleWrapper.click();
+    const titleInput = page.getByRole('textbox', { name: /edit title/i });
+    await titleInput.fill(`E2E Problem ${testNamespace} (edited)`);
+    await titleInput.press('Enter');
+    await expect(page.getByTestId('ribbon-title-wrapper')).toContainText(`E2E Problem ${testNamespace} (edited)`);
+
     // G2: Switch to solution tab and add solution code
     // (EditorPane renders tabs as <button> with data-testid="editor-tab-{id}")
     const solutionTab = page.locator('[data-testid="editor-tab-solution"]');
@@ -126,15 +136,15 @@ test.describe('Problem Management', () => {
     // After update, return to the Problem Library
     await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 15000 });
 
-    // The original title should still be visible in the list
+    // The edited title should now be visible in the list
     await expect(
-      page.locator(`h3:has-text("E2E Problem ${testNamespace}")`)
+      page.locator(`h3:has-text("E2E Problem ${testNamespace} (edited)")`)
     ).toBeVisible({ timeout: 10000 });
 
     // ===== PHASE 3: DELETE THE PROBLEM =====
-    // Locate the Delete button scoped to the card
+    // Locate the Delete button scoped to the card (matches by edited title)
     const deleteButton = page
-      .locator(`div:has(h3:has-text("E2E Problem ${testNamespace}")) button:has-text("Delete")`)
+      .locator(`div:has(h3:has-text("E2E Problem ${testNamespace} (edited)")) button:has-text("Delete")`)
       .first();
     await expect(deleteButton).toBeVisible();
     await deleteButton.click();
@@ -144,9 +154,9 @@ test.describe('Problem Management', () => {
     await expect(confirmButton).toBeVisible();
     await confirmButton.click();
 
-    // The problem should be removed from the list
+    // The problem should be removed from the list (edited title is gone)
     await expect(
-      page.locator(`h3:has-text("E2E Problem ${testNamespace}")`)
+      page.locator(`h3:has-text("E2E Problem ${testNamespace} (edited)")`)
     ).not.toBeVisible({ timeout: 10000 });
 
     // The library may show the empty state (since we created exactly one problem)

@@ -15,16 +15,32 @@ import type { TestRailItem } from '@/lib/testRail';
 
 // Mock sub-components so tests focus on composition logic, not sub-component rendering
 jest.mock('../Ribbon', () => ({
-  Ribbon: ({ open, onToggle, title, meta, body }: {
+  Ribbon: ({ open, onToggle, title, meta, body, editable, onTitleChange }: {
     open: boolean;
     onToggle: () => void;
     title: string;
     meta?: string;
     body: string;
+    editable?: boolean;
+    onTitleChange?: (t: string) => void;
   }) => (
-    <div data-testid="ribbon" data-open={String(open)} data-title={title} data-meta={meta || ''}>
+    <div
+      data-testid="ribbon"
+      data-open={String(open)}
+      data-title={title}
+      data-meta={meta || ''}
+      data-editable={String(!!editable)}
+    >
       <button onClick={onToggle}>toggle</button>
       <span>{body}</span>
+      {editable && (
+        <button
+          data-testid="ribbon-edit-trigger"
+          onClick={() => onTitleChange?.('Edited Title')}
+        >
+          edit-title
+        </button>
+      )}
     </div>
   ),
 }));
@@ -177,7 +193,7 @@ describe('WorkspaceShell', () => {
      * EditorPane + TestRail + Drawer must still be present. TestRail gets width 320px in embedded
      * mode vs 340px otherwise. Regressions break every embedded consumer (instructor, author surfaces).
      */
-    it('omits Ribbon when embedded=true', () => {
+    it('omits Ribbon when embedded=true and ribbonEditable is not set', () => {
       render(
         <WorkspaceShell
           {...baseProps}
@@ -199,6 +215,42 @@ describe('WorkspaceShell', () => {
       expect(screen.getByTestId('editor-pane')).toBeInTheDocument();
       expect(screen.getByTestId('test-rail')).toBeInTheDocument();
       expect(screen.getByTestId('drawer')).toBeInTheDocument();
+    });
+
+    /**
+     * Contract: embedded hosts that pass ribbonEditable=true (author skin via
+     * ProblemCreator / SessionProblemEditor) must still render the Ribbon so
+     * the click-to-edit title is reachable. Without this gate, eval-af7 returns
+     * — the editable-title prop is wired but never visible.
+     */
+    it('renders editable Ribbon when embedded=true AND ribbonEditable=true', () => {
+      render(
+        <WorkspaceShell
+          {...baseProps}
+          embedded={true}
+          problemTitle="Two Sum"
+          ribbonEditable
+          onTitleChange={jest.fn()}
+        />
+      );
+      const ribbon = screen.getByTestId('ribbon');
+      expect(ribbon).toHaveAttribute('data-title', 'Two Sum');
+      expect(ribbon).toHaveAttribute('data-editable', 'true');
+    });
+
+    it('Ribbon onTitleChange threads back through WorkspaceShell.onTitleChange in embedded+editable', () => {
+      const onTitleChange = jest.fn();
+      render(
+        <WorkspaceShell
+          {...baseProps}
+          embedded={true}
+          problemTitle="Old"
+          ribbonEditable
+          onTitleChange={onTitleChange}
+        />
+      );
+      screen.getByTestId('ribbon-edit-trigger').click();
+      expect(onTitleChange).toHaveBeenCalledWith('Edited Title');
     });
   });
 

@@ -164,8 +164,18 @@ export default function WorkspaceShell({
         color: 'var(--fg)',
       }}
     >
-      {/* Ribbon — only in non-embedded mode */}
-      {!embedded && (
+      {/* Ribbon —
+       *  - Non-embedded: rendered (host doesn't provide its own ribbon).
+       *  - Embedded + ribbonEditable: still rendered so author hosts can
+       *    expose the editable-title affordance (eval-af7).
+       *  - Embedded without ribbonEditable: omitted (host fully owns chrome).
+       *
+       *  The Ribbon's expand body (markdown preview of the statement) renders
+       *  the same content that the statement.md editor tab edits in author
+       *  hosts. That duplication is by design — the Ribbon body is rendered
+       *  markdown (preview), the editor tab is raw markdown (source).
+       */}
+      {(!embedded || ribbonEditable) && (
         <Ribbon
           open={ribbonOpen}
           onToggle={onToggleRibbon ?? (() => {})}

@@ -1,32 +1,24 @@
 /**
  * Author Flow E2E Spec — G2 author-skin redesign
  *
- * Covers the full author journey using all four new G2 chrome surfaces:
- *   1. ProblemPropertiesBar — Class chip, Language chip, tag adder
- *   2. statement.md Monaco tab — Edit/Preview toggle, markdown content
- *   3. Split-button add-test row — "Add IO test" main button, "▾" caret → Pytest test
- *   4. Edit-test drawer — IO and Pytest editors, Save & run, Cancel
+ * Covers the full author journey using all five new G2 chrome surfaces:
+ *   1. Ribbon click-to-edit title (compact mode in embedded hosts — eval-af7)
+ *   2. ProblemPropertiesBar — Class chip, Language chip, tag adder
+ *   3. statement.md Monaco tab — Edit/Preview toggle, markdown content
+ *   4. Split-button add-test row — "Add IO test" main button, "▾" caret → Pytest test
+ *   5. Edit-test drawer — IO and Pytest editors, Save & run, Cancel
  *
- * NOTE — Ribbon click-to-edit title (the fourth G2 surface):
- *   ProblemCreator uses `embedded=true` which skips the Ribbon in WorkspaceShell.
- *   The `ribbonEditable` prop is wired through ProblemCreator → WorkspaceShell but
- *   the Ribbon is not rendered, so there is no click-to-edit title visible in the UI.
- *   The problem title is set via createProblem() API in test setup and verified via
- *   the "Edit Problem" page heading (static) + round-trip assertion on saved data.
- *   This gap should be addressed in a follow-up (fix WorkspaceShell embedded mode to
- *   show the editable title even in embedded=true, or move ProblemCreator to non-embedded).
+ * The problem is created with a placeholder title via API so the class can be
+ * pre-attached (the chrome doesn't expose class editing during create — that
+ * lives in the library list page). The Ribbon's click-to-edit title is then
+ * driven from the UI to verify the affordance is reachable AND functional.
  *
  * Affected existing specs (G2 chrome audit):
  *   problem-management.spec.ts — references deleted form-bar element IDs
  *     (select#problem-class, input#problem-tags, input#problem-title,
  *     textarea#problem-description). Flow replaced by this spec; existing spec is
- *     re-selectored below to use new G2 chrome.
+ *     re-selectored below to use new G2 chrome (including Ribbon title edit).
  *   No references to "Generate Solution" found in e2e/ specs (already out-of-scope).
- *
- * Verification gates:
- *   1. author-flow.spec.ts runs locally with all 7 steps passing.
- *   2. `git grep -nE "problem-title|problem-description|problem-class|problem-language|problem-tags" frontend/e2e/` → 0 results.
- *   3. `git grep -nE "Generate Solution" frontend/e2e/` → 0 results.
  */
 
 import { test, expect } from './fixtures/test-fixture';
@@ -62,10 +54,12 @@ test('author full flow: create, add tests of both kinds, edit, persist round-tri
   const instructor = await setupInstructor();
   const cls = await createClass(instructor.token, `Author Flow Class ${testNamespace}`);
 
-  // Create a problem with a title via API — avoids the embedded-mode ribbon gap
-  // (see NOTE in file header). Class is set via API so the form can be saved.
+  // Create the problem with a placeholder title via API. The class must be set
+  // at create time (no UI affordance to attach class after the fact in the
+  // editor). The real title is then set via the Ribbon click-to-edit affordance
+  // below to exercise that surface.
   const problem = await createProblem(instructor.token, cls.id, {
-    title: 'Two Sum',
+    title: 'placeholder-title',
     description: '',
     language: 'python',
     starterCode: '# starter',
@@ -77,6 +71,23 @@ test('author full flow: create, add tests of both kinds, edit, persist round-tri
 
   // Wait for the editor to load
   await expect(page.locator('h2:has-text("Edit Problem")')).toBeVisible({ timeout: 15000 });
+
+  // ── STEP 0: Edit the title via Ribbon click-to-edit ───────────────────────
+  await test.step('0. Edit problem title via Ribbon', async () => {
+    // The compact Ribbon renders the editable title row in embedded hosts.
+    const titleWrapper = page.getByTestId('ribbon-title-wrapper');
+    await expect(titleWrapper).toBeVisible();
+    await expect(titleWrapper).toContainText('placeholder-title');
+    await titleWrapper.click();
+
+    const titleInput = page.getByRole('textbox', { name: /edit title/i });
+    await expect(titleInput).toBeVisible();
+    await titleInput.fill('Two Sum');
+    await titleInput.press('Enter');
+
+    // After commit the display reverts to span; title should reflect new value
+    await expect(page.getByTestId('ribbon-title-wrapper')).toContainText('Two Sum');
+  });
 
   // ── STEP 1: Set chrome fields (PropertiesBar + statement.md tab) ──────────
   await test.step('1. Set PropertiesBar fields: Language + tags', async () => {
@@ -201,6 +212,9 @@ test('author full flow: create, add tests of both kinds, edit, persist round-tri
 
     // Wait for Monaco to be ready (starter code tab is default)
     await waitForMonacoReady(page);
+
+    // Verify the Ribbon title round-tripped from the click-to-edit step above
+    await expect(page.getByTestId('ribbon-title-wrapper')).toContainText('Two Sum');
 
     // Verify language chip shows Java 21
     await expect(page.locator('button:has(span:text-is("LANGUAGE"))')).toContainText('Java 21');

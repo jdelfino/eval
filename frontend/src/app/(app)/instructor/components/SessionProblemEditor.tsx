@@ -42,6 +42,7 @@ export default function SessionProblemEditor({
   const [title, setTitle] = useState(initialProblem?.title || '');
   const [description, setDescription] = useState(initialProblem?.description || '');
   const [statementPreview, setStatementPreview] = useState(true);
+  const [ribbonOpen, setRibbonOpen] = useState(false);
   const [starter_code, setStarterCode] = useState(initialProblem?.starter_code || '');
   const initialSolution = useMemo(() => initialProblem?.solution ?? '', [initialProblem]);
   const [solution, setSolution] = useState<string>(initialSolution);
@@ -572,10 +573,14 @@ export default function SessionProblemEditor({
       {/* WorkspaceShell — embedded, G2 author mode */}
       <WorkspaceShell
         embedded={true}
-        // Ribbon — editable title
+        // Ribbon — author hosts opt in via ribbonEditable so the Ribbon
+        // renders even in embedded mode (eval-af7).
         ribbonEditable={true}
         problemTitle={title}
         onTitleChange={(t) => setTitle(t)}
+        statement={description}
+        ribbonOpen={ribbonOpen}
+        onToggleRibbon={() => setRibbonOpen((o) => !o)}
         // Editor
         editorTabs={editorTabs}
         activeTabId={activeTab}
