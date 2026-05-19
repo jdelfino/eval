@@ -1,7 +1,7 @@
 /**
  * Privacy Policy Page
  *
- * Static page displaying the privacy policy for Code Classroom.
+ * Static page displaying the privacy policy for Eval.
  */
 
 import React from 'react';
@@ -9,11 +9,11 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - Code Classroom',
-  description: 'Privacy Policy for Code Classroom educational coding platform',
+  title: 'Privacy Policy - Eval',
+  description: 'Privacy Policy for Eval educational coding platform',
 };
 
-const CONTACT_EMAIL = 'jdelfino@gmail.com';
+const CONTACT_EMAIL = 'joe@delquillan.com';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -50,7 +50,7 @@ export default function PrivacyPolicyPage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Introduction</h2>
             <p className="text-gray-600 mb-4">
-              Code Classroom (&quot;we,&quot; &quot;our,&quot; or &quot;the Service&quot;) is an
+              Eval (&quot;we,&quot; &quot;our,&quot; or &quot;the Service&quot;) is an
               educational coding platform. This Privacy Policy explains what we collect, how we
               use it, and what we don&apos;t do with it. We&apos;ve kept this short and specific
               on purpose.
@@ -216,7 +216,7 @@ export default function PrivacyPolicyPage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">9. Children&apos;s Privacy</h2>
             <p className="text-gray-600 mb-4">
-              Code Classroom is designed for educational use. We do not knowingly collect personal
+              Eval is designed for educational use. We do not knowingly collect personal
               information from children under 13 without parental consent.
             </p>
           </section>

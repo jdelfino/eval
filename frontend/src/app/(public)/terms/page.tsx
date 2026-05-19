@@ -1,7 +1,7 @@
 /**
  * Terms of Service Page
  *
- * Static page displaying the terms of service for Code Classroom.
+ * Static page displaying the terms of service for Eval.
  */
 
 import React from 'react';
@@ -9,8 +9,8 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service - Code Classroom',
-  description: 'Terms of Service for Code Classroom educational coding platform',
+  title: 'Terms of Service - Eval',
+  description: 'Terms of Service for Eval educational coding platform',
 };
 
 export default function TermsOfServicePage() {
@@ -48,7 +48,7 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Acceptance of Terms</h2>
             <p className="text-gray-600 mb-4">
-              By accessing or using Code Classroom (&quot;the Service&quot;), you agree to be bound by these
+              By accessing or using Eval (&quot;the Service&quot;), you agree to be bound by these
               Terms of Service. If you do not agree to these terms, please do not use the Service.
             </p>
           </section>
@@ -56,7 +56,7 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">2. Description of Service</h2>
             <p className="text-gray-600 mb-4">
-              Code Classroom is an educational platform that provides real-time coding instruction
+              Eval is an educational platform that provides real-time coding instruction
               tools. The Service allows instructors to create coding sessions, students to write
               and execute code, and enables real-time monitoring of student progress.
             </p>
@@ -107,7 +107,7 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">6. Educational Use</h2>
             <p className="text-gray-600 mb-4">
-              Code Classroom is designed for educational purposes. Instructors and administrators
+              Eval is designed for educational purposes. Instructors and administrators
               are responsible for ensuring appropriate use within their classes and organizations.
               Student data and code submissions may be visible to instructors and administrators
               within the same educational context.
@@ -164,10 +164,10 @@ export default function TermsOfServicePage() {
             <p className="text-gray-600 mb-4">
               Questions about these Terms of Service? Email{' '}
               <a
-                href="mailto:jdelfino@gmail.com"
+                href="mailto:joe@delquillan.com"
                 className="text-indigo-600 hover:text-indigo-500"
               >
-                jdelfino@gmail.com
+                joe@delquillan.com
               </a>
               .
             </p>

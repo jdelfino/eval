@@ -200,7 +200,7 @@ export default function Home() {
               margin: '0 0 0.5rem',
             }}
           >
-            Code Classroom
+            Eval
           </h1>
           <p
             style={{

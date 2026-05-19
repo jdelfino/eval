@@ -12,7 +12,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import PrivacyPolicyPage from '../page';
 
-const CONTACT_EMAIL = 'jdelfino@gmail.com';
+const CONTACT_EMAIL = 'joe@delquillan.com';
 
 describe('Privacy Policy Page', () => {
   describe('Page Rendering', () => {
@@ -28,7 +28,7 @@ describe('Privacy Policy Page', () => {
       expect(screen.getByText(/last updated:/i)).toBeInTheDocument();
     });
 
-    it('renders the Code Classroom logo link to home', () => {
+    it('renders the Eval logo link to home', () => {
       render(<PrivacyPolicyPage />);
 
       const allLinks = screen.getAllByRole('link');
@@ -228,10 +228,10 @@ describe('Privacy Policy Page', () => {
   });
 
   describe('Content Details', () => {
-    it('mentions Code Classroom as the service', () => {
+    it('mentions Eval as the service', () => {
       render(<PrivacyPolicyPage />);
 
-      const elements = screen.getAllByText(/code classroom/i);
+      const elements = screen.getAllByText(/\beval\b/i);
       expect(elements.length).toBeGreaterThan(0);
     });
 

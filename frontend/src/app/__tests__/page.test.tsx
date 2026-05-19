@@ -97,7 +97,7 @@ describe('Landing Page', () => {
     it('shows join code input for unauthenticated users', () => {
       render(<Home />);
 
-      expect(screen.getByText('Code Classroom')).toBeInTheDocument();
+      expect(screen.getByText('Eval')).toBeInTheDocument();
       expect(screen.getByText('Enter your section code to get started')).toBeInTheDocument();
       expect(screen.getByLabelText('Section Join Code')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('ABC-123')).toBeInTheDocument();
