@@ -162,8 +162,14 @@ export default function TermsOfServicePage() {
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">12. Contact</h2>
             <p className="text-gray-600 mb-4">
-              If you have questions about these Terms of Service, please contact your
-              institution&apos;s administrator or the platform administrators.
+              Questions about these Terms of Service? Email{' '}
+              <a
+                href="mailto:jdelfino@gmail.com"
+                className="text-indigo-600 hover:text-indigo-500"
+              >
+                jdelfino@gmail.com
+              </a>
+              .
             </p>
           </section>
         </div>
