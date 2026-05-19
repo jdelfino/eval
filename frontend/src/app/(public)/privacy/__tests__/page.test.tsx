@@ -5,11 +5,14 @@
  * - Page renders with correct heading and content sections
  * - Navigation links are present and correct
  * - Key privacy sections are displayed
+ * - Privacy-friendly assertions (no password references, named sub-processors, direct contact email)
  */
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import PrivacyPolicyPage from '../page';
+
+const CONTACT_EMAIL = 'joe@delquillan.com';
 
 describe('Privacy Policy Page', () => {
   describe('Page Rendering', () => {
@@ -25,7 +28,7 @@ describe('Privacy Policy Page', () => {
       expect(screen.getByText(/last updated:/i)).toBeInTheDocument();
     });
 
-    it('renders the Code Classroom logo link to home', () => {
+    it('renders the Eval logo link to home', () => {
       render(<PrivacyPolicyPage />);
 
       const allLinks = screen.getAllByRole('link');
@@ -41,64 +44,70 @@ describe('Privacy Policy Page', () => {
       expect(screen.getByRole('heading', { level: 2, name: /1\. introduction/i })).toBeInTheDocument();
     });
 
+    it('renders What We Don\'t Do section', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getByRole('heading', { level: 2, name: /2\. what we don't do/i })).toBeInTheDocument();
+    });
+
     it('renders Information We Collect section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /2\. information we collect/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /3\. information we collect/i })).toBeInTheDocument();
     });
 
     it('renders How We Use Your Information section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /3\. how we use your information/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /4\. how we use your information/i })).toBeInTheDocument();
     });
 
-    it('renders Information Sharing section', () => {
+    it('renders How We Share Information section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /4\. information sharing/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /5\. how we share information/i })).toBeInTheDocument();
     });
 
     it('renders Data Security section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /5\. data security/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /6\. data security/i })).toBeInTheDocument();
     });
 
     it('renders Data Retention section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /6\. data retention/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /7\. data retention/i })).toBeInTheDocument();
     });
 
     it('renders Your Rights section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /7\. your rights/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /8\. your rights/i })).toBeInTheDocument();
     });
 
     it('renders Children\'s Privacy section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /8\. children's privacy/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /9\. children's privacy/i })).toBeInTheDocument();
     });
 
-    it('renders Cookies and Tracking section', () => {
+    it('renders Cookies section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /9\. cookies and tracking/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /10\. cookies/i })).toBeInTheDocument();
     });
 
     it('renders Changes to This Policy section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /10\. changes to this policy/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /11\. changes to this policy/i })).toBeInTheDocument();
     });
 
     it('renders Contact Us section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 2, name: /11\. contact us/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /12\. contact us/i })).toBeInTheDocument();
     });
   });
 
@@ -115,22 +124,22 @@ describe('Privacy Policy Page', () => {
       expect(screen.getByRole('heading', { level: 3, name: /educational data/i })).toBeInTheDocument();
     });
 
-    it('renders Usage Data sub-section', () => {
+    it('renders Server Logs sub-section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 3, name: /usage data/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: /server logs/i })).toBeInTheDocument();
     });
 
-    it('renders Within Educational Context sub-section', () => {
+    it('renders Within Your Class sub-section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 3, name: /within educational context/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: /within your class/i })).toBeInTheDocument();
     });
 
-    it('renders Service Providers sub-section', () => {
+    it('renders Infrastructure Providers sub-section', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByRole('heading', { level: 3, name: /service providers/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: /infrastructure providers/i })).toBeInTheDocument();
     });
 
     it('renders Legal Requirements sub-section', () => {
@@ -156,25 +165,79 @@ describe('Privacy Policy Page', () => {
     });
   });
 
-  describe('Content Details', () => {
-    it('mentions Code Classroom as the service', () => {
+  describe('Privacy-friendly content', () => {
+    it('does not reference passwords (password login is internal-only)', () => {
       render(<PrivacyPolicyPage />);
 
-      // Multiple mentions of Code Classroom in the document
-      const elements = screen.getAllByText(/code classroom/i);
-      expect(elements.length).toBeGreaterThan(0);
+      expect(screen.queryByText(/password/i)).not.toBeInTheDocument();
     });
 
-    it('describes commitment to protecting privacy', () => {
+    it('names Google Cloud Platform as an infrastructure provider', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByText(/committed to protecting your privacy/i)).toBeInTheDocument();
+      expect(screen.getByText(/Google Cloud Platform/)).toBeInTheDocument();
+    });
+
+    it('names Firebase Authentication as an infrastructure provider', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getByText(/Firebase Authentication/)).toBeInTheDocument();
+    });
+
+    it('explicitly states no third-party analytics', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getAllByText(/third-party analytics/i).length).toBeGreaterThan(0);
+    });
+
+    it('explicitly states data is not sold, rented, or traded', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getByText(/don't sell, rent, or trade your data/i)).toBeInTheDocument();
+    });
+
+    it('describes Centrifugo as self-hosted (real-time stays in GCP perimeter)', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getByText(/Centrifugo/)).toBeInTheDocument();
+      expect(screen.getByText(/does not leave the Google Cloud perimeter/i)).toBeInTheDocument();
+    });
+
+    it('mentions one session cookie (not generic "essential cookies")', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.getByText(/one session cookie/i)).toBeInTheDocument();
+    });
+
+    it('does not direct users to an institution administrator', () => {
+      render(<PrivacyPolicyPage />);
+
+      expect(screen.queryByText(/institution's administrator/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/institution administrator/i)).not.toBeInTheDocument();
+    });
+
+    it('provides the site administrator contact email for privacy requests', () => {
+      render(<PrivacyPolicyPage />);
+
+      const emailLinks = screen.getAllByRole('link', { name: CONTACT_EMAIL });
+      expect(emailLinks.length).toBeGreaterThan(0);
+      emailLinks.forEach(link => {
+        expect(link).toHaveAttribute('href', `mailto:${CONTACT_EMAIL}`);
+      });
+    });
+  });
+
+  describe('Content Details', () => {
+    it('mentions Eval as the service', () => {
+      render(<PrivacyPolicyPage />);
+
+      const elements = screen.getAllByText(/\beval\b/i);
+      expect(elements.length).toBeGreaterThan(0);
     });
 
     it('mentions email address collection', () => {
       render(<PrivacyPolicyPage />);
 
-      // Multiple mentions of email address
       const elements = screen.getAllByText(/email address/i);
       expect(elements.length).toBeGreaterThan(0);
     });
@@ -185,22 +248,10 @@ describe('Privacy Policy Page', () => {
       expect(screen.getByText(/code submissions and revisions/i)).toBeInTheDocument();
     });
 
-    it('mentions encryption for data security', () => {
+    it('mentions HTTPS encryption for data in transit', () => {
       render(<PrivacyPolicyPage />);
 
-      expect(screen.getByText(/encryption of data in transit/i)).toBeInTheDocument();
-    });
-
-    it('mentions essential cookies usage', () => {
-      render(<PrivacyPolicyPage />);
-
-      expect(screen.getByText(/essential cookies/i)).toBeInTheDocument();
-    });
-
-    it('does not mention advertising tracking', () => {
-      render(<PrivacyPolicyPage />);
-
-      expect(screen.getByText(/do not use tracking cookies for advertising/i)).toBeInTheDocument();
+      expect(screen.getByText(/encrypted in transit/i)).toBeInTheDocument();
     });
   });
 });
