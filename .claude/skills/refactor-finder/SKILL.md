@@ -29,7 +29,7 @@ Run a cheap, whole-codebase signal pass to identify candidate areas. If invoked 
 
 **File size outliers** — surface files in the top percentile by LOC:
 ```bash
-find . -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.py" | \
+find . \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.py" \) | \
   xargs wc -l 2>/dev/null | sort -rn | head -30
 ```
 
@@ -38,7 +38,7 @@ find . -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.py" | \
 # Go: count top-level func declarations per file
 find . -name "*.go" | xargs grep -c "^func " 2>/dev/null | sort -t: -k2 -rn | head -20
 # TS/TSX: count function/class/const exports per file
-find . -name "*.ts" -o -name "*.tsx" | xargs grep -c "^export " 2>/dev/null | sort -t: -k2 -rn | head -20
+find . \( -name "*.ts" -o -name "*.tsx" \) | xargs grep -c "^export " 2>/dev/null | sort -t: -k2 -rn | head -20
 ```
 
 **Git churn** — frequently modified files are hot spots for complexity:
@@ -90,10 +90,12 @@ If the result is non-empty, take the first issue's ID and fetch its notes:
 bd show <log-id> --json
 ```
 
-Parse the `notes` field line-by-line. Each line has the format:
+Parse the `notes` field line-by-line. Each line uses the key=value format:
 ```
-<area> scanned <YYYY-MM-DD>, <N findings filed of K surfaced>
+area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>
 ```
+
+Read key=value pairs from each line (split on spaces, then on `=`). The `area` value is the normalized slug (see Phase 4 normalization rule). To recover the original path for display, apply the inverse: replace `-` with `/` in the slug — or do prefix-matching on the slug form if exact round-trip isn't needed.
 
 ### Query open findings
 
@@ -101,7 +103,7 @@ Parse the `notes` field line-by-line. Each line has the format:
 bd list --label refactor-finder --status open --json
 ```
 
-Extract which areas already have open findings.
+Each result's `labels` array contains an `area:<slug>` entry (added by Phase 4 at filing time). Extract those `area:` slugs to build the set of areas with open findings, then filter Phase 1 candidates against that set.
 
 ### Filter candidates
 
@@ -123,6 +125,8 @@ Ask the user to pick 1-2 areas to deep-dive. Do NOT proceed to Phase 3 without u
 ## Phase 3 — Deep-dive (3 parallel sub-scanners)
 
 Spawn 3 parallel subagents via the Task/Agent tool. Use **inline ROLE prompt blocks** — do NOT use a `SKILL:` reference. Sub-scanners have no separate SKILL.md files; inline prompts are the right level of abstraction here (mirrors the three-reviewer parallel block in coordinator/SKILL.md).
+
+**Spawn parameters:** When spawning each sub-scanner, use `subagent_type=general-purpose`, `model=sonnet`, and do NOT set `isolation` — the scanners read files and need to see the same working tree as the parent.
 
 Run all three in parallel (one Task call per scanner):
 
@@ -237,18 +241,22 @@ Present findings in batches using AskUserQuestion (max 4 per call), or present a
 ```bash
 bd create --title="<concise summary>" \
   --description="<full finding details + suggested fix, self-contained per CLAUDE.md issue-writing standard>" \
-  --type=task --priority=3 --labels refactor-finder --json
+  --type=task --priority=3 --labels refactor-finder,area:<normalized-area-slug> --json
 ```
 
 The description must be self-contained: 1-2 sentence summary (what + why), exact file paths, numbered implementation steps, before→after example when applicable.
+
+**Area slug normalization rule:** replace `/` with `-` in the area path (e.g., `go-backend/store` → `area:go-backend-store`). Labels must be slug-safe (no slashes).
 
 ### Filing an epic finding
 
 ```bash
 bd create --title="<concise summary>" \
   --description="<rationale + key files affected + 'For full implementation plan, run /plan <this-epic-id> in a fresh session.'>" \
-  --type=epic --priority=2 --labels refactor-finder --json
+  --type=epic --priority=2 --labels refactor-finder,area:<normalized-area-slug> --json
 ```
+
+Apply the same area slug normalization rule as for task findings above.
 
 ---
 
@@ -262,7 +270,7 @@ Create the scan-log issue:
 
 ```bash
 bd create --title="refactor-finder scan log" \
-  --description="Persistent log of areas scanned by /refactor-finder. Used by the skill in Phase 2 to avoid re-scanning recently-covered ground. Each line of notes is one scan entry: '<area> scanned <YYYY-MM-DD>, <N findings filed of K surfaced>'." \
+  --description="Persistent log of areas scanned by /refactor-finder. Used by the skill in Phase 2 to avoid re-scanning recently-covered ground. Each line of notes is one scan entry with key=value pairs: 'area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>'." \
   --type=task --priority=4 --labels refactor-finder-log --json
 ```
 
@@ -271,7 +279,7 @@ Save the returned ID as `<log-id>`.
 ### Every run (append to existing log)
 
 ```bash
-bd note <log-id> "<area> scanned <YYYY-MM-DD>, <N findings filed of K surfaced>"
+bd note <log-id> "area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>"
 ```
 
 `bd note` appends to the notes field (it is shorthand for `bd update --append-notes`). Do NOT use `bd update <log-id> --notes "..."` — that flag **replaces** the entire notes field and would erase prior scan history.
