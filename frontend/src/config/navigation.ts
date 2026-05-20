@@ -16,6 +16,14 @@ export enum NavGroup {
   System = 'system',
 }
 
+/** Display label for each nav group. */
+export const GROUP_LABELS: Record<NavGroup, string> = {
+  [NavGroup.Main]: 'Main',
+  [NavGroup.Teaching]: 'Teaching',
+  [NavGroup.Admin]: 'Admin',
+  [NavGroup.System]: 'System',
+};
+
 /** Navigation item configuration */
 export interface NavItem {
   id: string;
@@ -120,6 +128,27 @@ export function getNavItemsForRole(role: string): NavItem[] {
   }
 
   return NAV_ITEMS.filter(item => item.roles.includes(role as UserRole));
+}
+
+/**
+ * Check if a nav item's href matches the current pathname.
+ * Matches exact path or child paths, but not if another nav item is a more specific match.
+ */
+export function isPathActive(href: string, pathname: string): boolean {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href !== '/' && pathname.startsWith(href + '/')) {
+    const moreSpecificMatch = NAV_ITEMS.some(item =>
+      item.href !== href &&
+      item.href.startsWith(href + '/') &&
+      (pathname === item.href || pathname.startsWith(item.href + '/'))
+    );
+    return !moreSpecificMatch;
+  }
+
+  return false;
 }
 
 /**

@@ -1,9 +1,8 @@
 'use client';
 
 /**
- * AppBarLite — v4 slim application bar.
- * 40px height. Breadcrumb on left; right side intentionally empty.
- * ConnectionDot lives per-page (T2); Search + Bell killed in G6 plan.
+ * AppBarLite — 40px slim application bar with breadcrumb on the left.
+ * Per-page connection indicators render in page content, not here.
  */
 
 import { PageBreadcrumb } from './PageBreadcrumb';
@@ -28,7 +27,6 @@ export function AppBarLite() {
     >
       <PageBreadcrumb />
       <div style={{ flex: 1 }} />
-      {/* Right side intentionally empty: ConnectionDot lives per-page (T2); Search + Bell killed in G6 plan */}
     </header>
   );
 }

@@ -1,7 +1,6 @@
 import React from 'react';
 
-// Hand-rolled minimal SVG path set. Paths copied verbatim from
-// docs/design/handoff/v4/primitives-v4.jsx ICON_PATHS table.
+// 16×16 viewBox line-glyph paths, tuned for 1.6px stroke at 14px render size.
 export const ICON_PATHS = {
   home:     'M3 8l5-5 5 5v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8z',
   layers:   'M8 2L2 5l6 3 6-3-6-3zm-6 6l6 3 6-3M2 11l6 3 6-3',

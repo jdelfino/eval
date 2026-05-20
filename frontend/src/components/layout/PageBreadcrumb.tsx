@@ -1,9 +1,8 @@
 'use client';
 
 /**
- * Page breadcrumb component — v4 reskin.
+ * Page breadcrumb component.
  * Auto-generates breadcrumbs from navigation hierarchy or accepts custom items.
- * No leading Home icon link (sidebar's Dashboard link covers 'go home').
  */
 
 import Link from 'next/link';

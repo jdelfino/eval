@@ -1,15 +1,21 @@
 'use client';
 
 /**
- * Mobile navigation drawer component (v4 reskin).
- * Slide-out drawer overlay for mobile navigation.
+ * Mobile navigation drawer — slide-out overlay used on narrow viewports.
  */
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem } from '@/config/navigation';
+import {
+  getNavItemsForRole,
+  getNavGroupsForRole,
+  NavGroup,
+  NavItem,
+  GROUP_LABELS,
+  isPathActive,
+} from '@/config/navigation';
 import { Icon } from '@/components/ui';
 import type { IconName } from '@/components/ui';
 
@@ -18,27 +24,6 @@ interface MobileNavProps {
   isOpen: boolean;
   /** Callback when drawer should close */
   onClose: () => void;
-}
-
-/** Group label for display. */
-const GROUP_LABELS: Record<NavGroup, string> = {
-  [NavGroup.Main]: 'Main',
-  [NavGroup.Teaching]: 'Teaching',
-  [NavGroup.Admin]: 'Admin',
-  [NavGroup.System]: 'System',
-};
-
-/**
- * Check if a nav item's href matches the current pathname.
- */
-function isPathActive(href: string, pathname: string): boolean {
-  if (pathname === href) {
-    return true;
-  }
-  if (href !== '/' && pathname.startsWith(href + '/')) {
-    return true;
-  }
-  return false;
 }
 
 interface MobileNavItemProps {
@@ -150,9 +135,10 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
 
   if (!isOpen) return null;
 
+  const helpActive = isPathActive('/help', pathname);
+
   return (
     <>
-      {/* Backdrop */}
       <div
         style={{
           position: 'fixed',
@@ -165,7 +151,6 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
         aria-hidden="true"
       />
 
-      {/* Drawer */}
       <div
         style={{
           position: 'fixed',
@@ -181,7 +166,6 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
         aria-modal="true"
         aria-label="Navigation menu"
       >
-        {/* Drawer header */}
         <div
           style={{
             height: 56,
@@ -229,7 +213,6 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
           </button>
         </div>
 
-        {/* Navigation content */}
         <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', height: 'calc(100% - 56px)' }}>
           <div style={{ flex: 1 }}>
             {navGroups.map((group, index) => (
@@ -244,7 +227,6 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
             ))}
           </div>
 
-          {/* Bottom-pinned Help link */}
           <div style={{ borderTop: '1px solid var(--border)' }}>
             <Link
               href="/help"
@@ -258,12 +240,12 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
                 fontSize: 15,
                 fontWeight: 500,
                 textDecoration: 'none',
-                color: isPathActive('/help', pathname) ? 'var(--accent-ink, var(--fg))' : 'var(--fg-muted)',
-                background: isPathActive('/help', pathname) ? 'var(--accent-soft, var(--bg-sunken))' : 'transparent',
-                borderLeft: `4px solid ${isPathActive('/help', pathname) ? 'var(--accent)' : 'transparent'}`,
+                color: helpActive ? 'var(--accent-ink, var(--fg))' : 'var(--fg-muted)',
+                background: helpActive ? 'var(--accent-soft, var(--bg-sunken))' : 'transparent',
+                borderLeft: `4px solid ${helpActive ? 'var(--accent)' : 'transparent'}`,
                 transition: 'background 0.1s',
               }}
-              aria-current={isPathActive('/help', pathname) ? 'page' : undefined}
+              aria-current={helpActive ? 'page' : undefined}
             >
               <Icon name="info" size={16} />
               <span>Help</span>

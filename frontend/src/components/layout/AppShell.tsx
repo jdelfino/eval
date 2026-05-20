@@ -1,9 +1,7 @@
 'use client';
 
 /**
- * Main application shell component — v4 row layout.
- * Layout: Sidebar | column(AppBarLite + scrollable main).
- * Drops: sidebarCollapsed prop, showRightPanels, rightPanels, fullscreen, forceDesktop, MobileNav.
+ * Application shell — row layout: Sidebar | column(AppBarLite + scrollable main).
  */
 
 import { ReactNode, Suspense } from 'react';

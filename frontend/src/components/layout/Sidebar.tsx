@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Left sidebar navigation component (v4 redesign).
+ * Left sidebar navigation.
  * Brand mark + namespace area + role-aware sectioned nav + user row with sign-out.
  * Supports expanded (232px) and collapsed (56px) states.
  */
@@ -11,7 +11,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreview } from '@/contexts/PreviewContext';
-import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem, NAV_ITEMS } from '@/config/navigation';
+import {
+  getNavItemsForRole,
+  getNavGroupsForRole,
+  NavGroup,
+  NavItem,
+  GROUP_LABELS,
+  isPathActive,
+} from '@/config/navigation';
 import { Icon, IconBtn } from '@/components/ui';
 import type { IconName } from '@/components/ui';
 import { getSystemNamespace, listSystemNamespaces, NamespaceInfo } from '@/lib/api/system';
@@ -21,35 +28,6 @@ interface SidebarProps {
   collapsed?: boolean;
   /** Callback when collapse toggle is clicked */
   onToggleCollapse?: () => void;
-}
-
-/** Group label for display. */
-const GROUP_LABELS: Record<NavGroup, string> = {
-  [NavGroup.Main]: 'Main',
-  [NavGroup.Teaching]: 'Teaching',
-  [NavGroup.Admin]: 'Admin',
-  [NavGroup.System]: 'System',
-};
-
-/**
- * Check if a nav item's href matches the current pathname.
- * Matches exact path or child paths, but NOT if the path matches a more specific nav item.
- */
-function isPathActive(href: string, pathname: string): boolean {
-  if (pathname === href) {
-    return true;
-  }
-
-  if (href !== '/' && pathname.startsWith(href + '/')) {
-    const moreSpecificMatch = NAV_ITEMS.some(item =>
-      item.href !== href &&
-      item.href.startsWith(href + '/') &&
-      (pathname === item.href || pathname.startsWith(item.href + '/'))
-    );
-    return !moreSpecificMatch;
-  }
-
-  return false;
 }
 
 /** Get initials from display name or email for avatar. */
@@ -92,7 +70,6 @@ function NavItemLink({ item, isActive, collapsed }: NavItemLinkProps) {
       title={collapsed ? item.label : undefined}
       aria-label={collapsed ? item.label : undefined}
     >
-      {/* Active accent bar */}
       {isActive && (
         <span
           aria-hidden="true"
@@ -183,11 +160,11 @@ function SidebarNamespaceArea() {
     }).catch(err => {
       console.error('Failed to load namespace:', err);
     });
-  }, [user, isSystemAdmin]);
+  }, [user?.namespace_id, isSystemAdmin]);
 
   // Load all namespaces for system-admin
   useEffect(() => {
-    if (!isSystemAdmin || !user) return;
+    if (!isSystemAdmin || !user?.namespace_id) return;
 
     listSystemNamespaces().then(nsList => {
       setNamespaces(nsList);
@@ -199,7 +176,7 @@ function SidebarNamespaceArea() {
     }).catch(err => {
       console.error('Failed to load namespaces:', err);
     });
-  }, [user, isSystemAdmin]);
+  }, [user?.namespace_id, isSystemAdmin]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -337,6 +314,8 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
     router.push('/auth/signin');
   };
 
+  const helpActive = isPathActive('/help', pathname);
+
   return (
     <aside
       aria-label="Main navigation"
@@ -352,7 +331,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         overflow: 'hidden',
       }}
     >
-      {/* Header: brand mark + wordmark + namespace area */}
       <div
         style={{
           height: 48,
@@ -364,7 +342,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           flexShrink: 0,
         }}
       >
-        {/* Brand logomark */}
         <div
           style={{
             width: 26,
@@ -400,7 +377,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         )}
       </div>
 
-      {/* Navigation items */}
       <div
         style={{
           flex: 1,
@@ -419,7 +395,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           />
         ))}
 
-        {/* Help link (part of nav section, always visible) */}
         <div style={{ marginTop: 8 }}>
           <Link
             href="/help"
@@ -434,11 +409,11 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               fontSize: 13,
               fontWeight: 500,
               textDecoration: 'none',
-              color: isPathActive('/help', pathname) ? 'var(--fg)' : 'var(--fg-muted)',
-              background: isPathActive('/help', pathname) ? 'var(--bg-sunken)' : 'transparent',
+              color: helpActive ? 'var(--fg)' : 'var(--fg-muted)',
+              background: helpActive ? 'var(--bg-sunken)' : 'transparent',
               transition: 'background 0.1s',
             }}
-            aria-current={isPathActive('/help', pathname) ? 'page' : undefined}
+            aria-current={helpActive ? 'page' : undefined}
             title={collapsed ? 'Help' : undefined}
             aria-label={collapsed ? 'Help' : undefined}
           >
@@ -448,7 +423,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
         </div>
       </div>
 
-      {/* Footer / user row */}
       <div
         style={{
           borderTop: '1px solid var(--border)',
@@ -459,7 +433,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           flexShrink: 0,
         }}
       >
-        {/* Avatar */}
         <div
           style={{
             width: 24,
@@ -480,7 +453,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           {initials}
         </div>
 
-        {/* User name + role (expanded only) */}
         {!collapsed && (
           <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
             <div
@@ -512,7 +484,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           </div>
         )}
 
-        {/* Collapse toggle */}
         {onToggleCollapse && (
           <IconBtn
             icon={collapsed ? 'chevR' : 'chevL'}
