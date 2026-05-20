@@ -20,12 +20,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
+import { mapToDotStatus } from '@/lib/connectionStatus';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
 
 /**
@@ -43,7 +43,6 @@ export default function InstructorSessionPage() {
   const params = useParams();
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { setHeaderSlot } = useHeaderSlot();
   const session_id = params.id as string;
 
   // Force desktop layout so browser zoom for projector display does not
@@ -122,19 +121,6 @@ export default function InstructorSessionPage() {
     setSessionTestCases(realtimeSession.problem?.test_cases ?? []);
   }, [realtimeSession]);
 
-  // Show connection status in the global header
-  useEffect(() => {
-    if (!sessionLoading) {
-      setHeaderSlot(
-        <ConnectionStatus
-          status={connectionStatus}
-          error={connectionError}
-          variant="badge"
-        />
-      );
-    }
-    return () => setHeaderSlot(null);
-  }, [sessionLoading, connectionStatus, connectionError, setHeaderSlot]);
 
   // Handle session ended state - status is 'active' or 'completed', not 'ended'
   const isSessionEnded = realtimeSession?.status === 'completed';
@@ -242,6 +228,11 @@ export default function InstructorSessionPage() {
 
   return (
     <div className="space-y-6">
+      {/* Connection status indicator */}
+      <div className="px-6">
+        <ConnectionDot status={mapToDotStatus(connectionStatus)} />
+      </div>
+
       {/* Session ended banner with reopen option */}
       {isSessionEnded && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center justify-between" data-testid="session-ended-banner">
