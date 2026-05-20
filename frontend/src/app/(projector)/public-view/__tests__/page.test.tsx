@@ -27,11 +27,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// ── ConnectionStatus ──────────────────────────────────────────────────────────
-jest.mock('@/components/ConnectionStatus', () => ({
-  ConnectionStatus: () => <span data-testid="connection-status" />,
-}));
-
 // ── executeCode ───────────────────────────────────────────────────────────────
 jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn().mockResolvedValue({

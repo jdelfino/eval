@@ -271,7 +271,7 @@ function PublicViewContent() {
       </div>
 
       <WorkspaceShell
-        // Projector provides its own chrome (font-size controls + ConnectionStatus in header),
+        // Projector renders its own font-size controls and ConnectionDot inline above,
         // so we use embedded=true to suppress the Ribbon.
         embedded={true}
         // editor
