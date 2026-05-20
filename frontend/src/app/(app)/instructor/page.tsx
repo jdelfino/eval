@@ -10,7 +10,6 @@
 import React, { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import NamespaceHeader from '@/components/NamespaceHeader';
 import { InstructorDashboard } from './components/InstructorDashboard';
 import StartSessionModal from './components/StartSessionModal';
 import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
@@ -54,11 +53,6 @@ function InstructorPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <NamespaceHeader className="text-sm" />
-      </div>
-
       {/* Main dashboard content */}
       <InstructorDashboard
         onStartSession={handleStartSession}

@@ -6,7 +6,7 @@
  * Supports expanded (232px) and collapsed (56px) states.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +14,7 @@ import { usePreview } from '@/contexts/PreviewContext';
 import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem, NAV_ITEMS } from '@/config/navigation';
 import { Icon, IconBtn } from '@/components/ui';
 import type { IconName } from '@/components/ui';
-import NamespaceHeader from '@/components/NamespaceHeader';
+import { getSystemNamespace, listSystemNamespaces, NamespaceInfo } from '@/lib/api/system';
 
 interface SidebarProps {
   /** Whether sidebar is collapsed to icon-only mode */
@@ -159,6 +159,164 @@ function NavGroupSection({ group, items, pathname, collapsed, isFirst }: NavGrou
   );
 }
 
+/**
+ * Namespace area rendered in the sidebar header below the brand wordmark.
+ * - Non-system-admin: display-only label showing the current namespace name.
+ * - System-admin: clickable button that opens a dropdown to switch namespaces.
+ *   Selection persists to localStorage('selectedNamespaceId') and reloads the page.
+ */
+function SidebarNamespaceArea() {
+  const { user } = useAuth();
+  const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([]);
+  const [currentNamespace, setCurrentNamespace] = useState<NamespaceInfo | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isSystemAdmin = user?.role === 'system-admin';
+
+  // Load current namespace for non-admin users
+  useEffect(() => {
+    if (!user?.namespace_id || isSystemAdmin) return;
+
+    getSystemNamespace(user.namespace_id).then(ns => {
+      setCurrentNamespace(ns);
+    }).catch(err => {
+      console.error('Failed to load namespace:', err);
+    });
+  }, [user, isSystemAdmin]);
+
+  // Load all namespaces for system-admin
+  useEffect(() => {
+    if (!isSystemAdmin || !user) return;
+
+    listSystemNamespaces().then(nsList => {
+      setNamespaces(nsList);
+
+      const savedId = localStorage.getItem('selectedNamespaceId');
+      const activeId = savedId || user.namespace_id || 'default';
+      const selected = nsList.find(ns => ns.id === activeId) || nsList[0] || null;
+      setCurrentNamespace(selected);
+    }).catch(err => {
+      console.error('Failed to load namespaces:', err);
+    });
+  }, [user, isSystemAdmin]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  const handleSelectNamespace = (ns: NamespaceInfo) => {
+    localStorage.setItem('selectedNamespaceId', ns.id);
+    window.location.reload();
+  };
+
+  const displayName = currentNamespace?.displayName || user?.namespace_id || '';
+
+  if (!user || !displayName) return null;
+
+  if (!isSystemAdmin) {
+    // Display-only label
+    return (
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--fg-muted)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+      >
+        {displayName}
+      </span>
+    );
+  }
+
+  // System-admin: clickable dropdown trigger
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-label="Switch namespace"
+        onClick={() => setDropdownOpen(prev => !prev)}
+        style={{
+          all: 'unset',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 11,
+          color: 'var(--fg-muted)',
+          cursor: 'pointer',
+          maxWidth: '100%',
+        }}
+      >
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayName}
+        </span>
+        <Icon name="chevD" size={10} />
+      </button>
+
+      {dropdownOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: 4,
+            minWidth: 160,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            zIndex: 50,
+            overflow: 'hidden',
+          }}
+        >
+          {namespaces.map(ns => (
+            <button
+              key={ns.id}
+              type="button"
+              aria-label={ns.displayName}
+              onClick={() => handleSelectNamespace(ns)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                fontSize: 12,
+                color: ns.id === currentNamespace?.id ? 'var(--accent)' : 'var(--fg)',
+                fontWeight: ns.id === currentNamespace?.id ? 600 : 400,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {ns.displayName}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user, signOut } = useAuth();
   const { isPreview } = usePreview();
@@ -226,21 +384,19 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
           e
         </div>
         {!collapsed && (
-          <>
-            <span
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
               style={{
                 fontSize: 13,
                 fontWeight: 600,
                 color: 'var(--fg)',
-                flexShrink: 0,
+                letterSpacing: -0.2,
               }}
             >
               Eval
-            </span>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <NamespaceHeader />
             </div>
-          </>
+            <SidebarNamespaceArea />
+          </div>
         )}
       </div>
 

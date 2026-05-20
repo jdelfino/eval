@@ -50,12 +50,7 @@ jest.mock('../components/InstructorDashboard', () => ({
   },
 }));
 
-// Mock NamespaceHeader
-jest.mock('@/components/NamespaceHeader', () => {
-  return function MockNamespaceHeader() {
-    return <div data-testid="namespace-header" />;
-  };
-});
+// NamespaceHeader has been removed from this page (moved into Sidebar) — no mock needed.
 
 // Mock StartSessionModal
 jest.mock('../components/StartSessionModal', () => {
@@ -95,10 +90,15 @@ describe('InstructorPage', () => {
       expect(screen.getByTestId('instructor-dashboard')).toBeInTheDocument();
     });
 
-    it('renders the namespace header', () => {
+    /**
+     * TC6: Instructor page no longer renders <NamespaceHeader>.
+     * Contract: namespace display belongs in Sidebar, not in the page body.
+     * Catches: incomplete removal of NamespaceHeader from page.
+     */
+    it('does not render namespace-header in the page body', () => {
       render(<InstructorPageWrapper />);
 
-      expect(screen.getByTestId('namespace-header')).toBeInTheDocument();
+      expect(screen.queryByTestId('namespace-header')).not.toBeInTheDocument();
     });
 
     it('does not show start session modal initially', () => {

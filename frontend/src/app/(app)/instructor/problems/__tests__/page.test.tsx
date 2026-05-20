@@ -43,11 +43,7 @@ jest.mock('../../components/ProblemCreator', () => {
   };
 });
 
-jest.mock('@/components/NamespaceHeader', () => {
-  return function MockNamespaceHeader() {
-    return <div data-testid="namespace-header">Namespace Header</div>;
-  };
-});
+// NamespaceHeader has been removed from this page (moved into Sidebar) — no mock needed.
 
 describe('ProblemsPage', () => {
   beforeEach(() => {
@@ -62,10 +58,11 @@ describe('ProblemsPage', () => {
     expect(screen.queryByTestId('problem-creator')).not.toBeInTheDocument();
   });
 
-  it('renders namespace header', () => {
+  it('does not render namespace-header in the page body', () => {
     render(<ProblemsPageWrapper />);
 
-    expect(screen.getByTestId('namespace-header')).toBeInTheDocument();
+    // NamespaceHeader was moved to Sidebar; page body must not render it
+    expect(screen.queryByTestId('namespace-header')).not.toBeInTheDocument();
   });
 
   it('navigates to create URL when creating a new problem', () => {
@@ -109,10 +106,11 @@ describe('ProblemsPage', () => {
     expect(creatorWrapper).toHaveClass('h-full', 'flex', 'flex-col', '-m-6');
   });
 
-  it('does not show namespace header when creator is open', () => {
+  it('does not show namespace header in page body when creator is open', () => {
     mockSearchParams = new URLSearchParams('edit=new');
     render(<ProblemsPageWrapper />);
 
+    // NamespaceHeader was moved to Sidebar — never present in page body
     expect(screen.queryByTestId('namespace-header')).not.toBeInTheDocument();
   });
 

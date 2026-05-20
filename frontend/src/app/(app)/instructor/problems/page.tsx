@@ -11,7 +11,6 @@ import React, { Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProblemLibrary from '../components/ProblemLibrary';
 import ProblemCreator from '../components/ProblemCreator';
-import NamespaceHeader from '@/components/NamespaceHeader';
 
 function ProblemsPage() {
   const router = useRouter();
@@ -47,11 +46,6 @@ function ProblemsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <NamespaceHeader className="text-sm" />
-      </div>
-
       {/* Main content */}
       <ProblemLibrary
         onCreateNew={handleCreateNew}

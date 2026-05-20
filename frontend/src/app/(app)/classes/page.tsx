@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
-import NamespaceHeader from '@/components/NamespaceHeader';
 import ClassList from './components/ClassList';
 import CreateClassForm from './components/CreateClassForm';
 
@@ -50,7 +49,6 @@ export default function ClassesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Classes</h1>
-          <NamespaceHeader className="mt-2" />
         </div>
         {!showCreateForm && classes.length > 0 && (
           <button
