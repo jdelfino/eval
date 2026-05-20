@@ -10,7 +10,8 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Drawer } from '../Drawer';
+import { Drawer, drawerHeight, drawerLabel, drawerStatusColor, drawerAutoSummary } from '../Drawer';
+import type { DrawerEdit } from '../Drawer';
 
 describe('Drawer', () => {
   describe('collapsed state', () => {
@@ -388,6 +389,194 @@ describe('Drawer', () => {
       const toggleBtn = screen.getByTitle(/collapse/i);
       fireEvent.click(toggleBtn);
       expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('mode=edit-test', () => {
+    const ioEdit: DrawerEdit = {
+      kind: 'io',
+      name: 't1',
+      input: '5\n3',
+      expected_output: '8',
+      match_type: 'exact',
+      random_seed: 42,
+      lastResult: { stdout: '8\n', passed: true },
+    };
+
+    const pytestEdit: DrawerEdit = {
+      kind: 'pytest',
+      name: 'pytest_test',
+      target_path: 'tests/test_foo.py::test_bar',
+      test_code: 'def test_bar():\n    assert 1 == 1',
+    };
+
+    it('mode=edit-test kind=io renders IO editor with all fields', () => {
+      /**
+       * Contract: edit-test mode with kind='io' renders stdin, expected_output, match_type select,
+       * last-run-got readonly, seed input, and kind pill. Field bindings must be correct.
+       * Catches: kind dispatch wrong, field bindings inverted.
+       */
+      render(
+        <Drawer mode="edit-test" edit={ioEdit} />
+      );
+
+      // stdin textarea contains the input
+      const stdinArea = screen.getByRole('textbox', { name: /stdin/i });
+      expect(stdinArea).toHaveValue('5\n3');
+
+      // expected_output textarea
+      const expectedArea = screen.getByRole('textbox', { name: /expected stdout/i });
+      expect(expectedArea).toHaveValue('8');
+
+      // match_type select shows 'exact'
+      const matchSelect = screen.getByRole('combobox', { name: /match type/i });
+      expect(matchSelect).toHaveValue('exact');
+
+      // last-run-got readonly textarea shows stdout
+      const lastRunArea = screen.getByRole('textbox', { name: /last run/i });
+      expect(lastRunArea).toHaveValue('8\n');
+      expect(lastRunArea).toHaveAttribute('readOnly');
+
+      // seed input shows "42"
+      const seedInput = screen.getByRole('spinbutton', { name: /seed/i });
+      expect(seedInput).toHaveValue(42);
+
+      // kind pill shows 'io'
+      expect(screen.getByText('io')).toBeInTheDocument();
+    });
+
+    it('match_type select offers exactly exact/contains/regex', () => {
+      /**
+       * Contract: match_type select has exactly three options: exact, contains, regex.
+       * Catches: extra/missing values; design's "trim trailing whitespace" / "case-insensitive"
+       * checkboxes accidentally landing.
+       */
+      render(<Drawer mode="edit-test" edit={ioEdit} />);
+
+      const matchSelect = screen.getByRole('combobox', { name: /match type/i });
+      const options = Array.from((matchSelect as HTMLSelectElement).options);
+      expect(options).toHaveLength(3);
+      expect(options.map(o => o.value)).toEqual(['exact', 'contains', 'regex']);
+    });
+
+    it('mode=edit-test kind=pytest renders pytest editor; NO imports panel', () => {
+      /**
+       * Contract: pytest edit renders test_code textarea and target_path input.
+       * The imports/fixtures info panel must NOT be rendered (speculative design content).
+       * Catches: imports panel slipping in.
+       */
+      render(<Drawer mode="edit-test" edit={pytestEdit} />);
+
+      const codeArea = screen.getByRole('textbox', { name: /test body/i });
+      expect(codeArea).toHaveValue('def test_bar():\n    assert 1 == 1');
+
+      const targetInput = screen.getByRole('textbox', { name: /target/i });
+      expect(targetInput).toHaveValue('tests/test_foo.py::test_bar');
+
+      // No imports/fixtures panel
+      expect(screen.queryByText(/imports|fixtures available/i)).not.toBeInTheDocument();
+    });
+
+    it('seed input present for kind=io, absent for kind=pytest', () => {
+      /**
+       * Contract: seed input is rendered only for kind='io'. kind='pytest' has no random_seed field.
+       * Catches: seed leaking to pytest form.
+       */
+      // variant-a: kind='io' → seed input present
+      const { rerender } = render(<Drawer mode="edit-test" edit={ioEdit} />);
+      expect(screen.getByRole('spinbutton', { name: /seed/i })).toBeInTheDocument();
+
+      // variant-b: kind='pytest' → no seed input
+      rerender(<Drawer mode="edit-test" edit={pytestEdit} />);
+      expect(screen.queryByRole('spinbutton', { name: /seed/i })).not.toBeInTheDocument();
+    });
+
+    it('field edits propagate via onEditChange', () => {
+      /**
+       * Contract: changing a field in the IO editor calls onEditChange with the full updated shape.
+       * input field changing from 'a' to 'b' must produce shape with input='b' and other fields unchanged.
+       * Catches: onEditChange not wired.
+       */
+      const onEditChange = jest.fn();
+      const simpleEdit: DrawerEdit = {
+        kind: 'io',
+        name: 'test1',
+        input: 'a',
+        expected_output: 'out',
+        match_type: 'exact',
+      };
+      render(<Drawer mode="edit-test" edit={simpleEdit} onEditChange={onEditChange} />);
+
+      const stdinArea = screen.getByRole('textbox', { name: /stdin/i });
+      fireEvent.change(stdinArea, { target: { value: 'b' } });
+
+      expect(onEditChange).toHaveBeenCalledTimes(1);
+      const called = onEditChange.mock.calls[0][0] as DrawerEdit;
+      expect(called.kind).toBe('io');
+      if (called.kind === 'io') {
+        expect(called.input).toBe('b');
+        expect(called.expected_output).toBe('out');
+        expect(called.name).toBe('test1');
+        expect(called.match_type).toBe('exact');
+      }
+    });
+
+    it('mode switch resets edit state from prop', () => {
+      /**
+       * Contract: when the edit prop changes (different test), local state must reset from new prop.
+       * Switching mode away and back with a new edit should show the new test's values.
+       * Catches: stale local state retained when parent passes different test.
+       */
+      const editA: DrawerEdit = {
+        kind: 'io',
+        name: 'testA',
+        input: 'input-A',
+        expected_output: 'output-A',
+        match_type: 'exact',
+      };
+      const editB: DrawerEdit = {
+        kind: 'io',
+        name: 'testB',
+        input: 'input-B',
+        expected_output: 'output-B',
+        match_type: 'contains',
+      };
+
+      const { rerender } = render(<Drawer mode="edit-test" edit={editA} />);
+      // Confirm editA is shown
+      expect(screen.getByRole('textbox', { name: /stdin/i })).toHaveValue('input-A');
+
+      // Switch to output mode (no edit prop)
+      rerender(<Drawer mode="output" />);
+      expect(screen.queryByRole('textbox', { name: /stdin/i })).not.toBeInTheDocument();
+
+      // Switch back to edit-test with editB
+      rerender(<Drawer mode="edit-test" edit={editB} />);
+      expect(screen.getByRole('textbox', { name: /stdin/i })).toHaveValue('input-B');
+      expect(screen.getByRole('textbox', { name: /expected stdout/i })).toHaveValue('output-B');
+      expect(screen.getByRole('combobox', { name: /match type/i })).toHaveValue('contains');
+    });
+
+    it('Drawer utility functions return edit-test-specific values', () => {
+      /**
+       * Contract: drawerHeight, drawerLabel, drawerStatusColor, drawerAutoSummary must handle
+       * 'edit-test' mode. Without this, the mode falls through to idle defaults (30px bar, 'Console' label).
+       * Catches: any utility-fn fall-through to idle defaults.
+       */
+      expect(drawerHeight('edit-test')).toBe(260);
+      expect(drawerLabel('edit-test')).toBe('Test body');
+      expect(drawerStatusColor('edit-test', undefined, undefined)).toBe('var(--accent)');
+      expect(drawerAutoSummary('edit-test', undefined, undefined, undefined)).toBe('editing test body');
+    });
+
+    it('mode=edit-test rendered drawer is full-height (not 30px collapsed bar)', () => {
+      /**
+       * Contract: edit-test mode must render at height 260, not the idle 30px bar.
+       * Catches: visual regression from utility-fn miss (edit-test falls through to idle height).
+       */
+      const { container } = render(<Drawer mode="edit-test" edit={ioEdit} />);
+      const outer = container.firstChild as HTMLElement;
+      expect(outer).toHaveStyle({ height: '260px' });
     });
   });
 });

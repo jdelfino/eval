@@ -477,12 +477,10 @@ jobs:
   system-playwright:
     needs: changes
     if: |
-      github.base_ref != 'redesign' && (
-        needs.changes.outputs.go-backend == 'true' ||
-        needs.changes.outputs.frontend == 'true' ||
-        needs.changes.outputs.executor == 'true' ||
-        needs.changes.outputs.migrations == 'true'
-      )
+      needs.changes.outputs.go-backend == 'true' ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.executor == 'true' ||
+      needs.changes.outputs.migrations == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

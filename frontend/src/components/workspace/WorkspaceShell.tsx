@@ -6,7 +6,7 @@ import EditorPane from '@/components/workspace/EditorPane';
 import { TestRail } from '@/components/workspace/TestRail';
 import { Drawer } from '@/components/workspace/Drawer';
 import type { EditorTab } from '@/components/workspace/EditorPane';
-import type { DrawerMode, DrawerProps } from '@/components/workspace/Drawer';
+import type { DrawerMode, DrawerProps, DrawerEdit } from '@/components/workspace/Drawer';
 import type { TestRailItem } from '@/lib/testRail';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -18,6 +18,13 @@ export interface WorkspaceShellProps {
   problemTitle?: string;
   problemMeta?: string;
   statement?: string;
+  /**
+   * Author-skin only: when true the Ribbon title is click-to-edit.
+   * Non-author skins (student, instructor, projector) omit this prop or pass false.
+   */
+  ribbonEditable?: boolean;
+  /** Called with the new title string when the author commits a ribbon title edit. */
+  onTitleChange?: (title: string) => void;
 
   // editor
   editorTabs: EditorTab[];
@@ -36,11 +43,22 @@ export interface WorkspaceShellProps {
   onSelectTest?: (id: string) => void;
   onRunTest?: (id: string) => void;
   onDebugTest?: (id: string) => void;
+  /** Fired when the per-row "Edit body" button is clicked (edit mode only) */
+  onEditTest?: (id: string) => void;
   onRunAll?: () => void;
   isRunningAll?: boolean;
   railTitle?: string;
   railMode?: 'run' | 'edit' | 'view';
   railSummary?: string;
+  /** When true, renders a split-button "+ Add <kind> test" row at the bottom */
+  railShowAdd?: boolean;
+  /** Fired when the main add button or a menu item is clicked */
+  onAddTest?: (kind: 'io' | 'pytest') => void;
+  /**
+   * Sticky default kind for the main add button label.
+   * undefined → 'io' (first-use default).
+   */
+  lastCreatedKind?: 'io' | 'pytest';
 
   // drawer
   drawerMode: DrawerMode;
@@ -52,10 +70,14 @@ export interface WorkspaceShellProps {
   drawerRuntimeError?: DrawerProps['runtimeError'];
   drawerSummary?: string;
   drawerCloseAction?: React.ReactNode;
+  drawerEdit?: DrawerEdit;
+  onDrawerEditChange?: (next: DrawerEdit) => void;
 
   // skin extras
   /** Optional row rendered between Ribbon (or shell top) and the editor/rail area */
   skinTopBar?: React.ReactNode;
+  /** Optional row rendered after skinTopBar and before the editor/rail area (author skin: ProblemPropertiesBar) */
+  propertiesBar?: React.ReactNode;
   /** When true, omits the Ribbon — host page provides its own chrome */
   embedded?: boolean;
 }
@@ -66,10 +88,10 @@ export interface WorkspaceShellProps {
  * WorkspaceShell — unified workspace surface consumed by all four host skins.
  *
  * Layout (non-embedded):
- *   Ribbon → skinTopBar? → [EditorPane (flex:1) | TestRail (340px)] → Drawer
+ *   Ribbon → skinTopBar? → propertiesBar? → [EditorPane (flex:1) | TestRail (340px)] → Drawer
  *
  * Layout (embedded):
- *   skinTopBar? → [EditorPane (flex:1) | TestRail (320px)] → Drawer
+ *   skinTopBar? → propertiesBar? → [EditorPane (flex:1) | TestRail (320px)] → Drawer
  *
  * embedded=true omits the Ribbon; the host page provides its own chrome.
  */
@@ -80,6 +102,8 @@ export default function WorkspaceShell({
   problemTitle = '',
   problemMeta,
   statement = '',
+  ribbonEditable = false,
+  onTitleChange,
 
   // editor
   editorTabs,
@@ -97,11 +121,15 @@ export default function WorkspaceShell({
   onSelectTest,
   onRunTest,
   onDebugTest,
+  onEditTest,
   onRunAll,
   isRunningAll,
   railTitle,
   railMode,
   railSummary,
+  railShowAdd = false,
+  onAddTest,
+  lastCreatedKind,
 
   // drawer
   drawerMode,
@@ -113,9 +141,12 @@ export default function WorkspaceShell({
   drawerRuntimeError,
   drawerSummary,
   drawerCloseAction,
+  drawerEdit,
+  onDrawerEditChange,
 
   // extras
   skinTopBar,
+  propertiesBar,
   embedded = false,
 }: WorkspaceShellProps) {
   // TestRail width: 320px in embedded mode (host provides outer padding), 340px standalone
@@ -133,19 +164,34 @@ export default function WorkspaceShell({
         color: 'var(--fg)',
       }}
     >
-      {/* Ribbon — only in non-embedded mode */}
-      {!embedded && (
+      {/* Ribbon —
+       *  - Non-embedded: rendered (host doesn't provide its own ribbon).
+       *  - Embedded + ribbonEditable: still rendered so author hosts can
+       *    expose the editable-title affordance (eval-af7).
+       *  - Embedded without ribbonEditable: omitted (host fully owns chrome).
+       *
+       *  The Ribbon's expand body (markdown preview of the statement) renders
+       *  the same content that the statement.md editor tab edits in author
+       *  hosts. That duplication is by design — the Ribbon body is rendered
+       *  markdown (preview), the editor tab is raw markdown (source).
+       */}
+      {(!embedded || ribbonEditable) && (
         <Ribbon
           open={ribbonOpen}
           onToggle={onToggleRibbon ?? (() => {})}
           title={problemTitle}
           meta={problemMeta}
           body={statement}
+          editable={ribbonEditable}
+          onTitleChange={onTitleChange}
         />
       )}
 
       {/* Optional top bar between ribbon and editor (e.g. instructor student-switcher) */}
       {skinTopBar}
+
+      {/* Optional properties bar between skinTopBar and editor (e.g. author ProblemPropertiesBar) */}
+      {propertiesBar}
 
       {/* Main content row: editor + rail side-by-side */}
       <div
@@ -194,10 +240,14 @@ export default function WorkspaceShell({
             onSelectTest={onSelectTest}
             onRunTest={onRunTest}
             onDebugTest={onDebugTest}
+            onEditTest={onEditTest}
             onRunAll={onRunAll}
             isRunningAll={isRunningAll}
             title={railTitle}
             selectedSummary={railSummary}
+            railShowAdd={railShowAdd}
+            onAddTest={onAddTest}
+            lastCreatedKind={lastCreatedKind}
           />
         </div>
       </div>
@@ -213,6 +263,8 @@ export default function WorkspaceShell({
         runtimeError={drawerRuntimeError}
         summary={drawerSummary}
         closeAction={drawerCloseAction}
+        edit={drawerEdit}
+        onEditChange={onDrawerEditChange}
       />
     </div>
   );

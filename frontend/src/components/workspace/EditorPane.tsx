@@ -139,7 +139,11 @@ export default function EditorPane({
       >
         {activeTab ? (
           activeTab.kind === 'markdown' ? (
-            <MarkdownBody tab={activeTab} />
+            <MarkdownBody
+              tab={activeTab}
+              onChangeCode={onChangeCode}
+              fontSize={fontSize}
+            />
           ) : (
             <CodeBody
               tab={activeTab}
@@ -268,10 +272,20 @@ function TabButton({ tab, active, dark, onClick }: TabButtonProps) {
 
 interface MarkdownBodyProps {
   tab: Extract<EditorTab, { kind: 'markdown' }>;
+  onChangeCode?: (id: string, code: string) => void;
+  fontSize?: number;
 }
 
-function MarkdownBody({ tab }: MarkdownBodyProps) {
+function MarkdownBody({ tab, onChangeCode, fontSize }: MarkdownBodyProps) {
   const dark = isDark(tab);
+
+  // preview:false → editable Monaco view; anything else (true/undefined) → MarkdownContent
+  if (tab.preview === false) {
+    return (
+      <MarkdownEditBody tab={tab} onChangeCode={onChangeCode} fontSize={fontSize} />
+    );
+  }
+
   return (
     <div
       style={{
@@ -284,6 +298,59 @@ function MarkdownBody({ tab }: MarkdownBodyProps) {
     >
       <MarkdownContent content={tab.body} darkTheme={dark} />
     </div>
+  );
+}
+
+// ─── MarkdownEditBody ─────────────────────────────────────────────────────────
+
+interface MarkdownEditBodyProps {
+  tab: Extract<EditorTab, { kind: 'markdown' }>;
+  onChangeCode?: (id: string, code: string) => void;
+  fontSize?: number;
+}
+
+function MarkdownEditBody({ tab, onChangeCode, fontSize }: MarkdownEditBodyProps) {
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+
+  // Unregister from window.__TEST_EDITORS on unmount — same pattern as CodeBody.
+  useEffect(() => {
+    return () => {
+      const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
+      if (w.__TEST_EDITORS && editorRef.current) {
+        const idx = w.__TEST_EDITORS.indexOf(editorRef.current);
+        if (idx >= 0) w.__TEST_EDITORS.splice(idx, 1);
+      }
+    };
+  }, []);
+
+  const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
+    editorRef.current = editor;
+    const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
+    if (!w.__TEST_EDITORS) w.__TEST_EDITORS = [];
+    w.__TEST_EDITORS.push(editor);
+  };
+
+  const handleChange = (value: string | undefined) => {
+    onChangeCode?.(tab.id, value ?? '');
+  };
+
+  return (
+    <Editor
+      height="100%"
+      language="markdown"
+      value={tab.body}
+      onChange={handleChange}
+      onMount={handleEditorDidMount}
+      theme="vs-dark"
+      options={{
+        minimap: { enabled: false },
+        fontSize: fontSize ?? 14,
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        folding: false,
+        lineNumbersMinChars: 2,
+      }}
+    />
   );
 }
 

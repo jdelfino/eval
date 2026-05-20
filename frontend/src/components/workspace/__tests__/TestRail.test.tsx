@@ -207,4 +207,159 @@ describe('TestRail', () => {
       expect(onSelectTest).toHaveBeenCalledWith('s1');
     });
   });
+
+  // ── G2 author affordances ─────────────────────────────────────────────────
+
+  describe('railMode=edit: Edit body button', () => {
+    /**
+     * In edit mode the active row must show an "Edit body" button so the author
+     * can open the per-test drawer. The button must be absent on inactive rows
+     * (no noise) and absent entirely when mode !== 'edit'.
+     *
+     * Catches: wrong mode gate (run-mode should not show it), button leaked to
+     * inactive rows, callback not wired to the correct test id.
+     */
+    it('shows "Edit body" button on active row in edit mode, absent on inactive', () => {
+      const items = [
+        makeItem({ id: 't1', name: 'Test 1' }),
+        makeItem({ id: 't2', name: 'Test 2' }),
+      ];
+      render(<TestRail tests={items} activeId="t1" mode="edit" />);
+
+      const editButtons = screen.getAllByRole('button', { name: /edit body/i });
+      expect(editButtons).toHaveLength(1);
+
+      // Confirm it's on the active row (t1's row)
+      const t1Row = screen.getByTestId('testrail-row-t1');
+      expect(t1Row).toContainElement(editButtons[0]);
+
+      // t2's row must not have an Edit body button
+      const t2Row = screen.getByTestId('testrail-row-t2');
+      expect(t2Row.querySelector('[data-testid="edit-body-btn"]')).toBeNull();
+    });
+
+    it('does not show "Edit body" button in run mode', () => {
+      const items = [makeItem({ id: 't1', name: 'Test 1' })];
+      render(<TestRail tests={items} activeId="t1" mode="run" />);
+
+      expect(screen.queryByRole('button', { name: /edit body/i })).not.toBeInTheDocument();
+    });
+
+    it('clicking Edit body fires onEditTest with the row id', () => {
+      const onEditTest = jest.fn();
+      const items = [makeItem({ id: 't1', name: 'Test 1' })];
+      render(<TestRail tests={items} activeId="t1" mode="edit" onEditTest={onEditTest} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /edit body/i }));
+      expect(onEditTest).toHaveBeenCalledTimes(1);
+      expect(onEditTest).toHaveBeenCalledWith('t1');
+    });
+  });
+
+  describe('railShowAdd: split-button add-test row', () => {
+    /**
+     * When railShowAdd=true, a split-button row must appear at the bottom of the
+     * list with a main button (fires onAddTest with the current sticky kind) and a
+     * caret button (opens a menu with IO test + Pytest test options).
+     *
+     * Catches: row missing or only partially rendered, default kind seed wrong,
+     * sticky state ignored, menu options not wired.
+     */
+    it('renders main add button and caret when railShowAdd=true', () => {
+      render(<TestRail tests={[ioItem]} railShowAdd={true} />);
+
+      // Main button label matches the default kind (io → "Add IO test")
+      expect(screen.getByRole('button', { name: /add io test/i })).toBeInTheDocument();
+      // Caret button
+      expect(screen.getByRole('button', { name: /▾/i })).toBeInTheDocument();
+    });
+
+    it('does not render add-test affordance when railShowAdd=false', () => {
+      render(<TestRail tests={[ioItem]} railShowAdd={false} />);
+
+      expect(screen.queryByRole('button', { name: /add io test/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /add pytest test/i })).not.toBeInTheDocument();
+    });
+
+    it('does not render add-test affordance when railShowAdd is omitted', () => {
+      render(<TestRail tests={[ioItem]} />);
+
+      expect(screen.queryByRole('button', { name: /add io test/i })).not.toBeInTheDocument();
+    });
+
+    it('main label follows lastCreatedKind: io → "Add IO test"', () => {
+      render(<TestRail tests={[]} railShowAdd={true} lastCreatedKind="io" />);
+      expect(screen.getByRole('button', { name: /add io test/i })).toBeInTheDocument();
+    });
+
+    it('main label follows lastCreatedKind: pytest → "Add Pytest test"', () => {
+      render(<TestRail tests={[]} railShowAdd={true} lastCreatedKind="pytest" />);
+      expect(screen.getByRole('button', { name: /add pytest test/i })).toBeInTheDocument();
+    });
+
+    it('main click fires onAddTest with sticky io kind (no lastCreatedKind)', () => {
+      const onAddTest = jest.fn();
+      render(<TestRail tests={[]} railShowAdd={true} onAddTest={onAddTest} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add io test/i }));
+      expect(onAddTest).toHaveBeenCalledTimes(1);
+      expect(onAddTest).toHaveBeenCalledWith('io');
+    });
+
+    it('main click fires onAddTest with lastCreatedKind=pytest', () => {
+      const onAddTest = jest.fn();
+      render(
+        <TestRail tests={[]} railShowAdd={true} onAddTest={onAddTest} lastCreatedKind="pytest" />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /add pytest test/i }));
+      expect(onAddTest).toHaveBeenCalledTimes(1);
+      expect(onAddTest).toHaveBeenCalledWith('pytest');
+    });
+
+    it('caret opens menu with IO test and Pytest test options', () => {
+      render(<TestRail tests={[]} railShowAdd={true} />);
+
+      // Menu should be closed initially
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+      // Click caret to open menu
+      fireEvent.click(screen.getByRole('button', { name: /▾/i }));
+
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /io test/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /pytest test/i })).toBeInTheDocument();
+    });
+
+    it('selecting Pytest test from menu fires onAddTest("pytest") and closes menu', () => {
+      const onAddTest = jest.fn();
+      render(<TestRail tests={[]} railShowAdd={true} onAddTest={onAddTest} />);
+
+      // Open caret menu
+      fireEvent.click(screen.getByRole('button', { name: /▾/i }));
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+
+      // Click Pytest test option
+      fireEvent.click(screen.getByRole('menuitem', { name: /pytest test/i }));
+
+      expect(onAddTest).toHaveBeenCalledTimes(1);
+      expect(onAddTest).toHaveBeenCalledWith('pytest');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('selecting IO test from menu fires onAddTest("io") and closes menu', () => {
+      const onAddTest = jest.fn();
+      render(<TestRail tests={[]} railShowAdd={true} onAddTest={onAddTest} />);
+
+      // Open caret menu
+      fireEvent.click(screen.getByRole('button', { name: /▾/i }));
+
+      // Click IO test option
+      fireEvent.click(screen.getByRole('menuitem', { name: /io test/i }));
+
+      expect(onAddTest).toHaveBeenCalledTimes(1);
+      expect(onAddTest).toHaveBeenCalledWith('io');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+  });
 });

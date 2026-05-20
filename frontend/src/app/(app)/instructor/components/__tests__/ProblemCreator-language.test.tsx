@@ -1,19 +1,15 @@
 /**
- * Tests for ProblemCreator language selector and Java default starter code.
+ * Tests for ProblemCreator language selector and Java default starter code (G2).
  *
- * Verifies:
- * - Language dropdown renders with Python (default) and Java options
- * - Changing language updates the field in the submitted payload
- * - Switching to Java auto-populates default starter code if empty
- * - Switching to Java does NOT overwrite non-empty starter code
- * - Language defaults to python for new problems
- * - Language is loaded from API when editing existing problems
+ * Language is now controlled via ProblemPropertiesBar's onChangeProperties callback
+ * (threaded through WorkspaceShell's propertiesBar slot), not a standalone select.
+ * Title is via Ribbon onTitleChange. Class is via onChangeProperties.
  *
  * @jest-environment jsdom
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 
@@ -26,27 +22,29 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
-  generateSolution: jest.fn(),
+  // generateSolution intentionally omitted — moved to G7
 }));
 
 jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn(),
   ioTestCasesToCaseDefs: jest.fn((cases) => cases),
-  buildIOTestCases: jest.fn(({ stdin, random_seed, attached_files }) => {
-    if (!stdin && !random_seed && (!attached_files || attached_files.length === 0)) return [];
-    return [{ kind: 'io', name: 'Default', input: stdin || '', match_type: 'exact', order: 0 }];
-  }),
+  buildIOTestCases: jest.fn(() => []),
 }));
 
-// Mock WorkspaceShell — language tests only care about language selector behavior
-// and that language flows into the editorTabs prop and submit payload.
+// Capture WorkspaceShell props for interaction with propertiesBar and Ribbon.
+let capturedProps: any = null;
 jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
   default: (props: any) => {
+    capturedProps = props;
     const { editorTabs, activeTabId, onChangeCode, onSelectTab } = props;
     const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
       <div data-testid="workspace-shell">
+        {/* PropertiesBar slot — renders ProblemPropertiesBar */}
+        {props.propertiesBar && (
+          <div data-testid="properties-bar-slot">{props.propertiesBar}</div>
+        )}
         <div>
           {editorTabs.map((tab: any) => (
             <button
@@ -59,7 +57,7 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
             </button>
           ))}
         </div>
-        {activeTab && (
+        {activeTab && activeTab.kind === 'code' && (
           <textarea
             aria-label={activeTab.label}
             value={activeTab.code}
@@ -86,47 +84,61 @@ const DEFAULT_CLASSES = [
   { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
 ];
 
-describe('ProblemCreator - Language Selector', () => {
+describe('ProblemCreator - Language Selector (G2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    capturedProps = null;
     const { listClasses } = require('@/lib/api/classes');
     listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
-  describe('Language selector rendering', () => {
-    it('should render a language selector dropdown', () => {
+  describe('Language selector via PropertiesBar', () => {
+    it('defaults to python for new problems', () => {
       render(<ProblemCreator />);
 
-      const languageSelect = screen.getByLabelText('Language');
-      expect(languageSelect).toBeInTheDocument();
+      // Language defaults to python — check via propertiesBar prop
+      expect(capturedProps.propertiesBar.props.problemLanguage).toBe('python');
     });
 
-    it('should default to python for new problems', () => {
+    it('changing language via onChangeProperties updates editorTabs language', () => {
       render(<ProblemCreator />);
 
-      const languageSelect = screen.getByLabelText('Language') as HTMLSelectElement;
-      expect(languageSelect.value).toBe('python');
-    });
+      // Initially python
+      const starterTab = capturedProps.editorTabs.find((t: any) => t.id === 'starter');
+      expect(starterTab.language).toBe('python');
 
-    it('should have Python and Java options', () => {
-      render(<ProblemCreator />);
+      // Switch to java via PropertiesBar onChangeProperties
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: null,
+          language: 'java',
+          tags: [],
+        });
+      });
 
-      expect(screen.getByRole('option', { name: 'Python' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Java' })).toBeInTheDocument();
+      // editorTabs should now be java
+      const updatedTab = capturedProps.editorTabs.find((t: any) => t.id === 'starter');
+      expect(updatedTab.language).toBe('java');
     });
   });
 
   describe('Language field in submitted payload', () => {
-    it('should include language: python in create payload by default', async () => {
+    it('includes language: python in create payload by default', async () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'problem-1' });
 
       render(<ProblemCreator />);
 
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+      // Set title + class
+      act(() => { capturedProps.onTitleChange('Test Problem'); });
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: 'default-class-1',
+          language: 'python',
+          tags: [],
+        });
+      });
 
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
@@ -136,17 +148,21 @@ describe('ProblemCreator - Language Selector', () => {
       });
     });
 
-    it('should include language: java in create payload when Java selected', async () => {
+    it('includes language: java in create payload when Java selected', async () => {
       const { createProblem } = require('@/lib/api/problems');
       createProblem.mockResolvedValue({ id: 'problem-1' });
 
       render(<ProblemCreator />);
 
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: 'default-class-1',
+          language: 'java',
+          tags: [],
+        });
+      });
+      act(() => { capturedProps.onTitleChange('Test Problem'); });
 
-      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
       fireEvent.click(screen.getByText('Create Problem'));
 
       await waitFor(() => {
@@ -156,7 +172,7 @@ describe('ProblemCreator - Language Selector', () => {
       });
     });
 
-    it('should include language in update payload when editing', async () => {
+    it('includes language in update payload when editing', async () => {
       const { getProblem, updateProblem } = require('@/lib/api/problems');
       const existingProblem = {
         id: 'problem-456',
@@ -172,11 +188,19 @@ describe('ProblemCreator - Language Selector', () => {
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Language')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
+      // Switch to java via PropertiesBar
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: null,
+          language: 'java',
+          tags: [],
+        });
       });
 
-      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
       fireEvent.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
@@ -189,20 +213,26 @@ describe('ProblemCreator - Language Selector', () => {
   });
 
   describe('Java default starter code', () => {
-    it('should auto-populate Java default starter code when switching to Java with empty starter code', () => {
+    it('auto-populates Java default starter code when switching to Java with empty starter', () => {
       render(<ProblemCreator />);
 
       // Starter code is empty by default
       expect(screen.getByLabelText(/Starter Code/)).toHaveValue('');
 
-      // Switch to Java
-      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
+      // Switch to Java via PropertiesBar
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: null,
+          language: 'java',
+          tags: [],
+        });
+      });
 
       // Starter code should be populated with Java default
       expect(screen.getByLabelText(/Starter Code/)).toHaveValue(JAVA_DEFAULT_STARTER);
     });
 
-    it('should NOT overwrite non-empty starter code when switching to Java', () => {
+    it('does NOT overwrite non-empty starter code when switching to Java', () => {
       render(<ProblemCreator />);
 
       // Set some starter code first
@@ -211,29 +241,40 @@ describe('ProblemCreator - Language Selector', () => {
         target: { value: existingCode },
       });
 
-      // Switch to Java
-      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'java' } });
+      // Switch to Java via PropertiesBar
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: null,
+          language: 'java',
+          tags: [],
+        });
+      });
 
       // Starter code should remain unchanged
       expect(screen.getByLabelText(/Starter Code/)).toHaveValue(existingCode);
     });
 
-    it('should NOT auto-populate starter code when switching to Python', () => {
+    it('does NOT auto-populate starter code when switching to Python', () => {
       render(<ProblemCreator />);
 
-      // Starter code is empty by default
+      // Starter code is empty
       expect(screen.getByLabelText(/Starter Code/)).toHaveValue('');
 
-      // Switch to Python (should not populate anything)
-      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'python' } });
+      // Switch to Python — should not populate
+      act(() => {
+        capturedProps.propertiesBar.props.onChangeProperties({
+          class: null,
+          language: 'python',
+          tags: [],
+        });
+      });
 
-      // Starter code should remain empty
       expect(screen.getByLabelText(/Starter Code/)).toHaveValue('');
     });
   });
 
   describe('Loading existing problem language', () => {
-    it('should load language from API and display it in the selector when editing', async () => {
+    it('loads language from API and passes it to PropertiesBar when editing', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockResolvedValue({
         id: 'problem-456',
@@ -247,13 +288,14 @@ describe('ProblemCreator - Language Selector', () => {
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        const languageSelect = screen.getByLabelText('Language') as HTMLSelectElement;
-        expect(languageSelect.value).toBe('java');
-      });
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
+      expect(capturedProps.propertiesBar.props.problemLanguage).toBe('java');
     });
 
-    it('should default language to python when existing problem has no language field', async () => {
+    it('defaults language to python when existing problem has no language field', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockResolvedValue({
         id: 'problem-456',
@@ -266,10 +308,11 @@ describe('ProblemCreator - Language Selector', () => {
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        const languageSelect = screen.getByLabelText('Language') as HTMLSelectElement;
-        expect(languageSelect.value).toBe('python');
-      });
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
+      expect(capturedProps.propertiesBar.props.problemLanguage).toBe('python');
     });
   });
 });

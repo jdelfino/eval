@@ -302,4 +302,123 @@ describe('EditorPane', () => {
     const options = mockEditorProps.options as Record<string, unknown>;
     expect(options?.fontSize).toBe(18);
   });
+
+  // TC-md1: markdown tab preview mode renders HTML (MarkdownContent), no Monaco
+  it('renders markdown tab in preview mode using MarkdownContent (no Monaco)', () => {
+    /**
+     * Contract: when a markdown tab has preview:true (or preview omitted), EditorPane
+     * renders the body via MarkdownContent rather than Monaco. Catches the
+     * preview/edit branch being inverted or missing.
+     */
+    const statementTab = {
+      id: 'statement',
+      label: 'statement.md',
+      kind: 'markdown' as const,
+      body: '# Hello',
+      preview: true,
+    };
+    render(
+      <EditorPane
+        tabs={[statementTab]}
+        activeId="statement"
+      />
+    );
+
+    expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
+    expect(screen.getByText('# Hello')).toBeInTheDocument();
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+  });
+
+  // TC-md2: markdown tab edit mode (preview:false) mounts Monaco with body as value
+  it('renders markdown tab in edit mode as Monaco when preview=false', () => {
+    /**
+     * Contract: when a markdown tab has preview:false, EditorPane renders a Monaco
+     * instance with language="markdown" and value=tab.body, not MarkdownContent.
+     * Catches the edit branch being missing or the preview/edit logic inverted.
+     */
+    const statementTab = {
+      id: 'statement',
+      label: 'statement.md',
+      kind: 'markdown' as const,
+      body: '# Hello',
+      preview: false,
+    };
+    render(
+      <EditorPane
+        tabs={[statementTab]}
+        activeId="statement"
+      />
+    );
+
+    expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
+    const editor = screen.getByTestId('monaco-editor');
+    expect(editor).toBeInTheDocument();
+    expect(editor).toHaveAttribute('data-value', '# Hello');
+    expect(editor).toHaveAttribute('data-language', 'markdown');
+  });
+
+  // TC-md3: onChangeCode fires when user edits markdown in edit mode
+  it('calls onChangeCode with tab id and new value when markdown Monaco onChange fires', () => {
+    /**
+     * Contract: in edit mode (preview:false), Monaco onChange wires through to
+     * onChangeCode(tabId, newValue). Catches the change handler not being wired for
+     * the markdown Monaco branch.
+     */
+    const onChangeCode = jest.fn();
+    const statementTab = {
+      id: 'statement',
+      label: 'statement.md',
+      kind: 'markdown' as const,
+      body: '# Hello',
+      preview: false,
+    };
+    render(
+      <EditorPane
+        tabs={[statementTab]}
+        activeId="statement"
+        onChangeCode={onChangeCode}
+      />
+    );
+
+    mockOnChange('# Edited');
+    expect(onChangeCode).toHaveBeenCalledWith('statement', '# Edited');
+    expect(onChangeCode).toHaveBeenCalledTimes(1);
+  });
+
+  // TC-md4: body prop changes flow through edit<->preview re-renders
+  it('reflects updated body and mode across edit/preview re-renders', () => {
+    /**
+     * Contract: EditorPane reflects tab.body and tab.preview on every render —
+     * no stale state captured from the first render. Catches cases where the body
+     * or preview flag is captured into component state rather than derived from props.
+     */
+    const makeTab = (body: string, preview: boolean) => ({
+      id: 'statement',
+      label: 'statement.md',
+      kind: 'markdown' as const,
+      body,
+      preview,
+    });
+
+    // Start in edit mode with '# A'
+    const { rerender } = render(
+      <EditorPane tabs={[makeTab('# A', false)]} activeId="statement" />
+    );
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-value', '# A');
+
+    // Switch to preview mode with updated body '# Edited'
+    rerender(
+      <EditorPane tabs={[makeTab('# Edited', true)]} activeId="statement" />
+    );
+    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+    expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
+    expect(screen.getByText('# Edited')).toBeInTheDocument();
+
+    // Switch back to edit mode — editor should show updated body
+    rerender(
+      <EditorPane tabs={[makeTab('# Edited', false)]} activeId="statement" />
+    );
+    expect(screen.queryByTestId('markdown-content')).not.toBeInTheDocument();
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-value', '# Edited');
+  });
 });
