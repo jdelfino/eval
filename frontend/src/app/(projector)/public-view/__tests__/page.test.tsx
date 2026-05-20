@@ -27,12 +27,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// ── Header slot ───────────────────────────────────────────────────────────────
-const mockSetHeaderSlot = jest.fn();
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: mockSetHeaderSlot }),
-}));
-
 // ── ConnectionStatus ──────────────────────────────────────────────────────────
 jest.mock('@/components/ConnectionStatus', () => ({
   ConnectionStatus: () => <span data-testid="connection-status" />,
@@ -289,38 +283,6 @@ describe('PublicInstructorView', () => {
     const tab = lastShellProps!.editorTabs[0];
     if (tab.kind !== 'code') throw new Error('Expected code tab');
     expect(tab.readOnly).toBeFalsy();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('PublicInstructorView header slot', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    localStorage.clear();
-    lastShellProps = null;
-  });
-
-  afterEach(() => {
-    localStorage.clear();
-  });
-
-  test('displays join code in header slot when session loads', async () => {
-    mockUseRealtimePublicView.mockReturnValue(makeLoadedState());
-
-    const PublicInstructorView = require('../page').default;
-    render(<PublicInstructorView />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
-    });
-
-    const slotCalls = mockSetHeaderSlot.mock.calls.filter((call: any[]) => call[0] !== null);
-    expect(slotCalls.length).toBeGreaterThan(0);
-
-    const lastSlotContent = slotCalls[slotCalls.length - 1][0];
-    const { container } = render(lastSlotContent);
-    expect(container.textContent).toContain('ABC-123');
   });
 });
 

@@ -39,12 +39,6 @@ jest.mock('@/hooks/useSessionOperations', () => ({
   useSessionOperations: jest.fn(),
 }));
 
-// Mock HeaderSlotContext
-const mockSetHeaderSlot = jest.fn();
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ headerSlot: null, setHeaderSlot: mockSetHeaderSlot }),
-}));
-
 // Mock SessionView component
 jest.mock('../../../components/SessionView', () => ({
   SessionView: function MockSessionView({
@@ -311,27 +305,6 @@ describe('InstructorSessionPage', () => {
       expect(screen.getByTestId('student-count')).toHaveTextContent('2');
     });
 
-    it('shows connection status in header slot', () => {
-      render(<InstructorSessionPage />);
-
-      // Connection status is now rendered via the global header slot
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-      const lastCall = mockSetHeaderSlot.mock.calls[mockSetHeaderSlot.mock.calls.length - 1][0];
-      expect(lastCall).not.toBeNull();
-    });
-
-    it('updates header slot on connection change', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        isConnected: false,
-        connectionStatus: 'Disconnected',
-      });
-
-      render(<InstructorSessionPage />);
-
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-    });
-
     it('shows connection error', () => {
       (useRealtimeSession as jest.Mock).mockReturnValue({
         ...defaultRealtimeSessionReturn,
@@ -382,11 +355,6 @@ describe('InstructorSessionPage', () => {
       });
     });
 
-    it('sets connection status in header slot', () => {
-      render(<InstructorSessionPage />);
-
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-    });
   });
 
   describe('Problem Updates', () => {

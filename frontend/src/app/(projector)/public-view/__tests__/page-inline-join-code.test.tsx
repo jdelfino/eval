@@ -29,13 +29,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// ── No HeaderSlotContext setHeaderSlot calls expected after T2 ────────────────
-
-const mockSetHeaderSlot = jest.fn();
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: mockSetHeaderSlot }),
-}));
-
 // ── executeCode ───────────────────────────────────────────────────────────────
 
 jest.mock('@/lib/api/execute', () => ({

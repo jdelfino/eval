@@ -28,11 +28,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// ── Header slot ───────────────────────────────────────────────────────────────
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: jest.fn() }),
-}));
-
 // ── ConnectionStatus ──────────────────────────────────────────────────────────
 jest.mock('@/components/ConnectionStatus', () => ({
   ConnectionStatus: () => null,

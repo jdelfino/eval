@@ -60,12 +60,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   })),
 }));
 
-// ── No HeaderSlotContext needed — page should NOT call setHeaderSlot anymore ──
-
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: jest.fn(() => ({ setHeaderSlot: jest.fn() })),
-}));
-
 // ── Debugger ──────────────────────────────────────────────────────────────────
 
 jest.mock('@/hooks/useApiDebugger', () => ({

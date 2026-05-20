@@ -39,9 +39,6 @@ jest.mock('@/contexts/AuthContext', () => ({
     signOut: jest.fn(),
   }),
 }));
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: jest.fn() }),
-}));
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: jest.fn().mockResolvedValue({
     id: 'work-123', user_id: 'user-1', section_id: 'section-1',

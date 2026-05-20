@@ -50,12 +50,6 @@ jest.mock('@/hooks/useSessionOperations', () => ({
   useSessionOperations: jest.fn(),
 }));
 
-// ── No HeaderSlotContext needed — T2 drops the hook from this page ────────────
-
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ headerSlot: null, setHeaderSlot: jest.fn() }),
-}));
-
 // ── SessionView: renders join_code so we can assert it's still visible ────────
 
 jest.mock('../../../components/SessionView', () => ({
