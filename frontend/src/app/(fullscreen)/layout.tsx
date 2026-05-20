@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { PanelProvider } from '@/contexts/PanelContext';
 import { PreviewProvider } from '@/contexts/PreviewContext';
+import { PreviewBanner } from '@/components/preview/PreviewBanner';
 
 export default function FullscreenLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -38,7 +39,10 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
   return (
     <PreviewProvider>
       <PanelProvider pageId="fullscreen">
-        <main style={{ height: '100vh', overflow: 'hidden' }}>{children}</main>
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <PreviewBanner />
+          <main style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>{children}</main>
+        </div>
       </PanelProvider>
     </PreviewProvider>
   );

@@ -28,13 +28,14 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 // Track whether PreviewProvider was rendered
 let previewProviderRendered = false;
+let mockIsPreview = false;
 jest.mock('@/contexts/PreviewContext', () => ({
   PreviewProvider: ({ children }: { children: React.ReactNode }) => {
     previewProviderRendered = true;
     return <>{children}</>;
   },
   usePreview: () => ({
-    isPreview: false,
+    isPreview: mockIsPreview,
     previewSectionId: null,
     enterPreview: jest.fn(),
     exitPreview: jest.fn(),
@@ -51,6 +52,7 @@ beforeEach(() => {
   mockAuth = { user: { id: 'user-1' }, isLoading: false };
   mockPush.mockClear();
   previewProviderRendered = false;
+  mockIsPreview = false;
 });
 
 describe('FullscreenLayout', () => {
@@ -111,6 +113,20 @@ describe('FullscreenLayout', () => {
       const main = screen.getByRole('main');
       expect(main).toBeInTheDocument();
       expect(main.contains(screen.getByTestId('child'))).toBe(true);
+    });
+
+    it('renders PreviewBanner above main when isPreview is true', () => {
+      /**
+       * Contract: when an instructor enters preview-as-student mode and navigates
+       * to a fullscreen page, the amber preview banner must remain visible.
+       * Why it matters: without the banner, an instructor previewing a section
+       * cannot tell they are not actually a student. E2E preview-mode test depends
+       * on `text=You are previewing this section as a student` being present on
+       * the fullscreen route.
+       */
+      mockIsPreview = true;
+      render(<FullscreenLayout><div>content</div></FullscreenLayout>);
+      expect(screen.getByText('You are previewing this section as a student')).toBeInTheDocument();
     });
   });
 });
