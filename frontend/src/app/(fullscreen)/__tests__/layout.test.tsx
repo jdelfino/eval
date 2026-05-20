@@ -1,5 +1,6 @@
 /**
  * Tests for the fullscreen layout — verifies PreviewProvider wrapping and auth behavior.
+ * v4 redesign: fullscreen layout is bare (no AppShell/sidebar) per T5.
  *
  * @jest-environment jsdom
  */
@@ -42,12 +43,6 @@ jest.mock('@/contexts/PreviewContext', () => ({
 
 jest.mock('@/contexts/PanelContext', () => ({
   PanelProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-jest.mock('@/components/layout', () => ({
-  AppShell: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="app-shell">{children}</div>
-  ),
 }));
 
 import FullscreenLayout from '../layout';
@@ -99,10 +94,23 @@ describe('FullscreenLayout', () => {
     });
   });
 
-  describe('content rendering', () => {
-    it('renders AppShell when user is authenticated', () => {
-      render(<FullscreenLayout><div>content</div></FullscreenLayout>);
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+  describe('v4 bare layout (no AppShell)', () => {
+    it('does not render AppShell sidebar when user is authenticated', () => {
+      /**
+       * Contract: Fullscreen layout has no sidebar in v4 — it is bare (just providers + main).
+       * Why it matters: AppShell leaked into fullscreen would add an unwanted sidebar to the workspace.
+       * What breaks: If AppShell is still used, aside/sidebar renders in student workspace editor.
+       */
+      const { container } = render(<FullscreenLayout><div>content</div></FullscreenLayout>);
+      expect(container.querySelector('aside')).toBeNull();
+      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+    });
+
+    it('renders children in a main element', () => {
+      render(<FullscreenLayout><div data-testid="child">content</div></FullscreenLayout>);
+      const main = screen.getByRole('main');
+      expect(main).toBeInTheDocument();
+      expect(main.contains(screen.getByTestId('child'))).toBe(true);
     });
   });
 });

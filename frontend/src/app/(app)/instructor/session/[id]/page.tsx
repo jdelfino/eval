@@ -26,8 +26,6 @@ import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
 import { reopenSession } from '@/lib/api/sessions';
 import { executeCode as apiExecuteCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
-import { useForceDesktopLayout } from '@/contexts/LayoutConfigContext';
-
 /**
  * Extended session state from API that includes section info
  */
@@ -44,10 +42,6 @@ export default function InstructorSessionPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const session_id = params.id as string;
-
-  // Force desktop layout so browser zoom for projector display does not
-  // collapse the sidebar and session layout to mobile breakpoints.
-  useForceDesktopLayout();
 
   // Local state
   const [error, setError] = useState<string | null>(null);

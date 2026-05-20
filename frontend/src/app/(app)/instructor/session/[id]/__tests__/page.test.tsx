@@ -22,13 +22,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
 
-// Mock LayoutConfigContext to verify useForceDesktopLayout is called for zoom protection
-const mockUseForceDesktopLayout = jest.fn();
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: false, setForceDesktop: jest.fn() }),
-  useForceDesktopLayout: () => mockUseForceDesktopLayout(),
-}));
-
 // Mock useRealtimeSession hook
 jest.mock('@/hooks/useRealtimeSession', () => ({
   useRealtimeSession: jest.fn(),
@@ -563,13 +556,7 @@ describe('InstructorSessionPage', () => {
     });
   });
 
-  describe('Zoom Protection (forceDesktop)', () => {
-    it('calls useForceDesktopLayout to prevent zoom from collapsing layout', () => {
-      render(<InstructorSessionPage />);
-
-      expect(mockUseForceDesktopLayout).toHaveBeenCalled();
-    });
-
+  describe('SessionView forceDesktop', () => {
     it('passes forceDesktop=true to SessionView for projector zoom protection', () => {
       render(<InstructorSessionPage />);
 

@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * Page breadcrumb component.
+ * Page breadcrumb component — v4 reskin.
  * Auto-generates breadcrumbs from navigation hierarchy or accepts custom items.
+ * No leading Home icon link (sidebar's Dashboard link covers 'go home').
  */
 
 import Link from 'next/link';
-import { ChevronRight, Home } from 'lucide-react';
 import { useBreadcrumbs, BreadcrumbItem } from '@/hooks/useBreadcrumbs';
 
 interface PageBreadcrumbProps {
@@ -23,28 +23,22 @@ export function PageBreadcrumb({ items }: PageBreadcrumbProps) {
   }
 
   return (
-    <nav className="flex items-center text-sm" aria-label="Breadcrumb">
-      <ol className="flex items-center gap-1">
-        {/* Home link */}
-        <li>
-          <Link
-            href="/"
-            className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100 transition-colors"
-            aria-label="Home"
-          >
-            <Home className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </li>
-
+    <nav
+      style={{ display: 'flex', alignItems: 'center', fontSize: 12.5, color: 'var(--fg-muted)' }}
+      aria-label="Breadcrumb"
+    >
+      <ol style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, padding: 0, listStyle: 'none' }}>
         {breadcrumbs.map((item, index) => {
           const isLast = index === breadcrumbs.length - 1;
 
           return (
-            <li key={item.label} className="flex items-center gap-1">
-              <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+            <li key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {index > 0 && (
+                <span aria-hidden="true" style={{ opacity: 0.4 }}>/</span>
+              )}
               {isLast || !item.href ? (
                 <span
-                  className="px-1 py-0.5 text-gray-900 font-medium"
+                  style={{ color: 'var(--fg)', fontWeight: 500 }}
                   aria-current={isLast ? 'page' : undefined}
                 >
                   {item.label}
@@ -52,7 +46,7 @@ export function PageBreadcrumb({ items }: PageBreadcrumbProps) {
               ) : (
                 <Link
                   href={item.href}
-                  className="px-1 py-0.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                  style={{ color: 'var(--fg-muted)', fontWeight: 400, textDecoration: 'none' }}
                 >
                   {item.label}
                 </Link>

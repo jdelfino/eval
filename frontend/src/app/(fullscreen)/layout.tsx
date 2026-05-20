@@ -2,7 +2,8 @@
 
 /**
  * Layout for fullscreen pages (student code editor).
- * Provides AppShell with collapsed sidebar and no right panels.
+ * Bare layout: full-bleed content within PreviewProvider + PanelProvider.
+ * No AppShell/sidebar — workspace renders full-bleed per v4 design.
  * Redirects to signin if user is not authenticated.
  */
 
@@ -11,20 +12,17 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { PanelProvider } from '@/contexts/PanelContext';
 import { PreviewProvider } from '@/contexts/PreviewContext';
-import { AppShell } from '@/components/layout';
 
 export default function FullscreenLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Wait for auth to load before checking
     if (!isLoading && !user) {
       router.push('/auth/signin');
     }
   }, [user, isLoading, router]);
 
-  // Show loading state while auth is being checked
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -33,7 +31,6 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
     );
   }
 
-  // Don't render app shell if not authenticated
   if (!user) {
     return null;
   }
@@ -41,9 +38,7 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
   return (
     <PreviewProvider>
       <PanelProvider pageId="fullscreen">
-        <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
-          {children}
-        </AppShell>
+        <main style={{ height: '100vh', overflow: 'hidden' }}>{children}</main>
       </PanelProvider>
     </PreviewProvider>
   );

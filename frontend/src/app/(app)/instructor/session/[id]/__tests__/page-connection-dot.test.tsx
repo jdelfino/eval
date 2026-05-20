@@ -31,13 +31,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
 
-// ── LayoutConfigContext ───────────────────────────────────────────────────────
-
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: false, setForceDesktop: jest.fn() }),
-  useForceDesktopLayout: () => jest.fn(),
-}));
-
 // ── Realtime hook ─────────────────────────────────────────────────────────────
 
 jest.mock('@/hooks/useRealtimeSession', () => ({

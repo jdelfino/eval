@@ -3,7 +3,7 @@
  */
 
 export { AppShell } from './AppShell';
-export { GlobalHeader } from './GlobalHeader';
+export { AppBarLite } from './AppBarLite';
 export { Sidebar } from './Sidebar';
 export { MobileNav } from './MobileNav';
 export { PageBreadcrumb } from './PageBreadcrumb';

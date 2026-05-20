@@ -18,13 +18,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, isLoading: false }),
 }));
 
-// Mock LayoutConfigContext to verify useForceDesktopLayout is called for zoom protection
-const mockUseForceDesktopLayout = jest.fn();
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: false, setForceDesktop: jest.fn() }),
-  useForceDesktopLayout: () => mockUseForceDesktopLayout(),
-}));
-
 // Mock InstructorDashboard to avoid deep dependency tree
 jest.mock('../components/InstructorDashboard', () => ({
   InstructorDashboard: function MockInstructorDashboard({
@@ -75,14 +68,6 @@ beforeEach(() => {
 });
 
 describe('InstructorPage', () => {
-  describe('Zoom Protection (forceDesktop)', () => {
-    it('calls useForceDesktopLayout to prevent browser zoom from collapsing sidebar', () => {
-      render(<InstructorPageWrapper />);
-
-      expect(mockUseForceDesktopLayout).toHaveBeenCalled();
-    });
-  });
-
   describe('rendering', () => {
     it('renders the instructor dashboard', () => {
       render(<InstructorPageWrapper />);
