@@ -11,6 +11,7 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 
 ## Principles
 
+- **Stay in your assigned worktree.** You can `cd` freely within it, but don't leave its root, and don't write to absolute paths outside it. Every worktree is a full repo — `bd`, `git`, `make` all work from inside it.
 - Never silently work around problems. Throw errors for missing env vars, invalid state, missing dependencies.
 - Mock properly in tests. Do not add production fallbacks to make tests pass.
 - No type casts that bypass the type system.
