@@ -9,7 +9,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { PanelProvider } from '@/contexts/PanelContext';
 import { PreviewProvider } from '@/contexts/PreviewContext';
 import { AppShell } from '@/components/layout';
@@ -41,13 +40,11 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
 
   return (
     <PreviewProvider>
-      <ActiveSessionProvider>
-        <PanelProvider pageId="fullscreen">
-          <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
-            {children}
-          </AppShell>
-        </PanelProvider>
-      </ActiveSessionProvider>
+      <PanelProvider pageId="fullscreen">
+        <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
+          {children}
+        </AppShell>
+      </PanelProvider>
     </PreviewProvider>
   );
 }

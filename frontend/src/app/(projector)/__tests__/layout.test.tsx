@@ -28,10 +28,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => mockAuth,
 }));
 
-jest.mock('@/contexts/ActiveSessionContext', () => ({
-  ActiveSessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 jest.mock('@/components/layout/GlobalHeader', () => ({
   GlobalHeader: (props: { showMobileMenu: boolean }) => (
     <header data-testid="global-header" data-mobile-menu={String(props.showMobileMenu)} />

@@ -9,7 +9,6 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 
 export default function ProjectorLayout({ children }: { children: React.ReactNode }) {
@@ -35,13 +34,11 @@ export default function ProjectorLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <ActiveSessionProvider>
-      <div className="h-screen flex flex-col bg-gray-50">
-        <GlobalHeader showMobileMenu={false} />
-        <main className="flex-1 overflow-hidden">
-          {children}
-        </main>
-      </div>
-    </ActiveSessionProvider>
+    <div className="h-screen flex flex-col bg-gray-50">
+      <GlobalHeader showMobileMenu={false} />
+      <main className="flex-1 overflow-hidden">
+        {children}
+      </main>
+    </div>
   );
 }

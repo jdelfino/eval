@@ -2,12 +2,11 @@
 
 /**
  * Global header component.
- * Fixed top bar with logo, session banner, and user menu.
+ * Fixed top bar with logo and mobile menu toggle.
+ * Transitional stub — deleted by T5 (AppShell rewrite).
  */
 
 import { Menu } from 'lucide-react';
-import { ActiveSessionBanner } from './ActiveSessionBanner';
-import { UserMenu } from './UserMenu';
 
 interface GlobalHeaderProps {
   /** Callback when mobile menu button is clicked */
@@ -37,16 +36,6 @@ export function GlobalHeader({ onMobileMenuToggle, showMobileMenu = false }: Glo
           </div>
           <span className="font-semibold text-gray-900 hidden sm:inline">Eval</span>
         </div>
-      </div>
-
-      {/* Center section: Active session banner */}
-      <div className="flex-1 flex justify-center px-4">
-        <ActiveSessionBanner />
-      </div>
-
-      {/* Right section: User menu */}
-      <div className="flex items-center gap-3">
-        <UserMenu />
       </div>
     </header>
   );

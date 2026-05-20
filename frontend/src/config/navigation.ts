@@ -21,7 +21,7 @@ export interface NavItem {
   id: string;
   label: string;
   href: string;
-  icon: string; // Lucide icon name
+  icon: string; // IconName from @/components/ui/Icon
   roles: UserRole[];
   group: NavGroup;
 }
@@ -36,7 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'my-sections',
     label: 'My Sections',
     href: '/sections',
-    icon: 'BookOpen',
+    icon: 'layers',
     roles: ['student'],
     group: NavGroup.Main,
   },
@@ -46,7 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'dashboard',
     label: 'Dashboard',
     href: '/instructor',
-    icon: 'LayoutDashboard',
+    icon: 'home',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
@@ -54,15 +54,15 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'classes',
     label: 'Classes',
     href: '/classes',
-    icon: 'School',
+    icon: 'users',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
   {
     id: 'problems',
-    label: 'Problems',
+    label: 'Library',
     href: '/instructor/problems',
-    icon: 'FileCode',
+    icon: 'book',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
@@ -72,7 +72,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'user-management',
     label: 'User Management',
     href: '/admin',
-    icon: 'Users',
+    icon: 'users',
     roles: ['namespace-admin', 'system-admin'],
     group: NavGroup.Admin,
   },
@@ -82,7 +82,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'namespaces',
     label: 'Namespaces',
     href: '/system',
-    icon: 'Building',
+    icon: 'globe',
     roles: ['system-admin'],
     group: NavGroup.System,
   },

@@ -8,14 +8,15 @@
 import React, { ReactNode } from 'react';
 import { usePanelState } from '@/contexts/PanelContext';
 import { PanelToggle } from './PanelToggle';
-import { getIconComponent } from './iconMap';
+import { Icon } from '@/components/ui';
+import type { IconName } from '@/components/ui';
 
 interface PanelProps {
   /** Unique identifier used for PanelContext state */
   id: string;
   /** Panel title displayed in header */
   title: string;
-  /** Lucide icon name */
+  /** Icon name from the Icon primitive */
   icon?: string;
   /** Panel content */
   children: ReactNode;
@@ -32,8 +33,6 @@ export function Panel({
 }: PanelProps) {
   const { isPanelExpanded, togglePanel } = usePanelState();
   const isExpanded = isPanelExpanded(id);
-
-  const IconComponent = icon ? getIconComponent(icon) : null;
 
   const handleToggle = () => {
     togglePanel(id);
@@ -60,8 +59,8 @@ export function Panel({
         aria-controls={`panel-content-${id}`}
       >
         <div className="flex items-center gap-2">
-          {IconComponent && (
-            <IconComponent className="h-4 w-4 text-gray-500" aria-hidden="true" />
+          {icon && (
+            <Icon name={icon as IconName} size={14} />
           )}
           <span className="text-sm font-medium text-gray-700">{title}</span>
         </div>

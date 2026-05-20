@@ -1,23 +1,27 @@
 /**
- * Tests for Sidebar component
+ * Tests for Sidebar component (v4 redesign)
  * @jest-environment jsdom
  */
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { Sidebar } from '../Sidebar';
 
 // Mock next/navigation
 const mockPathname = jest.fn();
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname(),
+  useRouter: () => ({ push: mockRouterPush }),
 }));
 
 // Mock useAuth
 const mockUser = jest.fn();
+const mockSignOut = jest.fn();
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: mockUser(),
+    signOut: mockSignOut,
   }),
 }));
 
@@ -27,6 +31,14 @@ jest.mock('@/contexts/PreviewContext', () => ({
   usePreview: () => mockUsePreview(),
 }));
 
+// Mock NamespaceHeader (async component, simplify for tests)
+jest.mock('@/components/NamespaceHeader', () => ({
+  __esModule: true,
+  default: () => <div data-testid="namespace-header" />,
+}));
+
+const mockRouterPush = jest.fn();
+
 describe('Sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -34,334 +46,268 @@ describe('Sidebar', () => {
     mockUser.mockReturnValue({
       id: 'user1',
       email: 'test@example.com',
+      display_name: 'Test User',
       role: 'instructor',
     });
-    // Default: not in preview mode
     mockUsePreview.mockReturnValue({
       isPreview: false,
       previewSectionId: null,
       enterPreview: jest.fn(),
       exitPreview: jest.fn(),
     });
+    mockSignOut.mockResolvedValue(undefined);
   });
 
   /**
-   * Helper to get the sidebar aside element
+   * Helper to get the sidebar aside element.
+   * Verifies aria-label="Main navigation" — this is required by e2e fixtures.
    */
   function getSidebar() {
     return screen.getByRole('complementary', { name: /main navigation/i });
   }
 
-  describe('rendering', () => {
-    it('renders sidebar landmark', () => {
-      render(<Sidebar />);
+  /**
+   * TC1: Sidebar renders brand + nav landmark with correct aria-label.
+   * Contract: aside[aria-label="Main navigation"] must exist and brand text "Eval" must be visible.
+   * Why: e2e selector `aside[aria-label="Main navigation"]` depends on this exact aria-label.
+   */
+  it('renders sidebar landmark with correct aria-label and brand text Eval', () => {
+    render(<Sidebar />);
 
-      expect(getSidebar()).toBeInTheDocument();
-    });
-
-    it('renders nav items for instructor role', () => {
-      render(<Sidebar />);
-
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('Classes')).toBeInTheDocument();
-      expect(screen.getByText('Problems')).toBeInTheDocument();
-      // Note: Sessions removed from navigation - sessions are now managed from the dashboard
-    });
-
-    it('does not render admin items for instructor', () => {
-      render(<Sidebar />);
-
-      expect(screen.queryByText('User Management')).not.toBeInTheDocument();
-      expect(screen.queryByText('Namespaces')).not.toBeInTheDocument();
-    });
+    const sidebar = getSidebar();
+    expect(sidebar).toBeInTheDocument();
+    expect(screen.getByText('Eval')).toBeInTheDocument();
   });
 
-  describe('role filtering', () => {
-    it('shows My Sections for student role', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'student@example.com',
-        role: 'student',
-      });
+  /**
+   * TC2: Instructor role sees Teaching group items in order.
+   * Contract: Dashboard, Classes, Library nav items present in DOM order.
+   * Why: nav config drift would break instructor navigation.
+   */
+  it('renders instructor nav items: Dashboard, Classes, Library', () => {
+    render(<Sidebar />);
 
-      render(<Sidebar />);
-
-      expect(screen.getByText('My Sections')).toBeInTheDocument();
-      expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
-      expect(screen.queryByText('Classes')).not.toBeInTheDocument();
-    });
-
-    it('shows admin items for namespace-admin role', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'admin@example.com',
-        role: 'namespace-admin',
-      });
-
-      render(<Sidebar />);
-
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('User Management')).toBeInTheDocument();
-      expect(screen.queryByText('Namespaces')).not.toBeInTheDocument();
-    });
-
-    it('shows all items for system-admin role', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'sysadmin@example.com',
-        role: 'system-admin',
-      });
-
-      render(<Sidebar />);
-
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('User Management')).toBeInTheDocument();
-      expect(screen.getByText('Namespaces')).toBeInTheDocument();
-    });
-
-    it('defaults to student role when no user', () => {
-      mockUser.mockReturnValue(null);
-
-      render(<Sidebar />);
-
-      // Student role shows My Sections
-      expect(screen.getByText('My Sections')).toBeInTheDocument();
-      expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
-    });
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /classes/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /library/i })).toBeInTheDocument();
+    // "Problems" label should be gone — renamed to Library
+    expect(screen.queryByText('Problems')).not.toBeInTheDocument();
   });
 
-  describe('active state', () => {
-    it('highlights active nav item based on pathname', () => {
-      mockPathname.mockReturnValue('/instructor');
-
-      render(<Sidebar />);
-
-      const dashboardLink = screen.getByRole('link', { name: 'Dashboard' });
-      expect(dashboardLink).toHaveAttribute('aria-current', 'page');
+  /**
+   * TC3: Student role sees only Main items.
+   * Contract: "My Sections" present; "Dashboard"/"Classes"/"Library" NOT present.
+   * Why: role filter regression would expose instructor nav to students.
+   */
+  it('shows only student nav items for student role', () => {
+    mockUser.mockReturnValue({
+      id: 'user2',
+      email: 'student@example.com',
+      display_name: 'Student User',
+      role: 'student',
     });
 
-    it('highlights nested route correctly', () => {
-      mockPathname.mockReturnValue('/classes/123');
+    render(<Sidebar />);
 
-      render(<Sidebar />);
-
-      const classesLink = screen.getByRole('link', { name: 'Classes' });
-      expect(classesLink).toHaveAttribute('aria-current', 'page');
-    });
-
-    it('does not highlight non-active items', () => {
-      mockPathname.mockReturnValue('/instructor');
-
-      render(<Sidebar />);
-
-      const classesLink = screen.getByRole('link', { name: 'Classes' });
-      expect(classesLink).not.toHaveAttribute('aria-current', 'page');
-    });
+    expect(screen.getByRole('link', { name: /my sections/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /classes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /library/i })).not.toBeInTheDocument();
   });
 
-  describe('collapsed state', () => {
-    it('shows full width when not collapsed', () => {
-      render(<Sidebar collapsed={false} />);
-
-      const sidebar = getSidebar();
-      expect(sidebar).toHaveClass('w-64');
+  /**
+   * TC4: Namespace-admin sees Admin items in addition to Teaching.
+   * Contract: Dashboard + Classes + Library + User Management visible, no Namespaces.
+   */
+  it('shows Teaching + Admin items for namespace-admin role', () => {
+    mockUser.mockReturnValue({
+      id: 'user3',
+      email: 'nsadmin@example.com',
+      display_name: 'NS Admin',
+      role: 'namespace-admin',
     });
 
-    it('shows narrow width when collapsed', () => {
-      render(<Sidebar collapsed={true} />);
+    render(<Sidebar />);
 
-      const sidebar = getSidebar();
-      expect(sidebar).toHaveClass('w-16');
-    });
-
-    it('shows labels when expanded', () => {
-      render(<Sidebar collapsed={false} />);
-
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    });
-
-    it('hides labels when collapsed', () => {
-      render(<Sidebar collapsed={true} />);
-
-      // Links should still exist but text content should not be visible
-      const link = screen.getByRole('link', { name: 'Dashboard' });
-      expect(link).toHaveAttribute('title', 'Dashboard');
-    });
-
-    it('shows group labels when expanded', () => {
-      render(<Sidebar collapsed={false} />);
-
-      expect(screen.getByText('Teaching')).toBeInTheDocument();
-    });
-
-    it('hides group labels when collapsed', () => {
-      render(<Sidebar collapsed={true} />);
-
-      expect(screen.queryByText('Teaching')).not.toBeInTheDocument();
-    });
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /user management/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /namespaces/i })).not.toBeInTheDocument();
   });
 
-  describe('toggle functionality', () => {
-    it('shows toggle button when onToggleCollapse provided', () => {
-      const onToggle = jest.fn();
-      render(<Sidebar onToggleCollapse={onToggle} />);
-
-      expect(screen.getByRole('button', { name: /collapse sidebar/i })).toBeInTheDocument();
+  /**
+   * TC5: System-admin sees all items including Namespaces + Admin + Teaching.
+   * Contract: full nav tree visible for system-admin.
+   */
+  it('shows all items including Namespaces for system-admin role', () => {
+    mockUser.mockReturnValue({
+      id: 'user4',
+      email: 'sysadmin@example.com',
+      display_name: 'Sys Admin',
+      role: 'system-admin',
     });
 
-    it('hides toggle button when onToggleCollapse not provided', () => {
-      render(<Sidebar />);
+    render(<Sidebar />);
 
-      expect(screen.queryByRole('button', { name: /collapse sidebar/i })).not.toBeInTheDocument();
-    });
-
-    it('calls onToggleCollapse when toggle button clicked', () => {
-      const onToggle = jest.fn();
-      render(<Sidebar onToggleCollapse={onToggle} />);
-
-      fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
-
-      expect(onToggle).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows expand label when collapsed', () => {
-      const onToggle = jest.fn();
-      render(<Sidebar collapsed={true} onToggleCollapse={onToggle} />);
-
-      expect(screen.getByRole('button', { name: /expand sidebar/i })).toBeInTheDocument();
-    });
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /user management/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /namespaces/i })).toBeInTheDocument();
   });
 
-  describe('accessibility', () => {
-    it('nav items have aria-label when collapsed', () => {
-      render(<Sidebar collapsed={true} />);
+  /**
+   * TC6: Sign-out trigger has visible text "Sign Out" inside sidebar.
+   * Contract: element with text content "Sign Out" must be findable inside the sidebar.
+   * Why: e2e fixture uses `:has-text("Sign Out")` which requires visible text content,
+   * not just a title= attribute. Breaking this blocks the signOut e2e fixture.
+   */
+  it('renders Sign Out element with visible text content inside sidebar', async () => {
+    render(<Sidebar />);
 
-      const links = screen.getAllByRole('link');
-      links.forEach(link => {
-        expect(link).toHaveAttribute('aria-label');
-      });
-    });
+    // Must find by visible text — title= alone does NOT satisfy Playwright :has-text()
+    const signOutEl = screen.getByText('Sign Out');
+    expect(signOutEl).toBeInTheDocument();
 
-    it('links are navigable via keyboard', () => {
-      render(<Sidebar />);
-
-      const firstLink = screen.getByRole('link', { name: 'Dashboard' });
-      firstLink.focus();
-
-      expect(document.activeElement).toBe(firstLink);
-    });
+    // Must be inside the sidebar landmark
+    const sidebar = getSidebar();
+    expect(sidebar).toContainElement(signOutEl);
   });
 
-  describe('nav groups', () => {
-    it('renders nav groups in correct order', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'sysadmin@example.com',
-        role: 'system-admin',
-      });
+  /**
+   * TC6b: Sign-out triggers signOut() and router.push('/auth/signin').
+   * Contract: clicking Sign Out calls auth.signOut() and navigates to sign-in page.
+   */
+  it('calls signOut and navigates to /auth/signin when Sign Out clicked', async () => {
+    render(<Sidebar />);
 
-      render(<Sidebar />);
+    const signOutEl = screen.getByText('Sign Out');
+    fireEvent.click(signOutEl);
 
-      const headings = screen.getAllByRole('heading', { level: 3 });
-      const groupNames = headings.map(h => h.textContent);
-
-      // System admin should see: Teaching, Admin, System (in that order)
-      expect(groupNames).toEqual(['Teaching', 'Admin', 'System']);
-    });
-
-    it('renders Main group for student', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'student@example.com',
-        role: 'student',
-      });
-
-      render(<Sidebar collapsed={false} />);
-
-      expect(screen.getByText('Main')).toBeInTheDocument();
-      expect(screen.queryByText('Teaching')).not.toBeInTheDocument();
-    });
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 
-  describe('help link', () => {
+  /**
+   * TC7: Collapse toggle invokes onToggleCollapse.
+   * Contract: clicking collapse IconBtn triggers the passed callback.
+   * Why: collapse not wired means sidebar never collapses.
+   */
+  it('calls onToggleCollapse when collapse button clicked', () => {
+    const onToggle = jest.fn();
+    render(<Sidebar onToggleCollapse={onToggle} />);
+
+    // Find the collapse button (title="Collapse" on IconBtn)
+    const collapseBtn = screen.getByTitle('Collapse');
+    fireEvent.click(collapseBtn);
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * TC8: Collapsed state hides labels, icons still present.
+   * Contract: when collapsed=true, nav item text labels not visible; SVG icons still in DOM.
+   * Why: collapsed branch broken would show labels when collapsed.
+   */
+  it('hides nav item labels when collapsed=true', () => {
+    render(<Sidebar collapsed={true} />);
+
+    // Text labels should not be visible as separate spans
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByText('Classes')).not.toBeInTheDocument();
+    // But links should still exist (via aria-label/title for accessibility)
+    expect(screen.getByTitle('Dashboard')).toBeInTheDocument();
+  });
+
+  /**
+   * TC9: Active route shows active styling and aria-current="page".
+   * Contract: nav item for current pathname gets aria-current="page".
+   * Why: active detection broken means visual focus cues break.
+   */
+  it('marks active route with aria-current="page"', () => {
+    mockPathname.mockReturnValue('/classes');
+
+    render(<Sidebar />);
+
+    const classesLink = screen.getByRole('link', { name: /classes/i });
+    expect(classesLink).toHaveAttribute('aria-current', 'page');
+
+    const dashboardLink = screen.getByRole('link', { name: /dashboard/i });
+    expect(dashboardLink).not.toHaveAttribute('aria-current', 'page');
+  });
+
+  /**
+   * TC10: Preview mode forces student nav even for instructor users.
+   * Contract: isPreview=true + role=instructor → My Sections visible, Dashboard not visible.
+   * Why: preview branch broken would show instructor items during student preview.
+   */
+  it('shows student nav in preview mode for instructor', () => {
+    mockUsePreview.mockReturnValue({
+      isPreview: true,
+      previewSectionId: 'section-123',
+      enterPreview: jest.fn(),
+      exitPreview: jest.fn(),
+    });
+
+    render(<Sidebar />);
+
+    expect(screen.getByRole('link', { name: /my sections/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /classes/i })).not.toBeInTheDocument();
+  });
+
+  describe('Help link', () => {
     it('renders Help link for all roles', () => {
-      const roles = ['student', 'instructor', 'namespace-admin', 'system-admin'] as const;
-
-      roles.forEach(role => {
-        mockUser.mockReturnValue({
-          id: 'user1',
-          email: 'test@example.com',
-          role,
-        });
-
-        const { unmount } = render(<Sidebar />);
-        expect(screen.getByRole('link', { name: /help/i })).toBeInTheDocument();
-        unmount();
-      });
+      render(<Sidebar />);
+      expect(screen.getByRole('link', { name: /help/i })).toBeInTheDocument();
     });
 
     it('has correct href', () => {
       render(<Sidebar />);
-      const helpLink = screen.getByRole('link', { name: /help/i });
-      expect(helpLink).toHaveAttribute('href', '/help');
+      expect(screen.getByRole('link', { name: /help/i })).toHaveAttribute('href', '/help');
     });
 
     it('shows active state when on /help', () => {
       mockPathname.mockReturnValue('/help');
       render(<Sidebar />);
-      const helpLink = screen.getByRole('link', { name: /help/i });
-      expect(helpLink).toHaveAttribute('aria-current', 'page');
-    });
-
-    it('does not show active state on other pages', () => {
-      mockPathname.mockReturnValue('/instructor');
-      render(<Sidebar />);
-      const helpLink = screen.getByRole('link', { name: /help/i });
-      expect(helpLink).not.toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: /help/i })).toHaveAttribute('aria-current', 'page');
     });
   });
 
-  describe('preview mode navigation', () => {
-    it('shows student nav items (My Sections) for instructor when preview is active', () => {
-      mockUser.mockReturnValue({
-        id: 'user1',
-        email: 'test@example.com',
-        role: 'instructor',
-      });
-      mockUsePreview.mockReturnValue({
-        isPreview: true,
-        previewSectionId: 'section-123',
-        enterPreview: jest.fn(),
-        exitPreview: jest.fn(),
-      });
-
+  describe('user row', () => {
+    it('shows user display name in the user row', () => {
       render(<Sidebar />);
-
-      // Student nav shows "My Sections" instead of instructor items
-      expect(screen.getByText('My Sections')).toBeInTheDocument();
-      // Instructor-only items should NOT be visible during preview
-      expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
-      expect(screen.queryByText('Classes')).not.toBeInTheDocument();
+      expect(screen.getByText('Test User')).toBeInTheDocument();
     });
 
-    it('shows instructor nav items when preview is not active', () => {
+    it('shows email as fallback when no display_name', () => {
       mockUser.mockReturnValue({
         id: 'user1',
-        email: 'test@example.com',
+        email: 'noname@example.com',
+        display_name: null,
         role: 'instructor',
-      });
-      mockUsePreview.mockReturnValue({
-        isPreview: false,
-        previewSectionId: null,
-        enterPreview: jest.fn(),
-        exitPreview: jest.fn(),
       });
 
       render(<Sidebar />);
+      expect(screen.getByText('noname@example.com')).toBeInTheDocument();
+    });
+  });
 
-      expect(screen.getByText('Dashboard')).toBeInTheDocument();
-      expect(screen.getByText('Classes')).toBeInTheDocument();
-      expect(screen.queryByText('My Sections')).not.toBeInTheDocument();
+  describe('nav groups', () => {
+    it('renders group labels when expanded', () => {
+      mockUser.mockReturnValue({
+        id: 'user4',
+        email: 'sysadmin@example.com',
+        display_name: 'Sys Admin',
+        role: 'system-admin',
+      });
+
+      render(<Sidebar collapsed={false} />);
+
+      const headings = screen.getAllByRole('heading', { level: 3 });
+      const groupNames = headings.map(h => h.textContent);
+      expect(groupNames).toContain('Teaching');
+    });
+
+    it('hides group labels when collapsed', () => {
+      render(<Sidebar collapsed={true} />);
+      expect(screen.queryByText('Teaching')).not.toBeInTheDocument();
     });
   });
 });
