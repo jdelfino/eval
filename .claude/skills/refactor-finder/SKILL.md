@@ -16,14 +16,14 @@ reviewer-architecture catches duplication, pattern divergence, and leaky abstrac
 
 `/refactor-finder [scope]`
 
-- If given a scope argument (path or topic): focus reconnaissance and deep-dive on that area
+- If given a scope argument (path or topic): focus reconnaissance and deep-dive on that scope
 - If no scope: scan the whole repo via signal-driven reconnaissance, then surface ranked candidates for user selection
 
 ---
 
 ## Phase 1 — Reconnaissance
 
-Run a cheap, whole-codebase signal pass to identify candidate areas. If invoked with a scope argument, restrict these commands to that path. Otherwise scan from the repo root.
+Run a cheap, whole-codebase signal pass to identify candidate scopes. If invoked with a scope argument, restrict these commands to that path. Otherwise scan from the repo root.
 
 ### Signal collection
 
@@ -67,58 +67,25 @@ grep -rn "^\s\{20,\}" --include="*.go" --include="*.ts" --include="*.tsx" . | \
 
 ### Output of Phase 1
 
-Aggregate all signals into a **ranked candidate list** of areas (directories or file clusters). Each candidate entry should include:
-- Path / area name
+Aggregate the signals into ranked candidate **scopes** — described in whatever form fits the codebase: a directory, a feature, a file cluster, a code path. The scope is whatever a human would point at and say "go look there." No imposed taxonomy or slug naming. Each candidate entry should include:
+- Scope description (path, prose, or both — whatever fits)
 - Signals that flagged it (LOC, churn count, TODO count, nesting hits, etc.)
-- Last-scanned date (populated in Phase 2 from the scan-log)
 
 ---
 
-## Phase 2 — Selection (memory-aware)
+## Phase 2 — Selection
 
-Query beads to avoid re-scanning recently-covered ground and areas with already-open findings.
-
-### Query the scan-log
-
-```bash
-bd list --label refactor-finder-log --all --json
-```
-
-If the result is non-empty, take the first issue's ID and fetch its notes:
-
-```bash
-bd show <log-id> --json
-```
-
-Parse the `notes` field line-by-line. Each line uses the key=value format:
-```
-area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>
-```
-
-Read key=value pairs from each line (split on spaces, then on `=`). The `area` value is the normalized slug (see Phase 4 normalization rule). To recover the original path for display, apply the inverse: replace `-` with `/` in the slug — or do prefix-matching on the slug form if exact round-trip isn't needed.
-
-### Query open findings
-
-```bash
-bd list --label refactor-finder --status open --json
-```
-
-Each result's `labels` array contains an `area:<slug>` entry (added by Phase 4 at filing time). Extract those `area:` slugs to build the set of areas with open findings, then filter Phase 1 candidates against that set.
-
-### Filter candidates
-
-- **Without scope argument**: skip areas scanned within the last 30 days AND areas with already-open findings. This avoids duplicate noise.
-- **With scope argument**: the recent-scan filter is **informational only** — show the last-scanned date in the rationale, but do NOT suppress the area. The user explicitly asked for it.
+Present the Phase 1 ranked candidate scopes to the user. Do NOT impose a taxonomy — describe each scope as the agent naturally would.
 
 ### Present candidates to user
 
 Use AskUserQuestion with up to 4 options per call. Present the top ranked candidates with rationale:
 
 ```
-Option label example: "go-backend/store (3 files >500 LOC, churn: 18 commits in 6mo, last scanned 2026-02-01, 12 TODO markers)"
+Option label example: "executor sandbox setup — 4 files >500 LOC, 12 TODO markers, low churn"
 ```
 
-Ask the user to pick 1-2 areas to deep-dive. Do NOT proceed to Phase 3 without user selection.
+Ask the user to pick 1-2 scopes to deep-dive. Do NOT proceed to Phase 3 without user selection.
 
 ---
 
@@ -137,14 +104,14 @@ Run all three in parallel (one Task call per scanner):
 ```
 ROLE: Structure Scanner
 
-AREA: <path(s) selected in Phase 2>
+SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
 - Duplication & parallel implementations: types (structs, interfaces, response shapes) defined in multiple places; copy-pasted logic across packages; utility functions that duplicate shared ones
 - Leaky abstractions: internal details exposed through interfaces; excessive type-casting (Go: repeated interface{} assertions; TS: excessive `as any`); data-shuffling conversion code between layers (handler→service→store) that indicates a missing shared type
 
 INSTRUCTIONS:
-- Read all source files under AREA
+- Read all source files under SCOPE
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
@@ -167,7 +134,7 @@ Finding N:
 ```
 ROLE: Cruft Scanner
 
-AREA: <path(s) selected in Phase 2>
+SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
 - Dead code: unreferenced exports, commented-out blocks, defunct config options, Make targets that no longer work or reference deleted artifacts
@@ -175,7 +142,7 @@ CATEGORIES TO HUNT:
 - Backwards-compat shims: adapter/shim code that was added for a migration but whose migration is now complete, leaving the shim with no remaining purpose
 
 INSTRUCTIONS:
-- Read all source files under AREA
+- Read all source files under SCOPE
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
@@ -198,14 +165,14 @@ Finding N:
 ```
 ROLE: Complexity Scanner
 
-AREA: <path(s) selected in Phase 2>
+SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
 - Complexity: long functions (Go: >80 lines; TS: >60 lines), deep nesting (>4 levels), functions with too many parameters (>5), switch statements that should be dispatch tables
 - Test smells: skipped/xfail tests with no tracking issue, commented-out test cases, tests that mock cheap real dependencies, test files with no assertions, copy-pasted test setup that should be a helper
 
 INSTRUCTIONS:
-- Read all source files under AREA
+- Read all source files under SCOPE
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
@@ -227,12 +194,28 @@ Finding N:
 
 After all 3 sub-scanners return:
 
+### Dedup pass
+
+Before presenting findings to the user, fetch open `refactor-finder` findings:
+```bash
+bd list --label refactor-finder --status open --json
+```
+
+For each open issue, read its title and description. For each candidate finding from Phase 3, judge whether it likely duplicates one of the open issues. Use judgement — consider:
+- File-and-line overlap (but allow for shifted line numbers, renamed files)
+- Semantic equivalence (same problem described differently)
+- Same suggested fix
+
+Annotate each candidate finding with `(possible dupe of #N — reason)` if you think it duplicates an open issue. If not, no annotation.
+
 1. **Aggregate** all findings from the three scanners into one list
 2. **Dedupe** overlapping findings (same file + same diagnosis from two scanners — keep the more specific one)
-3. **Present findings to the user** for triage. For each finding, the user can:
+3. **Present findings to the user** for triage. For each finding, include the dupe annotation if any. For findings flagged as possible dupes, the user's choices are:
+   - Skip (it's a dupe)
+   - File anyway (it's distinct)
+   - Merge into #N (the user adds context to the existing issue — use `bd note #N "..."` to append; do NOT use `bd update --description` since that replaces)
    - File as task (small finding, 1 implementer session)
    - File as stub epic (large finding, requires /plan handoff)
-   - Skip (won't file)
 
 Present findings in batches using AskUserQuestion (max 4 per call), or present a numbered list and accept freeform keep/skip/escalate decisions. Wait for user input before filing any issue.
 
@@ -241,48 +224,18 @@ Present findings in batches using AskUserQuestion (max 4 per call), or present a
 ```bash
 bd create --title="<concise summary>" \
   --description="<full finding details + suggested fix, self-contained per CLAUDE.md issue-writing standard>" \
-  --type=task --priority=3 --labels refactor-finder,area:<normalized-area-slug> --json
+  --type=task --priority=3 --labels refactor-finder --json
 ```
 
 The description must be self-contained: 1-2 sentence summary (what + why), exact file paths, numbered implementation steps, before→after example when applicable.
-
-**Area slug normalization rule:** replace `/` with `-` in the area path (e.g., `go-backend/store` → `area:go-backend-store`). Labels must be slug-safe (no slashes).
 
 ### Filing an epic finding
 
 ```bash
 bd create --title="<concise summary>" \
   --description="<rationale + key files affected + 'For full implementation plan, run /plan <this-epic-id> in a fresh session.'>" \
-  --type=epic --priority=2 --labels refactor-finder,area:<normalized-area-slug> --json
+  --type=epic --priority=2 --labels refactor-finder --json
 ```
-
-Apply the same area slug normalization rule as for task findings above.
-
----
-
-## Phase 5 — Scan-log update
-
-Always update the scan-log at the end of every run, regardless of how many findings were filed.
-
-### First run (no scan-log issue exists)
-
-Create the scan-log issue:
-
-```bash
-bd create --title="refactor-finder scan log" \
-  --description="Persistent log of areas scanned by /refactor-finder. Used by the skill in Phase 2 to avoid re-scanning recently-covered ground. Each line of notes is one scan entry with key=value pairs: 'area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>'." \
-  --type=task --priority=4 --labels refactor-finder-log --json
-```
-
-Save the returned ID as `<log-id>`.
-
-### Every run (append to existing log)
-
-```bash
-bd note <log-id> "area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfaced=<K>"
-```
-
-`bd note` appends to the notes field (it is shorthand for `bd update --append-notes`). Do NOT use `bd update <log-id> --notes "..."` — that flag **replaces** the entire notes field and would erase prior scan history.
 
 ---
 
@@ -292,15 +245,14 @@ bd note <log-id> "area=<normalized-area-slug> date=<YYYY-MM-DD> filed=<N> surfac
 - **MAY** use file reads and git commands for reconnaissance
 - **MAY** spawn subagents for the 3 parallel sub-scanners in Phase 3
 - **NEVER** write production code or modify source files
-- **NEVER** make decisions without user input (Phase 2 area selection; Phase 4 finding triage)
-- **ALWAYS** update the scan-log in Phase 5, even if zero findings were filed
+- **NEVER** make decisions without user input (Phase 2 scope selection; Phase 4 finding triage)
+- **ALWAYS** run the Phase 4 dedup pass against open `refactor-finder` issues before presenting findings to the user
 - **ALWAYS** produce behavior-preserving suggestions; only bug fixes may change behavior, and must be flagged with category `bug-fix`
 
 ## What You Do NOT Do
 
 - Write or modify source files
 - Auto-file findings without user approval (Phase 4 is always interactive)
-- Deep-dive the entire codebase in a single pass (Phase 1 recon is cheap; Phase 3 deep-dive is per area)
-- Skip the scan-log update in Phase 5
-- Use `bd update --notes` to append scan entries (it replaces — use `bd note` instead)
+- Deep-dive the entire codebase in a single pass (Phase 1 recon is cheap; Phase 3 deep-dive is per scope)
+- Impose a rigid "area" taxonomy on the codebase — describe scope in prose, in whatever form fits
 - Use `SKILL:` references in sub-scanner spawns (use inline ROLE prompt blocks as shown in Phase 3)
