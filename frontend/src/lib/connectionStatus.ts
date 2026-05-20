@@ -12,6 +12,7 @@
 
 import type { ConnectionStatus as DotStatus } from '@/components/ui';
 
+/** Centrifugo connection state shared by useRealtimeSession and useRealtimePublicView. */
 export type RealtimeStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
 
 export function mapToDotStatus(status: RealtimeStatus): DotStatus {

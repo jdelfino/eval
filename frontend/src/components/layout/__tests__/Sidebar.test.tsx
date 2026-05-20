@@ -187,6 +187,9 @@ describe('Sidebar', () => {
     fireEvent.click(signOutEl);
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/auth/signin');
+    });
   });
 
   /**

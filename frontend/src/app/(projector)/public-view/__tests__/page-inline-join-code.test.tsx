@@ -132,16 +132,22 @@ describe('PublicInstructorView inline join_code + ConnectionDot', () => {
     const joinCodeEl = screen.getByText('K7M-2A9');
     expect(joinCodeEl).toBeInTheDocument();
 
-    // Must have prominent styling: mono font + bold
-    const style = joinCodeEl.getAttribute('class') || '';
-    const computedOrInline =
-      style.includes('font-mono') ||
-      style.includes('mono') ||
-      (joinCodeEl as HTMLElement).style.fontFamily?.includes('mono');
+    // Must have prominent styling: mono font + bold + large
+    // Students read this off a projection screen — losing the styling silently
+    // breaks the affordance with no other visible failure mode.
+    const className = joinCodeEl.getAttribute('class') || '';
+    const inlineFontFamily = (joinCodeEl as HTMLElement).style.fontFamily || '';
+    const hasMono =
+      className.includes('font-mono') ||
+      className.includes('mono') ||
+      inlineFontFamily.includes('mono');
+    expect(hasMono).toBe(true);
 
-    // Also accept: the element's parent wraps it with data-testid for clarity
-    // At minimum, the text must be present and wrapped in a span/element
-    expect(joinCodeEl).toBeTruthy();
+    const hasBold =
+      className.includes('font-bold') ||
+      className.includes('bold') ||
+      ['600', '700', '800', '900', 'bold'].includes((joinCodeEl as HTMLElement).style.fontWeight);
+    expect(hasBold).toBe(true);
   });
 
   it('renders ConnectionDot alongside the join_code', async () => {
