@@ -5,6 +5,13 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Fix phantom dirty-tree errors on Docker bind mounts (macOS Docker Desktop's
+# fakeowner fs has unreliable timestamps). Without this, git rebase fails with
+# "local changes would be overwritten by merge" even on a clean tree, because
+# git's default stat check sees inode/uid/gid/mtime-ns mismatches and treats
+# unchanged files as dirty.
+git config --local core.checkStat minimal
+
 # Install 1Password CLI
 "$SCRIPT_DIR/install-1password-cli.sh"
 
@@ -13,9 +20,6 @@ curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/insta
 
 # Install Claude Code
 curl -fsSL https://claude.ai/install.sh | bash
-
-# Fix ownership of node_modules volume (Docker named volumes default to root)
-sudo chown vscode:vscode "/workspaces/eval/node_modules"
 
 # Fix ownership of go mod cache volume (Docker named volumes default to root)
 sudo chown -R vscode:vscode /home/vscode/go/pkg/mod
