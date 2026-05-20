@@ -8,10 +8,6 @@ user_invocable: true
 
 You are a refactor-finder agent. Your job is to autonomously discover refactoring opportunities across the codebase and file findings as beads issues for future work.
 
-## Relation to reviewer-architecture
-
-reviewer-architecture catches duplication, pattern divergence, and leaky abstractions in PR diffs at review time. refactor-finder catches those same categories (plus dead code, complexity, test smells) across already-merged code at discovery time. They are complementary: one is reactive on changes; the other is proactive on accumulated cruft. Do not collapse them.
-
 ## Invocation
 
 `/refactor-finder [scope]`
@@ -23,53 +19,32 @@ reviewer-architecture catches duplication, pattern divergence, and leaky abstrac
 
 ## Phase 1 — Reconnaissance
 
-Run a cheap, whole-codebase signal pass to identify candidate scopes. If invoked with a scope argument, restrict these commands to that path. Otherwise scan from the repo root.
+Tour the codebase to identify candidate scopes worth deep-diving. This is open-ended — there is no prescribed checklist. Use judgement and any combination of the directions below, varying your approach across runs so you don't surface the same scopes repeatedly.
 
-### Signal collection
+**Orient yourself:**
+- Read `CLAUDE.md` and any package-level `CLAUDE.md` files to understand what the project says about itself
+- Walk the top-level directory structure
+- Sample a few files from each major area
 
-**File size outliers** — surface files in the top percentile by LOC:
-```bash
-find . \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.py" \) | \
-  xargs wc -l 2>/dev/null | sort -rn | head -30
-```
+**Consider recent changes** — where the team's mental energy has been concentrated is often where cruft accumulates:
+- Recently merged PRs and commits — `git log --since=2.months --oneline` — look at what kinds of changes are landing and what gets revisited
+- Open beads issues across all labels (not just `refactor-finder`) — `bd list --status open --json` — areas with multiple open issues are often where the abstractions are wrong
+- Git churn — `git log --pretty=format: --name-only --since=6.months | sort | uniq -c | sort -rn | head -30` — files modified repeatedly are hot spots
 
-**Function/method density** — files with many top-level definitions suggest either a god-object or legitimate hub:
-```bash
-# Go: count top-level func declarations per file
-find . -name "*.go" | xargs grep -c "^func " 2>/dev/null | sort -t: -k2 -rn | head -20
-# TS/TSX: count function/class/const exports per file
-find . \( -name "*.ts" -o -name "*.tsx" \) | xargs grep -c "^export " 2>/dev/null | sort -t: -k2 -rn | head -20
-```
+**Other signals** — use any combination, none, or different ones — these are tools, not requirements:
+- File size outliers — `find . \( -name "*.go" -o -name "*.ts" -o -name "*.tsx" -o -name "*.py" \) | xargs wc -l 2>/dev/null | sort -rn | head -30`
+- Function density — `find . -name "*.go" | xargs grep -c "^func " 2>/dev/null | sort -t: -k2 -rn | head -20`
+- Long-untouched files — `git log -1 --format="%cd %H" --date=short -- <file>`
+- TODO/FIXME density — `grep -rn "TODO\|FIXME\|XXX\|HACK" --include="*.go" --include="*.ts" --include="*.tsx" --include="*.py" . | grep -v node_modules | grep -v ".git"`
+- Deep nesting heuristic — `grep -rn "^\s\{20,\}" --include="*.go" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v ".git" | head -30`
 
-**Git churn** — frequently modified files are hot spots for complexity:
-```bash
-git log --pretty=format: --name-only --since=6.months | sort | uniq -c | sort -rn | head -30
-```
-
-**Long-untouched files** — stale code that may contain dead or obsolete logic:
-```bash
-# Surface files last touched more than 6 months ago (sample from large/interesting files)
-git log -1 --format="%cd %H" --date=short -- <file>
-```
-
-**TODO/FIXME density** — acknowledged but unresolved debt:
-```bash
-grep -rn "TODO\|FIXME\|XXX\|HACK" \
-  --include="*.go" --include="*.ts" --include="*.tsx" --include="*.py" \
-  . | grep -v node_modules | grep -v ".git"
-```
-
-**Deep nesting** — heuristic for complexity:
-```bash
-grep -rn "^\s\{20,\}" --include="*.go" --include="*.ts" --include="*.tsx" . | \
-  grep -v node_modules | grep -v ".git" | head -30
-```
+**Vary your approach across runs.** Before finalizing candidates, query `bd list --label refactor-finder --all --json` (the `--all` flag includes closed issues) to see what has been covered previously and shift focus to scopes that haven't been touched recently.
 
 ### Output of Phase 1
 
-Aggregate the signals into ranked candidate **scopes** — described in whatever form fits the codebase: a directory, a feature, a file cluster, a code path. The scope is whatever a human would point at and say "go look there." No imposed taxonomy or slug naming. Each candidate entry should include:
-- Scope description (path, prose, or both — whatever fits)
-- Signals that flagged it (LOC, churn count, TODO count, nesting hits, etc.)
+Aggregate observations into 4-6 ranked candidate scopes, described in whatever form fits the codebase: a directory, a feature, a file cluster, a code path. The scope is whatever a human would point at and say "go look there." Each candidate includes:
+- Scope description (path, prose, or both)
+- Why it's interesting (the signals or judgement that flagged it)
 
 ---
 
@@ -91,9 +66,9 @@ Ask the user to pick 1-2 scopes to deep-dive. Do NOT proceed to Phase 3 without 
 
 ## Phase 3 — Deep-dive (3 parallel sub-scanners)
 
-Spawn 3 parallel subagents via the Task/Agent tool. Use **inline ROLE prompt blocks** — do NOT use a `SKILL:` reference. Sub-scanners have no separate SKILL.md files; inline prompts are the right level of abstraction here (mirrors the three-reviewer parallel block in coordinator/SKILL.md).
+Spawn 3 parallel subagents via the Task/Agent tool. Use **inline ROLE prompt blocks** — do NOT use a `SKILL:` reference.
 
-**Spawn parameters:** When spawning each sub-scanner, use `subagent_type=general-purpose`, `model=sonnet`, and do NOT set `isolation` — the scanners read files and need to see the same working tree as the parent.
+**Spawn parameters:** When spawning each sub-scanner, use `subagent_type=general-purpose`, `model=sonnet`, and do NOT set `isolation`. Capture your own cwd before spawning (`pwd`) and pass it explicitly as a `WORKTREE` field in the scanner prompt (see prompt template below). Sub-scanners that don't set `isolation` inherit the parent's cwd, so the WORKTREE field is belt-and-braces: it makes the contract explicit and gives the scanner a path to anchor any relative file references it emits.
 
 Run all three in parallel (one Task call per scanner):
 
@@ -104,6 +79,7 @@ Run all three in parallel (one Task call per scanner):
 ```
 ROLE: Structure Scanner
 
+WORKTREE: <absolute path; the parent's `pwd` captured before spawning>
 SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
@@ -111,7 +87,7 @@ CATEGORIES TO HUNT:
 - Leaky abstractions: internal details exposed through interfaces; excessive type-casting (Go: repeated interface{} assertions; TS: excessive `as any`); data-shuffling conversion code between layers (handler→service→store) that indicates a missing shared type
 
 INSTRUCTIONS:
-- Read all source files under SCOPE
+- All file references resolve relative to WORKTREE. Read source files under SCOPE within WORKTREE.
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
@@ -134,6 +110,7 @@ Finding N:
 ```
 ROLE: Cruft Scanner
 
+WORKTREE: <absolute path; the parent's `pwd` captured before spawning>
 SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
@@ -142,7 +119,7 @@ CATEGORIES TO HUNT:
 - Backwards-compat shims: adapter/shim code that was added for a migration but whose migration is now complete, leaving the shim with no remaining purpose
 
 INSTRUCTIONS:
-- Read all source files under SCOPE
+- All file references resolve relative to WORKTREE. Read source files under SCOPE within WORKTREE.
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
@@ -165,14 +142,15 @@ Finding N:
 ```
 ROLE: Complexity Scanner
 
+WORKTREE: <absolute path; the parent's `pwd` captured before spawning>
 SCOPE: <scope as described in Phase 2 — paths, prose, or both>
 
 CATEGORIES TO HUNT:
-- Complexity: long functions (Go: >80 lines; TS: >60 lines), deep nesting (>4 levels), functions with too many parameters (>5), switch statements that should be dispatch tables
+- Complexity: long functions (Go: >80 lines; TS: >60 lines); deep nesting (>4 levels); functions with too many parameters (>5); switch/if-else chains that should be dispatch tables; complicated conditionals (nested booleans, hard-to-read predicate logic, conditions that would be clearer as guard clauses); complex concurrency control (intricate mutex hierarchies, channel patterns that obscure the data flow, goroutine lifecycles that aren't local to one function); excessive edge-case checking in a single function (a sign that the responsibility has outgrown the function and a sub-module might be warranted)
 - Test smells: skipped/xfail tests with no tracking issue, commented-out test cases, tests that mock cheap real dependencies, test files with no assertions, copy-pasted test setup that should be a helper
 
 INSTRUCTIONS:
-- Read all source files under SCOPE
+- All file references resolve relative to WORKTREE. Read source files under SCOPE within WORKTREE.
 - For each cruft instance in your CATEGORIES, emit a finding
 - Be precise about why this isn't intentional — if you can't articulate why, don't surface the finding
 - Suggested fixes MUST be behavior-preserving (the only allowed behavior change is bug fixing; flag those explicitly with category 'bug-fix')
