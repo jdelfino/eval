@@ -19,7 +19,7 @@ You are a refactor-finder agent. Your job is to autonomously discover refactorin
 
 ## Phase 1 — Reconnaissance
 
-Tour the codebase to identify candidate scopes worth deep-diving. This is open-ended — there is no prescribed checklist. Use judgement and any combination of the directions below, varying your approach across runs so you don't surface the same scopes repeatedly.
+Tour the codebase to identify candidate scopes worth deep-diving. This is open-ended — there is no prescribed checklist. Use judgement and any combination of the directions below.
 
 **Orient yourself:**
 - Read `CLAUDE.md` and any package-level `CLAUDE.md` files to understand what the project says about itself
@@ -28,7 +28,6 @@ Tour the codebase to identify candidate scopes worth deep-diving. This is open-e
 
 **Consider recent changes** — where the team's mental energy has been concentrated is often where cruft accumulates:
 - Recently merged PRs and commits — `git log --since=2.months --oneline` — look at what kinds of changes are landing and what gets revisited
-- Open beads issues across all labels (not just `refactor-finder`) — `bd list --status open --json` — areas with multiple open issues are often where the abstractions are wrong
 - Git churn — `git log --pretty=format: --name-only --since=6.months | sort | uniq -c | sort -rn | head -30` — files modified repeatedly are hot spots
 
 **Other signals** — use any combination, none, or different ones — these are tools, not requirements:
@@ -38,7 +37,7 @@ Tour the codebase to identify candidate scopes worth deep-diving. This is open-e
 - TODO/FIXME density — `grep -rn "TODO\|FIXME\|XXX\|HACK" --include="*.go" --include="*.ts" --include="*.tsx" --include="*.py" . | grep -v node_modules | grep -v ".git"`
 - Deep nesting heuristic — `grep -rn "^\s\{20,\}" --include="*.go" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v ".git" | head -30`
 
-**Vary your approach across runs.** Before finalizing candidates, query `bd list --label refactor-finder --all --json` (the `--all` flag includes closed issues) to see what has been covered previously and shift focus to scopes that haven't been touched recently.
+**Avoid resurfacing covered ground.** You have no memory of previous runs, but you can see what they filed. Query `bd list --label refactor-finder --all --json` (the `--all` flag includes closed issues) and read each result's title/description to see which scopes previous runs surfaced findings against. Shift focus toward scopes that haven't been covered.
 
 ### Output of Phase 1
 
