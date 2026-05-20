@@ -119,9 +119,9 @@ test.describe('README Screenshots', () => {
       await joinNowButton.waitFor({ state: 'visible' });
       await joinNowButton.click();
 
-      // Wait for the Monaco editor and Connected status
+      // Wait for the Monaco editor and Live connection status
       await page.locator('.monaco-editor').waitFor({ state: 'visible' });
-      await page.locator('text=Connected').waitFor({ state: 'visible' });
+      await page.locator('text=Live').first().waitFor({ state: 'visible' });
 
       // Wait for initial empty sync to settle before typing
       await page.waitForTimeout(800);

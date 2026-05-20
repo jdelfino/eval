@@ -47,7 +47,7 @@ test.describe('Session Lifecycle', () => {
       const work1 = await getOrCreateStudentWork(student.token, section.id, problem.id);
       await page.goto(`/student?work_id=${work1.id}`);
       await expect(page.locator('.monaco-editor')).toBeVisible();
-      await expect(page.locator('text=Connected')).toBeVisible();
+      await expect(page.locator('text=Live').first()).toBeVisible();
 
       // Wait for initial sync
       await page.waitForTimeout(1000);

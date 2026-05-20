@@ -121,7 +121,7 @@ test.describe('Public View Feature', () => {
       await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
       await expect(page.locator('.monaco-editor')).toBeVisible();
-      await expect(page.locator('text=Connected')).toBeVisible();
+      await expect(page.locator('text=Live').first()).toBeVisible();
 
       // Student types code in the Monaco editor using the programmatic API
       const studentCode = 'print("Hello from student!")';
