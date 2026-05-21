@@ -158,7 +158,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
             Run third
           </button>
         )}
-        {/* Render drawerCloseAction so tests can assert on Exit Debug button */}
         {props.drawerCloseAction && (
           <div data-testid="drawer-close-action">{props.drawerCloseAction}</div>
         )}

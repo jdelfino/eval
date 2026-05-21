@@ -88,7 +88,7 @@ test.describe('Debugger', () => {
     });
 
     await publishProblem(instructor.token, section.id, problem.id);
-    const session = await startSessionFromProblem(instructor.token, section.id, problem.id);
+    await startSessionFromProblem(instructor.token, section.id, problem.id);
     const student = await setupStudent(section.join_code, 'debug-student');
     const work = await getOrCreateStudentWork(student.token, section.id, problem.id);
 
@@ -101,45 +101,39 @@ test.describe('Debugger', () => {
     await waitForMonacoReady(page);
     await setMonacoValue(page, 'y = 42\nprint(y)');
 
-    // Step 1: Click the test row to activate it (the Debug button only appears on the active row)
     const testRow = page.locator('[data-testid^="testrail-row-"]').first();
     await expect(testRow).toBeVisible();
     await testRow.click();
 
-    // Step 2: Click the Debug button on the now-active row
     const debugButton = testRow.locator('button:has-text("Debug")');
     await expect(debugButton).toBeVisible();
     await debugButton.click();
 
-    // Step 3: Assert drawer enters debug mode
     const drawer = page.locator('[data-testid="workspace-drawer"][data-mode="debug"]');
     await expect(drawer).toBeVisible({ timeout: 30000 });
 
-    // Step 4: Expand drawer if it's collapsed (summary bar visible, step controls hidden)
-    const stepCounter = page.locator('[data-testid="debug-step-counter"]');
-    const isCollapsed = !(await stepCounter.isVisible());
-    if (isCollapsed) {
-      // Click the collapsed summary bar to expand
+    // Drawer can render collapsed (30px summary bar); step controls live in the expanded variant.
+    // Check the drawer's own data-collapsed attribute instead of probing a child for visibility —
+    // the child may still be mid-render right after the drawer appears.
+    if ((await drawer.getAttribute('data-collapsed')) === 'true') {
       await drawer.click();
     }
+
+    const stepCounter = page.locator('[data-testid="debug-step-counter"]');
     await expect(stepCounter).toBeVisible({ timeout: 10000 });
 
-    // Step 5: Advance through debug steps
     const stepNext = page.locator('[data-testid="debug-step-next"]');
     await expect(stepNext).toBeVisible();
 
     const counterBefore = await stepCounter.textContent();
+    expect(counterBefore).not.toBeNull();
     await stepNext.click();
-    await expect(stepCounter).not.toHaveText(counterBefore ?? '', { timeout: 5000 });
+    await expect(stepCounter).not.toHaveText(counterBefore!, { timeout: 5000 });
 
-    // Step 6: Exit debug mode via the "Exit Debug" button
     const exitButton = page.locator('[data-testid="debug-exit"]');
     await expect(exitButton).toBeVisible();
     await exitButton.click();
 
-    // Step 7: Assert drawer has left debug mode
     await expect(page.locator('[data-testid="workspace-drawer"][data-mode="debug"]')).not.toBeVisible({ timeout: 5000 });
-
-    void session; // suppress unused variable warning
   });
 });

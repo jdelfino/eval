@@ -502,7 +502,6 @@ function StudentPage() {
   // Debugger adapter
   const drawerDebug = buildDrawerDebug(debuggerHook);
 
-  // Drawer close action: "Exit Debug" button when debugger is active
   const drawerCloseAction = debuggerHook.hasTrace ? (
     <Button
       variant="quiet"
