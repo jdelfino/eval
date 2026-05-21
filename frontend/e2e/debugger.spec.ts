@@ -6,48 +6,34 @@ import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 /**
  * Debugger E2E Tests
  *
- * Verifies that the standalone debugger (POST /trace) works from both
- * the instructor Problem Setup editor and the student code editor.
+ * Verifies that the standalone debugger (POST /trace) works from the student
+ * code editor.
  *
- * G1 selector audit (eval-cej.5.11):
+ * Post-G2 (eval-cej.6) selector reference:
  *
- * The old debugger flow used a standalone sidebar:
- *   button[aria-label="Debugger"] → "Start Debugging" → "Active Debugging" header
- *   → "Step X of" counter → "Next" / "Exit Debugging" buttons
+ * The per-test debug flow (shipped in G1 WorkspaceShell):
+ *   - Click a test row in TestRail to activate it:
+ *       [data-testid="testrail-row-{id}"]  (id = "io-{order}-{name}")
+ *   - Click the "Debug" button on the active row (visible only in run/edit mode):
+ *       button:has-text("Debug")
+ *   - Drawer switches to mode='debug':
+ *       [data-testid="workspace-drawer"][data-mode="debug"]
+ *   - Drawer may start collapsed; click summary bar to expand before asserting on controls
+ *   - Step counter:  [data-testid="debug-step-counter"]
+ *   - Nav buttons:   [data-testid="debug-step-next"], [data-testid="debug-step-prev"]
+ *   - Exit Debug:    [data-testid="debug-exit"]  (wired via drawerCloseAction in student/page.tsx)
  *
- * The new G1 WorkspaceShell debug flow is per-test-case:
- *   - Click a test row in TestRail to activate it
- *   - Click the "Debug" button on the active row → drawer switches to mode='debug'
- *   - Drawer shows step counter (data-testid="debug-step-counter") and nav buttons
- *     (data-testid="debug-step-next", "debug-step-prev")
- *   - No "Exit Debugging" button is wired in G1 student page (drawerCloseAction omitted)
- *
- * SKIPPED: Both tests are skipped because:
- * 1. The problems created here have no test cases, so the TestRail is empty and
- *    the per-row Debug button never renders.
- * 2. "Exit Debugging" is not wired in T6 (student/page.tsx does not pass drawerCloseAction).
- * 3. SessionProblemEditor likewise does not wire an exit-debug affordance.
- *
- * These tests can be re-enabled in G2 (eval-cej.6) once the per-test edit drawer
- * lands and the "Exit Debugging" wiring is added (drawerCloseAction with debugger.reset()).
+ * Student test:    ENABLED (G2 shipped: test cases API, drawerCloseAction wired)
+ * Instructor test: SKIPPED — blocked on G3 (eval-cej.7); SessionProblemEditor.handleDebugTest
+ *                  is currently a no-op stub; instructor pages lack useApiDebugger wiring.
  */
 
 test.describe('Debugger', () => {
   test.skip('Instructor can debug code from Problem Setup tab', async ({ page, browser, setupInstructor, logCollector }) => {
-    // SKIPPED: blocked on eval-cej.6 (G2).
-    // The new debug flow requires at least one test case in the TestRail to show
-    // the per-row "Debug" button. Problems created here have no test cases, so the
-    // TestRail is empty. Additionally, "Exit Debugging" is not wired in G1's
-    // SessionProblemEditor (drawerCloseAction not passed to WorkspaceShell).
-    //
-    // When re-enabling:
-    //   1. Create problem with at least one IO test case via API
-    //   2. Select the test row: page.locator('[data-testid="testrail-row-{id}"]').click()
-    //   3. Click Debug: page.locator('button:has-text("Debug")').click()
-    //   4. Assert drawer mode='debug': page.locator('[data-testid="workspace-drawer"][data-mode="debug"]')
-    //   5. Step counter: page.locator('[data-testid="debug-step-counter"]')
-    //   6. Next: page.locator('[data-testid="debug-step-next"]').click()
-    //   7. Exit: wire drawerCloseAction in page.tsx with debugger.reset(), then assert
+    // SKIPPED: Blocked on G3 (eval-cej.7) — SessionProblemEditor.handleDebugTest is currently
+    // a no-op stub (`// Debug deferred to G3`); the instructor pages lack the useApiDebugger
+    // hook, buildDrawerDebug adapter, and drawerDebug wiring that the student page has.
+    // Re-enable when eval-cej.7 lands and instructor debug machinery is wired.
     test.setTimeout(60000);
 
     const instructor = await setupInstructor();
@@ -70,11 +56,7 @@ test.describe('Debugger', () => {
       await waitForMonacoReady(instructorPage);
       await setMonacoValue(instructorPage, 'x = 1\nprint(x)');
 
-      // OLD selectors (removed — sidebar is gone):
-      //   button[aria-label="Debugger"], text=Python Debugger, button:has-text("Start Debugging")
-      //   text=Active Debugging, text=Step 1 of, button:has-text("Next"), button:has-text("Exit Debugging")
-      //
-      // NEW selectors (available in G2+):
+      // NEW selectors (available in G3+):
       //   [data-testid="workspace-test-rail"] → select row → click "Debug" button
       //   [data-testid="workspace-drawer"][data-mode="debug"]
       //   [data-testid="debug-step-counter"] — text: "step N / total"
@@ -84,10 +66,7 @@ test.describe('Debugger', () => {
     }
   });
 
-  test.skip('Student can debug code from session editor', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
-    // SKIPPED: blocked on eval-cej.6 (G2).
-    // Same reasons as the instructor test above — no test cases → empty TestRail →
-    // per-row Debug button never renders. Also no "Exit Debugging" UI in G1.
+  test('Student can debug code from session editor', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
     test.setTimeout(60000);
 
     const instructor = await setupInstructor();
@@ -97,6 +76,15 @@ test.describe('Debugger', () => {
       title: 'Debug Problem',
       description: 'A problem for debugging',
       starterCode: '# Write your solution\n',
+      testCases: [
+        {
+          kind: 'io',
+          order: 0,
+          name: 'prints 42',
+          input: '',
+          expected_output: '42\n',
+        },
+      ],
     });
 
     await publishProblem(instructor.token, section.id, problem.id);
@@ -113,14 +101,45 @@ test.describe('Debugger', () => {
     await waitForMonacoReady(page);
     await setMonacoValue(page, 'y = 42\nprint(y)');
 
-    // OLD selectors (removed — sidebar is gone):
-    //   button[aria-label="Debugger"], text=Python Debugger, button:has-text("Start Debugging")
-    //   text=Active Debugging, text=Step 1 of, button:has-text("Exit Debugging")
-    //
-    // NEW selectors (available in G2+):
-    //   [data-testid="workspace-test-rail"] → select row → click "Debug" button
-    //   [data-testid="workspace-drawer"][data-mode="debug"]
-    //   [data-testid="debug-step-counter"] — text: "step N / total"
-    //   [data-testid="debug-step-next"], [data-testid="debug-step-prev"]
+    // Step 1: Click the test row to activate it (the Debug button only appears on the active row)
+    const testRow = page.locator('[data-testid^="testrail-row-"]').first();
+    await expect(testRow).toBeVisible();
+    await testRow.click();
+
+    // Step 2: Click the Debug button on the now-active row
+    const debugButton = testRow.locator('button:has-text("Debug")');
+    await expect(debugButton).toBeVisible();
+    await debugButton.click();
+
+    // Step 3: Assert drawer enters debug mode
+    const drawer = page.locator('[data-testid="workspace-drawer"][data-mode="debug"]');
+    await expect(drawer).toBeVisible({ timeout: 30000 });
+
+    // Step 4: Expand drawer if it's collapsed (summary bar visible, step controls hidden)
+    const stepCounter = page.locator('[data-testid="debug-step-counter"]');
+    const isCollapsed = !(await stepCounter.isVisible());
+    if (isCollapsed) {
+      // Click the collapsed summary bar to expand
+      await drawer.click();
+    }
+    await expect(stepCounter).toBeVisible({ timeout: 10000 });
+
+    // Step 5: Advance through debug steps
+    const stepNext = page.locator('[data-testid="debug-step-next"]');
+    await expect(stepNext).toBeVisible();
+
+    const counterBefore = await stepCounter.textContent();
+    await stepNext.click();
+    await expect(stepCounter).not.toHaveText(counterBefore ?? '', { timeout: 5000 });
+
+    // Step 6: Exit debug mode via the "Exit Debug" button
+    const exitButton = page.locator('[data-testid="debug-exit"]');
+    await expect(exitButton).toBeVisible();
+    await exitButton.click();
+
+    // Step 7: Assert drawer has left debug mode
+    await expect(page.locator('[data-testid="workspace-drawer"][data-mode="debug"]')).not.toBeVisible({ timeout: 5000 });
+
+    void session; // suppress unused variable warning
   });
 });
