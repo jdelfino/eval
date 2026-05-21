@@ -6,7 +6,6 @@
   "workspaceFolder": "/workspaces/eval",
 
   "mounts": [
-    "source=eval-node-modules,target=/workspaces/eval/node_modules,type=volume",
     "source=eval-go-mod,target=/home/vscode/go/pkg/mod,type=volume",
     "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=consistent"
   ],
