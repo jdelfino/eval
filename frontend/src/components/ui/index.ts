@@ -64,3 +64,12 @@ export type { StatusBadgeProps, StatusBadgeStatus } from './StatusBadge';
 
 export { Menu } from './Menu';
 export type { MenuProps, MenuItem } from './Menu';
+
+export { Icon, ICON_PATHS } from './Icon';
+export type { IconProps, IconName } from './Icon';
+
+export { IconBtn } from './IconBtn';
+export type { IconBtnProps } from './IconBtn';
+
+export { ConnectionDot } from './ConnectionDot';
+export type { ConnectionDotProps, ConnectionStatus } from './ConnectionDot';

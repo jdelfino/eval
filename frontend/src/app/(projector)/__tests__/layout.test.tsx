@@ -4,7 +4,8 @@
 
 /**
  * Tests for projector layout.
- * Ensures no sidebar or mobile nav is rendered, only GlobalHeader + content.
+ * Ensures no sidebar, no mobile nav, no GlobalHeader — only full-bleed content.
+ * Projector layout is bare (no AppShell) per v4 redesign: T5 drops GlobalHeader.
  */
 
 import React from 'react';
@@ -28,16 +29,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => mockAuth,
 }));
 
-jest.mock('@/contexts/ActiveSessionContext', () => ({
-  ActiveSessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-jest.mock('@/components/layout/GlobalHeader', () => ({
-  GlobalHeader: (props: { showMobileMenu: boolean }) => (
-    <header data-testid="global-header" data-mobile-menu={String(props.showMobileMenu)} />
-  ),
-}));
-
 import ProjectorLayout from '../layout';
 
 beforeEach(() => {
@@ -46,32 +37,35 @@ beforeEach(() => {
 });
 
 describe('ProjectorLayout', () => {
-  it('renders GlobalHeader with showMobileMenu=false', () => {
-    render(<ProjectorLayout><div>content</div></ProjectorLayout>);
-    const header = screen.getByTestId('global-header');
-    expect(header).toHaveAttribute('data-mobile-menu', 'false');
-  });
-
   it('renders children in a full-bleed main area', () => {
     render(<ProjectorLayout><div data-testid="child">content</div></ProjectorLayout>);
     expect(screen.getByTestId('child')).toBeInTheDocument();
     const main = screen.getByRole('main');
-    expect(main.className).toContain('flex-1');
-    expect(main.className).toContain('overflow-hidden');
+    expect(main).toBeInTheDocument();
+  });
+
+  it('does not render GlobalHeader', () => {
+    /**
+     * Contract: v4 projector layout is bare — no GlobalHeader (deleted in T5).
+     * Why it matters: GlobalHeader is deleted; any import would break the build.
+     * What breaks: If GlobalHeader leaks into projector layout, deleted component causes failure.
+     */
+    const { container } = render(<ProjectorLayout><div>content</div></ProjectorLayout>);
+    expect(container.querySelector('[data-testid="global-header"]')).toBeNull();
+    expect(container.querySelector('header')).toBeNull();
   });
 
   it('does not render Sidebar or MobileNav', () => {
     const { container } = render(<ProjectorLayout><div>content</div></ProjectorLayout>);
-    // No sidebar or mobile nav elements
     expect(container.querySelector('[data-testid="sidebar"]')).toBeNull();
     expect(container.querySelector('[data-testid="mobile-nav"]')).toBeNull();
+    expect(container.querySelector('aside')).toBeNull();
   });
 
   it('redirects to signin when not authenticated', () => {
     mockAuth = { user: null, isLoading: false };
     const { container } = render(<ProjectorLayout><div>content</div></ProjectorLayout>);
     expect(mockPush).toHaveBeenCalledWith('/auth/signin');
-    // Should render nothing
     expect(container.innerHTML).toBe('');
   });
 

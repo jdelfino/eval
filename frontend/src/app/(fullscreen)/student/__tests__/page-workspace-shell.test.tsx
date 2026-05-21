@@ -99,12 +99,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   })),
 }));
 
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: jest.fn(() => ({
-    setHeaderSlot: jest.fn(),
-  })),
-}));
-
 jest.mock('../components/SessionEndedNotification', () => ({
   __esModule: true,
   default: () => <div data-testid="session-ended">Session Ended</div>,

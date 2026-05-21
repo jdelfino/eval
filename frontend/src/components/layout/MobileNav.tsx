@@ -1,51 +1,29 @@
 'use client';
 
 /**
- * Mobile navigation drawer component.
- * Slide-out drawer overlay for mobile navigation.
+ * Mobile navigation drawer — slide-out overlay used on narrow viewports.
  */
 
 import React, { useEffect } from 'react';
-import { X, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem } from '@/config/navigation';
-import { getIconComponent } from './iconMap';
+import {
+  getNavItemsForRole,
+  getNavGroupsForRole,
+  NavGroup,
+  NavItem,
+  GROUP_LABELS,
+  isPathActive,
+} from '@/config/navigation';
+import { Icon } from '@/components/ui';
+import type { IconName } from '@/components/ui';
 
 interface MobileNavProps {
   /** Whether the drawer is open */
   isOpen: boolean;
   /** Callback when drawer should close */
   onClose: () => void;
-}
-
-/**
- * Group label for display.
- */
-const GROUP_LABELS: Record<NavGroup, string> = {
-  [NavGroup.Main]: 'Main',
-  [NavGroup.Teaching]: 'Teaching',
-  [NavGroup.Admin]: 'Admin',
-  [NavGroup.System]: 'System',
-};
-
-/**
- * Check if a nav item's href matches the current pathname.
- * Matches exact path or any child paths (e.g., /classes matches /classes/123).
- */
-function isPathActive(href: string, pathname: string): boolean {
-  // Exact match
-  if (pathname === href) {
-    return true;
-  }
-
-  // Child path match (e.g., /classes matches /classes/123)
-  if (href !== '/' && pathname.startsWith(href + '/')) {
-    return true;
-  }
-
-  return false;
 }
 
 interface MobileNavItemProps {
@@ -55,26 +33,27 @@ interface MobileNavItemProps {
 }
 
 function MobileNavItem({ item, isActive, onClose }: MobileNavItemProps) {
-  const IconComponent = getIconComponent(item.icon);
-
   return (
     <Link
       href={item.href}
       prefetch={false}
       onClick={onClose}
-      className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
-        isActive
-          ? 'bg-blue-100 text-blue-700 border-l-4 border-blue-600'
-          : 'text-gray-700 hover:bg-gray-100 border-l-4 border-transparent'
-      }`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 16px',
+        fontSize: 15,
+        fontWeight: 500,
+        textDecoration: 'none',
+        color: isActive ? 'var(--accent-ink, var(--fg))' : 'var(--fg-muted)',
+        background: isActive ? 'var(--accent-soft, var(--bg-sunken))' : 'transparent',
+        borderLeft: `4px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+        transition: 'background 0.1s',
+      }}
       aria-current={isActive ? 'page' : undefined}
     >
-      {IconComponent && (
-        <IconComponent
-          className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}
-          aria-hidden="true"
-        />
-      )}
+      <Icon name={item.icon as IconName} size={16} />
       <span>{item.label}</span>
     </Link>
   );
@@ -96,8 +75,18 @@ function MobileNavGroup({ group, items, pathname, onClose, isFirst }: MobileNavG
   }
 
   return (
-    <div className={isFirst ? '' : 'mt-4'}>
-      <h3 className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+    <div style={{ marginTop: isFirst ? 0 : 16 }}>
+      <h3
+        style={{
+          padding: '8px 16px',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--fg-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          background: 'var(--bg-sunken)',
+        }}
+      >
         {GROUP_LABELS[group]}
       </h3>
       <nav role="navigation" aria-label={GROUP_LABELS[group]}>
@@ -146,43 +135,86 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
 
   if (!isOpen) return null;
 
+  const helpActive = isPathActive('/help', pathname);
+
   return (
     <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-40 lg:hidden opacity-100"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 40,
+        }}
+        className="lg:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer */}
       <div
-        className="fixed inset-y-0 left-0 w-72 bg-white z-50 lg:hidden translate-x-0"
+        style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: 288,
+          background: 'var(--bg)',
+          zIndex: 50,
+        }}
+        className="lg:hidden"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
       >
-        {/* Drawer header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">E</span>
+        <div
+          style={{
+            height: 56,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 16px',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              style={{
+                width: 26,
+                height: 26,
+                background: 'var(--accent)',
+                borderRadius: 5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: 'monospace',
+                fontWeight: 700,
+                fontSize: 14,
+                color: 'var(--accent-ink, #fff)',
+              }}
+            >
+              e
             </div>
-            <span className="font-semibold text-gray-900">Eval</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)' }}>Eval</span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-md text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            style={{
+              padding: 8,
+              borderRadius: 6,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--fg-muted)',
+            }}
             aria-label="Close navigation menu"
           >
-            <X className="h-5 w-5" aria-hidden="true" />
+            <Icon name="x" size={16} />
           </button>
         </div>
 
-        {/* Navigation content */}
-        <div className="flex flex-col overflow-y-auto h-[calc(100%-3.5rem)]">
-          <div className="flex-1">
+        <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', height: 'calc(100% - 56px)' }}>
+          <div style={{ flex: 1 }}>
             {navGroups.map((group, index) => (
               <MobileNavGroup
                 key={group}
@@ -195,25 +227,27 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
             ))}
           </div>
 
-          {/* Bottom-pinned Help link */}
-          <div className="border-t border-gray-200">
+          <div style={{ borderTop: '1px solid var(--border)' }}>
             <Link
               href="/help"
               prefetch={false}
               onClick={onClose}
-              className={`flex items-center gap-3 px-4 py-3 text-base font-medium transition-colors ${
-                isPathActive('/help', pathname)
-                  ? 'bg-blue-100 text-blue-700 border-l-4 border-blue-600'
-                  : 'text-gray-700 hover:bg-gray-100 border-l-4 border-transparent'
-              }`}
-              aria-current={isPathActive('/help', pathname) ? 'page' : undefined}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 16px',
+                fontSize: 15,
+                fontWeight: 500,
+                textDecoration: 'none',
+                color: helpActive ? 'var(--accent-ink, var(--fg))' : 'var(--fg-muted)',
+                background: helpActive ? 'var(--accent-soft, var(--bg-sunken))' : 'transparent',
+                borderLeft: `4px solid ${helpActive ? 'var(--accent)' : 'transparent'}`,
+                transition: 'background 0.1s',
+              }}
+              aria-current={helpActive ? 'page' : undefined}
             >
-              <HelpCircle
-                className={`h-5 w-5 ${
-                  isPathActive('/help', pathname) ? 'text-blue-600' : 'text-gray-500'
-                }`}
-                aria-hidden="true"
-              />
+              <Icon name="info" size={16} />
               <span>Help</span>
             </Link>
           </div>

@@ -24,16 +24,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// Mock useHeaderSlot
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: jest.fn() }),
-}));
-
-// Mock ConnectionStatus
-jest.mock('@/components/ConnectionStatus', () => ({
-  ConnectionStatus: () => null,
-}));
-
 // Mock executeCode
 jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn().mockResolvedValue({ summary: { passed: 0, failed: 0, total: 0 }, results: [] }),

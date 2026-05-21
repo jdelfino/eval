@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import { AuthProvider } from '@/contexts/AuthContext'
-import { HeaderSlotProvider } from '@/contexts/HeaderSlotContext'
-import { LayoutConfigProvider } from '@/contexts/LayoutConfigContext'
 import { ErrorListener } from '@/components/ErrorListener'
 import './globals.css'
 
@@ -19,12 +17,8 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>
-          <LayoutConfigProvider>
-            <HeaderSlotProvider>
-              <ErrorListener />
-              {children}
-            </HeaderSlotProvider>
-          </LayoutConfigProvider>
+          <ErrorListener />
+          {children}
         </AuthProvider>
       </body>
     </html>

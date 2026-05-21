@@ -36,11 +36,7 @@ jest.mock('@/hooks/useSelectedNamespace', () => ({
   useSelectedNamespace: () => 'ns-1',
 }));
 
-// Mock NamespaceHeader
-jest.mock('@/components/NamespaceHeader', () => ({
-  __esModule: true,
-  default: () => <div data-testid="namespace-header">Namespace Header</div>,
-}));
+// NamespaceHeader has been removed from this page (moved into Sidebar) — no mock needed.
 
 // Mock child components
 jest.mock('../components/UserList', () => ({

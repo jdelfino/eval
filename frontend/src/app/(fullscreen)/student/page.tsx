@@ -20,8 +20,8 @@ import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
 import { deriveDrawerModeBase } from '@/lib/drawerState';
 import SessionEndedNotification from './components/SessionEndedNotification';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
+import { mapToDotStatus } from '@/lib/connectionStatus';
 import type { Session } from '@/types/api';
 import type { DrawerMode, DrawerFailure, DrawerRuntimeError } from '@/components/workspace/Drawer';
 
@@ -101,7 +101,6 @@ function deriveFailure(
 function StudentPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
   const sectionIdFromUrl = searchParams.get('section_id');
@@ -166,21 +165,6 @@ function StudentPage() {
   // Debugger hook
   const debuggerHook = useApiDebugger();
 
-  // Show connection status in header (only in live mode)
-  useEffect(() => {
-    if (mode === 'live' && joined) {
-      setHeaderSlot(
-        <ConnectionStatus
-          status={connectionStatus}
-          error={connectionError}
-          variant="badge"
-        />
-      );
-    } else {
-      setHeaderSlot(null);
-    }
-    return () => setHeaderSlot(null);
-  }, [mode, joined, connectionStatus, connectionError, setHeaderSlot]);
 
   // Step 1: Load student_work data from work_id
   useEffect(() => {
@@ -604,10 +588,15 @@ function StudentPage() {
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
       {sectionId && (
         <div className="px-3 py-1.5 bg-white border-b border-gray-200 flex-shrink-0">
-          <Breadcrumb items={[
-            { label: sectionName || 'Section', href: `/sections/${sectionId}` },
-            { label: problem?.title || 'Problem' },
-          ]} />
+          <div className="flex items-center justify-between">
+            <Breadcrumb items={[
+              { label: sectionName || 'Section', href: `/sections/${sectionId}` },
+              { label: problem?.title || 'Problem' },
+            ]} />
+            {mode === 'live' && joined && (
+              <ConnectionDot status={mapToDotStatus(connectionStatus)} />
+            )}
+          </div>
         </div>
       )}
       {connectionError && mode === 'live' && (

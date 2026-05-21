@@ -1,47 +1,25 @@
 /**
- * Tests for AppShell component — zoom/forceDesktop protection
+ * Tests for AppShell component — v4 row layout structure.
  * @jest-environment jsdom
  */
 
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
-// Mock LayoutConfigContext — default to no forced desktop
-let mockForceDesktopContext = false;
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: mockForceDesktopContext, setForceDesktop: jest.fn() }),
-  LayoutConfigProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useForceDesktopLayout: jest.fn(),
-}));
-
-// Mock child components to isolate AppShell behavior
-jest.mock('../GlobalHeader', () => ({
-  GlobalHeader: ({ onMobileMenuToggle }: { onMobileMenuToggle: () => void }) => (
-    <header data-testid="global-header">
-      <button onClick={onMobileMenuToggle}>Menu</button>
-    </header>
-  ),
-}));
-
+// Mock Sidebar to isolate AppShell layout behavior
 jest.mock('../Sidebar', () => ({
   Sidebar: ({ collapsed }: { collapsed?: boolean }) => (
     <aside data-testid="sidebar" data-collapsed={collapsed} />
   ),
 }));
 
-jest.mock('../MobileNav', () => ({
-  MobileNav: () => <nav data-testid="mobile-nav" />,
-}));
-
-jest.mock('../RightPanelContainer', () => ({
-  RightPanelContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="right-panel-container">{children}</div>
-  ),
+jest.mock('../AppBarLite', () => ({
+  AppBarLite: () => <header data-testid="app-bar-lite" />,
 }));
 
 jest.mock('@/components/preview/PreviewBanner', () => ({
-  PreviewBanner: () => null,
+  PreviewBanner: () => <div data-testid="preview-banner" />,
 }));
 
 jest.mock('@/hooks/useSidebarCollapsed', () => ({
@@ -50,99 +28,95 @@ jest.mock('@/hooks/useSidebarCollapsed', () => ({
 
 import { AppShell } from '../AppShell';
 
-beforeEach(() => {
-  mockForceDesktopContext = false;
-});
-
 describe('AppShell', () => {
-  describe('default behavior (no forceDesktop)', () => {
-    it('renders sidebar wrapper with hidden lg:block classes (responsive)', () => {
+  describe('v4 row layout structure', () => {
+    it('renders Sidebar, AppBarLite, and main content in correct order', () => {
+      /**
+       * Contract: AppShell lays out as a horizontal row: Sidebar | (AppBarLite stacked above main).
+       * Why it matters: Row layout is the v4 design — any deviation breaks the visual hierarchy.
+       * What breaks: Old column layout (header top, sidebar+content below) would fail this.
+       */
+      const { container } = render(
+        <AppShell>
+          <div>test content</div>
+        </AppShell>
+      );
+
+      const sidebar = screen.getByTestId('sidebar');
+      const appBarLite = screen.getByTestId('app-bar-lite');
+      const main = container.querySelector('main');
+
+      expect(sidebar).toBeInTheDocument();
+      expect(appBarLite).toBeInTheDocument();
+      expect(main).toBeInTheDocument();
+
+      // Sidebar should be a direct child of the root flex row
+      const rootRow = container.firstChild as HTMLElement;
+      expect(rootRow.contains(sidebar)).toBe(true);
+      expect(rootRow.contains(appBarLite)).toBe(true);
+      expect(rootRow.contains(main)).toBe(true);
+    });
+
+    it('forwards children into the main element', () => {
+      /**
+       * Contract: Children are rendered inside <main> — the scrollable content area.
+       * Why it matters: If children are dropped, all page content is lost.
+       * What breaks: Missing children prop forwarding or wrong render location.
+       */
+      const marker = 'unique-content-marker-xyz';
+      const { container } = render(
+        <AppShell>
+          <div>{marker}</div>
+        </AppShell>
+      );
+
+      const main = container.querySelector('main');
+      expect(main).toBeInTheDocument();
+      expect(main).toHaveTextContent(marker);
+    });
+
+    it('does not render old GlobalHeader', () => {
+      /**
+       * Contract: v4 AppShell uses AppBarLite instead of GlobalHeader.
+       * Why it matters: GlobalHeader was deleted in T5; leaking it would cause import errors or duplication.
+       * What breaks: If AppShell still mounts GlobalHeader, the deleted component causes a build failure.
+       */
       const { container } = render(
         <AppShell>
           <div>content</div>
         </AppShell>
       );
 
-      // The sidebar wrapper should have both 'hidden' and 'lg:block' for responsive behavior
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).toHaveClass('hidden');
-      expect(sidebarWrapper).toHaveClass('lg:block');
+      expect(container.querySelector('[data-testid="global-header"]')).toBeNull();
+    });
+
+    it('does not render MobileNav by default', () => {
+      /**
+       * Contract: v4 AppShell drops MobileNav — narrow viewports show cramped sidebar until G8.
+       * Why it matters: MobileNav depended on GlobalHeader trigger which no longer exists.
+       * What breaks: Stale MobileNav render would mount an unreachable component.
+       */
+      const { container } = render(
+        <AppShell>
+          <div>content</div>
+        </AppShell>
+      );
+
+      expect(container.querySelector('[data-testid="mobile-nav"]')).toBeNull();
     });
   });
 
-  describe('forceDesktop prop', () => {
-    it('shows sidebar wrapper without hidden class when forceDesktop=true', () => {
-      const { container } = render(
-        <AppShell forceDesktop>
-          <div>content</div>
-        </AppShell>
-      );
-
-      // With forceDesktop, sidebar should always be visible — no 'hidden' class
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).not.toHaveClass('hidden');
-    });
-
-    it('uses block class instead of hidden lg:block when forceDesktop=true', () => {
-      const { container } = render(
-        <AppShell forceDesktop>
-          <div>content</div>
-        </AppShell>
-      );
-
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).toHaveClass('block');
-      expect(sidebarWrapper).not.toHaveClass('hidden');
-    });
-
-    it('renders children normally when forceDesktop=true', () => {
-      const { getByText } = render(
-        <AppShell forceDesktop>
-          <div>my content</div>
-        </AppShell>
-      );
-
-      expect(getByText('my content')).toBeInTheDocument();
-    });
-
-    it('defaults to responsive behavior when forceDesktop is not set', () => {
+  describe('PreviewBanner', () => {
+    it('renders PreviewBanner inside main content area', () => {
       const { container } = render(
         <AppShell>
           <div>content</div>
         </AppShell>
       );
 
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).toHaveClass('hidden');
-    });
-  });
-
-  describe('forceDesktop via LayoutConfigContext', () => {
-    it('shows sidebar without hidden class when context forceDesktop=true', () => {
-      mockForceDesktopContext = true;
-
-      const { container } = render(
-        <AppShell>
-          <div>content</div>
-        </AppShell>
-      );
-
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).not.toHaveClass('hidden');
-      expect(sidebarWrapper).toHaveClass('block');
-    });
-
-    it('prop forceDesktop takes precedence even when context is false', () => {
-      mockForceDesktopContext = false;
-
-      const { container } = render(
-        <AppShell forceDesktop>
-          <div>content</div>
-        </AppShell>
-      );
-
-      const sidebarWrapper = container.querySelector('[data-testid="sidebar"]')?.parentElement;
-      expect(sidebarWrapper).not.toHaveClass('hidden');
+      const main = container.querySelector('main');
+      const banner = screen.getByTestId('preview-banner');
+      expect(main?.contains(banner)).toBe(true);
     });
   });
 });

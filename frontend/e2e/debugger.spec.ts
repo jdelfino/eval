@@ -107,7 +107,7 @@ test.describe('Debugger', () => {
     await signInAs(page, student.email);
     await page.goto(`/student?work_id=${work.id}`);
     await expect(page.locator('.monaco-editor')).toBeVisible();
-    await expect(page.locator('text=Connected')).toBeVisible();
+    await expect(page.locator('text=Live').first()).toBeVisible();
 
     await page.waitForTimeout(1000);
     await waitForMonacoReady(page);

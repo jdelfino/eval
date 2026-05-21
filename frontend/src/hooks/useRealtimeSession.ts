@@ -13,8 +13,9 @@ import {
 import { Session, Student } from '@/types/session';
 import type { IOTestCase } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
+import type { RealtimeStatus } from '@/lib/connectionStatus';
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
+export type ConnectionStatus = RealtimeStatus;
 
 /**
  * Debounce function

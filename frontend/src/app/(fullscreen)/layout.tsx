@@ -2,30 +2,28 @@
 
 /**
  * Layout for fullscreen pages (student code editor).
- * Provides AppShell with collapsed sidebar and no right panels.
+ * Bare layout: full-bleed content within PreviewProvider + PanelProvider.
+ * No AppShell/sidebar — workspace renders full-bleed per v4 design.
  * Redirects to signin if user is not authenticated.
  */
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { PanelProvider } from '@/contexts/PanelContext';
 import { PreviewProvider } from '@/contexts/PreviewContext';
-import { AppShell } from '@/components/layout';
+import { PreviewBanner } from '@/components/preview/PreviewBanner';
 
 export default function FullscreenLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // Wait for auth to load before checking
     if (!isLoading && !user) {
       router.push('/auth/signin');
     }
   }, [user, isLoading, router]);
 
-  // Show loading state while auth is being checked
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -34,20 +32,18 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
     );
   }
 
-  // Don't render app shell if not authenticated
   if (!user) {
     return null;
   }
 
   return (
     <PreviewProvider>
-      <ActiveSessionProvider>
-        <PanelProvider pageId="fullscreen">
-          <AppShell sidebarCollapsed={true} showRightPanels={false} fullscreen={true}>
-            {children}
-          </AppShell>
-        </PanelProvider>
-      </ActiveSessionProvider>
+      <PanelProvider pageId="fullscreen">
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <PreviewBanner />
+          <main style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>{children}</main>
+        </div>
+      </PanelProvider>
     </PreviewProvider>
   );
 }

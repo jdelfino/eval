@@ -7,8 +7,8 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
 import { executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
+import { mapToDotStatus } from '@/lib/connectionStatus';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
 import { deriveDrawerModeBase } from '@/lib/drawerState';
@@ -32,7 +32,6 @@ function PublicViewContent() {
   const searchParams = useSearchParams();
   const session_id = searchParams.get('session_id');
   const section_id = searchParams.get('section_id');
-  const { setHeaderSlot } = useHeaderSlot();
 
   // ── Font size (persisted to localStorage) ─────────────────────────────────
 
@@ -95,32 +94,6 @@ function PublicViewContent() {
 
   const debuggerHook = useApiDebugger();
 
-  // ── Global header: join code + connection status ──────────────────────────
-
-  useEffect(() => {
-    const hasIdentifier = session_id || section_id;
-    if (hasIdentifier && state) {
-      setHeaderSlot(
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-bold font-mono text-blue-600">
-            {state.join_code || '------'}
-          </span>
-          <ConnectionStatus
-            status={connectionStatus}
-            variant="badge"
-          />
-        </div>
-      );
-    } else if (hasIdentifier) {
-      setHeaderSlot(
-        <ConnectionStatus
-          status={connectionStatus}
-          variant="badge"
-        />
-      );
-    }
-    return () => setHeaderSlot(null);
-  }, [session_id, section_id, state?.join_code, connectionStatus, setHeaderSlot]);
 
   // ── Reset local code when featured student changes ────────────────────────
 
@@ -265,10 +238,18 @@ function PublicViewContent() {
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
+      {/* Join code + Connection status at top */}
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-lg font-bold font-mono text-blue-600">
+          {state?.join_code || '------'}
+        </span>
+        <ConnectionDot status={mapToDotStatus(connectionStatus)} />
+      </div>
+
       {/* Font size controls — projector-specific chrome.
           WorkspaceShell is mounted with embedded=true so the Ribbon is
           omitted; the projector page owns its own chrome (these controls +
-          the ConnectionStatus in the global header). */}
+          the ConnectionDot at the top). */}
       <div className="flex items-center gap-1 mb-1 self-end">
         <button
           type="button"
@@ -290,7 +271,7 @@ function PublicViewContent() {
       </div>
 
       <WorkspaceShell
-        // Projector provides its own chrome (font-size controls + ConnectionStatus in header),
+        // Projector renders its own font-size controls and ConnectionDot inline above,
         // so we use embedded=true to suppress the Ribbon.
         embedded={true}
         // editor

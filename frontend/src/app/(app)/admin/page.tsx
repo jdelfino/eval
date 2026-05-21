@@ -9,7 +9,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission } from '@/hooks/usePermissions';
 import { useSelectedNamespace } from '@/hooks/useSelectedNamespace';
-import NamespaceHeader from '@/components/NamespaceHeader';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import UserList from './components/UserList';
 import InviteInstructorForm from './components/InviteInstructorForm';
@@ -236,7 +235,6 @@ function AdminPage() {
       {/* Header */}
       <div className="flex flex-col gap-2 mb-8">
         <h1 className="text-2xl font-bold">{isAdmin ? 'System Administration' : 'Admin Panel'}</h1>
-        <NamespaceHeader />
       </div>
 
       {/* Error Message */}

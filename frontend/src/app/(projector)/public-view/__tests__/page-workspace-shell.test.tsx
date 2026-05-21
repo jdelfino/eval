@@ -28,16 +28,6 @@ jest.mock('@/components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-// ── Header slot ───────────────────────────────────────────────────────────────
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ setHeaderSlot: jest.fn() }),
-}));
-
-// ── ConnectionStatus ──────────────────────────────────────────────────────────
-jest.mock('@/components/ConnectionStatus', () => ({
-  ConnectionStatus: () => null,
-}));
-
 // ── executeCode ───────────────────────────────────────────────────────────────
 const mockExecuteCode = jest.fn();
 jest.mock('@/lib/api/execute', () => ({
@@ -266,7 +256,7 @@ describe('Public view projector — WorkspaceShell wiring (T7)', () => {
   it('WorkspaceShell receives embedded=true so Ribbon is hidden', () => {
     /**
      * Contract: the projector page mounts WorkspaceShell with embedded=true.
-     * The projector provides its own chrome (font-size controls + ConnectionStatus).
+     * The projector provides its own chrome (font-size controls + inline ConnectionDot).
      * embedded=true causes WorkspaceShell to omit the Ribbon entirely.
      * Catches: Ribbon rendered when it should be absent on the projector.
      */

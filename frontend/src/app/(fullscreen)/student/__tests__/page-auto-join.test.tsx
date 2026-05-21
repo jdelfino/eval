@@ -59,12 +59,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   })),
 }));
 
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: jest.fn(() => ({
-    setHeaderSlot: jest.fn(),
-  })),
-}));
-
 jest.mock('@/hooks/useApiDebugger', () => ({
   useApiDebugger: jest.fn(() => ({
     trace: null, currentStep: 0, isLoading: false, error: null,
