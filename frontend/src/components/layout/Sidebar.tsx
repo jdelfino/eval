@@ -145,7 +145,7 @@ function NavGroupSection({ group, items, pathname, collapsed, isFirst }: NavGrou
  */
 function SidebarNamespaceArea() {
   const { user } = useAuth();
-  const { current: currentNamespace, list: namespaces, isAll, select } = useSystemNamespace();
+  const { current: currentNamespace, list: namespaces, isAll, error, select } = useSystemNamespace();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -165,9 +165,30 @@ function SidebarNamespaceArea() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownOpen]);
 
-  const displayName = isAll ? 'All Namespaces' : (currentNamespace?.displayName || user?.namespace_id || '');
+  if (!user) return null;
 
-  if (!user || !displayName) return null;
+  if (error) {
+    return (
+      <span
+        role="alert"
+        title={error}
+        style={{
+          fontSize: 11,
+          color: 'var(--danger, #c00)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+      >
+        Namespace unavailable
+      </span>
+    );
+  }
+
+  const displayName = isAll ? 'All Namespaces' : (currentNamespace?.displayName || user.namespace_id || '');
+
+  if (!displayName) return null;
 
   if (!isSystemAdmin) {
     // Display-only label

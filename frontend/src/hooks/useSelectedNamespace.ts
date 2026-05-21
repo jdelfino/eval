@@ -8,6 +8,7 @@
 
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { NAMESPACE_STORAGE_KEY, ALL_NAMESPACES_SENTINEL } from '@/hooks/namespaceStorage';
 
 /**
  * Compute the namespace synchronously from the current user.
@@ -17,8 +18,8 @@ function getInitialNamespace(user: Pick<{ role: string; namespace_id: string | n
   if (!user) return null;
   if (typeof window === 'undefined') return user.namespace_id;
   if (user.role === 'system-admin') {
-    const saved = localStorage.getItem('selectedNamespaceId');
-    if (saved === 'all') return null;
+    const saved = localStorage.getItem(NAMESPACE_STORAGE_KEY);
+    if (saved === ALL_NAMESPACES_SENTINEL) return null;
     return saved || user.namespace_id || 'default';
   }
   return user.namespace_id;
