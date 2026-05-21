@@ -450,6 +450,71 @@ describe('Sidebar', () => {
     // The reload behaviour is verified at the E2E level instead.
 
     /**
+     * TC-All: System-admin can select 'All Namespaces' from dropdown.
+     * Contract: clicking 'All Namespaces' entry writes 'all' to localStorage('selectedNamespaceId').
+     * Why: this is the regression fix — the affordance was dropped in PR #283. Without it,
+     * system-admins cannot view cross-namespace data. The 'all' sentinel is what
+     * useSelectedNamespace resolves to null, which admin/page.tsx converts to namespaceId: undefined
+     * (no filter) for cross-namespace API calls.
+     */
+    it('writes all to localStorage when All Namespaces selected from dropdown', async () => {
+      mockUser.mockReturnValue({
+        id: 'user4',
+        email: 'sysadmin@example.com',
+        display_name: 'Sys Admin',
+        role: 'system-admin',
+        namespace_id: 'ns-1',
+      });
+      localStorage.setItem('selectedNamespaceId', 'ns-1');
+
+      render(<Sidebar />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /switch namespace/i })).toBeInTheDocument();
+      });
+
+      // Open dropdown
+      fireEvent.click(screen.getByRole('button', { name: /switch namespace/i }));
+
+      // 'All Namespaces' option should be present in the dropdown
+      const allNamespacesOption = screen.getByRole('button', { name: /all namespaces/i });
+      expect(allNamespacesOption).toBeInTheDocument();
+
+      // Click it
+      fireEvent.click(allNamespacesOption);
+
+      // Must write 'all' sentinel to localStorage
+      expect(localStorage.getItem('selectedNamespaceId')).toBe('all');
+    });
+
+    /**
+     * TC-AllLabel: When 'all' is active, the trigger label shows 'All Namespaces'.
+     * Contract: when localStorage('selectedNamespaceId') === 'all', the namespace switcher
+     * trigger button displays 'All Namespaces' text rather than a specific namespace name.
+     * Why: without this label, the user cannot tell which selection is active.
+     */
+    it('shows All Namespaces as trigger label when isAll is active', async () => {
+      mockUser.mockReturnValue({
+        id: 'user4',
+        email: 'sysadmin@example.com',
+        display_name: 'Sys Admin',
+        role: 'system-admin',
+        namespace_id: 'ns-1',
+      });
+      localStorage.setItem('selectedNamespaceId', 'all');
+
+      render(<Sidebar />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /switch namespace/i })).toBeInTheDocument();
+      });
+
+      // The trigger button should display 'All Namespaces' text
+      const trigger = screen.getByRole('button', { name: /switch namespace/i });
+      expect(trigger).toHaveTextContent(/all namespaces/i);
+    });
+
+    /**
      * TC5: Collapsed sidebar hides namespace area.
      * Contract: when collapsed=true, no namespace display name visible.
      * Catches: collapse branch missing for namespace.
