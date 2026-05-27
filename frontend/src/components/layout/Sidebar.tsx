@@ -21,7 +21,7 @@ import {
 } from '@/config/navigation';
 import { Icon, IconBtn } from '@/components/ui';
 import type { IconName } from '@/components/ui';
-import { getSystemNamespace, listSystemNamespaces, NamespaceInfo } from '@/lib/api/system';
+import { useSystemNamespace } from '@/hooks/useSystemNamespace';
 
 interface SidebarProps {
   /** Whether sidebar is collapsed to icon-only mode */
@@ -140,43 +140,16 @@ function NavGroupSection({ group, items, pathname, collapsed, isFirst }: NavGrou
  * Namespace area rendered in the sidebar header below the brand wordmark.
  * - Non-system-admin: display-only label showing the current namespace name.
  * - System-admin: clickable button that opens a dropdown to switch namespaces.
+ *   Includes an 'All Namespaces' entry at the top that activates cross-namespace view.
  *   Selection persists to localStorage('selectedNamespaceId') and reloads the page.
  */
 function SidebarNamespaceArea() {
   const { user } = useAuth();
-  const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([]);
-  const [currentNamespace, setCurrentNamespace] = useState<NamespaceInfo | null>(null);
+  const { current: currentNamespace, list: namespaces, isAll, error, select } = useSystemNamespace();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isSystemAdmin = user?.role === 'system-admin';
-
-  // Load current namespace for non-admin users
-  useEffect(() => {
-    if (!user?.namespace_id || isSystemAdmin) return;
-
-    getSystemNamespace(user.namespace_id).then(ns => {
-      setCurrentNamespace(ns);
-    }).catch(err => {
-      console.error('Failed to load namespace:', err);
-    });
-  }, [user?.namespace_id, isSystemAdmin]);
-
-  // Load all namespaces for system-admin
-  useEffect(() => {
-    if (!isSystemAdmin || !user?.namespace_id) return;
-
-    listSystemNamespaces().then(nsList => {
-      setNamespaces(nsList);
-
-      const savedId = localStorage.getItem('selectedNamespaceId');
-      const activeId = savedId || user.namespace_id || 'default';
-      const selected = nsList.find(ns => ns.id === activeId) || nsList[0] || null;
-      setCurrentNamespace(selected);
-    }).catch(err => {
-      console.error('Failed to load namespaces:', err);
-    });
-  }, [user?.namespace_id, isSystemAdmin]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -192,14 +165,30 @@ function SidebarNamespaceArea() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownOpen]);
 
-  const handleSelectNamespace = (ns: NamespaceInfo) => {
-    localStorage.setItem('selectedNamespaceId', ns.id);
-    window.location.reload();
-  };
+  if (!user) return null;
 
-  const displayName = currentNamespace?.displayName || user?.namespace_id || '';
+  if (error) {
+    return (
+      <span
+        role="alert"
+        title={error}
+        style={{
+          fontSize: 11,
+          color: 'var(--danger, #c00)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+      >
+        Namespace unavailable
+      </span>
+    );
+  }
 
-  if (!user || !displayName) return null;
+  const displayName = isAll ? 'All Namespaces' : (currentNamespace?.displayName || user.namespace_id || '');
+
+  if (!displayName) return null;
 
   if (!isSystemAdmin) {
     // Display-only label
@@ -265,20 +254,43 @@ function SidebarNamespaceArea() {
             overflow: 'hidden',
           }}
         >
+          {/* 'All Namespaces' entry — restores cross-namespace affordance dropped in PR #283 */}
+          <button
+            type="button"
+            aria-label="All Namespaces"
+            onClick={() => select('all')}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              fontSize: 12,
+              color: isAll ? 'var(--accent)' : 'var(--fg)',
+              fontWeight: isAll ? 600 : 400,
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid var(--border)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            All Namespaces
+          </button>
+
           {namespaces.map(ns => (
             <button
               key={ns.id}
               type="button"
               aria-label={ns.displayName}
-              onClick={() => handleSelectNamespace(ns)}
+              onClick={() => select(ns.id)}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
                 padding: '6px 10px',
                 fontSize: 12,
-                color: ns.id === currentNamespace?.id ? 'var(--accent)' : 'var(--fg)',
-                fontWeight: ns.id === currentNamespace?.id ? 600 : 400,
+                color: !isAll && ns.id === currentNamespace?.id ? 'var(--accent)' : 'var(--fg)',
+                fontWeight: !isAll && ns.id === currentNamespace?.id ? 600 : 400,
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
