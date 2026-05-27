@@ -16,6 +16,7 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { Button } from '@/components/ui/Button';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
 import { deriveDrawerModeBase } from '@/lib/drawerState';
@@ -501,6 +502,17 @@ function StudentPage() {
   // Debugger adapter
   const drawerDebug = buildDrawerDebug(debuggerHook);
 
+  const drawerCloseAction = debuggerHook.hasTrace ? (
+    <Button
+      variant="quiet"
+      size="sm"
+      data-testid="debug-exit"
+      onClick={() => debuggerHook.reset()}
+    >
+      Exit Debug
+    </Button>
+  ) : undefined;
+
   // Derive drawer mode
   const drawerMode = deriveDrawerMode({
     isDebugging: debuggerHook.hasTrace,
@@ -662,6 +674,7 @@ function StudentPage() {
         drawerFailure={drawerFailure}
         drawerDebug={drawerDebug}
         drawerRuntimeError={drawerRuntimeError}
+        drawerCloseAction={drawerCloseAction}
       />
 
       <ConfirmDialog

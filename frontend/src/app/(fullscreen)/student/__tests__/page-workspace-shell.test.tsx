@@ -158,6 +158,9 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
             Run third
           </button>
         )}
+        {props.drawerCloseAction && (
+          <div data-testid="drawer-close-action">{props.drawerCloseAction}</div>
+        )}
       </div>
     );
   },
@@ -438,6 +441,58 @@ describe('StudentPage wired to WorkspaceShell', () => {
       });
 
       expect(screen.getByTestId('drawer-mode').textContent).toBe('debug');
+    });
+
+    it('renders Exit Debug button in drawerCloseAction when hasTrace is true, and reset() is called on click', async () => {
+      /**
+       * Contract: when debuggerHook.hasTrace is true the student page passes a
+       * drawerCloseAction that renders a [data-testid="debug-exit"] button. Clicking
+       * it calls debuggerHook.reset(). Regression guard: drawerCloseAction omitted or
+       * reset not wired would leave the user stuck in debug mode with no exit affordance.
+       */
+      const mockReset = jest.fn();
+      const { useApiDebugger } = require('@/hooks/useApiDebugger');
+      useApiDebugger.mockReturnValue({
+        ...mockDebuggerState,
+        hasTrace: true,
+        reset: mockReset,
+        getCurrentStep: () => ({ line: 1, event: 'line', locals: {}, globals: {}, call_stack: [], stdout: '' }),
+      });
+
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      // The Exit Debug button should be rendered inside drawerCloseAction
+      const exitBtn = screen.getByTestId('debug-exit');
+      expect(exitBtn).toBeInTheDocument();
+
+      await act(async () => {
+        exitBtn.click();
+      });
+
+      expect(mockReset).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not render Exit Debug button when hasTrace is false', async () => {
+      /**
+       * Contract: drawerCloseAction is undefined when hasTrace is false, so the
+       * debug-exit button should not appear. Regression guard: stale close action
+       * rendered when not debugging would confuse students.
+       */
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('debug-exit')).toBeNull();
     });
   });
 

@@ -22,7 +22,7 @@ import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-p
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
 import { bootstrapUser } from '../../src/lib/api/auth';
 import { createVerifiedTestUser, getTestToken, IS_EMULATOR, DEFAULT_PASSWORD } from './test-auth';
-import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo } from '../../src/types/api';
+import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo, IOTestCase } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
 
@@ -164,7 +164,7 @@ export async function getSectionByJoinCode(joinCode: string): Promise<RegisterSt
 }
 
 export async function createProblem(token: string, classId: string, opts: {
-  title: string; starterCode?: string; description?: string; language?: string; solution?: string;
+  title: string; starterCode?: string; description?: string; language?: string; solution?: string; testCases?: IOTestCase[];
 }): Promise<Problem> {
   const language = opts.language || 'python';
   return withToken(token, () =>
@@ -175,6 +175,7 @@ export async function createProblem(token: string, classId: string, opts: {
       description: opts.description || '',
       language,
       ...(opts.solution !== undefined ? { solution: opts.solution } : {}),
+      ...(opts.testCases !== undefined ? { test_cases: opts.testCases } : {}),
     })
   );
 }
