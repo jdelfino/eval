@@ -154,11 +154,11 @@ test.describe('Critical User Paths', () => {
       // Verify student entered session (editor loads directly)
       await expect(page.locator('.monaco-editor')).toBeVisible();
 
-      // Verify connected status (shown in global header badge)
-      await expect(page.locator('text=Connected')).toBeVisible();
+      // Verify connected status (shown inline via ConnectionDot)
+      await expect(page.locator('text=Live').first()).toBeVisible();
 
-      // Verify the Run Code button is present (confirms editor loaded)
-      await expect(page.locator('button:has-text("Run Code")')).toBeVisible();
+      // Verify the Run all button is present in the test rail (confirms workspace loaded)
+      await expect(page.locator('[data-testid="workspace-run-all"]')).toBeVisible();
 
       // Success! The complete flow works:
       // - Instructor created class + section from dashboard
@@ -272,7 +272,7 @@ test.describe('Critical User Paths', () => {
       await expect(joinNowButton).toBeVisible();
       await joinNowButton.click();
       await expect(page.locator('.monaco-editor')).toBeVisible();
-      await expect(page.locator('text=Connected')).toBeVisible();
+      await expect(page.locator('text=Live').first()).toBeVisible();
 
       // Wait for initial empty code sync to complete (500ms debounce + buffer)
       // This prevents the initial empty code update from racing with our typed code

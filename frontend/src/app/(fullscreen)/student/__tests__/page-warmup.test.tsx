@@ -63,31 +63,35 @@ jest.mock('@/contexts/AuthContext', () => ({
   })),
 }));
 
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: jest.fn(() => ({
-    setHeaderSlot: jest.fn(),
+jest.mock('@/hooks/useApiDebugger', () => ({
+  useApiDebugger: jest.fn(() => ({
+    trace: null, currentStep: 0, isLoading: false, error: null,
+    requestTrace: jest.fn(), setTrace: jest.fn(), setError: jest.fn(),
+    stepForward: jest.fn(), stepBackward: jest.fn(), jumpToStep: jest.fn(),
+    jumpToFirst: jest.fn(), jumpToLast: jest.fn(), reset: jest.fn(),
+    getCurrentStep: jest.fn(() => null), getCurrentLocals: jest.fn(() => ({})),
+    getCurrentGlobals: jest.fn(() => ({})), getCurrentCallStack: jest.fn(() => []),
+    getPreviousStep: jest.fn(() => null),
+    total_steps: 0, hasTrace: false, canStepForward: false, canStepBackward: false,
   })),
 }));
 
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({})),
-}));
+// Track onRunAll callback and drawerMode from WorkspaceShell
+let capturedOnRun: (() => void) | null = null;
+let capturedDrawerMode: string | null = null;
 
-// Track onRun callback from CodeEditor to trigger execution in tests
-let capturedOnRun: ((testCases: unknown[]) => void) | null = null;
-
-jest.mock('../components/CodeEditor', () => ({
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: ({ onRun }: { onRun: (testCases: unknown[]) => void }) => {
-    capturedOnRun = onRun;
-    return <div data-testid="code-editor">CodeEditor</div>;
+  default: ({ onRunAll, drawerMode }: { onRunAll: () => void; drawerMode?: string }) => {
+    capturedOnRun = onRunAll;
+    capturedDrawerMode = drawerMode ?? null;
+    return (
+      <div data-testid="workspace-shell">
+        <div data-testid="drawer-mode">{drawerMode}</div>
+        WorkspaceShell
+      </div>
+    );
   },
-}));
-
-jest.mock('../components/EditorContainer', () => ({
-  EditorContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="editor-container">{children}</div>
-  ),
 }));
 
 jest.mock('../components/SessionEndedNotification', () => ({
@@ -136,6 +140,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedOnRun = null;
+    capturedDrawerMode = null;
     mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
     mockUpdateStudentWork.mockResolvedValue(undefined);
     mockWarmExecutor.mockResolvedValue(undefined);
@@ -149,7 +154,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
@@ -193,7 +198,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Page should load successfully despite warmExecutor failing
@@ -212,12 +217,12 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       // Trigger execution
       act(() => {
-        capturedOnRun?.([]);
+        capturedOnRun?.();
       });
 
       await waitFor(() => {
@@ -228,7 +233,13 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       expect(alert.textContent).toMatch(/warming up/i);
     });
 
-    it('shows generic error message for non-503 errors', async () => {
+    it('routes non-503 errors to drawer runtime-error mode (not generic alert)', async () => {
+      /**
+       * C3 fix: non-503 errors now call setRuntimeError (not setError), which causes
+       * drawerMode='runtime-error' and the WorkspaceShell drawer to show the error.
+       * Previously, non-503 errors were shown via a generic ErrorAlert — this was wrong
+       * because runtime errors (NameError, SyntaxError etc.) belong in the drawer.
+       */
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
       mockExecuteCode.mockRejectedValue(
@@ -238,20 +249,17 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
       act(() => {
-        capturedOnRun?.([]);
+        capturedOnRun?.();
       });
 
+      // Non-503 errors should set drawerMode='runtime-error', not show a generic alert
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByTestId('drawer-mode').textContent).toBe('runtime-error');
       });
-
-      const alert = screen.getByRole('alert');
-      // Should not show warming-up message for 500 errors
-      expect(alert.textContent).not.toMatch(/warming up/i);
     });
   });
 });

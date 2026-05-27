@@ -2,14 +2,21 @@
 
 import React, { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import CodeEditor from '@/app/(fullscreen)/student/components/CodeEditor';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { useRealtimePublicView } from '@/hooks/useRealtimePublicView';
-import { executeCode, ioTestCasesToCaseDefs, type ExecuteOptions } from '@/lib/api/execute';
+import { executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
-import type { IOTestCase } from '@/types/api';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
+import { mapToDotStatus } from '@/lib/connectionStatus';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
+import { buildDrawerDebug } from '@/lib/debuggerAdapter';
+import { deriveDrawerModeBase } from '@/lib/drawerState';
+import type { IOTestCase, TestResponse } from '@/types/api';
+import type { DrawerRuntimeError } from '@/components/workspace/Drawer';
+import type { EditorTab } from '@/components/workspace/EditorPane';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const FONT_SIZE_STORAGE_KEY = 'publicView_fontSize';
 const DEFAULT_FONT_SIZE = 24;
@@ -17,11 +24,16 @@ const FONT_SIZE_STEP = 2;
 const FONT_SIZE_MIN = 12;
 const FONT_SIZE_MAX = 48;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// ─── PublicViewContent ────────────────────────────────────────────────────────
+
 function PublicViewContent() {
   const searchParams = useSearchParams();
   const session_id = searchParams.get('session_id');
   const section_id = searchParams.get('section_id');
-  const { setHeaderSlot } = useHeaderSlot();
+
+  // ── Font size (persisted to localStorage) ─────────────────────────────────
 
   const [fontSize, setFontSize] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -50,8 +62,8 @@ function PublicViewContent() {
     });
   };
 
-  // Real-time session state via Centrifugo websocket.
-  // Supports both session_id and section_id modes.
+  // ── Real-time session state (Centrifugo WebSocket) ────────────────────────
+
   const {
     state,
     loading,
@@ -63,72 +75,28 @@ function PublicViewContent() {
     section_id: section_id ?? undefined,
   });
 
-  // Local code state for editing (changes don't propagate back to student)
+  // ── Local scratch-pad code state ──────────────────────────────────────────
+
   const [localCode, setLocalCode] = useState<string>('');
   const lastFeaturedStudentId = useRef<string | null>(null);
   const lastFeaturedCode = useRef<string | null>(null);
-  // Tracks whether the user has edited the scratch pad code.
-  // When true, we don't auto-replace with starter_code.
+  // When true, the user has edited the scratch pad — don't clobber with starter_code.
   const hasUserEdited = useRef(false);
 
-  // Execution state for code editor
+  // ── Execution state (scratch-pad only) ────────────────────────────────────
+
   const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<import('@/types/api').TestResponse | null>(null);
+  const [executionResult, setExecutionResult] = useState<TestResponse | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 
-  const handleRunCode = (codeToRun: string) => (testCases: IOTestCase[]) => {
-    const language = (state?.problem as any)?.language || 'python';
-    const options: ExecuteOptions = {
-      cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
-    };
-    setIsRunning(true);
-    setExecutionResult(null);
-    executeCode(codeToRun, language, options)
-      .then(setExecutionResult)
-      .catch(() => {
-        // On error, leave executionResult null — the error banner handles display
-      })
-      .finally(() => setIsRunning(false));
-  };
+  // ── Debugger hook (for featured-student debug traces) ─────────────────────
 
-  const hasFeaturedSubmission = !!state?.featured_student_id || !!state?.featured_code;
-
-  // Show connection status and join code in the global header
-  useEffect(() => {
-    const hasIdentifier = session_id || section_id;
-    if (hasIdentifier && state) {
-      setHeaderSlot(
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-bold font-mono text-blue-600">
-            {state.join_code || '------'}
-          </span>
-          <ConnectionStatus
-            status={connectionStatus}
-            variant="badge"
-          />
-        </div>
-      );
-    } else if (hasIdentifier) {
-      setHeaderSlot(
-        <ConnectionStatus
-          status={connectionStatus}
-          variant="badge"
-        />
-      );
-    }
-    return () => setHeaderSlot(null);
-  }, [session_id, section_id, state?.join_code, connectionStatus, setHeaderSlot]);
-
-  // Debugger hook for API-based trace requests
   const debuggerHook = useApiDebugger();
 
-  // Test cases from problem (baseline for the session).
-  const problemTestCases: IOTestCase[] = ((state?.problem as any)?.test_cases as IOTestCase[]) ?? [];
 
-  // When something is featured, use featured_test_cases; otherwise fall back to problem's test cases.
-  const featuredTestCases: IOTestCase[] = (state?.featured_test_cases as IOTestCase[] | null | undefined)
-    ?? problemTestCases;
+  // ── Reset local code when featured student changes ────────────────────────
 
-  // Reset local code when featured student or their code changes
   useEffect(() => {
     const studentChanged = state?.featured_student_id !== lastFeaturedStudentId.current;
     const codeChanged = state?.featured_code !== lastFeaturedCode.current;
@@ -138,14 +106,13 @@ function PublicViewContent() {
       lastFeaturedCode.current = state?.featured_code ?? null;
       setLocalCode(state?.featured_code ?? '');
       hasUserEdited.current = false;
+      // Clear execution state when featured student changes
+      setExecutionResult(null);
+      setRuntimeError(null);
     }
   }, [state?.featured_student_id, state?.featured_code, state?.featured_test_cases, state?.problem]);
 
-  // Track user edits to the scratch pad
-  const handleCodeChange = (code: string) => {
-    hasUserEdited.current = true;
-    setLocalCode(code);
-  };
+  // ── Early returns (loading / error / no session) ──────────────────────────
 
   if (!session_id && !section_id) {
     return (
@@ -177,7 +144,7 @@ function PublicViewContent() {
     );
   }
 
-  // Section mode: show waiting state when no active session
+  // Section mode: waiting for a session to start
   if (section_id && !activeSessionId) {
     return (
       <div className="h-full bg-gray-50 flex items-center justify-center">
@@ -200,13 +167,89 @@ function PublicViewContent() {
     );
   }
 
+  // ── Derived values ────────────────────────────────────────────────────────
+
   const problem = state.problem;
-  // Show starter_code only when the user hasn't edited the scratch pad
+  const hasFeaturedSubmission = !!(state.featured_student_id || state.featured_code);
+
+  // Test cases: prefer featured_test_cases, fall back to problem's test cases
+  const problemTestCases: IOTestCase[] = (problem?.test_cases as IOTestCase[] | null | undefined) ?? [];
+  const featuredTestCases: IOTestCase[] = (state.featured_test_cases as IOTestCase[] | null | undefined) ?? problemTestCases;
+  const activeTestCases = hasFeaturedSubmission ? featuredTestCases : problemTestCases;
+
+  // In scratch-pad mode, start with starter_code unless user has edited
   const scratchPadCode = hasUserEdited.current ? localCode : (localCode || problem?.starter_code || '');
+  const displayCode = hasFeaturedSubmission ? localCode : scratchPadCode;
+
+  // Build EditorTab — readOnly in featured-student mode (read-only display surface)
+  const editorTabs: EditorTab[] = [
+    {
+      id: 'main',
+      label: hasFeaturedSubmission ? 'Featured Code' : (problem?.starter_code ? 'Starter Code' : 'Scratch Pad'),
+      kind: 'code',
+      language: ((problem?.language as 'python' | 'javascript' | 'java') ?? 'python'),
+      code: displayCode,
+      readOnly: hasFeaturedSubmission,
+    },
+  ];
+
+  // Build TestRail items
+  const tests = toTestRailItems(activeTestCases, executionResult?.results);
+
+  // Debugger adapter
+  const drawerDebug = buildDrawerDebug(debuggerHook);
+
+  // Drawer mode
+  const drawerMode = deriveDrawerModeBase({
+    isDebugging: debuggerHook.hasTrace,
+    executionResult,
+    runtimeError,
+  });
+
+  // Output lines for the drawer
+  const drawerOutput = toDrawerOutput(executionResult);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleRunAll = () => {
+    const language = problem?.language || 'python';
+    const codeToRun = displayCode;
+
+    setIsRunning(true);
+    setExecutionResult(null);
+    setRuntimeError(null);
+    executeCode(codeToRun, language, {
+      cases: ioTestCasesToCaseDefs(activeTestCases),
+    })
+      .then(setExecutionResult)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Execution failed';
+        setRuntimeError(msg);
+      })
+      .finally(() => setIsRunning(false));
+  };
+
+  const handleChangeCode = (_tabId: string, code: string) => {
+    hasUserEdited.current = true;
+    setLocalCode(code);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <main className="h-full w-full flex flex-col p-2 box-border">
-      {/* Font size controls */}
+      {/* Join code + Connection status at top */}
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-lg font-bold font-mono text-blue-600">
+          {state?.join_code || '------'}
+        </span>
+        <ConnectionDot status={mapToDotStatus(connectionStatus)} />
+      </div>
+
+      {/* Font size controls — projector-specific chrome.
+          WorkspaceShell is mounted with embedded=true so the Ribbon is
+          omitted; the projector page owns its own chrome (these controls +
+          the ConnectionDot at the top). */}
       <div className="flex items-center gap-1 mb-1 self-end">
         <button
           type="button"
@@ -226,47 +269,34 @@ function PublicViewContent() {
           +
         </button>
       </div>
-      {/* Featured Submission or Solution */}
-      {hasFeaturedSubmission ? (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <CodeEditor
-            code={localCode}
-            onChange={setLocalCode}
-            problem={problem || null}
-            title="Featured Code"
-            defaultTestCases={featuredTestCases}
-            onRun={handleRunCode(localCode)}
-            isRunning={isRunning}
-            execution_result={executionResult}
-            debugger={debuggerHook}
-            forceDesktop={true}
-            outputPosition="right"
-            fontSize={fontSize}
-            outputCollapsible={true}
-          />
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <CodeEditor
-            code={scratchPadCode}
-            onChange={handleCodeChange}
-            problem={problem || null}
-            title={problem?.starter_code ? 'Starter Code' : 'Scratch Pad'}
-            defaultTestCases={problemTestCases}
-            onRun={handleRunCode(scratchPadCode)}
-            isRunning={isRunning}
-            execution_result={executionResult}
-            debugger={debuggerHook}
-            forceDesktop={true}
-            outputPosition="right"
-            fontSize={fontSize}
-            outputCollapsible={true}
-          />
-        </div>
-      )}
+
+      <WorkspaceShell
+        // Projector renders its own font-size controls and ConnectionDot inline above,
+        // so we use embedded=true to suppress the Ribbon.
+        embedded={true}
+        // editor
+        editorTabs={editorTabs}
+        activeTabId="main"
+        onChangeCode={hasFeaturedSubmission ? undefined : handleChangeCode}
+        fontSize={fontSize}
+        highlight={debuggerHook.hasTrace ? debuggerHook.getCurrentStep()?.line : undefined}
+        // rail
+        tests={tests}
+        onRunAll={hasFeaturedSubmission ? undefined : handleRunAll}
+        isRunningAll={isRunning}
+        // drawer
+        drawerMode={drawerMode}
+        drawerCollapsed={drawerCollapsed}
+        onToggleDrawer={() => setDrawerCollapsed(c => !c)}
+        drawerOutput={drawerOutput}
+        drawerDebug={drawerDebug}
+        drawerRuntimeError={runtimeError ? ({ type: 'error', message: runtimeError } satisfies DrawerRuntimeError) : undefined}
+      />
     </main>
   );
 }
+
+// ─── Page export ──────────────────────────────────────────────────────────────
 
 export default function PublicInstructorView() {
   return (

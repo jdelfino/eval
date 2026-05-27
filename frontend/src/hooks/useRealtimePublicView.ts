@@ -24,8 +24,9 @@ import { getSessionPublicState } from '@/lib/api/sessions';
 import { getActiveSessions } from '@/lib/api/sections';
 import type { SessionPublicState } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
+import type { RealtimeStatus } from '@/lib/connectionStatus';
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'failed';
+export type ConnectionStatus = RealtimeStatus;
 
 export interface UseRealtimePublicViewOptions {
   /** Session ID for direct session tracking. */

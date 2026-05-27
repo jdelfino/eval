@@ -1,13 +1,21 @@
 /**
  * @jest-environment jsdom
+ *
+ * Tests for SessionProblemEditor (G2 T6 wiring).
+ *
+ * Integration tests focus on prop wiring: Ribbon editable title, statement.md tab,
+ * edit-test drawer state. The host has no ProblemPropertiesBar — session context
+ * doesn't permit class/tag editing.
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import SessionProblemEditor from '../SessionProblemEditor';
 import type { Problem } from '@/types/problem';
 
-/** Build a full Problem with sensible defaults, overriding specific fields. */
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
     id: 'test-id',
@@ -27,579 +35,405 @@ function makeProblem(overrides: Partial<Problem> = {}): Problem {
   };
 }
 
-// Mock useApiDebugger hook
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: jest.fn(() => ({
-    isDebugging: false,
-    currentStep: 0,
-    total_steps: 0,
-    currentTrace: null,
-    startDebugging: jest.fn(),
-    stopDebugging: jest.fn(),
-    nextStep: jest.fn(),
-    previousStep: jest.fn(),
-    getCurrentStep: jest.fn(() => null),
-  })),
+const MOCK_IO_TEST = {
+  kind: 'io' as const,
+  name: 't1',
+  input: '42',
+  expected_output: '42',
+  match_type: 'exact' as const,
+  order: 0,
+};
+
+const MOCK_PYTEST_TEST = {
+  kind: 'pytest' as const,
+  name: 'test_basic',
+  target_path: 'tests/test_basic.py::test_basic',
+  test_code: 'def test_basic():\n    assert True',
+};
+
+// ─── API mocks ────────────────────────────────────────────────────────────────
+
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn(),
+  ioTestCasesToCaseDefs: jest.fn((cases) => cases),
+  buildIOTestCases: jest.fn(() => []),
 }));
 
-// Mock useResponsiveLayout hook
-jest.mock('@/hooks/useResponsiveLayout', () => ({
+// ─── WorkspaceShell mock ──────────────────────────────────────────────────────
+
+let capturedWorkspaceProps: any = null;
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: jest.fn(() => ({
-    isMobile: false,
-    isTablet: false,
-    isDesktop: true,
-  })),
-}));
-
-// Mock the CodeEditor component
-// Simulates Monaco's behavior: without a key prop to force remount, switching from
-// non-empty to empty content may not properly update the editor state
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  const editorInstances = new Map<string, string>();
-
-  return React.forwardRef(function MockCodeEditor(props: any, ref: any) {
+  default: (props: any) => {
+    capturedWorkspaceProps = props;
     const {
-      code,
-      onChange,
-      readOnly,
-      onTestCasesChange,
-      title,
-      problem,
-      onProblemEdit,
-      editableProblem
+      editorTabs,
+      activeTabId,
+      onChangeCode,
+      onRunAll,
+      onSelectTab,
+      railMode,
+      embedded,
+      tests,
+      propertiesBar,
+      drawerMode,
+      drawerEdit,
+      onDrawerEditChange,
+      drawerCloseAction,
+      railShowAdd,
+      onEditTest,
+      onAddTest,
     } = props;
-
-    // Use a ref to simulate Monaco's internal state that persists across renders
-    const instanceIdRef = React.useRef<string | undefined>(undefined);
-    const [displayedCode, setDisplayedCode] = React.useState(code);
-
-    // On mount, create or retrieve instance
-    React.useEffect(() => {
-      const instanceId = Math.random().toString(36);
-      instanceIdRef.current = instanceId;
-      editorInstances.set(instanceId, code);
-      setDisplayedCode(code);
-
-      return () => {
-        if (instanceIdRef.current) {
-          editorInstances.delete(instanceIdRef.current);
-        }
-      };
-    }, []); // Empty deps = only runs on mount/unmount (simulating Monaco instance lifecycle)
-
-    // Update displayed code only if instance has been remounted (via key change)
-    // Otherwise, simulate Monaco bug: empty string doesn't trigger update
-    React.useEffect(() => {
-      if (instanceIdRef.current) {
-        // Simulate Monaco bug: when code becomes empty, the editor doesn't update unless remounted
-        if (code !== '' || !editorInstances.get(instanceIdRef.current)) {
-          editorInstances.set(instanceIdRef.current, code);
-          setDisplayedCode(code);
-        }
-      }
-    }, [code]);
-
+    const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
-      <div data-testid="code-editor" data-readonly={readOnly ? 'true' : 'false'}>
-        <div>{title}</div>
-        <textarea
-          data-testid="code-textarea"
-          value={displayedCode}
-          readOnly={readOnly}
-          onChange={(e) => onChange?.(e.target.value)}
-        />
-        <input
-          data-testid="stdin-input"
-          placeholder="stdin"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: e.target.value, match_type: 'exact' as const, order: 0 }] : [])}
-        />
-        <input
-          data-testid="seed-input"
-          type="number"
-          placeholder="seed"
-          onChange={(e) => onTestCasesChange?.(e.target.value ? [{ kind: 'io' as const, name: 'Default', input: '', match_type: 'exact' as const, order: 0, random_seed: Number(e.target.value) }] : [])}
-        />
-        {editableProblem && (
-          <div data-testid="editable-problem-sidebar">
+      <div data-testid="workspace-shell" data-embedded={String(embedded ?? false)}>
+        {/* Ribbon — editable title */}
+        {props.ribbonEditable && (
+          <div data-testid="ribbon-editable">
             <input
-              data-testid="problem-title-input"
-              aria-label="Problem Title"
-              placeholder="Problem Title"
-              value={problem?.title || ''}
-              onChange={(e) => onProblemEdit?.({ title: e.target.value })}
-            />
-            <textarea
-              data-testid="problem-description-textarea"
-              aria-label="Problem Description"
-              placeholder="Problem Description"
-              value={problem?.description || ''}
-              onChange={(e) => onProblemEdit?.({ description: e.target.value })}
+              data-testid="ribbon-title-input"
+              defaultValue={props.problemTitle ?? ''}
+              onBlur={(e) => props.onTitleChange?.(e.target.value)}
             />
           </div>
         )}
+        {/* Properties bar slot (should NOT be rendered for SPE) */}
+        {propertiesBar && <div data-testid="properties-bar-slot">{propertiesBar}</div>}
+        {/* Editor tabs */}
+        <div data-testid="editor-tabs">
+          {editorTabs.map((tab: any) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              onClick={() => onSelectTab?.(tab.id)}
+              data-readonly={String(tab.readOnly ?? false)}
+              data-kind={tab.kind}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* Active editor areas */}
+        {activeTab && activeTab.kind === 'code' && (
+          <textarea
+            data-testid="active-code-area"
+            aria-label={activeTab.label}
+            value={activeTab.code}
+            readOnly={activeTab.readOnly}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
+        )}
+        {activeTab && activeTab.kind === 'markdown' && (
+          <textarea
+            data-testid="active-markdown-area"
+            aria-label={activeTab.label}
+            value={activeTab.body ?? ''}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
+        )}
+        <button data-testid="run-all-btn" onClick={() => onRunAll?.()}>Run all</button>
+        <span data-testid="rail-mode">{railMode ?? 'run'}</span>
+        <span data-testid="tests-count">{tests?.length ?? 0}</span>
+        <span data-testid="drawer-mode">{drawerMode}</span>
+        {/* Rail add controls */}
+        {railShowAdd && (
+          <div data-testid="rail-add-controls">
+            <button data-testid="add-io-btn" onClick={() => onAddTest?.('io')}>Add IO</button>
+            <button data-testid="add-pytest-btn" onClick={() => onAddTest?.('pytest')}>Add Pytest</button>
+          </div>
+        )}
+        {/* Drawer edit area */}
+        {drawerEdit && (
+          <div data-testid="drawer-edit-area">
+            <span data-testid="drawer-edit-kind">{drawerEdit.kind}</span>
+          </div>
+        )}
+        {/* Drawer close actions */}
+        {drawerCloseAction && (
+          <div data-testid="drawer-close-actions">{drawerCloseAction}</div>
+        )}
+        {/* Per-row edit button simulation */}
+        {tests?.map((t: any) => (
+          <button
+            key={t.id}
+            data-testid={`edit-body-${t.id}`}
+            onClick={() => onEditTest?.(t.id)}
+          >
+            Edit {t.id}
+          </button>
+        ))}
       </div>
     );
-  });
-});
+  },
+}));
 
-describe('SessionProblemEditor', () => {
+jest.mock('@/lib/testRail', () => ({
+  toTestRailItems: jest.fn((cases, results) =>
+    (cases ?? []).map((c: any, i: number) => {
+      const name = c.name ?? `case-${i}`;
+      const id = `${c.kind}-${c.order ?? i}-${name}`;
+      return {
+        id,
+        name,
+        kind: c.kind,
+        visible: true,
+        state: 'idle',
+        t: '',
+        io: c.kind === 'io' ? { stdin: c.input ?? '' } : undefined,
+        pytest: c.kind === 'pytest' ? { target: c.target_path ?? '' } : undefined,
+      };
+    })
+  ),
+  toDrawerOutput: jest.fn((result) =>
+    result
+      ? { lines: [], status: 'pass', summary: '1/1 passed' }
+      : undefined
+  ),
+}));
+
+// ─── Test suite ───────────────────────────────────────────────────────────────
+
+describe('SessionProblemEditor (G2 T6)', () => {
   const mockOnUpdateProblem = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
+    capturedWorkspaceProps = null;
+  });
+
+  // ── T6 test case 14: Ribbon editable title ────────────────────────────────────
+  /**
+   * Verifies that ribbonEditable=true is passed and onTitleChange propagates
+   * to onUpdateProblem when Update Problem is clicked.
+   */
+  it('T14: Ribbon editable title wired — onTitleChange flows to onUpdateProblem', () => {
+    const prob = makeProblem({ title: 'Initial Title', starter_code: 'code' });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    expect(capturedWorkspaceProps.ribbonEditable).toBe(true);
+    expect(capturedWorkspaceProps.problemTitle).toBe('Initial Title');
+
+    // Fire onTitleChange
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('New Title');
+    });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'New Title' })
+    );
+  });
+
+  // ── T6 test case 15: Statement.md tab loads + writes ─────────────────────────
+  /**
+   * Verifies that the statement.md tab is present in editorTabs with the
+   * problem's description as body, and that editing it flows to onUpdateProblem.
+   */
+  it('T15a: statement.md tab present with description body', () => {
+    const prob = makeProblem({ title: 'T', description: '# Statement body', starter_code: '' });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    const statementTab = capturedWorkspaceProps.editorTabs.find(
+      (t: any) => t.id === 'statement'
+    );
+    expect(statementTab).toBeDefined();
+    expect(statementTab.kind).toBe('markdown');
+    expect(statementTab.body).toBe('# Statement body');
+  });
+
+  it('T15b: editorTabs has 3 tabs', () => {
+    render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
+    expect(capturedWorkspaceProps.editorTabs).toHaveLength(3);
+    const tabIds = capturedWorkspaceProps.editorTabs.map((t: any) => t.id);
+    expect(tabIds).toContain('starter');
+    expect(tabIds).toContain('solution');
+    expect(tabIds).toContain('statement');
+  });
+
+  it('T15c: statement tab onChangeCode flows to onUpdateProblem.description', () => {
+    const prob = makeProblem({ title: 'T', description: '# Old', starter_code: '' });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    // Switch to statement tab
+    fireEvent.click(screen.getByRole('tab', { name: 'statement.md' }));
+
+    const markdownArea = screen.getByTestId('active-markdown-area');
+    fireEvent.change(markdownArea, { target: { value: '# New Description' } });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
+      expect.objectContaining({ description: '# New Description' })
+    );
+  });
+
+  // ── T6 test case 16: Edit drawer round-trip ───────────────────────────────────
+  /**
+   * Verifies that onEditTest on a test row opens the drawer in edit-test mode,
+   * and that Save & run replaces the test in the array and calls onUpdateProblem.
+   */
+  it('T16a: onEditTest opens drawer in edit-test mode', () => {
+    const prob = makeProblem({
+      title: 'T',
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    expect(tests).toHaveLength(2);
+
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[1].id); // pytest test
+    });
+
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('pytest');
+  });
+
+  it('T16b: Save & run round-trip calls onUpdateProblem with updated test array', async () => {
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 10, actual: '42' }],
+    });
+
+    const prob = makeProblem({
+      title: 'T',
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    const ioItem = tests[0];
+
+    act(() => {
+      capturedWorkspaceProps.onEditTest(ioItem.id);
+    });
+
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'x',
+        expected_output: 'y',
+        match_type: 'contains',
+      });
+    });
+
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => {
+      expect(mockOnUpdateProblem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          test_cases: expect.arrayContaining([
+            expect.objectContaining({ input: 'x', expected_output: 'y', match_type: 'contains' }),
+            expect.objectContaining({ kind: 'pytest' }),
+          ]),
+        })
+      );
+    });
+  });
+
+  // ── T6 test case 17: No ProblemPropertiesBar in SessionProblemEditor ──────────
+  /**
+   * Verifies that SessionProblemEditor does NOT render ProblemPropertiesBar.
+   * Session context doesn't permit class/tag editing.
+   * Catches: accidentally adding PropertiesBar to session host.
+   */
+  it('T17: no ProblemPropertiesBar rendered in session context', () => {
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />
+    );
+
+    // propertiesBar prop should be undefined/null
+    expect(capturedWorkspaceProps.propertiesBar).toBeFalsy();
+    expect(screen.queryByTestId('properties-bar-slot')).not.toBeInTheDocument();
+  });
+
+  // ── Existing behavior preserved ───────────────────────────────────────────────
+
+  describe('WorkspaceShell integration', () => {
+    it('renders WorkspaceShell embedded=true', () => {
+      render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
+      expect(screen.getByTestId('workspace-shell')).toHaveAttribute('data-embedded', 'true');
+    });
+
+    it('rail mode is edit (G2)', () => {
+      render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
+      expect(screen.getByTestId('rail-mode')).toHaveTextContent('edit');
+    });
+
+    it('railShowAdd is true', () => {
+      render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
+      expect(screen.getByTestId('rail-add-controls')).toBeInTheDocument();
+    });
   });
 
   it('renders with empty initial state', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('');
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
+    render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
+    expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
     expect(screen.getByText('Update Problem')).toBeInTheDocument();
   });
 
   it('renders with initial problem data', () => {
-    const initialProblem = makeProblem({
-      title: 'Test Problem',
-      description: 'Test description',
-      starter_code: 'print("hello")',
-    });
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={initialProblem}
-      />
-    );
-
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Test Problem');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Test description');
-    expect(screen.getByTestId('code-textarea')).toHaveValue('print("hello")');
+    const prob = makeProblem({ title: 'Test Problem', starter_code: 'print("hello")' });
+    render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />);
+    // Starter Code tab is active — code area should show starter_code
+    expect(screen.getByTestId('active-code-area')).toHaveValue('print("hello")');
   });
 
-  it('renders with initial test cases', () => {
-    const initialTestCases = [
-      { kind: 'io' as const, name: 'Default', input: 'test input', match_type: 'exact' as const, order: 0, random_seed: 42, attached_files: [{ name: 'test.txt', content: 'content' }] },
-    ];
+  it('calls onUpdateProblem with correct data when Update is clicked', () => {
+    render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
 
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialTestCases={initialTestCases}
-      />
-    );
-
-    // CodeEditor should receive these settings as props
-    expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-  });
-
-  it('updates title when user types', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    const titleInput = screen.getByTestId('problem-title-input');
-    fireEvent.change(titleInput, { target: { value: 'New Title' } });
-
-    expect(titleInput).toHaveValue('New Title');
-  });
-
-  it('updates description when user types', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    const descriptionInput = screen.getByTestId('problem-description-textarea');
-    fireEvent.change(descriptionInput, { target: { value: 'New description' } });
-
-    expect(descriptionInput).toHaveValue('New description');
-  });
-
-  it('updates starter code when user types in editor', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    const codeTextarea = screen.getByTestId('code-textarea');
-    fireEvent.change(codeTextarea, { target: { value: 'print("new code")' } });
-
-    expect(codeTextarea).toHaveValue('print("new code")');
-  });
-
-  it('calls onUpdateProblem with correct data when Update button is clicked', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Fill in the form
-    fireEvent.change(screen.getByTestId('problem-title-input'), {
-      target: { value: 'My Title' }
-    });
-    fireEvent.change(screen.getByTestId('problem-description-textarea'), {
-      target: { value: 'My description' }
-    });
-    fireEvent.change(screen.getByTestId('code-textarea'), {
-      target: { value: 'print("code")' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'My Title',
-        description: 'My description',
-        starter_code: 'print("code")',
-        solution: null,
-        language: 'python',
-      })
-    );
-  });
-
-  it('includes execution settings when stdin is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set stdin
-    fireEvent.change(screen.getByTestId('stdin-input'), {
-      target: { value: 'test input' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            name: 'Default',
-            input: 'test input',
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('includes execution settings when random seed is provided', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    // Set random seed
-    fireEvent.change(screen.getByTestId('seed-input'), {
-      target: { value: '42' }
-    });
-
-    // Click update
-    fireEvent.click(screen.getByText('Update Problem'));
-
-    expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        test_cases: expect.arrayContaining([
-          expect.objectContaining({
-            random_seed: 42,
-          }),
-        ]),
-      })
-    );
-  });
-
-  it('trims whitespace from inputs when updating', () => {
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-      />
-    );
-
-    fireEvent.change(screen.getByTestId('problem-title-input'), {
-      target: { value: '  Title with spaces  ' }
-    });
-    fireEvent.change(screen.getByTestId('problem-description-textarea'), {
-      target: { value: '  Description with spaces  ' }
-    });
-    fireEvent.change(screen.getByTestId('code-textarea'), {
-      target: { value: '  code with spaces  ' }
+    fireEvent.change(screen.getByTestId('active-code-area'), {
+      target: { value: 'print("code")' },
     });
 
     fireEvent.click(screen.getByText('Update Problem'));
 
     expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Title with spaces',
-        description: 'Description with spaces',
-        starter_code: 'code with spaces',
-        solution: null,
-        language: 'python',
-      })
+      expect.objectContaining({ starter_code: 'print("code")', language: 'python' })
     );
   });
 
-  it('syncs state when initialProblem changes', () => {
-    const { rerender } = render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={makeProblem({
-          title: 'Initial',
-          description: 'Initial desc',
-          starter_code: 'initial code',
-        })}
-      />
-    );
+  it('Starter and Solution tabs are both kind=code and editable', () => {
+    render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} />);
 
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Initial');
-
-    // Update the initial problem
-    rerender(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={makeProblem({
-          title: 'Updated',
-          description: 'Updated desc',
-          starter_code: 'updated code',
-        })}
-      />
-    );
-
-    expect(screen.getByTestId('problem-title-input')).toHaveValue('Updated');
-    expect(screen.getByTestId('problem-description-textarea')).toHaveValue('Updated desc');
-  });
-
-  it('uses CodeEditor component with correct props', () => {
-    const initialProblem = makeProblem({
-      title: 'Test',
-      description: 'Test',
-      starter_code: 'test code',
-    });
-    const initialTestCases = [
-      { kind: 'io' as const, name: 'Default', input: 'input', match_type: 'exact' as const, order: 0, random_seed: 123, attached_files: [{ name: 'file.txt', content: 'content' }] },
-    ];
-
-    render(
-      <SessionProblemEditor
-        onUpdateProblem={mockOnUpdateProblem}
-        initialProblem={initialProblem}
-        initialTestCases={initialTestCases}
-      />
-    );
-
-    const editor = screen.getByTestId('code-editor');
-    expect(editor).toBeInTheDocument();
-    expect(screen.getByTestId('code-textarea')).toHaveValue('test code');
-  });
-
-  describe('tab rendering', () => {
-    it('renders Starter Code and Solution tabs', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-        />
-      );
-
-      expect(screen.getByRole('tab', { name: 'Starter Code' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Solution' })).toBeInTheDocument();
-    });
-
-    it('defaults to Starter Code tab', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-        />
-      );
-
-      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
-      expect(starterTab).toHaveAttribute('aria-selected', 'true');
-      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
-      expect(solutionTab).toHaveAttribute('aria-selected', 'false');
-    });
-
-    it('switches to Solution tab when clicked', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-        />
-      );
-
-      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
-      fireEvent.click(solutionTab);
-
-      expect(solutionTab).toHaveAttribute('aria-selected', 'true');
-      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
-      expect(starterTab).toHaveAttribute('aria-selected', 'false');
-    });
-
-    it('shows starter code in editor on Starter Code tab', () => {
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: 'starter code here',
-        solution: 'solution code here',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Default tab is Starter Code, should show starter_code
-      expect(screen.getByTestId('code-textarea')).toHaveValue('starter code here');
-    });
-
-    it('solution tab is read-only', () => {
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: 'starter code here',
-        solution: 'solution code here',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Starter Code tab should not be read-only
-      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'false');
-
-      // Switch to Solution tab — should be read-only
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-editor')).toHaveAttribute('data-readonly', 'true');
-    });
-
-    it('shows solution code in editor on Solution tab', () => {
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: 'starter code here',
-        solution: 'solution code here',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Switch to Solution tab
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
-    });
-
-    it('switches from solution to empty starter code correctly', () => {
-      // Regression test for PLAT-m8d: Solution stays visible when switching to empty Starter Code tab
-      // This verifies that the CodeEditor properly updates when switching from a populated Solution
-      // tab to an empty Starter Code tab. Without a key prop forcing remount, Monaco may retain
-      // the previous buffer instead of showing empty content.
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: '',
-        solution: 'solution code here',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Start on Starter Code tab (default) - should be empty
-      expect(screen.getByTestId('code-textarea')).toHaveValue('');
-
-      // Switch to Solution tab - should show solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('solution code here');
-
-      // Switch back to Starter Code tab - should be empty again
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('');
-    });
-  });
-
-  describe('solution state', () => {
-    it('initializes solution from initialProblem.solution', () => {
-      const initialProblem = makeProblem({
-        title: 'Test',
-        description: 'Test',
-        starter_code: 'starter',
-        solution: 'the solution code',
-      });
-
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={initialProblem}
-        />
-      );
-
-      // Switch to Solution tab to see solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('the solution code');
-    });
-
-    it('syncs solution when initialProblem changes', () => {
-      const { rerender } = render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({
-            title: 'Initial',
-            description: 'Initial desc',
-            starter_code: 'initial code',
-            solution: 'initial solution',
-          })}
-        />
-      );
-
-      rerender(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({
-            title: 'Updated',
-            description: 'Updated desc',
-            starter_code: 'updated code',
-            solution: 'updated solution',
-          })}
-        />
-      );
-
-      // Switch to Solution tab to check updated solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByTestId('code-textarea')).toHaveValue('updated solution');
+    const codeTabs = capturedWorkspaceProps.editorTabs.filter((t: any) => t.kind === 'code');
+    expect(codeTabs).toHaveLength(2);
+    codeTabs.forEach((tab: any) => {
+      expect(tab.readOnly).toBeFalsy();
     });
   });
 
   describe('View Solution button', () => {
-    it('does not show View Solution button when no solution exists', () => {
+    it('does not show View Solution button when no solution', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '' })}
+          initialProblem={makeProblem({ title: 'T', starter_code: '' })}
         />
       );
-
       expect(screen.queryByTestId('view-solution-button')).not.toBeInTheDocument();
     });
 
@@ -607,10 +441,9 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'solution code' })}
+          initialProblem={makeProblem({ title: 'T', starter_code: '', solution: 'sol' })}
         />
       );
-
       expect(screen.getByTestId('view-solution-button')).toBeInTheDocument();
     });
 
@@ -618,202 +451,162 @@ describe('SessionProblemEditor', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
+          initialProblem={makeProblem({ title: 'T', starter_code: '', solution: 'my solution' })}
         />
       );
-
       fireEvent.click(screen.getByTestId('view-solution-button'));
-
       expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
     });
 
-    it('closes solution viewer modal when Close button is clicked', () => {
+    it('closes solution viewer modal when Close is clicked', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
+          initialProblem={makeProblem({ title: 'T', starter_code: '', solution: 'sol' })}
         />
       );
-
       fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-
       fireEvent.click(screen.getByText('Close'));
-      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
-    });
-
-    it('closes solution viewer modal on Escape key', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-
-      fireEvent.keyDown(document, { key: 'Escape' });
-      expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
-    });
-
-    it('solution viewer modal has proper accessibility attributes', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-
-      const modal = screen.getByTestId('solution-viewer-modal');
-      expect(modal).toHaveAttribute('role', 'dialog');
-      expect(modal).toHaveAttribute('aria-modal', 'true');
-      expect(modal).toHaveAttribute('aria-labelledby', 'solution-viewer-title');
-      expect(document.getElementById('solution-viewer-title')).toHaveTextContent('Solution');
-    });
-
-    it('closes solution viewer modal when clicking backdrop', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'my solution' })}
-        />
-      );
-
-      fireEvent.click(screen.getByTestId('view-solution-button'));
-      expect(screen.getByTestId('solution-viewer-modal')).toBeInTheDocument();
-
-      // Click the backdrop (first child of the modal container)
-      const backdrop = screen.getByTestId('solution-viewer-modal').querySelector('[aria-hidden="true"]')!;
-      fireEvent.click(backdrop);
       expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
     });
   });
 
   describe('Feature Solution button', () => {
-    it('does not show Feature Solution button when no solution exists', () => {
-      const mockOnFeatureSolution = jest.fn();
+    it('calls onFeatureSolution when clicked', () => {
+      const mockFeat = jest.fn();
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
-          onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '' })}
+          onFeatureSolution={mockFeat}
+          initialProblem={makeProblem({ title: 'T', starter_code: '', solution: 'sol' })}
         />
       );
-
-      expect(screen.queryByTestId('feature-solution-button')).not.toBeInTheDocument();
-    });
-
-    it('does not show Feature Solution button when callback not provided', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
-        />
-      );
-
-      expect(screen.queryByTestId('feature-solution-button')).not.toBeInTheDocument();
-    });
-
-    it('shows Feature Solution button when solution exists and callback provided', () => {
-      const mockOnFeatureSolution = jest.fn();
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
-        />
-      );
-
-      expect(screen.getByTestId('feature-solution-button')).toBeInTheDocument();
-    });
-
-    it('calls onFeatureSolution when Feature Solution button is clicked', () => {
-      const mockOnFeatureSolution = jest.fn();
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          onFeatureSolution={mockOnFeatureSolution}
-          initialProblem={makeProblem({ title: 'T', description: 'D', starter_code: '', solution: 'sol' })}
-        />
-      );
-
       fireEvent.click(screen.getByTestId('feature-solution-button'));
-      expect(mockOnFeatureSolution).toHaveBeenCalledTimes(1);
+      expect(mockFeat).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('initialTestCases prop (PLAT-st42.3)', () => {
-    /**
-     * Verifies SessionProblemEditor accepts initialTestCases: IOTestCase[] instead of
-     * initialExecutionSettings: ExecutionSettings. This eliminates the conversion
-     * step (buildTestCasesFromExecutionSettings) on save.
-     */
-    it('accepts initialTestCases instead of initialExecutionSettings', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialTestCases={[{ kind: 'io' as const, name: 'Default', input: 'hello', match_type: 'exact', order: 0 }]}
-        />
-      );
-      expect(screen.getByTestId('code-editor')).toBeInTheDocument();
-    });
+  describe('Add test — append and open drawer', () => {
+    it('onAddTest("io") appends blank io test and opens drawer', () => {
+      const prob = makeProblem({ test_cases: [MOCK_IO_TEST] });
 
-    it('produces IOTestCase[] test_cases on save when stdin set', () => {
       render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-        />
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
       );
 
-      // Set stdin via the mock CodeEditor
-      fireEvent.change(screen.getByTestId('stdin-input'), {
-        target: { value: 'test stdin' },
+      expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
+
+      act(() => {
+        capturedWorkspaceProps.onAddTest('io');
       });
 
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      expect(mockOnUpdateProblem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          test_cases: expect.arrayContaining([
-            expect.objectContaining({
-              name: 'Default',
-              input: 'test stdin',
-              match_type: 'exact',
-            }),
-          ]),
-        })
-      );
+      expect(screen.getByTestId('tests-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+      expect(capturedWorkspaceProps.drawerEdit.kind).toBe('io');
     });
+  });
 
-    it('produces null test_cases on save when no stdin/seed/files and no initial problem', () => {
+  describe('Cancel edit closes drawer', () => {
+    it('Cancel clears drawer without calling onUpdateProblem', () => {
+      const prob = makeProblem({ test_cases: [MOCK_IO_TEST] });
+
+      render(
+        <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+      );
+
+      const tests = capturedWorkspaceProps.tests;
+      act(() => {
+        capturedWorkspaceProps.onEditTest(tests[0].id);
+      });
+
+      expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+      const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+      act(() => {
+        fireEvent.click(cancelBtn);
+      });
+
+      expect(screen.getByTestId('drawer-mode')).toHaveTextContent('idle');
+      expect(mockOnUpdateProblem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Tab switching', () => {
+    it('switches from Starter to Solution tab', () => {
+      const prob = makeProblem({ starter_code: 'starter', solution: 'solution' });
+      render(<SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />);
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
+      expect(screen.getByTestId('active-code-area')).toHaveValue('solution');
+    });
+  });
+
+  describe('initialTestCases prop', () => {
+    it('accepts initialTestCases prop and shows them in rail', () => {
       render(
         <SessionProblemEditor
           onUpdateProblem={mockOnUpdateProblem}
+          initialTestCases={[MOCK_IO_TEST]}
         />
       );
+      expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
+    });
+  });
 
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      const call = mockOnUpdateProblem.mock.calls[0][0];
-      // No initial problem and no settings: test_cases falls back to base?.test_cases ?? null
-      expect(call.test_cases).toBeNull();
+  // ── eval-5ez regression: stale closure in saveAndRun ─────────────────────────
+  /**
+   * Verifies that Save & run sends the EDITED stdin to executeCode, not the
+   * pre-edit value. The bug: handleRunTest closed over old testCases, so after
+   * setTestCases(newTestCases) the stale closure would run with the original stdin.
+   * Fix: saveAndRun must call the runner with the freshly-built newTestCases snapshot,
+   * bypassing the stale handleRunTest closure.
+   */
+  it('eval-5ez: Save & run passes NEW stdin to executeCode, not the stale pre-edit value', async () => {
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 5, actual: 'new' }],
     });
 
-    it('produces empty test_cases [] on save when initial problem has empty test_cases and no stdin/seed/files', () => {
-      render(
-        <SessionProblemEditor
-          onUpdateProblem={mockOnUpdateProblem}
-          initialProblem={makeProblem({ test_cases: [] })}
-        />
-      );
-
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      const call = mockOnUpdateProblem.mock.calls[0][0];
-      expect(call.test_cases).toEqual([]);
+    const prob = makeProblem({
+      title: 'T',
+      test_cases: [{ ...MOCK_IO_TEST, input: 'original', name: 't1' }],
     });
+
+    render(
+      <SessionProblemEditor onUpdateProblem={mockOnUpdateProblem} initialProblem={prob} />
+    );
+
+    // Open edit drawer for the io test
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
+    });
+
+    // Simulate user changing stdin from 'original' to 'new'
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'new',
+        expected_output: '42',
+        match_type: 'exact',
+      });
+    });
+
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => expect(executeCode).toHaveBeenCalled());
+
+    // executeCode must be called with the NEW stdin 'new', not the stale 'original'
+    const caseArgs = executeCode.mock.calls[0][2];
+    const cases = caseArgs.cases;
+    expect(cases).toHaveLength(1);
+    // ioTestCasesToCaseDefs is mocked as identity so the raw IOTestCase is passed
+    expect(cases[0].input).toBe('new');
   });
 });

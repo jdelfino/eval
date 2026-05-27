@@ -1,5 +1,6 @@
 /**
  * Tests for the fullscreen layout — verifies PreviewProvider wrapping and auth behavior.
+ * v4 redesign: fullscreen layout is bare (no AppShell/sidebar) per T5.
  *
  * @jest-environment jsdom
  */
@@ -27,31 +28,22 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 // Track whether PreviewProvider was rendered
 let previewProviderRendered = false;
+let mockIsPreview = false;
 jest.mock('@/contexts/PreviewContext', () => ({
   PreviewProvider: ({ children }: { children: React.ReactNode }) => {
     previewProviderRendered = true;
     return <>{children}</>;
   },
   usePreview: () => ({
-    isPreview: false,
+    isPreview: mockIsPreview,
     previewSectionId: null,
     enterPreview: jest.fn(),
     exitPreview: jest.fn(),
   }),
 }));
 
-jest.mock('@/contexts/ActiveSessionContext', () => ({
-  ActiveSessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 jest.mock('@/contexts/PanelContext', () => ({
   PanelProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-jest.mock('@/components/layout', () => ({
-  AppShell: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="app-shell">{children}</div>
-  ),
 }));
 
 import FullscreenLayout from '../layout';
@@ -60,6 +52,7 @@ beforeEach(() => {
   mockAuth = { user: { id: 'user-1' }, isLoading: false };
   mockPush.mockClear();
   previewProviderRendered = false;
+  mockIsPreview = false;
 });
 
 describe('FullscreenLayout', () => {
@@ -103,10 +96,37 @@ describe('FullscreenLayout', () => {
     });
   });
 
-  describe('content rendering', () => {
-    it('renders AppShell when user is authenticated', () => {
+  describe('v4 bare layout (no AppShell)', () => {
+    it('does not render AppShell sidebar when user is authenticated', () => {
+      /**
+       * Contract: Fullscreen layout has no sidebar in v4 — it is bare (just providers + main).
+       * Why it matters: AppShell leaked into fullscreen would add an unwanted sidebar to the workspace.
+       * What breaks: If AppShell is still used, aside/sidebar renders in student workspace editor.
+       */
+      const { container } = render(<FullscreenLayout><div>content</div></FullscreenLayout>);
+      expect(container.querySelector('aside')).toBeNull();
+      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+    });
+
+    it('renders children in a main element', () => {
+      render(<FullscreenLayout><div data-testid="child">content</div></FullscreenLayout>);
+      const main = screen.getByRole('main');
+      expect(main).toBeInTheDocument();
+      expect(main.contains(screen.getByTestId('child'))).toBe(true);
+    });
+
+    it('renders PreviewBanner above main when isPreview is true', () => {
+      /**
+       * Contract: when an instructor enters preview-as-student mode and navigates
+       * to a fullscreen page, the amber preview banner must remain visible.
+       * Why it matters: without the banner, an instructor previewing a section
+       * cannot tell they are not actually a student. E2E preview-mode test depends
+       * on `text=You are previewing this section as a student` being present on
+       * the fullscreen route.
+       */
+      mockIsPreview = true;
       render(<FullscreenLayout><div>content</div></FullscreenLayout>);
-      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.getByText('You are previewing this section as a student')).toBeInTheDocument();
     });
   });
 });

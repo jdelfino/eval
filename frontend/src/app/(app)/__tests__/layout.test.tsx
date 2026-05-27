@@ -40,10 +40,6 @@ jest.mock('@/contexts/PreviewContext', () => ({
   }),
 }));
 
-jest.mock('@/contexts/ActiveSessionContext', () => ({
-  ActiveSessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 jest.mock('@/contexts/PanelContext', () => ({
   PanelProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

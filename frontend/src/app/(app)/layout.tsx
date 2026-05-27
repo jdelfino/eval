@@ -9,7 +9,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ActiveSessionProvider } from '@/contexts/ActiveSessionContext';
 import { PanelProvider } from '@/contexts/PanelContext';
 import { PreviewProvider } from '@/contexts/PreviewContext';
 import { AppShell } from '@/components/layout';
@@ -42,12 +41,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <PreviewProvider>
-      <ActiveSessionProvider>
-        <PanelProvider pageId="app">
-          <SessionCreatedNotification />
-          <AppShell>{children}</AppShell>
-        </PanelProvider>
-      </ActiveSessionProvider>
+      <PanelProvider pageId="app">
+        <SessionCreatedNotification />
+        <AppShell>{children}</AppShell>
+      </PanelProvider>
     </PreviewProvider>
   );
 }

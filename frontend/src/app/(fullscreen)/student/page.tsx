@@ -1,31 +1,107 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useCallback, useRef, Suspense, useEffect } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Problem } from '@/types/api';
-import type { TestResponse, IOTestCase } from '@/types/api';
+import type { TestResponse, IOTestCase, CaseResult, CaseResultIO, CaseResultPytest } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
 import { warmExecutor, executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import CodeEditor from './components/CodeEditor';
-import { EditorContainer } from './components/EditorContainer';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { Button } from '@/components/ui/Button';
+import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
+import { buildDrawerDebug } from '@/lib/debuggerAdapter';
+import { deriveDrawerModeBase } from '@/lib/drawerState';
 import SessionEndedNotification from './components/SessionEndedNotification';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
-import { useHeaderSlot } from '@/contexts/HeaderSlotContext';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
+import { mapToDotStatus } from '@/lib/connectionStatus';
 import type { Session } from '@/types/api';
+import type { DrawerMode, DrawerFailure, DrawerRuntimeError } from '@/components/workspace/Drawer';
+
+// ─── Drawer mode derivation ──────────────────────────────────────────────────
+
+/**
+ * Extends the base drawer mode logic with the student-specific focusedFailureId
+ * branch (not present in the projector variant).
+ */
+function deriveDrawerMode({
+  isDebugging,
+  focusedFailureId,
+  executionResult,
+  runtimeError,
+}: {
+  isDebugging: boolean;
+  focusedFailureId: string | null;
+  executionResult: TestResponse | null;
+  runtimeError: string | null;
+}): DrawerMode {
+  if (runtimeError) return 'runtime-error';
+  if (isDebugging) return 'debug';
+  if (focusedFailureId) return 'failure';
+  return deriveDrawerModeBase({ isDebugging: false, executionResult, runtimeError: null });
+}
+
+// ─── Failure derivation ──────────────────────────────────────────────────────
+
+function deriveFailure(
+  focusedFailureId: string | null,
+  executionResult: TestResponse | null,
+  effectiveTestCases: IOTestCase[]
+): DrawerFailure | undefined {
+  if (!focusedFailureId || !executionResult) return undefined;
+
+  // Find the index of the focused test by matching its ID to the effectiveTestCases array
+  const items = toTestRailItems(effectiveTestCases, executionResult.results);
+  const idx = items.findIndex((item) => item.id === focusedFailureId);
+  if (idx === -1) return undefined;
+
+  const result = executionResult.results[idx];
+  if (!result) return undefined;
+
+  if (result.kind === 'io') {
+    const r = result as CaseResultIO;
+    if (r.status !== 'failed' && r.status !== 'error') return undefined;
+    return {
+      kind: 'io',
+      name: r.name,
+      io: {
+        stdin: r.input ?? '',
+        expected: r.expected ?? '',
+        got: r.actual ?? '',
+      },
+    };
+  }
+
+  if (result.kind === 'pytest') {
+    const r = result as CaseResultPytest;
+    if (r.passed) return undefined;
+    const firstFail = r.assertions.find((a) => !a.passed);
+    return {
+      kind: 'pytest',
+      name: r.name,
+      pytest: {
+        target: r.name,
+        trace: firstFail?.traceback ?? firstFail?.failure_message,
+      },
+    };
+  }
+
+  return undefined;
+}
+
+// ─── StudentPage ─────────────────────────────────────────────────────────────
 
 function StudentPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { setHeaderSlot } = useHeaderSlot();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
   const sectionIdFromUrl = searchParams.get('section_id');
@@ -38,7 +114,7 @@ function StudentPage() {
   const [code, setCode] = useState('');
   const [studentTestCases, setStudentTestCases] = useState<IOTestCase[]>([]);
 
-  // Breadcrumb state
+  // Breadcrumb / section name (kept for future use, not rendered in shell)
   const [sectionName, setSectionName] = useState<string | null>(null);
 
   // Mode state
@@ -51,9 +127,9 @@ function StudentPage() {
   const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // True when executor returned 503 (cold-starting) — shown as a distinct warming-up banner
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  // True when executor returned 503 (cold-starting)
   const [warmingUp, setWarmingUp] = useState(false);
-  // Last test cases used, to support retry from the warming-up banner
   const lastRunTestCasesRef = useRef<IOTestCase[]>([]);
 
   // Join state
@@ -61,8 +137,14 @@ function StudentPage() {
   const [isJoining, setIsJoining] = useState(false);
 
   // UI state
+  const [ribbonOpen, setRibbonOpen] = useState(false);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const [showReplaceCodeConfirm, setShowReplaceCodeConfirm] = useState(false);
   const [pendingStarterCode, setPendingStarterCode] = useState<string | null>(null);
+
+  // Focused test for failure detail
+  const [activeTestId, setActiveTestId] = useState<string | null>(null);
+  const [focusedFailureId, setFocusedFailureId] = useState<string | null>(null);
 
   // Realtime session hook (only used in live mode)
   const {
@@ -81,24 +163,9 @@ function StudentPage() {
     userName: user?.display_name || user?.email,
   });
 
-  // Debugger state
+  // Debugger hook
   const debuggerHook = useApiDebugger();
 
-  // Show connection status in header (only in live mode)
-  useEffect(() => {
-    if (mode === 'live' && joined) {
-      setHeaderSlot(
-        <ConnectionStatus
-          status={connectionStatus}
-          error={connectionError}
-          variant="badge"
-        />
-      );
-    } else {
-      setHeaderSlot(null);
-    }
-    return () => setHeaderSlot(null);
-  }, [mode, joined, connectionStatus, connectionError, setHeaderSlot]);
 
   // Step 1: Load student_work data from work_id
   useEffect(() => {
@@ -114,12 +181,12 @@ function StudentPage() {
         setProblem(data.problem);
         setCode(data.code);
 
-        // Restore test cases directly as IOTestCase[]
         if (data.test_cases && Array.isArray(data.test_cases)) {
           setStudentTestCases(data.test_cases as IOTestCase[]);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load student work');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to load student work';
+        setError(message);
         setMode('error');
       }
     };
@@ -127,26 +194,26 @@ function StudentPage() {
     loadWork();
   }, [workId, user?.id]);
 
-  // Fetch section name for breadcrumb
+  // Fetch section name
   useEffect(() => {
     if (!sectionId) return;
 
     getSection(sectionId)
       .then((section) => setSectionName(section.name))
       .catch(() => {
-        // Graceful degradation: breadcrumb will show fallback text
+        // Graceful degradation: section name is cosmetic only
       });
   }, [sectionId]);
 
-  // Step 2a: Fetch active sessions (starts immediately if sectionId from URL)
+  // Step 2a: Fetch active sessions
   useEffect(() => {
     if (!sectionId) return;
 
     getActiveSessions(sectionId)
       .then(setActiveSessions)
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error('Failed to check for active sessions:', err);
-        setActiveSessions([]); // Fall back to practice mode
+        setActiveSessions([]);
       });
   }, [sectionId]);
 
@@ -159,15 +226,12 @@ function StudentPage() {
     );
 
     if (activeSession) {
-      // Active session found -> enter live mode
       setActiveSessionId(activeSession.id);
       setMode('live');
     } else {
-      // No active session -> practice mode
       setMode('practice');
-      // Proactively warm the executor so it's ready when the student runs code
       warmExecutor().catch(() => {
-        // Fire-and-forget: ignore errors, don't block the user
+        // Fire-and-forget
       });
     }
   }, [mode, activeSessions, problemId]);
@@ -180,12 +244,10 @@ function StudentPage() {
       return;
     }
 
-    // Check if we've already attempted to join this session
     if (joinAttemptedRef.current === activeSessionId) {
       return;
     }
 
-    // Don't auto-join if student explicitly left
     if (sessionStorage.getItem(`left-session:${activeSessionId}`)) {
       return;
     }
@@ -200,7 +262,6 @@ function StudentPage() {
         setIsJoining(false);
         setError(null);
 
-        // Restore saved code from server (student_work code via session_students join)
         if (result.code) {
           setCode(result.code);
         }
@@ -208,28 +269,27 @@ function StudentPage() {
           setStudentTestCases(result.test_cases as IOTestCase[]);
         }
 
-        // Check if session is already completed
         if (session?.status === 'completed') {
           setSessionEnded(true);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to join session');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to join session';
+        setError(message);
         setIsJoining(false);
       }
     };
 
     performJoin();
-  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, joinSession]);
+  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, joinSession, session?.status]);
 
   // Detect session end in live mode
   useEffect(() => {
     if (mode === 'live' && session?.status === 'completed') {
       setSessionEnded(true);
-      // Stay in live mode but disable live features
     }
   }, [mode, session?.status]);
 
-  // Auto-save code in practice mode (debounced)
+  // Auto-save code in practice mode (debounced 500ms)
   useEffect(() => {
     if (mode !== 'practice' || !workId) return;
 
@@ -256,57 +316,24 @@ function StudentPage() {
     return () => clearTimeout(timeout);
   }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentTestCases, realtimeUpdateCode]);
 
-  // Handlers
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+
   const handleLeaveSession = useCallback(() => {
     if (activeSessionId) {
       sessionStorage.setItem(`left-session:${activeSessionId}`, 'true');
     }
-
     router.push(sectionId ? `/sections/${sectionId}` : '/');
   }, [activeSessionId, router, sectionId]);
 
   const handleJoinNewSession = useCallback(() => {
     if (!replacementInfo) return;
-    // Redirect to section page so the student can rejoin via the active session banner
     router.push(sectionId ? `/sections/${sectionId}` : '/');
   }, [replacementInfo, router, sectionId]);
 
-  const editorRef = useRef<any>(null);
+  const handleRunAll = useCallback(async () => {
+    const effectiveTestCases =
+      studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
 
-  const applyStarterCode = useCallback((starter_code: string) => {
-    if (editorRef.current) {
-      const editor = editorRef.current;
-      const model = editor.getModel();
-      if (model) {
-        const fullRange = model.getFullModelRange();
-        editor.executeEdits('load-starter-code', [{
-          range: fullRange,
-          text: starter_code,
-        }]);
-      }
-    } else {
-      setCode(starter_code);
-    }
-  }, []);
-
-  const handleLoadStarterCode = useCallback((starter_code: string) => {
-    if (code.trim().length > 0) {
-      setPendingStarterCode(starter_code);
-      setShowReplaceCodeConfirm(true);
-    } else {
-      applyStarterCode(starter_code);
-    }
-  }, [code, applyStarterCode]);
-
-  const handleConfirmReplaceCode = useCallback(() => {
-    setShowReplaceCodeConfirm(false);
-    if (pendingStarterCode) {
-      applyStarterCode(pendingStarterCode);
-      setPendingStarterCode(null);
-    }
-  }, [pendingStarterCode, applyStarterCode]);
-
-  const handleRunCode = async (testCases: IOTestCase[]) => {
     if (!code || code.trim().length === 0) {
       setError('Please write some code before running');
       return;
@@ -316,29 +343,197 @@ function StudentPage() {
       return;
     }
 
-    lastRunTestCasesRef.current = testCases;
+    lastRunTestCasesRef.current = effectiveTestCases;
     setError(null);
+    setRuntimeError(null);
     setWarmingUp(false);
     setIsRunning(true);
     setExecutionResult(null);
+    setFocusedFailureId(null);
 
     try {
       const result = await executeCode(code, problem.language, {
-        cases: ioTestCasesToCaseDefs(testCases).slice(0, 1),
+        cases: ioTestCasesToCaseDefs(effectiveTestCases),
       });
       setExecutionResult(result);
       setIsRunning(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 503) {
         setWarmingUp(true);
       } else {
-        setError(err.message || 'Code execution failed');
+        const message = err instanceof Error ? err.message : 'Code execution failed';
+        setRuntimeError(message);
       }
       setIsRunning(false);
     }
-  };
+  }, [code, problem, studentTestCases]);
 
-  // No work_id in URL
+  const handleRunTest = useCallback(
+    async (testId: string) => {
+      const effectiveTestCases =
+        studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
+
+      if (!code || code.trim().length === 0) {
+        setError('Please write some code before running');
+        return;
+      }
+      if (!problem?.language) {
+        setError('Problem language not available');
+        return;
+      }
+
+      const items = toTestRailItems(effectiveTestCases);
+      const idx = items.findIndex((item) => item.id === testId);
+      if (idx === -1) return;
+
+      const singleCase = effectiveTestCases[idx];
+      if (!singleCase) return;
+
+      lastRunTestCasesRef.current = [singleCase];
+      setError(null);
+      setRuntimeError(null);
+      setWarmingUp(false);
+      setIsRunning(true);
+      setExecutionResult(null);
+      setFocusedFailureId(null);
+
+      try {
+        const result = await executeCode(code, problem.language, {
+          cases: ioTestCasesToCaseDefs([singleCase]),
+        });
+        // C2 fix: build a sparse results array so the single result is attributed
+        // to position `idx` (matching the rail row), not position 0.
+        // The array has undefined slots at positions 0..idx-1; toTestRailItems handles
+        // missing results by leaving those rows as 'idle'. The cast is safe because all
+        // index reads in toTestRailItems are guarded by the `result &&` check.
+        const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
+        sparseResults[idx] = result.results[0];
+        setExecutionResult({ ...result, results: sparseResults });
+        setIsRunning(false);
+      } catch (err: unknown) {
+        if (err instanceof ApiError && err.status === 503) {
+          setWarmingUp(true);
+        } else {
+          const message = err instanceof Error ? err.message : 'Code execution failed';
+          setRuntimeError(message);
+        }
+        setIsRunning(false);
+      }
+    },
+    [code, problem, studentTestCases]
+  );
+
+  const handleDebugTest = useCallback(
+    async (testId: string) => {
+      const effectiveTestCases =
+        studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
+
+      if (!code || !problem?.language) return;
+
+      const items = toTestRailItems(effectiveTestCases);
+      const idx = items.findIndex((item) => item.id === testId);
+      if (idx === -1) return;
+
+      const testCase = effectiveTestCases[idx];
+      if (!testCase || testCase.kind !== 'io') return;
+
+      await debuggerHook.requestTrace(code, problem.language, testCase);
+    },
+    [code, problem, studentTestCases, debuggerHook]
+  );
+
+  const handleChangeCode = useCallback(
+    (_tabId: string, newCode: string) => {
+      setCode(newCode);
+    },
+    []
+  );
+
+  const handleSelectTest = useCallback(
+    (testId: string) => {
+      setActiveTestId(testId);
+
+      // If the selected test has a failure, focus it for the drawer
+      if (execution_result) {
+        const effectiveTestCases =
+          studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
+        const items = toTestRailItems(effectiveTestCases, execution_result.results);
+        const item = items.find((i) => i.id === testId);
+        if (item?.state === 'fail') {
+          setFocusedFailureId(testId);
+        } else {
+          setFocusedFailureId(null);
+        }
+      }
+    },
+    [execution_result, problem, studentTestCases]
+  );
+
+  const applyStarterCode = useCallback((starter_code: string) => {
+    setCode(starter_code);
+  }, []);
+
+  const handleConfirmReplaceCode = useCallback(() => {
+    setShowReplaceCodeConfirm(false);
+    if (pendingStarterCode) {
+      applyStarterCode(pendingStarterCode);
+      setPendingStarterCode(null);
+    }
+  }, [pendingStarterCode, applyStarterCode]);
+
+  // ─── Derived values ────────────────────────────────────────────────────────
+
+  const effectiveTestCases =
+    studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
+
+  const tests = toTestRailItems(effectiveTestCases, execution_result?.results);
+
+  const editorTabs = [
+    {
+      id: 'main',
+      label: 'main.py',
+      kind: 'code' as const,
+      language: (problem?.language ?? 'python') as 'python' | 'javascript' | 'java',
+      code,
+      dirty: false,
+    },
+  ];
+
+  // Debugger adapter
+  const drawerDebug = buildDrawerDebug(debuggerHook);
+
+  const drawerCloseAction = debuggerHook.hasTrace ? (
+    <Button
+      variant="quiet"
+      size="sm"
+      data-testid="debug-exit"
+      onClick={() => debuggerHook.reset()}
+    >
+      Exit Debug
+    </Button>
+  ) : undefined;
+
+  // Derive drawer mode
+  const drawerMode = deriveDrawerMode({
+    isDebugging: debuggerHook.hasTrace,
+    focusedFailureId,
+    executionResult: execution_result,
+    runtimeError,
+  });
+
+  // Derive failure detail
+  const drawerFailure = deriveFailure(focusedFailureId, execution_result, effectiveTestCases);
+
+  // Derive output lines from stdout (execution result gives us stdout via results)
+  const drawerOutput = toDrawerOutput(execution_result);
+
+  // Derive runtime error for drawer
+  const drawerRuntimeError: DrawerRuntimeError | undefined = runtimeError
+    ? { type: 'error', message: runtimeError }
+    : undefined;
+
+  // ─── Early returns ────────────────────────────────────────────────────────
+
   if (!workIdFromUrl) {
     return (
       <main className="p-8 text-center">
@@ -351,10 +546,6 @@ function StudentPage() {
     );
   }
 
-  // Loading state — only gate on mode determination (needs student work + active sessions).
-  // Session state load (realtimeLoading), join (isJoining), and Centrifugo connection all
-  // happen in the background while Monaco loads its JS bundle — the student's code is
-  // already available from getStudentWork().
   if (mode === 'loading') {
     return (
       <main className="p-8 text-center">
@@ -372,7 +563,6 @@ function StudentPage() {
     );
   }
 
-  // Error state
   if (mode === 'error') {
     return (
       <main className="p-8 text-center">
@@ -390,7 +580,6 @@ function StudentPage() {
     );
   }
 
-  // Live mode: join failed (not in-progress, not joined, and error present)
   if (mode === 'live' && !joined && !isJoining && error) {
     return (
       <main className="p-8 text-center">
@@ -405,17 +594,21 @@ function StudentPage() {
     );
   }
 
-  // Merge: student's saved test cases take priority, fall back to problem's test cases
-  const effectiveDefaultTestCases = studentTestCases.length > 0 ? studentTestCases : (problem?.test_cases ?? []);
+  // ─── Main render ──────────────────────────────────────────────────────────
 
   return (
     <main className="w-full h-full box-border flex flex-col relative overflow-hidden">
       {sectionId && (
         <div className="px-3 py-1.5 bg-white border-b border-gray-200 flex-shrink-0">
-          <Breadcrumb items={[
-            { label: sectionName || 'Section', href: `/sections/${sectionId}` },
-            { label: problem?.title || 'Problem' },
-          ]} />
+          <div className="flex items-center justify-between">
+            <Breadcrumb items={[
+              { label: sectionName || 'Section', href: `/sections/${sectionId}` },
+              { label: problem?.title || 'Problem' },
+            ]} />
+            {mode === 'live' && joined && (
+              <ConnectionDot status={mapToDotStatus(connectionStatus)} />
+            )}
+          </div>
         </div>
       )}
       {connectionError && mode === 'live' && (
@@ -431,7 +624,7 @@ function StudentPage() {
           title="Code Execution Warming Up"
           variant="warning"
           onDismiss={() => setWarmingUp(false)}
-          onRetry={() => handleRunCode(lastRunTestCasesRef.current)}
+          onRetry={() => handleRunAll()}
           isRetrying={isRunning}
           className="mx-3 my-1 flex-shrink-0"
         />
@@ -454,23 +647,35 @@ function StudentPage() {
         />
       )}
 
-      <EditorContainer variant="flex">
-        <CodeEditor
-          code={code}
-          onChange={setCode}
-          onRun={handleRunCode}
-          isRunning={isRunning}
-          defaultTestCases={effectiveDefaultTestCases}
-          onTestCasesChange={setStudentTestCases}
-          execution_result={execution_result}
-          problem={problem}
-          onLoadStarterCode={handleLoadStarterCode}
-          externalEditorRef={editorRef}
-          debugger={debuggerHook}
-          readOnly={false}
-          showRunButton={true}
-        />
-      </EditorContainer>
+      <WorkspaceShell
+        // ribbon
+        ribbonOpen={ribbonOpen}
+        onToggleRibbon={() => setRibbonOpen((o) => !o)}
+        problemTitle={problem?.title ?? ''}
+        statement={problem?.description ?? ''}
+        // editor
+        editorTabs={editorTabs}
+        activeTabId="main"
+        onChangeCode={handleChangeCode}
+        highlight={debuggerHook.hasTrace ? debuggerHook.getCurrentStep()?.line : undefined}
+        // rail
+        tests={tests}
+        activeTestId={activeTestId ?? undefined}
+        onSelectTest={handleSelectTest}
+        onRunTest={handleRunTest}
+        onDebugTest={handleDebugTest}
+        onRunAll={handleRunAll}
+        isRunningAll={isRunning}
+        // drawer
+        drawerMode={drawerMode}
+        drawerCollapsed={drawerCollapsed}
+        onToggleDrawer={() => setDrawerCollapsed((c) => !c)}
+        drawerOutput={drawerOutput}
+        drawerFailure={drawerFailure}
+        drawerDebug={drawerDebug}
+        drawerRuntimeError={drawerRuntimeError}
+        drawerCloseAction={drawerCloseAction}
+      />
 
       <ConfirmDialog
         open={showReplaceCodeConfirm}

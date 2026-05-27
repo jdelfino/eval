@@ -22,13 +22,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
 
-// Mock LayoutConfigContext to verify useForceDesktopLayout is called for zoom protection
-const mockUseForceDesktopLayout = jest.fn();
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: false, setForceDesktop: jest.fn() }),
-  useForceDesktopLayout: () => mockUseForceDesktopLayout(),
-}));
-
 // Mock useRealtimeSession hook
 jest.mock('@/hooks/useRealtimeSession', () => ({
   useRealtimeSession: jest.fn(),
@@ -37,12 +30,6 @@ jest.mock('@/hooks/useRealtimeSession', () => ({
 // Mock useSessionOperations hook
 jest.mock('@/hooks/useSessionOperations', () => ({
   useSessionOperations: jest.fn(),
-}));
-
-// Mock HeaderSlotContext
-const mockSetHeaderSlot = jest.fn();
-jest.mock('@/contexts/HeaderSlotContext', () => ({
-  useHeaderSlot: () => ({ headerSlot: null, setHeaderSlot: mockSetHeaderSlot }),
 }));
 
 // Mock SessionView component
@@ -311,27 +298,6 @@ describe('InstructorSessionPage', () => {
       expect(screen.getByTestId('student-count')).toHaveTextContent('2');
     });
 
-    it('shows connection status in header slot', () => {
-      render(<InstructorSessionPage />);
-
-      // Connection status is now rendered via the global header slot
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-      const lastCall = mockSetHeaderSlot.mock.calls[mockSetHeaderSlot.mock.calls.length - 1][0];
-      expect(lastCall).not.toBeNull();
-    });
-
-    it('updates header slot on connection change', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        isConnected: false,
-        connectionStatus: 'Disconnected',
-      });
-
-      render(<InstructorSessionPage />);
-
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-    });
-
     it('shows connection error', () => {
       (useRealtimeSession as jest.Mock).mockReturnValue({
         ...defaultRealtimeSessionReturn,
@@ -382,11 +348,6 @@ describe('InstructorSessionPage', () => {
       });
     });
 
-    it('sets connection status in header slot', () => {
-      render(<InstructorSessionPage />);
-
-      expect(mockSetHeaderSlot).toHaveBeenCalled();
-    });
   });
 
   describe('Problem Updates', () => {
@@ -595,13 +556,7 @@ describe('InstructorSessionPage', () => {
     });
   });
 
-  describe('Zoom Protection (forceDesktop)', () => {
-    it('calls useForceDesktopLayout to prevent zoom from collapsing layout', () => {
-      render(<InstructorSessionPage />);
-
-      expect(mockUseForceDesktopLayout).toHaveBeenCalled();
-    });
-
+  describe('SessionView forceDesktop', () => {
     it('passes forceDesktop=true to SessionView for projector zoom protection', () => {
       render(<InstructorSessionPage />);
 

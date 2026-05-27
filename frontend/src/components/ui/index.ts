@@ -4,6 +4,15 @@
 export { Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 
+export { Pill } from './Pill';
+export type { PillProps, PillTone } from './Pill';
+
+export { Kbd } from './Kbd';
+export type { KbdProps } from './Kbd';
+
+export { StateDot } from './StateDot';
+export type { StateDotProps, DotState } from './StateDot';
+
 export { Card } from './Card';
 export type { CardProps, CardVariant, CardSectionProps } from './Card';
 
@@ -52,3 +61,15 @@ export type { SignInButtonsProps } from './SignInButtons';
 
 export { StatusBadge } from './StatusBadge';
 export type { StatusBadgeProps, StatusBadgeStatus } from './StatusBadge';
+
+export { Menu } from './Menu';
+export type { MenuProps, MenuItem } from './Menu';
+
+export { Icon, ICON_PATHS } from './Icon';
+export type { IconProps, IconName } from './Icon';
+
+export { IconBtn } from './IconBtn';
+export type { IconBtnProps } from './IconBtn';
+
+export { ConnectionDot } from './ConnectionDot';
+export type { ConnectionDotProps, ConnectionStatus } from './ConnectionDot';

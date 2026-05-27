@@ -16,12 +16,20 @@ export enum NavGroup {
   System = 'system',
 }
 
+/** Display label for each nav group. */
+export const GROUP_LABELS: Record<NavGroup, string> = {
+  [NavGroup.Main]: 'Main',
+  [NavGroup.Teaching]: 'Teaching',
+  [NavGroup.Admin]: 'Admin',
+  [NavGroup.System]: 'System',
+};
+
 /** Navigation item configuration */
 export interface NavItem {
   id: string;
   label: string;
   href: string;
-  icon: string; // Lucide icon name
+  icon: string; // IconName from @/components/ui/Icon
   roles: UserRole[];
   group: NavGroup;
 }
@@ -36,7 +44,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'my-sections',
     label: 'My Sections',
     href: '/sections',
-    icon: 'BookOpen',
+    icon: 'layers',
     roles: ['student'],
     group: NavGroup.Main,
   },
@@ -46,7 +54,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'dashboard',
     label: 'Dashboard',
     href: '/instructor',
-    icon: 'LayoutDashboard',
+    icon: 'home',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
@@ -54,15 +62,15 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'classes',
     label: 'Classes',
     href: '/classes',
-    icon: 'School',
+    icon: 'users',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
   {
     id: 'problems',
-    label: 'Problems',
+    label: 'Library',
     href: '/instructor/problems',
-    icon: 'FileCode',
+    icon: 'book',
     roles: ['instructor', 'namespace-admin', 'system-admin'],
     group: NavGroup.Teaching,
   },
@@ -72,7 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'user-management',
     label: 'User Management',
     href: '/admin',
-    icon: 'Users',
+    icon: 'users',
     roles: ['namespace-admin', 'system-admin'],
     group: NavGroup.Admin,
   },
@@ -82,7 +90,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'namespaces',
     label: 'Namespaces',
     href: '/system',
-    icon: 'Building',
+    icon: 'globe',
     roles: ['system-admin'],
     group: NavGroup.System,
   },
@@ -120,6 +128,27 @@ export function getNavItemsForRole(role: string): NavItem[] {
   }
 
   return NAV_ITEMS.filter(item => item.roles.includes(role as UserRole));
+}
+
+/**
+ * Check if a nav item's href matches the current pathname.
+ * Matches exact path or child paths, but not if another nav item is a more specific match.
+ */
+export function isPathActive(href: string, pathname: string): boolean {
+  if (pathname === href) {
+    return true;
+  }
+
+  if (href !== '/' && pathname.startsWith(href + '/')) {
+    const moreSpecificMatch = NAV_ITEMS.some(item =>
+      item.href !== href &&
+      item.href.startsWith(href + '/') &&
+      (pathname === item.href || pathname.startsWith(item.href + '/'))
+    );
+    return !moreSpecificMatch;
+  }
+
+  return false;
 }
 
 /**

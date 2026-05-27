@@ -1,22 +1,19 @@
 /**
- * Tests for ProblemCreator component
+ * Tests for ProblemCreator component (G2 author-skin T6 wiring)
  *
- * Tests both create and edit modes with all fields:
- * - Loading existing problem data
- * - Editing all fields (title, description, starter_code)
- * - Form submission and validation
- * - Error handling
- * - Cancel functionality
+ * Integration tests focus on the host wiring: prop passing, callbacks, and
+ * state mutations. WorkspaceShell internals are mocked.
  *
  * @jest-environment jsdom
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProblemCreator from '../ProblemCreator';
 
-// Mock API modules
+// ─── API mocks ────────────────────────────────────────────────────────────────
+
 jest.mock('@/lib/api/classes', () => ({
   listClasses: jest.fn(),
 }));
@@ -25,1238 +22,1006 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
-  generateSolution: jest.fn(),
+  // generateSolution intentionally omitted — T6 deletes that import
 }));
 
-// Mock useApiDebugger hook
-jest.mock('@/hooks/useApiDebugger', () => ({
-  useApiDebugger: () => ({
-    trace: null,
-    currentStep: 0,
-    isLoading: false,
-    error: null,
-    hasTrace: false,
-    total_steps: 0,
-    canStepForward: false,
-    canStepBackward: false,
-    requestTrace: jest.fn(),
-    setTrace: jest.fn(),
-    setError: jest.fn(),
-    stepForward: jest.fn(),
-    stepBackward: jest.fn(),
-    jumpToStep: jest.fn(),
-    jumpToFirst: jest.fn(),
-    jumpToLast: jest.fn(),
-    reset: jest.fn(),
-    getCurrentStep: jest.fn(() => null),
-    getCurrentLocals: jest.fn(() => ({})),
-    getCurrentGlobals: jest.fn(() => ({})),
-    getCurrentCallStack: jest.fn(() => []),
-    getPreviousStep: jest.fn(() => null)
-  })
+jest.mock('@/lib/api/execute', () => ({
+  executeCode: jest.fn(),
+  ioTestCasesToCaseDefs: jest.fn((cases) => cases),
+  buildIOTestCases: jest.fn(() => []),
 }));
 
-// Mock useResponsiveLayout
-jest.mock('@/hooks/useResponsiveLayout', () => ({
-  useResponsiveLayout: () => true,
-  useSidebarSection: () => ({
-    isCollapsed: true,
-    toggle: jest.fn(),
-    setCollapsed: jest.fn()
-  })
-}));
+// ─── WorkspaceShell mock ──────────────────────────────────────────────────────
+// Captures all props for assertion, and renders enough DOM for interaction.
 
-// Mock CodeEditor component
-jest.mock('@/app/(fullscreen)/student/components/CodeEditor', () => {
-  return function MockCodeEditor({ code, onChange, title, onRun, problem, onProblemEdit, editableProblem }: any) {
+let capturedWorkspaceProps: any = null;
+jest.mock('@/components/workspace/WorkspaceShell', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    capturedWorkspaceProps = props;
+    const {
+      editorTabs,
+      activeTabId,
+      onChangeCode,
+      onRunAll,
+      onRunTest,
+      onSelectTab,
+      railMode,
+      embedded,
+      tests,
+      propertiesBar,
+      editorRightControls,
+      drawerMode,
+      drawerEdit,
+      onDrawerEditChange,
+      drawerCloseAction,
+      railShowAdd,
+      onEditTest,
+      onAddTest,
+      lastCreatedKind,
+    } = props;
+    const activeTab = editorTabs.find((t: any) => t.id === activeTabId) ?? editorTabs[0];
     return (
-      <div data-testid={`code-editor-${title}`}>
-        {/* Show editable problem fields if in edit mode */}
-        {editableProblem && problem && onProblemEdit && (
-          <div data-testid="editable-problem-sidebar">
-            <label htmlFor="problem-title">Title *</label>
+      <div data-testid="workspace-shell" data-embedded={String(embedded ?? false)}>
+        {/* Ribbon area — for editable title tests */}
+        {props.ribbonEditable && (
+          <div data-testid="ribbon-editable">
             <input
-              id="problem-title"
-              value={problem.title || ''}
-              onChange={(e) => onProblemEdit({ title: e.target.value })}
-            />
-            <label htmlFor="problem-description">Description</label>
-            <textarea
-              id="problem-description"
-              value={problem.description || ''}
-              onChange={(e) => onProblemEdit({ description: e.target.value })}
+              data-testid="ribbon-title-input"
+              defaultValue={props.problemTitle ?? ''}
+              onBlur={(e) => props.onTitleChange?.(e.target.value)}
             />
           </div>
         )}
-        <label htmlFor={`code-${title}`}>{title}</label>
-        <textarea
-          id={`code-${title}`}
-          aria-label={title}
-          value={code}
-          onChange={(e) => onChange(e.target.value)}
-          data-has-run={!!onRun}
-        />
+        {/* Properties bar slot */}
+        {propertiesBar && <div data-testid="properties-bar-slot">{propertiesBar}</div>}
+        {/* Editor right controls slot */}
+        {editorRightControls && <div data-testid="editor-right-controls">{editorRightControls}</div>}
+        {/* Editor tabs */}
+        <div data-testid="editor-tabs">
+          {editorTabs.map((tab: any) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              onClick={() => onSelectTab?.(tab.id)}
+              data-readonly={String(tab.readOnly ?? false)}
+              data-kind={tab.kind}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* Active code area */}
+        {activeTab && activeTab.kind === 'code' && (
+          <textarea
+            data-testid="active-code-area"
+            aria-label={activeTab.label}
+            value={activeTab.code}
+            readOnly={activeTab.readOnly}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
+        )}
+        {/* Active markdown area (statement tab) */}
+        {activeTab && activeTab.kind === 'markdown' && (
+          <textarea
+            data-testid="active-markdown-area"
+            aria-label={activeTab.label}
+            value={activeTab.body ?? ''}
+            onChange={(e) => onChangeCode?.(activeTab.id, e.target.value)}
+          />
+        )}
+        {/* Rail actions */}
+        <button data-testid="run-all-btn" onClick={() => onRunAll?.()}>Run all</button>
+        {tests?.length > 0 && (
+          <button data-testid="run-test-btn" onClick={() => onRunTest?.(tests[0].id)}>Run test</button>
+        )}
+        <span data-testid="rail-mode">{railMode ?? 'run'}</span>
+        <span data-testid="tests-count">{tests?.length ?? 0}</span>
+        <span data-testid="drawer-mode">{drawerMode}</span>
+        {/* Rail add controls */}
+        {railShowAdd && (
+          <div data-testid="rail-add-controls">
+            <button data-testid="add-io-btn" onClick={() => onAddTest?.('io')}>Add IO</button>
+            <button data-testid="add-pytest-btn" onClick={() => onAddTest?.('pytest')}>Add Pytest</button>
+          </div>
+        )}
+        {/* Drawer edit controls */}
+        {drawerEdit && (
+          <div data-testid="drawer-edit-area">
+            <span data-testid="drawer-edit-kind">{drawerEdit.kind}</span>
+            <button
+              data-testid="drawer-edit-change-btn"
+              onClick={() => onDrawerEditChange?.({ ...drawerEdit, name: 'edited-name' })}
+            >
+              Simulate edit
+            </button>
+          </div>
+        )}
+        {/* Drawer close actions */}
+        {drawerCloseAction && (
+          <div data-testid="drawer-close-actions">{drawerCloseAction}</div>
+        )}
+        {/* Per-row edit button simulation */}
+        {tests?.map((t: any) => (
+          <button
+            key={t.id}
+            data-testid={`edit-body-${t.id}`}
+            onClick={() => onEditTest?.(t.id)}
+          >
+            Edit {t.id}
+          </button>
+        ))}
+        {lastCreatedKind && <span data-testid="last-created-kind">{lastCreatedKind}</span>}
       </div>
     );
-  };
-});
+  },
+}));
+
+jest.mock('@/lib/testRail', () => ({
+  toTestRailItems: jest.fn((cases, results) =>
+    (cases ?? []).map((c: any, i: number) => {
+      const name = c.name ?? `case-${i}`;
+      const id = `${c.kind}-${c.order ?? i}-${name}`;
+      return {
+        id,
+        name,
+        kind: c.kind,
+        visible: true,
+        state: results?.[i] ? 'pass' : 'idle',
+        t: '',
+        io: c.kind === 'io' ? { stdin: c.input ?? '' } : undefined,
+        pytest: c.kind === 'pytest' ? { target: c.target_path ?? '' } : undefined,
+      };
+    })
+  ),
+  toDrawerOutput: jest.fn((result) =>
+    result
+      ? {
+          lines: [],
+          status: result.summary?.failed > 0 ? 'fail' : 'pass',
+          summary: `${result.summary?.passed ?? 0}/${result.summary?.total ?? 0} passed`,
+        }
+      : undefined
+  ),
+}));
+
+// ─── Test data ────────────────────────────────────────────────────────────────
 
 const DEFAULT_CLASSES = [
-  { id: 'default-class-1', name: 'Default Class', namespace_id: 'ns-1' },
+  { id: 'c1', name: 'CS 101', namespace_id: 'ns-1' },
+  { id: 'c2', name: 'CS 201', namespace_id: 'ns-1' },
 ];
 
-describe('ProblemCreator Component', () => {
+const MOCK_IO_TEST = {
+  kind: 'io' as const,
+  name: 't1',
+  input: '42',
+  expected_output: '42',
+  match_type: 'exact' as const,
+  order: 0,
+};
+
+const MOCK_PYTEST_TEST = {
+  kind: 'pytest' as const,
+  name: 'test_basic',
+  target_path: 'tests/test_basic.py::test_basic',
+  test_code: 'def test_basic():\n    assert True',
+};
+
+const mockExistingProblem = {
+  id: 'problem-456',
+  title: 'Existing',
+  description: '# Statement',
+  starter_code: 'def starter(): pass',
+  solution: 'def answer(): return 42',
+  language: 'python',
+  class_id: 'c1',
+  tags: ['a'],
+  author_id: 'user-1',
+  test_cases: [MOCK_IO_TEST],
+};
+
+// ─── Test suite ───────────────────────────────────────────────────────────────
+
+describe('ProblemCreator Component (G2 T6)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Set default mock implementations — provide a class so tests can submit
+    capturedWorkspaceProps = null;
     const { listClasses } = require('@/lib/api/classes');
     listClasses.mockResolvedValue(DEFAULT_CLASSES);
   });
 
-  describe('Layout', () => {
-    it('should use flex layout classes for full-height rendering', () => {
-      const { container } = render(<ProblemCreator />);
-      const outerDiv = container.firstElementChild;
-      expect(outerDiv).toHaveClass('flex-1', 'min-h-0', 'flex', 'flex-col');
-    });
-  });
-
-  describe('Create Mode', () => {
-    it('should render form in create mode when no problem_id provided', () => {
-      render(<ProblemCreator />);
-
-      expect(screen.getByText('Create New Problem')).toBeInTheDocument();
-      // Fields are now in the editable problem sidebar within CodeEditor
-      expect(screen.getByLabelText('Title *')).toHaveValue('');
-      expect(screen.getByLabelText('Description')).toHaveValue('');
-      expect(screen.getByLabelText(/Starter Code/)).toHaveValue('');
-      expect(screen.getByText('Create Problem')).toBeInTheDocument();
-    });
-
-    it('should validate required title field', async () => {
-      render(<ProblemCreator />);
-
-      const submitButton = screen.getByText('Create Problem');
-
-      // Button should be disabled when title is empty
-      expect(submitButton).toBeDisabled();
-
-      // Only the listClasses should have been called, no problem create
-      const { createProblem } = require('@/lib/api/problems');
-      expect(createProblem).not.toHaveBeenCalled();
-    });
-
-    it('should create new problem with all fields', async () => {
-      const onProblemCreated = jest.fn();
-      const mockProblem = {
-        id: 'problem-123',
-        title: 'Test Problem',
-        description: 'Test description',
-        starter_code: 'def solution():\n    pass',
-      };
-
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue(mockProblem);
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      // Wait for class dropdown to load
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Fill in fields (now in editable sidebar)
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Test description' },
-      });
-      fireEvent.change(screen.getByLabelText(/Starter Code/), {
-        target: { value: 'def solution():\n    pass' },
-      });
-      // Select a class (required for create)
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      // Submit
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            title: 'Test Problem',
-            description: 'Test description',
-            starter_code: 'def solution():\n    pass',
-          })
-        );
-      });
-
-      await waitFor(() => {
-        expect(onProblemCreated).toHaveBeenCalledWith('problem-123');
-      });
-    });
-
-    it('should display error when create fails', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockRejectedValue(new Error('Creation failed'));
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Creation failed')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Edit Mode', () => {
-    const mockExistingProblem = {
-      id: 'problem-456',
-      title: 'Existing Problem',
-      description: 'Original description',
-      starter_code: 'def original():\n    pass',
-      author_id: 'user-1',
-    };
-
-    it('should load existing problem data in edit mode', async () => {
+  // ── T6 test case 1: Load round-trip ─────────────────────────────────────────
+  /**
+   * Verifies that loading a problem correctly populates all G2 wired props:
+   * - Ribbon receives problemTitle + ribbonEditable=true
+   * - editorTabs includes statement.md with body from description
+   * - propertiesBar receives class/language/tags
+   * - tests prop is populated from test_cases (proves setTestCases wired)
+   */
+  describe('Load round-trip', () => {
+    it('loads problem and wires Ribbon, statement tab, propertiesBar, and testCases', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockResolvedValue(mockExistingProblem);
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      // Should show loading state
-      expect(screen.getByText('Loading problem...')).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
 
-      // Should fetch problem data
-      await waitFor(() => {
-        expect(getProblem).toHaveBeenCalledWith('problem-456');
-      });
+      // Ribbon wired with editable title
+      expect(capturedWorkspaceProps.ribbonEditable).toBe(true);
+      expect(capturedWorkspaceProps.problemTitle).toBe('Existing');
 
-      // Should populate form
-      await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
-      });
+      // statement.md tab present
+      const statementTab = capturedWorkspaceProps.editorTabs.find(
+        (t: any) => t.id === 'statement'
+      );
+      expect(statementTab).toBeDefined();
+      expect(statementTab.kind).toBe('markdown');
+      expect(statementTab.body).toBe('# Statement');
 
-      expect(screen.getByLabelText(/Title/)).toHaveValue('Existing Problem');
-      expect(screen.getByLabelText(/Description/)).toHaveValue('Original description');
-      expect(screen.getByLabelText(/Starter Code/)).toHaveValue('def original():\n    pass');
-      expect(screen.getByText('Update Problem')).toBeInTheDocument();
+      // propertiesBar rendered in slot
+      expect(screen.getByTestId('properties-bar-slot')).toBeInTheDocument();
+
+      // test rail shows 1 test (proves setTestCases was called)
+      expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
     });
 
-    it('should display error when loading problem fails', async () => {
+    it('editorTabs has 3 tabs (Starter, Solution, Statement)', async () => {
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(mockExistingProblem);
+
+      render(<ProblemCreator problem_id="problem-456" />);
+
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
+      expect(capturedWorkspaceProps.editorTabs).toHaveLength(3);
+      const tabIds = capturedWorkspaceProps.editorTabs.map((t: any) => t.id);
+      expect(tabIds).toContain('starter');
+      expect(tabIds).toContain('solution');
+      expect(tabIds).toContain('statement');
+    });
+  });
+
+  // ── T6 test case 2: Ribbon onTitleChange propagates to updateProblem ─────────
+  /**
+   * Verifies that firing onTitleChange on the Ribbon updates the local title state
+   * which flows into updateProblem payload on submit.
+   */
+  it('Ribbon onTitleChange propagates to updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem, title: 'New Title' });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Fire Ribbon onTitleChange via the captured prop
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('New Title');
+    });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({ title: 'New Title' })
+      );
+    });
+  });
+
+  // ── T6 test case 3: PropertiesBar onChangeProperties propagates to updateProblem ──
+  /**
+   * Verifies that onChangeProperties on ProblemPropertiesBar updates class/language/tags
+   * state, which flows into updateProblem on submit.
+   */
+  it('PropertiesBar onChangeProperties propagates to updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Fire onChangeProperties via captured propertiesBar prop
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c2',
+        language: 'java',
+        tags: ['x', 'y'],
+      });
+    });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({
+          class_id: 'c2',
+          language: 'java',
+          tags: ['x', 'y'],
+        })
+      );
+    });
+  });
+
+  // ── T6 test case 4: Statement-tab onChangeCode propagates to updateProblem ───
+  /**
+   * Verifies that editing the statement.md tab updates description state,
+   * which flows into updateProblem.description on submit.
+   */
+  it('Statement-tab onChangeCode propagates to updateProblem.description', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+    updateProblem.mockResolvedValue({ ...mockExistingProblem });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Switch to statement tab
+    fireEvent.click(screen.getByRole('tab', { name: 'statement.md' }));
+
+    // Type in the statement markdown area
+    const markdownArea = screen.getByTestId('active-markdown-area');
+    fireEvent.change(markdownArea, { target: { value: '# New Statement' } });
+
+    fireEvent.click(screen.getByText('Update Problem'));
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({ description: '# New Statement' })
+      );
+    });
+  });
+
+  // ── T6 test case 5: Old class/language/tags form bar is gone ─────────────────
+  /**
+   * Verifies that the pre-existing Class/Language/Tags form bar has been deleted.
+   * These elements used id-based selectors that no longer exist in G2.
+   * Catches: old form bar survived the deletion.
+   */
+  it('old class/language/tags form bar is gone (no #problem-class, etc.)', () => {
+    render(<ProblemCreator />);
+
+    expect(document.getElementById('problem-class')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-language')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-tags')).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 6: Old title/description form bar is gone ───────────────────
+  /**
+   * Verifies that the pre-existing Title/Description page-chrome form bar has been deleted.
+   * Catches: old form survived the deletion.
+   */
+  it('old title/description form bar is gone (no #problem-title, #problem-description)', () => {
+    render(<ProblemCreator />);
+
+    expect(document.getElementById('problem-title')).not.toBeInTheDocument();
+    expect(document.getElementById('problem-description')).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 7: Generate Solution modal/handlers/state are gone ──────────
+  /**
+   * Verifies the Generate Solution feature has been removed from ProblemCreator.
+   * It moves to G7. No button, no modal, no handlers.
+   * Catches: Generate Solution modal accidentally survived.
+   */
+  it('Generate Solution modal is gone — no button, no modal', () => {
+    render(<ProblemCreator />);
+
+    expect(screen.queryByRole('button', { name: /generate solution/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /generate solution/i })).not.toBeInTheDocument();
+  });
+
+  // ── T6 test case 8: Edit body on rail row opens drawer in edit-test mode ─────
+  /**
+   * Verifies that clicking "Edit body" on a test rail row opens the drawer
+   * in edit-test mode, with drawerEdit seeded from the matching test case.
+   * Catches: onEditTest not connected, drawerMode not updated.
+   */
+  it('onEditTest opens drawer in edit-test mode with right test data', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Get the ID for the pytest test (index 1)
+    const tests = capturedWorkspaceProps.tests;
+    expect(tests).toHaveLength(2);
+    const pytestItem = tests[1];
+
+    // Fire onEditTest for the pytest test
+    act(() => {
+      capturedWorkspaceProps.onEditTest(pytestItem.id);
+    });
+
+    // Drawer should now be in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+    // drawerEdit should be seeded from the pytest test — deep-equal to the seeded mock
+    expect(capturedWorkspaceProps.drawerEdit).toBeDefined();
+    expect(capturedWorkspaceProps.drawerEdit).toEqual({
+      kind: 'pytest',
+      name: MOCK_PYTEST_TEST.name,
+      target_path: MOCK_PYTEST_TEST.target_path,
+      test_code: MOCK_PYTEST_TEST.test_code,
+    });
+  });
+
+  // ── T6 test case 9: Save & run replaces test in array; updateProblem called ───
+  /**
+   * Verifies the save flow: editing via drawer then Save & run replaces the
+   * specific test in the array and calls updateProblem with full new array.
+   * Catches: immutability bugs, wrong index replacement, updateProblem not called.
+   */
+  it('Save & run replaces right test in array and calls updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 10, actual: '42' }],
+    });
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST, MOCK_PYTEST_TEST],
+    });
+    updateProblem.mockResolvedValue(mockExistingProblem);
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    const ioItem = tests[0];
+
+    // Open edit for the io test (index 0)
+    act(() => {
+      capturedWorkspaceProps.onEditTest(ioItem.id);
+    });
+
+    // Simulate user editing the drawer
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'x',
+        expected_output: 'y',
+        match_type: 'contains',
+      });
+    });
+
+    // Click Save & run (should be in drawerCloseAction)
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
+
+    await waitFor(() => {
+      expect(updateProblem).toHaveBeenCalledWith(
+        'problem-456',
+        expect.objectContaining({
+          test_cases: expect.arrayContaining([
+            expect.objectContaining({ input: 'x', expected_output: 'y', match_type: 'contains' }),
+            expect.objectContaining({ kind: 'pytest' }),
+          ]),
+        })
+      );
+    });
+
+    // Ensure test_cases length preserved
+    const callArgs = updateProblem.mock.calls[0][1];
+    expect(callArgs.test_cases).toHaveLength(2);
+  });
+
+  // ── T6 test case 10: "+ Add IO test" appends blank io case + opens drawer ────
+  /**
+   * Verifies that onAddTest('io') appends a blank io test to testCases,
+   * opens the drawer in edit-test mode, and seeds drawerEdit with the blank case.
+   * Catches: addNewTest not wired, kind defaults wrong.
+   */
+  it('onAddTest("io") appends blank io case and opens drawer in edit-test', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
+
+    // Fire onAddTest('io')
+    act(() => {
+      capturedWorkspaceProps.onAddTest('io');
+    });
+
+    // Test count should grow to 2
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('2');
+
+    // Drawer should be in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+
+    // drawerEdit should be the new blank io case
+    expect(capturedWorkspaceProps.drawerEdit).toBeDefined();
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('io');
+    expect(capturedWorkspaceProps.drawerEdit.input).toBe('');
+    expect(capturedWorkspaceProps.drawerEdit.expected_output).toBe('');
+    expect(capturedWorkspaceProps.drawerEdit.match_type).toBe('exact');
+  });
+
+  // ── T6 test case 11: "+ Add Pytest test" appends blank pytest case ───────────
+  /**
+   * Verifies that onAddTest('pytest') appends a blank pytest test case with
+   * default target_path and test_code values, opens the drawer, and sets
+   * lastCreatedKind to 'pytest'.
+   * Catches: pytest defaults not set.
+   */
+  it('onAddTest("pytest") appends blank pytest case with defaults', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    act(() => {
+      capturedWorkspaceProps.onAddTest('pytest');
+    });
+
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
+    expect(capturedWorkspaceProps.drawerEdit.kind).toBe('pytest');
+    expect(capturedWorkspaceProps.drawerEdit.target_path).toBeTruthy();
+    expect(capturedWorkspaceProps.drawerEdit.test_code).toBeTruthy();
+
+    // lastCreatedKind should be 'pytest'
+    expect(screen.getByTestId('last-created-kind')).toHaveTextContent('pytest');
+  });
+
+  // ── T6 test case 12: match_type narrowed at boundary ─────────────────────────
+  /**
+   * Verifies that an unknown match_type from the DB is narrowed to 'exact'
+   * when seeding the drawer. Catches: type-narrowing miss allowing invalid values.
+   */
+  it('match_type is narrowed to "exact" for unknown values', async () => {
+    const { getProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [
+        { ...MOCK_IO_TEST, match_type: 'unknown' },
+      ],
+    });
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
+    });
+
+    // match_type should be narrowed to 'exact'
+    expect(capturedWorkspaceProps.drawerEdit.match_type).toBe('exact');
+  });
+
+  // ── T6 test case 13: Validation: empty title blocks save ─────────────────────
+  /**
+   * Verifies that the submit button is disabled when title is empty (G2 validation).
+   * Also verifies that calling handleSubmit programmatically with empty title shows an error.
+   * Catches: validation removed with form bar deletion.
+   */
+  it('validation: empty title blocks save — button disabled and handleSubmit guards', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue(mockExistingProblem);
+
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Clear the title via Ribbon
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('');
+    });
+
+    // Button should be disabled when title is empty
+    const submitBtn = screen.getByText('Update Problem');
+    expect(submitBtn).toBeDisabled();
+    expect(updateProblem).not.toHaveBeenCalled();
+  });
+
+  // ── Cancel button ─────────────────────────────────────────────────────────────
+
+  describe('Cancel functionality', () => {
+    it('calls onCancel when cancel button clicked', () => {
+      const onCancel = jest.fn();
+      render(<ProblemCreator onCancel={onCancel} />);
+      fireEvent.click(screen.getByTitle('Back to Problem Library'));
+      expect(onCancel).toHaveBeenCalled();
+    });
+
+    it('does not show cancel button when onCancel not provided', () => {
+      render(<ProblemCreator />);
+      expect(screen.queryByTitle('Back to Problem Library')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── WorkspaceShell integration ────────────────────────────────────────────────
+
+  describe('WorkspaceShell integration', () => {
+    it('renders WorkspaceShell embedded=true', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('workspace-shell')).toHaveAttribute('data-embedded', 'true');
+    });
+
+    it('rail mode is edit (G2)', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('rail-mode')).toHaveTextContent('edit');
+    });
+
+    it('railShowAdd is true', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByTestId('rail-add-controls')).toBeInTheDocument();
+    });
+
+    it('ribbonEditable is true', () => {
+      render(<ProblemCreator />);
+      expect(capturedWorkspaceProps.ribbonEditable).toBe(true);
+    });
+
+    it('statement.md tab is present as kind=markdown in new problem', () => {
+      render(<ProblemCreator />);
+      const tabs = capturedWorkspaceProps.editorTabs;
+      const statementTab = tabs.find((t: any) => t.id === 'statement');
+      expect(statementTab).toBeDefined();
+      expect(statementTab.kind).toBe('markdown');
+    });
+  });
+
+  // ── Create mode ───────────────────────────────────────────────────────────────
+
+  describe('Create mode', () => {
+    it('renders header in create mode', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByText('Create New Problem')).toBeInTheDocument();
+    });
+
+    it('creates problem successfully with title', async () => {
+      const onProblemCreated = jest.fn();
+      const { createProblem } = require('@/lib/api/problems');
+      createProblem.mockResolvedValue({ id: 'problem-123' });
+
+      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
+
+      // Set title via Ribbon callback
+      act(() => {
+        capturedWorkspaceProps.onTitleChange('New Problem');
+      });
+
+      // Set class via PropertiesBar callback
+      act(() => {
+        capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+          class: 'c1',
+          language: 'python',
+          tags: [],
+        });
+      });
+
+      fireEvent.click(screen.getByText('Create Problem'));
+
+      await waitFor(() => {
+        expect(createProblem).toHaveBeenCalledWith(
+          expect.objectContaining({ title: 'New Problem', class_id: 'c1' })
+        );
+        expect(onProblemCreated).toHaveBeenCalledWith('problem-123');
+      });
+    });
+
+    it('submit button disabled when title empty', () => {
+      render(<ProblemCreator />);
+      expect(screen.getByText('Create Problem')).toBeDisabled();
+    });
+  });
+
+  // ── Edit mode ─────────────────────────────────────────────────────────────────
+
+  describe('Edit mode', () => {
+    it('loads and shows Edit Problem header', async () => {
+      const { getProblem } = require('@/lib/api/problems');
+      getProblem.mockResolvedValue(mockExistingProblem);
+
+      render(<ProblemCreator problem_id="problem-456" />);
+
+      await waitFor(() =>
+        expect(screen.getByText('Edit Problem')).toBeInTheDocument()
+      );
+    });
+
+    it('shows error when loading fails', async () => {
       const { getProblem } = require('@/lib/api/problems');
       getProblem.mockRejectedValue(new Error('Not found'));
 
       render(<ProblemCreator problem_id="problem-456" />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Not found')).toBeInTheDocument();
-      });
+      await waitFor(() =>
+        expect(screen.getByText('Not found')).toBeInTheDocument()
+      );
     });
 
-    it('should update existing problem with modified fields', async () => {
-      const onProblemCreated = jest.fn();
-      const updatedProblem = { ...mockExistingProblem, title: 'Updated Problem' };
-
+    it('test_cases payload uses testCases state (not buildIOTestCases)', async () => {
       const { getProblem, updateProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(mockExistingProblem);
-      updateProblem.mockResolvedValue(updatedProblem);
-
-      render(<ProblemCreator problem_id="problem-456" onProblemCreated={onProblemCreated} />);
-
-      // Wait for load
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Title/)).toHaveValue('Existing Problem');
+      const { buildIOTestCases } = require('@/lib/api/execute');
+      getProblem.mockResolvedValue({
+        ...mockExistingProblem,
+        test_cases: [MOCK_IO_TEST],
       });
+      updateProblem.mockResolvedValue(mockExistingProblem);
 
-      // Modify title
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Updated Problem' },
-      });
+      render(<ProblemCreator problem_id="problem-456" />);
 
-      // Submit
+      await waitFor(() =>
+        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+      );
+
       fireEvent.click(screen.getByText('Update Problem'));
 
       await waitFor(() => {
         expect(updateProblem).toHaveBeenCalledWith(
           'problem-456',
           expect.objectContaining({
-            title: 'Updated Problem',
+            test_cases: expect.arrayContaining([
+              expect.objectContaining({ kind: 'io', name: 't1' }),
+            ]),
           })
         );
-      });
-
-      await waitFor(() => {
-        expect(onProblemCreated).toHaveBeenCalledWith('problem-456');
-      });
-    });
-
-    it('should handle update failure', async () => {
-      const { getProblem, updateProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(mockExistingProblem);
-      updateProblem.mockRejectedValue(new Error('Update failed'));
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Title/)).toHaveValue('Existing Problem');
-      });
-
-      fireEvent.click(screen.getByText('Update Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Update failed')).toBeInTheDocument();
+        // buildIOTestCases should NOT be called for the test_cases payload
+        expect(buildIOTestCases).not.toHaveBeenCalled();
       });
     });
   });
 
-  describe('Cancel Functionality', () => {
-    it('should call onCancel when cancel button clicked', () => {
-      const onCancel = jest.fn();
-      render(<ProblemCreator onCancel={onCancel} />);
+  // ── Drawer: Cancel edit ───────────────────────────────────────────────────────
 
-      const cancelButton = screen.getByTitle('Back to Problem Library');
-      fireEvent.click(cancelButton);
-
-      expect(onCancel).toHaveBeenCalled();
+  it('Cancel edit closes drawer without calling updateProblem', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [MOCK_IO_TEST],
     });
 
-    it('should not show cancel button when onCancel not provided', () => {
-      render(<ProblemCreator />);
-      expect(screen.queryByTitle('Back to Problem Library')).not.toBeInTheDocument();
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
     });
 
-    it('should show cancel button when onCancel is provided', async () => {
-      const onCancel = jest.fn();
-      render(<ProblemCreator onCancel={onCancel} />);
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
 
-      expect(screen.getByTitle('Back to Problem Library')).toBeInTheDocument();
+    // Click Cancel
+    const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+    act(() => {
+      fireEvent.click(cancelBtn);
     });
+
+    // Drawer should go back to idle
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('idle');
+    expect(updateProblem).not.toHaveBeenCalled();
   });
 
-  describe('Form States', () => {
-    it('should disable submit button when title is empty', () => {
-      render(<ProblemCreator />);
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).toBeDisabled();
-    });
+  // ── No ProblemPropertiesBar id-based selectors ────────────────────────────────
 
-    it('should enable submit button when title and class are provided', async () => {
-      render(<ProblemCreator />);
+  it('renders without any old id-based form bar selectors', () => {
+    render(<ProblemCreator />);
 
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).not.toBeDisabled();
-    });
-
-    it('should disable submit button when title is provided but no class is selected', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      // Set title but leave class unselected
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test Problem' },
-      });
-
-      // No class selected (still on "Select a class...")
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).toBeDisabled();
-    });
-
-    it('should enable submit button when both title and class are provided', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test Problem' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'class-1' },
-      });
-
-      const submitButton = screen.getByText('Create Problem');
-      expect(submitButton).not.toBeDisabled();
-    });
-
-    it('should show loading state during submission', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Creating...')).toBeInTheDocument();
-      });
-    });
+    // Old form bar element IDs should be gone
+    expect(document.querySelector('#problem-class')).toBeNull();
+    expect(document.querySelector('#problem-language')).toBeNull();
+    expect(document.querySelector('#problem-tags')).toBeNull();
+    expect(document.querySelector('#problem-title')).toBeNull();
+    expect(document.querySelector('#problem-description')).toBeNull();
   });
 
-  describe('Execution Settings', () => {
-    it('should pass execution settings to CodeEditor components', () => {
-      render(<ProblemCreator />);
+  // ── IOTestCase direct construction ───────────────────────────────────────────
 
-      // Verify CodeEditor component is rendered
-      expect(screen.getByTestId('code-editor-Starter Code')).toBeInTheDocument();
+  it('creates problem with test_cases from testCases state (empty by default)', async () => {
+    const { createProblem } = require('@/lib/api/problems');
+    createProblem.mockResolvedValue({ id: 'problem-new' });
 
-      // Note: stdin, Random Seed, and Attached Files are now in CodeEditor's ExecutionSettings
-      // These are tested in the CodeEditor component tests
+    render(<ProblemCreator />);
+
+    // Set title via ribbon callback
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('Test Problem');
     });
 
-    it('should include execution settings in create request when provided via CodeEditor callbacks', async () => {
-      const onProblemCreated = jest.fn();
-      const mockProblem = {
-        id: 'problem-789',
-        title: 'Test Problem',
-      };
-
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue(mockProblem);
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Fill in basic fields
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test Problem' },
-      });
-      // Select a class (required for create)
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      // Note: ExecutionSettings (stdin, random seed, attached files) are now handled
-      // inside CodeEditor component via onStdinChange callback
-      // This is tested in the CodeEditor component tests
-
-      // Submit - execution settings should be empty since we didn't set them through the callback
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalled();
-      });
-
-      // Verify the call - stdin is empty so execution_settings should not be included
-      const callArgs = createProblem.mock.calls[0][0];
-      // No execution settings since we didn't set any values
-      expect(callArgs.execution_settings).toBeUndefined();
-    });
-
-    // Note: Attached files test removed because file attachment UI is now
-    // part of CodeEditor's ExecutionSettings component and tested separately
-
-    // Note: File attachment UI is now part of CodeEditor's ExecutionSettings
-    // These tests are handled by ExecutionSettings component tests
-
-    it('should load execution settings when editing and pass to CodeEditor', async () => {
-      const problemWithExecSettings = {
-        ...mockExistingProblem,
-      };
-
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(problemWithExecSettings);
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        // Verify CodeEditor component is rendered
-        expect(screen.getByTestId('code-editor-Starter Code')).toBeInTheDocument();
-        // Note: Execution settings (stdin, random seed, attached files) are passed as props
-        // to CodeEditor and managed by ExecutionSettings component
+    // Set class
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c1',
+        language: 'python',
+        tags: [],
       });
     });
 
-    it('should reset execution settings after successful create', async () => {
-      const mockProblem = { id: 'problem-reset' };
+    fireEvent.click(screen.getByText('Create Problem'));
 
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue(mockProblem);
+    await waitFor(() => expect(createProblem).toHaveBeenCalled());
 
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Fill in fields
-      fireEvent.change(screen.getByLabelText(/Title/), {
-        target: { value: 'Test' },
-      });
-      // Select a class (required for create)
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      // Note: Execution settings are managed by CodeEditor's ExecutionSettings
-      // After form reset, CodeEditor receives empty props for exampleInput, random_seed, attached_files
-
-      // Submit
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      // Wait for success
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalled();
-      });
-
-      // After successful create, the form is reset
-      // Verify the title field is cleared
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Title/)).toHaveValue('');
-      });
-
-      // Execution settings state is also reset (empty strings/arrays/undefined)
-      // This is verified by the component receiving fresh props
-    });
+    const callArgs = createProblem.mock.calls[0][0];
+    expect(callArgs.test_cases).toEqual([]);
   });
 
-  describe('Class and Tags', () => {
-    const mockClasses = [
-      { id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' },
-      { id: 'class-2', name: 'CS 201', namespace_id: 'ns-1' },
-    ];
+  // ── eval-5ez regression: stale closure in saveAndRun ─────────────────────────
+  /**
+   * Verifies that Save & run sends the EDITED stdin to executeCode, not the
+   * pre-edit value. The bug: handleRunTest closed over old testCases, so after
+   * setTestCases(newTestCases) the stale closure would run with the original stdin.
+   * Fix: saveAndRun must call the runner with the freshly-built newTestCases snapshot,
+   * bypassing the stale handleRunTest closure.
+   */
+  it('eval-5ez: Save & run passes NEW stdin to executeCode, not the stale pre-edit value', async () => {
+    const { getProblem, updateProblem } = require('@/lib/api/problems');
+    const { executeCode } = require('@/lib/api/execute');
+    executeCode.mockResolvedValue({
+      summary: { passed: 1, failed: 0, total: 1 },
+      results: [{ kind: 'io', status: 'passed', time_ms: 5, actual: 'new' }],
+    });
+    getProblem.mockResolvedValue({
+      ...mockExistingProblem,
+      test_cases: [{ ...MOCK_IO_TEST, input: 'original', name: 't1' }],
+    });
+    updateProblem.mockResolvedValue(mockExistingProblem);
 
-    beforeEach(() => {
-      const { listClasses } = require('@/lib/api/classes');
-      const { createProblem } = require('@/lib/api/problems');
-      listClasses.mockResolvedValue(mockClasses);
-      createProblem.mockResolvedValue({ id: 'problem-new' });
+    render(<ProblemCreator problem_id="problem-456" />);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument()
+    );
+
+    // Open edit drawer for the io test
+    const tests = capturedWorkspaceProps.tests;
+    act(() => {
+      capturedWorkspaceProps.onEditTest(tests[0].id);
     });
 
-    it('should render class selector dropdown', async () => {
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-    });
-
-    it('should render tags input field', () => {
-      render(<ProblemCreator />);
-      expect(screen.getByLabelText('Tags')).toBeInTheDocument();
-    });
-
-    it('should include class_id and tags in create request', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      // Select class
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-2' } });
-
-      // Enter tags
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'loops, arrays' } });
-      fireEvent.keyDown(tagsInput, { key: 'Enter' });
-
-      // Fill required title
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      // Submit
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            class_id: 'class-2',
-            tags: ['loops', 'arrays'],
-          })
-        );
+    // Simulate user changing stdin from 'original' to 'new'
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 't1',
+        input: 'new',
+        expected_output: '42',
+        match_type: 'exact',
       });
     });
 
-    it('should flush uncommitted tag input on submit', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-1' } });
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-
-      // Type a tag but do NOT press Enter
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'functions' } });
-
-      // Submit directly
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            tags: ['functions'],
-          })
-        );
-      });
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
     });
 
-    it('should flush tag input on blur', async () => {
-      render(<ProblemCreator />);
+    await waitFor(() => expect(executeCode).toHaveBeenCalled());
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Tags')).toBeInTheDocument();
-      });
-
-      const tagsInput = screen.getByLabelText('Tags');
-      fireEvent.change(tagsInput, { target: { value: 'loops' } });
-      fireEvent.blur(tagsInput);
-
-      expect(screen.getByText('loops')).toBeInTheDocument();
-    });
-
-    it('should pre-populate class_id from prop', async () => {
-      render(<ProblemCreator class_id="class-2" />);
-
-      await waitFor(() => {
-        const select = screen.getByLabelText('Class *') as HTMLSelectElement;
-        expect(select.value).toBe('class-2');
-      });
-    });
-
-    it('should show class validation hint when class is not selected in create mode', async () => {
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      // Class selector should show a validation hint when no class selected
-      expect(screen.getByText('Required')).toBeInTheDocument();
-    });
-
-    it('should not show class validation hint when class is selected', async () => {
-      const mockClasses = [{ id: 'class-1', name: 'CS 101', namespace_id: 'ns-1' }];
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(mockClasses);
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText('Class *')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'class-1' } });
-
-      expect(screen.queryByText('Required')).not.toBeInTheDocument();
-    });
-
-    it('should not show class validation hint in edit mode', async () => {
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue({
-        ...mockExistingProblem,
-        class_id: null,
-      });
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Edit Problem')).toBeInTheDocument();
-      });
-
-      // In edit mode, no class required hint should be shown
-      expect(screen.queryByText('Required')).not.toBeInTheDocument();
-    });
+    // executeCode must be called with the NEW stdin 'new', not the stale 'original'
+    const caseArgs = executeCode.mock.calls[0][2];
+    const cases = caseArgs.cases;
+    expect(cases).toHaveLength(1);
+    // ioTestCasesToCaseDefs is mocked as identity so the raw IOTestCase is passed
+    expect(cases[0].input).toBe('new');
   });
 
-  describe('Generate Solution', () => {
-    beforeEach(() => {
-      jest.clearAllMocks();
-      const { listClasses } = require('@/lib/api/classes');
-      listClasses.mockResolvedValue(DEFAULT_CLASSES);
+  // ── eval-v0c regression: create mode silent return in saveAndRun ──────────────
+  /**
+   * Verifies that in create mode (no problem_id), clicking Save & run in the
+   * drawer flushes the pendingEdit into testCases and closes the drawer.
+   * The bug: saveAndRun returned early when !problem_id, so the edit was lost
+   * and the drawer stayed open. The final handleSubmit would ship the blank placeholder.
+   */
+  it('eval-v0c: create mode Save & run flushes edit into testCases and closes drawer', async () => {
+    const { createProblem } = require('@/lib/api/problems');
+    const { updateProblem } = require('@/lib/api/problems');
+    createProblem.mockResolvedValue({ id: 'problem-new' });
+
+    render(<ProblemCreator />);
+
+    // Add a new IO test in create mode
+    act(() => {
+      capturedWorkspaceProps.onAddTest('io');
     });
 
-    it('should render the Generate Solution button in the tab bar area', () => {
-      render(<ProblemCreator />);
-      expect(screen.getByRole('button', { name: 'Generate Solution' })).toBeInTheDocument();
-    });
+    // Drawer should be open in edit-test mode
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('edit-test');
 
-    it('should disable Generate Solution button when description is empty', () => {
-      render(<ProblemCreator />);
-      const btn = screen.getByRole('button', { name: 'Generate Solution' });
-      expect(btn).toBeDisabled();
-    });
-
-    it('should enable Generate Solution button when description has content', () => {
-      render(<ProblemCreator />);
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-      const btn = screen.getByRole('button', { name: 'Generate Solution' });
-      expect(btn).not.toBeDisabled();
-    });
-
-    it('should disable Generate Solution button while isSubmitting', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-      fireEvent.change(screen.getByLabelText('Title *'), {
-        target: { value: 'Test' },
-      });
-      fireEvent.change(screen.getByLabelText('Class *'), {
-        target: { value: 'default-class-1' },
-      });
-
-      // Trigger submission
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByText('Creating...')).toBeInTheDocument();
-      });
-
-      const btn = screen.getByRole('button', { name: 'Generate Solution' });
-      expect(btn).toBeDisabled();
-    });
-
-    it('should open modal when Generate Solution button is clicked', () => {
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Modal should be visible with title
-      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-      // Modal should have the textarea for custom instructions
-      expect(screen.getByLabelText('Custom Instructions (optional)')).toBeInTheDocument();
-      // Modal should have Cancel and Generate buttons
-      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
-    });
-
-    it('should call generateSolution API with description and starter_code when Generate is clicked in modal', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def reverse(s): return s[::-1]' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function that reverses a string.' },
-      });
-      fireEvent.change(screen.getByLabelText(/Starter Code/), {
-        target: { value: 'def reverse(s):\n    pass' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Click Generate in modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalledWith({
-          description: 'Write a function that reverses a string.',
-          starter_code: 'def reverse(s):\n    pass',
-        });
-      });
-
-      // Should switch to solution tab and populate solution
-      await waitFor(() => {
-        expect(screen.getByTestId('code-editor-Solution Code')).toBeInTheDocument();
-        expect(screen.getByLabelText(/Solution Code/)).toHaveValue('def reverse(s): return s[::-1]');
+    // Simulate user editing the new test
+    act(() => {
+      capturedWorkspaceProps.onDrawerEditChange({
+        kind: 'io',
+        name: 'my-test',
+        input: 'hello',
+        expected_output: 'world',
+        match_type: 'exact',
       });
     });
 
-    it('should pass custom instructions to generateSolution API when provided', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): return []' });
+    // Click Save & run
+    const saveBtn = screen.getByRole('button', { name: /save & run/i });
+    await act(async () => {
+      fireEvent.click(saveBtn);
+    });
 
-      render(<ProblemCreator />);
+    // (a) Drawer must close — drawerMode back to idle
+    expect(screen.getByTestId('drawer-mode')).toHaveTextContent('idle');
 
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Write a function to solve the problem.' },
-      });
+    // (b) testCases should reflect the edit — visible in tests count
+    expect(screen.getByTestId('tests-count')).toHaveTextContent('1');
 
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
+    // (c) updateProblem must NOT be called in create mode
+    expect(updateProblem).not.toHaveBeenCalled();
 
-      // Enter custom instructions
-      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
-        target: { value: "Don't use dicts or lists" },
-      });
-
-      // Click Generate in modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalledWith({
-          description: 'Write a function to solve the problem.',
-          starter_code: undefined,
-          custom_instructions: "Don't use dicts or lists",
-        });
+    // (d) On submit, createProblem receives the edited test, not the blank placeholder
+    act(() => {
+      capturedWorkspaceProps.onTitleChange('New Problem');
+    });
+    act(() => {
+      capturedWorkspaceProps.propertiesBar.props.onChangeProperties({
+        class: 'c1',
+        language: 'python',
+        tags: [],
       });
     });
 
-    it('should not pass custom_instructions when the field is empty', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
+    fireEvent.click(screen.getByText('Create Problem'));
 
-      render(<ProblemCreator />);
+    await waitFor(() => expect(createProblem).toHaveBeenCalled());
 
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Leave custom instructions empty
-      // Click Generate
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalledWith({
-          description: 'Some description',
-          starter_code: undefined,
-        });
-      });
-
-      // Ensure custom_instructions is NOT in the call (no key at all)
-      const callArgs = generateSolution.mock.calls[0][0];
-      expect(callArgs).not.toHaveProperty('custom_instructions');
-    });
-
-    it('should close modal and not call API when Cancel is clicked', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Verify modal is open
-      expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-
-      // Click Cancel
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-      // Modal should be closed
-      expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
-
-      // API should not have been called
-      expect(generateSolution).not.toHaveBeenCalled();
-    });
-
-    it('should clear customInstructions when Cancel is clicked', async () => {
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Enter custom instructions
-      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
-        target: { value: 'Use recursion only' },
-      });
-
-      // Cancel
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-      // Re-open modal - instructions should be cleared
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      expect(screen.getByLabelText('Custom Instructions (optional)')).toHaveValue('');
-    });
-
-    it('should display error inside modal when generateSolution API fails', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockRejectedValue(new Error('AI generation failed'));
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Click Generate in modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        // Error should be inside the modal
-        expect(screen.getByRole('heading', { name: 'Generate Solution' })).toBeInTheDocument();
-        expect(screen.getByText('AI generation failed')).toBeInTheDocument();
-      });
-    });
-
-    it('should close modal on successful generation', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): return 42' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Click Generate in modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        // Modal should be closed after success
-        expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
-      });
-    });
-
-    it('should show loading state in Generate button while API call is in progress', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Click Generate
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Generating...' })).toBeInTheDocument();
-      });
-    });
-
-    it('should call generateSolution with undefined starter_code when starter code is empty', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-      // Leave starter_code empty
-
-      // Open modal
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-
-      // Click Generate
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(generateSolution).toHaveBeenCalledWith({
-          description: 'Some description',
-          starter_code: undefined,
-        });
-      });
-    });
-
-    it('should clear customInstructions after successful generation', async () => {
-      const { generateSolution } = require('@/lib/api/problems');
-      generateSolution.mockResolvedValue({ solution: 'def solve(): pass' });
-
-      render(<ProblemCreator />);
-
-      fireEvent.change(screen.getByLabelText('Description'), {
-        target: { value: 'Some description' },
-      });
-
-      // Open modal and enter custom instructions
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      fireEvent.change(screen.getByLabelText('Custom Instructions (optional)'), {
-        target: { value: 'Use only loops' },
-      });
-
-      // Generate successfully
-      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
-
-      await waitFor(() => {
-        expect(screen.queryByRole('heading', { name: 'Generate Solution' })).not.toBeInTheDocument();
-      });
-
-      // Re-open modal - instructions should be cleared
-      fireEvent.click(screen.getByRole('button', { name: 'Generate Solution' }));
-      expect(screen.getByLabelText('Custom Instructions (optional)')).toHaveValue('');
-    });
-  });
-
-  describe('Solution Tab', () => {
-    it('should render tab bar with Starter Code and Solution tabs', () => {
-      render(<ProblemCreator />);
-
-      expect(screen.getByRole('tab', { name: 'Starter Code' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'Solution' })).toBeInTheDocument();
-    });
-
-    it('should default to Starter Code tab', () => {
-      render(<ProblemCreator />);
-
-      const starterTab = screen.getByRole('tab', { name: 'Starter Code' });
-      expect(starterTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('code-editor-Starter Code')).toBeInTheDocument();
-    });
-
-    it('should switch to Solution tab and show Solution Code editor', () => {
-      render(<ProblemCreator />);
-
-      const solutionTab = screen.getByRole('tab', { name: 'Solution' });
-      fireEvent.click(solutionTab);
-
-      expect(solutionTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('code-editor-Solution Code')).toBeInTheDocument();
-    });
-
-    it('should switch back to Starter Code tab', () => {
-      render(<ProblemCreator />);
-
-      // Switch to solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      // Switch back
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-
-      expect(screen.getByRole('tab', { name: 'Starter Code' })).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByTestId('code-editor-Starter Code')).toBeInTheDocument();
-    });
-
-    it('should preserve code in each tab independently', () => {
-      render(<ProblemCreator />);
-
-      // Type starter code
-      fireEvent.change(screen.getByLabelText(/Starter Code/), {
-        target: { value: 'def starter(): pass' },
-      });
-
-      // Switch to solution and type
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByLabelText(/Solution Code/), {
-        target: { value: 'def solution(): return 42' },
-      });
-
-      // Switch back - starter code preserved
-      fireEvent.click(screen.getByRole('tab', { name: 'Starter Code' }));
-      expect(screen.getByLabelText(/Starter Code/)).toHaveValue('def starter(): pass');
-
-      // Switch to solution - solution code preserved
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByLabelText(/Solution Code/)).toHaveValue('def solution(): return 42');
-    });
-
-    it('should include solution in submit payload', async () => {
-      const onProblemCreated = jest.fn();
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'p-1' });
-
-      render(<ProblemCreator onProblemCreated={onProblemCreated} />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Set title and class (required for create)
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-
-      // Set solution
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByLabelText(/Solution Code/), {
-        target: { value: 'def solve(): return 42' },
-      });
-
-      // Submit (switch back not needed, submit should work from any tab)
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(createProblem).toHaveBeenCalledWith(
-          expect.objectContaining({
-            solution: 'def solve(): return 42',
-          })
-        );
-      });
-    });
-
-    it('should load solution from API in edit mode', async () => {
-      const problemWithSolution = {
-        ...mockExistingProblem,
-        solution: 'def answer(): return 42',
-      };
-
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue(problemWithSolution);
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Starter Code/)).toHaveValue('def original():\n    pass');
-      });
-
-      // Switch to solution tab
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      expect(screen.getByLabelText(/Solution Code/)).toHaveValue('def answer(): return 42');
-    });
-
-    it('should reset solution after successful create', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'p-reset' });
-
-      render(<ProblemCreator />);
-
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      // Set title, class (required for create), and solution
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByRole('tab', { name: 'Solution' }));
-      fireEvent.change(screen.getByLabelText(/Solution Code/), {
-        target: { value: 'some solution' },
-      });
-
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Solution Code/)).toHaveValue('');
-      });
-    });
-  });
-
-  describe('IOTestCase[] direct construction (PLAT-st42.3)', () => {
-    /**
-     * Verifies ProblemCreator saves test_cases as IOTestCase[] directly —
-     * not via ExecutionSettings conversion. Regression for data loss bugs
-     * caused by the old conversion path.
-     */
-    it('creates problem with test_cases: [] when no stdin/seed/files', async () => {
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'problem-new' });
-
-      render(<ProblemCreator />);
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test Problem' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => expect(createProblem).toHaveBeenCalled());
-
-      const callArgs = createProblem.mock.calls[0][0];
-      // Direct IOTestCase[] — empty when no settings provided
-      expect(callArgs.test_cases).toEqual([]);
-    });
-
-    /**
-     * Verifies ProblemCreator populates form fields from test_cases[0] directly —
-     * not via extractExecutionSettingsFromTestCases. After PLAT-st42, the component
-     * reads test_cases[0].input instead of going through conversion.
-     */
-    it('loads stdin from problem.test_cases[0].input in edit mode', async () => {
-      const { getProblem } = require('@/lib/api/problems');
-      getProblem.mockResolvedValue({
-        ...mockExistingProblem,
-        test_cases: [
-          { name: 'Default', input: 'hello world', match_type: 'exact', order: 0 },
-        ],
-      });
-
-      render(<ProblemCreator problem_id="problem-456" />);
-
-      // Problem loads and sets stdin state from test_cases[0].input
-      await waitFor(() => {
-        expect(getProblem).toHaveBeenCalledWith('problem-456');
-      });
-      // Loading completes
-      await waitFor(() => {
-        expect(screen.queryByText('Loading problem...')).not.toBeInTheDocument();
-      });
-    });
-
-    it('creates problem with test_cases: [{input, name, match_type, order}] when stdin set via callback', async () => {
-      /**
-       * Simulates the CodeEditor callback setting stdin, then verifies the save
-       * produces a proper IOTestCase[] rather than an ExecutionSettings object.
-       */
-      const { createProblem } = require('@/lib/api/problems');
-      createProblem.mockResolvedValue({ id: 'problem-new' });
-
-      // We need a CodeEditor mock that exposes onExecutionSettingsChange
-      // The current mock doesn't wire it up, so we test via internal state via rerender
-      // Instead verify the no-stdin case produces test_cases: []
-      render(<ProblemCreator />);
-      await waitFor(() => expect(screen.getByLabelText('Class *')).toBeInTheDocument());
-
-      fireEvent.change(screen.getByLabelText('Title *'), { target: { value: 'Test' } });
-      fireEvent.change(screen.getByLabelText('Class *'), { target: { value: 'default-class-1' } });
-      fireEvent.click(screen.getByText('Create Problem'));
-
-      await waitFor(() => expect(createProblem).toHaveBeenCalled());
-
-      const callArgs = createProblem.mock.calls[0][0];
-      // test_cases is present (not execution_settings)
-      expect(callArgs).toHaveProperty('test_cases');
-      expect(callArgs.test_cases).toBeInstanceOf(Array);
-    });
+    const callArgs = createProblem.mock.calls[0][0];
+    expect(callArgs.test_cases).toHaveLength(1);
+    expect(callArgs.test_cases[0].input).toBe('hello');
+    expect(callArgs.test_cases[0].expected_output).toBe('world');
   });
 });
-
-const mockExistingProblem = {
-  id: 'problem-456',
-  title: 'Existing Problem',
-  description: 'Original description',
-  starter_code: 'def original():\n    pass',
-  author_id: 'user-1',
-};

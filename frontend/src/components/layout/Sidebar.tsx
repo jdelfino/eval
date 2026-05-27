@@ -1,20 +1,27 @@
 'use client';
 
 /**
- * Left sidebar navigation component.
- * Renders nav items filtered by user role from navigation config.
- * Supports expanded and collapsed states.
+ * Left sidebar navigation.
+ * Brand mark + namespace area + role-aware sectioned nav + user row with sign-out.
+ * Supports expanded (232px) and collapsed (56px) states.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { HelpCircle } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreview } from '@/contexts/PreviewContext';
-import { getNavItemsForRole, getNavGroupsForRole, NavGroup, NavItem, NAV_ITEMS } from '@/config/navigation';
-import { SidebarToggle } from './SidebarToggle';
-import { getIconComponent } from './iconMap';
+import {
+  getNavItemsForRole,
+  getNavGroupsForRole,
+  NavGroup,
+  NavItem,
+  GROUP_LABELS,
+  isPathActive,
+} from '@/config/navigation';
+import { Icon, IconBtn } from '@/components/ui';
+import type { IconName } from '@/components/ui';
+import { useSystemNamespace } from '@/hooks/useSystemNamespace';
 
 interface SidebarProps {
   /** Whether sidebar is collapsed to icon-only mode */
@@ -23,15 +30,15 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
-/**
- * Group label for display.
- */
-const GROUP_LABELS: Record<NavGroup, string> = {
-  [NavGroup.Main]: 'Main',
-  [NavGroup.Teaching]: 'Teaching',
-  [NavGroup.Admin]: 'Admin',
-  [NavGroup.System]: 'System',
-};
+/** Get initials from display name or email for avatar. */
+function getInitials(displayName: string | null | undefined, email: string): string {
+  const name = displayName || email;
+  const parts = name.split(/[\s@]/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
 
 interface NavItemLinkProps {
   item: NavItem;
@@ -40,27 +47,44 @@ interface NavItemLinkProps {
 }
 
 function NavItemLink({ item, isActive, collapsed }: NavItemLinkProps) {
-  const IconComponent = getIconComponent(item.icon);
-
   return (
     <Link
       href={item.href}
       prefetch={false}
-      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-        isActive
-          ? 'bg-blue-100 text-blue-700'
-          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-      } ${collapsed ? 'justify-center' : ''}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: collapsed ? 0 : 8,
+        padding: collapsed ? '7px 0' : '7px 10px',
+        justifyContent: collapsed ? 'center' : undefined,
+        borderRadius: 6,
+        fontSize: 13,
+        fontWeight: 500,
+        textDecoration: 'none',
+        color: isActive ? 'var(--fg)' : 'var(--fg-muted)',
+        background: isActive ? 'var(--bg-sunken)' : 'transparent',
+        position: 'relative',
+        transition: 'background 0.1s',
+      }}
       aria-current={isActive ? 'page' : undefined}
       title={collapsed ? item.label : undefined}
       aria-label={collapsed ? item.label : undefined}
     >
-      {IconComponent && (
-        <IconComponent
-          className={`h-5 w-5 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}
+      {isActive && (
+        <span
           aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: '20%',
+            height: '60%',
+            width: 2,
+            borderRadius: 1,
+            background: 'var(--accent)',
+          }}
         />
       )}
+      <Icon name={item.icon as IconName} size={14} />
       {!collapsed && <span>{item.label}</span>}
     </Link>
   );
@@ -82,13 +106,23 @@ function NavGroupSection({ group, items, pathname, collapsed, isFirst }: NavGrou
   }
 
   return (
-    <div className={isFirst ? '' : 'mt-4'}>
+    <div style={{ marginTop: isFirst ? 0 : 16 }}>
       {!collapsed && (
-        <h3 className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        <h3
+          style={{
+            padding: '0 10px',
+            marginBottom: 4,
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--fg-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
           {GROUP_LABELS[group]}
         </h3>
       )}
-      <nav className="space-y-1" role="navigation" aria-label={collapsed ? undefined : GROUP_LABELS[group]}>
+      <nav role="navigation" aria-label={collapsed ? undefined : GROUP_LABELS[group]}>
         {groupItems.map(item => (
           <NavItemLink
             key={item.id}
@@ -103,59 +137,265 @@ function NavGroupSection({ group, items, pathname, collapsed, isFirst }: NavGrou
 }
 
 /**
- * Check if a nav item's href matches the current pathname.
- * Matches exact path or child paths, but NOT if the path matches a more specific nav item.
- * E.g., /instructor should not match when on /instructor/problems (which is its own nav item).
+ * Namespace area rendered in the sidebar header below the brand wordmark.
+ * - Non-system-admin: display-only label showing the current namespace name.
+ * - System-admin: clickable button that opens a dropdown to switch namespaces.
+ *   Includes an 'All Namespaces' entry at the top that activates cross-namespace view.
+ *   Selection persists to localStorage('selectedNamespaceId') and reloads the page.
  */
-function isPathActive(href: string, pathname: string): boolean {
-  // Exact match
-  if (pathname === href) {
-    return true;
-  }
+function SidebarNamespaceArea() {
+  const { user } = useAuth();
+  const { current: currentNamespace, list: namespaces, isAll, error, select } = useSystemNamespace();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Child path match (e.g., /classes matches /classes/123)
-  // But don't match if there's a more specific nav item for this path
-  if (href !== '/' && pathname.startsWith(href + '/')) {
-    // Check if another nav item is a more specific match for this pathname
-    const moreSpecificMatch = NAV_ITEMS.some(item =>
-      item.href !== href &&
-      item.href.startsWith(href + '/') &&
-      (pathname === item.href || pathname.startsWith(item.href + '/'))
+  const isSystemAdmin = user?.role === 'system-admin';
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  if (!user) return null;
+
+  if (error) {
+    return (
+      <span
+        role="alert"
+        title={error}
+        style={{
+          fontSize: 11,
+          color: 'var(--danger, #c00)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+      >
+        Namespace unavailable
+      </span>
     );
-
-    // Only match if there's no more specific nav item
-    return !moreSpecificMatch;
   }
 
-  return false;
+  const displayName = isAll ? 'All Namespaces' : (currentNamespace?.displayName || user.namespace_id || '');
+
+  if (!displayName) return null;
+
+  if (!isSystemAdmin) {
+    // Display-only label
+    return (
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--fg-muted)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+        }}
+      >
+        {displayName}
+      </span>
+    );
+  }
+
+  // System-admin: clickable dropdown trigger
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-label="Switch namespace"
+        onClick={() => setDropdownOpen(prev => !prev)}
+        style={{
+          all: 'unset',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          fontSize: 11,
+          color: 'var(--fg-muted)',
+          cursor: 'pointer',
+          maxWidth: '100%',
+        }}
+      >
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayName}
+        </span>
+        <Icon name="chevD" size={10} />
+      </button>
+
+      {dropdownOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: 4,
+            minWidth: 160,
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            zIndex: 50,
+            overflow: 'hidden',
+          }}
+        >
+          {/* 'All Namespaces' entry — restores cross-namespace affordance dropped in PR #283 */}
+          <button
+            type="button"
+            aria-label="All Namespaces"
+            onClick={() => select('all')}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              fontSize: 12,
+              color: isAll ? 'var(--accent)' : 'var(--fg)',
+              fontWeight: isAll ? 600 : 400,
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid var(--border)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            All Namespaces
+          </button>
+
+          {namespaces.map(ns => (
+            <button
+              key={ns.id}
+              type="button"
+              aria-label={ns.displayName}
+              onClick={() => select(ns.id)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                fontSize: 12,
+                color: !isAll && ns.id === currentNamespace?.id ? 'var(--accent)' : 'var(--fg)',
+                fontWeight: !isAll && ns.id === currentNamespace?.id ? 600 : 400,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {ns.displayName}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { isPreview } = usePreview();
   const pathname = usePathname();
+  const router = useRouter();
 
   // During preview mode, show student navigation so instructor sees what students see
   const role = isPreview ? 'student' : (user?.role || 'student');
   const navItems = getNavItemsForRole(role);
   const navGroups = getNavGroupsForRole(role);
 
+  const displayName = user?.display_name || user?.email || '';
+  const initials = user ? getInitials(user.display_name, user.email) : '??';
+  const roleLabel = user?.role?.replace('-', ' ') ?? '';
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/auth/signin');
+  };
+
+  const helpActive = isPathActive('/help', pathname);
+
   return (
     <aside
-      className={`flex flex-col bg-white border-r border-gray-200 h-full transition-all duration-200 ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
       aria-label="Main navigation"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg)',
+        borderRight: '1px solid var(--border)',
+        height: '100%',
+        width: collapsed ? 56 : 232,
+        transition: 'width 0.2s',
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}
     >
-      {/* Collapse toggle at top */}
-      {onToggleCollapse && (
-        <div className="px-2 py-3 border-b border-gray-200">
-          <SidebarToggle isCollapsed={collapsed} onToggle={onToggleCollapse} />
+      <div
+        style={{
+          height: 48,
+          display: 'flex',
+          alignItems: 'center',
+          padding: collapsed ? '0 15px' : '0 12px',
+          gap: 8,
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 26,
+            height: 26,
+            background: 'var(--accent)',
+            borderRadius: 5,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            fontSize: 14,
+            color: 'var(--accent-ink, #fff)',
+          }}
+        >
+          e
         </div>
-      )}
+        {!collapsed && (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--fg)',
+                letterSpacing: -0.2,
+              }}
+            >
+              Eval
+            </div>
+            <SidebarNamespaceArea />
+          </div>
+        )}
+      </div>
 
-      {/* Navigation items */}
-      <div className="flex-1 overflow-y-auto py-4 px-2">
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: 6,
+        }}
+      >
         {navGroups.map((group, index) => (
           <NavGroupSection
             key={group}
@@ -166,30 +406,126 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
             isFirst={index === 0}
           />
         ))}
+
+        <div style={{ marginTop: 8 }}>
+          <Link
+            href="/help"
+            prefetch={false}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: collapsed ? 0 : 8,
+              padding: collapsed ? '7px 0' : '7px 10px',
+              justifyContent: collapsed ? 'center' : undefined,
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: 'none',
+              color: helpActive ? 'var(--fg)' : 'var(--fg-muted)',
+              background: helpActive ? 'var(--bg-sunken)' : 'transparent',
+              transition: 'background 0.1s',
+            }}
+            aria-current={helpActive ? 'page' : undefined}
+            title={collapsed ? 'Help' : undefined}
+            aria-label={collapsed ? 'Help' : undefined}
+          >
+            <Icon name="info" size={14} />
+            {!collapsed && <span>Help</span>}
+          </Link>
+        </div>
       </div>
 
-      {/* Bottom-pinned Help link */}
-      <div className="border-t border-gray-200 px-2 py-3">
-        <Link
-          href="/help"
-          prefetch={false}
-          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            isPathActive('/help', pathname)
-              ? 'bg-blue-100 text-blue-700'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-          } ${collapsed ? 'justify-center' : ''}`}
-          aria-current={isPathActive('/help', pathname) ? 'page' : undefined}
-          title={collapsed ? 'Help' : undefined}
-          aria-label={collapsed ? 'Help' : undefined}
+      <div
+        style={{
+          borderTop: '1px solid var(--border)',
+          padding: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            background: 'var(--bg-sunken)',
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'monospace',
+            fontSize: 10,
+            fontWeight: 600,
+            color: 'var(--fg)',
+            flexShrink: 0,
+          }}
         >
-          <HelpCircle
-            className={`h-5 w-5 flex-shrink-0 ${
-              isPathActive('/help', pathname) ? 'text-blue-600' : 'text-gray-500'
-            }`}
-            aria-hidden="true"
+          {initials}
+        </div>
+
+        {!collapsed && (
+          <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--fg)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {displayName}
+            </div>
+            {roleLabel && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: 'var(--fg-muted)',
+                  textTransform: 'capitalize',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {roleLabel}
+              </div>
+            )}
+          </div>
+        )}
+
+        {onToggleCollapse && (
+          <IconBtn
+            icon={collapsed ? 'chevR' : 'chevL'}
+            title="Collapse"
+            onClick={onToggleCollapse}
+            size={24}
           />
-          {!collapsed && <span>Help</span>}
-        </Link>
+        )}
+
+        {/* Sign Out — visible text required for Playwright :has-text("Sign Out") */}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          title="Sign Out"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: collapsed ? 0 : 12,
+            color: 'var(--fg-muted)',
+            padding: collapsed ? '4px 0' : '4px 6px',
+            borderRadius: 4,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            width: collapsed ? 0 : undefined,
+            display: collapsed ? 'none' : 'block',
+          }}
+        >
+          Sign Out
+        </button>
       </div>
     </aside>
   );

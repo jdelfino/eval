@@ -18,13 +18,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, isLoading: false }),
 }));
 
-// Mock LayoutConfigContext to verify useForceDesktopLayout is called for zoom protection
-const mockUseForceDesktopLayout = jest.fn();
-jest.mock('@/contexts/LayoutConfigContext', () => ({
-  useLayoutConfig: () => ({ forceDesktop: false, setForceDesktop: jest.fn() }),
-  useForceDesktopLayout: () => mockUseForceDesktopLayout(),
-}));
-
 // Mock InstructorDashboard to avoid deep dependency tree
 jest.mock('../components/InstructorDashboard', () => ({
   InstructorDashboard: function MockInstructorDashboard({
@@ -50,12 +43,7 @@ jest.mock('../components/InstructorDashboard', () => ({
   },
 }));
 
-// Mock NamespaceHeader
-jest.mock('@/components/NamespaceHeader', () => {
-  return function MockNamespaceHeader() {
-    return <div data-testid="namespace-header" />;
-  };
-});
+// NamespaceHeader has been removed from this page (moved into Sidebar) — no mock needed.
 
 // Mock StartSessionModal
 jest.mock('../components/StartSessionModal', () => {
@@ -80,14 +68,6 @@ beforeEach(() => {
 });
 
 describe('InstructorPage', () => {
-  describe('Zoom Protection (forceDesktop)', () => {
-    it('calls useForceDesktopLayout to prevent browser zoom from collapsing sidebar', () => {
-      render(<InstructorPageWrapper />);
-
-      expect(mockUseForceDesktopLayout).toHaveBeenCalled();
-    });
-  });
-
   describe('rendering', () => {
     it('renders the instructor dashboard', () => {
       render(<InstructorPageWrapper />);
@@ -95,10 +75,15 @@ describe('InstructorPage', () => {
       expect(screen.getByTestId('instructor-dashboard')).toBeInTheDocument();
     });
 
-    it('renders the namespace header', () => {
+    /**
+     * TC6: Instructor page no longer renders <NamespaceHeader>.
+     * Contract: namespace display belongs in Sidebar, not in the page body.
+     * Catches: incomplete removal of NamespaceHeader from page.
+     */
+    it('does not render namespace-header in the page body', () => {
       render(<InstructorPageWrapper />);
 
-      expect(screen.getByTestId('namespace-header')).toBeInTheDocument();
+      expect(screen.queryByTestId('namespace-header')).not.toBeInTheDocument();
     });
 
     it('does not show start session modal initially', () => {
