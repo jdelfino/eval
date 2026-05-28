@@ -880,7 +880,9 @@ fi
 MOCK_RETRY5XX="$(make_mock_dir)"
 cp "$SEED_SCRIPT" "${MOCK_RETRY5XX}/scripts/seed-staging.sh"
 RETRY5XX_CODES="${TMPDIR_ROOT}/retry5xx_codes"
+RETRY5XX_CTR="${TMPDIR_ROOT}/retry5xx_bootstrap_ctr"
 printf '502\n502\n502\n200\n' > "$RETRY5XX_CODES"
+echo "0" > "$RETRY5XX_CTR"
 
 retry5xx_exit=0
 retry5xx_stderr=$(
@@ -891,6 +893,7 @@ retry5xx_stderr=$(
     API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
     BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
     MOCK_BOOTSTRAP_CODES_FILE="$RETRY5XX_CODES" \
+    MOCK_BOOTSTRAP_CTR_FILE="$RETRY5XX_CTR" \
     bash "${MOCK_RETRY5XX}/scripts/seed-staging.sh" 2>&1 >/dev/null
 ) || retry5xx_exit=$?
 
@@ -900,6 +903,15 @@ if [ "$retry5xx_exit" -eq 0 ]; then
 else
   echo "FAIL: Retry on 5xx: expected exit 0, got $retry5xx_exit"
   echo "  Stderr: $retry5xx_stderr"
+  FAIL=$((FAIL + 1))
+fi
+
+retry5xx_calls=$(cat "$RETRY5XX_CTR")
+if [ "$retry5xx_calls" -eq 4 ]; then
+  echo "PASS: Retry on 5xx: bootstrap called exactly 4 times (3 failures + 1 success)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Retry on 5xx: expected 4 calls, got $retry5xx_calls"
   FAIL=$((FAIL + 1))
 fi
 

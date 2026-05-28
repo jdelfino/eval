@@ -230,7 +230,7 @@ jobs:
               echo "  attempt $i/40: got $RESP (want 401, streak reset)..."
             fi
             if [ "$i" = "40" ]; then
-              echo "::error::Staging API not routable after 200s (last status: $RESP, streak: $STREAK)"
+              echo "::error::Staging API not routable after 40 attempts (last status: $RESP, streak: $STREAK)"
               exit 1
             fi
             sleep 5
