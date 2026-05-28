@@ -239,7 +239,7 @@ api_call() {
   local response_file
   response_file="$(mktemp)"
 
-  local curl_args=(-s -o "$response_file" -w '%{http_code}' -X "$method")
+  local curl_args=(-s -o "$response_file" -w '%{http_code}' --max-time 30 -X "$method")
 
   if [[ -n "$token" ]]; then
     curl_args+=(-H "Authorization: Bearer ${token}")
@@ -260,7 +260,6 @@ api_call() {
 
     # Retry on transient gateway errors (502/503/504); never retry on 4xx
     if [[ "$http_code" == "502" || "$http_code" == "503" || "$http_code" == "504" ]] && [[ "$attempt" -lt 5 ]]; then
-      response_body="$(cat "$response_file")"
       echo "api_call: attempt $attempt got HTTP $http_code for $method $path — retrying in ${backoff}s..." >&2
       sleep "$backoff"
       backoff=$((backoff * 2))

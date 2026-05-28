@@ -85,6 +85,13 @@ make_mock_dir() {
   local dir
   dir="$(mktemp -d -p "$TMPDIR_ROOT")"
 
+  # No-op sleep so retry backoff doesn't slow tests
+  cat > "$dir/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$dir/sleep"
+
   # mock jq: delegate to real jq
   cat > "$dir/jq" <<EOF
 #!/usr/bin/env bash
@@ -163,6 +170,20 @@ fi
 
 # POST /auth/bootstrap
 if [[ "$url" == *"/api/v1/auth/bootstrap"* ]]; then
+  # Optional call counter
+  if [[ -n "${MOCK_BOOTSTRAP_CTR_FILE:-}" ]]; then
+    ctr=$(cat "$MOCK_BOOTSTRAP_CTR_FILE" 2>/dev/null || echo 0)
+    echo "$((ctr + 1))" > "$MOCK_BOOTSTRAP_CTR_FILE"
+  fi
+  # Optional per-call code sequence (one code per line; pop the first each call)
+  if [[ -n "${MOCK_BOOTSTRAP_CODES_FILE:-}" && -s "${MOCK_BOOTSTRAP_CODES_FILE}" ]]; then
+    code=$(head -n1 "$MOCK_BOOTSTRAP_CODES_FILE")
+    tail -n +2 "$MOCK_BOOTSTRAP_CODES_FILE" > "${MOCK_BOOTSTRAP_CODES_FILE}.tmp" \
+      && mv "${MOCK_BOOTSTRAP_CODES_FILE}.tmp" "$MOCK_BOOTSTRAP_CODES_FILE"
+    case "$code" in 502|503|504) write_body '{"error":"transient"}' ;; *) write_body '{"message":"bootstrapped"}' ;; esac
+    printf '%s' "$code"
+    exit 0
+  fi
   write_body '{"message":"bootstrapped"}'
   printf "${MOCK_BOOTSTRAP_CODE:-200}"
   exit 0
@@ -852,122 +873,24 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# 9. Retry on 5xx: bootstrap returns 502 three times, then 200 → exits 0,
-#    stderr contains a retry message.
+# 9. Retry on 5xx: bootstrap returns 502, 502, 502, 200 → script exits 0
+#    and stderr logs a retry. Uses the base mock + MOCK_BOOTSTRAP_CODES_FILE.
 # ────────────────────────────────────────────────────────────────────────────
 
 MOCK_RETRY5XX="$(make_mock_dir)"
 cp "$SEED_SCRIPT" "${MOCK_RETRY5XX}/scripts/seed-staging.sh"
-
-# Counter file: tracks how many times bootstrap has been called
-RETRY5XX_CTR="${TMPDIR_ROOT}/retry5xx_bootstrap_ctr"
-echo "0" > "$RETRY5XX_CTR"
-
-# Override curl to return 502 for first 3 bootstrap calls, then 200
-cat > "${MOCK_RETRY5XX}/curl" <<CURL_EOF
-#!/usr/bin/env bash
-REAL_JQ="${REAL_JQ}"
-RETRY5XX_CTR="${RETRY5XX_CTR}"
-args=("\$@")
-output_file=""
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-o" ]]; then output_file="\${args[\$((i+1))]}"; break; fi
-done
-url=""
-for arg in "\${args[@]}"; do
-  if [[ "\$arg" == http* ]]; then url="\$arg"; break; fi
-done
-method="GET"
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-X" ]]; then method="\${args[\$((i+1))]}"; break; fi
-done
-
-write_body() { [[ -n "\$output_file" ]] && printf '%s' "\$1" > "\$output_file"; }
-
-if [[ "\$url" == *"signInWithPassword"* ]]; then
-  write_body '{"idToken":"mock-idtoken","localId":"mock-uid-123"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
-  write_body '{"localId":"mock-new-uid"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
-  write_body '{"id":"mock-uid","email":"instructor@test.local","role":"instructor"}'
-  printf '401'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/bootstrap"* ]]; then
-  ctr=\$(cat "\$RETRY5XX_CTR" 2>/dev/null || echo "0")
-  ctr=\$((ctr + 1))
-  echo "\$ctr" > "\$RETRY5XX_CTR"
-  if [ "\$ctr" -le 3 ]; then
-    write_body '{"error":"bad gateway"}'
-    printf '502'; exit 0
-  fi
-  write_body '{"message":"bootstrapped"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/namespaces"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"test-school","display_name":"Test School"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/system/invitations"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-invitation-uuid-1234"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/accept-invite"* ]]; then
-  write_body '{"id":"mock-instructor-uid","role":"instructor"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes/"*"/sections"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes/"*"/sections"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-section-uuid-9012","name":"Section A","join_code":"MOCK-CODE"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-class-uuid-5678","name":"CS 101 - Introduction to Programming"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/problems"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/problems"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-problem-uuid-3456","title":"Hello World"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/sessions"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/sessions"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-session-uuid-7890","status":"active"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/register-student"* ]]; then
-  write_body '{"id":"mock-student-uid","role":"student"}'
-  printf '200'; exit 0
-fi
-write_body "{\"error\":\"unexpected url: \$url\"}"
-printf '500'
-CURL_EOF
-chmod +x "${MOCK_RETRY5XX}/curl"
+RETRY5XX_CODES="${TMPDIR_ROOT}/retry5xx_codes"
+printf '502\n502\n502\n200\n' > "$RETRY5XX_CODES"
 
 retry5xx_exit=0
 retry5xx_stderr=$(
   env -i \
     PATH="${MOCK_RETRY5XX}:${SYSTEM_PATH}" \
-    HOME="${HOME:-/root}" \
-    TMPDIR="${TMPDIR:-/tmp}" \
-    PROJECT_ID=test-project \
-    TENANT_ID=test-tenant \
-    E2E_PASSWORD=test-pass \
-    API_BASE_URL=https://staging.example.com \
-    IDP_API_KEY=test-api-key \
+    HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+    PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+    API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
     BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+    MOCK_BOOTSTRAP_CODES_FILE="$RETRY5XX_CODES" \
     bash "${MOCK_RETRY5XX}/scripts/seed-staging.sh" 2>&1 >/dev/null
 ) || retry5xx_exit=$?
 
@@ -980,7 +903,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-if echo "$retry5xx_stderr" | grep -qiE "retry|retrying|attempt|502|503|504"; then
+if echo "$retry5xx_stderr" | grep -qiE "retry|retrying|attempt"; then
   echo "PASS: Retry on 5xx: stderr contains retry message"
   PASS=$((PASS + 1))
 else
@@ -990,70 +913,24 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# 10. Exhaust retries on 5xx: bootstrap always returns 504 → exits non-zero
-#     after exactly 5 bootstrap attempts.
+# 10. Exhaust retries: bootstrap always 504 → exits non-zero after exactly
+#     5 attempts.
 # ────────────────────────────────────────────────────────────────────────────
 
 MOCK_EXHAUST="$(make_mock_dir)"
 cp "$SEED_SCRIPT" "${MOCK_EXHAUST}/scripts/seed-staging.sh"
-
 EXHAUST_CTR="${TMPDIR_ROOT}/exhaust_bootstrap_ctr"
 echo "0" > "$EXHAUST_CTR"
-
-cat > "${MOCK_EXHAUST}/curl" <<CURL_EOF
-#!/usr/bin/env bash
-EXHAUST_CTR="${EXHAUST_CTR}"
-args=("\$@")
-output_file=""
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-o" ]]; then output_file="\${args[\$((i+1))]}"; break; fi
-done
-url=""
-for arg in "\${args[@]}"; do
-  if [[ "\$arg" == http* ]]; then url="\$arg"; break; fi
-done
-method="GET"
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-X" ]]; then method="\${args[\$((i+1))]}"; break; fi
-done
-
-write_body() { [[ -n "\$output_file" ]] && printf '%s' "\$1" > "\$output_file"; }
-
-if [[ "\$url" == *"signInWithPassword"* ]]; then
-  write_body '{"idToken":"mock-idtoken","localId":"mock-uid-123"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
-  write_body '{"localId":"mock-new-uid"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
-  write_body '{"id":"mock-uid"}'
-  printf '401'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/bootstrap"* ]]; then
-  ctr=\$(cat "\$EXHAUST_CTR" 2>/dev/null || echo "0")
-  ctr=\$((ctr + 1))
-  echo "\$ctr" > "\$EXHAUST_CTR"
-  write_body '{"error":"gateway timeout"}'
-  printf '504'; exit 0
-fi
-write_body "{\"error\":\"unexpected url: \$url\"}"
-printf '500'
-CURL_EOF
-chmod +x "${MOCK_EXHAUST}/curl"
 
 exhaust_exit=0
 env -i \
   PATH="${MOCK_EXHAUST}:${SYSTEM_PATH}" \
-  HOME="${HOME:-/root}" \
-  TMPDIR="${TMPDIR:-/tmp}" \
-  PROJECT_ID=test-project \
-  TENANT_ID=test-tenant \
-  E2E_PASSWORD=test-pass \
-  API_BASE_URL=https://staging.example.com \
-  IDP_API_KEY=test-api-key \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
   BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=504 \
+  MOCK_BOOTSTRAP_CTR_FILE="$EXHAUST_CTR" \
   bash "${MOCK_EXHAUST}/scripts/seed-staging.sh" > /dev/null 2>&1 || exhaust_exit=$?
 
 if [ "$exhaust_exit" -ne 0 ]; then
@@ -1064,215 +941,81 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-exhaust_actual="$(cat "$EXHAUST_CTR" 2>/dev/null || echo "0")"
-if [ "$exhaust_actual" -eq 5 ]; then
-  echo "PASS: Exhaust retries on 5xx: bootstrap called exactly 5 times (got $exhaust_actual)"
+exhaust_calls=$(cat "$EXHAUST_CTR")
+if [ "$exhaust_calls" -eq 5 ]; then
+  echo "PASS: Exhaust retries on 5xx: bootstrap called exactly 5 times (got $exhaust_calls)"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: Exhaust retries on 5xx: expected exactly 5 bootstrap calls, got $exhaust_actual"
+  echo "FAIL: Exhaust retries on 5xx: expected 5 calls, got $exhaust_calls"
   FAIL=$((FAIL + 1))
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# 11. No retry on 4xx: bootstrap returns 400 → called exactly once, exits non-zero.
+# 11. No retry on 4xx: bootstrap returns 400 → script exits non-zero after
+#     exactly 1 call (no retry).
 # ────────────────────────────────────────────────────────────────────────────
 
 MOCK_NO4XX="$(make_mock_dir)"
 cp "$SEED_SCRIPT" "${MOCK_NO4XX}/scripts/seed-staging.sh"
-
 NO4XX_CTR="${TMPDIR_ROOT}/no4xx_bootstrap_ctr"
 echo "0" > "$NO4XX_CTR"
-
-cat > "${MOCK_NO4XX}/curl" <<CURL_EOF
-#!/usr/bin/env bash
-NO4XX_CTR="${NO4XX_CTR}"
-args=("\$@")
-output_file=""
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-o" ]]; then output_file="\${args[\$((i+1))]}"; break; fi
-done
-url=""
-for arg in "\${args[@]}"; do
-  if [[ "\$arg" == http* ]]; then url="\$arg"; break; fi
-done
-method="GET"
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-X" ]]; then method="\${args[\$((i+1))]}"; break; fi
-done
-
-write_body() { [[ -n "\$output_file" ]] && printf '%s' "\$1" > "\$output_file"; }
-
-if [[ "\$url" == *"signInWithPassword"* ]]; then
-  write_body '{"idToken":"mock-idtoken","localId":"mock-uid-123"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
-  write_body '{"localId":"mock-new-uid"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
-  write_body '{"id":"mock-uid"}'
-  printf '401'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/bootstrap"* ]]; then
-  ctr=\$(cat "\$NO4XX_CTR" 2>/dev/null || echo "0")
-  ctr=\$((ctr + 1))
-  echo "\$ctr" > "\$NO4XX_CTR"
-  write_body '{"error":"bad request"}'
-  printf '400'; exit 0
-fi
-write_body "{\"error\":\"unexpected url: \$url\"}"
-printf '500'
-CURL_EOF
-chmod +x "${MOCK_NO4XX}/curl"
 
 no4xx_exit=0
 env -i \
   PATH="${MOCK_NO4XX}:${SYSTEM_PATH}" \
-  HOME="${HOME:-/root}" \
-  TMPDIR="${TMPDIR:-/tmp}" \
-  PROJECT_ID=test-project \
-  TENANT_ID=test-tenant \
-  E2E_PASSWORD=test-pass \
-  API_BASE_URL=https://staging.example.com \
-  IDP_API_KEY=test-api-key \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
   BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=400 \
+  MOCK_BOOTSTRAP_CTR_FILE="$NO4XX_CTR" \
   bash "${MOCK_NO4XX}/scripts/seed-staging.sh" > /dev/null 2>&1 || no4xx_exit=$?
 
 if [ "$no4xx_exit" -ne 0 ]; then
   echo "PASS: No retry on 4xx: script exits non-zero on 400"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: No retry on 4xx: expected non-zero exit on 400, got 0"
+  echo "FAIL: No retry on 4xx: expected non-zero exit, got 0"
   FAIL=$((FAIL + 1))
 fi
 
-no4xx_actual="$(cat "$NO4XX_CTR" 2>/dev/null || echo "0")"
-if [ "$no4xx_actual" -eq 1 ]; then
-  echo "PASS: No retry on 4xx: bootstrap called exactly once (got $no4xx_actual)"
+no4xx_calls=$(cat "$NO4XX_CTR")
+if [ "$no4xx_calls" -eq 1 ]; then
+  echo "PASS: No retry on 4xx: bootstrap called exactly once (got $no4xx_calls)"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: No retry on 4xx: expected exactly 1 bootstrap call, got $no4xx_actual"
+  echo "FAIL: No retry on 4xx: expected 1 call, got $no4xx_calls"
   FAIL=$((FAIL + 1))
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# 12. No retry on 409: bootstrap returns 409 → called exactly once, script
-#     continues (409 = "already done" is treated as success).
+# 12. No retry on 409 (already done): bootstrap returns 409 → exactly 1 call,
+#     script continues and exits 0.
 # ────────────────────────────────────────────────────────────────────────────
 
 MOCK_NO409="$(make_mock_dir)"
 cp "$SEED_SCRIPT" "${MOCK_NO409}/scripts/seed-staging.sh"
-
 NO409_CTR="${TMPDIR_ROOT}/no409_bootstrap_ctr"
 echo "0" > "$NO409_CTR"
-
-cat > "${MOCK_NO409}/curl" <<CURL_EOF
-#!/usr/bin/env bash
-NO409_CTR="${NO409_CTR}"
-args=("\$@")
-output_file=""
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-o" ]]; then output_file="\${args[\$((i+1))]}"; break; fi
-done
-url=""
-for arg in "\${args[@]}"; do
-  if [[ "\$arg" == http* ]]; then url="\$arg"; break; fi
-done
-method="GET"
-for i in "\${!args[@]}"; do
-  if [[ "\${args[\$i]}" == "-X" ]]; then method="\${args[\$((i+1))]}"; break; fi
-done
-
-write_body() { [[ -n "\$output_file" ]] && printf '%s' "\$1" > "\$output_file"; }
-
-if [[ "\$url" == *"signInWithPassword"* ]]; then
-  write_body '{"idToken":"mock-idtoken","localId":"mock-uid-123"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/tenants/"*"/accounts"* && "\$method" == "POST" ]]; then
-  write_body '{"localId":"mock-new-uid"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/me"* && "\$method" == "GET" ]]; then
-  write_body '{"id":"mock-uid","email":"instructor@test.local","role":"instructor"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/bootstrap"* ]]; then
-  ctr=\$(cat "\$NO409_CTR" 2>/dev/null || echo "0")
-  ctr=\$((ctr + 1))
-  echo "\$ctr" > "\$NO409_CTR"
-  write_body '{"message":"already bootstrapped"}'
-  printf '409'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/namespaces"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"test-school","display_name":"Test School"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/system/invitations"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-invitation-uuid-1234"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/accept-invite"* ]]; then
-  write_body '{"id":"mock-instructor-uid","role":"instructor"}'
-  printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes/"*"/sections"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes/"*"/sections"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-section-uuid-9012","name":"Section A","join_code":"MOCK-CODE"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/classes"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-class-uuid-5678","name":"CS 101 - Introduction to Programming"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/problems"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/problems"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-problem-uuid-3456","title":"Hello World"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/sessions"* && "\$method" == "GET" ]]; then
-  write_body '[]'; printf '200'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/sessions"* && "\$method" == "POST" ]]; then
-  write_body '{"id":"mock-session-uuid-7890","status":"active"}'
-  printf '201'; exit 0
-fi
-if [[ "\$url" == *"/api/v1/auth/register-student"* ]]; then
-  write_body '{"id":"mock-student-uid","role":"student"}'
-  printf '200'; exit 0
-fi
-write_body "{\"error\":\"unexpected url: \$url\"}"
-printf '500'
-CURL_EOF
-chmod +x "${MOCK_NO409}/curl"
 
 no409_exit=0
 env -i \
   PATH="${MOCK_NO409}:${SYSTEM_PATH}" \
-  HOME="${HOME:-/root}" \
-  TMPDIR="${TMPDIR:-/tmp}" \
-  PROJECT_ID=test-project \
-  TENANT_ID=test-tenant \
-  E2E_PASSWORD=test-pass \
-  API_BASE_URL=https://staging.example.com \
-  IDP_API_KEY=test-api-key \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
   BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=409 \
+  MOCK_INSTRUCTOR_ME_CODE=200 \
+  MOCK_BOOTSTRAP_CTR_FILE="$NO409_CTR" \
   bash "${MOCK_NO409}/scripts/seed-staging.sh" > /dev/null 2>&1 || no409_exit=$?
 
-no409_actual="$(cat "$NO409_CTR" 2>/dev/null || echo "0")"
-if [ "$no409_actual" -eq 1 ]; then
-  echo "PASS: No retry on 409: bootstrap called exactly once (got $no409_actual)"
+no409_calls=$(cat "$NO409_CTR")
+if [ "$no409_calls" -eq 1 ]; then
+  echo "PASS: No retry on 409: bootstrap called exactly once (got $no409_calls)"
   PASS=$((PASS + 1))
 else
-  echo "FAIL: No retry on 409: expected exactly 1 bootstrap call, got $no409_actual"
+  echo "FAIL: No retry on 409: expected 1 call, got $no409_calls"
   FAIL=$((FAIL + 1))
 fi
 
@@ -1283,6 +1026,7 @@ else
   echo "FAIL: No retry on 409: expected exit 0 (409 treated as success), got $no409_exit"
   FAIL=$((FAIL + 1))
 fi
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Results
