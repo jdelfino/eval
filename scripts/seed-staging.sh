@@ -223,6 +223,9 @@ _API_STATUS_FILE="$(mktemp)"
 # api_call <method> <path> [body] [token]
 # Prints response body on stdout.
 # Writes HTTP status code to $_API_STATUS_FILE so callers can read API_STATUS.
+# Retries automatically on HTTP 502/503/504 (transient gateway errors) up to 5
+# attempts with exponential backoff (1s, 2s, 4s, 8s, 16s). Does not retry on
+# 4xx responses — those are application errors that retrying cannot fix.
 # Usage:
 #   response="$(api_call GET /api/v1/foo "" "$token")"
 #   read_api_status   # sets API_STATUS from file
@@ -247,11 +250,29 @@ api_call() {
   fi
 
   local http_code
-  http_code="$(curl "${curl_args[@]}" "$url")"
+  local response_body
+  local attempt=0
+  local backoff=1
+
+  while true; do
+    attempt=$((attempt + 1))
+    http_code="$(curl "${curl_args[@]}" "$url")"
+
+    # Retry on transient gateway errors (502/503/504); never retry on 4xx
+    if [[ "$http_code" == "502" || "$http_code" == "503" || "$http_code" == "504" ]] && [[ "$attempt" -lt 5 ]]; then
+      response_body="$(cat "$response_file")"
+      echo "api_call: attempt $attempt got HTTP $http_code for $method $path — retrying in ${backoff}s..." >&2
+      sleep "$backoff"
+      backoff=$((backoff * 2))
+      continue
+    fi
+
+    break
+  done
+
   # Write status to file so it survives subshell boundary
   echo "$http_code" > "$_API_STATUS_FILE"
 
-  local response_body
   response_body="$(cat "$response_file")"
   rm -f "$response_file"
 
