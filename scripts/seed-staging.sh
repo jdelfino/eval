@@ -223,6 +223,10 @@ _API_STATUS_FILE="$(mktemp)"
 # api_call <method> <path> [body] [token]
 # Prints response body on stdout.
 # Writes HTTP status code to $_API_STATUS_FILE so callers can read API_STATUS.
+# Retries automatically on transient gateway errors — HTTP 502/503/504, plus
+# curl-level failures (timeout, connection refused; status code "000") — up
+# to 5 attempts with exponential backoff (1s, 2s, 4s, 8s). Does not retry on
+# 4xx responses — those are application errors that retrying cannot fix.
 # Usage:
 #   response="$(api_call GET /api/v1/foo "" "$token")"
 #   read_api_status   # sets API_STATUS from file
@@ -236,7 +240,7 @@ api_call() {
   local response_file
   response_file="$(mktemp)"
 
-  local curl_args=(-s -o "$response_file" -w '%{http_code}' -X "$method")
+  local curl_args=(-s -o "$response_file" -w '%{http_code}' --max-time 30 -X "$method")
 
   if [[ -n "$token" ]]; then
     curl_args+=(-H "Authorization: Bearer ${token}")
@@ -247,11 +251,31 @@ api_call() {
   fi
 
   local http_code
-  http_code="$(curl "${curl_args[@]}" "$url")"
+  local response_body
+  local attempt=0
+  local backoff=1
+
+  while true; do
+    attempt=$((attempt + 1))
+    # `|| echo 000` makes timeouts / connection failures observable as a status
+    # rather than tripping set -e through the command substitution.
+    http_code="$(curl "${curl_args[@]}" "$url" || echo 000)"
+
+    # Retry on transient gateway errors (502/503/504) and curl-level failures
+    # (timeout / connection refused → status "000"); never retry on 4xx.
+    if [[ "$http_code" == "502" || "$http_code" == "503" || "$http_code" == "504" || "$http_code" == "000" ]] && [[ "$attempt" -lt 5 ]]; then
+      echo "api_call: attempt $attempt got HTTP $http_code for $method $path — retrying in ${backoff}s..." >&2
+      sleep "$backoff"
+      backoff=$((backoff * 2))
+      continue
+    fi
+
+    break
+  done
+
   # Write status to file so it survives subshell boundary
   echo "$http_code" > "$_API_STATUS_FILE"
 
-  local response_body
   response_body="$(cat "$response_file")"
   rm -f "$response_file"
 

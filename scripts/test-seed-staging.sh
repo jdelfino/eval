@@ -85,6 +85,13 @@ make_mock_dir() {
   local dir
   dir="$(mktemp -d -p "$TMPDIR_ROOT")"
 
+  # No-op sleep so retry backoff doesn't slow tests
+  cat > "$dir/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$dir/sleep"
+
   # mock jq: delegate to real jq
   cat > "$dir/jq" <<EOF
 #!/usr/bin/env bash
@@ -163,6 +170,20 @@ fi
 
 # POST /auth/bootstrap
 if [[ "$url" == *"/api/v1/auth/bootstrap"* ]]; then
+  # Optional call counter
+  if [[ -n "${MOCK_BOOTSTRAP_CTR_FILE:-}" ]]; then
+    ctr=$(cat "$MOCK_BOOTSTRAP_CTR_FILE" 2>/dev/null || echo 0)
+    echo "$((ctr + 1))" > "$MOCK_BOOTSTRAP_CTR_FILE"
+  fi
+  # Optional per-call code sequence (one code per line; pop the first each call)
+  if [[ -n "${MOCK_BOOTSTRAP_CODES_FILE:-}" && -s "${MOCK_BOOTSTRAP_CODES_FILE}" ]]; then
+    code=$(head -n1 "$MOCK_BOOTSTRAP_CODES_FILE")
+    tail -n +2 "$MOCK_BOOTSTRAP_CODES_FILE" > "${MOCK_BOOTSTRAP_CODES_FILE}.tmp" \
+      && mv "${MOCK_BOOTSTRAP_CODES_FILE}.tmp" "$MOCK_BOOTSTRAP_CODES_FILE"
+    case "$code" in 502|503|504) write_body '{"error":"transient"}' ;; *) write_body '{"message":"bootstrapped"}' ;; esac
+    printf '%s' "$code"
+    exit 0
+  fi
   write_body '{"message":"bootstrapped"}'
   printf "${MOCK_BOOTSTRAP_CODE:-200}"
   exit 0
@@ -850,6 +871,174 @@ else
   echo "FAIL: Bob Student was not registered"
   FAIL=$((FAIL + 1))
 fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# 9. Retry on 5xx: bootstrap returns 502, 502, 502, 200 → script exits 0
+#    and stderr logs a retry. Uses the base mock + MOCK_BOOTSTRAP_CODES_FILE.
+# ────────────────────────────────────────────────────────────────────────────
+
+MOCK_RETRY5XX="$(make_mock_dir)"
+cp "$SEED_SCRIPT" "${MOCK_RETRY5XX}/scripts/seed-staging.sh"
+RETRY5XX_CODES="${TMPDIR_ROOT}/retry5xx_codes"
+RETRY5XX_CTR="${TMPDIR_ROOT}/retry5xx_bootstrap_ctr"
+printf '502\n502\n502\n200\n' > "$RETRY5XX_CODES"
+echo "0" > "$RETRY5XX_CTR"
+
+retry5xx_exit=0
+retry5xx_stderr=$(
+  env -i \
+    PATH="${MOCK_RETRY5XX}:${SYSTEM_PATH}" \
+    HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+    PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+    API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
+    BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+    MOCK_BOOTSTRAP_CODES_FILE="$RETRY5XX_CODES" \
+    MOCK_BOOTSTRAP_CTR_FILE="$RETRY5XX_CTR" \
+    bash "${MOCK_RETRY5XX}/scripts/seed-staging.sh" 2>&1 >/dev/null
+) || retry5xx_exit=$?
+
+if [ "$retry5xx_exit" -eq 0 ]; then
+  echo "PASS: Retry on 5xx: script exits 0 after recovering from 3x 502"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Retry on 5xx: expected exit 0, got $retry5xx_exit"
+  echo "  Stderr: $retry5xx_stderr"
+  FAIL=$((FAIL + 1))
+fi
+
+retry5xx_calls=$(cat "$RETRY5XX_CTR")
+if [ "$retry5xx_calls" -eq 4 ]; then
+  echo "PASS: Retry on 5xx: bootstrap called exactly 4 times (3 failures + 1 success)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Retry on 5xx: expected 4 calls, got $retry5xx_calls"
+  FAIL=$((FAIL + 1))
+fi
+
+if echo "$retry5xx_stderr" | grep -qiE "retry|retrying|attempt"; then
+  echo "PASS: Retry on 5xx: stderr contains retry message"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Retry on 5xx: stderr did not contain retry message"
+  echo "  Stderr was: $retry5xx_stderr"
+  FAIL=$((FAIL + 1))
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# 10. Exhaust retries: bootstrap always 504 → exits non-zero after exactly
+#     5 attempts.
+# ────────────────────────────────────────────────────────────────────────────
+
+MOCK_EXHAUST="$(make_mock_dir)"
+cp "$SEED_SCRIPT" "${MOCK_EXHAUST}/scripts/seed-staging.sh"
+EXHAUST_CTR="${TMPDIR_ROOT}/exhaust_bootstrap_ctr"
+echo "0" > "$EXHAUST_CTR"
+
+exhaust_exit=0
+env -i \
+  PATH="${MOCK_EXHAUST}:${SYSTEM_PATH}" \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
+  BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=504 \
+  MOCK_BOOTSTRAP_CTR_FILE="$EXHAUST_CTR" \
+  bash "${MOCK_EXHAUST}/scripts/seed-staging.sh" > /dev/null 2>&1 || exhaust_exit=$?
+
+if [ "$exhaust_exit" -ne 0 ]; then
+  echo "PASS: Exhaust retries on 5xx: script exits non-zero"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Exhaust retries on 5xx: expected non-zero exit, got 0"
+  FAIL=$((FAIL + 1))
+fi
+
+exhaust_calls=$(cat "$EXHAUST_CTR")
+if [ "$exhaust_calls" -eq 5 ]; then
+  echo "PASS: Exhaust retries on 5xx: bootstrap called exactly 5 times (got $exhaust_calls)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Exhaust retries on 5xx: expected 5 calls, got $exhaust_calls"
+  FAIL=$((FAIL + 1))
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# 11. No retry on 4xx: bootstrap returns 400 → script exits non-zero after
+#     exactly 1 call (no retry).
+# ────────────────────────────────────────────────────────────────────────────
+
+MOCK_NO4XX="$(make_mock_dir)"
+cp "$SEED_SCRIPT" "${MOCK_NO4XX}/scripts/seed-staging.sh"
+NO4XX_CTR="${TMPDIR_ROOT}/no4xx_bootstrap_ctr"
+echo "0" > "$NO4XX_CTR"
+
+no4xx_exit=0
+env -i \
+  PATH="${MOCK_NO4XX}:${SYSTEM_PATH}" \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
+  BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=400 \
+  MOCK_BOOTSTRAP_CTR_FILE="$NO4XX_CTR" \
+  bash "${MOCK_NO4XX}/scripts/seed-staging.sh" > /dev/null 2>&1 || no4xx_exit=$?
+
+if [ "$no4xx_exit" -ne 0 ]; then
+  echo "PASS: No retry on 4xx: script exits non-zero on 400"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: No retry on 4xx: expected non-zero exit, got 0"
+  FAIL=$((FAIL + 1))
+fi
+
+no4xx_calls=$(cat "$NO4XX_CTR")
+if [ "$no4xx_calls" -eq 1 ]; then
+  echo "PASS: No retry on 4xx: bootstrap called exactly once (got $no4xx_calls)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: No retry on 4xx: expected 1 call, got $no4xx_calls"
+  FAIL=$((FAIL + 1))
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# 12. No retry on 409 (already done): bootstrap returns 409 → exactly 1 call,
+#     script continues and exits 0.
+# ────────────────────────────────────────────────────────────────────────────
+
+MOCK_NO409="$(make_mock_dir)"
+cp "$SEED_SCRIPT" "${MOCK_NO409}/scripts/seed-staging.sh"
+NO409_CTR="${TMPDIR_ROOT}/no409_bootstrap_ctr"
+echo "0" > "$NO409_CTR"
+
+no409_exit=0
+env -i \
+  PATH="${MOCK_NO409}:${SYSTEM_PATH}" \
+  HOME="${HOME:-/root}" TMPDIR="${TMPDIR:-/tmp}" \
+  PROJECT_ID=test-project TENANT_ID=test-tenant E2E_PASSWORD=test-pass \
+  API_BASE_URL=https://staging.example.com IDP_API_KEY=test-api-key \
+  BOOTSTRAP_ADMIN_EMAIL=emulator-admin@test.local \
+  MOCK_BOOTSTRAP_CODE=409 \
+  MOCK_INSTRUCTOR_ME_CODE=200 \
+  MOCK_BOOTSTRAP_CTR_FILE="$NO409_CTR" \
+  bash "${MOCK_NO409}/scripts/seed-staging.sh" > /dev/null 2>&1 || no409_exit=$?
+
+no409_calls=$(cat "$NO409_CTR")
+if [ "$no409_calls" -eq 1 ]; then
+  echo "PASS: No retry on 409: bootstrap called exactly once (got $no409_calls)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: No retry on 409: expected 1 call, got $no409_calls"
+  FAIL=$((FAIL + 1))
+fi
+
+if [ "$no409_exit" -eq 0 ]; then
+  echo "PASS: No retry on 409: script continues and exits 0 (409 = already done)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: No retry on 409: expected exit 0 (409 treated as success), got $no409_exit"
+  FAIL=$((FAIL + 1))
+fi
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Results

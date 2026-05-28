@@ -209,17 +209,28 @@ jobs:
           kubectl rollout status deployment/staging-ingress-proxy --timeout=120s
       - name: Wait for staging API to be routable
         run: |
-          echo "Waiting for staging go-api to be reachable (expect HTTP 401 from /api/v1/auth/me)..."
-          for i in $(seq 1 30); do
+          # Require 5 consecutive 401s before proceeding. A single 401 is not enough:
+          # GCLB needs time to settle after a backend rollout — it may still be serving
+          # old pods (401) or returning 502s during the transition window, even after
+          # K8s readiness has passed. A streak of 5 proves the new backend is stable.
+          echo "Waiting for staging go-api to be reachable (expect 5 consecutive 401s from /api/v1/auth/me)..."
+          STREAK=0
+          for i in $(seq 1 40); do
             RESP=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
               https://staging.eval.delquillan.com/api/v1/auth/me 2>/dev/null || echo "000")
             if [ "$RESP" = "401" ]; then
-              echo "Staging API is routable (got 401 from go-api)"
-              break
+              STREAK=$((STREAK + 1))
+              echo "  attempt $i/40: got 401 (streak: $STREAK/5)"
+              if [ "$STREAK" -ge 5 ]; then
+                echo "Staging API is routable (5 consecutive 401s from go-api)"
+                break
+              fi
+            else
+              STREAK=0
+              echo "  attempt $i/40: got $RESP (want 401, streak reset)..."
             fi
-            echo "  attempt $i/30: got $RESP (want 401)..."
-            if [ "$i" = "30" ]; then
-              echo "::error::Staging API not routable after 150s (last status: $RESP)"
+            if [ "$i" = "40" ]; then
+              echo "::error::Staging API not routable after 40 attempts (last status: $RESP, streak: $STREAK)"
               exit 1
             fi
             sleep 5
