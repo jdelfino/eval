@@ -285,7 +285,7 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      const btn = await screen.findByRole('button', { name: /Rejoin/i });
       await userEvent.click(btn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
@@ -297,7 +297,7 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      const btn = await screen.findByRole('button', { name: /Rejoin/i });
       await userEvent.click(btn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
@@ -309,7 +309,7 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      const btn = await screen.findByRole('button', { name: /View Dashboard/i });
+      const btn = await screen.findByRole('button', { name: /Rejoin/i });
       await userEvent.click(btn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
@@ -329,13 +329,13 @@ describe('SectionDetailPage', () => {
       expect(screen.queryByText('Active Sessions')).not.toBeInTheDocument();
     });
 
-    it('shows "View Dashboard" label for instructors on active sessions', async () => {
+    it('shows "Rejoin" label for instructors on active sessions', async () => {
       mockUser('instructor');
       mockSectionData([activeSession], []);
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText('View Dashboard')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /Rejoin/i })).toBeInTheDocument();
       expect(screen.queryByText('Join Now')).not.toBeInTheDocument();
     });
 

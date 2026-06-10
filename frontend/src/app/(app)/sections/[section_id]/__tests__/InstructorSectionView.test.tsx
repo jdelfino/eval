@@ -212,8 +212,13 @@ describe('InstructorSectionView', () => {
       expect(screen.getByText('Active Sessions')).toBeInTheDocument();
     });
 
-    it('shows active session with "View Dashboard" button', () => {
-      render(
+    it('shows active session with live indicator and "Rejoin" button', () => {
+      /**
+       * Verifies the active session card has the v4 live indicator (pulsing dot)
+       * and "Rejoin" action. Catches: active-session card regression if the
+       * button text or live indicator is dropped during the reskin.
+       */
+      const { container } = render(
         <InstructorSectionView
           section={sectionDetail}
           activeSessions={[activeSession]}
@@ -224,10 +229,16 @@ describe('InstructorSectionView', () => {
       );
 
       expect(screen.getByText('Active Problem')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /View Dashboard/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Rejoin/i })).toBeInTheDocument();
+      // Live indicator: pulsing dot element inside the active session card
+      const sessionCard = container.querySelector('.border-green-200');
+      expect(sessionCard).not.toBeNull();
+      // A pulse/live indicator dot should exist inside the card
+      const liveDot = sessionCard!.querySelector('[data-testid="live-dot"]');
+      expect(liveDot).not.toBeNull();
     });
 
-    it('"View Dashboard" button navigates to instructor dashboard', async () => {
+    it('"Rejoin" button navigates to instructor dashboard', async () => {
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -238,7 +249,7 @@ describe('InstructorSectionView', () => {
         />
       );
 
-      const btn = screen.getByRole('button', { name: /View Dashboard/i });
+      const btn = screen.getByRole('button', { name: /Rejoin/i });
       await userEvent.click(btn);
 
       expect(mockPush).toHaveBeenCalledWith('/instructor/session/session-active-1');
@@ -586,7 +597,7 @@ describe('InstructorSectionView', () => {
 
       // Active Sessions section always visible
       expect(screen.getByText('Active Sessions')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /View Dashboard/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Rejoin/i })).toBeInTheDocument();
       // Tabs also present
       expect(screen.getByRole('tab', { name: /Students/i })).toBeInTheDocument();
     });
@@ -630,7 +641,13 @@ describe('InstructorSectionView', () => {
       expect(studentsTab).toHaveTextContent('2');
     });
 
-    it('renders student display names and progress fractions', async () => {
+    it('renders student display names, emails, and "Solved X · Started Y" progress', async () => {
+      /**
+       * Verifies that the Students tab shows name, email, and the canonical
+       * "Solved X · Started Y" aggregate from A2's problems_solved +
+       * problems_started fields. Catches: copy/aggregate drift if the
+       * component renders the old "X / Y problems" format or omits fields.
+       */
       render(
         <InstructorSectionView
           section={sectionDetail}
@@ -644,9 +661,40 @@ describe('InstructorSectionView', () => {
       await userEvent.click(screen.getByRole('tab', { name: /Students/i }));
 
       expect(screen.getByText('Alice Smith')).toBeInTheDocument();
-      expect(screen.getByText('3 / 5 problems')).toBeInTheDocument();
+      expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+      expect(screen.getByText('Solved 2 · Started 3')).toBeInTheDocument();
       expect(screen.getByText('Bob Jones')).toBeInTheDocument();
-      expect(screen.getByText('0 / 5 problems')).toBeInTheDocument();
+      expect(screen.getByText('bob@example.com')).toBeInTheDocument();
+      expect(screen.getByText('Solved 0 · Started 0')).toBeInTheDocument();
+      // Old format must not appear
+      expect(screen.queryByText(/\/ \d+ problems/)).not.toBeInTheDocument();
+    });
+
+    it('does not render streak/stuck/absent pills, ratio columns, avgAttempts, or times-run', async () => {
+      /**
+       * Verifies that dropped v4 affordances (streak/stuck/absent pills,
+       * solved/attempted ratios, avgAttempts, times-run, solve-rate bars)
+       * are absent. Catches: mock affordances creeping into the reskinned view.
+       */
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={students}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Students/i }));
+
+      expect(screen.queryByText(/streak/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/stuck/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/absent/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/avgAttempts/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/times.run/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/solve.rate/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/attempted/i)).not.toBeInTheDocument();
     });
 
     it('shows "Never" when last_active is null', async () => {
@@ -797,8 +845,8 @@ describe('InstructorSectionView', () => {
       expect(flexContainer!.className).toMatch(/flex-wrap/);
     });
 
-    it('active session "View Dashboard" button does not use fixed ml-4 margin', () => {
-      const { container } = render(
+    it('active session "Rejoin" button does not use fixed ml-4 margin', () => {
+      const { container: _container } = render(
         <InstructorSectionView
           section={sectionDetail}
           activeSessions={[activeSession]}
@@ -808,8 +856,8 @@ describe('InstructorSectionView', () => {
         />
       );
 
-      const viewDashboardBtn = screen.getByRole('button', { name: /View Dashboard/i });
-      expect(viewDashboardBtn.className).not.toMatch(/\bml-4\b/);
+      const rejoinBtn = screen.getByRole('button', { name: /Rejoin/i });
+      expect(rejoinBtn.className).not.toMatch(/\bml-4\b/);
     });
 
     // PLAT-7ib6: Past session cards should wrap their button on small screens

@@ -158,9 +158,10 @@ export default function InstructorSectionView({
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                          </svg>
+                          <span
+                            data-testid="live-dot"
+                            className="w-4 h-4 bg-green-500 rounded-full animate-pulse"
+                          />
                         </div>
                       </div>
                       <div className="flex-1">
@@ -190,7 +191,7 @@ export default function InstructorSectionView({
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                       </svg>
-                      View Dashboard
+                      Rejoin
                     </button>
                   </div>
                 </div>
@@ -365,7 +366,7 @@ export default function InstructorSectionView({
                       Progress
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Active
+                      Last Seen
                     </th>
                   </tr>
                 </thead>
@@ -378,13 +379,18 @@ export default function InstructorSectionView({
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
                           href={`/sections/${section.id}/students/${student.user_id}`}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                          className="block text-sm font-medium text-blue-600 hover:text-blue-800"
                         >
                           {student.display_name || student.email}
                         </Link>
+                        {student.display_name && (
+                          <span className="block text-xs text-gray-500 mt-0.5">
+                            {student.email}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {student.problems_started} / {student.total_problems} problems
+                        {`Solved ${student.problems_solved} · Started ${student.problems_started}`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {student.last_active ? formatRelativeTime(student.last_active) : 'Never'}
