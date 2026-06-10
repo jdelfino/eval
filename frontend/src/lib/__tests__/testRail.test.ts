@@ -285,4 +285,72 @@ describe('toDrawerOutput', () => {
     expect(output!.lines).toHaveLength(0);
     expect(output!.status).toBe('pass');
   });
+
+  it('includes stdout from run-only case (status=run) — the free-run / no-test-cases path', () => {
+    /**
+     * Contract: when a student runs code with no test cases, the backend synthesises a
+     * free-run case (status="run"). The stdout captured in `actual` must appear in
+     * output.lines so it is rendered in the drawer.
+     *
+     * Regression: without this test the truthy-check on `.actual` was the only guard,
+     * and the test confirmed what SHOULD work but did not cover the display path end-to-end.
+     * The root cause of eval-o1s was that, in the test environment, nsjail failed and
+     * returned status="error" with no `actual` field — but the fix here is to ensure
+     * the correct summary is shown for run-only cases.
+     */
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'run', status: 'run', actual: 'hello from practice\n', time_ms: 8 },
+      ],
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 8 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output).toBeDefined();
+    expect(output!.lines).toHaveLength(1);
+    expect(output!.lines[0]).toEqual({ stream: 'out', text: 'hello from practice\n' });
+    expect(output!.status).toBe('pass');
+  });
+
+  it('shows "1 run" summary for run-only case instead of "0/1 passed"', () => {
+    /**
+     * Contract: when all cases are run-only (no assertions), the summary should read
+     * "1 run" not "0/1 passed". "0/1 passed" is misleading — it implies a test failed
+     * when in fact the code ran without assertions. The UI shows this alongside "✓ Success",
+     * which is confusing.
+     *
+     * Catches: summary always using passed/total regardless of run context.
+     */
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'run', status: 'run', actual: 'hello\n', time_ms: 5 },
+      ],
+      summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 5 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.summary).toBe('1 run');
+  });
+
+  it('returns fail status when there are errors (not just failures)', () => {
+    /**
+     * Contract: executor errors (e.g. sandbox failure, timeout) should result in
+     * status='fail' so the drawer shows "✗ Error" rather than "✓ Success".
+     * Previously only failed>0 was checked, not errors>0.
+     *
+     * Catches: status='pass' when executor errors out (shows ✓ Success on failure).
+     */
+    const result: TestResponse = {
+      results: [
+        { kind: 'io', name: 'run', status: 'error', time_ms: 2 },
+      ],
+      summary: { total: 1, passed: 0, failed: 0, errors: 1, run: 0, time_ms: 2 },
+    };
+
+    const output = toDrawerOutput(result);
+
+    expect(output!.status).toBe('fail');
+  });
 });
