@@ -4,15 +4,20 @@
  * Accept Invitation Page
  *
  * Handles the email invitation acceptance flow for namespace-admin and instructor roles.
+ * Implements v4 design screens L (invite card), L2 (error/expired), L3 (email mismatch).
  *
  * Flow:
  * 1. User clicks invite link in email, lands here with token in URL query param (?token=<uuid>)
  * 2. Page sends token to Go backend for verification via GET /auth/accept-invite (unauthenticated)
  * 3. On success, fetches invitation details from the API response
- * 4. If already signed in (firebaseAuth.currentUser): call acceptInvite directly
- * 5. If not signed in: render <SignInButtons />, then call acceptInvite on success
- * 6. Optional display name field is shown before sign-in
+ * 4. If already signed in (firebaseAuth.currentUser): check email match, then call acceptInvite
+ *    directly (or show L3 if mismatch)
+ * 5. If not signed in: render <SignInButtons />, then check email match and call acceptInvite on success
+ * 6. Optional display name field is shown before sign-in (screen L)
  * 7. Redirect based on role
+ *
+ * Note: "Decline invitation" button from the v4 mock is NOT implemented — there is no
+ * backend endpoint for declining invitations. See eval-cej.9.5.
  */
 
 import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
@@ -21,79 +26,47 @@ import Link from 'next/link';
 import { firebaseAuth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignInButtons } from '@/components/ui/SignInButtons';
+import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { AuthLoading } from '@/components/layout/AuthLoading';
+import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthHeading } from '@/components/ui/AuthHeading';
+import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import { Icon } from '@/components/ui/Icon';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
+import {
+  INVITATION_ERROR_MESSAGES,
+  type InvitationErrorCode,
+} from '@/lib/api/registration-errors';
+import { postInvitePathForRole } from '@/lib/auth-redirect';
 
 // Page state types
 type PageState =
-  | { status: 'verifying' }
-  | { status: 'loading-invitation' }
+  | { status: 'loading'; caption: string }
   | { status: 'ready'; invitation: InvitationInfo }
   | { status: 'submitting'; invitation: InvitationInfo }
   | { status: 'success' }
-  | { status: 'error'; error: ErrorType };
-
-// Error types
-type ErrorType =
-  | 'otp_expired'
-  | 'otp_invalid'
-  | 'invitation_consumed'
-  | 'invitation_revoked'
-  | 'invitation_not_found'
-  | 'invitation_expired'
-  | 'network_error'
-  | 'unknown';
+  | { status: 'error'; error: InvitationErrorCode }
+  | { status: 'email-mismatch'; invitation: InvitationInfo; signedInEmail: string; isNewSignIn: boolean };
 
 interface InvitationInfo {
   id: string;
   email: string;
   targetRole: 'namespace-admin' | 'instructor';
+  expiresAt: string;
   namespace: {
     id: string;
     displayName: string;
   } | null;
 }
 
-// Error messages for each error type
-const ERROR_MESSAGES: Record<ErrorType, { title: string; message: string }> = {
-  otp_expired: {
-    title: 'Invitation Expired',
-    message: 'This invitation link has expired. Please contact your administrator to send a new invitation.',
-  },
-  otp_invalid: {
-    title: 'Invalid Link',
-    message: 'This invitation link is invalid. Please check your email for the correct link.',
-  },
-  invitation_consumed: {
-    title: 'Already Used',
-    message: 'This invitation has already been used.',
-  },
-  invitation_revoked: {
-    title: 'Invitation Revoked',
-    message: 'This invitation has been revoked. Please contact your administrator.',
-  },
-  invitation_not_found: {
-    title: 'Invitation Not Found',
-    message: "We couldn't find your invitation. Please contact your administrator.",
-  },
-  invitation_expired: {
-    title: 'Invitation Expired',
-    message: 'This invitation has expired. Please contact your administrator to send a new invitation.',
-  },
-  network_error: {
-    title: 'Connection Error',
-    message: 'Unable to connect. Please check your internet connection and try again.',
-  },
-  unknown: {
-    title: 'Something Went Wrong',
-    message: 'An unexpected error occurred. Please try again or contact your administrator.',
-  },
-};
-
 /**
- * Map an error code string to an ErrorType for the page state.
+ * Map an error code string to an InvitationErrorCode for the page state.
  */
-function mapErrorCode(code: string | undefined, status?: number): ErrorType {
+function mapErrorCode(code: string | undefined, status?: number): InvitationErrorCode {
   switch (code) {
     case 'OTP_EXPIRED':
     case 'TOKEN_EXPIRED':
@@ -116,14 +89,64 @@ function mapErrorCode(code: string | undefined, status?: number): ErrorType {
   }
 }
 
-// Loading fallback for Suspense boundary
-function LoadingFallback() {
+// Format role for display
+function formatRole(role: string): string {
+  if (role === 'namespace-admin') return 'Namespace Administrator';
+  if (role === 'instructor') return 'Instructor';
+  return role;
+}
+
+// Format a date string (ISO 8601) to a human-readable format like "Jun 17, 2026"
+function formatDate(isoDate: string): string {
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return isoDate;
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return isoDate;
+  }
+}
+
+/**
+ * Detail row for the invite card detail box.
+ */
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
-        <p className="text-gray-600">Loading...</p>
-      </div>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        padding: '5px 0',
+        fontSize: 12,
+        gap: 16,
+      }}
+    >
+      <span style={{ color: 'var(--fg-subtle)', flexShrink: 0 }}>{label}</span>
+      <span style={{ textAlign: 'right', maxWidth: 260, color: 'var(--fg)' }}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Shared bg-sunken detail box used on L (invite card) and L3 (email mismatch).
+ */
+function DetailBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: 'var(--bg-sunken)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        fontSize: 12,
+        ...style,
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -131,7 +154,7 @@ function LoadingFallback() {
 // Page wrapper with Suspense boundary for useSearchParams
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={<AuthLoading caption="Loading invitation..." />}>
       <AcceptInviteContent />
     </Suspense>
   );
@@ -140,22 +163,19 @@ export default function AcceptInvitePage() {
 function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { beginAuthFlow, endAuthFlow } = useAuth();
-  const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
+  const { beginAuthFlow, endAuthFlow, signOut: authSignOut } = useAuth();
+  const [pageState, setPageState] = useState<PageState>({ status: 'loading', caption: 'Verifying invitation...' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [submitError, setSubmitError] = useState('');
 
   // Redirect based on user role
-  const redirectBasedOnRole = useCallback((role: string) => {
-    if (role === 'namespace-admin') {
-      router.push('/namespace/invitations');
-    } else if (role === 'instructor') {
-      router.push('/instructor');
-    } else {
-      router.push('/');
-    }
-  }, [router]);
+  const redirectBasedOnRole = useCallback(
+    (role: string) => {
+      router.push(postInvitePathForRole(role));
+    },
+    [router]
+  );
 
   // Core accept logic — called both from direct (already signed in) and from SignInButtons handler
   const doAccept = useCallback(
@@ -211,6 +231,28 @@ function AcceptInviteContent() {
   const doAcceptRef = useRef(doAccept);
   doAcceptRef.current = doAccept;
 
+  // Shared: email-mismatch check → L3 interstitial, or accept directly.
+  // Called from both the mount effect (isNewSignIn=false) and handleSignIn (isNewSignIn=true).
+  // Null/empty provider email: skip L3 and accept directly (backend permits mismatched accept).
+  const proceedAfterSignIn = useCallback(
+    async (inv: InvitationInfo, providerEmail: string, name: string, isNewSignIn: boolean) => {
+      if (providerEmail && providerEmail.toLowerCase() !== inv.email.toLowerCase()) {
+        endAuthFlow();
+        setPageState({
+          status: 'email-mismatch',
+          invitation: inv,
+          signedInEmail: providerEmail,
+          isNewSignIn,
+        });
+        return;
+      }
+      await doAcceptRef.current(inv, name, isNewSignIn);
+    },
+    [endAuthFlow]
+  );
+  const proceedAfterSignInRef = useRef(proceedAfterSignIn);
+  proceedAfterSignInRef.current = proceedAfterSignIn;
+
   // Verify token and load invitation on mount.
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
@@ -221,7 +263,7 @@ function AcceptInviteContent() {
         return;
       }
 
-      setPageState({ status: 'loading-invitation' });
+      setPageState({ status: 'loading', caption: 'Loading your invitation...' });
 
       try {
         const data = await getInvitationDetails(queryToken);
@@ -229,13 +271,15 @@ function AcceptInviteContent() {
           id: data.id,
           email: data.email,
           targetRole: data.target_role,
+          expiresAt: data.expires_at,
           namespace: null,
         };
         setInvitation(invitationInfo);
 
-        // If already signed in, proceed directly to accepting
+        // If already signed in, check email match before accepting
         if (firebaseAuth.currentUser) {
-          await doAcceptRef.current(invitationInfo, '');
+          const providerEmail = firebaseAuth.currentUser.email ?? '';
+          await proceedAfterSignInRef.current(invitationInfo, providerEmail, '', false);
         } else {
           setPageState({ status: 'ready', invitation: invitationInfo });
         }
@@ -255,195 +299,331 @@ function AcceptInviteContent() {
   // Sign-in success handler from SignInButtons — user just signed in, so isNewSignIn=true
   const handleSignIn = useCallback(async () => {
     if (!invitation) return;
-    await doAccept(invitation, displayName, true);
-  }, [invitation, displayName, doAccept]);
+    const providerEmail = firebaseAuth.currentUser?.email ?? '';
+    await proceedAfterSignIn(invitation, providerEmail, displayName, true);
+  }, [invitation, displayName, proceedAfterSignIn]);
 
   // Sign-in error handler
-  const handleSignInError = useCallback((error: Error) => {
-    // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
-    // beginAuthFlow was called via onBeforeSignIn before the popup opened; if
-    // the popup is cancelled, blocked, or errors out we must release the gate
-    // here because doAccept never runs to release it.
-    endAuthFlow();
-    setSubmitError(error.message || 'Sign in failed. Please try again.');
-    if (invitation) {
-      setPageState({ status: 'ready', invitation });
-    }
-  }, [endAuthFlow, invitation]);
+  const handleSignInError = useCallback(
+    (error: Error) => {
+      // Clear the auth flow gate so onAuthStateChanged resumes normal processing.
+      // beginAuthFlow was called via onBeforeSignIn before the popup opened; if
+      // the popup is cancelled, blocked, or errors out we must release the gate
+      // here because doAccept never runs to release it.
+      endAuthFlow();
+      setSubmitError(error.message || 'Sign in failed. Please try again.');
+      if (invitation) {
+        setPageState({ status: 'ready', invitation });
+      }
+    },
+    [endAuthFlow, invitation]
+  );
 
   // Handle retry for network errors
   const handleRetry = () => {
-    setPageState({ status: 'verifying' });
+    setPageState({ status: 'loading', caption: 'Verifying invitation...' });
     window.location.reload();
   };
 
-  // Format role for display
-  const formatRole = (role: string): string => {
-    if (role === 'namespace-admin') return 'Namespace Administrator';
-    if (role === 'instructor') return 'Instructor';
-    return role;
-  };
+  // ---------------------------------------------------------------------------
+  // Loading state
+  // ---------------------------------------------------------------------------
 
-  // Render loading states
-  if (pageState.status === 'verifying') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Verifying invitation...</p>
-        </div>
-      </div>
-    );
+  if (pageState.status === 'loading') {
+    return <AuthLoading caption={pageState.caption} />;
   }
 
-  if (pageState.status === 'loading-invitation') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading your invitation...</p>
-        </div>
-      </div>
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Success state
+  // ---------------------------------------------------------------------------
 
   if (pageState.status === 'success') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <AuthPublicShell narrow showSignInLink={false}>
+        <AuthCard style={{ marginTop: 30, textAlign: 'center' }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              background: 'var(--run-soft)',
+              display: 'grid',
+              placeItems: 'center',
+              margin: '0 auto 14px',
+            }}
+          >
+            <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Account Created!</h2>
-          <p className="text-gray-600">Redirecting to your dashboard...</p>
-        </div>
-      </div>
+          <AuthHeading sub="Redirecting to your dashboard…">
+            Account created!
+          </AuthHeading>
+        </AuthCard>
+      </AuthPublicShell>
     );
   }
 
-  // Render error state
+  // ---------------------------------------------------------------------------
+  // Error state (L2 layout)
+  // ---------------------------------------------------------------------------
+
   if (pageState.status === 'error') {
-    const errorInfo = ERROR_MESSAGES[pageState.error];
-    const showSignInLink = ['invitation_consumed'].includes(pageState.error);
+    const errorInfo = INVITATION_ERROR_MESSAGES[pageState.error];
+    const showSignInLink = pageState.error === 'invitation_consumed';
     const showRetryButton = pageState.error === 'network_error';
 
+    // Use warn-soft circle + history icon for expired states; danger-soft + alert otherwise
+    const isExpiredError =
+      pageState.error === 'otp_expired' || pageState.error === 'invitation_expired';
+    const circleBg = isExpiredError ? 'var(--warn-soft)' : 'var(--danger-soft)';
+    const circleColor = isExpiredError ? 'var(--warn)' : 'var(--danger)';
+    const circleIcon = isExpiredError ? 'history' : 'alert';
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4">
-        <div className="max-w-md w-full p-10 bg-white rounded-2xl shadow-2xl border border-gray-100 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+      <AuthPublicShell narrow>
+        <AuthCard style={{ marginTop: 30, textAlign: 'center' }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              background: circleBg,
+              display: 'grid',
+              placeItems: 'center',
+              margin: '0 auto 14px',
+            }}
+          >
+            <Icon name={circleIcon} size={24} style={{ color: circleColor }} />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">{errorInfo.title}</h2>
-          <p className="text-gray-600 mb-6">{errorInfo.message}</p>
+          <AuthHeading sub={errorInfo.message}>
+            {errorInfo.title}
+          </AuthHeading>
 
           {showSignInLink && (
-            <Link
-              href="/auth/signin"
-              className="inline-block px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              Sign In
-            </Link>
+            <div style={{ marginTop: 20 }}>
+              <Button variant="accent" asChild>
+                <Link href="/auth/signin">Sign In</Link>
+              </Button>
+            </div>
           )}
 
           {showRetryButton && (
-            <button
-              onClick={handleRetry}
-              className="inline-block px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              Try Again
-            </button>
+            <div style={{ marginTop: 20 }}>
+              <Button variant="accent" onClick={handleRetry}>
+                Try Again
+              </Button>
+            </div>
           )}
-        </div>
-      </div>
+        </AuthCard>
+      </AuthPublicShell>
     );
   }
 
-  // Render form (ready or submitting state)
+  // ---------------------------------------------------------------------------
+  // Email mismatch state (L3 layout)
+  // ---------------------------------------------------------------------------
+
+  if (pageState.status === 'email-mismatch') {
+    const { invitation: inv, signedInEmail, isNewSignIn } = pageState;
+
+    const handleAcceptAnyway = async () => {
+      await doAccept(inv, displayName, isNewSignIn);
+    };
+
+    const handleSignOutAndRetry = async () => {
+      await authSignOut();
+      endAuthFlow();
+      setPageState({ status: 'ready', invitation: inv });
+    };
+
+    return (
+      <AuthPublicShell narrow showSignInLink={false}>
+        <AuthCard style={{ marginTop: 30 }}>
+          {/* Header row: warn circle + heading */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                background: 'var(--warn-soft)',
+                display: 'grid',
+                placeItems: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="alert" size={18} style={{ color: 'var(--warn)' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <AuthHeading
+                size="sm"
+                sub="You're signed in as one account, but the invitation was sent to another. Sign out and try with the right account."
+              >
+                This invitation is for a different email
+              </AuthHeading>
+            </div>
+          </div>
+
+          {/* Detail box */}
+          <DetailBox style={{ marginTop: 18 }}>
+            <Row
+              label="Invitation sent to"
+              value={<span style={{ fontFamily: 'var(--font-mono)' }}>{inv.email}</span>}
+            />
+            <Row
+              label="You signed in as"
+              value={
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--danger)' }}>
+                  {signedInEmail}
+                </span>
+              }
+            />
+          </DetailBox>
+
+          {/* Button row */}
+          <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+            <Button
+              variant="quiet"
+              style={{ flex: 1 }}
+              onClick={handleAcceptAnyway}
+            >
+              Accept anyway
+            </Button>
+            <Button
+              variant="accent"
+              style={{ flex: 1 }}
+              onClick={handleSignOutAndRetry}
+            >
+              Sign out &amp; retry
+            </Button>
+          </div>
+
+          {/* Footnote */}
+          <p
+            style={{
+              marginTop: 10,
+              fontSize: 11.5,
+              color: 'var(--fg-subtle)',
+              textAlign: 'center',
+              lineHeight: 1.5,
+            }}
+          >
+            If you don&apos;t have access to{' '}
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{inv.email}</span>, ask the person who
+            invited you to re-issue the invitation.
+          </p>
+        </AuthCard>
+      </AuthPublicShell>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ready / submitting state (L layout)
+  // ---------------------------------------------------------------------------
+
   if (!invitation) {
     return null; // Should never happen, but guard for TypeScript
   }
 
+  const inv = invitation;
+  const submitting = pageState.status === 'submitting';
+
+  const roleHeading =
+    inv.targetRole === 'instructor' ? 'Join Eval as an instructor' : 'Join Eval as a namespace administrator';
+
+  const roleCapabilities =
+    inv.targetRole === 'instructor'
+      ? 'create classes, publish problems, run live sessions'
+      : 'invite instructors and manage classes in your organization';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4">
-      <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-2xl shadow-2xl border border-gray-100">
-        <div>
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-          </div>
-          <h2 className="text-center text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Complete Your Profile
-          </h2>
-          <p className="mt-3 text-center text-sm text-gray-600">
-            You&apos;ve been invited to join as {formatRole(invitation.targetRole).toLowerCase()}
-          </p>
+    <AuthPublicShell narrow showSignInLink={false}>
+      <AuthCard style={{ marginTop: 20 }}>
+        {/* Kicker */}
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: 0.6,
+            textTransform: 'uppercase',
+            color: 'var(--accent-ink)',
+          }}
+        >
+          You&apos;ve been invited
         </div>
 
-        {/* Invitation Info */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Email:</span>
-              <span className="font-medium text-gray-900">{invitation.email}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Role:</span>
-              <span className="font-medium text-gray-900">{formatRole(invitation.targetRole)}</span>
-            </div>
-            {invitation.namespace && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Organization:</span>
-                <span className="font-medium text-gray-900">{invitation.namespace.displayName}</span>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Role heading */}
+        <AuthHeading style={{ margin: '8px 0 4px' }}>
+          {roleHeading}
+        </AuthHeading>
 
-        {/* Optional display name */}
-        <div>
-          <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
-            Display Name <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
+        {/* Expiry sub */}
+        <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>
+          This invitation expires {formatDate(inv.expiresAt)}.
+        </p>
+
+        {/* Detail box */}
+        <DetailBox style={{ margin: '18px 0' }}>
+          <Row
+            label="Invited email"
+            value={
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{inv.email}</span>
+            }
+          />
+          <Row label="Role" value={formatRole(inv.targetRole)} />
+          <Row label="Expires" value={formatDate(inv.expiresAt)} />
+          {inv.namespace && (
+            <Row label="Organization" value={inv.namespace.displayName} />
+          )}
+          <Row label="You'll be able to" value={roleCapabilities} />
+        </DetailBox>
+
+        {/* Display name field */}
+        <Field
+          label="Display name"
+          hint="Optional — defaults to the name on your account."
+          style={{ marginBottom: 16 }}
+        >
+          <Input
             id="displayName"
             name="displayName"
             type="text"
-            className="appearance-none rounded-lg relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
             placeholder="Your preferred display name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            disabled={pageState.status === 'submitting'}
+            disabled={submitting}
             maxLength={100}
           />
+        </Field>
+
+        {/* Sign in section */}
+        <div style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 500 }}>Sign in to accept</div>
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, marginBottom: 12 }}>
+          Use the account that matches{' '}
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{inv.email}</span>.
         </div>
 
+        {/* Submit error banner */}
         {submitError && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <p className="text-sm font-medium text-red-800">{submitError}</p>
-            </div>
+          <div style={{ marginBottom: 12 }}>
+            <Banner
+              tone="danger"
+              icon="alert"
+              title="Couldn't accept the invitation."
+              body={submitError}
+            />
           </div>
         )}
 
-        {/* Sign in with social provider */}
+        {/* Sign in buttons — no label prop: "Sign in to accept" heading above replaces it */}
+        {/* Note: "Decline invitation" button from v4 mock is deliberately omitted —
+            there is no backend endpoint for declining. See eval-cej.9.5. */}
         <SignInButtons
-          label="Sign in to accept invitation"
           onSuccess={handleSignIn}
           onError={handleSignInError}
           onBeforeSignIn={beginAuthFlow}
-          disabled={pageState.status === 'submitting'}
+          disabled={submitting}
         />
-      </div>
-    </div>
+      </AuthCard>
+    </AuthPublicShell>
   );
 }

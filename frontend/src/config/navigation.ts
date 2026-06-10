@@ -97,14 +97,25 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
+ * Labels for breadcrumb patterns that are neither NAV_ITEMS nor derivable from the path.
+ * Checked by useBreadcrumbs before NAV_ITEMS lookup.
+ */
+export const BREADCRUMB_LABELS: Record<string, string> = {
+  '/sections/join': 'Join a section',
+};
+
+/**
  * Breadcrumb hierarchy mapping.
  * Maps routes to their parent routes for building breadcrumb navigation.
  * null indicates a top-level route.
+ * NOTE: order matters — findMatchingPattern returns the FIRST matching key.
+ * '/sections/join' must appear before '/sections/[section_id]' so it is matched first.
  */
 export const BREADCRUMB_HIERARCHY: Record<string, string | null> = {
   '/classes': null,
   '/classes/[id]': '/classes',
   '/sections': null,
+  '/sections/join': '/sections',
   '/sections/[section_id]': '/sections',
   '/sections/[section_id]/students/[user_id]': '/sections/[section_id]',
   '/sections/[section_id]/session/[session_id]': '/sections/[section_id]',

@@ -143,6 +143,43 @@ describe('Button', () => {
     });
   });
 
+  describe('style prop merging with variant inline styles', () => {
+    /**
+     * Regression for eval-3b0: caller `style` was replacing `variantInlineStyles`
+     * entirely, so token variants rendered unstyled when a `style` prop was passed.
+     * Now both are merged: variant styles come first, caller style overrides on top.
+     */
+    it('variant=accent keeps var(--accent) background when style prop is also passed', () => {
+      render(<Button variant="accent" style={{ width: '100%' }}>Accept</Button>);
+      const button = screen.getByRole('button', { name: 'Accept' });
+      // Both variant background AND caller width must be present
+      expect(button).toHaveStyle({ background: 'var(--accent)', width: '100%' });
+    });
+
+    it('caller style overrides variant inline style when keys conflict', () => {
+      render(<Button variant="accent" style={{ background: 'red' }}>Override</Button>);
+      const button = screen.getByRole('button', { name: 'Override' });
+      // Caller style takes precedence
+      expect(button).toHaveStyle({ background: 'red' });
+    });
+
+    it('variant=accent renders with var(--accent) background (no caller style)', () => {
+      render(<Button variant="accent">Join</Button>);
+      const button = screen.getByRole('button', { name: 'Join' });
+      expect(button).toHaveStyle({ background: 'var(--accent)' });
+    });
+
+    it('asChild preserves variant inline style and merges caller style', () => {
+      render(
+        <Button asChild variant="accent" style={{ flex: 1 }}>
+          <a href="/test">Link Button</a>
+        </Button>
+      );
+      const link = screen.getByRole('link', { name: 'Link Button' });
+      expect(link).toHaveStyle({ background: 'var(--accent)', flex: '1' });
+    });
+  });
+
   describe('new token-driven variants', () => {
     /**
      * Verifies the `run` variant uses the --run CSS token for its background.

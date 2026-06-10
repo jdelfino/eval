@@ -41,9 +41,9 @@ test.describe('Invitation Acceptance Flow', () => {
     const acceptUrl = `/invite/accept?token=${encodeURIComponent(invitationId)}`;
     await page.goto(acceptUrl);
 
-    await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=${instructorEmail}`).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Instructor', { exact: true })).toBeVisible();
-    await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
+    await expect(page.locator('text=Sign in to accept')).toBeVisible();
 
     // ===== STEP 4: Create user in IDP and sign in via email page =====
     await createVerifiedTestUser(instructorEmail, DEFAULT_PASSWORD);
@@ -75,8 +75,8 @@ test.describe('Invitation Acceptance Flow', () => {
     await page.goto(acceptUrl);
 
     // Verify invitation details are displayed
-    await expect(page.locator(`text=${instructorEmail}`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`text=${instructorEmail}`).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Instructor', { exact: true })).toBeVisible();
-    await expect(page.locator('text=Sign in to accept invitation')).toBeVisible();
+    await expect(page.locator('text=Sign in to accept')).toBeVisible();
   });
 });

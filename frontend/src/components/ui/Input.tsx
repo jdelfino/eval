@@ -1,47 +1,79 @@
+'use client';
+
 import * as React from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   /**
    * Error message to display below the input.
-   * When provided, the input will show error styling.
+   * When provided, the input will show error styling using the --danger token.
    */
   error?: string;
+  /**
+   * Render the input in the monospace font (--font-mono).
+   * Useful for code or join-code inputs.
+   */
+  mono?: boolean;
 }
 
 /**
  * A styled input component with consistent focus, error, and disabled states.
  * Extends native HTML input props and supports ref forwarding.
+ *
+ * Styling uses CSS design tokens (--bg, --border-strong, --accent, --danger, etc.)
+ * rather than hardcoded Tailwind color classes. Focus treatment applies
+ * accent border-color and box-shadow rather than a Tailwind ring.
+ *
+ * **Field+Input composition convention:**
+ * When composing `<Field>` with `<Input>`, pass `error` to `Input` (not to `Field`).
+ * Input owns the `aria-describedby` wiring and inline error text. `Field.error` is
+ * intended for non-Input children where the field wrapper must show the error message.
  */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, error, type = 'text', ...props }, ref) => {
+  ({ className, error, mono, type = 'text', onFocus, onBlur, style, ...props }, ref) => {
+    const [focused, setFocused] = React.useState(false);
+
+    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      setFocused(true);
+      onFocus?.(e);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      setFocused(false);
+      onBlur?.(e);
+    };
+
     const baseClasses = [
       'appearance-none',
-      'rounded-lg',
-      'relative',
       'block',
       'w-full',
-      'px-4',
-      'py-3',
-      'border',
-      'placeholder-gray-400',
-      'text-gray-900',
       'focus:outline-none',
-      'focus:ring-2',
-      'focus:border-transparent',
       'transition-all',
       'duration-200',
-      'sm:text-sm',
-      'disabled:bg-gray-50',
-      'disabled:text-gray-500',
+      'disabled:opacity-60',
     ].join(' ');
 
-    const borderClasses = error
-      ? 'border-red-300 focus:ring-red-500'
-      : 'border-gray-300 focus:ring-indigo-500';
+    const combinedClasses = [baseClasses, className].filter(Boolean).join(' ');
 
-    const combinedClasses = [baseClasses, borderClasses, className]
-      .filter(Boolean)
-      .join(' ');
+    const borderValue = error
+      ? '1px solid var(--danger)'
+      : focused
+        ? '1px solid var(--accent)'
+        : '1px solid var(--border-strong)';
+
+    const boxShadow = focused && !error ? '0 0 0 2px var(--accent-soft)' : undefined;
+
+    const inputStyle: React.CSSProperties = {
+      background: 'var(--bg)',
+      border: borderValue,
+      borderRadius: 'var(--radius)',
+      fontSize: 13,
+      fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+      color: 'var(--fg)',
+      padding: '8px 12px',
+      width: '100%',
+      boxShadow,
+      ...style,
+    };
 
     return (
       <div className="w-full">
@@ -51,13 +83,16 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={error ? `${props.id}-error` : undefined}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          style={inputStyle}
           {...props}
         />
         {error && (
           <p
             id={props.id ? `${props.id}-error` : undefined}
-            className="mt-1 text-sm text-red-600"
             role="alert"
+            style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}
           >
             {error}
           </p>

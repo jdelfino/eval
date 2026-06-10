@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Button } from './Button';
+import { Spinner } from './Spinner';
 import { authProviders, type ProviderConfig } from '@/config/auth-providers';
 import { reportError } from '@/lib/api/error-reporting';
 
-/** Official provider logos rendered as inline SVGs. */
+/** Official provider logos rendered as inline SVGs (16×16 slot). */
 const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
   google: (
-    <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden="true">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
       <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -16,7 +16,7 @@ const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
     </svg>
   ),
   github: (
-    <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width={16} height={16} viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
         fill="#24292f"
@@ -24,7 +24,7 @@ const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
     </svg>
   ),
   microsoft: (
-    <svg className="w-5 h-5 mr-3" viewBox="0 0 21 21" aria-hidden="true">
+    <svg width={16} height={16} viewBox="0 0 21 21" aria-hidden="true">
       <rect x="1" y="1" width="9" height="9" fill="#f25022" />
       <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
       <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
@@ -36,8 +36,6 @@ const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
 export interface SignInButtonsProps {
   onSuccess: () => void;
   onError: (error: Error) => void;
-  /** Optional heading shown above the buttons, e.g. "Sign in to join CS101" */
-  label?: string;
   /** Disable all buttons (e.g. while a backend call is in flight) */
   disabled?: boolean;
   /**
@@ -75,21 +73,21 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
 /**
  * Shared sign-in buttons component for rendering social provider sign-in buttons.
  *
- * Renders one button per provider (Google, GitHub, Microsoft).
+ * Renders one button per provider (Google, GitHub, Microsoft) with v4 equal-weight
+ * outline style.
  *
  * Error handling:
- * - auth/popup-closed-by-user — silently ignored (user cancelled)
+ * - auth/popup-closed-by-user — calls onError with locked copy; does NOT call reportError
  * - auth/cancelled-popup-request — silently ignored (new popup replaced old)
- * - auth/popup-blocked — shows "Please allow popups" message
- * - Other errors — calls onError prop
+ * - auth/popup-blocked — shows inline message, calls reportError, does NOT call onError
+ * - Other errors — calls reportError then onError
  *
  * @example
  * ```tsx
  * <SignInButtons onSuccess={handleSuccess} onError={handleError} />
- * <SignInButtons label="Sign in to join CS101" onSuccess={handleSuccess} onError={handleError} />
  * ```
  */
-export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled, onBeforeSignIn }: SignInButtonsProps) {
+export function SignInButtons({ onSuccess, onError, disabled: externalDisabled, onBeforeSignIn }: SignInButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
 
@@ -102,21 +100,27 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
       onSuccess();
     } catch (error) {
       const firebaseError = error as { code?: string };
-      const isUserCancelled =
-        firebaseError.code === 'auth/popup-closed-by-user' ||
-        firebaseError.code === 'auth/cancelled-popup-request';
 
-      if (!isUserCancelled) {
-        // Report non-user-initiated errors to backend for monitoring
-        void reportError(
-          error instanceof Error ? error : new Error(String(error)),
-          { type: 'firebase_sign_in', provider: providerType, code: firebaseError.code ?? 'unknown' }
-        );
+      if (firebaseError.code === 'auth/cancelled-popup-request') {
+        // Fully silent — new popup superseded the old one, not an error.
+        return;
       }
+
+      if (firebaseError.code === 'auth/popup-closed-by-user') {
+        // User-initiated: surface the J2 error banner but do NOT call reportError.
+        onError(new Error('The popup was closed before sign-in finished. Try again, or pick a different provider.'));
+        return;
+      }
+
+      // All other errors: report to backend for monitoring, then surface to the page.
+      void reportError(
+        error instanceof Error ? error : new Error(String(error)),
+        { type: 'firebase_sign_in', provider: providerType, code: firebaseError.code ?? 'unknown' }
+      );
 
       if (firebaseError.code === 'auth/popup-blocked') {
         setPopupBlocked(true);
-      } else if (!isUserCancelled) {
+      } else {
         onError(error instanceof Error ? error : new Error(String(error)));
       }
     } finally {
@@ -124,25 +128,45 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
     }
   };
 
+  const isAnyLoading = loadingProvider !== null;
+
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {label && <p className="text-sm font-medium text-gray-700 text-center">{label}</p>}
-      {authProviders.map((provider) => (
-        <Button
-          key={provider.id}
-          variant="secondary"
-          size="lg"
-          className="w-full"
-          loading={loadingProvider === provider.id}
-          disabled={loadingProvider !== null || externalDisabled}
-          onClick={() => handleSignIn(provider.providerType, provider.id)}
-        >
-          {providerIcons[provider.providerType]}
-          Continue with {provider.name}
-        </Button>
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {authProviders.map((provider) => {
+        const isLoading = loadingProvider === provider.id;
+        const isDisabled = isAnyLoading || externalDisabled;
+        return (
+          <button
+            key={provider.id}
+            type="button"
+            disabled={isDisabled}
+            onClick={() => handleSignIn(provider.providerType, provider.id)}
+            style={{
+              width: '100%',
+              height: 44,
+              padding: '0 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              fontSize: 13.5,
+              fontWeight: 500,
+              color: 'var(--fg)',
+              cursor: isDisabled ? 'default' : 'pointer',
+              opacity: isDisabled ? 0.55 : 1,
+            }}
+          >
+            <span style={{ width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {isLoading ? <Spinner size="sm" /> : providerIcons[provider.providerType]}
+            </span>
+            <span style={{ flex: 1, textAlign: 'left' }}>Continue with {provider.name}</span>
+          </button>
+        );
+      })}
       {popupBlocked && (
-        <p className="text-sm text-red-600 text-center">
+        <p style={{ fontSize: 12.5, color: 'var(--danger)', textAlign: 'center', margin: 0 }}>
           Please allow popups for this site to sign in.
         </p>
       )}

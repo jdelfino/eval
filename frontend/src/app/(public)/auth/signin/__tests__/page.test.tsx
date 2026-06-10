@@ -57,20 +57,30 @@ describe('SignInPage', () => {
       expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
     });
 
+    it('renders v4 card: h1 "Sign in to Eval" and sub copy', () => {
+      /**
+       * v4 screen J card heading contract. Catches copy/heading drift from the design.
+       */
+      render(<SignInPage />);
+
+      expect(screen.getByRole('heading', { name: /sign in to eval/i })).toBeInTheDocument();
+      expect(screen.getByText(/use the same account you signed up with/i)).toBeInTheDocument();
+    });
+
     it('renders link to student registration page', () => {
       render(<SignInPage />);
 
-      const studentLink = screen.getByText(/join as a student/i);
+      const studentLink = screen.getByRole('link', { name: /join as a student/i });
       expect(studentLink).toBeInTheDocument();
-      expect(studentLink.closest('a')).toHaveAttribute('href', '/register/student');
+      expect(studentLink).toHaveAttribute('href', '/register/student');
     });
 
     it('renders link to email sign-in page', () => {
       render(<SignInPage />);
 
-      const emailLink = screen.getByText(/sign in with email/i);
+      const emailLink = screen.getByRole('link', { name: /sign in with email/i });
       expect(emailLink).toBeInTheDocument();
-      expect(emailLink.closest('a')).toHaveAttribute('href', '/auth/signin/email');
+      expect(emailLink).toHaveAttribute('href', '/auth/signin/email');
     });
 
     it('does not render email or password input fields', () => {
@@ -120,7 +130,12 @@ describe('SignInPage', () => {
   });
 
   describe('Error handling', () => {
-    it('displays error when SignInButtons calls onError', async () => {
+    it('shows danger Banner (role=alert) when SignInButtons calls onError — J2 state', async () => {
+      /**
+       * v4 screen J2: when OAuth errors, a danger Banner appears between the heading
+       * and provider stack. The banner has role="alert" and the error message. Retry
+       * is one click away (providers still visible). Catches J2 state regression.
+       */
       render(<SignInPage />);
 
       const errorButton = screen.getByTestId('mock-sign-in-error');
@@ -128,10 +143,12 @@ describe('SignInPage', () => {
 
       await waitFor(() => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
+        // Error message from mock: "Sign in failed. Please try again."
+        expect(screen.getByRole('alert')).toHaveTextContent(/sign in failed/i);
       });
     });
 
-    it('allows dismissing error alerts', async () => {
+    it('allows dismissing the Banner, which clears the error', async () => {
       render(<SignInPage />);
 
       // Trigger an error
@@ -142,7 +159,7 @@ describe('SignInPage', () => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
       });
 
-      // Dismiss the error
+      // Dismiss the Banner
       const dismissButton = screen.getByRole('button', { name: /dismiss/i });
       fireEvent.click(dismissButton);
 

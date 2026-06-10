@@ -7,11 +7,14 @@
  *
  * Flow:
  * 1. Enter/validate join code (unauthenticated GET)
- * 2. See section preview (class name, instructor)
+ * 2. See section preview (class name, section, semester)
  * 3a. If already signed in (firebaseAuth.currentUser): call registerStudent directly
  * 3b. If not signed in: show <SignInButtons />, then call registerStudent on success
  * 4. Call authenticated backend API to create user profile
  * 5. On success, redirect to student dashboard
+ *
+ * v4 screens K (code-valid: "Join code accepted" card) and K2 (code-entry with
+ * inline danger banner on bad codes).
  */
 
 import React, { useState, useEffect, useRef, FormEvent, Suspense, useCallback } from 'react';
@@ -21,8 +24,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { firebaseAuth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { SignInButtons } from '@/components/ui/SignInButtons';
+import { JoinCodeBoxes } from '@/components/ui/JoinCodeBoxes';
+import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthHeading } from '@/components/ui/AuthHeading';
+import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { AuthLoading } from '@/components/layout/AuthLoading';
 import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
+import { formatJoinCodeInput, formatJoinCodeForDisplay, isCompleteJoinCode } from '@/lib/join-code';
+import { REGISTRATION_ERROR_MESSAGES } from '@/lib/api/registration-errors';
 import type { RegisterStudentInfo } from '@/types/api';
 
 // Page state types
@@ -31,39 +44,13 @@ type PageState =
   | { status: 'validating-code' }
   | { status: 'code-valid'; info: RegisterStudentInfo }
   | { status: 'submitting' }
-  | { status: 'success' }
-  | { status: 'error'; error: ErrorType; step: 'code' | 'registration' };
+  | { status: 'success' };
 
-type ErrorType =
-  | 'invalid_code'
-  | 'section_inactive'
-  | 'namespace_at_capacity'
-  | 'network_error';
-
-// Error messages
-const ERROR_MESSAGES: Record<ErrorType, string> = {
-  invalid_code: "This join code doesn't exist. Check with your instructor.",
-  section_inactive: 'This section is no longer accepting new students.',
-  namespace_at_capacity: 'This class has reached its student limit. Contact your instructor.',
-  network_error: 'Unable to connect. Please try again.',
-};
-
-// Loading fallback for Suspense boundary
-function LoadingFallback() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
-        <p className="text-gray-600">Loading...</p>
-      </div>
-    </div>
-  );
-}
 
 // Page wrapper with Suspense boundary for useSearchParams
 export default function StudentRegistrationPage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={<AuthLoading />}>
       <StudentRegistrationContent />
     </Suspense>
   );
@@ -93,32 +80,16 @@ function StudentRegistrationContent() {
   useEffect(() => {
     const codeParam = searchParams.get('code');
     if (codeParam) {
-      setJoinCode(formatJoinCode(codeParam));
+      setJoinCode(formatJoinCodeInput(codeParam));
     }
   }, [searchParams]);
 
-  // Format join code as XXX-XXX
-  const formatJoinCode = (value: string): string => {
-    const cleaned = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const parts = [];
-    for (let i = 0; i < cleaned.length && i < 6; i += 3) {
-      parts.push(cleaned.slice(i, i + 3));
-    }
-    return parts.join('-');
-  };
-
-  // Handle join code input change
+  // Handle join code input change (emitted by JoinCodeBoxes already formatted)
   const handleCodeChange = (value: string) => {
-    const formatted = formatJoinCode(value);
-    setJoinCode(formatted);
+    setJoinCode(value);
     if (codeError) setCodeError('');
   };
 
-  // Validate join code format (6 chars)
-  const validateCodeFormat = (code: string): boolean => {
-    const cleaned = code.replace(/-/g, '');
-    return /^[A-Z0-9]{6}$/.test(cleaned);
-  };
 
   // Core registration logic — called both from direct flow (already signed in)
   // and from the SignInButtons onSuccess handler.
@@ -153,13 +124,13 @@ function StudentRegistrationContent() {
 
         if (backendError instanceof ApiError) {
           if (backendError.code === 'NAMESPACE_AT_CAPACITY') {
-            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
+            setSubmitError(REGISTRATION_ERROR_MESSAGES.namespace_at_capacity);
           } else if (backendError.code === 'INVALID_CODE' || backendError.code === 'SECTION_INACTIVE') {
             setPageState({ status: 'code-entry' });
             setCodeError(
               backendError.code === 'SECTION_INACTIVE'
-                ? ERROR_MESSAGES.section_inactive
-                : ERROR_MESSAGES.invalid_code
+                ? REGISTRATION_ERROR_MESSAGES.section_inactive
+                : REGISTRATION_ERROR_MESSAGES.invalid_code
             );
             return;
           } else {
@@ -175,36 +146,45 @@ function StudentRegistrationContent() {
     [setUserProfile, endAuthFlow, router]
   );
 
+  // Refs to access current values from the subscribe-once-on-mount onAuthStateChanged
+  // effect without adding them as dependencies (which caused resubscription on every keystroke).
+  const pageStateRef = useRef(pageState);
+  pageStateRef.current = pageState;
+  const registrationInfoRef = useRef(registrationInfo);
+  registrationInfoRef.current = registrationInfo;
+  const join_codeRef = useRef(join_code);
+  join_codeRef.current = join_code;
+  const doRegisterRef = useRef(doRegister);
+  doRegisterRef.current = doRegister;
+
   // Handle late Firebase Auth hydration (auth race fix for PLAT-my3o).
   //
   // After page.goto(), firebaseAuth.currentUser may be null when the user
-  // clicks "Continue to Register" because Firebase Auth hasn't yet restored
+  // clicks "Continue" because Firebase Auth hasn't yet restored
   // state from IndexedDB. In that case, handleValidateCode falls through to
   // showing the sign-in buttons (code-valid state).
   //
-  // This effect watches for onAuthStateChanged to fire with a user. If the
-  // page is still in code-valid state (sign-in buttons showing) and no
-  // registration has started yet, it auto-registers the user without requiring
-  // a manual re-click.
+  // This effect subscribes once on mount and reads current values via refs so
+  // it does not resubscribe on every keystroke (deps: []).
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
       if (
         firebaseUser &&
         !registrationStartedRef.current &&
-        pageState.status === 'code-valid' &&
-        registrationInfo !== null
+        pageStateRef.current.status === 'code-valid' &&
+        registrationInfoRef.current !== null
       ) {
-        void doRegister(registrationInfo, join_code);
+        void doRegisterRef.current(registrationInfoRef.current, join_codeRef.current);
       }
     });
     return unsubscribe;
-  }, [pageState.status, registrationInfo, join_code, doRegister]);
+  }, []);
 
   // Handle code validation
   const handleValidateCode = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!validateCodeFormat(join_code)) {
+    if (!isCompleteJoinCode(join_code)) {
       setCodeError('Please enter a valid join code (e.g., ABC-123)');
       return;
     }
@@ -225,9 +205,9 @@ function StudentRegistrationContent() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === 'INVALID_CODE' || error.code === 'MISSING_CODE') {
-          setCodeError(ERROR_MESSAGES.invalid_code);
+          setCodeError(REGISTRATION_ERROR_MESSAGES.invalid_code);
         } else if (error.code === 'SECTION_INACTIVE') {
-          setCodeError(ERROR_MESSAGES.section_inactive);
+          setCodeError(REGISTRATION_ERROR_MESSAGES.section_inactive);
         } else {
           setCodeError(error.message);
         }
@@ -257,7 +237,7 @@ function StudentRegistrationContent() {
     }
   }, [endAuthFlow, registrationInfo]);
 
-  // Go back to code entry
+  // Go back to code entry (Wrong code? button)
   const handleBackToCode = () => {
     registrationStartedRef.current = false;
     setPageState({ status: 'code-entry' });
@@ -265,193 +245,253 @@ function StudentRegistrationContent() {
     setSubmitError('');
   };
 
+  // Clear code and error
+  const handleClear = () => {
+    setJoinCode('');
+    setCodeError('');
+  };
+
+  const isCodeEntry =
+    pageState.status === 'code-entry' || pageState.status === 'validating-code';
+  const isCodeValid =
+    pageState.status === 'code-valid' || pageState.status === 'submitting';
+  const validating = pageState.status === 'validating-code';
+
   // Success state
   if (pageState.status === 'success') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      <AuthPublicShell narrow showSignInLink={false}>
+        <AuthCard style={{ marginTop: 30, textAlign: 'center' as const }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              background: 'var(--run-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}
+          >
+            <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Joined!</h2>
-          <p className="text-gray-600">Redirecting to your dashboard...</p>
-        </div>
-      </div>
+          <AuthHeading size="sm" as="h2" style={{ margin: '0 0 8px' }} sub="Redirecting to your dashboard…">
+            Joined!
+          </AuthHeading>
+        </AuthCard>
+      </AuthPublicShell>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4">
-      <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-2xl shadow-2xl border border-gray-100">
-        <div>
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-          </div>
-          <h2 className="text-center text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            {pageState.status === 'code-entry' || pageState.status === 'validating-code'
-              ? 'Join Your Section'
-              : 'Sign In to Join'}
-          </h2>
-          <p className="mt-3 text-center text-sm text-gray-600">
-            {pageState.status === 'code-entry' || pageState.status === 'validating-code'
-              ? 'Enter your section join code to get started'
-              : 'Sign in with your account to complete registration'}
-          </p>
-        </div>
+    <AuthPublicShell narrow showSignInLink={false}>
+      {/* K2 / code-entry state */}
+      {isCodeEntry && (
+        <AuthCard style={{ marginTop: 30, padding: 28 }}>
+          <AuthHeading sub="Six characters from your teacher.">
+            Enter your join code
+          </AuthHeading>
 
-        {/* Code Entry Step */}
-        {(pageState.status === 'code-entry' || pageState.status === 'validating-code') && (
-          <>
-            {/* Prominent Sign In Option */}
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 mb-6">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900">Already have an account?</p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    If you&apos;ve registered before, sign in to access your sections.
-                  </p>
-                  <Link
-                    href="/auth/signin"
-                    className="inline-flex items-center mt-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-                  >
-                    Sign in to your account
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            <form className="space-y-6" onSubmit={handleValidateCode}>
-              <div>
-                <label htmlFor="join_code" className="block text-sm font-medium text-gray-700 mb-2">
-                  Section Join Code
-                </label>
-                <input
-                  id="join_code"
-                  name="join_code"
-                  type="text"
-                  autoComplete="off"
-                  autoFocus
-                  className={`appearance-none rounded-lg relative block w-full px-4 py-3 border ${
-                    codeError ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-400 text-gray-900 text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500`}
-                  placeholder="ABC-123"
-                  value={join_code}
-                  onChange={(e) => handleCodeChange(e.target.value)}
-                  disabled={pageState.status === 'validating-code'}
-                  maxLength={7}
-                />
-                {codeError && (
-                  <p className="mt-2 text-sm text-red-600">{codeError}</p>
-                )}
-              </div>
-
-              <div>
-                <button
-                  type="submit"
-                  disabled={pageState.status === 'validating-code'}
-                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  {pageState.status === 'validating-code' && (
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  )}
-                  {pageState.status === 'validating-code' ? 'Checking code...' : 'Continue to Register'}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-
-        {/* Section Preview + Sign-In Step */}
-        {(pageState.status === 'code-valid' || pageState.status === 'submitting') && registrationInfo && (
-          <>
-            {/* Section Preview */}
-            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-              <p className="text-xs text-indigo-600 font-medium mb-2">You&apos;re joining:</p>
-              <div className="bg-white rounded-lg p-4 border border-indigo-100">
-                <h3 className="font-semibold text-gray-900">
-                  {registrationInfo.class.name}
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Section: {registrationInfo.section.name}
-                  {registrationInfo.section.semester && ` (${registrationInfo.section.semester})`}
-                </p>
-              </div>
-            </div>
-
-            {submitError && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-sm font-medium text-red-800">{submitError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Sign In via social provider */}
-            <div className="space-y-4">
-              <SignInButtons
-                label={`Sign in to join ${registrationInfo.class.name}`}
-                onSuccess={handleSignIn}
-                onError={handleSignInError}
-                onBeforeSignIn={beginAuthFlow}
-                disabled={pageState.status === 'submitting'}
+          <form onSubmit={handleValidateCode}>
+            <div style={{ marginTop: 18 }}>
+              <JoinCodeBoxes
+                id="join_code"
+                size="md"
+                error={!!codeError}
+                autoFocus
+                value={join_code}
+                onChange={handleCodeChange}
+                disabled={validating}
               />
             </div>
 
-            <div className="flex justify-center pt-2">
-              <button
-                type="button"
-                onClick={handleBackToCode}
-                disabled={pageState.status === 'submitting'}
-                className="py-2 px-4 border border-gray-300 text-sm font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            {codeError && (
+              <div style={{ marginTop: 12 }}>
+                <Banner tone="danger" icon="alert" title={codeError} />
+              </div>
+            )}
+
+            <div
+              style={{
+                marginTop: 16,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+              }}
+            >
+              {codeError && (
+                <Button
+                  type="button"
+                  variant="quiet"
+                  size="sm"
+                  onClick={handleClear}
+                >
+                  Clear
+                </Button>
+              )}
+              <Button
+                type="submit"
+                variant="accent"
+                size="sm"
+                loading={validating}
               >
-                Back
-              </button>
+                {validating ? 'Checking code…' : codeError ? 'Try again' : 'Continue'}
+                {!validating && <Icon name="arrowR" size={14} />}
+              </Button>
             </div>
-          </>
-        )}
+          </form>
 
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link
-                href="/auth/signin"
-                className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
-              >
-                Sign in here
-              </Link>
-            </p>
+          {/* Card footer — replaces old blue info-box and bottom "Sign in here" */}
+          <div
+            style={{
+              borderTop: '1px solid var(--border)',
+              marginTop: 20,
+              paddingTop: 12,
+              fontSize: 12.5,
+              color: 'var(--fg-muted)',
+              textAlign: 'center' as const,
+            }}
+          >
+            Already on Eval?{' '}
+            <Link href="/auth/signin" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+              Sign in →
+            </Link>
           </div>
-        </div>
+        </AuthCard>
+      )}
 
-        {/* Footer Links */}
-        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-center gap-6 text-xs text-gray-500">
-          <Link href="/terms" className="hover:text-indigo-600 transition-colors">
-            Terms
-          </Link>
-          <Link href="/privacy" className="hover:text-indigo-600 transition-colors">
-            Privacy
-          </Link>
-        </div>
-      </div>
-    </div>
+      {/* K / code-valid state */}
+      {isCodeValid && registrationInfo && (
+        <AuthCard style={{ marginTop: 20, padding: 28 }}>
+          {/* Kicker */}
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase' as const,
+              color: 'var(--accent-ink)',
+            }}
+          >
+            Join code accepted
+          </div>
+
+          {/* Class name heading */}
+          <AuthHeading size="lg" style={{ margin: '8px 0 4px' }}>
+            Joining {registrationInfo.class.name}
+          </AuthHeading>
+
+          {/* Section / semester sub-line */}
+          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>
+            Section: {registrationInfo.section.name}
+            {registrationInfo.section.semester ? ` · ${registrationInfo.section.semester}` : ''}
+          </p>
+
+          {/* Locked code summary */}
+          <div
+            style={{
+              marginTop: 18,
+              padding: 12,
+              background: 'var(--bg-sunken)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: 'var(--fg-subtle)',
+                  fontSize: 11,
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: 0.4,
+                }}
+              >
+                Join code
+              </div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  marginTop: 2,
+                }}
+              >
+                {formatJoinCodeForDisplay(join_code)}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleBackToCode}
+              disabled={pageState.status === 'submitting'}
+              style={{
+                fontSize: 12,
+                color: pageState.status === 'submitting' ? 'var(--fg-subtle)' : 'var(--accent-ink)',
+                background: 'none',
+                border: 'none',
+                cursor: pageState.status === 'submitting' ? 'not-allowed' : 'pointer',
+                padding: 0,
+                opacity: pageState.status === 'submitting' ? 0.5 : 1,
+              }}
+            >
+              Wrong code?
+            </button>
+          </div>
+
+          {/* Sign-in heading */}
+          <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg)', fontWeight: 500 }}>
+            Sign in to finish joining
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, marginBottom: 12 }}>
+            Your name and email come from the account you choose.
+          </div>
+
+          {/* Submit error Banner */}
+          {submitError && (
+            <div style={{ marginBottom: 12 }}>
+              <Banner
+                tone="danger"
+                icon="alert"
+                title="Couldn't finish joining."
+                body={submitError}
+              />
+            </div>
+          )}
+
+          {/* Sign in providers */}
+          <SignInButtons
+            onSuccess={handleSignIn}
+            onError={handleSignInError}
+            onBeforeSignIn={beginAuthFlow}
+            disabled={pageState.status === 'submitting'}
+          />
+
+          {/* Terms line */}
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--fg-subtle)',
+              marginTop: 16,
+              textAlign: 'center' as const,
+              lineHeight: 1.5,
+            }}
+          >
+            By joining, you agree to the{' '}
+            <Link href="/terms" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+              Terms
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+              Privacy Policy
+            </Link>
+            .
+          </div>
+        </AuthCard>
+      )}
+    </AuthPublicShell>
   );
 }

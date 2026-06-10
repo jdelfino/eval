@@ -1,13 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { useSections } from '@/hooks/useSections';
+import { AuthHeading } from '@/components/ui/AuthHeading';
 import JoinSectionForm from '../components/JoinSectionForm';
 
 export default function JoinSectionPage() {
   const router = useRouter();
-  const { user: _user } = useAuth();
   const { joinSection } = useSections();
 
   const handleJoinSection = async (join_code: string) => {
@@ -16,8 +15,16 @@ export default function JoinSectionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-7xl mx-auto">
+    <div>
+      <div style={{ padding: '20px 24px 0' }}>
+        <AuthHeading
+          size="xs"
+          sub="Enter the join code your teacher gave you. You'll keep your existing sections."
+        >
+          Join a new section
+        </AuthHeading>
+      </div>
+      <div style={{ padding: 24, maxWidth: 480 }}>
         <JoinSectionForm onSubmit={handleJoinSection} />
       </div>
     </div>

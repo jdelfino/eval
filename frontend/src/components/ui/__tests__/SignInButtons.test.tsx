@@ -60,24 +60,6 @@ describe('SignInButtons', () => {
       expect(screen.getByRole('button', { name: /microsoft/i })).toBeInTheDocument();
     });
 
-    it('renders an optional label heading', () => {
-      render(
-        <SignInButtons
-          onSuccess={mockOnSuccess}
-          onError={mockOnError}
-          label="Sign in to join CS101"
-        />
-      );
-
-      expect(screen.getByText('Sign in to join CS101')).toBeInTheDocument();
-    });
-
-    it('does not render a heading when label is not provided', () => {
-      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
-
-      expect(screen.queryByRole('heading')).not.toBeInTheDocument();
-    });
-
     it('calls signInWithPopup with GoogleAuthProvider when Google button is clicked', async () => {
       const googleProviderInstance = { providerId: 'google.com' };
       mockGoogleAuthProvider.mockReturnValue(googleProviderInstance);
@@ -151,7 +133,12 @@ describe('SignInButtons', () => {
       });
     });
 
-    it('silently ignores auth/popup-closed-by-user error', async () => {
+    it('calls onError with popup-closed copy for auth/popup-closed-by-user (does NOT silently ignore)', async () => {
+      /**
+       * Decision-5: auth/popup-closed-by-user now surfaces the J2 error banner
+       * by calling onError (not silent). reportError must NOT be called — this is
+       * user-initiated. Catching regression in either direction.
+       */
       mockGoogleAuthProvider.mockReturnValue({});
       const error = Object.assign(new Error('Popup closed'), { code: 'auth/popup-closed-by-user' });
       mockSignInWithPopup.mockRejectedValue(error);
@@ -164,8 +151,10 @@ describe('SignInButtons', () => {
 
       await waitFor(() => {
         expect(mockOnSuccess).not.toHaveBeenCalled();
-        expect(mockOnError).not.toHaveBeenCalled();
+        expect(mockOnError).toHaveBeenCalledTimes(1);
+        expect(mockOnError.mock.calls[0][0].message).toContain('The popup was closed before sign-in finished');
       });
+      expect(mockReportError).not.toHaveBeenCalled();
     });
 
     it('silently ignores auth/cancelled-popup-request error', async () => {
@@ -273,8 +262,10 @@ describe('SignInButtons', () => {
 
       await waitFor(() => {
         expect(mockOnSuccess).not.toHaveBeenCalled();
-        expect(mockOnError).not.toHaveBeenCalled();
+        // onError IS called (decision-5: popup-closed surfaces the J2 banner)
+        expect(mockOnError).toHaveBeenCalledTimes(1);
       });
+      // reportError must NOT be called — this is user-initiated, not a monitoring event
       expect(mockReportError).not.toHaveBeenCalled();
     });
 
@@ -357,6 +348,65 @@ describe('SignInButtons', () => {
         const googleButton = screen.getByRole('button', { name: /google/i });
         expect(googleButton).toBeDisabled();
       });
+    });
+
+    it('still silently ignores auth/cancelled-popup-request (no onError, no reportError)', async () => {
+      /** Decision-5: only popup-closed-by-user changed; cancelled-popup-request stays silent. */
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Cancelled'), { code: 'auth/cancelled-popup-request' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+        expect(mockOnError).not.toHaveBeenCalled();
+      });
+      expect(mockReportError).not.toHaveBeenCalled();
+    });
+
+    it('popup-blocked: shows message and calls reportError but does NOT call onError', async () => {
+      /** Unchanged behavior: popup-blocked shows inline message + reportError but not onError. */
+      mockGoogleAuthProvider.mockReturnValue({});
+      const error = Object.assign(new Error('Popup blocked'), { code: 'auth/popup-blocked' });
+      mockSignInWithPopup.mockRejectedValue(error);
+
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /google/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/allow popups/i)).toBeInTheDocument();
+        expect(mockReportError).toHaveBeenCalledWith(error, expect.objectContaining({ code: 'auth/popup-blocked' }));
+        expect(mockOnError).not.toHaveBeenCalled();
+      });
+    });
+
+    it('renders three equal-weight provider buttons with v4 outline styling', () => {
+      /**
+       * v4 ProviderButton style contract: background var(--bg), border includes var(--border),
+       * three buttons named "Continue with Google/GitHub/Microsoft".
+       * Catches restyle drift away from equal-weight outline look.
+       */
+      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
+
+      const google = screen.getByRole('button', { name: /Continue with Google/i });
+      const github = screen.getByRole('button', { name: /Continue with GitHub/i });
+      const microsoft = screen.getByRole('button', { name: /Continue with Microsoft/i });
+
+      expect(google).toBeInTheDocument();
+      expect(github).toBeInTheDocument();
+      expect(microsoft).toBeInTheDocument();
+
+      // Check v4 styling on one button
+      expect(google).toHaveStyle({ background: 'var(--bg)' });
+      expect(google.style.border).toContain('var(--border)');
     });
   });
 

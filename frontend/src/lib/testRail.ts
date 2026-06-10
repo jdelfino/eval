@@ -116,6 +116,20 @@ export function toTestRailItems(
  */
 export function toDrawerOutput(result: TestResponse | null): DrawerOutput | undefined {
   if (!result) return undefined;
+  const { passed, failed, errors, run, total } = result.summary;
+
+  // Summary text: for pure run-only executions (no assertions), show "N run" instead
+  // of "0/N passed" which implies a failure when the code simply ran without assertions.
+  const summary =
+    run > 0 && failed === 0 && passed === 0
+      ? `${run} run`
+      : `${passed}/${total} passed`;
+
+  // Status: fail if any test failed OR if the executor reported errors (e.g. sandbox
+  // failure, timeout). Previously only checked failed>0, causing "✓ Success" to appear
+  // when the executor errored out.
+  const status = failed > 0 || errors > 0 ? ('fail' as const) : ('pass' as const);
+
   return {
     lines: result.results.flatMap((r) => {
       // r may be undefined in a sparse results array (C2 single-run attribution fix)
@@ -125,7 +139,7 @@ export function toDrawerOutput(result: TestResponse | null): DrawerOutput | unde
       }
       return [];
     }),
-    status: result.summary.failed > 0 ? ('fail' as const) : ('pass' as const),
-    summary: `${result.summary.passed}/${result.summary.total} passed`,
+    status,
+    summary,
   };
 }
