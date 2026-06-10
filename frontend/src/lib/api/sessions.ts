@@ -7,7 +7,7 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Session, Revision, SessionPublicState, Problem, IOTestCase } from '@/types/api';
+import type { Session, Revision, SessionPublicState, Problem, IOTestCase, SessionStudent } from '@/types/api';
 import type { WalkthroughScript } from '@/types/analysis';
 
 /**
@@ -258,6 +258,16 @@ export async function featureCode(
  */
 export async function reopenSession(sessionId: string): Promise<void> {
   await apiPost(`/sessions/${sessionId}/reopen`);
+}
+
+/**
+ * Get all students currently joined in a session.
+ * Used by the instructor home live strip to compute the "N connected" numerator.
+ * @param sessionId - The session ID
+ * @returns Array of SessionStudent objects
+ */
+export async function getSessionStudents(sessionId: string): Promise<SessionStudent[]> {
+  return apiGet<SessionStudent[]>(`/sessions/${sessionId}/students`);
 }
 
 /**
