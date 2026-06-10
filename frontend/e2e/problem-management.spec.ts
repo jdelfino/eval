@@ -93,13 +93,14 @@ test.describe('Problem Management', () => {
     await page.reload();
     await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 10000 });
 
-    // The new problem should appear in the problem list
-    await expect(page.locator(`h3:has-text("E2E Problem ${testNamespace}")`)).toBeVisible({ timeout: 10000 });
+    // The new problem should appear in the problem list (A4: table layout — title in <td>)
+    await expect(page.locator(`td:has-text("E2E Problem ${testNamespace}")`)).toBeVisible({ timeout: 10000 });
 
     // ===== PHASE 2: EDIT THE PROBLEM =====
-    // Locate the Edit button scoped to the card containing the problem title
+    // Locate the Edit button scoped to the table row containing the problem title
+    // A4 reskin: library now renders a <table>; scope to <tr> to find the right row's actions.
     const editButton = page
-      .locator(`div:has(h3:has-text("E2E Problem ${testNamespace}")) button:has-text("Edit")`)
+      .locator(`tr:has(td:has-text("E2E Problem ${testNamespace}")) button:has-text("Edit")`)
       .first();
     await expect(editButton).toBeVisible();
     await editButton.click();
@@ -136,15 +137,16 @@ test.describe('Problem Management', () => {
     // After update, return to the Problem Library
     await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 15000 });
 
-    // The edited title should now be visible in the list
+    // The edited title should now be visible in the list (A4: table row)
     await expect(
-      page.locator(`h3:has-text("E2E Problem ${testNamespace} (edited)")`)
+      page.locator(`td:has-text("E2E Problem ${testNamespace} (edited)")`)
     ).toBeVisible({ timeout: 10000 });
 
     // ===== PHASE 3: DELETE THE PROBLEM =====
-    // Locate the Delete button scoped to the card (matches by edited title)
+    // Locate the Delete button scoped to the table row (matches by edited title)
+    // A4 reskin: library now renders a <table>; scope to <tr> to find the right row's actions.
     const deleteButton = page
-      .locator(`div:has(h3:has-text("E2E Problem ${testNamespace} (edited)")) button:has-text("Delete")`)
+      .locator(`tr:has(td:has-text("E2E Problem ${testNamespace} (edited)")) button:has-text("Delete")`)
       .first();
     await expect(deleteButton).toBeVisible();
     await deleteButton.click();
@@ -154,9 +156,9 @@ test.describe('Problem Management', () => {
     await expect(confirmButton).toBeVisible();
     await confirmButton.click();
 
-    // The problem should be removed from the list (edited title is gone)
+    // The problem should be removed from the list (edited title is gone; A4: table row)
     await expect(
-      page.locator(`h3:has-text("E2E Problem ${testNamespace} (edited)")`)
+      page.locator(`td:has-text("E2E Problem ${testNamespace} (edited)")`)
     ).not.toBeVisible({ timeout: 10000 });
 
     // The library may show the empty state (since we created exactly one problem)
@@ -167,5 +169,89 @@ test.describe('Problem Management', () => {
 
     // Suppress the unused variable warning — apiProblem.id is used above
     void apiProblem;
+  });
+
+  /**
+   * A4: Tag chip bar filtering + Start-session from table
+   *
+   * Verifies that the A4 LibraryTagBar works end-to-end:
+   * - Tag chips appear when problems have tags
+   * - Selecting a chip filters the table to problems bearing that tag (AND logic)
+   * - The 'clear' affordance resets the filter
+   * - The Start button in the table row opens the Start Session modal
+   *
+   * Catches: tag-chip wiring breakages invisible to jsdom, and A4 table Start CTA regression.
+   */
+  test('A4: Tag chip filtering and Start-session from table', async ({ page, testNamespace, setupInstructor }) => {
+    test.setTimeout(60000);
+
+    const instructor = await setupInstructor();
+    const cls = await createClass(instructor.token, `Tag Filter Class ${testNamespace}`);
+
+    // Create two problems: one tagged, one untagged
+    await createProblem(instructor.token, cls.id, {
+      title: `Tagged Problem ${testNamespace}`,
+      description: 'Has tags',
+      language: 'python',
+      starterCode: '# tagged\n',
+      tags: ['e2e', 'filtering'],
+    });
+    await createProblem(instructor.token, cls.id, {
+      title: `Untagged Problem ${testNamespace}`,
+      description: 'No tags',
+      language: 'python',
+      starterCode: '# untagged\n',
+    });
+
+    await signInAs(page, instructor.email);
+    await page.goto('/instructor/problems');
+
+    // Wait for the library to load with both problems.
+    // Use getByRole('cell', { exact: true }) to avoid case-insensitive substring issues:
+    // `:has-text("Tagged Problem")` also matches "Untagged Problem" because it's a
+    // case-insensitive substring match and "tagged Problem" is contained in "Untagged Problem".
+    await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByRole('cell', { name: `Tagged Problem ${testNamespace}`, exact: true })
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByRole('cell', { name: `Untagged Problem ${testNamespace}`, exact: true })
+    ).toBeVisible();
+
+    // The tag chip bar should be visible with the 'e2e' and 'filtering' chips
+    await expect(page.locator('[data-testid="tag-bar"]')).toBeVisible();
+    await expect(page.locator('[data-testid="tag-chip-e2e"]')).toBeVisible();
+    await expect(page.locator('[data-testid="tag-chip-filtering"]')).toBeVisible();
+
+    // Select the 'e2e' chip — should filter to only the tagged problem
+    await page.locator('[data-testid="tag-chip-e2e"]').click();
+    await expect(
+      page.getByRole('cell', { name: `Tagged Problem ${testNamespace}`, exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('cell', { name: `Untagged Problem ${testNamespace}`, exact: true })
+    ).not.toBeVisible();
+
+    // The 'clear' affordance should appear and reset the filter
+    await expect(page.locator('[data-testid="tag-bar-clear"]')).toBeVisible();
+    await page.locator('[data-testid="tag-bar-clear"]').click();
+    await expect(
+      page.getByRole('cell', { name: `Untagged Problem ${testNamespace}`, exact: true })
+    ).toBeVisible();
+
+    // The Start button in the table row should be clickable (opens Start Session modal)
+    // Scope to the row to avoid clicking the wrong Start button.
+    // Use getByRole to avoid the :has-text substring issue with "Tagged"/"Untagged".
+    const startButton = page
+      .locator(`tr:has(:text-is("Tagged Problem ${testNamespace}")) button:has-text("Start")`)
+      .first();
+    await expect(startButton).toBeVisible();
+    await startButton.click();
+
+    // A modal or panel should open for starting a session
+    // The CreateSessionFromProblemModal renders with a "Start Session" heading or similar
+    await expect(
+      page.locator('button:has-text("Create Session"), h2:has-text("Start Session"), [role="dialog"]').first()
+    ).toBeVisible({ timeout: 10000 });
   });
 });

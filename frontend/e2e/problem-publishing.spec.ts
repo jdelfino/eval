@@ -136,7 +136,9 @@ test.describe('Problem Publishing + Student Practice', () => {
 
       // ===== PHASE 5: STUDENT VIEWS SOLUTION (show_solution=true) =====
       // Navigate back to section page to verify "View Solution" button is shown
-      // since show_solution was enabled when publishing
+      // since show_solution was enabled when publishing.
+      // A5 reskin: the StudentSectionView now shows state pills (Solved/In progress/Not started).
+      // After a successful run-all, the problem should show "Solved" (A2 persisted solved state).
       await page.goto(`/sections/${section.id}`);
 
       // Wait for the section page to reload and show the problem
@@ -144,8 +146,19 @@ test.describe('Problem Publishing + Student Practice', () => {
         page.locator(`text=Publishing Test Problem ${testNamespace}`)
       ).toBeVisible({ timeout: 10000 });
 
-      // "Continue" button should now appear (student has prior work)
+      // "Continue" button should now appear (student has prior work — any work, regardless of solved)
       await expect(page.locator('button:has-text("Continue")')).toBeVisible({ timeout: 10000 });
+
+      // A2+A5 integration: the problem should be in "Solved" state after a successful run-all.
+      // The problem has no canonical test cases, so coverage is trivially satisfied → solved.
+      // The state pill for this problem should now show "Solved" (A5 ProblemRow). We look for
+      // the problem row (data-testid="problem-row") that has both the problem title and a "Solved"
+      // pill. Using data-testid avoids strict-mode violations from ancestor divs that also satisfy
+      // the :has() selector.
+      const problemRowWithSolved = page.locator(
+        `[data-testid="problem-row"]:has(:text-is("Publishing Test Problem ${testNamespace}")):has(:text-is("Solved"))`
+      );
+      await expect(problemRowWithSolved).toBeVisible({ timeout: 10000 });
 
       // "View Solution" button should be visible because show_solution=true
       await expect(page.locator('button:has-text("View Solution")')).toBeVisible({ timeout: 10000 });

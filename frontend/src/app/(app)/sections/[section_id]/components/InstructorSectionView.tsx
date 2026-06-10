@@ -7,7 +7,9 @@ import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/typ
 import { BackButton } from '@/components/ui/BackButton';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { createSession } from '@/lib/api/sessions';
+import { formatTimeAgo } from '@/lib/format';
 import type { SectionDetail } from '../page';
 
 interface InstructorSectionViewProps {
@@ -17,18 +19,6 @@ interface InstructorSectionViewProps {
   publishedProblems: PublishedProblemWithStatus[];
   students: StudentProgress[];
   onEnterPreview?: () => void;
-}
-
-function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
 }
 
 type SectionTab = 'students' | 'sessions' | 'problems';
@@ -158,9 +148,9 @@ export default function InstructorSectionView({
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                          </svg>
+                          <span data-testid="live-dot">
+                            <ConnectionDot status="live" compact />
+                          </span>
                         </div>
                       </div>
                       <div className="flex-1">
@@ -190,7 +180,7 @@ export default function InstructorSectionView({
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                       </svg>
-                      View Dashboard
+                      Rejoin
                     </button>
                   </div>
                 </div>
@@ -365,7 +355,7 @@ export default function InstructorSectionView({
                       Progress
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Active
+                      Last Seen
                     </th>
                   </tr>
                 </thead>
@@ -378,16 +368,21 @@ export default function InstructorSectionView({
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
                           href={`/sections/${section.id}/students/${student.user_id}`}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                          className="block text-sm font-medium text-blue-600 hover:text-blue-800"
                         >
                           {student.display_name || student.email}
                         </Link>
+                        {student.display_name && (
+                          <span className="block text-xs text-gray-500 mt-0.5">
+                            {student.email}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {student.problems_started} / {student.total_problems} problems
+                        {`Solved ${student.problems_solved} · Started ${student.problems_started}`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {student.last_active ? formatRelativeTime(student.last_active) : 'Never'}
+                        {student.last_active ? formatTimeAgo(student.last_active) : 'Never'}
                       </td>
                     </tr>
                   ))}

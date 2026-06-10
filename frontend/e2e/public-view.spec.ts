@@ -1,14 +1,15 @@
 /**
- * E2E tests for the Public View feature.
+ * E2E tests for the Public View feature (projector) and the public problem page.
  *
- * Tests the public display view that instructors show during class.
- * Verifies that when an instructor features a student, the public view
- * updates to display that student's code.
+ * "Public View Feature" tests: the projector public display view instructors open during class.
+ * "Public Problem Page" tests: the A3-reskinned /problems/:id route (unauthenticated).
+ *   - Verifies the new hero layout (serif title, tag pills, meta line, tests list).
+ *   - Regression guard: solution text must NEVER appear for a problem that has a solution.
  */
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { createClass, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Public View Feature', () => {
@@ -157,6 +158,77 @@ test.describe('Public View Feature', () => {
       } catch {
         /* ignore */
       }
+    }
+  });
+});
+
+/**
+ * Public Problem Page (A3 hero reskin) — /problems/:id
+ *
+ * Verifies the unauthenticated public problem page after the A3 reskin and A1
+ * solution-removal. These tests cover:
+ *   1. The new hero: serif title, meta line, tests list visible to anonymous visitors.
+ *   2. Regression guard (eval-e81): solution text NEVER appears on the public page even
+ *      when the problem was created with a solution. This is the most important guard —
+ *      if it fails, solution data is leaking to anonymous visitors.
+ *
+ * Why e2e matters here: the solution removal involves both the Go backend (dropping
+ * the field from the SQL query) and the frontend (removing SolutionBlock). Only an
+ * end-to-end test catches a regression in either layer.
+ */
+test.describe('Public Problem Page (A3)', () => {
+  /**
+   * Verifies the A3 hero layout and that the solution is never exposed publicly.
+   *
+   * Contract: GET /api/v1/public/problems/:id MUST NOT return a solution field,
+   * and the page MUST NOT render any solution content regardless of what the
+   * problem record stores. If this test fails, solution data is leaking to
+   * anonymous (unauthenticated) visitors — a privacy regression.
+   */
+  test('A3 hero visible; solution content never appears on public page', async ({ page, setupInstructor }) => {
+    test.setTimeout(30000);
+
+    const instructor = await setupInstructor();
+    const cls = await createClass(instructor.token, `Public Page Class`);
+
+    // Create a problem WITH a solution so we can verify it never leaks publicly
+    const problem = await createProblem(instructor.token, cls.id, {
+      title: 'Public Hero Test Problem',
+      description: 'A problem for public page testing',
+      language: 'python',
+      starterCode: 'print("hello")\n',
+      solution: 'SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW',
+      tags: ['e2e', 'public'],
+    });
+
+    // Visit the public problem page as an anonymous user (no sign-in)
+    await page.goto(`/problems/${problem.id}`);
+
+    // ── Hero: serif title must be visible ──────────────────────────────────
+    await expect(page.locator('text=Public Hero Test Problem')).toBeVisible({ timeout: 15000 });
+
+    // ── Meta line: should contain language (python) ────────────────────────
+    // The meta line reads "python 3.11 · N tests · authored by X · updated <date>"
+    await expect(page.locator('text=python')).toBeVisible();
+
+    // ── Tag pills should be visible ────────────────────────────────────────
+    // Use :text-is() for exact-match to avoid strict-mode violations when the
+    // instructor display name also contains "e2e" as a substring.
+    await expect(page.locator(':text-is("e2e")').first()).toBeVisible();
+    await expect(page.locator(':text-is("public")').first()).toBeVisible();
+
+    // ── REGRESSION GUARD: solution sentinel text must NOT appear anywhere ──
+    // This assertion is the primary regression guard for eval-e81 / A1 / A3.
+    // Any text containing the sentinel string would indicate a solution leak.
+    await expect(page.locator('text=SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')).not.toBeVisible();
+
+    // Also verify the page HTML does not contain the sentinel in any form
+    // (guards against server-side rendering leaking it in a non-visible element)
+    const pageContent = await page.content();
+    if (pageContent.includes('SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')) {
+      throw new Error(
+        'REGRESSION: Solution sentinel text found in page HTML — solution is leaking publicly!'
+      );
     }
   });
 });

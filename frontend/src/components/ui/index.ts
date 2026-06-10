@@ -91,3 +91,9 @@ export type { AuthCardProps } from './AuthCard';
 
 export { AuthHeading } from './AuthHeading';
 export type { AuthHeadingProps, AuthHeadingSize } from './AuthHeading';
+
+export { SectionLabel } from './SectionLabel';
+export type { SectionLabelProps } from './SectionLabel';
+
+export { Chip } from './Chip';
+export type { ChipProps } from './Chip';

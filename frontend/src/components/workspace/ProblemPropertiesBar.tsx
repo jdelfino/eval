@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Menu } from '@/components/ui/Menu';
+import { LANGUAGE_VERSIONS } from '@/lib/languageVersions';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,16 +19,20 @@ export interface ProblemPropertiesBarProps {
 }
 
 // ─── Language display map ─────────────────────────────────────────────────────
+// Derived from LANGUAGE_VERSIONS (single source of truth in lib/languageVersions.ts)
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 const LANGUAGE_LABELS: Record<'python' | 'java', string> = {
-  python: 'Python 3.11',
-  java: 'Java 21',
+  python: `${capitalize('python')} ${LANGUAGE_VERSIONS['python']}`,
+  java: `${capitalize('java')} ${LANGUAGE_VERSIONS['java']}`,
 };
 
-const LANGUAGE_BACKEND: Record<string, 'python' | 'java'> = {
-  'Python 3.11': 'python',
-  'Java 21': 'java',
-};
+const LANGUAGE_BACKEND: Record<string, 'python' | 'java'> = Object.fromEntries(
+  (Object.keys(LANGUAGE_LABELS) as Array<'python' | 'java'>).map((k) => [LANGUAGE_LABELS[k], k])
+) as Record<string, 'python' | 'java'>;
 
 // ─── ChipButton ───────────────────────────────────────────────────────────────
 
@@ -157,7 +162,7 @@ export function ProblemPropertiesBar({
 
   // ── language menu items ───────────────────────────────────────────────────
 
-  const langMenuItems = (['Python 3.11', 'Java 21'] as const).map((display) => ({
+  const langMenuItems = (Object.values(LANGUAGE_LABELS) as string[]).map((display) => ({
     label: display,
     onSelect: () => {
       onChangeProperties({

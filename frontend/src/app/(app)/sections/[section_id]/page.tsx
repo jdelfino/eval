@@ -170,6 +170,7 @@ export default function SectionDetailPage() {
         section={section}
         activeSessions={activeSessions}
         publishedProblems={publishedProblems}
+        pastSessions={pastSessions}
         sectionId={section_id}
         onBack={handlePreviewBack}
       />

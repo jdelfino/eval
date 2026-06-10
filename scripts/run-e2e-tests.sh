@@ -90,6 +90,7 @@ cp -r frontend/public frontend/.next/standalone/public 2>/dev/null || true
 (cd frontend && \
   HOSTNAME=0.0.0.0 \
   PORT="${NEXT_PORT}" \
+  API_INTERNAL_URL="http://localhost:${API_PORT}/api/v1" \
   node .next/standalone/server.js) &
 PIDS_TO_KILL+=($!)
 

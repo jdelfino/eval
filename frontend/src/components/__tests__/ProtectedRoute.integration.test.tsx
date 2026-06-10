@@ -98,7 +98,7 @@ describe('ProtectedRoute + AuthContext integration', () => {
     await waitFor(() => {
       expect(authStateCallback).not.toBeNull();
     });
-    authStateCallback!({ uid: 'fb-1' }); // simulate firebase user
+    authStateCallback!({ uid: 'fb-1', getIdToken: jest.fn().mockResolvedValue('test-token') }); // simulate firebase user
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/student');
@@ -119,7 +119,7 @@ describe('ProtectedRoute + AuthContext integration', () => {
     await waitFor(() => {
       expect(authStateCallback).not.toBeNull();
     });
-    authStateCallback!({ uid: 'fb-1' });
+    authStateCallback!({ uid: 'fb-1', getIdToken: jest.fn().mockResolvedValue('test-token') });
 
     await waitFor(() => {
       expect(screen.getByText('Instructor Dashboard')).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('ProtectedRoute + AuthContext integration', () => {
     await waitFor(() => {
       expect(authStateCallback).not.toBeNull();
     });
-    authStateCallback!({ uid: 'fb-admin' });
+    authStateCallback!({ uid: 'fb-admin', getIdToken: jest.fn().mockResolvedValue('test-token') });
 
     await waitFor(() => {
       expect(screen.getByText('Admin Bypass Content')).toBeInTheDocument();

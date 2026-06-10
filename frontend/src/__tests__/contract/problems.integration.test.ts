@@ -136,16 +136,32 @@ describe('Problems API', () => {
         // Validate required string fields
         expect(typeof problem.id).toBe('string');
         expect(typeof problem.title).toBe('string');
+        expect(typeof problem.language).toBe('string');
+        expect(typeof problem.updated_at).toBe('string');
 
-        // Validate nullable string fields
+        // Validate nullable string fields (no solution — eval-e81 fix)
         expect(problem.description === null || typeof problem.description === 'string').toBe(true);
-        expect(problem.solution === null || typeof problem.solution === 'string').toBe(true);
         expect(problem.starter_code === null || typeof problem.starter_code === 'string').toBe(true);
         expect(problem.class_id === null || typeof problem.class_id === 'string').toBe(true);
         expect(problem.class_name === null || typeof problem.class_name === 'string').toBe(true);
+        expect(problem.author_name === null || typeof problem.author_name === 'string').toBe(true);
+
+        // solution must not be present in the payload.
+        expect('solution' in problem).toBe(false);
 
         // Validate array fields
         expect(Array.isArray(problem.tags)).toBe(true);
+        expect(Array.isArray(problem.test_cases)).toBe(true);
+
+        // Each test_cases entry must have exactly kind/name/summary and no output fields.
+        for (const tc of problem.test_cases) {
+          expect(typeof tc.kind).toBe('string');
+          expect(tc.kind === 'io' || tc.kind === 'pytest').toBe(true);
+          expect(typeof tc.name).toBe('string');
+          expect(typeof tc.summary).toBe('string');
+          expect('expected_output' in tc).toBe(false);
+          expect('test_code' in tc).toBe(false);
+        }
 
         // Verify it matches the created problem
         expect(problem.id).toBe(createdProblemId);
@@ -182,6 +198,13 @@ describe('Problems API', () => {
 
       // Validate array fields (tags can be null when not set)
       expect(summary.tags === null || Array.isArray(summary.tags)).toBe(true);
+
+      // test_counts must be present and have the right shape.
+      expect(summary.test_counts).toBeDefined();
+      if (summary.test_counts) {
+        expect(typeof summary.test_counts.io).toBe('number');
+        expect(typeof summary.test_counts.pytest).toBe('number');
+      }
     });
 
     it('returns problems filtered by class_id', async () => {

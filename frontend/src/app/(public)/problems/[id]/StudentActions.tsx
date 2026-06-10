@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listMySections } from '@/lib/api/sections';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
+import { Button } from '@/components/ui/Button';
 import type { MySectionInfo } from '@/types/api';
 
 interface StudentActionsProps {
@@ -69,32 +70,34 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
-        <button
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <Button
+          variant="accent"
+          size="md"
           onClick={() => handleStartPractice()}
+          loading={starting}
           disabled={starting}
-          className="px-4 py-2 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
         >
-          {starting ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Starting...
-            </span>
-          ) : (
-            'Practice'
-          )}
-        </button>
+          Practice
+        </Button>
       </div>
       {error && (
-        <p className="text-sm text-red-600 mb-4">{error}</p>
+        <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 16 }}>{error}</p>
       )}
       {showPicker && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-          <p className="text-sm text-gray-700 mb-3">Select a section to practice in:</p>
-          <div className="flex flex-col gap-2">
+        <div
+          style={{
+            marginBottom: 24,
+            padding: 16,
+            background: 'var(--bg-raised)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 12 }}>
+            Select a section to practice in:
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {matchingSections.map((s) => (
               <button
                 key={s.section.id}
@@ -103,7 +106,17 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
                   handleStartPractice(s.section.id);
                 }}
                 disabled={starting}
-                className="px-3 py-2 text-sm text-left bg-white border rounded hover:bg-gray-50 transition-colors disabled:opacity-50"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  textAlign: 'left',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--fg)',
+                  cursor: starting ? 'not-allowed' : 'pointer',
+                  opacity: starting ? 0.5 : 1,
+                }}
               >
                 {s.section.name}
               </button>

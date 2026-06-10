@@ -203,16 +203,26 @@ export interface RegisterStudentInfo {
   class: Class;
 }
 
+/** Input-side-only test case summary included in the public problem payload. */
+export interface PublicTestCaseSummary {
+  kind: 'io' | 'pytest';
+  name: string;
+  summary: string;
+}
+
 /** Public problem data returned by GET /public/problems/:id. */
 export interface PublicProblem {
   id: string;
   title: string;
   description: string | null;
-  solution: string | null;
   starter_code: string | null;
   class_id: string | null;
   class_name: string | null;
   tags: string[];
+  author_name: string | null;
+  updated_at: string;
+  language: string;
+  test_cases: PublicTestCaseSummary[];
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +290,8 @@ export interface StudentWork {
   test_cases: IOTestCase[];
   last_update: string;
   created_at: string;
+  last_run_all_passed: boolean | null;
+  last_run_at: string | null;
 }
 
 /** StudentWork with problem data (from GET /student-work/:id). */
@@ -316,6 +328,7 @@ export interface StudentProgress {
   display_name: string;
   email: string;
   problems_started: number;
+  problems_solved: number;
   total_problems: number;
   last_active: string | null;
 }

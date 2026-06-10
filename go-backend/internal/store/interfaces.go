@@ -137,6 +137,13 @@ type File struct {
 	Content string `json:"content"`
 }
 
+// TestCounts holds the count of io and pytest test cases for a problem.
+// Populated only by ListProblemsFiltered.
+type TestCounts struct {
+	IO     int `json:"io"`
+	Pytest int `json:"pytest"`
+}
+
 // Problem represents a coding exercise in the database.
 // test_cases stores a NOT NULL JSONB array of IOTestCase definitions (may be empty).
 type Problem struct {
@@ -153,6 +160,7 @@ type Problem struct {
 	Language    string          `json:"language"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
+	TestCounts  *TestCounts     `json:"test_counts,omitempty"`
 }
 
 // CreateProblemParams contains the fields for creating a problem.
@@ -192,16 +200,28 @@ type ProblemFilters struct {
 	SortOrder     string // "asc", "desc"
 }
 
+// PublicTestCaseSummary is an input-side-only summary of a test case for the public problem payload.
+// It deliberately omits expected_output, test_code, match_type, and any attached file contents.
+type PublicTestCaseSummary struct {
+	Kind    string `json:"kind"`
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
+}
+
 // PublicProblem is the public-facing subset of a problem, exposed without authentication.
+// It never includes solution, expected outputs, or test bodies.
 type PublicProblem struct {
-	ID          uuid.UUID  `json:"id"`
-	Title       string     `json:"title"`
-	Description *string    `json:"description"`
-	Solution    *string    `json:"solution"`
-	StarterCode *string    `json:"starter_code"`
-	ClassID     *uuid.UUID `json:"class_id"`
-	ClassName   *string    `json:"class_name"`
-	Tags        []string   `json:"tags"`
+	ID          uuid.UUID               `json:"id"`
+	Title       string                  `json:"title"`
+	Description *string                 `json:"description"`
+	StarterCode *string                 `json:"starter_code"`
+	ClassID     *uuid.UUID              `json:"class_id"`
+	ClassName   *string                 `json:"class_name"`
+	Tags        []string                `json:"tags"`
+	AuthorName  *string                 `json:"author_name"`
+	UpdatedAt   time.Time               `json:"updated_at"`
+	Language    string                  `json:"language"`
+	TestCases   []PublicTestCaseSummary `json:"test_cases"`
 }
 
 // ProblemRepository defines the interface for problem data access.
@@ -684,15 +704,17 @@ type SectionProblemRepository interface {
 
 // StudentWork represents persistent student work for a problem in a section.
 type StudentWork struct {
-	ID          uuid.UUID       `json:"id"`
-	NamespaceID string          `json:"namespace_id"`
-	UserID      uuid.UUID       `json:"user_id"`
-	ProblemID   uuid.UUID       `json:"problem_id"`
-	SectionID   uuid.UUID       `json:"section_id"`
-	Code        string          `json:"code"`
-	TestCases   json.RawMessage `json:"test_cases"`
-	CreatedAt   time.Time       `json:"created_at"`
-	LastUpdate  time.Time       `json:"last_update"`
+	ID               uuid.UUID       `json:"id"`
+	NamespaceID      string          `json:"namespace_id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	ProblemID        uuid.UUID       `json:"problem_id"`
+	SectionID        uuid.UUID       `json:"section_id"`
+	Code             string          `json:"code"`
+	TestCases        json.RawMessage `json:"test_cases"`
+	CreatedAt        time.Time       `json:"created_at"`
+	LastUpdate       time.Time       `json:"last_update"`
+	LastRunAllPassed *bool           `json:"last_run_all_passed"`
+	LastRunAt        *time.Time      `json:"last_run_at"`
 }
 
 // StudentWorkWithProblem represents student work with its associated problem details.
@@ -713,6 +735,7 @@ type StudentProgress struct {
 	DisplayName     string     `json:"display_name"`
 	Email           string     `json:"email"`
 	ProblemsStarted int        `json:"problems_started"`
+	ProblemsSolved  int        `json:"problems_solved"`
 	TotalProblems   int        `json:"total_problems"`
 	LastActive      *time.Time `json:"last_active"`
 }
@@ -744,6 +767,10 @@ type StudentWorkRepository interface {
 	// ListStudentWorkForReview returns all published problems in a section with the
 	// given student's work (if any) for each problem.
 	ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentWorkSummary, error)
+	// SetStudentWorkRunResult persists the result of a graded run on student work.
+	// allPassed=true when every canonical case was covered and all executed cases passed.
+	// Returns ErrNotFound if the student work record does not exist.
+	SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error
 }
 
 // AdminStats contains aggregate system statistics.

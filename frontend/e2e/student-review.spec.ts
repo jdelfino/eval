@@ -76,9 +76,10 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     const studentLink = studentsTable.locator(`a:has-text("${studentDisplayName}")`);
     await expect(studentLink).toBeVisible();
 
-    // Progress column should show "1 / 1 problems" (1 problem published, 1 started)
+    // Progress column shows "Solved X · Started Y" (A6 InstructorSectionView reskin).
+    // The student has started the problem (via getOrCreateStudentWork), so Started ≥ 1.
     const studentRow = studentsTable.locator('tr').filter({ hasText: studentDisplayName });
-    await expect(studentRow.locator('td').filter({ hasText: /\d+ \/ \d+ problems/ })).toBeVisible();
+    await expect(studentRow.locator('td').filter({ hasText: /Solved \d+ · Started \d+/ })).toBeVisible();
 
     // ===== CLICK STUDENT TO VIEW THEIR WORK PAGE =====
     await studentLink.click();

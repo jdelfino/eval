@@ -15,7 +15,7 @@ jest.mock('@/lib/api-client', () => ({
   apiPost: (...args: unknown[]) => mockApiPost(...args),
 }));
 
-import { warmExecutor, executeCode, ioTestCasesToCaseDefs, buildIOTestCases, type CaseDef, type CaseDefIO, type CaseDefPytest } from '../execute';
+import { warmExecutor, executeCode, ioTestCasesToCaseDefs, ioTestCasesToGradedCaseDefs, buildIOTestCases, type CaseDef, type CaseDefIO, type CaseDefPytest } from '../execute';
 
 const mockTestResponse = {
   results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: 'hello\n', time_ms: 50 }],
@@ -315,6 +315,166 @@ describe('ioTestCasesToCaseDefs — pytest dispatch (TC3)', () => {
       { kind: 'pytest' as const, target_path: 'tests/t.py::fn', test_code: 'def fn(): pass' },
     ]);
     expect(result[0].name).toBeTruthy();
+  });
+});
+
+describe('ioTestCasesToGradedCaseDefs (TC1)', () => {
+  /**
+   * TC1: ioTestCasesToGradedCaseDefs preserves canonical names and expected_output.
+   *
+   * Contract: graded case defs must include expected_output and the original
+   * canonical case names (never renamed to 'run'). The backend uses these for
+   * content-based coverage matching and grading.
+   *
+   * Catches: ungradable graded runs (missing expected_output) and name-mismatch
+   * coverage failures if canonical names are stripped or replaced.
+   */
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(mockTestResponse);
+  });
+
+  it('preserves the canonical case name (does NOT rename to "run") for io cases', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'My Case', input: 'hello', expected_output: 'HELLO', match_type: 'exact', order: 0 },
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('My Case');
+    expect(result[0].name).not.toBe('run');
+  });
+
+  it('includes expected_output for io cases', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'Case 1', input: 'x', expected_output: 'y', match_type: 'exact', order: 0 },
+    ]);
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase).toHaveProperty('expected_output', 'y');
+  });
+
+  it('io case without expected_output produces CaseDef without expected_output', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'Case 1', input: 'x', match_type: 'exact', order: 0 },
+    ]);
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase).not.toHaveProperty('expected_output');
+  });
+
+  it('preserves match_type for io cases', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'C', input: '', expected_output: 'x', match_type: 'contains', order: 0 },
+    ]);
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase.match_type).toBe('contains');
+  });
+
+  it('preserves random_seed for io cases', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'C', input: 'x', match_type: 'exact', order: 0, random_seed: 42 },
+    ]);
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase.random_seed).toBe(42);
+  });
+
+  it('preserves attached_files for io cases', () => {
+    const files = [{ name: 'data.txt', content: 'content' }];
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'C', input: '', match_type: 'exact', order: 0, attached_files: files },
+    ]);
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase.attached_files).toEqual(files);
+  });
+
+  it('preserves pytest case fields fully (name, test_code, target_path)', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'pytest' as const, name: 'test-foo', target_path: 'tests/test_foo.py::test_foo', test_code: 'def test_foo(): pass' },
+    ]);
+    expect(result).toHaveLength(1);
+    const pytestCase = result[0] as CaseDefPytest;
+    expect(pytestCase.kind).toBe('pytest');
+    expect(pytestCase.name).toBe('test-foo');
+    expect(pytestCase.target_path).toBe('tests/test_foo.py::test_foo');
+    expect(pytestCase.test_code).toBe('def test_foo(): pass');
+  });
+
+  it('handles a mix of io and pytest cases', () => {
+    const result = ioTestCasesToGradedCaseDefs([
+      { kind: 'io' as const, name: 'IO Case', input: 'hi', expected_output: 'HI', match_type: 'exact', order: 0 },
+      { kind: 'pytest' as const, name: 'Pytest Case', target_path: 'tests/t.py::fn', test_code: 'def fn(): pass' },
+    ]);
+    expect(result).toHaveLength(2);
+
+    const ioCase = result[0] as CaseDefIO;
+    expect(ioCase.name).toBe('IO Case');
+    expect(ioCase).toHaveProperty('expected_output', 'HI');
+
+    const pytestCase = result[1] as CaseDefPytest;
+    expect(pytestCase.kind).toBe('pytest');
+    expect(pytestCase.name).toBe('Pytest Case');
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(ioTestCasesToGradedCaseDefs([])).toEqual([]);
+  });
+});
+
+describe('TC4: ioTestCasesToCaseDefs behavior unchanged (regression guard)', () => {
+  /**
+   * TC4: ioTestCasesToCaseDefs must still rename io cases to 'run' and strip expected_output.
+   *
+   * There are 6 call sites (5 onRun handlers + useCaseRunner.ts) that depend on
+   * this run-only behavior. If this changes, all those handlers start sending
+   * graded case defs which breaks the "run-only" semantics.
+   */
+
+  it('still renames io cases to "run" (run-only behavior preserved)', () => {
+    const result = ioTestCasesToCaseDefs([
+      { kind: 'io' as const, name: 'My Test', input: 'x', expected_output: 'y', match_type: 'exact', order: 0 },
+    ]);
+    expect(result[0].name).toBe('run');
+  });
+
+  it('still strips expected_output from io cases', () => {
+    const result = ioTestCasesToCaseDefs([
+      { kind: 'io' as const, name: 'Test', input: 'x', expected_output: 'y', match_type: 'exact', order: 0 },
+    ]);
+    expect(result[0]).not.toHaveProperty('expected_output');
+  });
+});
+
+describe('executeCode — studentWorkId plumbing (TC2)', () => {
+  /**
+   * TC2: executeCode sends student_work_id in the request body when studentWorkId is set.
+   *
+   * Contract: ExecuteOptions accepts studentWorkId?:string; when present, the request body
+   * includes student_work_id so the backend can persist solved state.
+   * Catches: plumbing omission — studentWorkId set in options but not forwarded to POST body.
+   */
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiPost.mockResolvedValue(mockTestResponse);
+  });
+
+  it('includes student_work_id in POST body when studentWorkId option is set', async () => {
+    await executeCode('print("hi")', 'python', { studentWorkId: 'work-abc' });
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).toHaveProperty('student_work_id', 'work-abc');
+  });
+
+  it('does NOT include student_work_id in POST body when studentWorkId is absent', async () => {
+    await executeCode('print("hi")', 'python', {});
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('student_work_id');
+  });
+
+  it('does NOT include student_work_id when no options are provided', async () => {
+    await executeCode('print("hi")', 'python');
+
+    const body = mockApiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('student_work_id');
   });
 });
 

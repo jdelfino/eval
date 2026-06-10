@@ -17,6 +17,12 @@ describe('AuthHeading', () => {
    * If violated, heading sizes drift from the v4 design spec.
    */
   describe('size map', () => {
+    it('size=xl renders with 32px font-size', () => {
+      render(<AuthHeading size="xl">Heading</AuthHeading>);
+      const heading = screen.getByRole('heading', { name: 'Heading' });
+      expect(heading).toHaveStyle({ fontSize: '32px' });
+    });
+
     it('size=lg renders with 26px font-size', () => {
       render(<AuthHeading size="lg">Heading</AuthHeading>);
       const heading = screen.getByRole('heading', { name: 'Heading' });

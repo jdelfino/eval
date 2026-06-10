@@ -7,13 +7,14 @@ import (
 	"github.com/google/uuid"
 )
 
-const studentWorkColumns = `id, namespace_id, user_id, problem_id, section_id, code, test_cases, created_at, last_update`
+const studentWorkColumns = `id, namespace_id, user_id, problem_id, section_id, code, test_cases, created_at, last_update, last_run_all_passed, last_run_at`
 
 func scanStudentWork(row interface{ Scan(dest ...any) error }) (*StudentWork, error) {
 	var sw StudentWork
 	err := row.Scan(
 		&sw.ID, &sw.NamespaceID, &sw.UserID, &sw.ProblemID, &sw.SectionID,
 		&sw.Code, &sw.TestCases, &sw.CreatedAt, &sw.LastUpdate,
+		&sw.LastRunAllPassed, &sw.LastRunAt,
 	)
 	if err != nil {
 		return nil, err
@@ -27,6 +28,7 @@ func scanStudentWorkWithProblem(row interface{ Scan(dest ...any) error }) (*Stud
 		// StudentWork fields
 		&swp.ID, &swp.NamespaceID, &swp.UserID, &swp.ProblemID, &swp.SectionID,
 		&swp.Code, &swp.TestCases, &swp.CreatedAt, &swp.LastUpdate,
+		&swp.LastRunAllPassed, &swp.LastRunAt,
 		// Problem fields
 		&swp.Problem.ID, &swp.Problem.NamespaceID, &swp.Problem.Title, &swp.Problem.Description,
 		&swp.Problem.StarterCode, &swp.Problem.TestCases,
@@ -92,6 +94,7 @@ func (s *Store) GetStudentWork(ctx context.Context, id uuid.UUID) (*StudentWorkW
 	query := `SELECT
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
 		sw.code, sw.test_cases, sw.created_at, sw.last_update,
+		sw.last_run_all_passed, sw.last_run_at,
 		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases,
 		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at
 		FROM student_work sw
@@ -121,7 +124,7 @@ func (s *Store) GetStudentWorkByProblem(ctx context.Context, userID, problemID, 
 
 // ListStudentWorkBySession retrieves all student work linked to a session.
 func (s *Store) ListStudentWorkBySession(ctx context.Context, sessionID uuid.UUID) ([]StudentWork, error) {
-	query := `SELECT sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id, sw.code, sw.test_cases, sw.created_at, sw.last_update
+	query := `SELECT sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id, sw.code, sw.test_cases, sw.created_at, sw.last_update, sw.last_run_all_passed, sw.last_run_at
 		FROM student_work sw
 		JOIN session_students ss ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1
@@ -153,6 +156,7 @@ func (s *Store) ListStudentProgress(ctx context.Context, sectionID uuid.UUID) ([
 		COALESCE(u.display_name, u.email) AS display_name,
 		u.email,
 		COUNT(sw.id) AS problems_started,
+		COUNT(*) FILTER (WHERE sw.last_run_all_passed = true) AS problems_solved,
 		(SELECT COUNT(*) FROM section_problems WHERE section_id = $1) AS total_problems,
 		MAX(sw.last_update) AS last_active
 		FROM section_memberships sm
@@ -176,6 +180,7 @@ func (s *Store) ListStudentProgress(ctx context.Context, sectionID uuid.UUID) ([
 			&p.DisplayName,
 			&p.Email,
 			&p.ProblemsStarted,
+			&p.ProblemsSolved,
 			&p.TotalProblems,
 			&p.LastActive,
 		); err != nil {
@@ -193,7 +198,8 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		` + prefixCols("p", problemColumns) + `,
 		sp.published_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.test_cases, sw.created_at, sw.last_update
+		sw.code, sw.test_cases, sw.created_at, sw.last_update,
+		sw.last_run_all_passed, sw.last_run_at
 		FROM section_problems sp
 		JOIN problems p ON p.id = sp.problem_id
 		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id
@@ -220,6 +226,8 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		var workTestCases []byte
 		var workCreatedAt *time.Time
 		var workLastUpdate *time.Time
+		var workLastRunAllPassed *bool
+		var workLastRunAt *time.Time
 
 		if err := rows.Scan(
 			// Problem fields
@@ -232,18 +240,21 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 			// StudentWork fields (nullable)
 			&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
 			&workCode, &workTestCases, &workCreatedAt, &workLastUpdate,
+			&workLastRunAllPassed, &workLastRunAt,
 		); err != nil {
 			return nil, err
 		}
 
 		if workID != nil {
 			summary.StudentWork = &StudentWork{
-				ID:          *workID,
-				NamespaceID: *workNamespaceID,
-				UserID:      *workUserID,
-				ProblemID:   *workProblemID,
-				SectionID:   *workSectionID,
-				Code:        *workCode,
+				ID:               *workID,
+				NamespaceID:      *workNamespaceID,
+				UserID:           *workUserID,
+				ProblemID:        *workProblemID,
+				SectionID:        *workSectionID,
+				Code:             *workCode,
+				LastRunAllPassed: workLastRunAllPassed,
+				LastRunAt:        workLastRunAt,
 			}
 			if workTestCases != nil {
 				summary.StudentWork.TestCases = workTestCases
@@ -259,6 +270,23 @@ func (s *Store) ListStudentWorkForReview(ctx context.Context, sectionID, student
 		results = append(results, summary)
 	}
 	return results, rows.Err()
+}
+
+// SetStudentWorkRunResult persists the result of a graded run.
+// allPassed indicates whether every canonical case was covered and all passed.
+// Returns ErrNotFound if no row matches the given id (e.g. RLS blocked the update).
+func (s *Store) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
+	query := `UPDATE student_work
+		SET last_run_all_passed = $2, last_run_at = $3, last_update = now()
+		WHERE id = $1`
+	tag, err := s.q.Exec(ctx, query, id, allPassed, at)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // Compile-time check that Store implements StudentWorkRepository.
