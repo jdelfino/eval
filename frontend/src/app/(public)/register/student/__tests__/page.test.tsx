@@ -1056,6 +1056,80 @@ describe('StudentRegistrationPage', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test gap 5: "Wrong code?" button disabled during submitting state
+  // Catches: mid-flight reset that nulls registrationInfo and leaves a blank shell
+  // when doRegister recovery runs.
+  // -----------------------------------------------------------------------
+  describe('"Wrong code?" button disabled while submitting', () => {
+    it('is disabled while pageState.status === "submitting"', async () => {
+      // Let registerStudent hang so we can check the button state during submission
+      mockCurrentUser = null;
+      let resolveRegister!: () => void;
+      mockRegisterStudent.mockImplementation(
+        () => new Promise<{ id: string; role: string }>((res) => { resolveRegister = () => res({ id: 'u1', role: 'student' }); })
+      );
+
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Trigger sign-in which starts registration (submitting state)
+      mockCurrentUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'student@test.com' };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      // While submitting, "Wrong code?" should be disabled
+      await waitFor(() => {
+        const wrongCodeBtn = screen.getByRole('button', { name: 'Wrong code?' });
+        expect(wrongCodeBtn).toBeDisabled();
+      });
+
+      // Clean up
+      resolveRegister();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Test gap 8: K2 error state wires `error` prop to JoinCodeBoxes
+  // Catches: JoinCodeBoxes not receiving error=true when codeError is set,
+  // which would leave the boxes in the default styling instead of danger.
+  // -----------------------------------------------------------------------
+  describe('K2: JoinCodeBoxes receives error prop on code error', () => {
+    it('passes error=true to JoinCodeBoxes when codeError is shown (danger border on boxes)', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        // Error message is shown
+        expect(screen.getByText(/That code doesn't exist/)).toBeInTheDocument();
+      });
+
+      // JoinCodeBoxes with error=true renders visual boxes with danger border.
+      // The first data-box element should have the danger border style.
+      const firstBox = container.querySelector('[data-box="0"]') as HTMLElement;
+      expect(firstBox).not.toBeNull();
+      expect(firstBox.style.border).toContain('var(--danger)');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // NAMESPACE_AT_CAPACITY in Banner (code-valid state)
   // Catches: error-in-banner regression.
   // -----------------------------------------------------------------------

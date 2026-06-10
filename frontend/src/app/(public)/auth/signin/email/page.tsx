@@ -20,7 +20,7 @@ import { acceptInvite, registerStudent, getStudentRegistrationInfo } from '@/lib
 import { ApiError } from '@/lib/api-error';
 import { formatJoinCodeForDisplay, formatJoinCodeInput } from '@/lib/join-code';
 import { INVITATION_ERROR_MESSAGES, REGISTRATION_ERROR_MESSAGES } from '@/lib/api/registration-errors';
-import { redirectPathForRole } from '@/lib/auth-redirect';
+import { postInvitePathForRole } from '@/lib/auth-redirect';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
 import { AuthLoading } from '@/components/layout/AuthLoading';
 import { AuthCard } from '@/components/ui/AuthCard';
@@ -64,7 +64,7 @@ function EmailSignInContent() {
   // Redirect based on user role after accepting an invite
   const redirectBasedOnRole = useCallback(
     (role: string) => {
-      router.push(redirectPathForRole(role));
+      router.push(postInvitePathForRole(role));
     },
     [router]
   );
@@ -102,11 +102,11 @@ function EmailSignInContent() {
   const handleRegisterStudent = useCallback(
     async (code: string) => {
       try {
-        // Both calls are independent — run in parallel to save an RTT
-        const [registrationInfo, data] = await Promise.all([
-          getStudentRegistrationInfo(code),
-          registerStudent(code),
-        ]);
+        // Sequential: fetch registration info first (read), then register (mutate).
+        // Running in parallel risks the mutating POST succeeding while the GET fails,
+        // leaving the auth gate stuck; a retry would re-POST and create a duplicate.
+        const registrationInfo = await getStudentRegistrationInfo(code);
+        const data = await registerStudent(code);
         const sectionId = registrationInfo.section.id;
         // Write the profile to cache immediately so onAuthStateChanged finds it
         // during hydration — eliminates the race where onAuthStateChanged's

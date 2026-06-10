@@ -49,10 +49,13 @@ jest.mock('@/components/ui/SignInButtons', () => ({
 // Mock AuthContext
 const mockInviteBeginAuthFlow = jest.fn();
 const mockInviteEndAuthFlow = jest.fn();
+// mockSignOut is wired into useAuth().signOut so tests can assert on it
+const mockSignOut = jest.fn();
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     beginAuthFlow: mockInviteBeginAuthFlow,
     endAuthFlow: mockInviteEndAuthFlow,
+    signOut: (...args: unknown[]) => mockSignOut(...args),
   }),
 }));
 
@@ -66,12 +69,6 @@ jest.mock('@/lib/firebase', () => ({
       return mockCurrentUser;
     },
   },
-}));
-
-// Mock firebase/auth signOut for L3 test
-const mockSignOut = jest.fn();
-jest.mock('firebase/auth', () => ({
-  signOut: (...args: unknown[]) => mockSignOut(...args),
 }));
 
 // Mock typed registration API client
@@ -326,6 +323,24 @@ describe('AcceptInvitePage', () => {
       expect(screen.queryByText(/decline invitation/i)).not.toBeInTheDocument();
     });
 
+    /**
+     * Contract: The "Expires" row renders the formatted date value from the fixture's
+     * expires_at field (not just the label).
+     * Why it matters: a missing or blank date value would leave users without key
+     * information about the invitation's validity window.
+     * Breaks if: formatDate doesn't run, the value is omitted, or the row is removed.
+     */
+    it('renders "Expires" row with the formatted date value (Jun 17, 2026)', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        // Label present
+        expect(screen.getByText('Expires')).toBeInTheDocument();
+        // Formatted date from fixture expires_at: '2026-06-17T00:00:00Z'
+        expect(screen.getByText('Jun 17, 2026')).toBeInTheDocument();
+      });
+    });
+
     it('renders display name field', async () => {
       render(<AcceptInvitePage />);
 
@@ -487,6 +502,32 @@ describe('AcceptInvitePage', () => {
     });
 
     /**
+     * Contract: The "You signed in as" email in the L3 detail box carries
+     * var(--danger) color to visually signal the mismatch to the user.
+     * Why it matters: without the danger color, the mismatch is less obvious
+     * and the warning loses its visual weight.
+     * Breaks if: the span color is removed or changed from var(--danger).
+     */
+    it('L3 "You signed in as" email renders with var(--danger) color', async () => {
+      render(<AcceptInvitePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      mockCurrentUser = { email: 'different@example.com', delete: mockDeleteUser };
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(screen.getByText('This invitation is for a different email')).toBeInTheDocument();
+      });
+
+      // The signed-in email should be styled with var(--danger)
+      const signedInEmail = screen.getByText('different@example.com');
+      expect(signedInEmail).toHaveStyle({ color: 'var(--danger)' });
+    });
+
+    /**
      * Contract: Entering L3 calls endAuthFlow() immediately.
      * Why it matters: the suppressed onAuthStateChanged event has already fired and will
      * not replay — if the gate is left open and the user abandons L3 and navigates to
@@ -570,6 +611,7 @@ describe('AcceptInvitePage', () => {
 
       await waitFor(() => {
         expect(mockSignOut).toHaveBeenCalled();
+        expect(mockInviteEndAuthFlow).toHaveBeenCalled();
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
     });

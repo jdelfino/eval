@@ -16,31 +16,14 @@ import { Banner } from '@/components/ui/Banner';
 import { AuthCard } from '@/components/ui/AuthCard';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
-import { Spinner } from '@/components/ui/Spinner';
+import { AuthLoading } from '@/components/layout/AuthLoading';
 
 // Main page wrapper with Suspense for useSearchParams
 export default function SignInPage() {
   return (
-    <Suspense fallback={<SignInPageLoading />}>
+    <Suspense fallback={<AuthLoading />}>
       <SignInPageContent />
     </Suspense>
-  );
-}
-
-// Loading fallback — token spinner
-function SignInPageLoading() {
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg)',
-      }}
-    >
-      <Spinner size="lg" />
-    </div>
   );
 }
 

@@ -427,13 +427,15 @@ function StudentRegistrationContent() {
             <button
               type="button"
               onClick={handleBackToCode}
+              disabled={pageState.status === 'submitting'}
               style={{
                 fontSize: 12,
-                color: 'var(--accent-ink)',
+                color: pageState.status === 'submitting' ? 'var(--fg-subtle)' : 'var(--accent-ink)',
                 background: 'none',
                 border: 'none',
-                cursor: 'pointer',
+                cursor: pageState.status === 'submitting' ? 'not-allowed' : 'pointer',
                 padding: 0,
+                opacity: pageState.status === 'submitting' ? 0.5 : 1,
               }}
             >
               Wrong code?

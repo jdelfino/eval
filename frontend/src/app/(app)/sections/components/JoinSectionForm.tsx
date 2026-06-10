@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Banner } from '@/components/ui/Banner';
 import { Icon } from '@/components/ui/Icon';
 import { getStudentRegistrationInfo } from '@/lib/api/registration';
-import { formatJoinCodeInput, normalizeJoinCode, isCompleteJoinCode } from '@/lib/join-code';
+import { formatJoinCodeInput, formatJoinCodeForDisplay, normalizeJoinCode, isCompleteJoinCode } from '@/lib/join-code';
 import type { RegisterStudentInfo } from '@/types/api';
 
 interface JoinSectionFormProps {
@@ -40,10 +40,12 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     }
 
     const requestedCode = normalized;
+    // Backend stores join codes with dash (ABC-123); send the dashed display format
+    const dashedCode = formatJoinCodeForDisplay(normalized);
 
     const timer = setTimeout(async () => {
       try {
-        const info = await getStudentRegistrationInfo(requestedCode);
+        const info = await getStudentRegistrationInfo(dashedCode);
         // Guard stale responses: only apply if this is still the latest requested code
         if (latestPreviewCodeRef.current === requestedCode) {
           setPreview(info);

@@ -99,7 +99,7 @@ describe('JoinSectionForm', () => {
     });
 
     await waitFor(() => {
-      expect(mockGetStudentRegistrationInfo).toHaveBeenCalledWith('ABC123');
+      expect(mockGetStudentRegistrationInfo).toHaveBeenCalledWith('ABC-123');
     });
 
     await waitFor(() => {

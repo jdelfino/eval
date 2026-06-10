@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -20,6 +22,11 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
  * Styling uses CSS design tokens (--bg, --border-strong, --accent, --danger, etc.)
  * rather than hardcoded Tailwind color classes. Focus treatment applies
  * accent border-color and box-shadow rather than a Tailwind ring.
+ *
+ * **Field+Input composition convention:**
+ * When composing `<Field>` with `<Input>`, pass `error` to `Input` (not to `Field`).
+ * Input owns the `aria-describedby` wiring and inline error text. `Field.error` is
+ * intended for non-Input children where the field wrapper must show the error message.
  */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, error, mono, type = 'text', onFocus, onBlur, style, ...props }, ref) => {

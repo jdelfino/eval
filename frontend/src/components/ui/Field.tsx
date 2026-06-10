@@ -20,6 +20,12 @@ export interface FieldProps {
  *
  * When `error` is set it takes precedence over `hint`, renders in --danger color,
  * and adds role="alert" for screen-reader announcement.
+ *
+ * **Field+Input composition convention:**
+ * When composing `<Field>` with `<Input>`, pass `error` to `Input` (not to `Field`).
+ * Input owns the `aria-describedby` wiring and inline error text. `Field.error` is
+ * intended for non-Input children (e.g. custom selects, textarea) where the field
+ * wrapper must surface the error message.
  */
 export function Field({ label, hint, error, right, children, style }: FieldProps): React.ReactElement {
   const helpText = error ?? hint;

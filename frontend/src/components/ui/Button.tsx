@@ -132,6 +132,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className = '',
       children,
       disabled,
+      style,
       ...props
     },
     ref
@@ -147,7 +148,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       .filter(Boolean)
       .join(' ');
 
-    const inlineStyle = variantInlineStyles[variant];
+    const inlineStyle = { ...variantInlineStyles[variant], ...style };
 
     // For asChild pattern, clone the child element with button props
     if (asChild && React.isValidElement(children)) {

@@ -41,7 +41,7 @@ import {
   INVITATION_ERROR_MESSAGES,
   type InvitationErrorCode,
 } from '@/lib/api/registration-errors';
-import { redirectPathForRole } from '@/lib/auth-redirect';
+import { postInvitePathForRole } from '@/lib/auth-redirect';
 
 // Page state types
 type PageState =
@@ -99,7 +99,9 @@ function formatRole(role: string): string {
 // Format a date string (ISO 8601) to a human-readable format like "Jun 17, 2026"
 function formatDate(isoDate: string): string {
   try {
-    return new Date(isoDate).toLocaleDateString('en-US', {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return isoDate;
+    return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -161,7 +163,7 @@ export default function AcceptInvitePage() {
 function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { beginAuthFlow, endAuthFlow } = useAuth();
+  const { beginAuthFlow, endAuthFlow, signOut: authSignOut } = useAuth();
   const [pageState, setPageState] = useState<PageState>({ status: 'loading', caption: 'Verifying invitation...' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -170,7 +172,7 @@ function AcceptInviteContent() {
   // Redirect based on user role
   const redirectBasedOnRole = useCallback(
     (role: string) => {
-      router.push(redirectPathForRole(role));
+      router.push(postInvitePathForRole(role));
     },
     [router]
   );
@@ -292,7 +294,7 @@ function AcceptInviteContent() {
     };
 
     verifyAndLoadInvitation();
-  }, [searchParams, endAuthFlow]);
+  }, [searchParams]);
 
   // Sign-in success handler from SignInButtons — user just signed in, so isNewSignIn=true
   const handleSignIn = useCallback(async () => {
@@ -428,8 +430,7 @@ function AcceptInviteContent() {
     };
 
     const handleSignOutAndRetry = async () => {
-      const { signOut } = await import('firebase/auth');
-      await signOut(firebaseAuth);
+      await authSignOut();
       endAuthFlow();
       setPageState({ status: 'ready', invitation: inv });
     };
