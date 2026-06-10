@@ -7,6 +7,7 @@ import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/typ
 import { BackButton } from '@/components/ui/BackButton';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { createSession } from '@/lib/api/sessions';
 import type { SectionDetail } from '../page';
 
@@ -158,10 +159,9 @@ export default function InstructorSectionView({
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                          <span
-                            data-testid="live-dot"
-                            className="w-4 h-4 bg-green-500 rounded-full animate-pulse"
-                          />
+                          <span data-testid="live-dot">
+                            <ConnectionDot status="live" compact />
+                          </span>
                         </div>
                       </div>
                       <div className="flex-1">

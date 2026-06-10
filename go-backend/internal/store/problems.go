@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -116,17 +117,20 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 
 // countTestCases parses a test_cases JSONB array and returns a TestCounts struct.
 // Returns {0, 0} for nil or unparseable input.
+// Uses a kind-only struct to avoid full case materialization.
 func countTestCases(raw json.RawMessage) *TestCounts {
 	counts := &TestCounts{}
 	if len(raw) == 0 {
 		return counts
 	}
-	cases, err := UnmarshalIOTestCases(raw)
-	if err != nil {
+	var rows []struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil {
 		return counts
 	}
-	for _, tc := range cases {
-		switch tc.Kind() {
+	for _, r := range rows {
+		switch r.Kind {
 		case "io":
 			counts.IO++
 		case "pytest":
@@ -311,12 +315,8 @@ func buildPublicTestCaseSummaries(raw []byte) []PublicTestCaseSummary {
 
 // firstLine returns the first line of s, or the whole string if there is no newline.
 func firstLine(s string) string {
-	for i, c := range s {
-		if c == '\n' {
-			return s[:i]
-		}
-	}
-	return s
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }
 
 // Compile-time check that Store implements ProblemRepository.

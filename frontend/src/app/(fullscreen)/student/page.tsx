@@ -10,7 +10,7 @@ import type { Problem } from '@/types/api';
 import type { TestResponse, IOTestCase, CaseResult, CaseResultIO, CaseResultPytest } from '@/types/api';
 import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
 import { getActiveSessions, getSection } from '@/lib/api/sections';
-import { warmExecutor, executeCode, ioTestCasesToCaseDefs, ioTestCasesToGradedCaseDefs } from '@/lib/api/execute';
+import { warmExecutor, executeCode, ioTestCasesToCaseDefs, ioTestCasesToGradedCaseDefs, type ExecuteOptions } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
@@ -356,12 +356,10 @@ function StudentPage() {
       // canonical names and expected_output, and pass studentWorkId so the backend
       // can persist solved state. Single-case runs (handleRunTest) use the run-only
       // path and deliberately omit studentWorkId to avoid clobbering solved state.
-      const executeOptions: Parameters<typeof executeCode>[2] = {
+      const executeOptions: ExecuteOptions = {
         cases: ioTestCasesToGradedCaseDefs(effectiveTestCases),
+        studentWorkId: workId || undefined,
       };
-      if (workId) {
-        executeOptions.studentWorkId = workId;
-      }
       const result = await executeCode(code, problem.language, executeOptions);
       setExecutionResult(result);
       setIsRunning(false);

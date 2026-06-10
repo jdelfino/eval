@@ -18,10 +18,13 @@ import Link from 'next/link';
 import MarkdownContent from '@/components/MarkdownContent';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { Pill } from '@/components/ui/Pill';
+import { Button } from '@/components/ui/Button';
+import { SectionLabel } from '@/components/ui/SectionLabel';
 import InstructorActions from './InstructorActions';
 import StudentActions from './StudentActions';
 import { getPublicProblem } from '@/lib/api/problems';
 import { getLanguageVersion } from '@/lib/languageVersions';
+import { formatShortDate } from '@/lib/format';
 import type { PublicProblem, PublicTestCaseSummary } from '@/types/api';
 
 type Params = {
@@ -49,22 +52,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/** Format an ISO date string as "Jan 15, 2026" */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 /** Build the meta line segments: "python 3.11 · 3 tests · authored by X · updated Jan 15, 2026" */
 function buildMetaLine(problem: PublicProblem): string {
   const version = getLanguageVersion(problem.language);
   const langSegment = version ? `${problem.language} ${version}` : problem.language;
   const testSegment = `${problem.test_cases.length} tests`;
   const authorSegment = problem.author_name ? `authored by ${problem.author_name}` : null;
-  const dateSegment = `updated ${formatDate(problem.updated_at)}`;
+  const dateSegment = `updated ${formatShortDate(problem.updated_at)}`;
 
   return [langSegment, testSegment, authorSegment, dateSegment]
     .filter(Boolean)
@@ -148,7 +142,7 @@ export default async function PublicProblemPage({ params }: Params) {
           )}
 
           {/* Serif title */}
-          <AuthHeading size="lg" style={{ fontSize: 32, letterSpacing: -0.6, marginBottom: 6 }}>
+          <AuthHeading size="xl" style={{ marginBottom: 6 }}>
             {problem.title}
           </AuthHeading>
 
@@ -174,21 +168,9 @@ export default async function PublicProblemPage({ params }: Params) {
         {/* Persona CTAs */}
         {!problem.class_id && (
           <div style={{ marginBottom: 24 }}>
-            <Link
-              href="/auth/signin"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                background: 'var(--accent)',
-                color: 'var(--accent-fg)',
-                borderRadius: 'var(--radius)',
-                fontSize: 13.5,
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              Sign in
-            </Link>
+            <Button variant="accent" size="md" asChild>
+              <Link href="/auth/signin">Sign in</Link>
+            </Button>
           </div>
         )}
 
@@ -212,18 +194,7 @@ export default async function PublicProblemPage({ params }: Params) {
         {/* Problem statement */}
         {problem.description && (
           <section style={{ marginBottom: 32 }}>
-            <div
-              style={{
-                fontSize: 11.5,
-                fontWeight: 600,
-                letterSpacing: 0.4,
-                textTransform: 'uppercase' as const,
-                color: 'var(--fg-muted)',
-                marginBottom: 10,
-              }}
-            >
-              Statement
-            </div>
+            <SectionLabel style={{ marginBottom: 10 }}>Statement</SectionLabel>
             <div
               style={{
                 background: 'var(--bg-raised)',
@@ -239,18 +210,7 @@ export default async function PublicProblemPage({ params }: Params) {
 
         {/* Tests list */}
         <section>
-          <div
-            style={{
-              fontSize: 11.5,
-              fontWeight: 600,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase' as const,
-              color: 'var(--fg-muted)',
-              marginBottom: 10,
-            }}
-          >
-            Tests
-          </div>
+          <SectionLabel style={{ marginBottom: 10 }}>Tests</SectionLabel>
           {problem.test_cases.length > 0 ? (
             <div
               style={{

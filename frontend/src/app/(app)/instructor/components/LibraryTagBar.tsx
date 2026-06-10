@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { Chip } from '@/components/ui/Chip';
 
 interface LibraryTagBarProps {
   /** Map of tag name -> count of problems carrying that tag */
@@ -38,25 +39,17 @@ export default function LibraryTagBar({
       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-1">
         Tags
       </span>
-      {tags.map(([tag, count]) => {
-        const active = selectedTags.has(tag);
-        return (
-          <button
-            key={tag}
-            data-testid={`tag-chip-${tag}`}
-            onClick={() => onToggle(tag)}
-            className={[
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-mono transition-colors',
-              active
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100',
-            ].join(' ')}
-          >
-            <span>#{tag}</span>
-            <span className="opacity-70">{count}</span>
-          </button>
-        );
-      })}
+      {tags.map(([tag, count]) => (
+        <Chip
+          key={tag}
+          data-testid={`tag-chip-${tag}`}
+          active={selectedTags.has(tag)}
+          count={count}
+          onClick={() => onToggle(tag)}
+        >
+          #{tag}
+        </Chip>
+      ))}
       {selectedTags.size > 0 && (
         <button
           data-testid="tag-bar-clear"

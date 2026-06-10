@@ -10,7 +10,7 @@
  * No difficulty column, no status dot (problems have no draft/published state).
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listClasses } from '@/lib/api/classes';
@@ -20,6 +20,10 @@ import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
 import PublishProblemModal from './PublishProblemModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
+import { Pill } from '@/components/ui/Pill';
+import { Table } from '@/components/ui/Table';
+import { Menu } from '@/components/ui/Menu';
+import { formatShortDate } from '@/lib/format';
 import type { Class } from '@/types/api';
 import type { ProblemSummary } from '../types';
 import { Download, ChevronDown, FileJson, FileText } from 'lucide-react';
@@ -29,14 +33,10 @@ interface ProblemLibraryProps {
   onEdit?: (problem_id: string) => void;
 }
 
-/** Format a date string to a short human-readable form (e.g. "Jan 3, 2025"). */
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
+/** Serif title cell style — hoisted to module const per design. */
+const TITLE_CELL_STYLE: React.CSSProperties = {
+  fontFamily: 'var(--font-serif, Georgia, serif)',
+};
 
 /** Render the tests column value from test_counts. Falls back to "—" when absent. */
 function renderTestCounts(problem: ProblemSummary): string {
@@ -84,7 +84,6 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   // Export state
   const [exporting, setExporting] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // ──────────────────────────────────────────────
   // Load classes on mount
@@ -196,9 +195,9 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     return counts;
   }, [problems]);
 
-  /** Filtered + sorted problems based on search query and selected tags. */
+  /** Filtered problems based on search query and selected tags (API already sorted). */
   const filteredProblems = useMemo(() => {
-    let filtered = [...problems];
+    let filtered = problems;
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -213,23 +212,8 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       );
     }
 
-    // Client-side sort (API already sorts, but tag/search filtering may reorder)
-    filtered.sort((a, b) => {
-      let compareValue = 0;
-      if (sortBy === 'title') {
-        compareValue = a.title.localeCompare(b.title);
-      } else if (sortBy === 'created') {
-        compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      } else if (sortBy === 'updated') {
-        const aDate = a.updated_at ?? a.created_at;
-        const bDate = b.updated_at ?? b.created_at;
-        compareValue = new Date(aDate).getTime() - new Date(bDate).getTime();
-      }
-      return sortOrder === 'asc' ? compareValue : -compareValue;
-    });
-
     return filtered;
-  }, [problems, searchQuery, selectedTags, sortBy, sortOrder]);
+  }, [problems, searchQuery, selectedTags]);
 
   // ──────────────────────────────────────────────
   // Action handlers
@@ -306,28 +290,6 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
     }
   };
 
-  // Click-outside handler for export dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Escape key handler for export dropdown
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && exportMenuOpen) {
-        setExportMenuOpen(false);
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exportMenuOpen]);
-
   // ──────────────────────────────────────────────
   // Render
   // ──────────────────────────────────────────────
@@ -350,6 +312,33 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       </div>
     );
   }
+
+  // Export dropdown anchor
+  const exportAnchor = (
+    <Button
+      variant="secondary"
+      size="md"
+      loading={exporting}
+      disabled={exporting || filteredProblems.length === 0}
+      aria-expanded={exportMenuOpen}
+      aria-haspopup="true"
+    >
+      <Download className="w-4 h-4 mr-1" />
+      Export
+      <ChevronDown className="w-4 h-4 ml-1" />
+    </Button>
+  );
+
+  const exportMenuItems = [
+    {
+      label: 'Export JSON',
+      onSelect: () => handleExport('json'),
+    },
+    {
+      label: 'Export PDF',
+      onSelect: () => handleExport('pdf'),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -392,61 +381,14 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
             </div>
           )}
 
-          {/* Export dropdown */}
-          <div className="relative" ref={exportMenuRef}>
-            <button
-              onClick={() => setExportMenuOpen(!exportMenuOpen)}
-              disabled={exporting || filteredProblems.length === 0}
-              aria-expanded={exportMenuOpen}
-              aria-haspopup="true"
-              className="px-4 py-2 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {exporting ? (
-                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              ) : (
-                <Download className="w-5 h-5" />
-              )}
-              Export
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            {exportMenuOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
-                role="menu"
-              >
-                <button
-                  role="menuitem"
-                  onClick={() => handleExport('json')}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <FileJson className="w-4 h-4" />
-                  Export JSON
-                </button>
-                <button
-                  role="menuitem"
-                  onClick={() => handleExport('pdf')}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  Export PDF
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Export dropdown via Menu primitive */}
+          <Menu
+            anchor={exportAnchor}
+            items={exportMenuItems}
+            open={exportMenuOpen}
+            onOpenChange={setExportMenuOpen}
+            align="right"
+          />
 
           {/* Create new problem */}
           {onCreateNew && (
@@ -550,75 +492,57 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
         </div>
       ) : (
         <div className="overflow-hidden border border-gray-200 rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Title
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Tags
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Tests
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Updated
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <Table>
+            <Table.Header>
+              <Table.Row>
+                <Table.HeaderCell>Title</Table.HeaderCell>
+                <Table.HeaderCell>Tags</Table.HeaderCell>
+                <Table.HeaderCell>Tests</Table.HeaderCell>
+                <Table.HeaderCell>Updated</Table.HeaderCell>
+                <Table.HeaderCell align="right">Actions</Table.HeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
               {filteredProblems.map((problem) => (
-                <tr key={problem.id} className="hover:bg-gray-50 transition-colors">
+                <Table.Row key={problem.id}>
                   {/* Title — serif font per design */}
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-gray-900" style={{ fontFamily: 'var(--font-serif, Georgia, serif)' }}>
+                  <Table.Cell>
+                    <span className="font-medium text-gray-900" style={TITLE_CELL_STYLE}>
                       {problem.title}
                     </span>
-                  </td>
+                  </Table.Cell>
 
                   {/* Tags */}
-                  <td className="px-4 py-3">
+                  <Table.Cell>
                     <div className="flex flex-wrap gap-1">
                       {problem.tags && problem.tags.length > 0 ? (
                         problem.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className={[
-                              'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono border',
-                              selectedTags.has(tag)
-                                ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                                : 'bg-gray-100 text-gray-600 border-gray-200',
-                            ].join(' ')}
-                          >
+                          <Pill key={tag} tone="neutral" mono>
                             #{tag}
-                          </span>
+                          </Pill>
                         ))
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}
                     </div>
-                  </td>
+                  </Table.Cell>
 
                   {/* Tests column: "N io · M pytest" or "—" */}
-                  <td className="px-4 py-3">
+                  <Table.Cell>
                     <span className="text-xs font-mono text-gray-500">
                       {renderTestCounts(problem)}
                     </span>
-                  </td>
+                  </Table.Cell>
 
                   {/* Updated date */}
-                  <td className="px-4 py-3">
+                  <Table.Cell>
                     <span className="text-xs text-gray-500">
-                      {formatDate(problem.updated_at ?? problem.created_at)}
+                      {formatShortDate(problem.updated_at ?? problem.created_at)}
                     </span>
-                  </td>
+                  </Table.Cell>
 
                   {/* Actions */}
-                  <td className="px-4 py-3">
+                  <Table.Cell align="right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
                         variant="quiet"
@@ -634,25 +558,27 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
                       >
                         Start
                       </Button>
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handlePublish(problem.id)}
-                        className="px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
                       >
                         Publish
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => handleDeleteClick(problem.id, problem.title)}
                         disabled={isDeleting}
-                        className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
                         Delete
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </Table.Cell>
+                </Table.Row>
               ))}
-            </tbody>
-          </table>
+            </Table.Body>
+          </Table>
         </div>
       )}
 

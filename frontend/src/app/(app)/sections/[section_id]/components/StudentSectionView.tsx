@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,11 @@ import type { Session, PublishedProblemWithStatus } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import { BackButton } from '@/components/ui/BackButton';
 import { Pill } from '@/components/ui/Pill';
+import { Chip } from '@/components/ui/Chip';
+import { AuthHeading } from '@/components/ui/AuthHeading';
+import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useSectionEvents } from '@/hooks/useSectionEvents';
+import { formatShortDate } from '@/lib/format';
 import type { SectionDetail } from '../page';
 
 // ---------------------------------------------------------------------------
@@ -198,37 +202,6 @@ function LiveSessionCard({ liveNow, onJoin }: LiveSessionCardProps) {
 }
 
 // ---------------------------------------------------------------------------
-// FilterChip
-// ---------------------------------------------------------------------------
-
-interface FilterChipProps {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-function FilterChip({ label, active, onClick }: FilterChipProps) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        height: 24,
-        padding: '0 10px',
-        background: active ? 'var(--fg)' : 'var(--bg-sunken)',
-        color: active ? 'var(--bg)' : 'var(--fg-muted)',
-        border: `1px solid ${active ? 'var(--fg)' : 'var(--border)'}`,
-        borderRadius: 12,
-        fontSize: 11.5,
-        fontWeight: active ? 600 : 500,
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // ProblemRow
 // ---------------------------------------------------------------------------
 
@@ -237,10 +210,9 @@ interface ProblemRowProps {
   isLive: boolean;
   onPractice: () => void;
   onViewSolution: () => void;
-  last: boolean;
 }
 
-function ProblemRow({ problem, isLive, onPractice, onViewSolution, last }: ProblemRowProps) {
+function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowProps) {
   const state = deriveProblemState(problem);
   const testCount = problem.problem.test_cases?.length ?? 0;
 
@@ -259,7 +231,6 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution, last }: Probl
         alignItems: 'center',
         gap: 14,
         padding: '12px 16px',
-        borderBottom: last ? 'none' : '1px solid var(--border)',
         cursor: 'pointer',
       }}
     >
@@ -274,9 +245,7 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution, last }: Probl
           {problem.problem.title}
         </span>
         {isLive && (
-          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full">
-            Live
-          </span>
+          <Pill tone="ok">Live</Pill>
         )}
         <div style={{ display: 'flex', gap: 4 }}>
           {(problem.problem.tags ?? []).map((tag) => (
@@ -343,17 +312,10 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution, last }: Probl
 
 interface PastSessionRowProps {
   session: Session;
-  last: boolean;
 }
 
-function PastSessionRow({ session, last }: PastSessionRowProps) {
-  const date = session.created_at
-    ? new Date(session.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : '—';
+function PastSessionRow({ session }: PastSessionRowProps) {
+  const date = session.created_at ? formatShortDate(session.created_at) : '—';
 
   const replayHref = `/student?session_id=${session.id}`;
 
@@ -364,7 +326,6 @@ function PastSessionRow({ session, last }: PastSessionRowProps) {
         alignItems: 'center',
         gap: 14,
         padding: '12px 16px',
-        borderBottom: last ? 'none' : '1px solid var(--border)',
       }}
     >
       {/* Date */}
@@ -400,6 +361,13 @@ function PastSessionRow({ session, last }: PastSessionRowProps) {
 // ---------------------------------------------------------------------------
 
 type FilterValue = 'all' | 'not-started' | 'in-progress' | 'solved';
+
+const FILTER_CHIPS: { value: FilterValue; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'not-started', label: 'Not started' },
+  { value: 'in-progress', label: 'In progress' },
+  { value: 'solved', label: 'Solved' },
+];
 
 interface StudentSectionViewProps {
   section: SectionDetail;
@@ -459,17 +427,14 @@ export default function StudentSectionView({
 
   const isLive = activeSessions.length > 0 && !!activeSessions[0].problem?.id;
 
-  const filteredProblems = publishedProblems.filter((p) => {
-    if (filter === 'all') return true;
-    return deriveProblemState(p) === filter;
-  });
-
-  const filterChips: { value: FilterValue; label: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'not-started', label: 'Not started' },
-    { value: 'in-progress', label: 'In progress' },
-    { value: 'solved', label: 'Solved' },
-  ];
+  const filteredProblems = useMemo(
+    () =>
+      publishedProblems.filter((p) => {
+        if (filter === 'all') return true;
+        return deriveProblemState(p) === filter;
+      }),
+    [publishedProblems, filter]
+  );
 
   return (
     <div className="space-y-6">
@@ -486,29 +451,10 @@ export default function StudentSectionView({
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-start justify-between">
             <div>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  letterSpacing: 0.4,
-                  textTransform: 'uppercase',
-                  color: 'var(--fg-muted)',
-                  marginBottom: 4,
-                }}
-              >
-                Section
-              </div>
-              <h1
-                style={{
-                  margin: 0,
-                  fontFamily: 'var(--font-serif)',
-                  fontSize: 30,
-                  fontWeight: 600,
-                  letterSpacing: -0.4,
-                }}
-              >
+              <SectionLabel style={{ marginBottom: 4 }}>Section</SectionLabel>
+              <AuthHeading size="xl" style={{ marginBottom: 0 }}>
                 {section.name}
-              </h1>
+              </AuthHeading>
               <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)' }}>
                 <span>{section.className}</span>
                 {section.semester && (
@@ -541,13 +487,14 @@ export default function StudentSectionView({
           </h2>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {filterChips.map(({ value, label }) => (
-              <FilterChip
+            {FILTER_CHIPS.map(({ value, label }) => (
+              <Chip
                 key={value}
-                label={label}
                 active={filter === value}
                 onClick={() => setFilter(value)}
-              />
+              >
+                {label}
+              </Chip>
             ))}
           </div>
         </div>
@@ -564,17 +511,21 @@ export default function StudentSectionView({
           >
             {filteredProblems.map((problem, i) => {
               const problemIsLive = activeSessions.some((s) => s.problem?.id === problem.problem.id);
+              const isLast = i === filteredProblems.length - 1;
               return (
-                <ProblemRow
+                <div
                   key={problem.problem.id}
-                  problem={problem}
-                  isLive={problemIsLive}
-                  onPractice={() => handleProblemClick(problem.problem.id)}
-                  onViewSolution={() =>
-                    setSolutionModal({ title: problem.problem.title, solution: problem.problem.solution! })
-                  }
-                  last={i === filteredProblems.length - 1}
-                />
+                  style={isLast ? undefined : { borderBottom: '1px solid var(--border)' }}
+                >
+                  <ProblemRow
+                    problem={problem}
+                    isLive={problemIsLive}
+                    onPractice={() => handleProblemClick(problem.problem.id)}
+                    onViewSolution={() =>
+                      setSolutionModal({ title: problem.problem.title, solution: problem.problem.solution! })
+                    }
+                  />
+                </div>
               );
             })}
           </div>
@@ -619,13 +570,17 @@ export default function StudentSectionView({
               overflow: 'hidden',
             }}
           >
-            {pastSessions.map((session, i) => (
-              <PastSessionRow
-                key={session.id}
-                session={session}
-                last={i === pastSessions.length - 1}
-              />
-            ))}
+            {pastSessions.map((session, i) => {
+              const isLast = i === pastSessions.length - 1;
+              return (
+                <div
+                  key={session.id}
+                  style={isLast ? undefined : { borderBottom: '1px solid var(--border)' }}
+                >
+                  <PastSessionRow session={session} />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow p-8 text-center">

@@ -73,6 +73,53 @@ export interface ExecuteOptions {
 }
 
 /**
+ * Shared implementation: convert IOTestCase[] to CaseDef[].
+ *
+ * Both exported functions delegate here:
+ * - ioTestCasesToCaseDefs (graded=false): run-only semantics — io cases named 'run',
+ *   no expected_output, match_type fixed to 'exact'.
+ * - ioTestCasesToGradedCaseDefs (graded=true): preserves canonical name,
+ *   expected_output, and match_type for backend coverage matching.
+ *
+ * The pytest branch is identical in both modes.
+ */
+function convertIOTestCases(testCases: IOTestCase[], graded: boolean): CaseDef[] {
+  return testCases.map((tc) => {
+    if (tc.kind === 'pytest') {
+      const def: CaseDefPytest = {
+        kind: 'pytest',
+        name: tc.name ?? tc.target_path,
+        test_code: tc.test_code,
+        target_path: tc.target_path,
+      };
+      return def;
+    }
+    // 'io' case
+    const def: CaseDefIO = graded
+      ? {
+          name: tc.name ?? '',
+          input: tc.input ?? '',
+          match_type: (tc.match_type as 'exact' | 'contains' | 'regex') ?? 'exact',
+        }
+      : {
+          name: 'run',
+          input: tc.input ?? '',
+          match_type: 'exact',
+        };
+    if (graded && tc.expected_output !== undefined) {
+      def.expected_output = tc.expected_output;
+    }
+    if (tc.random_seed !== undefined) {
+      def.random_seed = tc.random_seed;
+    }
+    if (tc.attached_files !== undefined) {
+      def.attached_files = tc.attached_files;
+    }
+    return def;
+  });
+}
+
+/**
  * Convert IOTestCase[] to CaseDef[] for use in executeCode options.
  *
  * Dispatches on kind:
@@ -86,30 +133,7 @@ export interface ExecuteOptions {
  *   and public-view/page.
  */
 export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
-  return testCases.map((tc) => {
-    if (tc.kind === 'pytest') {
-      const def: CaseDefPytest = {
-        kind: 'pytest',
-        name: tc.name ?? tc.target_path,
-        test_code: tc.test_code,
-        target_path: tc.target_path,
-      };
-      return def;
-    }
-    // Default: 'io' case
-    const def: CaseDefIO = {
-      name: 'run',
-      input: tc.input ?? '',
-      match_type: 'exact',
-    };
-    if (tc.random_seed !== undefined) {
-      def.random_seed = tc.random_seed;
-    }
-    if (tc.attached_files !== undefined) {
-      def.attached_files = tc.attached_files;
-    }
-    return def;
-  });
+  return convertIOTestCases(testCases, false);
 }
 
 /**
@@ -129,33 +153,7 @@ export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
  * to use ioTestCasesToCaseDefs (run-only semantics).
  */
 export function ioTestCasesToGradedCaseDefs(testCases: IOTestCase[]): CaseDef[] {
-  return testCases.map((tc) => {
-    if (tc.kind === 'pytest') {
-      const def: CaseDefPytest = {
-        kind: 'pytest',
-        name: tc.name ?? tc.target_path,
-        test_code: tc.test_code,
-        target_path: tc.target_path,
-      };
-      return def;
-    }
-    // Default: 'io' case — preserve canonical name and expected_output
-    const def: CaseDefIO = {
-      name: tc.name ?? '',
-      input: tc.input ?? '',
-      match_type: (tc.match_type as 'exact' | 'contains' | 'regex') ?? 'exact',
-    };
-    if (tc.expected_output !== undefined) {
-      def.expected_output = tc.expected_output;
-    }
-    if (tc.random_seed !== undefined) {
-      def.random_seed = tc.random_seed;
-    }
-    if (tc.attached_files !== undefined) {
-      def.attached_files = tc.attached_files;
-    }
-    return def;
-  });
+  return convertIOTestCases(testCases, true);
 }
 
 /**

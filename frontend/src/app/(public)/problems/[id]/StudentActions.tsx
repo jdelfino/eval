@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listMySections } from '@/lib/api/sections';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
+import { Button } from '@/components/ui/Button';
 import type { MySectionInfo } from '@/types/api';
 
 interface StudentActionsProps {
@@ -70,45 +71,15 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button
+        <Button
+          variant="accent"
+          size="md"
           onClick={() => handleStartPractice()}
+          loading={starting}
           disabled={starting}
-          style={{
-            height: 36,
-            padding: '0 20px',
-            background: 'var(--accent)',
-            color: 'var(--accent-fg)',
-            border: 'none',
-            borderRadius: 'var(--radius)',
-            fontSize: 13.5,
-            fontWeight: 600,
-            cursor: starting ? 'not-allowed' : 'pointer',
-            opacity: starting ? 0.5 : 1,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
         >
-          {starting ? (
-            <>
-              <svg
-                style={{ animation: 'spin 1s linear infinite', height: 14, width: 14 }}
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Starting...
-            </>
-          ) : (
-            'Practice'
-          )}
-        </button>
+          Practice
+        </Button>
       </div>
       {error && (
         <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 16 }}>{error}</p>

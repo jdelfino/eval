@@ -139,9 +139,11 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 
 	// When student_work_id is provided: load the work BEFORE execution to validate
 	// ownership and get canonical test cases for coverage matching.
+	// repos is resolved once and reused for the persist step below.
 	var work *store.StudentWorkWithProblem
+	var repos store.Repos
 	if req.StudentWorkID != nil {
-		repos := store.ReposFromContext(r.Context())
+		repos = store.ReposFromContext(r.Context())
 		work, err = repos.GetStudentWork(r.Context(), *req.StudentWorkID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
@@ -211,7 +213,6 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	// Persist failure is a non-fatal side effect — execution results still returned.
 	if work != nil {
 		allPassed := computeAllPassed(work, req.Cases, execResp.Summary)
-		repos := store.ReposFromContext(r.Context())
 		if persistErr := repos.SetStudentWorkRunResult(r.Context(), work.ID, allPassed, time.Now()); persistErr != nil {
 			slog.Error("execute: persist solved state failed", "work_id", work.ID, "error", persistErr)
 		}

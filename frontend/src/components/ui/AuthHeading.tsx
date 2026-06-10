@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 
-export type AuthHeadingSize = 'lg' | 'md' | 'sm' | 'xs';
+export type AuthHeadingSize = 'xl' | 'lg' | 'md' | 'sm' | 'xs';
 
 export interface AuthHeadingProps {
   /** Heading text content. */
   children: React.ReactNode;
   /**
    * Size variant controlling font-size and letter-spacing.
+   * xl: 32px / -0.6  (public problem hero, large section titles)
    * lg: 26px / -0.5  (landing, main sign-in)
    * md: 24px / -0.4  (most auth cards)      — default
    * sm: 22px / -0.3  (secondary headings)
@@ -24,6 +25,7 @@ export interface AuthHeadingProps {
 }
 
 const SIZE_MAP: Record<AuthHeadingSize, { fontSize: number; letterSpacing: number }> = {
+  xl: { fontSize: 32, letterSpacing: -0.6 },
   lg: { fontSize: 26, letterSpacing: -0.5 },
   md: { fontSize: 24, letterSpacing: -0.4 },
   sm: { fontSize: 22, letterSpacing: -0.3 },
