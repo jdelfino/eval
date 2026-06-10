@@ -1,17 +1,20 @@
 /**
- * Tests for the executor warm-up UX on the student workspace page.
+ * Tests for graded run plumbing on the student workspace page.
  *
- * PLAT-6nij.4: Proactive /warm calls on practice entry and warming-up message on 503.
+ * eval-cej.7.13 (A2b): verifies that:
+ * 1. handleRun (run-all) uses ioTestCasesToGradedCaseDefs and passes studentWorkId.
+ * 2. handleRunTest (single-case) does NOT pass studentWorkId.
+ *
+ * Contract: run-all sends student_work_id + full case data (expected_output preserved)
+ * so the backend can persist solved state. Single-case debug runs must never clobber it.
  *
  * @jest-environment jsdom
  */
 
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import StudentPageWrapper from '../page';
-import { ApiError } from '@/lib/api-error';
 
 const mockGetStudentWork = jest.fn();
 const mockGetActiveSessions = jest.fn();
@@ -77,21 +80,22 @@ jest.mock('@/hooks/useApiDebugger', () => ({
   })),
 }));
 
-// Track onRunAll callback and drawerMode from WorkspaceShell
+// Capture callback refs from WorkspaceShell
 let capturedOnRun: (() => void) | null = null;
-let capturedDrawerMode: string | null = null;
+let capturedOnRunTest: ((testId: string) => void) | null = null;
 
 jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
-  default: ({ onRunAll, drawerMode }: { onRunAll: () => void; drawerMode?: string }) => {
-    capturedOnRun = onRunAll;
-    capturedDrawerMode = drawerMode ?? null;
-    return (
-      <div data-testid="workspace-shell">
-        <div data-testid="drawer-mode">{drawerMode}</div>
-        WorkspaceShell
-      </div>
-    );
+  default: ({
+    onRunAll,
+    onRunTest,
+  }: {
+    onRunAll?: () => void;
+    onRunTest?: (testId: string) => void;
+  }) => {
+    capturedOnRun = onRunAll ?? null;
+    capturedOnRunTest = onRunTest ?? null;
+    return <div data-testid="workspace-shell">WorkspaceShell</div>;
   },
 }));
 
@@ -100,14 +104,25 @@ jest.mock('../components/SessionEndedNotification', () => ({
   default: () => <div data-testid="session-ended">Session Ended</div>,
 }));
 
+const fakeTestCaseIO = {
+  kind: 'io' as const,
+  name: 'Case 1',
+  input: 'hello',
+  expected_output: 'HELLO',
+  match_type: 'exact' as const,
+  order: 0,
+};
+
 const fakeStudentWork = {
   id: 'work-123',
   user_id: 'user-1',
   section_id: 'section-1',
   problem_id: 'problem-1',
-  code: 'print("hello")',
+  code: 'print(input().upper())',
   last_update: '2024-01-01T00:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
+  last_run_all_passed: null,
+  last_run_at: null,
   problem: {
     id: 'problem-1',
     namespace_id: 'ns-1',
@@ -115,7 +130,7 @@ const fakeStudentWork = {
     description: 'Test description',
     starter_code: '',
     language: 'python',
-    test_cases: null,
+    test_cases: [fakeTestCaseIO],
     author_id: 'instructor-1',
     class_id: 'class-1',
     tags: [],
@@ -137,18 +152,31 @@ const defaultRealtimeSession = {
   replacementInfo: null,
 };
 
-describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
+const mockTestResponse = {
+  results: [{ kind: 'io', name: 'Case 1', status: 'passed', input: 'hello', actual: 'HELLO\n', time_ms: 10 }],
+  summary: { total: 1, passed: 1, failed: 0, errors: 0, run: 0, time_ms: 10 },
+};
+
+describe('StudentPage graded run plumbing (eval-cej.7.13)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedOnRun = null;
-    capturedDrawerMode = null;
+    capturedOnRunTest = null;
     mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
     mockUpdateStudentWork.mockResolvedValue(undefined);
     mockWarmExecutor.mockResolvedValue(undefined);
+    mockExecuteCode.mockResolvedValue(mockTestResponse);
   });
 
-  describe('warmExecutor called on practice mode entry', () => {
-    it('calls warmExecutor when no active session is found (practice mode)', async () => {
+  describe('TC2: run-all sends studentWorkId + graded case defs', () => {
+    /**
+     * Contract: when workId is set, handleRun passes studentWorkId to executeCode
+     * and uses ioTestCasesToGradedCaseDefs (which preserves expected_output).
+     * Matters because without studentWorkId the backend cannot persist solved state,
+     * and without expected_output the backend cannot confirm coverage.
+     * Breaks if: studentWorkId is omitted, or ioTestCasesToCaseDefs is used instead.
+     */
+    it('run-all calls executeCode with studentWorkId=work-123 when workId is set', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
 
@@ -158,94 +186,22 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
         expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
       });
 
-      expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not call warmExecutor when active session is found (live mode)', async () => {
-      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([
-        {
-          id: 'session-1',
-          problem: { id: 'problem-1' },
-          status: 'active',
-          section_id: 'section-1',
-        },
-      ]);
-      mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
-      mockUseRealtimeSession.mockReturnValue({
-        ...defaultRealtimeSession,
-        joinSession: mockJoinSession,
-      });
-
-      render(<StudentPageWrapper />);
-
-      await waitFor(() => {
-        expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
-      });
-
-      // Give a moment for effects to settle
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 50));
-      });
-
-      expect(mockWarmExecutor).not.toHaveBeenCalled();
-    });
-
-    it('does not block page load or show errors if warmExecutor fails', async () => {
-      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
-      mockWarmExecutor.mockRejectedValue(new Error('Network error'));
-
-      render(<StudentPageWrapper />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
-      });
-
-      // Page should load successfully despite warmExecutor failing
-      expect(screen.queryByRole('alert')).toBeNull();
-    });
-  });
-
-  describe('503 warming-up message on execute', () => {
-    it('shows warming-up message when execute returns 503', async () => {
-      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteCode.mockRejectedValue(
-        new ApiError('Code execution is warming up, please try again in a few moments', 503)
-      );
-
-      render(<StudentPageWrapper />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
-      });
-
-      // Trigger execution
+      expect(capturedOnRun).not.toBeNull();
       act(() => {
-        capturedOnRun?.();
+        capturedOnRun!();
       });
 
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(mockExecuteCode).toHaveBeenCalled();
       });
 
-      const alert = screen.getByRole('alert');
-      expect(alert.textContent).toMatch(/warming up/i);
+      const [, , options] = mockExecuteCode.mock.calls[0];
+      expect(options).toHaveProperty('studentWorkId', 'work-123');
     });
 
-    it('routes non-503 errors to drawer runtime-error mode (not generic alert)', async () => {
-      /**
-       * C3 fix: non-503 errors now call setRuntimeError (not setError), which causes
-       * drawerMode='runtime-error' and the WorkspaceShell drawer to show the error.
-       * Previously, non-503 errors were shown via a generic ErrorAlert — this was wrong
-       * because runtime errors (NameError, SyntaxError etc.) belong in the drawer.
-       */
+    it('run-all sends graded case defs with expected_output preserved', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
       mockGetActiveSessions.mockResolvedValue([]);
-      mockExecuteCode.mockRejectedValue(
-        new ApiError('internal server error', 500)
-      );
 
       render(<StudentPageWrapper />);
 
@@ -254,13 +210,54 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       });
 
       act(() => {
-        capturedOnRun?.();
+        capturedOnRun!();
       });
 
-      // Non-503 errors should set drawerMode='runtime-error', not show a generic alert
       await waitFor(() => {
-        expect(screen.getByTestId('drawer-mode').textContent).toBe('runtime-error');
+        expect(mockExecuteCode).toHaveBeenCalled();
       });
+
+      const [, , options] = mockExecuteCode.mock.calls[0];
+      expect(options.cases).toBeDefined();
+      // Graded case defs preserve the canonical name and expected_output
+      const ioCase = options.cases.find((c: { kind?: string }) => c.kind !== 'pytest');
+      expect(ioCase).toBeDefined();
+      expect(ioCase).toHaveProperty('expected_output', 'HELLO');
+      // Name must NOT be renamed to 'run'
+      expect(ioCase.name).not.toBe('run');
+    });
+  });
+
+  describe('TC3: single-case handleRunTest does NOT send studentWorkId', () => {
+    /**
+     * Contract: handleRunTest (single-case debug run) must never pass studentWorkId.
+     * Matters because single-case runs are not full graded runs and must not clobber
+     * the persisted solved state on the backend.
+     * Breaks if: studentWorkId is inadvertently forwarded from the handler.
+     */
+    it('handleRunTest calls executeCode WITHOUT studentWorkId', async () => {
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork);
+      mockGetActiveSessions.mockResolvedValue([]);
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      expect(capturedOnRunTest).not.toBeNull();
+      // testId for the first io test case with order=0 and name='Case 1'
+      // The format from toTestRailItems is `${kind}-${order}-${name}`
+      act(() => {
+        capturedOnRunTest!('io-0-Case 1');
+      });
+
+      await waitFor(() => {
+        expect(mockExecuteCode).toHaveBeenCalled();
+      });
+
+      const [, , options] = mockExecuteCode.mock.calls[0];
+      expect(options).not.toHaveProperty('studentWorkId');
     });
   });
 });

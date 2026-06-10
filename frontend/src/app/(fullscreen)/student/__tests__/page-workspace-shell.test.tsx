@@ -46,6 +46,7 @@ jest.mock('@/lib/api/execute', () => ({
   warmExecutor: jest.fn().mockResolvedValue(undefined),
   executeCode: (...args: unknown[]) => mockExecuteCode(...args),
   ioTestCasesToCaseDefs: jest.requireActual('@/lib/api/execute').ioTestCasesToCaseDefs,
+  ioTestCasesToGradedCaseDefs: jest.requireActual('@/lib/api/execute').ioTestCasesToGradedCaseDefs,
 }));
 
 const mockDebuggerState = {

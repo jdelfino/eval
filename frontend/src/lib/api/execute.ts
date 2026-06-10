@@ -64,6 +64,12 @@ export const FREE_RUN_CASE: CaseDef = {
 export interface ExecuteOptions {
   /** Test cases to run. */
   cases?: CaseDef[];
+  /**
+   * Optional student work ID for graded runs. When present, the backend
+   * persists solved state after executing (all canonical cases covered + all passed).
+   * Omit for single-case debug runs to avoid clobbering solved state.
+   */
+  studentWorkId?: string;
 }
 
 /**
@@ -96,6 +102,52 @@ export function ioTestCasesToCaseDefs(testCases: IOTestCase[]): CaseDef[] {
       input: tc.input ?? '',
       match_type: 'exact',
     };
+    if (tc.random_seed !== undefined) {
+      def.random_seed = tc.random_seed;
+    }
+    if (tc.attached_files !== undefined) {
+      def.attached_files = tc.attached_files;
+    }
+    return def;
+  });
+}
+
+/**
+ * Convert IOTestCase[] to CaseDef[] for graded runs (run-all with student_work_id).
+ *
+ * Unlike ioTestCasesToCaseDefs, this function:
+ * - Preserves the canonical case name (does NOT rename to 'run')
+ * - Preserves expected_output for io cases (required for backend coverage matching)
+ * - Preserves match_type, random_seed, and attached_files for io cases
+ * - Passes pytest fields through unchanged (same as ioTestCasesToCaseDefs)
+ *
+ * The backend matches canonical cases by CONTENT (input/expected_output/match_type
+ * for io; target_path/test_code for pytest). Graded runs must ship full case data —
+ * run-only defs (no expected_output, name='run') can never be coverage-matched.
+ *
+ * Only used by the student workspace run-all path. Single-case debug runs continue
+ * to use ioTestCasesToCaseDefs (run-only semantics).
+ */
+export function ioTestCasesToGradedCaseDefs(testCases: IOTestCase[]): CaseDef[] {
+  return testCases.map((tc) => {
+    if (tc.kind === 'pytest') {
+      const def: CaseDefPytest = {
+        kind: 'pytest',
+        name: tc.name ?? tc.target_path,
+        test_code: tc.test_code,
+        target_path: tc.target_path,
+      };
+      return def;
+    }
+    // Default: 'io' case — preserve canonical name and expected_output
+    const def: CaseDefIO = {
+      name: tc.name ?? '',
+      input: tc.input ?? '',
+      match_type: (tc.match_type as 'exact' | 'contains' | 'regex') ?? 'exact',
+    };
+    if (tc.expected_output !== undefined) {
+      def.expected_output = tc.expected_output;
+    }
     if (tc.random_seed !== undefined) {
       def.random_seed = tc.random_seed;
     }
@@ -163,6 +215,10 @@ export async function executeCode(
 
   if (options?.cases !== undefined) {
     body.cases = options.cases;
+  }
+
+  if (options?.studentWorkId !== undefined) {
+    body.student_work_id = options.studentWorkId;
   }
 
   return apiPost<TestResponse>('/execute', body);
