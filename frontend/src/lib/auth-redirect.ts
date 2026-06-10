@@ -23,8 +23,3 @@ export function postInvitePathForRole(role: string): string {
   }
   return '/';
 }
-
-/**
- * @deprecated Use postInvitePathForRole instead.
- */
-export const redirectPathForRole = postInvitePathForRole;
