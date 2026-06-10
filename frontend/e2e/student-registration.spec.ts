@@ -31,7 +31,7 @@ test.describe('Student Registration UI', () => {
     await page.goto('/register/student');
     await expect(page.locator('input#join_code')).toBeVisible();
     await page.fill('input#join_code', joinCode.replace(/-/g, ''));
-    await page.click('button:has-text("Continue to Register")');
+    await page.getByRole('button', { name: /^Continue/ }).click();
 
     // ===== STEP 2: Verify section preview shows =====
     await expect(page.locator(`text=${cls.name}`).first()).toBeVisible({ timeout: 10_000 });
