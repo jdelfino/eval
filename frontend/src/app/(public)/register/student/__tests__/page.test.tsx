@@ -42,7 +42,7 @@ jest.mock('@/contexts/AuthContext', () => ({
 const mockSignInButtonsOnSuccess = jest.fn();
 const mockSignInButtonsOnBeforeSignIn = jest.fn();
 jest.mock('@/components/ui/SignInButtons', () => ({
-  SignInButtons: ({ onSuccess, onError, onBeforeSignIn, label }: any) => {
+  SignInButtons: ({ onSuccess, onError, onBeforeSignIn }: any) => {
     // Store callbacks for test control
     mockSignInButtonsOnSuccess.mockImplementation(onSuccess);
     if (onBeforeSignIn) {
@@ -50,7 +50,6 @@ jest.mock('@/components/ui/SignInButtons', () => ({
     }
     return (
       <div data-testid="sign-in-buttons">
-        {label && <p data-testid="sign-in-label">{label}</p>}
         <button onClick={onSuccess} data-testid="mock-sign-in-success">
           Mock Sign In
         </button>
@@ -116,53 +115,301 @@ describe('StudentRegistrationPage', () => {
     mockOnAuthStateChangedUnsubscribe.mockClear();
   });
 
-  describe('Initial State', () => {
-    it('renders code entry form initially', () => {
+  // -----------------------------------------------------------------------
+  // T4 Test Case 1: Code-entry renders v4 layout
+  // Verifies: h1 "Enter your join code", JoinCodeBoxes input with id join_code,
+  // button named "Continue". Catches selector/copy drift and e2e id contract.
+  // -----------------------------------------------------------------------
+  describe('v4 Layout — Code Entry (K2)', () => {
+    it('renders v4 h1 heading "Enter your join code"', () => {
       render(<StudentRegistrationPage />);
-
-      expect(screen.getByText('Join Your Section')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('ABC-123')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Continue to Register' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Enter your join code' })).toBeInTheDocument();
     });
 
-    it('pre-fills code from URL param', () => {
-      mockSearchParams.set('code', 'TESTCODE123');
+    it('renders JoinCodeBoxes with id join_code for e2e selector contract', () => {
+      const { container } = render(<StudentRegistrationPage />);
+      // The real input must have id="join_code" so Playwright page.fill('#join_code') works
+      expect(container.querySelector('#join_code')).not.toBeNull();
+    });
 
+    it('renders Continue button', () => {
       render(<StudentRegistrationPage />);
+      expect(screen.getByRole('button', { name: /Continue/ })).toBeInTheDocument();
+    });
 
-      const input = screen.getByPlaceholderText('ABC-123');
-      expect(input).toHaveValue('TES-TCO');
+    it('renders subline "Six characters from your teacher."', () => {
+      render(<StudentRegistrationPage />);
+      expect(screen.getByText('Six characters from your teacher.')).toBeInTheDocument();
     });
   });
 
+  // -----------------------------------------------------------------------
+  // T4 Test Case 2: Invalid code from API shows K2 state (danger Banner)
+  // Verifies: danger Banner with "That code doesn't exist" copy, JoinCodeBoxes
+  // error styling, buttons Clear + Try again.
+  // Catches: error-variant regression.
+  // -----------------------------------------------------------------------
+  describe('v4 Layout — Invalid Code (K2 error state)', () => {
+    const triggerInvalidCode = async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+      const { container } = render(<StudentRegistrationPage />);
+      // Fill in a valid format code via the hidden input
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+      return user;
+    };
+
+    it('shows danger Banner with "That code doesn\'t exist" copy', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/That code doesn't exist/)[0]).toBeInTheDocument();
+      });
+    });
+
+    it('shows Clear button in error state', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+      });
+    });
+
+    it('shows "Try again" button in error state', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // T4 Test Case 3: Clear button resets code and error
+  // Catches: new affordance unwired.
+  // -----------------------------------------------------------------------
+  describe('Clear button', () => {
+    it('resets code and dismisses the error', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockRejectedValue(
+        new ApiError('Invalid code', 400, 'INVALID_CODE')
+      );
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+      // Error banner gone, input cleared
+      await waitFor(() => {
+        expect(screen.queryByText(/That code doesn't exist/)).not.toBeInTheDocument();
+      });
+      expect(input).toHaveValue('');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // T4 Test Case 4: Valid code shows K state
+  // Verifies: kicker "Join code accepted", "Joining {class.name}",
+  // "Section: {name} · {semester}", locked code shown as ABC-123 mono,
+  // "Wrong code?" link present. Catches: preview/locked-code regression.
+  // -----------------------------------------------------------------------
+  describe('v4 Layout — Valid Code / Code-valid State (K layout)', () => {
+    const goToCodeValid = async (section = { id: 'sec-1', name: 'Monday 2pm', semester: 'Fall 2025' }) => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section,
+        class: { id: 'cls-1', name: 'CS 101 - Intro to Python' },
+      });
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+      await waitFor(() => {
+        expect(screen.getByText('Join code accepted')).toBeInTheDocument();
+      });
+      return { user, container };
+    };
+
+    it('shows "Join code accepted" kicker', async () => {
+      await goToCodeValid();
+      expect(screen.getByText('Join code accepted')).toBeInTheDocument();
+    });
+
+    it('shows "Joining {class.name}" heading', async () => {
+      await goToCodeValid();
+      expect(screen.getByRole('heading', { name: /Joining CS 101 - Intro to Python/ })).toBeInTheDocument();
+    });
+
+    it('shows section name and semester in sub-line', async () => {
+      await goToCodeValid();
+      expect(screen.getByText(/Section: Monday 2pm · Fall 2025/)).toBeInTheDocument();
+    });
+
+    it('shows section name without semester separator when no semester', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Monday 2pm' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+      await waitFor(() => {
+        expect(screen.getByText('Section: Monday 2pm')).toBeInTheDocument();
+      });
+    });
+
+    it('shows the locked code as ABC-123 in the locked code summary', async () => {
+      await goToCodeValid();
+      // The locked code box shows formatJoinCodeForDisplay(join_code)
+      expect(screen.getByText('ABC-123')).toBeInTheDocument();
+    });
+
+    it('renders "Wrong code?" link that triggers handleBackToCode', async () => {
+      const { user } = await goToCodeValid();
+      const wrongCodeBtn = screen.getByRole('button', { name: 'Wrong code?' });
+      expect(wrongCodeBtn).toBeInTheDocument();
+
+      await user.click(wrongCodeBtn);
+
+      // Should return to code entry
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Enter your join code' })).toBeInTheDocument();
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // T4 Test Case 5: "Wrong code?" returns to code-entry and resets registrationStartedRef
+  // Catches: back-flow regression.
+  // -----------------------------------------------------------------------
+  describe('"Wrong code?" / back-to-code flow', () => {
+    it('returns to code-entry state when "Wrong code?" is clicked', async () => {
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Join code accepted')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Wrong code?' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Enter your join code' })).toBeInTheDocument();
+      });
+    });
+
+    it('allows registration to restart after "Wrong code?" (registrationStartedRef reset)', async () => {
+      // After clicking "Wrong code?", a new code submission should be able to trigger registration
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+      mockRegisterStudent.mockResolvedValue({ id: 'user-1', role: 'student' });
+
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Join code accepted')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Wrong code?' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Enter your join code' })).toBeInTheDocument();
+      });
+
+      // Now re-enter a code; auth fires — should be able to register (ref was reset)
+      const newInput = container.querySelector('#join_code') as HTMLInputElement;
+      await user.clear(newInput);
+      await user.type(newInput, 'DEF456');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      // Trigger auth hydration — registration should fire (ref was reset)
+      const hydratedUser = { delete: mockDeleteUser, uid: 'uid-1', email: 'student@test.com' };
+      mockCurrentUser = hydratedUser;
+      authStateCallback!(hydratedUser);
+
+      await waitFor(() => {
+        expect(mockRegisterStudent).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // T4 Test Case 6: Existing behavioral suite passes unchanged
+  // All behavioral assertions (API call args, Firebase delete, beginAuthFlow/endAuthFlow,
+  // setUserProfile, router.push targets, state transitions) keep their current expected values.
+  // -----------------------------------------------------------------------
   describe('Join Code Formatting', () => {
     it('auto-formats code with dashes', async () => {
       const user = userEvent.setup();
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'abc123xyz');
-
       expect(input).toHaveValue('ABC-123');
     });
 
     it('auto-uppercases code', async () => {
       const user = userEvent.setup();
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'abc');
-
       expect(input).toHaveValue('ABC');
     });
 
     it('removes non-alphanumeric characters', async () => {
       const user = userEvent.setup();
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'abc-!@#-123');
-
       expect(input).toHaveValue('ABC-123');
     });
   });
@@ -170,12 +417,11 @@ describe('StudentRegistrationPage', () => {
   describe('Code Validation', () => {
     it('validates code format before API call', async () => {
       const user = userEvent.setup();
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'ABC');
 
-      const button = screen.getByRole('button', { name: 'Continue to Register' });
+      const button = screen.getByRole('button', { name: /Continue/ });
       await user.click(button);
 
       expect(screen.getByText('Please enter a valid join code (e.g., ABC-123)')).toBeInTheDocument();
@@ -186,31 +432,29 @@ describe('StudentRegistrationPage', () => {
       const user = userEvent.setup();
       mockGetStudentRegistrationInfo.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'ABC123');
 
-      const button = screen.getByRole('button', { name: 'Continue to Register' });
+      const button = screen.getByRole('button', { name: /Continue/ });
       await user.click(button);
 
-      expect(screen.getByText('Checking code...')).toBeInTheDocument();
+      expect(screen.getByText('Checking code…')).toBeInTheDocument();
     });
 
     it('shows error for invalid code', async () => {
       const user = userEvent.setup();
       mockGetStudentRegistrationInfo.mockRejectedValue(new ApiError('Invalid code', 400, 'INVALID_CODE'));
 
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'ABC123');
 
-      const button = screen.getByRole('button', { name: 'Continue to Register' });
+      const button = screen.getByRole('button', { name: /Continue/ });
       await user.click(button);
 
       await waitFor(() => {
-        expect(screen.getByText("This join code doesn't exist. Check with your instructor.")).toBeInTheDocument();
+        expect(screen.getByText(/That code doesn't exist/)).toBeInTheDocument();
       });
     });
 
@@ -218,12 +462,11 @@ describe('StudentRegistrationPage', () => {
       const user = userEvent.setup();
       mockGetStudentRegistrationInfo.mockRejectedValue(new ApiError('Section inactive', 400, 'SECTION_INACTIVE'));
 
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'ABC123');
 
-      const button = screen.getByRole('button', { name: 'Continue to Register' });
+      const button = screen.getByRole('button', { name: /Continue/ });
       await user.click(button);
 
       await waitFor(() => {
@@ -238,16 +481,15 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'CS 101 - Intro to Python' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const input = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(input, 'ABC123');
 
-      const button = screen.getByRole('button', { name: 'Continue to Register' });
+      const button = screen.getByRole('button', { name: /Continue/ });
       await user.click(button);
 
       await waitFor(() => {
-        expect(screen.getByText('CS 101 - Intro to Python')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /CS 101 - Intro to Python/ })).toBeInTheDocument();
         expect(screen.getByText('Section: Monday 2pm')).toBeInTheDocument();
       });
     });
@@ -261,11 +503,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'CS 101' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       await waitFor(() => {
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
@@ -287,13 +528,6 @@ describe('StudentRegistrationPage', () => {
 
       expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
-    });
-
-    it('shows class name in sign-in label', async () => {
-      mockCurrentUser = null;
-      await validateCode();
-
-      expect(screen.getByTestId('sign-in-label')).toHaveTextContent(/CS 101/);
     });
 
     it('calls registerStudent after SignInButtons onSuccess', async () => {
@@ -428,11 +662,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'CS 101' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       return user;
     };
@@ -479,8 +712,11 @@ describe('StudentRegistrationPage', () => {
     });
   });
 
-  describe('Back Button', () => {
-    it('returns to code entry on back button', async () => {
+  // -----------------------------------------------------------------------
+  // T4 Test Case 5 (cont): "Wrong code?" back button (was "Back" button)
+  // -----------------------------------------------------------------------
+  describe('"Wrong code?" button (was Back button)', () => {
+    it('returns to code entry on "Wrong code?" button click', async () => {
       const user = userEvent.setup();
 
       mockGetStudentRegistrationInfo.mockResolvedValueOnce({
@@ -488,35 +724,38 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'Test Class' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       await waitFor(() => {
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByRole('button', { name: 'Back' }));
+      await user.click(screen.getByRole('button', { name: 'Wrong code?' }));
 
-      expect(screen.getByText('Join Your Section')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('ABC-123')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Enter your join code' })).toBeInTheDocument();
+      expect(container.querySelector('#join_code')).not.toBeNull();
     });
   });
 
   describe('Sign In Link', () => {
-    it('shows sign in link on the page', () => {
+    it('shows "Already on Eval? Sign in →" footer on code entry step', () => {
       render(<StudentRegistrationPage />);
-
-      expect(screen.getByRole('link', { name: 'Sign in here' })).toHaveAttribute('href', '/auth/signin');
+      expect(screen.getByText(/Already on Eval\?/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Sign in →/ })).toHaveAttribute('href', '/auth/signin');
     });
 
-    it('shows prominent sign-in box on code entry step', () => {
+    it('does NOT show old "Already have an account?" info box', () => {
       render(<StudentRegistrationPage />);
+      // The old blue info box is gone
+      expect(screen.queryByText("If you've registered before, sign in to access your sections.")).not.toBeInTheDocument();
+    });
 
-      expect(screen.getByText("If you've registered before, sign in to access your sections.")).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Sign in to your account/i })).toHaveAttribute('href', '/auth/signin');
+    it('does NOT show old "Sign in here" bottom link', () => {
+      render(<StudentRegistrationPage />);
+      expect(screen.queryByRole('link', { name: 'Sign in here' })).not.toBeInTheDocument();
     });
   });
 
@@ -535,11 +774,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'CS 101' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       // Page is in code-valid state, showing sign-in buttons (auth not hydrated yet)
       await waitFor(() => {
@@ -597,11 +835,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'CS 101' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       // Already-signed-in path: registers directly, never shows sign-in buttons
       await waitFor(() => {
@@ -631,10 +868,10 @@ describe('StudentRegistrationPage', () => {
         section: { id: 'sec-1', name: 'Test Section' },
         class: { id: 'cls-1', name: 'CS 101' },
       });
-      render(<StudentRegistrationPage />);
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
       await waitFor(() => {
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
       });
@@ -723,11 +960,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'Test Class' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       await waitFor(() => {
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
@@ -754,11 +990,10 @@ describe('StudentRegistrationPage', () => {
         class: { id: 'cls-1', name: 'Test Class' },
       });
 
-      render(<StudentRegistrationPage />);
-
-      const codeInput = screen.getByPlaceholderText('ABC-123');
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
       await user.type(codeInput, 'ABC123');
-      await user.click(screen.getByRole('button', { name: 'Continue to Register' }));
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
 
       await waitFor(() => {
         expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
@@ -774,4 +1009,83 @@ describe('StudentRegistrationPage', () => {
     });
   });
 
+  // -----------------------------------------------------------------------
+  // T4 Test Case 7: URL ?code=abc123 pre-fills the boxes as ABC-123
+  // Catches: pre-fill regression with new input component.
+  // -----------------------------------------------------------------------
+  describe('URL code pre-fill', () => {
+    it('pre-fills code from URL param as ABC-123 in #join_code input', () => {
+      mockSearchParams.set('code', 'abc123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      expect(input).toHaveValue('ABC-123');
+    });
+
+    it('pre-fills partial code from URL param', () => {
+      mockSearchParams.set('code', 'TESTCODE123');
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      // formatJoinCodeInput caps at 6 chars: TES-TCO
+      expect(input).toHaveValue('TES-TCO');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // T4 Test Case 8: No "Sign up" CTA and example code is ABC-123 (not K7M-2A9)
+  // Catches: DEC-9/locked-rule violation.
+  // -----------------------------------------------------------------------
+  describe('DEC-9 locked rules', () => {
+    it('renders no "Sign up" CTA text', () => {
+      render(<StudentRegistrationPage />);
+      expect(screen.queryByText(/sign up/i)).not.toBeInTheDocument();
+    });
+
+    it('renders example code as ABC-123 (not K7M-2A9)', () => {
+      render(<StudentRegistrationPage />);
+      expect(screen.queryByText(/K7M-2A9/)).not.toBeInTheDocument();
+    });
+
+    it('format validation error shows ABC-123 example', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<StudentRegistrationPage />);
+      const input = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(input, 'ABC');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+      expect(screen.getByText('Please enter a valid join code (e.g., ABC-123)')).toBeInTheDocument();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // NAMESPACE_AT_CAPACITY in Banner (code-valid state)
+  // Catches: error-in-banner regression.
+  // -----------------------------------------------------------------------
+  describe('NAMESPACE_AT_CAPACITY Banner in code-valid state', () => {
+    it('shows NAMESPACE_AT_CAPACITY error in Banner above providers', async () => {
+      mockCurrentUser = null;
+      mockRegisterStudent.mockRejectedValue(
+        new ApiError('At capacity', 400, 'NAMESPACE_AT_CAPACITY')
+      );
+
+      const user = userEvent.setup();
+      mockGetStudentRegistrationInfo.mockResolvedValue({
+        section: { id: 'sec-1', name: 'Test Section' },
+        class: { id: 'cls-1', name: 'CS 101' },
+      });
+
+      const { container } = render(<StudentRegistrationPage />);
+      const codeInput = container.querySelector('#join_code') as HTMLInputElement;
+      await user.type(codeInput, 'ABC123');
+      await user.click(screen.getByRole('button', { name: /Continue/ }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('mock-sign-in-success'));
+
+      await waitFor(() => {
+        expect(screen.getByText('This class has reached its student limit. Contact your instructor.')).toBeInTheDocument();
+      });
+    });
+  });
 });
