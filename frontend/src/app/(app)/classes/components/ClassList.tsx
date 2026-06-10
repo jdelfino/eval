@@ -1,14 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import type { Class } from '@/types/api';
+import type { Class, Section } from '@/types/api';
+import { formatJoinCodeForDisplay } from '@/lib/join-code';
 
 interface ClassListProps {
   classes: Class[];
   onCreateNew: () => void;
+  onCreateSection: (classId: string) => void;
+  onEdit?: (classId: string) => void;
+  sectionsByClass: Record<string, Section[]>;
 }
 
-export default function ClassList({ classes, onCreateNew }: ClassListProps) {
+export default function ClassList({ classes, onCreateNew, onCreateSection, onEdit, sectionsByClass }: ClassListProps) {
   if (classes.length === 0) {
     return (
       <div className="text-center py-12">
@@ -36,25 +40,63 @@ export default function ClassList({ classes, onCreateNew }: ClassListProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {classes.map((classItem) => (
-        <Link
-          key={classItem.id}
-          href={`/classes/${classItem.id}`}
-          className="block p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
-        >
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {classItem.name}
-          </h3>
-          {classItem.description && (
-            <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-              {classItem.description}
-            </p>
-          )}
-          <div className="text-sm text-gray-500">
-            Created {new Date(classItem.created_at).toLocaleDateString()}
+      {classes.map((classItem) => {
+        const sections = sectionsByClass[classItem.id] ?? [];
+        return (
+          <div
+            key={classItem.id}
+            className="bg-white border border-gray-200 rounded-lg p-4"
+          >
+            {/* Card header: class name + description */}
+            <div className="mb-3">
+              <div className="font-serif text-lg font-medium tracking-tight text-gray-900">
+                {classItem.name}
+              </div>
+              {classItem.description && (
+                <div className="text-xs text-gray-500 mt-0.5">{classItem.description}</div>
+              )}
+            </div>
+
+            {/* Sections list */}
+            {sections.length > 0 && (
+              <div className="border-t border-gray-100 pt-2 mb-3">
+                {sections.map((section) => (
+                  <div key={section.id} className="flex items-center justify-between py-1 text-sm">
+                    <div>
+                      <div className="text-gray-800">{section.name}</div>
+                      <div className="font-mono text-xs text-gray-400">
+                        {formatJoinCodeForDisplay(section.join_code)}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/sections/${section.id}`}
+                      className="text-xs text-blue-600 hover:text-blue-800 ml-3"
+                    >
+                      Open →
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Footer actions */}
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => onCreateSection(classItem.id)}
+                className="inline-flex items-center px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                + Section
+              </button>
+              <button
+                onClick={() => onEdit?.(classItem.id)}
+                className="inline-flex items-center px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Edit
+              </button>
+            </div>
           </div>
-        </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }
