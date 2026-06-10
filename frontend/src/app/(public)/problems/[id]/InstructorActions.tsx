@@ -63,9 +63,9 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   // Show trampoline UI after auto-start
   if (showCloseTab) {
     return (
-      <div className="flex flex-col items-start gap-3 mb-6">
-        <p className="text-sm text-green-700 font-medium">Session started successfully.</p>
-        <p className="text-sm text-gray-600">You may close this tab.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, marginBottom: 24 }}>
+        <p style={{ fontSize: 13, color: 'var(--run)', fontWeight: 500 }}>Session started successfully.</p>
+        <p style={{ fontSize: 13, color: 'var(--fg-muted)' }}>You may close this tab.</p>
       </div>
     );
   }
@@ -119,27 +119,49 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button
           onClick={handleStartSession}
           disabled={starting}
-          className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+          style={{
+            height: 36,
+            padding: '0 20px',
+            background: 'var(--accent)',
+            color: 'var(--accent-fg)',
+            border: 'none',
+            borderRadius: 'var(--radius)',
+            fontSize: 13.5,
+            fontWeight: 600,
+            cursor: starting ? 'not-allowed' : 'pointer',
+            opacity: starting ? 0.5 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
         >
           {starting ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <>
+              <svg
+                style={{ animation: 'spin 1s linear infinite', height: 14, width: 14 }}
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
               Starting...
-            </span>
+            </>
           ) : (
             'Start Session'
           )}
         </button>
       </div>
       {autoStartError && (
-        <p className="text-sm text-red-600 mb-4">{autoStartError}</p>
+        <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 16 }}>{autoStartError}</p>
       )}
       {showModal && (
         <CreateSessionFromProblemModal
