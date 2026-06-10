@@ -36,8 +36,6 @@ const providerIcons: Record<ProviderConfig['providerType'], React.ReactNode> = {
 export interface SignInButtonsProps {
   onSuccess: () => void;
   onError: (error: Error) => void;
-  /** Optional heading shown above the buttons, e.g. "Sign in to join CS101" */
-  label?: string;
   /** Disable all buttons (e.g. while a backend call is in flight) */
   disabled?: boolean;
   /**
@@ -87,10 +85,9 @@ async function signInWithProvider(providerType: 'google' | 'github' | 'microsoft
  * @example
  * ```tsx
  * <SignInButtons onSuccess={handleSuccess} onError={handleError} />
- * <SignInButtons label="Sign in to join CS101" onSuccess={handleSuccess} onError={handleError} />
  * ```
  */
-export function SignInButtons({ onSuccess, onError, label, disabled: externalDisabled, onBeforeSignIn }: SignInButtonsProps) {
+export function SignInButtons({ onSuccess, onError, disabled: externalDisabled, onBeforeSignIn }: SignInButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
 
@@ -135,11 +132,6 @@ export function SignInButtons({ onSuccess, onError, label, disabled: externalDis
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {label && (
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)', margin: 0 }}>
-          {label}
-        </p>
-      )}
       {authProviders.map((provider) => {
         const isLoading = loadingProvider === provider.id;
         const isDisabled = isAnyLoading || externalDisabled;

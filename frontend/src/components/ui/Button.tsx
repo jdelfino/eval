@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'run' | 'quiet';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'run' | 'quiet' | 'accent';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -76,8 +76,9 @@ const variantClasses: Record<ButtonVariant, string> = {
   ].join(' '),
   // Token-driven variants: use CSS variables from F1 token layer (globals.css).
   // Empty string here — styling applied via variantInlineStyles below.
-  run:   '',
-  quiet: '',
+  run:    '',
+  quiet:  '',
+  accent: '',
 };
 
 /**
@@ -96,6 +97,12 @@ const variantInlineStyles: Partial<Record<ButtonVariant, React.CSSProperties>> =
     background: 'transparent',
     color: 'var(--fg-muted)',
     border: '1px solid var(--border)',
+  },
+  accent: {
+    background: 'var(--accent)',
+    color: 'var(--accent-fg)',
+    borderRadius: 'var(--radius)',
+    fontWeight: 600,
   },
 };
 

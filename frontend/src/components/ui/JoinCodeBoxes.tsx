@@ -6,6 +6,35 @@ import { normalizeJoinCode, formatJoinCodeInput } from '@/lib/join-code';
 /** Ghost placeholder characters shown when the input is empty (screen I). */
 const GHOST_CHARS = ['A', 'B', 'C', '1', '2', '3'] as const;
 
+/** Static style for the invisible real <input> overlay. */
+const INPUT_OVERLAY_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  opacity: 0.01,
+  width: '100%',
+  height: '100%',
+  fontSize: 16,
+  cursor: 'text',
+  zIndex: 1,
+};
+
+/** Static style for the aria-hidden visual boxes container. */
+const BOXES_CONTAINER_STYLE: React.CSSProperties = {
+  display: 'flex',
+  gap: 6,
+  alignItems: 'center',
+  pointerEvents: 'none',
+};
+
+/** Static style for the middle divider between XXX and XXX. */
+const DIVIDER_STYLE: React.CSSProperties = {
+  width: 10,
+  height: 2,
+  background: 'var(--border-strong)',
+  borderRadius: 1,
+  flexShrink: 0,
+};
+
 export interface JoinCodeBoxesProps {
   /** Formatted value (XXX-XXX or partial). */
   value: string;
@@ -90,28 +119,11 @@ export function JoinCodeBoxes({
         autoCapitalize="characters"
         maxLength={7}
         aria-label={ariaLabel}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.01,
-          width: '100%',
-          height: '100%',
-          fontSize: 16,
-          cursor: 'text',
-          zIndex: 1,
-        }}
+        style={INPUT_OVERLAY_STYLE}
       />
 
       {/* Visual boxes (aria-hidden decoration) */}
-      <div
-        aria-hidden="true"
-        style={{
-          display: 'flex',
-          gap: 6,
-          alignItems: 'center',
-          pointerEvents: 'none',
-        }}
-      >
+      <div aria-hidden="true" style={BOXES_CONTAINER_STYLE}>
         {GHOST_CHARS.map((ghost, i) => {
           const char = chars[i];
           const isActive = !error && focused && i === Math.min(chars.length, 5);
@@ -146,17 +158,7 @@ export function JoinCodeBoxes({
               >
                 {char ?? ghost}
               </div>
-              {i === 2 && (
-                <div
-                  style={{
-                    width: 10,
-                    height: 2,
-                    background: 'var(--border-strong)',
-                    borderRadius: 1,
-                    flexShrink: 0,
-                  }}
-                />
-              )}
+              {i === 2 && <div style={DIVIDER_STYLE} />}
             </React.Fragment>
           );
         })}

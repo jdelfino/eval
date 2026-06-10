@@ -25,15 +25,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { AuthLoading } from '@/components/layout/AuthLoading';
+import { AuthCard } from '@/components/ui/AuthCard';
+import { Button } from '@/components/ui/Button';
 import { EvalLogomark } from '@/components/ui/EvalLogomark';
 import { JoinCodeBoxes } from '@/components/ui/JoinCodeBoxes';
 import { Icon } from '@/components/ui/Icon';
-
-// Validate join code format (XXX-XXX, 6 alphanumeric chars)
-function isValidJoinCode(code: string): boolean {
-  const cleaned = code.replace(/-/g, '');
-  return /^[A-Z0-9]{6}$/.test(cleaned);
-}
+import { isCompleteJoinCode, normalizeJoinCode } from '@/lib/join-code';
 
 export default function Home() {
   const router = useRouter();
@@ -71,43 +69,19 @@ export default function Home() {
     e.preventDefault();
     setError('');
 
-    if (!isValidJoinCode(join_code)) {
+    if (!isCompleteJoinCode(join_code)) {
       setError('Please enter a valid join code (e.g., ABC-123)');
       return;
     }
 
     setIsValidating(true);
-    const cleanCode = join_code.replace(/-/g, '');
+    const cleanCode = normalizeJoinCode(join_code);
     router.push(`/register/student?code=${cleanCode}`);
   };
 
   // Show loading spinner while checking auth
   if (isLoading) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg)',
-        }}
-      >
-        <div
-          role="status"
-          aria-label="Loading"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            border: '3px solid var(--border)',
-            borderTopColor: 'var(--accent)',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    return <AuthLoading />;
   }
 
   // If authenticated, render nothing (redirect effect will fire)
@@ -117,7 +91,7 @@ export default function Home() {
 
   // Render landing page for unauthenticated users (screen I)
   return (
-    <AuthPublicShell>
+    <AuthPublicShell showSignInLink={true}>
       <div style={{ maxWidth: 460, margin: '60px auto 0' }}>
 
         {/* Brand hero — centered logomark + tagline */}
@@ -138,16 +112,8 @@ export default function Home() {
         </div>
 
         {/* Join-code card — the primary action */}
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            background: 'var(--bg-raised)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 24,
-            boxShadow: 'var(--shadow-lg)',
-          }}
-        >
+        <AuthCard style={{ boxShadow: 'var(--shadow-lg)' }}>
+        <form onSubmit={handleSubmit}>
           <label
             htmlFor="join-code"
             style={{
@@ -196,26 +162,12 @@ export default function Home() {
             </p>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="accent"
             disabled={isValidating || !join_code}
-            style={{
-              marginTop: 18,
-              width: '100%',
-              height: 40,
-              background: isValidating || !join_code ? undefined : 'var(--accent)',
-              color: isValidating || !join_code ? undefined : 'var(--accent-fg)',
-              border: '1px solid var(--accent)',
-              borderRadius: 'var(--radius)',
-              fontSize: 13.5,
-              fontWeight: 600,
-              cursor: isValidating || !join_code ? 'not-allowed' : 'pointer',
-              opacity: isValidating || !join_code ? 0.55 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
+            loading={isValidating}
+            style={{ marginTop: 18, width: '100%' }}
           >
             {isValidating ? (
               'Joining…'
@@ -225,8 +177,9 @@ export default function Home() {
                 <Icon name="arrowR" size={14} />
               </>
             )}
-          </button>
+          </Button>
         </form>
+        </AuthCard>
 
         {/* Escape hatches below the card */}
         <div

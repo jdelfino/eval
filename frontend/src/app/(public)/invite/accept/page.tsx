@@ -27,34 +27,30 @@ import { firebaseAuth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignInButtons } from '@/components/ui/SignInButtons';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { AuthLoading } from '@/components/layout/AuthLoading';
 import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthHeading } from '@/components/ui/AuthHeading';
 import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Icon } from '@/components/ui/Icon';
 import { getInvitationDetails, acceptInvite } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
+import {
+  INVITATION_ERROR_MESSAGES,
+  type InvitationErrorCode,
+} from '@/lib/api/registration-errors';
+import { redirectPathForRole } from '@/lib/auth-redirect';
 
 // Page state types
 type PageState =
-  | { status: 'verifying' }
-  | { status: 'loading-invitation' }
+  | { status: 'loading'; caption: string }
   | { status: 'ready'; invitation: InvitationInfo }
   | { status: 'submitting'; invitation: InvitationInfo }
   | { status: 'success' }
-  | { status: 'error'; error: ErrorType }
+  | { status: 'error'; error: InvitationErrorCode }
   | { status: 'email-mismatch'; invitation: InvitationInfo; signedInEmail: string; isNewSignIn: boolean };
-
-// Error types
-type ErrorType =
-  | 'otp_expired'
-  | 'otp_invalid'
-  | 'invitation_consumed'
-  | 'invitation_revoked'
-  | 'invitation_not_found'
-  | 'invitation_expired'
-  | 'network_error'
-  | 'unknown';
 
 interface InvitationInfo {
   id: string;
@@ -67,47 +63,10 @@ interface InvitationInfo {
   } | null;
 }
 
-// Error messages for each error type
-const ERROR_MESSAGES: Record<ErrorType, { title: string; message: string }> = {
-  otp_expired: {
-    title: 'Invitation Expired',
-    message: 'This invitation link has expired. Please contact your administrator to send a new invitation.',
-  },
-  otp_invalid: {
-    title: 'Invalid Link',
-    message: 'This invitation link is invalid. Please check your email for the correct link.',
-  },
-  invitation_consumed: {
-    title: 'Already Used',
-    message: 'This invitation has already been used.',
-  },
-  invitation_revoked: {
-    title: 'Invitation Revoked',
-    message: 'This invitation has been revoked. Please contact your administrator.',
-  },
-  invitation_not_found: {
-    title: 'Invitation Not Found',
-    message: "We couldn't find your invitation. Please contact your administrator.",
-  },
-  invitation_expired: {
-    title: 'This invitation has expired',
-    message:
-      "Invitations are only valid for a limited time. Ask the person who invited you to send a new one and we'll get you in.",
-  },
-  network_error: {
-    title: 'Connection Error',
-    message: 'Unable to connect. Please check your internet connection and try again.',
-  },
-  unknown: {
-    title: 'Something Went Wrong',
-    message: 'An unexpected error occurred. Please try again or contact your administrator.',
-  },
-};
-
 /**
- * Map an error code string to an ErrorType for the page state.
+ * Map an error code string to an InvitationErrorCode for the page state.
  */
-function mapErrorCode(code: string | undefined, status?: number): ErrorType {
+function mapErrorCode(code: string | undefined, status?: number): InvitationErrorCode {
   switch (code) {
     case 'OTP_EXPIRED':
     case 'TOKEN_EXPIRED':
@@ -170,31 +129,30 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-// Loading fallback for Suspense boundary
-function LoadingFallback() {
+/**
+ * Shared bg-sunken detail box used on L (invite card) and L3 (email mismatch).
+ */
+function DetailBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <AuthPublicShell narrow showSignInLink={false}>
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            border: '3px solid var(--border)',
-            borderTopColor: 'var(--accent)',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto',
-          }}
-        />
-      </div>
-    </AuthPublicShell>
+    <div
+      style={{
+        padding: 14,
+        background: 'var(--bg-sunken)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        fontSize: 12,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
 // Page wrapper with Suspense boundary for useSearchParams
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={<AuthLoading caption="Loading invitation..." />}>
       <AcceptInviteContent />
     </Suspense>
   );
@@ -204,7 +162,7 @@ function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { beginAuthFlow, endAuthFlow } = useAuth();
-  const [pageState, setPageState] = useState<PageState>({ status: 'verifying' });
+  const [pageState, setPageState] = useState<PageState>({ status: 'loading', caption: 'Verifying invitation...' });
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -212,13 +170,7 @@ function AcceptInviteContent() {
   // Redirect based on user role
   const redirectBasedOnRole = useCallback(
     (role: string) => {
-      if (role === 'namespace-admin') {
-        router.push('/namespace/invitations');
-      } else if (role === 'instructor') {
-        router.push('/instructor');
-      } else {
-        router.push('/');
-      }
+      router.push(redirectPathForRole(role));
     },
     [router]
   );
@@ -277,6 +229,28 @@ function AcceptInviteContent() {
   const doAcceptRef = useRef(doAccept);
   doAcceptRef.current = doAccept;
 
+  // Shared: email-mismatch check → L3 interstitial, or accept directly.
+  // Called from both the mount effect (isNewSignIn=false) and handleSignIn (isNewSignIn=true).
+  // Null/empty provider email: skip L3 and accept directly (backend permits mismatched accept).
+  const proceedAfterSignIn = useCallback(
+    async (inv: InvitationInfo, providerEmail: string, name: string, isNewSignIn: boolean) => {
+      if (providerEmail && providerEmail.toLowerCase() !== inv.email.toLowerCase()) {
+        endAuthFlow();
+        setPageState({
+          status: 'email-mismatch',
+          invitation: inv,
+          signedInEmail: providerEmail,
+          isNewSignIn,
+        });
+        return;
+      }
+      await doAcceptRef.current(inv, name, isNewSignIn);
+    },
+    [endAuthFlow]
+  );
+  const proceedAfterSignInRef = useRef(proceedAfterSignIn);
+  proceedAfterSignInRef.current = proceedAfterSignIn;
+
   // Verify token and load invitation on mount.
   useEffect(() => {
     const verifyAndLoadInvitation = async () => {
@@ -287,7 +261,7 @@ function AcceptInviteContent() {
         return;
       }
 
-      setPageState({ status: 'loading-invitation' });
+      setPageState({ status: 'loading', caption: 'Loading your invitation...' });
 
       try {
         const data = await getInvitationDetails(queryToken);
@@ -303,22 +277,7 @@ function AcceptInviteContent() {
         // If already signed in, check email match before accepting
         if (firebaseAuth.currentUser) {
           const providerEmail = firebaseAuth.currentUser.email ?? '';
-          // Null/empty provider email (e.g. GitHub private email, some Microsoft accounts):
-          // skip the L3 interstitial and proceed with direct accept. The backend
-          // deliberately permits mismatched accept (auth.go ~line 210).
-          if (providerEmail && providerEmail.toLowerCase() !== invitationInfo.email.toLowerCase()) {
-            // Email mismatch: show L3 interstitial. Release the auth gate immediately —
-            // the onAuthStateChanged event already fired and will not replay.
-            endAuthFlow();
-            setPageState({
-              status: 'email-mismatch',
-              invitation: invitationInfo,
-              signedInEmail: providerEmail,
-              isNewSignIn: false,
-            });
-          } else {
-            await doAcceptRef.current(invitationInfo, '');
-          }
+          await proceedAfterSignInRef.current(invitationInfo, providerEmail, '', false);
         } else {
           setPageState({ status: 'ready', invitation: invitationInfo });
         }
@@ -338,24 +297,9 @@ function AcceptInviteContent() {
   // Sign-in success handler from SignInButtons — user just signed in, so isNewSignIn=true
   const handleSignIn = useCallback(async () => {
     if (!invitation) return;
-
     const providerEmail = firebaseAuth.currentUser?.email ?? '';
-    // Null/empty provider email: skip L3 and accept directly.
-    if (providerEmail && providerEmail.toLowerCase() !== invitation.email.toLowerCase()) {
-      // Email mismatch: show L3 interstitial. Release auth gate immediately so that
-      // if the user abandons L3 and navigates to /auth/signin they are not stuck.
-      endAuthFlow();
-      setPageState({
-        status: 'email-mismatch',
-        invitation,
-        signedInEmail: providerEmail,
-        isNewSignIn: true,
-      });
-      return;
-    }
-
-    await doAccept(invitation, displayName, true);
-  }, [invitation, displayName, doAccept, endAuthFlow]);
+    await proceedAfterSignIn(invitation, providerEmail, displayName, true);
+  }, [invitation, displayName, proceedAfterSignIn]);
 
   // Sign-in error handler
   const handleSignInError = useCallback(
@@ -375,54 +319,16 @@ function AcceptInviteContent() {
 
   // Handle retry for network errors
   const handleRetry = () => {
-    setPageState({ status: 'verifying' });
+    setPageState({ status: 'loading', caption: 'Verifying invitation...' });
     window.location.reload();
   };
 
   // ---------------------------------------------------------------------------
-  // Loading states
+  // Loading state
   // ---------------------------------------------------------------------------
 
-  if (pageState.status === 'verifying') {
-    return (
-      <AuthPublicShell narrow showSignInLink={false}>
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              border: '3px solid var(--border)',
-              borderTopColor: 'var(--accent)',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto 12px',
-            }}
-          />
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Verifying invitation...</p>
-        </div>
-      </AuthPublicShell>
-    );
-  }
-
-  if (pageState.status === 'loading-invitation') {
-    return (
-      <AuthPublicShell narrow showSignInLink={false}>
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              border: '3px solid var(--border)',
-              borderTopColor: 'var(--accent)',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto 12px',
-            }}
-          />
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Loading your invitation...</p>
-        </div>
-      </AuthPublicShell>
-    );
+  if (pageState.status === 'loading') {
+    return <AuthLoading caption={pageState.caption} />;
   }
 
   // ---------------------------------------------------------------------------
@@ -446,20 +352,9 @@ function AcceptInviteContent() {
           >
             <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
           </div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 24,
-              fontWeight: 500,
-              letterSpacing: -0.4,
-              margin: 0,
-            }}
-          >
+          <AuthHeading sub="Redirecting to your dashboard…">
             Account created!
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 8 }}>
-            Redirecting to your dashboard…
-          </p>
+          </AuthHeading>
         </AuthCard>
       </AuthPublicShell>
     );
@@ -470,7 +365,7 @@ function AcceptInviteContent() {
   // ---------------------------------------------------------------------------
 
   if (pageState.status === 'error') {
-    const errorInfo = ERROR_MESSAGES[pageState.error];
+    const errorInfo = INVITATION_ERROR_MESSAGES[pageState.error];
     const showSignInLink = pageState.error === 'invitation_consumed';
     const showRetryButton = pageState.error === 'network_error';
 
@@ -497,65 +392,23 @@ function AcceptInviteContent() {
           >
             <Icon name={circleIcon} size={24} style={{ color: circleColor }} />
           </div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 24,
-              fontWeight: 500,
-              letterSpacing: -0.4,
-              margin: 0,
-            }}
-          >
+          <AuthHeading sub={errorInfo.message}>
             {errorInfo.title}
-          </h1>
-          <p
-            style={{
-              fontSize: 13,
-              color: 'var(--fg-muted)',
-              marginTop: 8,
-              lineHeight: 1.55,
-            }}
-          >
-            {errorInfo.message}
-          </p>
+          </AuthHeading>
 
           {showSignInLink && (
             <div style={{ marginTop: 20 }}>
-              <Link
-                href="/auth/signin"
-                style={{
-                  display: 'inline-block',
-                  padding: '8px 20px',
-                  background: 'var(--accent)',
-                  color: 'var(--accent-fg)',
-                  borderRadius: 'var(--radius)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                }}
-              >
-                Sign In
-              </Link>
+              <Button variant="accent" asChild>
+                <Link href="/auth/signin">Sign In</Link>
+              </Button>
             </div>
           )}
 
           {showRetryButton && (
             <div style={{ marginTop: 20 }}>
-              <button
-                onClick={handleRetry}
-                style={{
-                  padding: '8px 20px',
-                  background: 'var(--accent)',
-                  color: 'var(--accent-fg)',
-                  border: 'none',
-                  borderRadius: 'var(--radius)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
+              <Button variant="accent" onClick={handleRetry}>
                 Try Again
-              </button>
+              </Button>
             </div>
           )}
         </AuthCard>
@@ -600,42 +453,17 @@ function AcceptInviteContent() {
               <Icon name="alert" size={18} style={{ color: 'var(--warn)' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <h1
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontSize: 22,
-                  fontWeight: 500,
-                  letterSpacing: -0.3,
-                  margin: 0,
-                }}
+              <AuthHeading
+                size="sm"
+                sub="You're signed in as one account, but the invitation was sent to another. Sign out and try with the right account."
               >
                 This invitation is for a different email
-              </h1>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: 'var(--fg-muted)',
-                  marginTop: 6,
-                  lineHeight: 1.55,
-                }}
-              >
-                You&apos;re signed in as one account, but the invitation was sent to another. Sign
-                out and try with the right account.
-              </p>
+              </AuthHeading>
             </div>
           </div>
 
           {/* Detail box */}
-          <div
-            style={{
-              marginTop: 18,
-              padding: 14,
-              background: 'var(--bg-sunken)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              fontSize: 12,
-            }}
-          >
+          <DetailBox style={{ marginTop: 18 }}>
             <Row
               label="Invitation sent to"
               value={<span style={{ fontFamily: 'var(--font-mono)' }}>{inv.email}</span>}
@@ -648,42 +476,24 @@ function AcceptInviteContent() {
                 </span>
               }
             />
-          </div>
+          </DetailBox>
 
           {/* Button row */}
           <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
-            <button
+            <Button
+              variant="quiet"
+              style={{ flex: 1 }}
               onClick={handleAcceptAnyway}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                background: 'transparent',
-                color: 'var(--fg-muted)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
             >
               Accept anyway
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="accent"
+              style={{ flex: 1 }}
               onClick={handleSignOutAndRetry}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                background: 'var(--accent)',
-                color: 'var(--accent-fg)',
-                border: '1px solid var(--accent)',
-                borderRadius: 'var(--radius)',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
             >
               Sign out &amp; retry
-            </button>
+            </Button>
           </div>
 
           {/* Footnote */}
@@ -741,17 +551,9 @@ function AcceptInviteContent() {
         </div>
 
         {/* Role heading */}
-        <h1
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontSize: 24,
-            fontWeight: 500,
-            letterSpacing: -0.4,
-            margin: '8px 0 4px',
-          }}
-        >
+        <AuthHeading style={{ margin: '8px 0 4px' }}>
           {roleHeading}
-        </h1>
+        </AuthHeading>
 
         {/* Expiry sub */}
         <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>
@@ -759,15 +561,7 @@ function AcceptInviteContent() {
         </p>
 
         {/* Detail box */}
-        <div
-          style={{
-            margin: '18px 0',
-            padding: 14,
-            background: 'var(--bg-sunken)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-          }}
-        >
+        <DetailBox style={{ margin: '18px 0' }}>
           <Row
             label="Invited email"
             value={
@@ -780,7 +574,7 @@ function AcceptInviteContent() {
             <Row label="Organization" value={inv.namespace.displayName} />
           )}
           <Row label="You'll be able to" value={roleCapabilities} />
-        </div>
+        </DetailBox>
 
         {/* Display name field */}
         <Field

@@ -60,24 +60,6 @@ describe('SignInButtons', () => {
       expect(screen.getByRole('button', { name: /microsoft/i })).toBeInTheDocument();
     });
 
-    it('renders an optional label heading', () => {
-      render(
-        <SignInButtons
-          onSuccess={mockOnSuccess}
-          onError={mockOnError}
-          label="Sign in to join CS101"
-        />
-      );
-
-      expect(screen.getByText('Sign in to join CS101')).toBeInTheDocument();
-    });
-
-    it('does not render a heading when label is not provided', () => {
-      render(<SignInButtons onSuccess={mockOnSuccess} onError={mockOnError} />);
-
-      expect(screen.queryByRole('heading')).not.toBeInTheDocument();
-    });
-
     it('calls signInWithPopup with GoogleAuthProvider when Google button is clicked', async () => {
       const googleProviderInstance = { providerId: 'google.com' };
       mockGoogleAuthProvider.mockReturnValue(googleProviderInstance);

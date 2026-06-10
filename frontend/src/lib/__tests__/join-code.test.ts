@@ -11,7 +11,38 @@ import {
   normalizeJoinCode,
   formatJoinCodeForDisplay,
   formatJoinCodeInput,
+  isCompleteJoinCode,
 } from '../join-code';
+
+describe('isCompleteJoinCode', () => {
+  it('returns true for a 6-char uppercase alphanumeric code', () => {
+    expect(isCompleteJoinCode('ABC123')).toBe(true);
+  });
+
+  it('returns true for a dash-formatted code like ABC-123', () => {
+    expect(isCompleteJoinCode('ABC-123')).toBe(true);
+  });
+
+  it('returns true for a lowercase code (normalised to uppercase)', () => {
+    expect(isCompleteJoinCode('abc123')).toBe(true);
+  });
+
+  it('returns false for fewer than 6 chars', () => {
+    expect(isCompleteJoinCode('ABC12')).toBe(false);
+  });
+
+  it('returns false for more than 6 chars', () => {
+    expect(isCompleteJoinCode('ABC1234')).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isCompleteJoinCode('')).toBe(false);
+  });
+
+  it('returns false for code with special characters', () => {
+    expect(isCompleteJoinCode('ABC!23')).toBe(false);
+  });
+});
 
 describe('normalizeJoinCode', () => {
   it('strips dashes and uppercases', () => {

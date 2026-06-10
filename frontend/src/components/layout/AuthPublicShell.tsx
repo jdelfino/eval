@@ -8,16 +8,50 @@ export interface AuthPublicShellProps {
   children: React.ReactNode;
   /** Content maxWidth: 460 when narrow, 1100 otherwise. Default false. */
   narrow?: boolean;
-  /** Render footer with © Eval, Terms, Privacy. Default true. */
-  footer?: boolean;
   /**
-   * Render the "Sign in →" link in the header. Default true.
+   * Render the "Sign in →" link in the header. Default false.
    *
-   * Locked decision (decision-6): the header sign-in link is shown on all
-   * public pages EXCEPT the sign-in page itself (T3 passes showSignInLink=false).
+   * Locked decision (decision-6): the header sign-in link is shown only on
+   * the landing page (/) — all other public auth pages omit it.
    */
   showSignInLink?: boolean;
 }
+
+const shellStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  background: 'var(--bg)',
+  color: 'var(--fg)',
+  fontFamily: 'var(--font-sans)',
+};
+
+const headerStyle: React.CSSProperties = {
+  height: 52,
+  padding: '0 24px',
+  borderBottom: '1px solid var(--border)',
+  background: 'var(--bg-raised)',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 16,
+  flexShrink: 0,
+};
+
+const logoLinkStyle: React.CSSProperties = { textDecoration: 'none', color: 'inherit' };
+const spacerStyle: React.CSSProperties = { flex: 1 };
+const signInLinkStyle: React.CSSProperties = { fontSize: 13, color: 'var(--fg-muted)', textDecoration: 'none' };
+const mainStyle: React.CSSProperties = { flex: 1, overflow: 'auto' };
+const footerStyle: React.CSSProperties = {
+  borderTop: '1px solid var(--border)',
+  padding: '12px 24px',
+  display: 'flex',
+  gap: 16,
+  fontSize: 11.5,
+  color: 'var(--fg-subtle)',
+  background: 'var(--bg-raised)',
+  flexShrink: 0,
+};
+const footerLinkStyle: React.CSSProperties = { color: 'inherit', textDecoration: 'none' };
 
 /**
  * AuthPublicShell — shared chrome for all public auth surfaces (G5).
@@ -25,7 +59,7 @@ export interface AuthPublicShellProps {
  * Layout:
  *   - Header (52px): EvalLogomark linking to /, spacer, optional "Sign in →"
  *   - Main: flex:1 scroll area with maxWidth container
- *   - Footer (optional): © 2026 Eval · Terms · Privacy
+ *   - Footer: © 2026 Eval · Terms · Privacy
  *
  * Deliberate divergence from the v4 mock: the mock's footer includes a
  * "Sign in with email" link on every public page. Per locked decision-6,
@@ -34,53 +68,25 @@ export interface AuthPublicShellProps {
 export function AuthPublicShell({
   children,
   narrow = false,
-  footer = true,
-  showSignInLink = true,
+  showSignInLink = false,
 }: AuthPublicShellProps): React.ReactElement {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--bg)',
-        color: 'var(--fg)',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
+    <div style={shellStyle}>
       {/* Header */}
-      <header
-        style={{
-          height: 52,
-          padding: '0 24px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-raised)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          flexShrink: 0,
-        }}
-      >
-        <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <header style={headerStyle}>
+        <Link href="/" style={logoLinkStyle}>
           <EvalLogomark />
         </Link>
-        <div style={{ flex: 1 }} />
+        <div style={spacerStyle} />
         {showSignInLink && (
-          <Link
-            href="/auth/signin"
-            style={{
-              fontSize: 13,
-              color: 'var(--fg-muted)',
-              textDecoration: 'none',
-            }}
-          >
+          <Link href="/auth/signin" style={signInLinkStyle}>
             Sign in →
           </Link>
         )}
       </header>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflow: 'auto' }}>
+      <main style={mainStyle}>
         <div
           style={{
             maxWidth: narrow ? 460 : 1100,
@@ -93,28 +99,15 @@ export function AuthPublicShell({
       </main>
 
       {/* Footer */}
-      {footer && (
-        <footer
-          style={{
-            borderTop: '1px solid var(--border)',
-            padding: '12px 24px',
-            display: 'flex',
-            gap: 16,
-            fontSize: 11.5,
-            color: 'var(--fg-subtle)',
-            background: 'var(--bg-raised)',
-            flexShrink: 0,
-          }}
-        >
-          <span>© 2026 Eval</span>
-          <Link href="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>
-            Terms
-          </Link>
-          <Link href="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>
-            Privacy
-          </Link>
-        </footer>
-      )}
+      <footer style={footerStyle}>
+        <span>© 2026 Eval</span>
+        <Link href="/terms" style={footerLinkStyle}>
+          Terms
+        </Link>
+        <Link href="/privacy" style={footerLinkStyle}>
+          Privacy
+        </Link>
+      </footer>
     </div>
   );
 }

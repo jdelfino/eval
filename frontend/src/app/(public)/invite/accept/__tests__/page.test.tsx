@@ -26,13 +26,12 @@ jest.mock('next/navigation', () => ({
 // Mock SignInButtons so tests don't depend on Firebase popup flow
 const mockInviteSignInButtonsOnBeforeSignIn = jest.fn();
 jest.mock('@/components/ui/SignInButtons', () => ({
-  SignInButtons: ({ onSuccess, onError, onBeforeSignIn, label }: any) => {
+  SignInButtons: ({ onSuccess, onError, onBeforeSignIn }: any) => {
     if (onBeforeSignIn) {
       mockInviteSignInButtonsOnBeforeSignIn.mockImplementation(onBeforeSignIn);
     }
     return (
       <div data-testid="sign-in-buttons">
-        {label && <p data-testid="sign-in-label">{label}</p>}
         <button onClick={onSuccess} data-testid="mock-sign-in-success">
           Mock Sign In
         </button>

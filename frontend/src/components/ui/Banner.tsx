@@ -20,6 +20,8 @@ export interface BannerProps {
   action?: React.ReactNode;
   /** When provided, renders a dismiss button that calls this handler. */
   onDismiss?: () => void;
+  /** Additional inline styles (e.g. marginTop) applied to the root element. */
+  style?: React.CSSProperties;
 }
 
 const TONE_MAP: Record<BannerTone, { bg: string; fg: string }> = {
@@ -45,6 +47,7 @@ export function Banner({
   body,
   action,
   onDismiss,
+  style,
 }: BannerProps): React.ReactElement {
   const t = TONE_MAP[tone];
   const isUrgent = tone === 'danger' || tone === 'warn';
@@ -62,6 +65,7 @@ export function Banner({
         gap: 10,
         fontSize: 12.5,
         lineHeight: 1.5,
+        ...style,
       }}
     >
       <Icon

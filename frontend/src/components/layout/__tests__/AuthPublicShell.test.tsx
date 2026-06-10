@@ -38,15 +38,15 @@ describe('AuthPublicShell', () => {
     expect(logomarkLink).toHaveAttribute('href', '/');
   });
 
-  it('renders "Sign in →" linking to /auth/signin by default', () => {
+  it('hides sign-in link by default (showSignInLink defaults to false)', () => {
     render(<AuthPublicShell><div>content</div></AuthPublicShell>);
-    const signInLink = screen.getByRole('link', { name: /sign in/i });
-    expect(signInLink).toHaveAttribute('href', '/auth/signin');
+    expect(screen.queryByRole('link', { name: /sign in →/i })).not.toBeInTheDocument();
   });
 
-  it('hides sign-in link when showSignInLink={false}', () => {
-    render(<AuthPublicShell showSignInLink={false}><div>content</div></AuthPublicShell>);
-    expect(screen.queryByRole('link', { name: /sign in →/i })).not.toBeInTheDocument();
+  it('renders "Sign in →" linking to /auth/signin when showSignInLink={true}', () => {
+    render(<AuthPublicShell showSignInLink={true}><div>content</div></AuthPublicShell>);
+    const signInLink = screen.getByRole('link', { name: /sign in/i });
+    expect(signInLink).toHaveAttribute('href', '/auth/signin');
   });
 
   it('renders children in main content area', () => {
@@ -63,11 +63,11 @@ describe('AuthPublicShell', () => {
     expect(privacyLink).toHaveAttribute('href', '/privacy');
   });
 
-  it('footer={false} removes the footer', () => {
-    render(<AuthPublicShell footer={false}><div>content</div></AuthPublicShell>);
-    expect(screen.queryByText(/© 2026 Eval/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Terms' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Privacy' })).not.toBeInTheDocument();
+  it('always renders footer with © 2026 Eval, Terms, and Privacy (footer is not conditional)', () => {
+    render(<AuthPublicShell><div>content</div></AuthPublicShell>);
+    expect(screen.getByText(/© 2026 Eval/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Terms' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy' })).toBeInTheDocument();
   });
 
   it('footer does NOT contain "Sign in with email" (locked decision-6)', () => {

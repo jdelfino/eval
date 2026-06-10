@@ -40,6 +40,18 @@ export function formatJoinCodeInput(value: string): string {
 }
 
 /**
+ * Return true when code is a complete, valid join code (6 uppercase alphanumeric
+ * characters after stripping dashes/whitespace).
+ *
+ * Drop-in replacement for the inline validation expressions scattered across
+ * public pages: isValidJoinCode, validateCodeFormat, and the inline regex in
+ * JoinSectionForm.
+ */
+export function isCompleteJoinCode(code: string): boolean {
+  return /^[A-Z0-9]{6}$/.test(normalizeJoinCode(code));
+}
+
+/**
  * Format a join code for display as XXX-XXX.
  */
 export function formatJoinCodeForDisplay(code: string): string {

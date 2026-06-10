@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SignInButtons } from '@/components/ui/SignInButtons';
 import { Banner } from '@/components/ui/Banner';
 import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthHeading } from '@/components/ui/AuthHeading';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
 import { Spinner } from '@/components/ui/Spinner';
 
@@ -68,26 +69,9 @@ function SignInPageContent() {
     <AuthPublicShell narrow showSignInLink={false}>
       <AuthCard style={{ marginTop: 30, padding: 28 }}>
         {/* Heading */}
-        <h1
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontSize: 26,
-            fontWeight: 500,
-            letterSpacing: -0.5,
-            margin: 0,
-          }}
-        >
+        <AuthHeading size="lg" sub="Use the same account you signed up with.">
           Sign in to Eval
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--fg-muted)',
-            margin: '8px 0 0',
-          }}
-        >
-          Use the same account you signed up with.
-        </p>
+        </AuthHeading>
 
         {/* J2: Error Banner between heading and provider stack */}
         {error && (

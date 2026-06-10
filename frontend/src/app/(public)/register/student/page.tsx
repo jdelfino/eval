@@ -26,12 +26,16 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { SignInButtons } from '@/components/ui/SignInButtons';
 import { JoinCodeBoxes } from '@/components/ui/JoinCodeBoxes';
 import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthHeading } from '@/components/ui/AuthHeading';
 import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { AuthLoading } from '@/components/layout/AuthLoading';
 import { getStudentRegistrationInfo, registerStudent } from '@/lib/api/registration';
 import { ApiError } from '@/lib/api-error';
-import { formatJoinCodeInput, formatJoinCodeForDisplay } from '@/lib/join-code';
+import { formatJoinCodeInput, formatJoinCodeForDisplay, isCompleteJoinCode } from '@/lib/join-code';
+import { REGISTRATION_ERROR_MESSAGES } from '@/lib/api/registration-errors';
 import type { RegisterStudentInfo } from '@/types/api';
 
 // Page state types
@@ -40,55 +44,13 @@ type PageState =
   | { status: 'validating-code' }
   | { status: 'code-valid'; info: RegisterStudentInfo }
   | { status: 'submitting' }
-  | { status: 'success' }
-  | { status: 'error'; error: ErrorType; step: 'code' | 'registration' };
+  | { status: 'success' };
 
-type ErrorType =
-  | 'invalid_code'
-  | 'section_inactive'
-  | 'namespace_at_capacity'
-  | 'network_error';
-
-// Error messages
-const ERROR_MESSAGES: Record<ErrorType, string> = {
-  invalid_code:
-    "That code doesn't exist. Double-check with your teacher — codes are 3 letters and 3 digits, like ABC-123.",
-  section_inactive: 'This section is no longer accepting new students.',
-  namespace_at_capacity: 'This class has reached its student limit. Contact your instructor.',
-  network_error: 'Unable to connect. Please try again.',
-};
-
-// Loading fallback for Suspense boundary
-function LoadingFallback() {
-  return (
-    <AuthPublicShell narrow showSignInLink={false}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 200,
-        }}
-      >
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            border: '2px solid var(--border)',
-            borderTopColor: 'var(--accent)',
-            animation: 'spin 0.7s linear infinite',
-          }}
-        />
-      </div>
-    </AuthPublicShell>
-  );
-}
 
 // Page wrapper with Suspense boundary for useSearchParams
 export default function StudentRegistrationPage() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={<AuthLoading />}>
       <StudentRegistrationContent />
     </Suspense>
   );
@@ -128,11 +90,6 @@ function StudentRegistrationContent() {
     if (codeError) setCodeError('');
   };
 
-  // Validate join code format (6 chars)
-  const validateCodeFormat = (code: string): boolean => {
-    const cleaned = code.replace(/-/g, '');
-    return /^[A-Z0-9]{6}$/.test(cleaned);
-  };
 
   // Core registration logic — called both from direct flow (already signed in)
   // and from the SignInButtons onSuccess handler.
@@ -167,13 +124,13 @@ function StudentRegistrationContent() {
 
         if (backendError instanceof ApiError) {
           if (backendError.code === 'NAMESPACE_AT_CAPACITY') {
-            setSubmitError(ERROR_MESSAGES.namespace_at_capacity);
+            setSubmitError(REGISTRATION_ERROR_MESSAGES.namespace_at_capacity);
           } else if (backendError.code === 'INVALID_CODE' || backendError.code === 'SECTION_INACTIVE') {
             setPageState({ status: 'code-entry' });
             setCodeError(
               backendError.code === 'SECTION_INACTIVE'
-                ? ERROR_MESSAGES.section_inactive
-                : ERROR_MESSAGES.invalid_code
+                ? REGISTRATION_ERROR_MESSAGES.section_inactive
+                : REGISTRATION_ERROR_MESSAGES.invalid_code
             );
             return;
           } else {
@@ -189,6 +146,17 @@ function StudentRegistrationContent() {
     [setUserProfile, endAuthFlow, router]
   );
 
+  // Refs to access current values from the subscribe-once-on-mount onAuthStateChanged
+  // effect without adding them as dependencies (which caused resubscription on every keystroke).
+  const pageStateRef = useRef(pageState);
+  pageStateRef.current = pageState;
+  const registrationInfoRef = useRef(registrationInfo);
+  registrationInfoRef.current = registrationInfo;
+  const join_codeRef = useRef(join_code);
+  join_codeRef.current = join_code;
+  const doRegisterRef = useRef(doRegister);
+  doRegisterRef.current = doRegister;
+
   // Handle late Firebase Auth hydration (auth race fix for PLAT-my3o).
   //
   // After page.goto(), firebaseAuth.currentUser may be null when the user
@@ -196,29 +164,28 @@ function StudentRegistrationContent() {
   // state from IndexedDB. In that case, handleValidateCode falls through to
   // showing the sign-in buttons (code-valid state).
   //
-  // This effect watches for onAuthStateChanged to fire with a user. If the
-  // page is still in code-valid state (sign-in buttons showing) and no
-  // registration has started yet, it auto-registers the user without requiring
-  // a manual re-click.
+  // This effect subscribes once on mount and reads current values via refs so
+  // it does not resubscribe on every keystroke (deps: []).
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
       if (
         firebaseUser &&
         !registrationStartedRef.current &&
-        pageState.status === 'code-valid' &&
-        registrationInfo !== null
+        pageStateRef.current.status === 'code-valid' &&
+        registrationInfoRef.current !== null
       ) {
-        void doRegister(registrationInfo, join_code);
+        void doRegisterRef.current(registrationInfoRef.current, join_codeRef.current);
       }
     });
     return unsubscribe;
-  }, [pageState.status, registrationInfo, join_code, doRegister]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle code validation
   const handleValidateCode = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!validateCodeFormat(join_code)) {
+    if (!isCompleteJoinCode(join_code)) {
       setCodeError('Please enter a valid join code (e.g., ABC-123)');
       return;
     }
@@ -239,9 +206,9 @@ function StudentRegistrationContent() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === 'INVALID_CODE' || error.code === 'MISSING_CODE') {
-          setCodeError(ERROR_MESSAGES.invalid_code);
+          setCodeError(REGISTRATION_ERROR_MESSAGES.invalid_code);
         } else if (error.code === 'SECTION_INACTIVE') {
-          setCodeError(ERROR_MESSAGES.section_inactive);
+          setCodeError(REGISTRATION_ERROR_MESSAGES.section_inactive);
         } else {
           setCodeError(error.message);
         }
@@ -310,19 +277,9 @@ function StudentRegistrationContent() {
           >
             <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
           </div>
-          <h2
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 22,
-              fontWeight: 500,
-              margin: '0 0 8px',
-            }}
-          >
+          <AuthHeading size="sm" as="h2" style={{ margin: '0 0 8px' }} sub="Redirecting to your dashboard…">
             Joined!
-          </h2>
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', margin: 0 }}>
-            Redirecting to your dashboard…
-          </p>
+          </AuthHeading>
         </AuthCard>
       </AuthPublicShell>
     );
@@ -333,20 +290,9 @@ function StudentRegistrationContent() {
       {/* K2 / code-entry state */}
       {isCodeEntry && (
         <AuthCard style={{ marginTop: 30, padding: 28 }}>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 24,
-              fontWeight: 500,
-              letterSpacing: -0.4,
-              margin: 0,
-            }}
-          >
+          <AuthHeading sub="Six characters from your teacher.">
             Enter your join code
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 6, marginBottom: 0 }}>
-            Six characters from your teacher.
-          </p>
+          </AuthHeading>
 
           <form onSubmit={handleValidateCode}>
             <div style={{ marginTop: 18 }}>
@@ -376,46 +322,24 @@ function StudentRegistrationContent() {
               }}
             >
               {codeError && (
-                <button
+                <Button
                   type="button"
+                  variant="quiet"
+                  size="sm"
                   onClick={handleClear}
-                  style={{
-                    height: 34,
-                    padding: '0 14px',
-                    background: 'var(--bg-sunken)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--fg)',
-                    borderRadius: 'var(--radius)',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
                 >
                   Clear
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="submit"
-                disabled={validating}
-                style={{
-                  height: 34,
-                  padding: '0 14px',
-                  background: 'var(--accent)',
-                  border: '1px solid var(--accent)',
-                  color: 'var(--accent-fg)',
-                  borderRadius: 'var(--radius)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: validating ? 'not-allowed' : 'pointer',
-                  opacity: validating ? 0.7 : 1,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+                variant="accent"
+                size="sm"
+                loading={validating}
               >
                 {validating ? 'Checking code…' : codeError ? 'Try again' : 'Continue'}
                 {!validating && <Icon name="arrowR" size={14} />}
-              </button>
+              </Button>
             </div>
           </form>
 
@@ -455,17 +379,9 @@ function StudentRegistrationContent() {
           </div>
 
           {/* Class name heading */}
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 26,
-              fontWeight: 500,
-              letterSpacing: -0.5,
-              margin: '8px 0 4px',
-            }}
-          >
+          <AuthHeading size="lg" style={{ margin: '8px 0 4px' }}>
             Joining {registrationInfo.class.name}
-          </h1>
+          </AuthHeading>
 
           {/* Section / semester sub-line */}
           <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>

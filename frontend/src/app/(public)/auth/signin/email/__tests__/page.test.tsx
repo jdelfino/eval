@@ -388,7 +388,8 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/expired/i)).toBeInTheDocument();
+        // Uses canonical message from INVITATION_ERROR_MESSAGES.invitation_expired
+        expect(screen.getByText(/invitations are only valid|limited time/i)).toBeInTheDocument();
       });
       expect(mockPush).not.toHaveBeenCalled();
     });
@@ -620,7 +621,8 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/invalid.*join code|join code.*invalid/i)).toBeInTheDocument();
+        // Uses canonical message from REGISTRATION_ERROR_MESSAGES.invalid_code
+        expect(screen.getByText(/that code doesn't exist|doesn't exist/i)).toBeInTheDocument();
       });
       expect(mockPush).not.toHaveBeenCalled();
     });
@@ -641,7 +643,8 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/section.*inactive|inactive.*section/i)).toBeInTheDocument();
+        // Uses canonical message from REGISTRATION_ERROR_MESSAGES.section_inactive
+        expect(screen.getByText(/no longer accepting new students/i)).toBeInTheDocument();
       });
       expect(mockPush).not.toHaveBeenCalled();
     });
@@ -662,7 +665,8 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/capacity/i)).toBeInTheDocument();
+        // Uses canonical message from REGISTRATION_ERROR_MESSAGES.namespace_at_capacity
+        expect(screen.getByText(/student limit|reached its student/i)).toBeInTheDocument();
       });
       expect(mockPush).not.toHaveBeenCalled();
     });

@@ -88,3 +88,6 @@ export type { JoinCodeBoxesProps } from './JoinCodeBoxes';
 
 export { AuthCard } from './AuthCard';
 export type { AuthCardProps } from './AuthCard';
+
+export { AuthHeading } from './AuthHeading';
+export type { AuthHeadingProps, AuthHeadingSize } from './AuthHeading';

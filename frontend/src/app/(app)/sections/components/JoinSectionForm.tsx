@@ -2,12 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { AuthCard } from '@/components/ui/AuthCard';
+import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Banner } from '@/components/ui/Banner';
 import { Icon } from '@/components/ui/Icon';
 import { getStudentRegistrationInfo } from '@/lib/api/registration';
-import { formatJoinCodeInput, normalizeJoinCode } from '@/lib/join-code';
+import { formatJoinCodeInput, normalizeJoinCode, isCompleteJoinCode } from '@/lib/join-code';
 import type { RegisterStudentInfo } from '@/types/api';
 
 interface JoinSectionFormProps {
@@ -19,7 +21,6 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [lastSubmittedCode, setLastSubmittedCode] = useState<string | null>(null);
   const [preview, setPreview] = useState<RegisterStudentInfo | null>(null);
 
   // Ref to track the most-recently-requested preview code for stale-response guard
@@ -32,7 +33,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     // Always advance the ref so any in-flight request for an old code is treated as stale
     latestPreviewCodeRef.current = normalized;
 
-    if (!/^[A-Z0-9]{6}$/.test(normalized)) {
+    if (!isCompleteJoinCode(normalized)) {
       // Clear preview immediately when code becomes format-invalid
       setPreview(null);
       return;
@@ -73,7 +74,6 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     setSubmitting(true);
     setError(null);
     setSuccess(false);
-    setLastSubmittedCode(codeToSubmit);
 
     try {
       await onSubmit(codeToSubmit);
@@ -92,26 +92,17 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     }
   }, [join_code, onSubmit]);
 
-  // Retry handler: re-submits the last submitted code
+  // Retry handler: re-submits the current code
   const handleRetry = useCallback(() => {
-    if (lastSubmittedCode) {
-      setJoinCode(lastSubmittedCode);
-    }
     setError(null);
     handleSubmit();
-  }, [lastSubmittedCode, handleSubmit]);
+  }, [handleSubmit]);
 
   const semester = preview?.section.semester;
+  const disabled = submitting || !join_code.trim() || success;
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-raised)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 24,
-      }}
-    >
+    <AuthCard>
       <form onSubmit={handleSubmit}>
         {error && (
           <div style={{ marginBottom: 16 }}>
@@ -193,47 +184,21 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
             marginTop: 20,
           }}
         >
-          <Link
-            href="/sections"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '7px 14px',
-              background: 'var(--bg-sunken)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              fontSize: 13,
-              color: 'var(--fg)',
-              textDecoration: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </Link>
+          <Button variant="quiet" asChild>
+            <Link href="/sections">Cancel</Link>
+          </Button>
 
-          <button
+          <Button
             type="submit"
-            disabled={submitting || !join_code.trim() || success}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 14px',
-              background: 'var(--accent)',
-              border: '1px solid var(--accent)',
-              borderRadius: 'var(--radius)',
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--accent-fg)',
-              cursor: submitting || !join_code.trim() || success ? 'not-allowed' : 'pointer',
-              opacity: submitting || !join_code.trim() || success ? 0.55 : 1,
-            }}
+            variant="accent"
+            disabled={disabled}
+            loading={submitting}
           >
             {submitting ? 'Joining…' : 'Join section'}
             {!submitting && <Icon name="arrowR" size={13} />}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </AuthCard>
   );
 }
