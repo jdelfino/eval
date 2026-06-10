@@ -27,28 +27,84 @@ describe('Input', () => {
   });
 
   describe('styling', () => {
-    it('applies base styling classes', () => {
+    /**
+     * Test case 13: Input default border uses var(--border-strong) and no border-gray-300 class.
+     * Verifies that the token restyle is complete — hardcoded gray classes must not remain.
+     * If violated, the input would ignore the design-token theme.
+     */
+    it('applies var(--border-strong) border in default state', () => {
+      render(<Input data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input.style.border).toContain('var(--border-strong)');
+    });
+
+    it('does not have border-gray-300 class', () => {
+      render(<Input data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input).not.toHaveClass('border-gray-300');
+    });
+
+    it('applies base structural classes', () => {
       render(<Input data-testid="input" />);
       const input = screen.getByTestId('input');
       expect(input).toHaveClass('appearance-none');
-      expect(input).toHaveClass('rounded-lg');
-      expect(input).toHaveClass('border');
-      expect(input).toHaveClass('px-4');
-      expect(input).toHaveClass('py-3');
+      expect(input).toHaveClass('block');
+      expect(input).toHaveClass('w-full');
     });
 
-    it('applies default border and focus ring colors', () => {
+    it('does not apply Tailwind ring utility classes', () => {
       render(<Input data-testid="input" />);
       const input = screen.getByTestId('input');
-      expect(input).toHaveClass('border-gray-300');
-      expect(input).toHaveClass('focus:ring-indigo-500');
+      expect(input).not.toHaveClass('focus:ring-indigo-500');
+      expect(input).not.toHaveClass('focus:ring-2');
+    });
+
+    /**
+     * Test case 13 (continued): focused input carries accent border/shadow, not Tailwind ring.
+     * Verifies that the focus treatment uses design tokens. The amendment requires
+     * border-color: var(--accent) and box-shadow: 0 0 0 2px var(--accent-soft).
+     */
+    it('applies accent focus style via onFocus handler', async () => {
+      const user = userEvent.setup();
+      render(<Input data-testid="input" />);
+      const input = screen.getByTestId('input');
+      await user.click(input);
+      // The onFocus handler should apply accent border and shadow
+      expect(input.style.border).toContain('var(--accent)');
+      expect(input.style.boxShadow).toBe('0 0 0 2px var(--accent-soft)');
+    });
+
+    it('restores default border on blur', async () => {
+      const user = userEvent.setup();
+      render(<Input data-testid="input" />);
+      const input = screen.getByTestId('input');
+      await user.click(input);
+      await user.tab();
+      expect(input.style.border).not.toContain('var(--accent)');
     });
 
     it('merges custom className with default classes', () => {
       render(<Input className="custom-class" data-testid="input" />);
       const input = screen.getByTestId('input');
       expect(input).toHaveClass('custom-class');
-      expect(input).toHaveClass('rounded-lg');
+      expect(input).toHaveClass('appearance-none');
+    });
+
+    /**
+     * Test case 14: Input mono prop sets var(--font-mono) font-family.
+     * Verifies that the new mono prop is wired through to the inline style.
+     * If violated, mono code inputs would render in the default sans-serif font.
+     */
+    it('applies var(--font-mono) when mono prop is true', () => {
+      render(<Input mono data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input.style.fontFamily).toBe('var(--font-mono)');
+    });
+
+    it('applies var(--font-sans) when mono prop is false/absent', () => {
+      render(<Input data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input.style.fontFamily).toBe('var(--font-sans)');
     });
   });
 
@@ -58,12 +114,28 @@ describe('Input', () => {
       expect(screen.getByText('Email is required')).toBeInTheDocument();
     });
 
-    it('applies error styling when error prop is provided', () => {
+    /**
+     * Test case 12: Input error styling uses tokens.
+     * Verifies that on error, the border uses var(--danger) (not red-300 class),
+     * the error message has role="alert", and aria-invalid="true" is set.
+     * If violated, errors would be invisible to the design-token theme.
+     */
+    it('applies var(--danger) border when error prop is provided', () => {
       render(<Input error="Invalid input" data-testid="input" />);
       const input = screen.getByTestId('input');
-      expect(input).toHaveClass('border-red-300');
-      expect(input).toHaveClass('focus:ring-red-500');
-      expect(input).not.toHaveClass('border-gray-300');
+      expect(input.style.border).toContain('var(--danger)');
+    });
+
+    it('does not apply border-red-300 class', () => {
+      render(<Input error="Invalid input" data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input).not.toHaveClass('border-red-300');
+    });
+
+    it('does not apply focus:ring-red-500 class', () => {
+      render(<Input error="Invalid input" data-testid="input" />);
+      const input = screen.getByTestId('input');
+      expect(input).not.toHaveClass('focus:ring-red-500');
     });
 
     it('sets aria-invalid to true when error is provided', () => {
@@ -87,14 +159,19 @@ describe('Input', () => {
       render(<Input error="Error message" />);
       expect(screen.getByRole('alert')).toHaveTextContent('Error message');
     });
+
+    it('error message uses var(--danger) color', () => {
+      render(<Input error="Error message" />);
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveStyle({ color: 'var(--danger)' });
+    });
   });
 
   describe('disabled state', () => {
-    it('applies disabled styling classes', () => {
+    it('applies disabled:opacity-60 class', () => {
       render(<Input disabled data-testid="input" />);
       const input = screen.getByTestId('input');
-      expect(input).toHaveClass('disabled:bg-gray-50');
-      expect(input).toHaveClass('disabled:text-gray-500');
+      expect(input).toHaveClass('disabled:opacity-60');
     });
 
     it('is actually disabled when disabled prop is true', () => {
