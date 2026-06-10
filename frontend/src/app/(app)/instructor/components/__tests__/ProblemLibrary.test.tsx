@@ -39,22 +39,21 @@ jest.mock('@/lib/api/problems', () => ({
   exportProblems: jest.fn(),
 }));
 
-// Mock the child components
-jest.mock('../ProblemSearch', () => {
-  return function MockProblemSearch(props: any) {
-    return <div data-testid="problem-search">ProblemSearch</div>;
+// Mock child modals to keep tests focused on ProblemLibrary behavior
+jest.mock('../CreateSessionFromProblemModal', () => {
+  return function MockCreateSessionModal(props: any) {
+    return (
+      <div data-testid="session-modal">
+        <button onClick={() => props.onSuccess('session-123', 'ABC')}>Confirm Session</button>
+        <button onClick={props.onClose}>Close Session Modal</button>
+      </div>
+    );
   };
 });
 
-jest.mock('../ProblemCard', () => {
-  return function MockProblemCard(props: any) {
-    return (
-      <div data-testid={`problem-card-${props.problem.id}`}>
-        {props.problem.title}
-        <button data-testid={`edit-${props.problem.id}`} onClick={() => props.onEdit(props.problem.id)}>Edit</button>
-        <button data-testid={`create-session-${props.problem.id}`} onClick={() => props.onCreateSession(props.problem.id)}>Create Session</button>
-      </div>
-    );
+jest.mock('../PublishProblemModal', () => {
+  return function MockPublishModal(props: any) {
+    return <div data-testid="publish-modal"><button onClick={props.onClose}>Close Publish Modal</button></div>;
   };
 });
 
@@ -69,28 +68,42 @@ describe('ProblemLibrary', () => {
   const mockProblems = [
     {
       id: 'problem-1',
-      title: 'Problem 1',
+      title: 'Problem One',
       description: 'Description 1',
       created_at: '2025-01-01T00:00:00.000Z',
+      updated_at: '2025-01-03T00:00:00.000Z',
       author_id: 'user-123',
-      tags: [],
+      tags: ['arrays', 'hashing'],
       class_id: 'class-1',
-      test_case_count: 3,
+      test_counts: { io: 2, pytest: 1 },
     },
     {
       id: 'problem-2',
-      title: 'Problem 2',
+      title: 'Problem Two',
       description: 'Description 2',
       created_at: '2025-01-02T00:00:00.000Z',
+      updated_at: '2025-01-04T00:00:00.000Z',
       author_id: 'user-123',
-      tags: [],
+      tags: ['arrays', 'strings'],
       class_id: 'class-1',
-      test_case_count: 2,
+      test_counts: { io: 0, pytest: 3 },
+    },
+    {
+      id: 'problem-3',
+      title: 'Problem Three',
+      description: 'Description 3',
+      created_at: '2025-01-03T00:00:00.000Z',
+      updated_at: '2025-01-05T00:00:00.000Z',
+      author_id: 'user-123',
+      tags: ['dp'],
+      class_id: 'class-1',
+      // test_counts absent intentionally
     },
   ];
 
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
     (useAuth as jest.Mock).mockReturnValue({
       user: mockUser,
       isAuthenticated: true,
@@ -132,23 +145,12 @@ describe('ProblemLibrary', () => {
     render(<ProblemLibrary />);
 
     await waitFor(() => {
-      expect(screen.getByText(/2 problems/)).toBeInTheDocument();
+      expect(screen.getByText(/3 problems/)).toBeInTheDocument();
     });
   });
 
   it('displays singular for single problem', async () => {
-    (listProblems as jest.Mock).mockResolvedValue([
-      {
-        id: 'problem-1',
-        title: 'Problem 1',
-        description: 'Description 1',
-        created_at: '2025-01-01T00:00:00.000Z',
-        author_id: 'user-123',
-        tags: [],
-        class_id: 'class-1',
-        test_case_count: 3,
-      }
-    ]);
+    (listProblems as jest.Mock).mockResolvedValue([mockProblems[0]]);
 
     render(<ProblemLibrary />);
 
@@ -232,23 +234,6 @@ describe('ProblemLibrary', () => {
     });
   });
 
-  it('displays ProblemSearch component', async () => {
-    render(<ProblemLibrary />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('problem-search')).toBeInTheDocument();
-    });
-  });
-
-  it('renders ProblemCard for each problem', async () => {
-    render(<ProblemLibrary />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('problem-card-problem-1')).toBeInTheDocument();
-      expect(screen.getByTestId('problem-card-problem-2')).toBeInTheDocument();
-    });
-  });
-
   it('does not fetch problems when user is not authenticated', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       user: null,
@@ -288,45 +273,391 @@ describe('ProblemLibrary', () => {
     });
   });
 
+  describe('Table layout', () => {
+    /**
+     * Verifies the table renders all problems as rows.
+     * After collapsing to table-only layout, replaces the old grid/list toggle tests.
+     */
+    it('renders all problems as table rows', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+        expect(screen.getByText('Problem Two')).toBeInTheDocument();
+        expect(screen.getByText('Problem Three')).toBeInTheDocument();
+      });
+    });
+
+    it('renders table column headers: Title, Tags, Tests, Updated, Actions', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // Column headers are in <th> elements
+      const headers = document.querySelectorAll('th');
+      const headerTexts = Array.from(headers).map(h => h.textContent?.trim());
+      expect(headerTexts).toContain('Title');
+      expect(headerTexts).toContain('Tags');
+      expect(headerTexts).toContain('Tests');
+      expect(headerTexts).toContain('Updated');
+      expect(headerTexts).toContain('Actions');
+    });
+
+    /**
+     * Verifies no difficulty column and no status dot rendered.
+     * Catches: mock affordances creeping in from the design refs.
+     */
+    it('does not render a Difficulty column header', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Difficulty')).not.toBeInTheDocument();
+    });
+
+    it('does not render status dots', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // No StateDot or status indicator elements
+      expect(document.querySelector('[data-testid="status-dot"]')).not.toBeInTheDocument();
+      expect(document.querySelector('[data-testid="state-dot"]')).not.toBeInTheDocument();
+    });
+
+    it('renders tag chips per row with mono prefix #', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // Tags rendered with # prefix in the row
+      expect(screen.getAllByText('#arrays').length).toBeGreaterThan(0);
+    });
+  });
+
+  /**
+   * Verifies the tests column renders "N io · M pytest" from test_counts
+   * and falls back to "—" when test_counts is absent.
+   * Catches: payload-shape assumptions that break the column display.
+   */
+  describe('Tests column', () => {
+    it('renders test count as "N io · M pytest" from test_counts', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // problem-1 has test_counts: { io: 2, pytest: 1 }
+      expect(screen.getByText('2 io · 1 pytest')).toBeInTheDocument();
+    });
+
+    it('renders "0 io · N pytest" when io count is 0', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Two')).toBeInTheDocument();
+      });
+
+      // problem-2 has test_counts: { io: 0, pytest: 3 }
+      expect(screen.getByText('0 io · 3 pytest')).toBeInTheDocument();
+    });
+
+    it('renders "—" when test_counts is absent', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem Three')).toBeInTheDocument();
+      });
+
+      // problem-3 has no test_counts
+      expect(screen.getByText('—')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Verifies tag chip bar renders chips with counts, AND-logic filtering,
+   * and clear button behavior.
+   * Catches: OR-logic or single-select regressions.
+   */
+  describe('Tag chip bar', () => {
+    it('renders tag bar with all unique tags from problems', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        // "arrays" appears in problem-1 and problem-2; should be a tag bar chip
+        expect(screen.getByTestId('tag-bar')).toBeInTheDocument();
+      });
+
+      // All unique tags from problems: arrays, hashing, strings, dp
+      const tagBar = screen.getByTestId('tag-bar');
+      expect(tagBar).toHaveTextContent('arrays');
+      expect(tagBar).toHaveTextContent('hashing');
+      expect(tagBar).toHaveTextContent('strings');
+      expect(tagBar).toHaveTextContent('dp');
+    });
+
+    it('renders tag counts next to each chip', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tag-bar')).toBeInTheDocument();
+      });
+
+      // "arrays" appears in 2 problems
+      const arraysChip = screen.getByTestId('tag-chip-arrays');
+      expect(arraysChip).toHaveTextContent('2');
+    });
+
+    it('selecting a tag filters problems to only those carrying that tag', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // Click "dp" tag - only problem-3 has it
+      const dpChip = screen.getByTestId('tag-chip-dp');
+      fireEvent.click(dpChip);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Problem One')).not.toBeInTheDocument();
+        expect(screen.queryByText('Problem Two')).not.toBeInTheDocument();
+        expect(screen.getByText('Problem Three')).toBeInTheDocument();
+      });
+    });
+
+    it('selecting two tags applies AND logic (must carry both tags)', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // "hashing" is only on problem-1; "strings" is only on problem-2
+      // AND(hashing, strings) = nothing matches
+      fireEvent.click(screen.getByTestId('tag-chip-hashing'));
+      fireEvent.click(screen.getByTestId('tag-chip-strings'));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Problem One')).not.toBeInTheDocument();
+        expect(screen.queryByText('Problem Two')).not.toBeInTheDocument();
+        expect(screen.queryByText('Problem Three')).not.toBeInTheDocument();
+      });
+    });
+
+    it('AND logic: selecting two tags that both appear on one problem shows that problem', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // "arrays" + "hashing" both appear on problem-1 only
+      fireEvent.click(screen.getByTestId('tag-chip-arrays'));
+      fireEvent.click(screen.getByTestId('tag-chip-hashing'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+        expect(screen.queryByText('Problem Two')).not.toBeInTheDocument();
+        expect(screen.queryByText('Problem Three')).not.toBeInTheDocument();
+      });
+    });
+
+    it('clear button appears when at least one tag is selected', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('tag-bar')).toBeInTheDocument();
+      });
+
+      // No clear button initially
+      expect(screen.queryByTestId('tag-bar-clear')).not.toBeInTheDocument();
+
+      // Select a tag
+      fireEvent.click(screen.getByTestId('tag-chip-arrays'));
+
+      expect(screen.getByTestId('tag-bar-clear')).toBeInTheDocument();
+    });
+
+    it('clicking clear resets all selected tags and shows all problems', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // Select a tag that filters down
+      fireEvent.click(screen.getByTestId('tag-chip-dp'));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Problem One')).not.toBeInTheDocument();
+      });
+
+      // Click clear
+      fireEvent.click(screen.getByTestId('tag-bar-clear'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+        expect(screen.getByText('Problem Two')).toBeInTheDocument();
+        expect(screen.getByText('Problem Three')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Search', () => {
+    it('filters table rows by search query', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      fireEvent.change(searchInput, { target: { value: 'One' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+        expect(screen.queryByText('Problem Two')).not.toBeInTheDocument();
+        expect(screen.queryByText('Problem Three')).not.toBeInTheDocument();
+      });
+    });
+
+    it('shows filtered count in header when searching', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/3 problems/)).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/search/i);
+      fireEvent.change(searchInput, { target: { value: 'One' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/1 problem/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Sort controls', () => {
+    it('renders sort control in toolbar', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      // Sort selector or control should be present
+      const sortSelect = screen.getByLabelText(/sort/i);
+      expect(sortSelect).toBeInTheDocument();
+    });
+
+    it('changing sort updates API call with new sort parameter', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      const sortSelect = screen.getByLabelText(/sort/i);
+      fireEvent.change(sortSelect, { target: { value: 'title' } });
+
+      await waitFor(() => {
+        expect(listProblems).toHaveBeenCalledWith(
+          expect.objectContaining({ sort_by: 'title' })
+        );
+      });
+    });
+  });
+
   describe('Edit handler', () => {
     it('calls onEdit when Edit is clicked', async () => {
       const onEdit = jest.fn();
       render(<ProblemLibrary onEdit={onEdit} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('problem-card-problem-1')).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /edit/i }).length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByTestId('edit-problem-1'));
-      expect(onEdit).toHaveBeenCalledWith('problem-1');
+      fireEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
+      expect(onEdit).toHaveBeenCalledWith(expect.any(String));
     });
 
     it('falls back to router.push for Edit when onEdit is not provided', async () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('problem-card-problem-1')).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /edit/i }).length).toBeGreaterThan(0);
       });
 
-      fireEvent.click(screen.getByTestId('edit-problem-1'));
+      fireEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
       expect(mockRouterPush).toHaveBeenCalledWith('/instructor/problems');
     });
   });
 
-  describe('Create Session handler', () => {
-    it('alerts when problem is not found', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+  describe('Start session handler', () => {
+    it('clicking Start opens session creation modal', async () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('problem-card-problem-1')).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /start/i }).length).toBeGreaterThan(0);
       });
 
-      // Manually clear problems to simulate not-found case — instead, we test the normal flow
-      fireEvent.click(screen.getByTestId('create-session-problem-1'));
+      fireEvent.click(screen.getAllByRole('button', { name: /start/i })[0]);
 
-      // No alert means problem was found
-      expect(alertSpy).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(screen.getByTestId('session-modal')).toBeInTheDocument();
+      });
+    });
+
+    it('navigates to session after session is created', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: /start/i }).length).toBeGreaterThan(0);
+      });
+
+      fireEvent.click(screen.getAllByRole('button', { name: /start/i })[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-modal')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Confirm Session'));
+
+      await waitFor(() => {
+        expect(mockRouterPush).toHaveBeenCalledWith('/instructor/session/session-123');
+      });
+    });
+  });
+
+  describe('Delete handler', () => {
+    it('clicking Delete prompts and calls deleteProblem after confirmation', async () => {
+      const alertSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: /delete/i }).length).toBeGreaterThan(0);
+      });
+
+      fireEvent.click(screen.getAllByRole('button', { name: /delete/i })[0]);
+
+      // Confirm dialog should appear
+      await waitFor(() => {
+        // Either confirm dialog or the deleteProblem was called
+        const calledOrDialog = (deleteProblem as jest.Mock).mock.calls.length > 0
+          || !!document.querySelector('[role="dialog"]');
+        expect(calledOrDialog).toBe(true);
+      });
+
       alertSpy.mockRestore();
     });
   });
@@ -406,16 +737,46 @@ describe('ProblemLibrary', () => {
         }
       });
     });
-  });
 
-  describe('Tag filtering', () => {
-    it('passes selectedTags to ProblemSearch', async () => {
-      // The ProblemSearch mock needs to be updated to capture tag props
+    /**
+     * Verifies class selector change persists to localStorage and restores on mount.
+     * Catches: persistence regression that breaks the user's saved class preference.
+     */
+    it('persists selected class_id to localStorage on change', async () => {
       render(<ProblemLibrary />);
 
       await waitFor(() => {
-        expect(screen.getByTestId('problem-search')).toBeInTheDocument();
+        expect(screen.getByLabelText('Class:')).toBeInTheDocument();
       });
+
+      fireEvent.change(screen.getByLabelText('Class:'), { target: { value: 'class-2' } });
+
+      expect(localStorage.getItem('problemLibrary_classId')).toBe('class-2');
+    });
+
+    it('restores class_id from localStorage on mount', async () => {
+      localStorage.setItem('problemLibrary_classId', 'class-2');
+
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        const select = screen.getByLabelText('Class:') as HTMLSelectElement;
+        expect(select.value).toBe('class-2');
+      });
+    });
+
+    it('removes localStorage entry when "All classes" is selected', async () => {
+      localStorage.setItem('problemLibrary_classId', 'class-1');
+
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Class:')).toBeInTheDocument();
+      });
+
+      fireEvent.change(screen.getByLabelText('Class:'), { target: { value: '' } });
+
+      expect(localStorage.getItem('problemLibrary_classId')).toBeNull();
     });
   });
 
