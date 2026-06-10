@@ -16,7 +16,7 @@
  * - router.push('/register/student?code=' + cleanCode)
  * - Error-clearing on input change
  *
- * Local formatJoinCode removed — replaced by formatJoinCodeInput from @/lib/join-code.
+ * Local formatJoinCode removed — JoinCodeBoxes calls formatJoinCodeInput internally.
  * Focus handling moved to <JoinCodeBoxes autoFocus>.
  */
 
@@ -28,7 +28,6 @@ import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
 import { EvalLogomark } from '@/components/ui/EvalLogomark';
 import { JoinCodeBoxes } from '@/components/ui/JoinCodeBoxes';
 import { Icon } from '@/components/ui/Icon';
-import { formatJoinCodeInput } from '@/lib/join-code';
 
 // Validate join code format (XXX-XXX, 6 alphanumeric chars)
 function isValidJoinCode(code: string): boolean {
