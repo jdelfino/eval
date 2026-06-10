@@ -23,7 +23,7 @@
  * - Calls useSectionEvents with correct sectionId and initialActiveSessions
  * - Preview mode: back button calls onBack when onBack prop is provided (no href link)
  * - Preview mode: back button links to /sections when onBack prop is not provided
- * - Past sessions render with date, problem title, and Replay link; no verdict pill
+ * - Past sessions render with date and problem title (Replay link absent — eval-4zi)
  * - Join handler called with live session id on Join click
  */
 
@@ -1260,10 +1260,12 @@ describe('StudentSectionView', () => {
   });
 
   describe('past sessions', () => {
-    it('renders past sessions section with date, problem title, and Replay link', () => {
+    it('renders past sessions section with date and problem title (no Replay link)', () => {
       /**
-       * Contract: past sessions render date + problem title + Replay link to the
-       * existing session view route. Catches: dead replay link / broken routing.
+       * Contract: past sessions render date + problem title only. The Replay link
+       * has been removed because /student?session_id= is ignored by the student page
+       * (permanent spinner). Replay UX lands in G4 (eval-4zi).
+       * Catches: accidental re-introduction of the broken Replay link.
        */
       render(
         <StudentSectionView
@@ -1279,15 +1281,18 @@ describe('StudentSectionView', () => {
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.getByText('Binary Search')).toBeInTheDocument();
 
-      // Replay links should appear (2 sessions)
-      const replayLinks = screen.getAllByText(/Replay/i);
-      expect(replayLinks.length).toBeGreaterThanOrEqual(2);
+      // "Replay →" link must NOT be present — it caused a permanent spinner (eval-4zi)
+      // Note: subtitle text "Replay any class session..." is still present; we check
+      // specifically that no anchor with text matching the link pattern exists.
+      expect(screen.queryByRole('link', { name: /Replay →/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Replay →')).not.toBeInTheDocument();
     });
 
-    it('Replay link points to the correct session route', () => {
+    it('Replay link is absent from past session rows', () => {
       /**
-       * Contract: Replay links navigate to the session workspace using the session id.
-       * Catches: broken replay routing.
+       * Contract: PastSessionRow renders date/problem/verdict with NO link.
+       * Replay UX deferred to G4 (eval-4zi); /student?session_id= is currently broken.
+       * Catches: broken replay link re-introduction.
        */
       render(
         <StudentSectionView
@@ -1299,12 +1304,12 @@ describe('StudentSectionView', () => {
         />
       );
 
-      // Use role-based query to directly select the anchor links (not container elements)
-      const replayLinkElements = screen.getAllByRole('link', { name: /Replay/i });
-      expect(replayLinkElements.length).toBeGreaterThanOrEqual(1);
-      const firstReplayLink = replayLinkElements[0];
-      // Should link to the session workspace with the session id
-      expect(firstReplayLink.getAttribute('href')).toContain('session-past-1');
+      // No anchor links should target the broken student?session_id route
+      const allLinks = screen.queryAllByRole('link');
+      const replayLinks = allLinks.filter(
+        (l) => l.getAttribute('href')?.includes('session_id=')
+      );
+      expect(replayLinks).toHaveLength(0);
     });
 
     it('does not render a verdict pill on past session rows', () => {

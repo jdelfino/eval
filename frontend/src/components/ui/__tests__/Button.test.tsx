@@ -180,6 +180,55 @@ describe('Button', () => {
     });
   });
 
+  describe('size variants', () => {
+    it('size=xs renders with text-xs class (12px font)', () => {
+      render(<Button size="xs">Tiny</Button>);
+      const button = screen.getByRole('button', { name: 'Tiny' });
+      expect(button.className).toContain('text-xs');
+    });
+
+    it('size=xs works with variant=accent', () => {
+      render(
+        <Button variant="accent" size="xs">
+          Practice
+        </Button>
+      );
+      const button = screen.getByRole('button', { name: 'Practice' });
+      expect(button.className).toContain('text-xs');
+      expect(button).toHaveStyle({ background: 'var(--accent)' });
+    });
+
+    it('size=xs works with variant=quiet', () => {
+      render(
+        <Button variant="quiet" size="xs">
+          View Solution
+        </Button>
+      );
+      const button = screen.getByRole('button', { name: 'View Solution' });
+      expect(button.className).toContain('text-xs');
+      expect(button).toHaveStyle({ background: 'transparent' });
+    });
+
+    it('size=sm renders with text-sm and compact padding', () => {
+      render(<Button size="sm">Small</Button>);
+      const button = screen.getByRole('button', { name: 'Small' });
+      expect(button.className).toContain('text-sm');
+    });
+
+    it('size=md is the default size', () => {
+      render(<Button>Default</Button>);
+      const button = screen.getByRole('button', { name: 'Default' });
+      expect(button.className).toContain('text-sm');
+      expect(button.className).toContain('px-4');
+    });
+
+    it('size=lg renders with text-base', () => {
+      render(<Button size="lg">Large</Button>);
+      const button = screen.getByRole('button', { name: 'Large' });
+      expect(button.className).toContain('text-base');
+    });
+  });
+
   describe('new token-driven variants', () => {
     /**
      * Verifies the `run` variant uses the --run CSS token for its background.

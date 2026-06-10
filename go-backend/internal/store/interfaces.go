@@ -138,7 +138,7 @@ type File struct {
 }
 
 // TestCounts holds the count of io and pytest test cases for a problem.
-// Populated only by the list path (ListProblemsFiltered / ListProblems).
+// Populated only by ListProblemsFiltered.
 type TestCounts struct {
 	IO     int `json:"io"`
 	Pytest int `json:"pytest"`

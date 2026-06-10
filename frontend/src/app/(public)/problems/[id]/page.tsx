@@ -56,7 +56,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 function buildMetaLine(problem: PublicProblem): string {
   const version = getLanguageVersion(problem.language);
   const langSegment = version ? `${problem.language} ${version}` : problem.language;
-  const testSegment = `${problem.test_cases.length} tests`;
+  const testCount = problem.test_cases.length;
+  const testSegment = `${testCount} ${testCount === 1 ? 'test' : 'tests'}`;
   const authorSegment = problem.author_name ? `authored by ${problem.author_name}` : null;
   const dateSegment = `updated ${formatShortDate(problem.updated_at)}`;
 

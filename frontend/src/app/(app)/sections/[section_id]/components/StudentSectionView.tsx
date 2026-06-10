@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Session, PublishedProblemWithStatus } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import { BackButton } from '@/components/ui/BackButton';
+import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Chip } from '@/components/ui/Chip';
 import { AuthHeading } from '@/components/ui/AuthHeading';
@@ -269,37 +269,13 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowP
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          onClick={onPractice}
-          style={{
-            padding: '4px 14px',
-            background: 'var(--accent)',
-            color: 'var(--accent-fg)',
-            border: 'none',
-            borderRadius: 'var(--radius)',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
+        <Button variant="accent" size="xs" onClick={onPractice}>
           {problem.student_work?.id ? 'Continue' : 'Practice'}
-        </button>
+        </Button>
         {problem.show_solution && problem.problem.solution && (
-          <button
-            onClick={onViewSolution}
-            style={{
-              padding: '4px 14px',
-              background: 'var(--bg-sunken)',
-              color: 'var(--fg-muted)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="quiet" size="xs" onClick={onViewSolution}>
             View Solution
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -316,8 +292,6 @@ interface PastSessionRowProps {
 
 function PastSessionRow({ session }: PastSessionRowProps) {
   const date = session.created_at ? formatShortDate(session.created_at) : '—';
-
-  const replayHref = `/student?session_id=${session.id}`;
 
   return (
     <div
@@ -340,18 +314,8 @@ function PastSessionRow({ session }: PastSessionRowProps) {
         </div>
       </div>
 
-      {/* Replay link — verdict pill omitted (per-session pass/fail not persisted) */}
-      <Link
-        href={replayHref}
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--accent-ink)',
-          textDecoration: 'none',
-        }}
-      >
-        Replay →
-      </Link>
+      {/* Verdict pill omitted (per-session pass/fail not persisted).
+          Replay UX lands in G4 (eval-4zi). */}
     </div>
   );
 }
@@ -479,12 +443,9 @@ export default function StudentSectionView({
       {/* Published Problems */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2
-            className="text-sm font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--fg-muted)', margin: 0 }}
-          >
+          <SectionLabel as="h2" style={{ margin: 0 }}>
             Problems
-          </h2>
+          </SectionLabel>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {FILTER_CHIPS.map(({ value, label }) => (
@@ -550,12 +511,9 @@ export default function StudentSectionView({
       {/* Past Sessions */}
       <div>
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <h2
-            className="text-sm font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--fg-muted)', margin: 0 }}
-          >
+          <SectionLabel as="h2" style={{ margin: 0 }}>
             Past sessions
-          </h2>
+          </SectionLabel>
           <div style={{ fontSize: 12, color: 'var(--fg-subtle)' }}>
             Replay any class session to review your code and tests
           </div>

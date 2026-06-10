@@ -230,11 +230,13 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 //  1. Every canonical test case (from work.Problem.TestCases) is present in the
 //     submitted cases, matched by content (NOT by name — the frontend renames io cases
 //     to "run" on the run path).
-//  2. All executed cases passed (execResp.Summary.Failed == 0 && .Errors == 0).
+//  2. All executed cases passed (summary.Failed == 0 && summary.Errors == 0).
 //
-// Content matching for io: Input + ExpectedOutput + MatchType equality.
+// Content matching for io: Input + ExpectedOutput + MatchType equality (empty
+// match_type normalised to "exact" on both canonical and submitted sides).
 // Content matching for pytest: TargetPath + TestCode equality.
-// A canonical io case with empty ExpectedOutput (run-only) is matched by Input alone.
+// Caveat: attached_files and random_seed are excluded from content matching.
+// If canonical test_cases JSON is unparsable, returns false (not an error).
 func computeAllPassed(work *store.StudentWorkWithProblem, requestCases []executeCaseDef, summary executorapi.CaseSummary) bool {
 	if summary.Failed > 0 || summary.Errors > 0 {
 		return false
@@ -260,16 +262,33 @@ func computeAllPassed(work *store.StudentWorkWithProblem, requestCases []execute
 	return true
 }
 
+// normalizeMatchType treats empty/missing match_type as "exact".
+// Problem-create passes raw JSON so stored canonical cases may lack the key,
+// while the frontend graded converter defaults to 'exact'. Without this
+// normalization such problems are silently unsolvable.
+// Caveat: attached_files and random_seed are excluded from content matching.
+func normalizeMatchType(mt string) string {
+	if mt == "" {
+		return "exact"
+	}
+	return mt
+}
+
 // canonicalCaseCovered reports whether the canonical case is present in requestCases
 // by content match (not by name).
+//
+// For io cases: Input + ExpectedOutput + MatchType equality (empty match_type
+// normalised to "exact" on both sides before comparing).
+// For pytest cases: TargetPath + TestCode equality.
 func canonicalCaseCovered(canonical store.IOTestCase, requestCases []executeCaseDef) bool {
 	switch c := canonical.(type) {
 	case *store.IOTestCaseIO:
+		canonicalMT := normalizeMatchType(c.MatchType)
 		for _, req := range requestCases {
 			if req.effectiveKind() == "io" &&
 				req.Input == c.Input &&
 				req.ExpectedOutput == c.ExpectedOutput &&
-				req.MatchType == c.MatchType {
+				normalizeMatchType(req.MatchType) == canonicalMT {
 				return true
 			}
 		}

@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { Chip } from '@/components/ui/Chip';
+import { SectionLabel } from '@/components/ui/SectionLabel';
 
 interface LibraryTagBarProps {
   /** Map of tag name -> count of problems carrying that tag */
@@ -36,9 +37,9 @@ export default function LibraryTagBar({
       data-testid="tag-bar"
       className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-wrap gap-2 items-center"
     >
-      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-1">
+      <SectionLabel style={{ marginRight: 4 }}>
         Tags
-      </span>
+      </SectionLabel>
       {tags.map(([tag, count]) => (
         <Chip
           key={tag}

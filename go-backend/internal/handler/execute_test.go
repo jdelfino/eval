@@ -781,19 +781,28 @@ func TestExecute_WithStudentWorkID_CaseFailed(t *testing.T) {
 	}
 }
 
-// TestExecute_ContentBasedMatching_NameDoesNotMatter verifies that canonical io cases
-// are matched by input/expected_output/match_type, NOT by name. The frontend renames
-// io cases to "run" on the run path — backend must match on content.
+// TestExecute_ContentBasedMatching_NameDivergence verifies that a canonical case
+// named "sum works" is matched by a submitted case named "run" when their
+// input/expected_output/match_type are identical. This is the name-divergence
+// scenario the frontend actually produces on the graded run path.
 // Catches: name-based matching bug (TC6).
-func TestExecute_ContentBasedMatching_NameDoesNotMatter(t *testing.T) {
+func TestExecute_ContentBasedMatching_NameDivergence(t *testing.T) {
 	ownerID := testStudentID
 	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
-	// Canonical case named "canonical0".
-	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
-		{input: "hello", expected: "HELLO\n", matchType: "exact"},
-	})
-	work := testCanonicalWork(ownerID, canonical)
+	// Canonical case with a descriptive name that the frontend will never reproduce.
+	type ioCase struct {
+		Kind           string `json:"kind"`
+		Name           string `json:"name"`
+		Input          string `json:"input"`
+		ExpectedOutput string `json:"expected_output,omitempty"`
+		MatchType      string `json:"match_type"`
+	}
+	arr := []ioCase{
+		{Kind: "io", Name: "sum works", Input: "3 4\n", ExpectedOutput: "7\n", MatchType: "exact"},
+	}
+	canonicalBytes, _ := json.Marshal(arr)
+	work := testCanonicalWork(ownerID, canonicalBytes)
 	work.ID = workID
 
 	var persistedAllPassed *bool
@@ -814,13 +823,13 @@ func TestExecute_ContentBasedMatching_NameDoesNotMatter(t *testing.T) {
 	}
 
 	handler := setupExecuteHandlerWithRepos(execClient, repos)
-	// Request case is named "run" (as the frontend does), but content matches the canonical case.
+	// Submitted case is named "run" — different name, same content as canonical.
 	body, _ := json.Marshal(map[string]any{
-		"code":            `print(input().upper())`,
+		"code":            `a, b = map(int, input().split()); print(a+b)`,
 		"language":        "python",
 		"student_work_id": workID.String(),
 		"cases": []map[string]any{
-			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+			{"name": "run", "kind": "io", "input": "3 4\n", "expected_output": "7\n", "match_type": "exact"},
 		},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
@@ -838,7 +847,352 @@ func TestExecute_ContentBasedMatching_NameDoesNotMatter(t *testing.T) {
 		t.Fatal("expected SetStudentWorkRunResult to be called")
 	}
 	if !*persistedAllPassed {
-		t.Errorf("expected allPassed=true with content-based matching, got false (name-based matching bug?)")
+		t.Errorf("expected allPassed=true with name-divergence content-based matching, got false")
+	}
+}
+
+// TestExecute_WithStudentWorkID_AllPassed_LastRunAtIsRecent verifies that
+// SetStudentWorkRunResult is called with a timestamp within one minute of now.
+// Catches: stale or zero timestamp being persisted.
+func TestExecute_WithStudentWorkID_AllPassed_LastRunAtIsRecent(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAt *time.Time
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, _ bool, at time.Time) error {
+			persistedAt = &at
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	before := time.Now()
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if persistedAt == nil {
+		t.Fatal("SetStudentWorkRunResult was not called")
+	}
+	after := time.Now()
+	if persistedAt.Before(before) || persistedAt.After(after.Add(time.Minute)) {
+		t.Errorf("expected last_run_at to be recent (between %v and %v), got %v", before, after, *persistedAt)
+	}
+}
+
+// TestExecute_MatchType_Normalization verifies that a canonical io case with no
+// match_type key (defaults to "exact" after normalization) is covered by a
+// submitted case with match_type="exact".
+// Problem-create stores raw JSON that may omit match_type; the frontend graded
+// converter defaults to 'exact'. Without normalization such problems are silently
+// unsolvable. Catches: match_type normalization bug (Fix-3).
+func TestExecute_MatchType_Normalization(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	// Build canonical JSON WITHOUT a match_type key — simulates problems
+	// created before the graded converter defaulted to 'exact'.
+	type ioCaseNoMatchType struct {
+		Kind           string `json:"kind"`
+		Name           string `json:"name"`
+		Input          string `json:"input"`
+		ExpectedOutput string `json:"expected_output"`
+	}
+	arr := []ioCaseNoMatchType{
+		{Kind: "io", Name: "case0", Input: "hi", ExpectedOutput: "HI\n"},
+	}
+	canonicalBytes, _ := json.Marshal(arr)
+	work := testCanonicalWork(ownerID, canonicalBytes)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	// Submitted case has match_type="exact" (frontend default).
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hi", "expected_output": "HI\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called")
+	}
+	if !*persistedAllPassed {
+		t.Errorf("expected allPassed=true with match_type normalization (empty→exact), got false")
+	}
+}
+
+// canonicalPytestTestCasesJSON builds a JSON array of pytest test cases.
+func canonicalPytestTestCasesJSON(cases []struct{ targetPath, testCode string }) []byte {
+	type pytestCase struct {
+		Kind       string `json:"kind"`
+		Name       string `json:"name"`
+		TargetPath string `json:"target_path"`
+		TestCode   string `json:"test_code"`
+	}
+	arr := make([]pytestCase, len(cases))
+	for i, c := range cases {
+		arr[i] = pytestCase{Kind: "pytest", Name: fmt.Sprintf("pytest%d", i), TargetPath: c.targetPath, TestCode: c.testCode}
+	}
+	b, _ := json.Marshal(arr)
+	return b
+}
+
+// allPassedPytestSummary returns an executor response where all pytest cases passed.
+func allPassedPytestSummary(n int) *executor.ExecuteResponse {
+	results := make([]executorapi.ExecuteResultUnion, n)
+	for i := range n {
+		pr := executorapi.PytestCaseResult{Name: fmt.Sprintf("pytest%d", i), Passed: true, DurationMs: 10}
+		results[i] = executorapi.ExecuteResultUnion{Kind: "pytest", Pytest: &pr}
+	}
+	return &executor.ExecuteResponse{
+		Results: results,
+		Summary: executorapi.CaseSummary{Total: n, Passed: n},
+	}
+}
+
+// TestExecute_Pytest_AllCasesCovered verifies that pytest canonical cases are
+// matched by target_path+test_code and allPassed=true is persisted when all pass.
+// Catches: pytest branch missing from canonicalCaseCovered (Fix-2).
+func TestExecute_Pytest_AllCasesCovered(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalPytestTestCasesJSON([]struct{ targetPath, testCode string }{
+		{targetPath: "solution.py", testCode: "def test_add():\n    assert add(1,2)==3\n"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedPytestSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `def add(a, b): return a + b`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{
+				"name":        "pytest0",
+				"kind":        "pytest",
+				"target_path": "solution.py",
+				"test_code":   "def test_add():\n    assert add(1,2)==3\n",
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called for pytest case")
+	}
+	if !*persistedAllPassed {
+		t.Errorf("expected allPassed=true for covered pytest case, got false")
+	}
+}
+
+// TestExecute_Pytest_MissingCanonicalCase verifies that when a canonical pytest
+// case is not present in the submitted cases (different test_code), allPassed=false
+// is persisted even if all io cases pass.
+// Catches: pytest canonical matching missing — io-only check wouldn't catch pytest gaps.
+func TestExecute_Pytest_MissingCanonicalCase(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	// Canonical pytest case with specific test_code.
+	canonical := canonicalPytestTestCasesJSON([]struct{ targetPath, testCode string }{
+		{targetPath: "solution.py", testCode: "def test_add():\n    assert add(1,2)==3\n"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			// All io cases pass — but no pytest case is submitted.
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	// Submit an io case instead of the required pytest case.
+	body, _ := json.Marshal(map[string]any{
+		"code":            `def add(a, b): return a + b`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "", "expected_output": "", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called")
+	}
+	if *persistedAllPassed {
+		t.Errorf("expected allPassed=false when canonical pytest case missing, got true")
+	}
+}
+
+// TestExecute_CorruptCanonicalJSON_PersistsFalse verifies that when
+// work.Problem.TestCases contains unparsable JSON, computeAllPassed returns
+// false and SetStudentWorkRunResult is called with allPassed=false.
+// The 200 response with execution results must still be returned.
+// Catches: panic or 500 on corrupt canonical JSON instead of graceful false.
+func TestExecute_CorruptCanonicalJSON_PersistsFalse(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	// Deliberately corrupt JSON — not a valid array.
+	corruptJSON := []byte(`{not valid json`)
+	work := testCanonicalWork(ownerID, corruptJSON)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print("hello")`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "", "expected_output": "", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Must still return 200 — corrupt JSON is not an HTTP error.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 even with corrupt canonical JSON, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called even with corrupt JSON")
+	}
+	if *persistedAllPassed {
+		t.Errorf("expected allPassed=false when canonical JSON is unparsable, got true")
 	}
 }
 

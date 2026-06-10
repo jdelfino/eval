@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { createSession } from '@/lib/api/sessions';
+import { formatTimeAgo } from '@/lib/format';
 import type { SectionDetail } from '../page';
 
 interface InstructorSectionViewProps {
@@ -18,18 +19,6 @@ interface InstructorSectionViewProps {
   publishedProblems: PublishedProblemWithStatus[];
   students: StudentProgress[];
   onEnterPreview?: () => void;
-}
-
-function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
 }
 
 type SectionTab = 'students' | 'sessions' | 'problems';
@@ -393,7 +382,7 @@ export default function InstructorSectionView({
                         {`Solved ${student.problems_solved} · Started ${student.problems_started}`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {student.last_active ? formatRelativeTime(student.last_active) : 'Never'}
+                        {student.last_active ? formatTimeAgo(student.last_active) : 'Never'}
                       </td>
                     </tr>
                   ))}

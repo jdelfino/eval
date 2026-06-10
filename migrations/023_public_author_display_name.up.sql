@@ -20,6 +20,7 @@ CREATE OR REPLACE FUNCTION public_author_display_name(author_id uuid)
   LANGUAGE sql
   STABLE
   SECURITY DEFINER
+  SET search_path = public, pg_temp
 AS $$
   SELECT display_name FROM users WHERE id = author_id;
 $$;

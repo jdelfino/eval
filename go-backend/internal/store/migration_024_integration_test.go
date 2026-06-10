@@ -19,7 +19,62 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
+	"github.com/jdelfino/eval/go-backend/internal/testutil"
 )
+
+// TestIntegration_Migration024_Down verifies that rolling back migration 024
+// removes the last_run_all_passed and last_run_at columns from student_work.
+//
+// Pattern follows migration 021/022 down tests: start at the target version,
+// call MigrateTo(prior version), assert columns are absent.
+func TestIntegration_Migration024_Down(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupMigrationTestDB(t, 24)
+
+	// Roll back to migration 023.
+	db.MigrateTo(t, 23)
+
+	// After down, neither column should exist.
+	var count int
+	err := db.Pool.QueryRow(t.Context(), `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_name = 'student_work'
+		  AND column_name IN ('last_run_all_passed', 'last_run_at')
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("query columns: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected columns to be absent after down migration, found %d", count)
+	}
+}
+
+// TestIntegration_Migration023_Down verifies that rolling back migration 023
+// drops the public_author_display_name function.
+func TestIntegration_Migration023_Down(t *testing.T) {
+	t.Parallel()
+
+	db := testutil.SetupMigrationTestDB(t, 23)
+
+	// Roll back to migration 022.
+	db.MigrateTo(t, 22)
+
+	// After down, the function should not exist.
+	var count int
+	err := db.Pool.QueryRow(t.Context(), `
+		SELECT COUNT(*) FROM pg_proc p
+		JOIN pg_namespace n ON n.oid = p.pronamespace
+		WHERE n.nspname = 'public'
+		  AND p.proname = 'public_author_display_name'
+	`).Scan(&count)
+	if err != nil {
+		t.Fatalf("query function: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected public_author_display_name to be absent after down migration, found %d instance(s)", count)
+	}
+}
 
 func TestIntegration_Migration024_StudentWorkSolvedState(t *testing.T) {
 	t.Parallel()
