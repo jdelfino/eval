@@ -253,6 +253,7 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution, last }: Probl
 
   return (
     <div
+      data-testid="problem-row"
       style={{
         display: 'flex',
         alignItems: 'center',
