@@ -526,13 +526,16 @@ describe('SectionDetailPage', () => {
       expect(screen.queryByText('Past Sessions')).not.toBeInTheDocument();
     });
 
-    it('shows work status "Last worked: X ago" for problems with student_work', async () => {
+    it('shows "In progress" state pill for problems with student_work', async () => {
       mockUser('student');
       mockSectionData([], publishedProblems);
 
       render(<SectionDetailPage />);
 
-      expect(await screen.findByText(/Last worked:/)).toBeInTheDocument();
+      // "In progress" appears as both the filter chip and the state pill on FizzBuzz
+      // (which has student_work but no last_run_all_passed)
+      const inProgressEls = await screen.findAllByText('In progress');
+      expect(inProgressEls.length).toBeGreaterThanOrEqual(2);
     });
 
     it('shows "Not started" status for problems without student_work', async () => {
@@ -649,7 +652,7 @@ describe('SectionDetailPage', () => {
       expect(screen.getByText('arrays')).toBeInTheDocument();
     });
 
-    it('filters to only worked-on problems when "Worked on" toggle is clicked', async () => {
+    it('filters to only in-progress problems when "In progress" chip is clicked', async () => {
       mockUser('student');
       mockSectionData([], publishedProblems);
 
@@ -659,16 +662,16 @@ describe('SectionDetailPage', () => {
       expect(await screen.findByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.getByText('Binary Search')).toBeInTheDocument();
 
-      // Click "Worked on" filter
-      const workedOnButton = screen.getByRole('button', { name: 'Worked on' });
-      await userEvent.click(workedOnButton);
+      // Click "In progress" filter chip
+      const inProgressButton = screen.getByRole('button', { name: 'In progress' });
+      await userEvent.click(inProgressButton);
 
-      // Only FizzBuzz (which has student_work_id) should be shown
+      // Only FizzBuzz (which has student_work but no last_run_all_passed) should be shown
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.queryByText('Binary Search')).not.toBeInTheDocument();
     });
 
-    it('shows all problems when "Show all" toggle is clicked after filtering', async () => {
+    it('shows all problems when "All" chip is clicked after filtering', async () => {
       mockUser('student');
       mockSectionData([], publishedProblems);
 
@@ -677,24 +680,24 @@ describe('SectionDetailPage', () => {
       // Wait for page to load
       expect(await screen.findByText('FizzBuzz')).toBeInTheDocument();
 
-      // Click "Worked on" filter
-      const workedOnButton = screen.getByRole('button', { name: 'Worked on' });
-      await userEvent.click(workedOnButton);
+      // Click "In progress" filter chip
+      const inProgressButton = screen.getByRole('button', { name: 'In progress' });
+      await userEvent.click(inProgressButton);
 
       // Only FizzBuzz should be visible
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.queryByText('Binary Search')).not.toBeInTheDocument();
 
-      // Click "Show all"
-      const showAllButton = screen.getByRole('button', { name: 'Show all' });
-      await userEvent.click(showAllButton);
+      // Click "All" chip to restore
+      const allButton = screen.getByRole('button', { name: 'All' });
+      await userEvent.click(allButton);
 
       // Both should be visible again
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.getByText('Binary Search')).toBeInTheDocument();
     });
 
-    it('shows empty state when no problems match "Worked on" filter', async () => {
+    it('shows empty state when no problems match "In progress" filter', async () => {
       mockUser('student');
       const unworkedProblems = [
         {
@@ -724,12 +727,12 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      // Click "Worked on" filter
-      const workedOnButton = await screen.findByRole('button', { name: 'Worked on' });
-      await userEvent.click(workedOnButton);
+      // Click "In progress" filter chip
+      const inProgressButton = await screen.findByRole('button', { name: 'In progress' });
+      await userEvent.click(inProgressButton);
 
-      // Should show empty state
-      expect(screen.getByText('No problems worked on yet')).toBeInTheDocument();
+      // Should show empty state (no problems with student_work but not solved)
+      expect(screen.getByText('No problems in progress')).toBeInTheDocument();
     });
 
     it('handles error when getOrCreateStudentWork fails', async () => {
@@ -991,10 +994,10 @@ describe('SectionDetailPage', () => {
 
       render(<SectionDetailPage />);
 
-      // StudentSectionView shows Problems list with filter buttons; InstructorSectionView shows tabs
+      // StudentSectionView shows Problems list with filter chips; InstructorSectionView shows tabs
       await screen.findByText('FizzBuzz');
-      // Student view has "Show all" filter; instructor view does not
-      expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument();
+      // Student view has "All" filter chip; instructor view does not
+      expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
       // Instructor-only tab should NOT be present
       expect(screen.queryByRole('tab', { name: /Students/i })).not.toBeInTheDocument();
     });
