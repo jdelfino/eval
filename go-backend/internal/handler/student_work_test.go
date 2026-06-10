@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -17,11 +18,12 @@ import (
 
 // mockStudentWorkRepo implements store.StudentWorkRepository for testing.
 type mockStudentWorkRepo struct {
-	getOrCreateStudentWorkFn   func(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error)
-	updateStudentWorkFn        func(ctx context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error)
-	getStudentWorkFn           func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error)
-	getStudentWorkByProblemFn  func(ctx context.Context, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error)
-	listStudentWorkBySessionFn func(ctx context.Context, sessionID uuid.UUID) ([]store.StudentWork, error)
+	getOrCreateStudentWorkFn    func(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error)
+	updateStudentWorkFn         func(ctx context.Context, id uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error)
+	getStudentWorkFn            func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error)
+	getStudentWorkByProblemFn   func(ctx context.Context, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error)
+	listStudentWorkBySessionFn  func(ctx context.Context, sessionID uuid.UUID) ([]store.StudentWork, error)
+	setStudentWorkRunResultFn   func(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error
 }
 
 func (m *mockStudentWorkRepo) GetOrCreateStudentWork(ctx context.Context, namespaceID string, userID, problemID, sectionID uuid.UUID) (*store.StudentWork, error) {
@@ -50,6 +52,13 @@ func (m *mockStudentWorkRepo) ListStudentProgress(_ context.Context, _ uuid.UUID
 
 func (m *mockStudentWorkRepo) ListStudentWorkForReview(_ context.Context, _, _ uuid.UUID) ([]store.StudentWorkSummary, error) {
 	panic("mockStudentWorkRepo: unexpected ListStudentWorkForReview call")
+}
+
+func (m *mockStudentWorkRepo) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
+	if m.setStudentWorkRunResultFn != nil {
+		return m.setStudentWorkRunResultFn(ctx, id, allPassed, at)
+	}
+	panic("mockStudentWorkRepo: unexpected SetStudentWorkRunResult call")
 }
 
 // Helper to create repos with both section problem and student work repos.
@@ -142,6 +151,13 @@ func (r swReposImpl) GetProblem(ctx context.Context, id uuid.UUID) (*store.Probl
 		return r.prob.GetProblem(ctx, id)
 	}
 	panic("swReposImpl: unexpected GetProblem call")
+}
+
+func (r swReposImpl) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
+	if r.sw != nil {
+		return r.sw.SetStudentWorkRunResult(ctx, id, allPassed, at)
+	}
+	panic("swReposImpl: unexpected SetStudentWorkRunResult call")
 }
 
 func swRepos(sp store.SectionProblemRepository, sw store.StudentWorkRepository, prob store.ProblemRepository) store.Repos {

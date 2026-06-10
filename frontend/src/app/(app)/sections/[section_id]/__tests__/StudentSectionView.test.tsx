@@ -131,6 +131,8 @@ const publishedProblems: PublishedProblemWithStatus[] = [
       test_cases: [],
       last_update: '2026-02-20T10:00:00Z',
       created_at: '2026-02-20T10:00:00Z',
+      last_run_all_passed: null,
+      last_run_at: null,
     },
   },
   {
@@ -654,6 +656,8 @@ describe('StudentSectionView', () => {
             test_cases: [],
             last_update: '2026-02-20T10:00:00Z',
             created_at: '2026-02-20T10:00:00Z',
+            last_run_all_passed: null,
+            last_run_at: null,
           },
         },
       ];
@@ -745,6 +749,8 @@ describe('StudentSectionView', () => {
           test_cases: [],
           last_update: '2026-02-20T10:00:00Z',
           created_at: '2026-02-20T10:00:00Z',
+          last_run_all_passed: null,
+          last_run_at: null,
         },
       },
     ];

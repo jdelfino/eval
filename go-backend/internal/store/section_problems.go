@@ -29,6 +29,8 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 	var workTestCases []byte
 	var workCreatedAt *time.Time
 	var workLastUpdate *time.Time
+	var workLastRunAllPassed *bool
+	var workLastRunAt *time.Time
 
 	err := row.Scan(
 		// SectionProblem fields
@@ -41,6 +43,7 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 		// StudentWork fields (nullable)
 		&workID, &workNamespaceID, &workUserID, &workProblemID, &workSectionID,
 		&workCode, &workTestCases, &workCreatedAt, &workLastUpdate,
+		&workLastRunAllPassed, &workLastRunAt,
 	)
 	if err != nil {
 		return nil, err
@@ -49,12 +52,14 @@ func scanPublishedProblemWithStatus(row interface{ Scan(dest ...any) error }) (*
 	// If student_work exists, populate it
 	if workID != nil {
 		p.StudentWork = &StudentWork{
-			ID:          *workID,
-			NamespaceID: *workNamespaceID,
-			UserID:      *workUserID,
-			ProblemID:   *workProblemID,
-			SectionID:   *workSectionID,
-			Code:        *workCode,
+			ID:               *workID,
+			NamespaceID:      *workNamespaceID,
+			UserID:           *workUserID,
+			ProblemID:        *workProblemID,
+			SectionID:        *workSectionID,
+			Code:             *workCode,
+			LastRunAllPassed: workLastRunAllPassed,
+			LastRunAt:        workLastRunAt,
 		}
 		if workTestCases != nil {
 			p.StudentWork.TestCases = workTestCases
@@ -77,7 +82,8 @@ func (s *Store) ListSectionProblems(ctx context.Context, sectionID, userID uuid.
 		p.id, p.namespace_id, p.title, p.description, p.starter_code, p.test_cases,
 		p.author_id, p.class_id, p.tags, p.solution, p.language, p.created_at, p.updated_at,
 		sw.id, sw.namespace_id, sw.user_id, sw.problem_id, sw.section_id,
-		sw.code, sw.test_cases, sw.created_at, sw.last_update
+		sw.code, sw.test_cases, sw.created_at, sw.last_update,
+		sw.last_run_all_passed, sw.last_run_at
 		FROM section_problems sp
 		LEFT JOIN problems p ON sp.problem_id = p.id
 		LEFT JOIN student_work sw ON sw.problem_id = sp.problem_id

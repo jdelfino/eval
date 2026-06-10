@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,12 +12,14 @@ import (
 	"net/url"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
+	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/executorapi"
 )
 
@@ -504,5 +507,530 @@ func TestNormalizeLanguage_Python3AliasMapsTo_Python(t *testing.T) {
 	got, err := normalizeLanguage("python3")
 	if err != nil || got != "python" {
 		t.Errorf("expected 'python', got %q, err %v", got, err)
+	}
+}
+
+// --- student_work_id tests ---
+
+// executeTestRepos is a minimal store.Repos for execute handler tests that
+// need student-work lookup and SetStudentWorkRunResult.
+type executeTestRepos struct {
+	stubRepos
+	getStudentWorkFn         func(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error)
+	setStudentWorkRunResultFn func(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error
+}
+
+func (r *executeTestRepos) GetStudentWork(ctx context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error) {
+	if r.getStudentWorkFn != nil {
+		return r.getStudentWorkFn(ctx, id)
+	}
+	panic("executeTestRepos: unexpected GetStudentWork call")
+}
+
+func (r *executeTestRepos) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
+	if r.setStudentWorkRunResultFn != nil {
+		return r.setStudentWorkRunResultFn(ctx, id, allPassed, at)
+	}
+	panic("executeTestRepos: unexpected SetStudentWorkRunResult call")
+}
+
+// setupExecuteHandlerWithRepos sets up the Execute handler with mock repos injected.
+func setupExecuteHandlerWithRepos(execClient ExecutorClient, repos store.Repos) http.Handler {
+	h := NewExecuteHandler(execClient)
+	r := chi.NewRouter()
+	r.Post("/execute", func(w http.ResponseWriter, req *http.Request) {
+		ctx := store.WithRepos(req.Context(), repos)
+		h.Execute(w, req.WithContext(ctx))
+	})
+	return r
+}
+
+// testCanonicalWork builds a StudentWorkWithProblem fixture with given canonical test cases.
+func testCanonicalWork(ownerID uuid.UUID, testCasesJSON []byte) *store.StudentWorkWithProblem {
+	return &store.StudentWorkWithProblem{
+		StudentWork: store.StudentWork{
+			ID:     uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+			UserID: ownerID,
+		},
+		Problem: store.Problem{
+			ID:        uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+			TestCases: testCasesJSON,
+		},
+	}
+}
+
+// allPassedSummary returns an executor response where all cases passed.
+func allPassedSummary(n int) *executor.ExecuteResponse {
+	results := make([]executorapi.ExecuteResultUnion, n)
+	for i := range n {
+		r := executorapi.CaseResult{Name: fmt.Sprintf("case%d", i), Status: "passed", Actual: "ok\n", TimeMs: 10}
+		results[i] = executorapi.ExecuteResultUnion{Kind: "io", IO: &r}
+	}
+	return &executor.ExecuteResponse{
+		Results: results,
+		Summary: executorapi.CaseSummary{Total: n, Passed: n},
+	}
+}
+
+// failedSummary returns an executor response with one case failed.
+func failedSummary() *executor.ExecuteResponse {
+	r := executorapi.CaseResult{Name: "case0", Status: "failed", Actual: "wrong\n", TimeMs: 10}
+	return &executor.ExecuteResponse{
+		Results: []executorapi.ExecuteResultUnion{{Kind: "io", IO: &r}},
+		Summary: executorapi.CaseSummary{Total: 1, Failed: 1},
+	}
+}
+
+// canonicalIOTestCasesJSON builds a JSON array of io test cases with given inputs/expected outputs.
+// Used to set up Problem.TestCases so the execute handler can match against them.
+func canonicalIOTestCasesJSON(cases []struct{ input, expected, matchType string }) []byte {
+	type ioCase struct {
+		Kind           string `json:"kind"`
+		Name           string `json:"name"`
+		Input          string `json:"input"`
+		ExpectedOutput string `json:"expected_output,omitempty"`
+		MatchType      string `json:"match_type"`
+	}
+	arr := make([]ioCase, len(cases))
+	for i, c := range cases {
+		arr[i] = ioCase{Kind: "io", Name: fmt.Sprintf("canonical%d", i), Input: c.input, ExpectedOutput: c.expected, MatchType: c.matchType}
+	}
+	b, _ := json.Marshal(arr)
+	return b
+}
+
+// TestExecute_WithStudentWorkID_AllCasesCovered_AllPassed verifies that when
+// student_work_id is present and the run includes every canonical case (matched
+// by content) and all pass, SetStudentWorkRunResult is called with allPassed=true.
+// Catches: happy-path write missing (TC4).
+func TestExecute_WithStudentWorkID_AllCasesCovered_AllPassed(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, id uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			if id != workID {
+				t.Fatalf("unexpected work id: %v", id)
+			}
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, id uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		// The frontend renames the case to "run" but must include input/expected_output/match_type.
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called, but it wasn't")
+	}
+	if !*persistedAllPassed {
+		t.Errorf("expected allPassed=true, got false")
+	}
+}
+
+// TestExecute_WithStudentWorkID_MissingCanonicalCase verifies that when a canonical
+// case is absent from the run, SetStudentWorkRunResult is called with allPassed=false.
+// Catches: coverage/pass conflation (TC5 - missing case).
+func TestExecute_WithStudentWorkID_MissingCanonicalCase(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	// Two canonical cases, but the run only includes one.
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+		{input: "world", expected: "WORLD\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	// Only include one of the two canonical cases.
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called")
+	}
+	if *persistedAllPassed {
+		t.Errorf("expected allPassed=false when canonical case missing, got true")
+	}
+}
+
+// TestExecute_WithStudentWorkID_CaseFailed verifies that when all canonical cases
+// are covered but one fails (Summary.Failed > 0), allPassed=false is persisted.
+// Catches: coverage/pass conflation (TC5 - case failed).
+func TestExecute_WithStudentWorkID_CaseFailed(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return failedSummary(), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print("wrong")`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called")
+	}
+	if *persistedAllPassed {
+		t.Errorf("expected allPassed=false when case failed, got true")
+	}
+}
+
+// TestExecute_ContentBasedMatching_NameDoesNotMatter verifies that canonical io cases
+// are matched by input/expected_output/match_type, NOT by name. The frontend renames
+// io cases to "run" on the run path — backend must match on content.
+// Catches: name-based matching bug (TC6).
+func TestExecute_ContentBasedMatching_NameDoesNotMatter(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	// Canonical case named "canonical0".
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	var persistedAllPassed *bool
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, allPassed bool, _ time.Time) error {
+			persistedAllPassed = &allPassed
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	// Request case is named "run" (as the frontend does), but content matches the canonical case.
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistedAllPassed == nil {
+		t.Fatal("expected SetStudentWorkRunResult to be called")
+	}
+	if !*persistedAllPassed {
+		t.Errorf("expected allPassed=true with content-based matching, got false (name-based matching bug?)")
+	}
+}
+
+// TestExecute_WithStudentWorkID_NonOwner_Returns403 verifies that a student
+// attempting to grade another student's work is rejected with 403 and nothing
+// is persisted.
+// Catches: cross-student grading writes (TC7 - non-owner).
+func TestExecute_WithStudentWorkID_NonOwner_Returns403(t *testing.T) {
+	ownerID := testStudentID
+	callerID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff") // different user
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+	// Work belongs to ownerID, but callerID is different.
+
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, _ bool, _ time.Time) error {
+			t.Error("SetStudentWorkRunResult must NOT be called for non-owner")
+			return nil
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			t.Error("executor must NOT be called when 403 is returned early")
+			return defaultTestResponse(), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            "x",
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: callerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestExecute_WithStudentWorkID_UnknownID_Returns404 verifies that an unknown
+// student_work_id results in 404.
+// Catches: cross-student grading writes (TC7 - unknown id).
+func TestExecute_WithStudentWorkID_UnknownID_Returns404(t *testing.T) {
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return nil, store.ErrNotFound
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			t.Error("executor must NOT be called when work not found")
+			return defaultTestResponse(), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            "x",
+		"language":        "python",
+		"student_work_id": workID.String(),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestExecute_NoStudentWorkID_NoStoreCallsResponseIdentical verifies that when
+// student_work_id is absent, no store calls are made and the response is identical
+// to the existing stateless behavior.
+// Catches: stateless-contract regression (TC8).
+func TestExecute_NoStudentWorkID_NoStoreCallsResponseIdentical(t *testing.T) {
+	// This repos will panic if any store method is called.
+	repos := stubRepos{}
+
+	var capturedReq executor.ExecuteRequest
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, req executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			capturedReq = req
+			return defaultTestResponse(), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":     `print("hello")`,
+		"language": "python",
+		"cases": []map[string]any{
+			{"name": "case1", "input": ""},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: testStudentID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	// Verify executor was called with the case.
+	if len(capturedReq.Cases) != 1 || capturedReq.Cases[0].Name != "case1" {
+		t.Errorf("expected cases forwarded correctly, got %+v", capturedReq.Cases)
+	}
+}
+
+// TestExecute_PersistError_StillReturns200 verifies that a persist failure
+// (SetStudentWorkRunResult returns error) does not prevent the 200 response
+// with execution results from being returned.
+// Catches: execution results held hostage by a write failure (TC9).
+func TestExecute_PersistError_StillReturns200(t *testing.T) {
+	ownerID := testStudentID
+	workID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
+	canonical := canonicalIOTestCasesJSON([]struct{ input, expected, matchType string }{
+		{input: "hello", expected: "HELLO\n", matchType: "exact"},
+	})
+	work := testCanonicalWork(ownerID, canonical)
+	work.ID = workID
+
+	repos := &executeTestRepos{
+		getStudentWorkFn: func(_ context.Context, _ uuid.UUID) (*store.StudentWorkWithProblem, error) {
+			return work, nil
+		},
+		setStudentWorkRunResultFn: func(_ context.Context, _ uuid.UUID, _ bool, _ time.Time) error {
+			return errors.New("db write failed")
+		},
+	}
+
+	execClient := &mockExecutorClient{
+		executeFn: func(_ context.Context, _ executor.ExecuteRequest) (*executor.ExecuteResponse, error) {
+			return allPassedSummary(1), nil
+		},
+	}
+
+	handler := setupExecuteHandlerWithRepos(execClient, repos)
+	body, _ := json.Marshal(map[string]any{
+		"code":            `print(input().upper())`,
+		"language":        "python",
+		"student_work_id": workID.String(),
+		"cases": []map[string]any{
+			{"name": "run", "kind": "io", "input": "hello", "expected_output": "HELLO\n", "match_type": "exact"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/execute", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: ownerID, Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Must still return 200 with execution results despite persist failure.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 even on persist error, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["results"] == nil {
+		t.Error("expected results in response even when persist failed")
 	}
 }

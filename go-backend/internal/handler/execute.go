@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"syscall"
+	"time"
 
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/executor"
@@ -104,15 +105,20 @@ func (c executeCaseDef) toExecutorCaseDef() executorapi.CaseDef {
 // executeRequest is the request body for POST /api/v1/execute.
 // Accepts code, language, and an optional cases[] array of test case definitions.
 // When cases is omitted or empty, a single free-run case is synthesized.
+// StudentWorkID is optional; when present the handler loads the canonical problem
+// test cases, computes solved state, and persists it as a side effect.
 type executeRequest struct {
-	Code     string           `json:"code" validate:"required"`
-	Language string           `json:"language" validate:"required"`
-	Cases    []executeCaseDef `json:"cases,omitempty"`
+	Code          string           `json:"code" validate:"required"`
+	Language      string           `json:"language" validate:"required"`
+	Cases         []executeCaseDef `json:"cases,omitempty"`
+	StudentWorkID *uuid.UUID       `json:"student_work_id,omitempty"`
 }
 
 // Execute handles POST /api/v1/execute for any authenticated user.
-// Accepts {code, language, cases[]} and returns {results[], summary} natively.
+// Accepts {code, language, cases[], student_work_id?} and returns {results[], summary}.
 // No session context is required — takes code + language directly.
+// When student_work_id is present: loads canonical cases, computes solved state, persists
+// as a side effect (persist failure is logged and does NOT affect the 200 response).
 func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	authUser := auth.UserFromContext(r.Context())
 	if authUser == nil {
@@ -129,6 +135,27 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	// When student_work_id is provided: load the work BEFORE execution to validate
+	// ownership and get canonical test cases for coverage matching.
+	var work *store.StudentWorkWithProblem
+	if req.StudentWorkID != nil {
+		repos := store.ReposFromContext(r.Context())
+		work, err = repos.GetStudentWork(r.Context(), *req.StudentWorkID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				httputil.WriteError(w, http.StatusNotFound, "student work not found")
+				return
+			}
+			httputil.WriteInternalError(w, r, err, "load student work")
+			return
+		}
+		// Only the owning student may grade their own work.
+		if work.UserID != authUser.ID {
+			httputil.WriteError(w, http.StatusForbidden, "not authorized to grade this work")
+			return
+		}
 	}
 
 	// Translate frontend case defs (attached_files) to executor wire format (files).
@@ -180,12 +207,86 @@ func (h *ExecuteHandler) Execute(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Persist solved state when student_work_id was provided.
+	// Persist failure is a non-fatal side effect — execution results still returned.
+	if work != nil {
+		allPassed := computeAllPassed(work, req.Cases, execResp.Summary)
+		repos := store.ReposFromContext(r.Context())
+		if persistErr := repos.SetStudentWorkRunResult(r.Context(), work.ID, allPassed, time.Now()); persistErr != nil {
+			slog.Error("execute: persist solved state failed", "work_id", work.ID, "error", persistErr)
+		}
+	}
+
 	resp := executeResponse{
 		Results: unified,
 		Summary: execResp.Summary,
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, resp)
+}
+
+// computeAllPassed returns true iff:
+//  1. Every canonical test case (from work.Problem.TestCases) is present in the
+//     submitted cases, matched by content (NOT by name — the frontend renames io cases
+//     to "run" on the run path).
+//  2. All executed cases passed (execResp.Summary.Failed == 0 && .Errors == 0).
+//
+// Content matching for io: Input + ExpectedOutput + MatchType equality.
+// Content matching for pytest: TargetPath + TestCode equality.
+// A canonical io case with empty ExpectedOutput (run-only) is matched by Input alone.
+func computeAllPassed(work *store.StudentWorkWithProblem, requestCases []executeCaseDef, summary executorapi.CaseSummary) bool {
+	if summary.Failed > 0 || summary.Errors > 0 {
+		return false
+	}
+
+	canonicalCases, err := store.UnmarshalIOTestCases(work.Problem.TestCases)
+	if err != nil {
+		// Can't parse canonical cases — treat as not covered.
+		slog.Warn("computeAllPassed: failed to unmarshal canonical test cases", "error", err)
+		return false
+	}
+	if len(canonicalCases) == 0 {
+		// No canonical cases defined — a run with all cases passing trivially satisfies coverage.
+		return true
+	}
+
+	// Check each canonical case is present in the submitted request cases by content.
+	for _, canonical := range canonicalCases {
+		if !canonicalCaseCovered(canonical, requestCases) {
+			return false
+		}
+	}
+	return true
+}
+
+// canonicalCaseCovered reports whether the canonical case is present in requestCases
+// by content match (not by name).
+func canonicalCaseCovered(canonical store.IOTestCase, requestCases []executeCaseDef) bool {
+	switch c := canonical.(type) {
+	case *store.IOTestCaseIO:
+		for _, req := range requestCases {
+			if req.effectiveKind() == "io" &&
+				req.Input == c.Input &&
+				req.ExpectedOutput == c.ExpectedOutput &&
+				req.MatchType == c.MatchType {
+				return true
+			}
+		}
+		return false
+
+	case *store.IOTestCasePytest:
+		for _, req := range requestCases {
+			if req.effectiveKind() == "pytest" &&
+				req.TargetPath == c.TargetPath &&
+				req.TestCode == c.TestCode {
+				return true
+			}
+		}
+		return false
+
+	default:
+		return false
+	}
 }
 
 // ioResultToCaseResult maps an executor CaseResult (io) to a store.CaseResultIO.

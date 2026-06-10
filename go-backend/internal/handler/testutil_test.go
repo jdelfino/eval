@@ -502,6 +502,9 @@ func (stubRepos) ListStudentProgress(context.Context, uuid.UUID) ([]store.Studen
 func (stubRepos) ListStudentWorkForReview(context.Context, uuid.UUID, uuid.UUID) ([]store.StudentWorkSummary, error) {
 	panic("stubRepos: unexpected ListStudentWorkForReview call")
 }
+func (stubRepos) SetStudentWorkRunResult(context.Context, uuid.UUID, bool, time.Time) error {
+	panic("stubRepos: unexpected SetStudentWorkRunResult call")
+}
 
 // Compile-time check that stubRepos implements store.Repos.
 var _ store.Repos = stubRepos{}

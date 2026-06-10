@@ -290,6 +290,8 @@ export interface StudentWork {
   test_cases: IOTestCase[];
   last_update: string;
   created_at: string;
+  last_run_all_passed: boolean | null;
+  last_run_at: string | null;
 }
 
 /** StudentWork with problem data (from GET /student-work/:id). */
@@ -326,6 +328,7 @@ export interface StudentProgress {
   display_name: string;
   email: string;
   problems_started: number;
+  problems_solved: number;
   total_problems: number;
   last_active: string | null;
 }

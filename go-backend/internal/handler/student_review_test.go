@@ -43,6 +43,9 @@ func (m *mockStudentReviewRepo) ListStudentProgress(ctx context.Context, section
 func (m *mockStudentReviewRepo) ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentWorkSummary, error) {
 	return m.listStudentWorkForReviewFn(ctx, sectionID, studentUserID)
 }
+func (m *mockStudentReviewRepo) SetStudentWorkRunResult(_ context.Context, _ uuid.UUID, _ bool, _ time.Time) error {
+	panic("mockStudentReviewRepo: unexpected SetStudentWorkRunResult call")
+}
 
 // srReposImpl embeds stubRepos and overrides only the StudentWorkRepository methods.
 type srReposImpl struct {
@@ -70,6 +73,9 @@ func (r srReposImpl) ListStudentProgress(ctx context.Context, sectionID uuid.UUI
 }
 func (r srReposImpl) ListStudentWorkForReview(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentWorkSummary, error) {
 	return r.sw.ListStudentWorkForReview(ctx, sectionID, studentUserID)
+}
+func (r srReposImpl) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
+	return r.sw.SetStudentWorkRunResult(ctx, id, allPassed, at)
 }
 
 func srRepos(sw store.StudentWorkRepository) store.Repos {
