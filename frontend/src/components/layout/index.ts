@@ -2,6 +2,9 @@
  * Barrel export for all layout components.
  */
 
+export { AuthPublicShell } from './AuthPublicShell';
+export type { AuthPublicShellProps } from './AuthPublicShell';
+
 export { AppShell } from './AppShell';
 export { AppBarLite } from './AppBarLite';
 export { Sidebar } from './Sidebar';

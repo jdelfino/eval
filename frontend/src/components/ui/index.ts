@@ -82,3 +82,9 @@ export type { BannerProps, BannerTone } from './Banner';
 
 export { EvalLogomark } from './EvalLogomark';
 export type { EvalLogomarkProps } from './EvalLogomark';
+
+export { JoinCodeBoxes } from './JoinCodeBoxes';
+export type { JoinCodeBoxesProps } from './JoinCodeBoxes';
+
+export { AuthCard } from './AuthCard';
+export type { AuthCardProps } from './AuthCard';
