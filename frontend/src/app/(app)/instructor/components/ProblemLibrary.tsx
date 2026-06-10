@@ -26,7 +26,7 @@ import { Menu } from '@/components/ui/Menu';
 import { formatShortDate } from '@/lib/format';
 import type { Class } from '@/types/api';
 import type { ProblemSummary } from '../types';
-import { Download, ChevronDown, FileJson, FileText } from 'lucide-react';
+import { Download, ChevronDown } from 'lucide-react';
 
 interface ProblemLibraryProps {
   onCreateNew?: () => void;
