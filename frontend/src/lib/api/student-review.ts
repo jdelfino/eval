@@ -6,7 +6,7 @@
  */
 
 import { apiGet } from '@/lib/api-client';
-import type { StudentProgress, StudentWorkSummary } from '@/types/api';
+import type { StudentProgress, StudentWorkForReviewResponse } from '@/types/api';
 
 /**
  * List progress for all students in a section (instructor only).
@@ -18,14 +18,20 @@ export async function listStudentProgress(sectionId: string): Promise<StudentPro
 }
 
 /**
- * List all published problems with a student's work for instructor review.
+ * List all published problems with a student's work for instructor review,
+ * plus per-session revision stats.
+ *
+ * The endpoint was extended from a bare array to a wrapper object
+ * {work: StudentWorkSummary[], sessions: StudentSessionStat[]} to include
+ * per-session revision stats in a single request (no per-session fan-out).
+ *
  * @param sectionId - The section ID
  * @param userId - The student's user ID
- * @returns Array of StudentWorkSummary objects (problem + optional student work)
+ * @returns Wrapper with work summaries and session stats
  */
 export async function listStudentWorkForReview(
   sectionId: string,
   userId: string,
-): Promise<StudentWorkSummary[]> {
-  return apiGet<StudentWorkSummary[]>(`/sections/${sectionId}/students/${userId}/work`);
+): Promise<StudentWorkForReviewResponse> {
+  return apiGet<StudentWorkForReviewResponse>(`/sections/${sectionId}/students/${userId}/work`);
 }

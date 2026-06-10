@@ -340,6 +340,29 @@ export interface StudentWorkSummary {
   student_work: StudentWork | null;
 }
 
+/**
+ * StudentSessionStat — per-session revision stats for a student in a section.
+ * Returned by GET /sections/{id}/students/{userID}/work inside the "sessions" field.
+ * Sessions are defined as sessions in which the student has at least one revision.
+ * Practice revisions (nil session_id) are excluded.
+ */
+export interface StudentSessionStat {
+  session_id: string;
+  session_created_at: string;
+  problem_id: string | null;
+  problem_title: string | null;
+  revision_count: number;
+}
+
+/**
+ * StudentWorkForReviewResponse — wrapper returned by GET /sections/{id}/students/{userID}/work.
+ * Changed from a bare StudentWorkSummary[] to include per-session revision stats.
+ */
+export interface StudentWorkForReviewResponse {
+  work: StudentWorkSummary[];
+  sessions: StudentSessionStat[];
+}
+
 // ---------------------------------------------------------------------------
 // Execution — Cases[] protocol
 // ---------------------------------------------------------------------------

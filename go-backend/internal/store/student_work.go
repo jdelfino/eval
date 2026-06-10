@@ -289,5 +289,51 @@ func (s *Store) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPa
 	return nil
 }
 
+// ListStudentSessionStats returns per-session revision stats for a student in a section.
+// Only sessions in which the student has at least one revision are included.
+// Revisions with nil session_id (practice mode) are excluded from session rows.
+// Results are ordered by session created_at descending.
+func (s *Store) ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentSessionStat, error) {
+	query := `SELECT
+		sess.id AS session_id,
+		sess.created_at AS session_created_at,
+		sp.problem_id,
+		p.title AS problem_title,
+		COUNT(r.id) AS revision_count
+		FROM revisions r
+		JOIN sessions sess ON sess.id = r.session_id
+		LEFT JOIN section_problems sp ON sp.section_id = $1 AND sp.problem_id = (
+			SELECT (problem->>'id')::uuid FROM sessions s2 WHERE s2.id = r.session_id
+		)
+		LEFT JOIN problems p ON p.id = sp.problem_id
+		WHERE r.session_id IS NOT NULL
+		  AND r.user_id = $2
+		  AND sess.section_id = $1
+		GROUP BY sess.id, sess.created_at, sp.problem_id, p.title
+		ORDER BY sess.created_at DESC`
+
+	rows, err := s.q.Query(ctx, query, sectionID, studentUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []StudentSessionStat
+	for rows.Next() {
+		var stat StudentSessionStat
+		if err := rows.Scan(
+			&stat.SessionID,
+			&stat.SessionCreatedAt,
+			&stat.ProblemID,
+			&stat.ProblemTitle,
+			&stat.RevisionCount,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, stat)
+	}
+	return results, rows.Err()
+}
+
 // Compile-time check that Store implements StudentWorkRepository.
 var _ StudentWorkRepository = (*Store)(nil)

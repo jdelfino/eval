@@ -28,6 +28,7 @@ import { createProblem, deleteProblem } from '@/lib/api/problems';
 import {
   validateStudentProgressShape,
   validateStudentWorkSummaryShape,
+  validateStudentSessionStatShape,
 } from './validators';
 
 describe('Student Review API', () => {
@@ -155,27 +156,58 @@ describe('Student Review API', () => {
   });
 
   // -------------------------------------------------------------------------
-  // listStudentWorkForReview
+  // listStudentWorkForReview — wrapper shape {work, sessions}
   // -------------------------------------------------------------------------
   describe('listStudentWorkForReview()', () => {
-    it('returns StudentWorkSummary[] with correct snake_case shape', async () => {
+    it('returns wrapper object with work[] and sessions[] keys (not a bare array)', async () => {
+      // Verifies the contract change: endpoint was extended from []StudentWorkSummary
+      // to {work: [], sessions: []} to include per-session revision stats.
+      // Catches: bare-array regressions, missing sessions key.
       const sectionId = state.sectionId;
       expect(sectionId).toBeTruthy();
       expect(studentUserId).toBeTruthy();
 
       configureTestAuth(INSTRUCTOR_TOKEN);
 
-      const summaries = await listStudentWorkForReview(sectionId, studentUserId!);
+      const response = await listStudentWorkForReview(sectionId, studentUserId!);
 
-      expect(Array.isArray(summaries)).toBe(true);
+      expect(Array.isArray(response)).toBe(false);
+      expect(typeof response).toBe('object');
+      expect(Array.isArray(response.work)).toBe(true);
+      expect(Array.isArray(response.sessions)).toBe(true);
+    });
 
-      // Validate shape of each item
-      for (const item of summaries) {
+    it('work[] entries have correct StudentWorkSummary shape', async () => {
+      const sectionId = state.sectionId;
+      expect(sectionId).toBeTruthy();
+      expect(studentUserId).toBeTruthy();
+
+      configureTestAuth(INSTRUCTOR_TOKEN);
+
+      const response = await listStudentWorkForReview(sectionId, studentUserId!);
+
+      // Validate shape of each work item
+      for (const item of response.work) {
         validateStudentWorkSummaryShape(item);
       }
     });
 
-    it('includes the published problem in the summaries', async () => {
+    it('sessions[] entries have correct StudentSessionStat shape', async () => {
+      const sectionId = state.sectionId;
+      expect(sectionId).toBeTruthy();
+      expect(studentUserId).toBeTruthy();
+
+      configureTestAuth(INSTRUCTOR_TOKEN);
+
+      const response = await listStudentWorkForReview(sectionId, studentUserId!);
+
+      // Validate shape of each session stat entry (may be empty if student made no revisions)
+      for (const item of response.sessions) {
+        validateStudentSessionStatShape(item);
+      }
+    });
+
+    it('includes the published problem in work[]', async () => {
       const sectionId = state.sectionId;
       expect(sectionId).toBeTruthy();
       expect(studentUserId).toBeTruthy();
@@ -183,13 +215,12 @@ describe('Student Review API', () => {
 
       configureTestAuth(INSTRUCTOR_TOKEN);
 
-      const summaries = await listStudentWorkForReview(sectionId, studentUserId!);
+      const response = await listStudentWorkForReview(sectionId, studentUserId!);
 
-      expect(Array.isArray(summaries)).toBe(true);
-      expect(summaries.length).toBeGreaterThan(0);
+      expect(response.work.length).toBeGreaterThan(0);
 
       // Find the problem we published
-      const found = summaries.find((s) => s.problem.id === createdProblemId);
+      const found = response.work.find((s) => s.problem.id === createdProblemId);
       expect(found).toBeDefined();
 
       if (found) {
@@ -208,10 +239,10 @@ describe('Student Review API', () => {
 
       configureTestAuth(INSTRUCTOR_TOKEN);
 
-      const summaries = await listStudentWorkForReview(sectionId, studentUserId!);
+      const response = await listStudentWorkForReview(sectionId, studentUserId!);
 
       // The newly published problem should have null student_work (student hasn't started it)
-      const notStarted = summaries.find((s) => s.problem.id === createdProblemId);
+      const notStarted = response.work.find((s) => s.problem.id === createdProblemId);
       expect(notStarted).toBeDefined();
 
       if (notStarted) {
