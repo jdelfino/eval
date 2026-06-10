@@ -70,7 +70,20 @@ describe('EmailSignInPage', () => {
   });
 
   describe('Page Rendering', () => {
-    it('renders email and password input fields', () => {
+    it('renders email and password input fields with e2e selector contract ids #email, #password', () => {
+      /**
+       * E2E selector contract: auth-recovery.spec.ts and auth.ts fixture use
+       * #email, #password, button[type=submit]. These MUST survive the reskin.
+       * Catches T3 selector breakage that would break auth-recovery e2e.
+       */
+      const { container } = render(<EmailSignInPage />);
+
+      expect(container.querySelector('#email')).toBeInTheDocument();
+      expect(container.querySelector('#password')).toBeInTheDocument();
+      expect(container.querySelector('button[type="submit"]')).toBeInTheDocument();
+    });
+
+    it('renders email and password input fields accessible by label', () => {
       render(<EmailSignInPage />);
 
       expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
@@ -81,6 +94,16 @@ describe('EmailSignInPage', () => {
       render(<EmailSignInPage />);
 
       expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    });
+
+    it('renders v4 heading "Sign in with email" and sub copy', () => {
+      /**
+       * v4 email page heading contract. Catches copy drift.
+       */
+      render(<EmailSignInPage />);
+
+      expect(screen.getByRole('heading', { name: /sign in with email/i })).toBeInTheDocument();
+      expect(screen.getByText(/testing fallback/i)).toBeInTheDocument();
     });
 
     it('renders link back to social sign-in page', () => {
@@ -405,7 +428,7 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/failed|error/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(/failed|error/i);
       });
       expect(mockPush).not.toHaveBeenCalled();
     });
@@ -658,7 +681,7 @@ describe('EmailSignInPage', () => {
       await user.click(screen.getByRole('button', { name: /sign in/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/failed|error/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent(/failed|error/i);
       });
       expect(mockPush).not.toHaveBeenCalled();
     });
@@ -682,7 +705,11 @@ describe('EmailSignInPage', () => {
       expect(mockRegisterStudent).not.toHaveBeenCalled();
     });
 
-    it('shows info banner when ?code= is in URL', () => {
+    it('shows accent Banner when ?code= is in URL', () => {
+      /**
+       * v4 reskin: the blue info box becomes an accent Banner with
+       * "Joining a section" title. Behavioral: code is locked from URL.
+       */
       render(<EmailSignInPage />);
 
       // Should display some informational text indicating join code flow is active

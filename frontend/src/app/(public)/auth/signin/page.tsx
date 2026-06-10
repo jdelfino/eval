@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * Sign-in page.
+ * Sign-in page — v4 screen J / J2.
  * Social provider authentication via <SignInButtons />.
- * Falls back to /auth/signin/email for testing (no staging environment).
+ * Falls back to /auth/signin/email for email/password sign-in (hidden, small footer link only).
  */
 
 import React, { Suspense } from 'react';
@@ -12,7 +12,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { SignInButtons } from '@/components/ui/SignInButtons';
-import { ErrorAlert } from '@/components/ErrorAlert';
+import { Banner } from '@/components/ui/Banner';
+import { AuthCard } from '@/components/ui/AuthCard';
+import { AuthPublicShell } from '@/components/layout/AuthPublicShell';
+import { Spinner } from '@/components/ui/Spinner';
 
 // Main page wrapper with Suspense for useSearchParams
 export default function SignInPage() {
@@ -23,13 +26,19 @@ export default function SignInPage() {
   );
 }
 
-// Loading fallback
+// Loading fallback — token spinner
 function SignInPageLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto" />
-      </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg)',
+      }}
+    >
+      <Spinner size="lg" />
     </div>
   );
 }
@@ -56,66 +65,70 @@ function SignInPageContent() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-2xl shadow-2xl border border-gray-100 transform hover:scale-[1.01] transition-transform duration-200">
-        <div>
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
+    <AuthPublicShell narrow showSignInLink={false}>
+      <AuthCard style={{ marginTop: 30, padding: 28 }}>
+        {/* Heading */}
+        <h1
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: 26,
+            fontWeight: 500,
+            letterSpacing: -0.5,
+            margin: 0,
+          }}
+        >
+          Sign in to Eval
+        </h1>
+        <p
+          style={{
+            fontSize: 13,
+            color: 'var(--fg-muted)',
+            margin: '8px 0 0',
+          }}
+        >
+          Use the same account you signed up with.
+        </p>
+
+        {/* J2: Error Banner between heading and provider stack */}
+        {error && (
+          <div style={{ marginTop: 16 }}>
+            <Banner
+              tone="danger"
+              icon="alert"
+              title="Sign-in didn't finish."
+              body={error}
+              onDismiss={() => setError('')}
+            />
           </div>
-          <h2 className="text-center text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Eval
-          </h2>
-          <p className="mt-3 text-center text-sm text-gray-600">
-            Sign in to your account
+        )}
+
+        {/* Provider buttons */}
+        <div style={{ marginTop: 20 }}>
+          <SignInButtons onSuccess={handleSuccess} onError={handleError} />
+        </div>
+
+        {/* Card footer */}
+        <div
+          style={{
+            marginTop: 18,
+            paddingTop: 16,
+            borderTop: '1px solid var(--border)',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ fontSize: 12.5, color: 'var(--fg-muted)', margin: 0 }}>
+            Have a section join code?{' '}
+            <Link href="/register/student" style={{ color: 'var(--accent-ink)' }}>
+              Join as a student →
+            </Link>
+          </p>
+          <p style={{ fontSize: 11.5, color: 'var(--fg-subtle)', margin: '6px 0 0' }}>
+            <Link href="/auth/signin/email" style={{ color: 'inherit' }}>
+              Sign in with email
+            </Link>
           </p>
         </div>
-
-        <div className="mt-8 space-y-6">
-          <SignInButtons onSuccess={handleSuccess} onError={handleError} />
-
-          {error && (
-            <ErrorAlert
-              error={error}
-              onDismiss={() => setError('')}
-              showHelpText={true}
-            />
-          )}
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Have a section code?{' '}
-              <Link
-                href="/register/student"
-                className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
-              >
-                Join as a student
-              </Link>
-            </p>
-          </div>
-        </div>
-
-        {/* Footer Links */}
-        <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center gap-6 text-xs text-gray-500">
-          <Link href="/terms" className="hover:text-indigo-600 transition-colors">
-            Terms
-          </Link>
-          <Link href="/privacy" className="hover:text-indigo-600 transition-colors">
-            Privacy
-          </Link>
-          <Link
-            href="/auth/signin/email"
-            className="hover:text-indigo-600 transition-colors"
-          >
-            Sign in with email
-          </Link>
-        </div>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthPublicShell>
   );
 }
