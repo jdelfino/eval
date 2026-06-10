@@ -203,16 +203,26 @@ export interface RegisterStudentInfo {
   class: Class;
 }
 
+/** Input-side-only test case summary included in the public problem payload. */
+export interface PublicTestCaseSummary {
+  kind: 'io' | 'pytest';
+  name: string;
+  summary: string;
+}
+
 /** Public problem data returned by GET /public/problems/:id. */
 export interface PublicProblem {
   id: string;
   title: string;
   description: string | null;
-  solution: string | null;
   starter_code: string | null;
   class_id: string | null;
   class_name: string | null;
   tags: string[];
+  author_name: string | null;
+  updated_at: string;
+  language: string;
+  test_cases: PublicTestCaseSummary[];
 }
 
 // ---------------------------------------------------------------------------

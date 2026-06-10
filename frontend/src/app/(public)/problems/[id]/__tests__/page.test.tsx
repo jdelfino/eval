@@ -2,17 +2,18 @@
  * Tests for public problem page /problems/[id]
  *
  * Tests:
- * - Renders problem title, description, and solution
- * - Solution is in a collapsed details element with syntax highlighting
+ * - Renders problem title and description (no solution — eval-e81 fix)
  * - Renders self-link for copy/paste
  * - generateMetadata returns correct title and OG tags
  * - Handles missing problems with notFound()
+ * - No solution content rendered in any persona state
  */
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import PublicProblemPage, { generateMetadata } from '../page';
 import { notFound } from 'next/navigation';
+import type { PublicProblem } from '@/types/api';
 
 // Mock typed API client
 const mockGetPublicProblem = jest.fn();
@@ -24,12 +25,6 @@ jest.mock('next/navigation', () => ({
   notFound: jest.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
   }),
-}));
-
-jest.mock('shiki', () => ({
-  codeToHtml: jest.fn((code: string) =>
-    Promise.resolve(`<pre class="shiki"><code>${code}</code></pre>`)
-  ),
 }));
 
 jest.mock('../InstructorActions', () => {
@@ -44,12 +39,6 @@ jest.mock('../StudentActions', () => {
   };
 });
 
-jest.mock('../SolutionBlock', () => {
-  return function MockSolutionBlock({ html }: { html: string }) {
-    return <div data-testid="solution-block" dangerouslySetInnerHTML={{ __html: html }} />;
-  };
-});
-
 // MarkdownContent is a client component; mock it
 jest.mock('@/components/MarkdownContent', () => {
   return function MockMarkdownContent({ content }: { content: string }) {
@@ -59,15 +48,21 @@ jest.mock('@/components/MarkdownContent', () => {
 
 const mockNotFound = notFound as jest.MockedFunction<typeof notFound>;
 
-const mockProblem = {
+const mockProblem: PublicProblem = {
   id: 'problem-123',
   title: 'Two Sum',
   description: 'Find two numbers that add up to a target.',
-  solution: 'def two_sum(nums, target):\n    lookup = {}',
   starter_code: 'def two_sum():\n    pass',
   class_id: 'class-1',
   class_name: 'CS 101',
   tags: ['arrays'],
+  author_name: 'Ada Lovelace',
+  updated_at: '2026-01-15T00:00:00Z',
+  language: 'python',
+  test_cases: [
+    { kind: 'io', name: 'basic', summary: '1 2' },
+    { kind: 'pytest', name: 'test_solution.py', summary: 'test_solution.py' },
+  ],
 };
 
 function mockApiResponse(data: unknown) {
@@ -109,39 +104,18 @@ describe('Public Problem Page', () => {
       expect(screen.getByTestId('markdown-content')).toHaveTextContent('Find two numbers that add up to a target.');
     });
 
-    it('renders solution in a collapsed details element', async () => {
+    it('renders no solution content for any problem fixture', async () => {
+      // Verifies eval-e81 fix: no solution block, no solution-related elements.
       mockApiResponse(mockProblem);
 
       const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
       render(page);
 
-      const details = document.querySelector('details');
-      expect(details).toBeInTheDocument();
-      expect(details).not.toHaveAttribute('open');
-      expect(screen.getByText(/solution/i, { selector: 'summary' })).toBeInTheDocument();
-    });
-
-    it('renders syntax-highlighted solution via shiki', async () => {
-      const { codeToHtml } = require('shiki');
-      mockApiResponse(mockProblem);
-
-      const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
-      render(page);
-
-      expect(codeToHtml).toHaveBeenCalledWith(mockProblem.solution, {
-        lang: 'python',
-        theme: 'github-light',
-      });
-      expect(document.querySelector('.shiki')).toBeInTheDocument();
-    });
-
-    it('renders solution block with highlighted HTML', async () => {
-      mockApiResponse(mockProblem);
-
-      const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
-      render(page);
-
-      expect(screen.getByTestId('solution-block')).toBeInTheDocument();
+      // No <details> element (solution block was inside details).
+      expect(document.querySelector('details')).not.toBeInTheDocument();
+      // No element with solution-related text.
+      expect(screen.queryByText(/show solution/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('solution-block')).not.toBeInTheDocument();
     });
 
     it('calls notFound for missing problem', async () => {

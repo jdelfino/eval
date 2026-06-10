@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -107,9 +108,32 @@ func (s *Store) ListProblemsFiltered(ctx context.Context, filters ProblemFilters
 		if err != nil {
 			return nil, err
 		}
+		p.TestCounts = countTestCases(p.TestCases)
 		problems = append(problems, *p)
 	}
 	return problems, rows.Err()
+}
+
+// countTestCases parses a test_cases JSONB array and returns a TestCounts struct.
+// Returns {0, 0} for nil or unparseable input.
+func countTestCases(raw json.RawMessage) *TestCounts {
+	counts := &TestCounts{}
+	if len(raw) == 0 {
+		return counts
+	}
+	cases, err := UnmarshalIOTestCases(raw)
+	if err != nil {
+		return counts
+	}
+	for _, tc := range cases {
+		switch tc.Kind() {
+		case "io":
+			counts.IO++
+		case "pytest":
+			counts.Pytest++
+		}
+	}
+	return counts
 }
 
 // GetProblem retrieves a problem by its ID.
@@ -212,16 +236,28 @@ func (s *Store) DeleteProblem(ctx context.Context, id uuid.UUID) error {
 
 // GetPublicProblem retrieves a problem's public fields by ID, including class name.
 // Returns ErrNotFound if the problem does not exist.
+//
+// The author's display_name is retrieved via the public_author_display_name()
+// SECURITY DEFINER function (migration 023) so the query works under the
+// public RLS context (app.role='public'), which has no SELECT policy on users.
+// The function exposes display_name only — never email or other user columns.
 func (s *Store) GetPublicProblem(ctx context.Context, id uuid.UUID) (*PublicProblem, error) {
-	query := `SELECT p.id, p.title, p.description, p.solution, p.starter_code, p.class_id,
-	                 c.name AS class_name, p.tags
+	query := `SELECT p.id, p.title, p.description, p.starter_code, p.class_id,
+	                 c.name AS class_name, p.tags,
+	                 public_author_display_name(p.author_id) AS author_name,
+	                 p.updated_at, p.language, p.test_cases
 	          FROM problems p
 	          LEFT JOIN classes c ON c.id = p.class_id
 	          WHERE p.id = $1`
 	row := s.q.QueryRow(ctx, query, id)
 	var pp PublicProblem
 	var tags []string
-	err := row.Scan(&pp.ID, &pp.Title, &pp.Description, &pp.Solution, &pp.StarterCode, &pp.ClassID, &pp.ClassName, &tags)
+	var rawTestCases []byte
+	err := row.Scan(
+		&pp.ID, &pp.Title, &pp.Description, &pp.StarterCode, &pp.ClassID,
+		&pp.ClassName, &tags, &pp.AuthorName, &pp.UpdatedAt, &pp.Language,
+		&rawTestCases,
+	)
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
@@ -230,7 +266,57 @@ func (s *Store) GetPublicProblem(ctx context.Context, id uuid.UUID) (*PublicProb
 	} else {
 		pp.Tags = tags
 	}
+	pp.TestCases = buildPublicTestCaseSummaries(rawTestCases)
 	return &pp, nil
+}
+
+// buildPublicTestCaseSummaries converts raw test_cases JSONB into input-side-only
+// PublicTestCaseSummary entries. It never includes expected_output, test_code,
+// match_type, or attached file contents.
+//
+// io cases: Summary = first line of Input (empty string when no stdin).
+// pytest cases: Summary = TargetPath; Name falls back to TargetPath when empty.
+func buildPublicTestCaseSummaries(raw []byte) []PublicTestCaseSummary {
+	if len(raw) == 0 {
+		return []PublicTestCaseSummary{}
+	}
+	cases, err := UnmarshalIOTestCases(raw)
+	if err != nil || len(cases) == 0 {
+		return []PublicTestCaseSummary{}
+	}
+	summaries := make([]PublicTestCaseSummary, 0, len(cases))
+	for _, tc := range cases {
+		switch c := tc.(type) {
+		case *IOTestCaseIO:
+			summary := firstLine(c.Input)
+			summaries = append(summaries, PublicTestCaseSummary{
+				Kind:    "io",
+				Name:    c.Name,
+				Summary: summary,
+			})
+		case *IOTestCasePytest:
+			name := c.Name
+			if name == "" {
+				name = c.TargetPath
+			}
+			summaries = append(summaries, PublicTestCaseSummary{
+				Kind:    "pytest",
+				Name:    name,
+				Summary: c.TargetPath,
+			})
+		}
+	}
+	return summaries
+}
+
+// firstLine returns the first line of s, or the whole string if there is no newline.
+func firstLine(s string) string {
+	for i, c := range s {
+		if c == '\n' {
+			return s[:i]
+		}
+	}
+	return s
 }
 
 // Compile-time check that Store implements ProblemRepository.

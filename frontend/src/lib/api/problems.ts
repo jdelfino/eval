@@ -22,6 +22,7 @@ export interface ProblemSummary {
   tags: string[];
   created_at: string;
   updated_at?: string;
+  test_counts?: { io: number; pytest: number };
 }
 
 /**

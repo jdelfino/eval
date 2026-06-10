@@ -137,6 +137,13 @@ type File struct {
 	Content string `json:"content"`
 }
 
+// TestCounts holds the count of io and pytest test cases for a problem.
+// Populated only by the list path (ListProblemsFiltered / ListProblems).
+type TestCounts struct {
+	IO     int `json:"io"`
+	Pytest int `json:"pytest"`
+}
+
 // Problem represents a coding exercise in the database.
 // test_cases stores a NOT NULL JSONB array of IOTestCase definitions (may be empty).
 type Problem struct {
@@ -153,6 +160,7 @@ type Problem struct {
 	Language    string          `json:"language"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
+	TestCounts  *TestCounts     `json:"test_counts,omitempty"`
 }
 
 // CreateProblemParams contains the fields for creating a problem.
@@ -192,16 +200,28 @@ type ProblemFilters struct {
 	SortOrder     string // "asc", "desc"
 }
 
+// PublicTestCaseSummary is an input-side-only summary of a test case for the public problem payload.
+// It deliberately omits expected_output, test_code, match_type, and any attached file contents.
+type PublicTestCaseSummary struct {
+	Kind    string `json:"kind"`
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
+}
+
 // PublicProblem is the public-facing subset of a problem, exposed without authentication.
+// It never includes solution, expected outputs, or test bodies.
 type PublicProblem struct {
-	ID          uuid.UUID  `json:"id"`
-	Title       string     `json:"title"`
-	Description *string    `json:"description"`
-	Solution    *string    `json:"solution"`
-	StarterCode *string    `json:"starter_code"`
-	ClassID     *uuid.UUID `json:"class_id"`
-	ClassName   *string    `json:"class_name"`
-	Tags        []string   `json:"tags"`
+	ID          uuid.UUID               `json:"id"`
+	Title       string                  `json:"title"`
+	Description *string                 `json:"description"`
+	StarterCode *string                 `json:"starter_code"`
+	ClassID     *uuid.UUID              `json:"class_id"`
+	ClassName   *string                 `json:"class_name"`
+	Tags        []string                `json:"tags"`
+	AuthorName  *string                 `json:"author_name"`
+	UpdatedAt   time.Time               `json:"updated_at"`
+	Language    string                  `json:"language"`
+	TestCases   []PublicTestCaseSummary `json:"test_cases"`
 }
 
 // ProblemRepository defines the interface for problem data access.

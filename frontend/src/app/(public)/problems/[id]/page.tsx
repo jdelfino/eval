@@ -1,19 +1,20 @@
 /**
  * Public problem page (unauthenticated)
  *
- * Displays problem title, description, and a click-to-reveal solution
- * with syntax highlighting. Includes a self-link for copy/paste into slides.
+ * Displays problem title and description.
+ * Includes a self-link for copy/paste into slides.
  * Server-rendered with OG meta tags for link previews.
  *
  * Fetches data from the Go backend public API via typed client.
+ *
+ * Note: Solution is never shown on the public page (eval-e81 fix, folded into G3).
+ * Full hero reskin with tests list and meta line is in A3.
  */
 
 import { cache, Suspense } from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { codeToHtml } from 'shiki';
 import MarkdownContent from '@/components/MarkdownContent';
-import SolutionBlock from './SolutionBlock';
 import InstructorActions from './InstructorActions';
 import StudentActions from './StudentActions';
 import { getPublicProblem } from '@/lib/api/problems';
@@ -54,16 +55,6 @@ export default async function PublicProblemPage({ params }: Params) {
 
   const className = problem.class_name || '';
 
-  let solutionHtml: string | null = null;
-  if (problem.solution) {
-    const rawHtml = await codeToHtml(problem.solution, {
-      lang: 'python',
-      theme: 'github-light',
-    });
-    // Strip background color from shiki output so copied text has no background
-    solutionHtml = rawHtml.replace(/background-color:\s*#[^;"']+;?/g, '');
-  }
-
   const publicUrl = `/problems/${problem.id}`;
 
   return (
@@ -86,15 +77,6 @@ export default async function PublicProblemPage({ params }: Params) {
         <div className="mb-8">
           <MarkdownContent content={problem.description} />
         </div>
-      )}
-
-      {solutionHtml && (
-        <details className="mb-8">
-          <summary className="cursor-pointer text-lg font-semibold text-gray-700 hover:text-gray-900 select-none">
-            Show Solution
-          </summary>
-          <SolutionBlock html={solutionHtml} />
-        </details>
       )}
 
     </div>
