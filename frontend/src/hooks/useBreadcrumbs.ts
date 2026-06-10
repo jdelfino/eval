@@ -7,7 +7,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
-import { BREADCRUMB_HIERARCHY, NAV_ITEMS } from '@/config/navigation';
+import { BREADCRUMB_HIERARCHY, BREADCRUMB_LABELS, NAV_ITEMS } from '@/config/navigation';
 
 export interface BreadcrumbItem {
   label: string;
@@ -64,6 +64,11 @@ function findMatchingPattern(path: string): string | null {
  * Get a human-readable label for a route pattern.
  */
 function getLabelForPattern(pattern: string, segments: Record<string, string>): string {
+  // Check BREADCRUMB_LABELS overrides first (e.g. '/sections/join' → 'Join a section')
+  if (BREADCRUMB_LABELS[pattern]) {
+    return BREADCRUMB_LABELS[pattern];
+  }
+
   // Check if this pattern matches a nav item
   const navItem = NAV_ITEMS.find(item => item.href === pattern);
   if (navItem) {

@@ -1,9 +1,14 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Card } from '@/components/ui/Card';
-import { ErrorAlert } from '@/components/ErrorAlert';
-import { BackButton } from '@/components/ui/BackButton';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { Field } from '@/components/ui/Field';
+import { Input } from '@/components/ui/Input';
+import { Banner } from '@/components/ui/Banner';
+import { Icon } from '@/components/ui/Icon';
+import { getStudentRegistrationInfo } from '@/lib/api/registration';
+import { formatJoinCodeInput, normalizeJoinCode } from '@/lib/join-code';
+import type { RegisterStudentInfo } from '@/types/api';
 
 interface JoinSectionFormProps {
   onSubmit: (join_code: string) => Promise<void>;
@@ -15,6 +20,45 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [lastSubmittedCode, setLastSubmittedCode] = useState<string | null>(null);
+  const [preview, setPreview] = useState<RegisterStudentInfo | null>(null);
+
+  // Ref to track the most-recently-requested preview code for stale-response guard
+  const latestPreviewCodeRef = useRef<string>('');
+
+  // Live preview: debounced 400ms, only when code is format-valid (6 alphanum chars)
+  useEffect(() => {
+    const normalized = normalizeJoinCode(join_code);
+
+    // Always advance the ref so any in-flight request for an old code is treated as stale
+    latestPreviewCodeRef.current = normalized;
+
+    if (!/^[A-Z0-9]{6}$/.test(normalized)) {
+      // Clear preview immediately when code becomes format-invalid
+      setPreview(null);
+      return;
+    }
+
+    const requestedCode = normalized;
+
+    const timer = setTimeout(async () => {
+      try {
+        const info = await getStudentRegistrationInfo(requestedCode);
+        // Guard stale responses: only apply if this is still the latest requested code
+        if (latestPreviewCodeRef.current === requestedCode) {
+          setPreview(info);
+        }
+      } catch {
+        // Preview errors are silent — submit path surfaces real errors
+        if (latestPreviewCodeRef.current === requestedCode) {
+          setPreview(null);
+        }
+      }
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [join_code]);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     if (e) {
@@ -23,7 +67,6 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
 
     const codeToSubmit = join_code.trim();
     if (!codeToSubmit) {
-      setError('Join code is required');
       return;
     }
 
@@ -35,11 +78,8 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     try {
       await onSubmit(codeToSubmit);
       setSuccess(true);
-      setJoinCode('');
-      // Note: Parent component handles redirect to section detail page
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join section';
-      // Provide more specific messages for common errors
       if (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('invalid')) {
         setError('Invalid join code. Please check the code and try again.');
       } else if (errorMessage.toLowerCase().includes('already')) {
@@ -52,77 +92,148 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     }
   }, [join_code, onSubmit]);
 
-  // Retry handler for the ErrorAlert component
+  // Retry handler: re-submits the last submitted code
   const handleRetry = useCallback(() => {
     if (lastSubmittedCode) {
       setJoinCode(lastSubmittedCode);
     }
+    setError(null);
     handleSubmit();
   }, [lastSubmittedCode, handleSubmit]);
 
-  return (
-    <div className="max-w-md mx-auto">
-      <Card variant="default" className="p-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Join a Section</h2>
-            <p className="text-gray-600">Enter the join code provided by your instructor</p>
-          </div>
+  const semester = preview?.section.semester;
 
-          {error && (
-            <ErrorAlert
-              error={error}
-              onRetry={handleRetry}
-              isRetrying={submitting}
+  return (
+    <div
+      style={{
+        background: 'var(--bg-raised)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 24,
+      }}
+    >
+      <form onSubmit={handleSubmit}>
+        {error && (
+          <div style={{ marginBottom: 16 }}>
+            <Banner
+              tone="danger"
+              icon="alert"
+              title="Couldn't join."
+              body={error}
+              action={
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--danger)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 12,
+                  }}
+                >
+                  Try again
+                </button>
+              }
               onDismiss={() => setError(null)}
             />
-          )}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-              Successfully joined section! Redirecting...
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="join_code" className="block text-sm font-medium text-gray-700 mb-2">
-              Join Code
-            </label>
-            <input
-              id="join_code"
-              type="text"
-              value={join_code}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="e.g., ABC-123"
-              className="w-full px-4 py-3 text-lg font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center tracking-wider"
-              disabled={submitting || success}
-              required
-              maxLength={10}
-            />
-            <p className="mt-2 text-sm text-gray-500">
-              Enter the join code from your instructor
-            </p>
           </div>
+        )}
+
+        {success && (
+          <div style={{ marginBottom: 16 }}>
+            <Banner
+              tone="run"
+              icon="check"
+              title="Joined!"
+              body="Redirecting…"
+            />
+          </div>
+        )}
+
+        <Field label="Join code" hint="6 letters and digits, like ABC-123">
+          <Input
+            id="join_code"
+            mono
+            placeholder="ABC-123"
+            autoFocus
+            value={join_code}
+            onChange={(e) => setJoinCode(formatJoinCodeInput(e.target.value))}
+            disabled={submitting || success}
+          />
+        </Field>
+
+        {preview && (
+          <div
+            style={{
+              marginTop: 4,
+              padding: 12,
+              background: 'var(--accent-soft)',
+              border: '1px solid var(--accent-soft)',
+              borderRadius: 'var(--radius)',
+              fontSize: 12.5,
+              color: 'var(--accent-ink)',
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>{preview.class.name}</div>
+            <div style={{ color: 'var(--fg-muted)', marginTop: 2 }}>
+              Section: {preview.section.name}{semester ? ` · ${semester}` : ''}
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 20,
+          }}
+        >
+          <Link
+            href="/sections"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '7px 14px',
+              background: 'var(--bg-sunken)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              fontSize: 13,
+              color: 'var(--fg)',
+              textDecoration: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </Link>
 
           <button
             type="submit"
             disabled={submitting || !join_code.trim() || success}
-            className="w-full py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              background: 'var(--accent)',
+              border: '1px solid var(--accent)',
+              borderRadius: 'var(--radius)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--accent-fg)',
+              cursor: submitting || !join_code.trim() || success ? 'not-allowed' : 'pointer',
+              opacity: submitting || !join_code.trim() || success ? 0.55 : 1,
+            }}
           >
-            {submitting ? 'Joining...' : success ? 'Joined!' : 'Join Section'}
+            {submitting ? 'Joining…' : 'Join section'}
+            {!submitting && <Icon name="arrowR" size={13} />}
           </button>
-
-          <div className="border-t pt-4">
-            <p className="text-sm text-gray-600">
-              After joining, you'll see this section in your dashboard and can participate in coding sessions.
-            </p>
-          </div>
-
-          <div className="flex justify-center">
-            <BackButton href="/" size="sm">Back to Home</BackButton>
-          </div>
-        </form>
-      </Card>
+        </div>
+      </form>
     </div>
   );
 }

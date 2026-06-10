@@ -130,6 +130,32 @@ describe('useBreadcrumbs', () => {
     });
   });
 
+  describe('/sections/join route', () => {
+    // Test case 1: breadcrumb for /sections/join resolves to My Sections / Join a section
+    // Catches: pattern-order bug (join swallowed by dynamic pattern, or vice versa)
+    it('returns breadcrumb chain for /sections/join with label "Join a section"', () => {
+      mockPathname.mockReturnValue('/sections/join');
+
+      const { result } = renderHook(() => useBreadcrumbs());
+
+      expect(result.current).toEqual([
+        { label: 'My Sections', href: '/sections' },
+        { label: 'Join a section', href: undefined },
+      ]);
+    });
+
+    it('/sections/abc-uuid still resolves via [section_id] pattern', () => {
+      mockPathname.mockReturnValue('/sections/abc-uuid');
+
+      const { result } = renderHook(() => useBreadcrumbs());
+
+      expect(result.current).toEqual([
+        { label: 'My Sections', href: '/sections' },
+        { label: 'abc-uuid', href: undefined },
+      ]);
+    });
+  });
+
   describe('unknown routes', () => {
     it('returns empty array for unregistered route', () => {
       mockPathname.mockReturnValue('/unknown/page');

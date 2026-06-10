@@ -16,8 +16,30 @@ export default function JoinSectionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-7xl mx-auto">
+    <div>
+      <div style={{ padding: '20px 24px 0' }}>
+        <h1
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: 20,
+            fontWeight: 500,
+            letterSpacing: -0.3,
+            margin: 0,
+          }}
+        >
+          Join a new section
+        </h1>
+        <p
+          style={{
+            fontSize: 13,
+            color: 'var(--fg-muted)',
+            marginTop: 4,
+          }}
+        >
+          Enter the join code your teacher gave you. You&apos;ll keep your existing sections.
+        </p>
+      </div>
+      <div style={{ padding: 24, maxWidth: 480 }}>
         <JoinSectionForm onSubmit={handleJoinSection} />
       </div>
     </div>
