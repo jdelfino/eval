@@ -28,7 +28,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
-import { createClass, createProblem } from './fixtures/api-setup';
+import { createClass, createSection, createProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Problem Management', () => {
@@ -172,13 +172,15 @@ test.describe('Problem Management', () => {
   });
 
   /**
-   * A4: Tag chip bar filtering + Start-session from table
+   * A4: Tag chip bar filtering + Start-session from table (full flow)
    *
    * Verifies that the A4 LibraryTagBar works end-to-end:
    * - Tag chips appear when problems have tags
    * - Selecting a chip filters the table to problems bearing that tag (AND logic)
    * - The 'clear' affordance resets the filter
-   * - The Start button in the table row opens the Start Session modal
+   * - The Start button in the table row opens the CreateSessionFromProblemModal,
+   *   the instructor selects a section, and clicking "Create Session" navigates
+   *   to /instructor/session/...
    *
    * Catches: tag-chip wiring breakages invisible to jsdom, and A4 table Start CTA regression.
    */
@@ -187,6 +189,9 @@ test.describe('Problem Management', () => {
 
     const instructor = await setupInstructor();
     const cls = await createClass(instructor.token, `Tag Filter Class ${testNamespace}`);
+
+    // Create a section so the CreateSessionFromProblemModal has a section to select
+    await createSection(instructor.token, cls.id, `Tag Filter Section ${testNamespace}`);
 
     // Create two problems: one tagged, one untagged
     await createProblem(instructor.token, cls.id, {
@@ -239,19 +244,26 @@ test.describe('Problem Management', () => {
       page.getByRole('cell', { name: `Untagged Problem ${testNamespace}`, exact: true })
     ).toBeVisible();
 
-    // The Start button in the table row should be clickable (opens Start Session modal)
+    // ── FULL START-SESSION FLOW (replaces the previous loose OR-locator check) ──
+    // Click the Start button in the table row for the tagged problem.
     // Scope to the row to avoid clicking the wrong Start button.
-    // Use getByRole to avoid the :has-text substring issue with "Tagged"/"Untagged".
     const startButton = page
       .locator(`tr:has(:text-is("Tagged Problem ${testNamespace}")) button:has-text("Start")`)
       .first();
     await expect(startButton).toBeVisible();
     await startButton.click();
 
-    // A modal or panel should open for starting a session
-    // The CreateSessionFromProblemModal renders with a "Start Session" heading or similar
-    await expect(
-      page.locator('button:has-text("Create Session"), h2:has-text("Start Session"), [role="dialog"]').first()
-    ).toBeVisible({ timeout: 10000 });
+    // The CreateSessionFromProblemModal opens with a "Create Session" heading
+    await expect(page.locator('h2:has-text("Create Session")')).toBeVisible({ timeout: 10000 });
+
+    // Select the section in the modal's section dropdown
+    await page.locator('select#section').selectOption({ label: `Tag Filter Section ${testNamespace} (Fall 2025)` });
+
+    // Click "Create Session" to start the session and navigate to it
+    await page.locator('button:has-text("Create Session")').last().click();
+
+    // Verify redirect to the active session page
+    await page.waitForURL(/\/instructor\/session\//, { timeout: 15000 });
+    await expect(page.locator('[data-testid="active-session-header"]')).toBeVisible({ timeout: 15000 });
   });
 });

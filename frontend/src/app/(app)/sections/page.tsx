@@ -4,6 +4,45 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSections } from '@/hooks/useSections';
+import { listSectionProblems } from '@/lib/api/section-problems';
+import { getActiveSessions } from '@/lib/api/sections';
+import { useParallelEnrichment } from '@/hooks/useParallelEnrichment';
+import { Pill } from '@/components/ui/Pill';
+import { Spinner } from '@/components/ui/Spinner';
+import { EmptyState } from '@/components/ui/EmptyState';
+import type { MySectionInfo, PublishedProblemWithStatus } from '@/types/api';
+
+// Per-section enrichment data — derived after parallel fetches
+interface SectionEnrichment {
+  solvedCount: number | null; // null if fetch failed
+  totalCount: number | null;  // null if fetch failed
+  live: boolean;
+}
+
+// Fetch problems + sessions in parallel for one section; degrade on failure.
+// getActiveSessions already passes ?status=active so no client-side filtering needed.
+async function fetchSectionEnrichment(info: MySectionInfo): Promise<SectionEnrichment> {
+  const sectionId = info.section.id;
+  const [problemsResult, sessionsResult] = await Promise.allSettled([
+    listSectionProblems(sectionId),
+    getActiveSessions(sectionId),
+  ]);
+
+  let solvedCount: number | null = null;
+  let totalCount: number | null = null;
+  if (problemsResult.status === 'fulfilled') {
+    const problems: PublishedProblemWithStatus[] = problemsResult.value;
+    totalCount = problems.length;
+    solvedCount = problems.filter(
+      (p) => p.student_work?.last_run_all_passed === true
+    ).length;
+  }
+
+  const live =
+    sessionsResult.status === 'fulfilled' && sessionsResult.value.length > 0;
+
+  return { solvedCount, totalCount, live };
+}
 
 export default function MySectionsPage() {
   const { user } = useAuth();
@@ -15,18 +54,33 @@ export default function MySectionsPage() {
     }
   }, [user, fetchMySections]);
 
+  // Fan out per-section enrichment fetches using the shared hook.
+  // Built-in cancellation and real-identity change detection.
+  const { map: enrichmentsRaw } = useParallelEnrichment<MySectionInfo, string, SectionEnrichment>(
+    sections,
+    (info) => info.section.id,
+    fetchSectionEnrichment
+  );
+  const enrichments = enrichmentsRaw;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+        <Spinner size="lg" label="Loading sections..." />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Page header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">My Sections</h1>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">My Sections</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Sections you&apos;re enrolled in. A live session pulls you straight into it.
+          </p>
+        </div>
         <Link
           href="/sections/join"
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -42,47 +96,86 @@ export default function MySectionsPage() {
       )}
 
       {sections.length === 0 && !error ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">No sections yet</h2>
-          <p className="text-gray-600 mb-6">Join a section using a code from your instructor to get started.</p>
-          <Link
-            href="/sections/join"
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Join a Section
-          </Link>
+        /* Empty state */
+        <div className="bg-white rounded-lg shadow">
+          <EmptyState
+            icon="book"
+            title="No sections yet"
+            blurb="Join a section using a code from your instructor to get started."
+            action={
+              <Link
+                href="/sections/join"
+                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Join a Section
+              </Link>
+            }
+          />
         </div>
       ) : (
-        <div className="space-y-3">
-          {sections.map((info) => (
-            <Link
-              key={info.section.id}
-              href={`/sections/${info.section.id}`}
-              className="block bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{info.section.name}</h2>
-                    <p className="text-gray-600 text-sm mt-1">{info.class_name}</p>
-                    {info.section.semester && (
-                      <span className="inline-block mt-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                        {info.section.semester}
-                      </span>
+        /* Section cards grid */
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {sections.map((info) => {
+            const enc = enrichments[info.section.id];
+            const isLive = enc?.live ?? false;
+
+            return (
+              <div
+                key={info.section.id}
+                className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Live top-bar */}
+                {isLive && (
+                  <div
+                    data-testid="live-top-bar"
+                    className="absolute top-0 left-0 right-0 h-1 bg-green-500"
+                  />
+                )}
+
+                <div className="p-5">
+                  {/* Section header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 leading-tight">
+                        {info.section.name}
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-1">{info.class_name}</p>
+                    </div>
+                    {isLive && (
+                      <Pill tone="ok" dot className="flex-shrink-0">
+                        Live now
+                      </Pill>
                     )}
                   </div>
-                  <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+
+                  {/* Solved count — only when enrichment loaded and data available */}
+                  {enc && enc.totalCount !== null && enc.solvedCount !== null && (
+                    <div className="mt-3 text-sm text-gray-500">
+                      {`${enc.solvedCount} / ${enc.totalCount} solved`}
+                    </div>
+                  )}
+
+                  {/* CTAs */}
+                  <div className="mt-4 flex items-center gap-2">
+                    {isLive && (
+                      <Link
+                        href={`/sections/${info.section.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Jump in
+                      </Link>
+                    )}
+                    <Link
+                      href={`/sections/${info.section.id}`}
+                      className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      Practice problems →
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

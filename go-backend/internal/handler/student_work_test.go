@@ -60,6 +60,9 @@ func (m *mockStudentWorkRepo) SetStudentWorkRunResult(ctx context.Context, id uu
 	}
 	panic("mockStudentWorkRepo: unexpected SetStudentWorkRunResult call")
 }
+func (m *mockStudentWorkRepo) ListStudentSessionStats(_ context.Context, _, _ uuid.UUID) ([]store.StudentSessionStat, error) {
+	panic("mockStudentWorkRepo: unexpected ListStudentSessionStats call")
+}
 
 // Helper to create repos with both section problem and student work repos.
 type swReposImpl struct {
@@ -158,6 +161,12 @@ func (r swReposImpl) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, 
 		return r.sw.SetStudentWorkRunResult(ctx, id, allPassed, at)
 	}
 	panic("swReposImpl: unexpected SetStudentWorkRunResult call")
+}
+func (r swReposImpl) ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentSessionStat, error) {
+	if r.sw != nil {
+		return r.sw.ListStudentSessionStats(ctx, sectionID, studentUserID)
+	}
+	panic("swReposImpl: unexpected ListStudentSessionStats call")
 }
 
 func swRepos(sp store.SectionProblemRepository, sw store.StudentWorkRepository, prob store.ProblemRepository) store.Repos {

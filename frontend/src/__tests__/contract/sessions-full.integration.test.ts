@@ -29,10 +29,12 @@ import {
   featureCode,
   reopenSession,
   listSessionHistoryWithFilters,
+  getSessionStudents,
 } from '@/lib/api/sessions';
 import {
   validateSessionShape,
   validateSessionPublicStateShape,
+  validateSessionStudentShape,
 } from './validators';
 import type { Session } from '@/types/api';
 
@@ -276,6 +278,29 @@ describe('Sessions Full API', () => {
       await expect(
         featureCode(testSessionId, 'print("featured code")')
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // 6. getSessionStudents
+  // -----------------------------------------------------------------------
+  describe('getSessionStudents()', () => {
+    /**
+     * Verifies that getSessionStudents returns a SessionStudent[] for an active
+     * session. The session may have no students (instructors don't auto-join as
+     * students), so this test validates the array contract and shape of each
+     * element when present. Breaking the endpoint path or dropping required
+     * SessionStudent fields would cause this test to fail.
+     */
+    it('returns SessionStudent[] with correct snake_case shape', async () => {
+      const students = await getSessionStudents(testSessionId);
+
+      expect(Array.isArray(students)).toBe(true);
+
+      // Validate shape of every student returned (may be empty if none joined)
+      for (const student of students) {
+        validateSessionStudentShape(student);
+      }
     });
   });
 

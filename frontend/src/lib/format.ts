@@ -15,6 +15,20 @@ export function formatShortDate(iso: string): string {
 }
 
 /**
+ * Format an ISO date string as a short human-readable date+time,
+ * e.g. "Jan 3, 2025, 2:05 PM".
+ */
+export function formatShortDateTime(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
  * Format an ISO date string as a relative time string,
  * e.g. "42s ago", "5m ago", "3h ago", "2d ago".
  */

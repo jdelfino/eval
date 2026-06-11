@@ -8,6 +8,14 @@ import (
 	"github.com/jdelfino/eval/pkg/httputil"
 )
 
+// studentWorkResponse is the wrapper returned by ListStudentWork.
+// The response shape was intentionally changed from a bare []StudentWorkSummary to
+// this wrapper in order to add per-session revision stats without a new endpoint.
+type studentWorkResponse struct {
+	Work     []store.StudentWorkSummary  `json:"work"`
+	Sessions []store.StudentSessionStat  `json:"sessions"`
+}
+
 // StudentReviewHandler handles instructor endpoints for reviewing student work.
 type StudentReviewHandler struct{}
 
@@ -39,7 +47,9 @@ func (h *StudentReviewHandler) ListStudentProgress(w http.ResponseWriter, r *htt
 }
 
 // ListStudentWork handles GET /api/v1/sections/{id}/students/{userID}/work —
-// returns all published problems in a section with the given student's work (instructor only).
+// returns all published problems in a section with the given student's work, plus
+// per-session revision stats. Response shape: {"work": [...], "sessions": [...]}.
+// This is an instructor-only endpoint (gated by PermContentManage in sections.go).
 func (h *StudentReviewHandler) ListStudentWork(w http.ResponseWriter, r *http.Request) {
 	sectionID, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
@@ -58,9 +68,21 @@ func (h *StudentReviewHandler) ListStudentWork(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	sessions, err := repos.ListStudentSessionStats(r.Context(), sectionID, userID)
+	if err != nil {
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
 	if summaries == nil {
 		summaries = []store.StudentWorkSummary{}
 	}
+	if sessions == nil {
+		sessions = []store.StudentSessionStat{}
+	}
 
-	httputil.WriteJSON(w, http.StatusOK, summaries)
+	httputil.WriteJSON(w, http.StatusOK, studentWorkResponse{
+		Work:     summaries,
+		Sessions: sessions,
+	})
 }

@@ -98,4 +98,51 @@ describe('Pill', () => {
       expect(screen.getByText('n')).toHaveStyle({ color: 'var(--fg-muted)' });
     });
   });
+
+  describe('dot prop', () => {
+    it('renders a dot element when dot=true', () => {
+      const { container } = render(<Pill tone="ok" dot>Live</Pill>);
+      // The dot is an aria-hidden span sibling to the text
+      const dotSpan = container.querySelector('[aria-hidden="true"]');
+      expect(dotSpan).toBeInTheDocument();
+      expect(dotSpan).toHaveStyle({ borderRadius: '50%' });
+    });
+
+    it('does not render a dot element when dot is omitted', () => {
+      const { container } = render(<Pill tone="ok">No dot</Pill>);
+      const dotSpan = container.querySelector('[aria-hidden="true"]');
+      expect(dotSpan).not.toBeInTheDocument();
+    });
+
+    it('does not render a dot element when dot=false', () => {
+      const { container } = render(<Pill tone="ok" dot={false}>No dot</Pill>);
+      const dotSpan = container.querySelector('[aria-hidden="true"]');
+      expect(dotSpan).not.toBeInTheDocument();
+    });
+
+    it('dot is static — no pulse animation', () => {
+      const { container } = render(<Pill tone="ok" dot>Live</Pill>);
+      const dotSpan = container.querySelector('[aria-hidden="true"]') as HTMLElement | null;
+      expect(dotSpan).toBeInTheDocument();
+      // v4 dot is static: no animation property
+      expect(dotSpan?.style.animation ?? '').toBe('');
+    });
+  });
+
+  describe('HTML attribute passthrough', () => {
+    it('forwards data-testid to the root span', () => {
+      render(<Pill data-testid="my-pill">Label</Pill>);
+      expect(screen.getByTestId('my-pill')).toBeInTheDocument();
+    });
+
+    it('forwards aria-label to the root span', () => {
+      render(<Pill aria-label="status: live">Live</Pill>);
+      expect(screen.getByLabelText('status: live')).toBeInTheDocument();
+    });
+
+    it('merges custom className with existing styles', () => {
+      render(<Pill className="extra-class">Label</Pill>);
+      expect(screen.getByText('Label')).toHaveClass('extra-class');
+    });
+  });
 });

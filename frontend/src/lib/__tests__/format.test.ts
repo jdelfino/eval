@@ -3,7 +3,7 @@
  * @jest-environment node
  */
 
-import { formatShortDate, formatTimeAgo } from '../format';
+import { formatShortDate, formatShortDateTime, formatTimeAgo } from '../format';
 
 describe('formatShortDate', () => {
   it('formats "2025-01-03T12:00:00Z" as "Jan 3, 2025"', () => {
@@ -20,6 +20,22 @@ describe('formatShortDate', () => {
   it('formats "2024-12-25T12:00:00Z" as "Dec 25, 2024"', () => {
     const result = formatShortDate('2024-12-25T12:00:00Z');
     expect(result).toBe('Dec 25, 2024');
+  });
+});
+
+describe('formatShortDateTime', () => {
+  it('includes date and time in the output', () => {
+    // Use a fixed UTC time: noon UTC on Jan 3, 2025
+    const result = formatShortDateTime('2025-01-03T20:05:00Z');
+    // Exact output depends on local timezone; verify shape
+    expect(result).toMatch(/Jan 3, 2025/);
+    expect(result).toMatch(/\d+:\d{2}/);
+  });
+
+  it('formats "2026-06-10T14:30:00Z" with date and time components', () => {
+    const result = formatShortDateTime('2026-06-10T14:30:00Z');
+    expect(result).toMatch(/Jun 10, 2026/);
+    expect(result).toMatch(/\d+:\d{2}/);
   });
 });
 

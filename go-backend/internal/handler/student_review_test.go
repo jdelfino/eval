@@ -18,8 +18,9 @@ import (
 
 // mockStudentReviewRepo implements store.StudentWorkRepository for student review tests.
 type mockStudentReviewRepo struct {
-	listStudentProgressFn      func(ctx context.Context, sectionID uuid.UUID) ([]store.StudentProgress, error)
-	listStudentWorkForReviewFn func(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentWorkSummary, error)
+	listStudentProgressFn        func(ctx context.Context, sectionID uuid.UUID) ([]store.StudentProgress, error)
+	listStudentWorkForReviewFn   func(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentWorkSummary, error)
+	listStudentSessionStatsFn    func(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentSessionStat, error)
 }
 
 func (m *mockStudentReviewRepo) GetOrCreateStudentWork(_ context.Context, _ string, _, _, _ uuid.UUID) (*store.StudentWork, error) {
@@ -45,6 +46,12 @@ func (m *mockStudentReviewRepo) ListStudentWorkForReview(ctx context.Context, se
 }
 func (m *mockStudentReviewRepo) SetStudentWorkRunResult(_ context.Context, _ uuid.UUID, _ bool, _ time.Time) error {
 	panic("mockStudentReviewRepo: unexpected SetStudentWorkRunResult call")
+}
+func (m *mockStudentReviewRepo) ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentSessionStat, error) {
+	if m.listStudentSessionStatsFn != nil {
+		return m.listStudentSessionStatsFn(ctx, sectionID, studentUserID)
+	}
+	return []store.StudentSessionStat{}, nil
 }
 
 // srReposImpl embeds stubRepos and overrides only the StudentWorkRepository methods.
@@ -76,6 +83,9 @@ func (r srReposImpl) ListStudentWorkForReview(ctx context.Context, sectionID, st
 }
 func (r srReposImpl) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error {
 	return r.sw.SetStudentWorkRunResult(ctx, id, allPassed, at)
+}
+func (r srReposImpl) ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]store.StudentSessionStat, error) {
+	return r.sw.ListStudentSessionStats(ctx, sectionID, studentUserID)
 }
 
 func srRepos(sw store.StudentWorkRepository) store.Repos {
@@ -222,8 +232,105 @@ func TestStudentReviewHandler_ListStudentProgress_BadSectionID(t *testing.T) {
 	}
 }
 
+// TestStudentReviewHandler_ListStudentWork_WrapperShape verifies that ListStudentWork
+// returns a wrapper object with "work" and "sessions" keys (not a bare array).
+// This is the contract defined in the B4 task: the endpoint was extended from
+// []StudentWorkSummary to {work: [], sessions: []} to include per-session revision stats.
+func TestStudentReviewHandler_ListStudentWork_WrapperShape(t *testing.T) {
+	sectionID := uuid.New()
+	studentID := uuid.New()
+	problemID := uuid.New()
+	workID := uuid.New()
+	sessionID := uuid.New()
+	now := time.Now().UTC().Truncate(time.Second)
+	problemTitle := "Two Sum"
+
+	work := &store.StudentWork{
+		ID:        workID,
+		UserID:    studentID,
+		ProblemID: problemID,
+		SectionID: sectionID,
+		Code:      "print('hello')",
+	}
+	workSummaries := []store.StudentWorkSummary{
+		{
+			Problem:     store.Problem{ID: problemID, Title: "Two Sum"},
+			PublishedAt: now,
+			StudentWork: work,
+		},
+	}
+	sessionStats := []store.StudentSessionStat{
+		{
+			SessionID:        sessionID,
+			SessionCreatedAt: now,
+			ProblemID:        &problemID,
+			ProblemTitle:     &problemTitle,
+			RevisionCount:    5,
+		},
+	}
+
+	repo := &mockStudentReviewRepo{
+		listStudentWorkForReviewFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.StudentWorkSummary, error) {
+			if sid != sectionID {
+				t.Fatalf("unexpected sectionID: got %v, want %v", sid, sectionID)
+			}
+			if uid != studentID {
+				t.Fatalf("unexpected studentID: got %v, want %v", uid, studentID)
+			}
+			return workSummaries, nil
+		},
+		listStudentSessionStatsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.StudentSessionStat, error) {
+			return sessionStats, nil
+		},
+	}
+
+	h := NewStudentReviewHandler()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	rctx.URLParams.Add("userID", studentID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = store.WithRepos(ctx, srRepos(repo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListStudentWork(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got struct {
+		Work     []store.StudentWorkSummary `json:"work"`
+		Sessions []store.StudentSessionStat `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Work) != 1 {
+		t.Fatalf("expected 1 work record, got %d", len(got.Work))
+	}
+	if got.Work[0].Problem.ID != problemID {
+		t.Errorf("expected problem ID %v, got %v", problemID, got.Work[0].Problem.ID)
+	}
+	if got.Work[0].StudentWork == nil {
+		t.Error("expected non-nil StudentWork")
+	} else if got.Work[0].StudentWork.ID != workID {
+		t.Errorf("expected work ID %v, got %v", workID, got.Work[0].StudentWork.ID)
+	}
+	if len(got.Sessions) != 1 {
+		t.Fatalf("expected 1 session stat, got %d", len(got.Sessions))
+	}
+	if got.Sessions[0].SessionID != sessionID {
+		t.Errorf("expected session ID %v, got %v", sessionID, got.Sessions[0].SessionID)
+	}
+	if got.Sessions[0].RevisionCount != 5 {
+		t.Errorf("expected revision count 5, got %d", got.Sessions[0].RevisionCount)
+	}
+}
+
 // TestStudentReviewHandler_ListStudentWork_Success verifies that a list of
-// StudentWorkSummary records is returned as JSON 200.
+// StudentWorkSummary records is returned as JSON 200 (work field in wrapper).
 func TestStudentReviewHandler_ListStudentWork_Success(t *testing.T) {
 	sectionID := uuid.New()
 	studentID := uuid.New()
@@ -274,25 +381,27 @@ func TestStudentReviewHandler_ListStudentWork_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var got []store.StudentWorkSummary
+	var got struct {
+		Work []store.StudentWorkSummary `json:"work"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(got))
+	if len(got.Work) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(got.Work))
 	}
-	if got[0].Problem.ID != problemID {
-		t.Errorf("expected problem ID %v, got %v", problemID, got[0].Problem.ID)
+	if got.Work[0].Problem.ID != problemID {
+		t.Errorf("expected problem ID %v, got %v", problemID, got.Work[0].Problem.ID)
 	}
-	if got[0].StudentWork == nil {
+	if got.Work[0].StudentWork == nil {
 		t.Error("expected non-nil StudentWork")
-	} else if got[0].StudentWork.ID != workID {
-		t.Errorf("expected work ID %v, got %v", workID, got[0].StudentWork.ID)
+	} else if got.Work[0].StudentWork.ID != workID {
+		t.Errorf("expected work ID %v, got %v", workID, got.Work[0].StudentWork.ID)
 	}
 }
 
 // TestStudentReviewHandler_ListStudentWork_NullWork verifies that a nil StudentWork
-// in the summary is serialized correctly (omitempty).
+// in the summary is serialized correctly inside the wrapper's "work" field.
 func TestStudentReviewHandler_ListStudentWork_NullWork(t *testing.T) {
 	sectionID := uuid.New()
 	studentID := uuid.New()
@@ -329,15 +438,17 @@ func TestStudentReviewHandler_ListStudentWork_NullWork(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var got []store.StudentWorkSummary
+	var got struct {
+		Work []store.StudentWorkSummary `json:"work"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(got))
+	if len(got.Work) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(got.Work))
 	}
-	if got[0].StudentWork != nil {
-		t.Errorf("expected nil StudentWork, got %v", got[0].StudentWork)
+	if got.Work[0].StudentWork != nil {
+		t.Errorf("expected nil StudentWork, got %v", got.Work[0].StudentWork)
 	}
 }
 
@@ -460,14 +571,18 @@ func TestStudentReviewHandler_ListStudentWork_InternalError(t *testing.T) {
 	}
 }
 
-// TestStudentReviewHandler_ListStudentWork_Empty verifies that a nil result
-// from the store is returned as an empty JSON array.
+// TestStudentReviewHandler_ListStudentWork_Empty verifies that nil results
+// from the store produce empty JSON arrays (not null) in both wrapper fields.
+// This is the spec from the task: "empty slices (not null) when no data".
 func TestStudentReviewHandler_ListStudentWork_Empty(t *testing.T) {
 	sectionID := uuid.New()
 	studentID := uuid.New()
 
 	repo := &mockStudentReviewRepo{
 		listStudentWorkForReviewFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.StudentWorkSummary, error) {
+			return nil, nil
+		},
+		listStudentSessionStatsFn: func(ctx context.Context, sid, uid uuid.UUID) ([]store.StudentSessionStat, error) {
 			return nil, nil
 		},
 	}
@@ -488,11 +603,26 @@ func TestStudentReviewHandler_ListStudentWork_Empty(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var got []store.StudentWorkSummary
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	body := rec.Body.String()
+
+	var got struct {
+		Work     []store.StudentWorkSummary `json:"work"`
+		Sessions []store.StudentSessionStat `json:"sessions"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("expected empty array, got %v", got)
+	if len(got.Work) != 0 {
+		t.Errorf("expected empty work array, got %v", got.Work)
+	}
+	if len(got.Sessions) != 0 {
+		t.Errorf("expected empty sessions array, got %v", got.Sessions)
+	}
+	// Verify the body is valid JSON with "work" and "sessions" keys (not null)
+	if !strings.Contains(body, `"work"`) || strings.Contains(body, `"work":null`) {
+		t.Errorf("expected JSON to contain \"work\" array (not null), got: %s", body)
+	}
+	if !strings.Contains(body, `"sessions"`) || strings.Contains(body, `"sessions":null`) {
+		t.Errorf("expected JSON to contain \"sessions\" array (not null), got: %s", body)
 	}
 }

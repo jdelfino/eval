@@ -68,8 +68,11 @@ if [ -L frontend/node_modules ]; then
   (cd frontend && npm install --prefer-offline)
 fi
 
-if [ -d frontend/.next/standalone ]; then
-  echo "Next.js standalone build exists, skipping build"
+# Reuse the standalone build only if no source/config file is newer than it —
+# an existence-only check silently runs e2e against stale UI.
+if [ -d frontend/.next/standalone ] && \
+   [ -z "$(find frontend/src frontend/public frontend/package.json -newer frontend/.next/standalone -print -quit 2>/dev/null)" ]; then
+  echo "Next.js standalone build is fresh, skipping build"
 else
   echo "Building Next.js..."
   (cd frontend && \

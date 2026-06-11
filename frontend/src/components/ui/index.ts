@@ -97,3 +97,6 @@ export type { SectionLabelProps } from './SectionLabel';
 
 export { Chip } from './Chip';
 export type { ChipProps } from './Chip';
+
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';

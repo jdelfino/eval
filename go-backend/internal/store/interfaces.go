@@ -747,6 +747,21 @@ type StudentWorkSummary struct {
 	StudentWork *StudentWork `json:"student_work"`
 }
 
+// StudentSessionStat holds per-session revision stats for a student.
+// Used by the instructor student-detail view to show a session history table.
+//
+// Attended sessions are defined as sessions from which the student has at least
+// one revision. Sessions the student joined but made no revisions in are omitted
+// (cheaply derivable only with an additional session_students join; the current
+// definition is: "sessions with at least one revision by this student in this section").
+type StudentSessionStat struct {
+	SessionID        uuid.UUID  `json:"session_id"`
+	SessionCreatedAt time.Time  `json:"session_created_at"`
+	ProblemID        *uuid.UUID `json:"problem_id"`
+	ProblemTitle     *string    `json:"problem_title"`
+	RevisionCount    int        `json:"revision_count"`
+}
+
 // StudentWorkRepository defines the interface for student work data access.
 type StudentWorkRepository interface {
 	// GetOrCreateStudentWork gets or creates student work for a (user, problem, section) triple.
@@ -771,6 +786,11 @@ type StudentWorkRepository interface {
 	// allPassed=true when every canonical case was covered and all executed cases passed.
 	// Returns ErrNotFound if the student work record does not exist.
 	SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPassed bool, at time.Time) error
+	// ListStudentSessionStats returns per-session revision stats for a student in a section.
+	// Only sessions in which the student has at least one revision are included.
+	// Revisions with nil session_id (practice mode) are excluded.
+	// Results are ordered by session created_at descending.
+	ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentSessionStat, error)
 }
 
 // AdminStats contains aggregate system statistics.

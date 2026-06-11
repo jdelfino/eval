@@ -1,14 +1,18 @@
 /**
- * Unit tests for StudentDetailPage
+ * Unit tests for StudentDetailPage (B4 reskin)
  *
  * Tests:
- * - Renders student name and progress summary
- * - Shows problem titles with correct status badges
- * - Expanding a problem shows code
- * - "Not started" problems are not expandable
- * - Back button links to section page
- * - Loading and error states
- * - Non-instructor redirect (to /sections — layout handles unauthenticated redirect)
+ * - Summary rail computes sessions attended, solved count, total revisions from fixtures
+ * - No time-spent estimate rendered (dropped affordance)
+ * - No streak/stuck/absent badges (dropped affordances)
+ * - Session rows render date, problem title, revision count, code link
+ * - Result pill "solved" for last_run_all_passed=true; "in progress" otherwise
+ * - Blank session (no problem) renders em-dash and no pill
+ * - Code link expands code viewer for problems with student work
+ * - Per-problem table keeps Started/Solved/Not started badges (reskinned)
+ * - Non-instructor redirect to /sections
+ * - Loading and error states preserved
+ * - Namespace-admin and system-admin can view the page
  */
 
 import React from 'react';
@@ -39,7 +43,11 @@ jest.mock('@/lib/api', () => ({
 const mockPush = jest.fn();
 const SECTION_ID = 'section-xyz-789';
 const USER_ID = 'user-student-1';
+const SESSION_1_ID = 'session-001';
+const SESSION_2_ID = 'session-002';
+const SESSION_BLANK_ID = 'session-blank';
 
+// Fixture: progress for the section
 const studentProgress = [
   {
     user_id: USER_ID,
@@ -61,6 +69,7 @@ const studentProgress = [
   },
 ];
 
+// Fixture: work summaries — prob-1 solved, prob-2 not started, prob-3 started
 const studentWork = [
   {
     problem: {
@@ -74,18 +83,23 @@ const studentWork = [
       class_id: 'class-1',
       tags: [],
       solution: null,
+      language: 'python',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     },
     published_at: '2024-01-10T00:00:00Z',
     student_work: {
       id: 'work-1',
+      namespace_id: 'ns-1',
       user_id: USER_ID,
       section_id: SECTION_ID,
       problem_id: 'prob-1',
       code: 'for i in range(1, 101): print(i)',
+      test_cases: [],
       last_update: '2026-02-20T10:00:00Z',
       created_at: '2026-02-10T00:00:00Z',
+      last_run_all_passed: true,  // solved
+      last_run_at: '2026-02-20T10:00:00Z',
     },
   },
   {
@@ -100,11 +114,12 @@ const studentWork = [
       class_id: 'class-1',
       tags: [],
       solution: null,
+      language: 'python',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     },
     published_at: '2024-01-10T00:00:00Z',
-    student_work: null,
+    student_work: null,   // not started
   },
   {
     problem: {
@@ -118,31 +133,75 @@ const studentWork = [
       class_id: 'class-1',
       tags: [],
       solution: null,
+      language: 'python',
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     },
     published_at: '2024-01-10T00:00:00Z',
     student_work: {
       id: 'work-3',
+      namespace_id: 'ns-1',
       user_id: USER_ID,
       section_id: SECTION_ID,
       problem_id: 'prob-3',
       code: '',
+      test_cases: [],
       last_update: '2026-02-15T10:00:00Z',
       created_at: '2026-02-15T10:00:00Z',
+      last_run_all_passed: false,  // in progress
+      last_run_at: '2026-02-15T10:00:00Z',
     },
   },
 ];
 
+// Fixture: session stats — two real sessions + one blank
+const sessionStats = [
+  {
+    session_id: SESSION_1_ID,
+    session_created_at: '2026-02-20T08:30:00Z',
+    problem_id: 'prob-1',
+    problem_title: 'FizzBuzz',
+    revision_count: 17,
+  },
+  {
+    session_id: SESSION_2_ID,
+    session_created_at: '2026-02-15T09:00:00Z',
+    problem_id: 'prob-3',
+    problem_title: 'Hello World',
+    revision_count: 5,
+  },
+  {
+    session_id: SESSION_BLANK_ID,
+    session_created_at: '2026-02-10T08:00:00Z',
+    problem_id: null,
+    problem_title: null,
+    revision_count: 3,
+  },
+];
+
+// The wrapper shape returned by the API client
+const workApiResponse = {
+  work: studentWork,
+  sessions: sessionStats,
+};
+
+const TEACHING_PERMISSIONS = ['content.manage', 'session.manage'];
+
 function mockUser(role: string) {
+  const isTeachingRole = ['instructor', 'namespace-admin', 'system-admin'].includes(role);
   (useAuth as jest.Mock).mockReturnValue({
-    user: { id: 'instructor-1', email: 'instructor@example.com', role },
+    user: {
+      id: 'instructor-1',
+      email: 'instructor@example.com',
+      role,
+      permissions: isTeachingRole ? TEACHING_PERMISSIONS : [],
+    },
     isLoading: false,
   });
 }
 
 function mockApiSuccess() {
-  (listStudentWorkForReview as jest.Mock).mockResolvedValue(studentWork);
+  (listStudentWorkForReview as jest.Mock).mockResolvedValue(workApiResponse);
   (listStudentProgress as jest.Mock).mockResolvedValue(studentProgress);
 }
 
@@ -153,42 +212,197 @@ describe('StudentDetailPage', () => {
     (useParams as jest.Mock).mockReturnValue({ section_id: SECTION_ID, user_id: USER_ID });
   });
 
-  describe('instructor access', () => {
-    it('renders student name from progress data', async () => {
+  describe('summary rail', () => {
+    it('shows sessions attended count from session stats length', async () => {
       mockUser('instructor');
       mockApiSuccess();
 
       render(<StudentDetailPage />);
 
-      expect(await screen.findByText('Alice Smith')).toBeInTheDocument();
+      await screen.findByTestId('summary-rail');
+      const sessions = screen.getByTestId('summary-sessions');
+      // 3 sessions in fixture
+      expect(sessions.textContent).toBe('3');
     });
 
-    it('renders progress summary "X / Y problems started"', async () => {
+    it('shows solved count from work items with last_run_all_passed=true', async () => {
       mockUser('instructor');
       mockApiSuccess();
 
       render(<StudentDetailPage />);
 
-      expect(await screen.findByText(/2 \/ 3 problems started/)).toBeInTheDocument();
+      await screen.findByTestId('summary-rail');
+      const solved = screen.getByTestId('summary-solved');
+      // Only prob-1 has last_run_all_passed=true
+      expect(solved.textContent).toBe('1');
     });
 
+    it('shows total revisions as sum across all session stats', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId('summary-rail');
+      const revisions = screen.getByTestId('summary-revisions');
+      // 17 + 5 + 3 = 25
+      expect(revisions.textContent).toBe('25');
+    });
+
+    it('does NOT render any time-spent estimate (dropped affordance)', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId('summary-rail');
+      // "Time spent", "active", "h ", "min" should not appear in summary
+      expect(screen.queryByText(/time spent/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/\d+h \d+m/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('session rows', () => {
+    it('renders a row for each session stat', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`session-row-${SESSION_1_ID}`);
+      expect(screen.getByTestId(`session-row-${SESSION_2_ID}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`session-row-${SESSION_BLANK_ID}`)).toBeInTheDocument();
+    });
+
+    it('renders problem title in session row', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`session-row-${SESSION_1_ID}`);
+      const row = screen.getByTestId(`session-row-${SESSION_1_ID}`);
+      expect(row.textContent).toContain('FizzBuzz');
+    });
+
+    it('renders revision count in session row', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`revision-count-${SESSION_1_ID}`);
+      expect(screen.getByTestId(`revision-count-${SESSION_1_ID}`).textContent).toContain('17');
+    });
+
+    it('renders "solved" result pill for a session with last_run_all_passed=true', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`session-row-${SESSION_1_ID}`);
+      // prob-1 has last_run_all_passed=true
+      expect(screen.getByTestId('result-pill-solved')).toBeInTheDocument();
+    });
+
+    it('renders "in progress" result pill for a session with last_run_all_passed=false', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`session-row-${SESSION_2_ID}`);
+      expect(screen.getByTestId('result-pill-in-progress')).toBeInTheDocument();
+    });
+
+    it('renders em-dash and no pill for a blank session (no problem)', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`session-row-${SESSION_BLANK_ID}`);
+      const row = screen.getByTestId(`session-row-${SESSION_BLANK_ID}`);
+      expect(row.textContent).toContain('—');
+      // No result pill in blank session row
+      const pills = row.querySelectorAll('[data-testid^="result-pill"]');
+      expect(pills.length).toBe(0);
+    });
+
+    it('renders a code link for sessions with student work', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`view-code-${SESSION_1_ID}`);
+      expect(screen.getByTestId(`view-code-${SESSION_1_ID}`)).toBeInTheDocument();
+    });
+
+    it('code link expands the problem card below', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId(`view-code-${SESSION_1_ID}`);
+      await userEvent.click(screen.getByTestId(`view-code-${SESSION_1_ID}`));
+
+      // FizzBuzz code should appear
+      expect(await screen.findByText('for i in range(1, 101): print(i)')).toBeInTheDocument();
+    });
+  });
+
+  describe('no dropped affordances', () => {
+    it('does NOT render streak/stuck/absent badges', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      await screen.findByTestId('summary-rail');
+      expect(screen.queryByText(/streak/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/stuck/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/absent/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('per-problem table', () => {
     it('shows problem titles in the list', async () => {
       mockUser('instructor');
       mockApiSuccess();
 
       render(<StudentDetailPage />);
 
-      expect(await screen.findByText('FizzBuzz')).toBeInTheDocument();
-      expect(screen.getByText('Binary Search')).toBeInTheDocument();
+      // Use testids to find the specific problem cards in the "All Problems" table
+      // (FizzBuzz and Hello World also appear in session rows, so scope to card testids)
+      const prob1Card = await screen.findByTestId('problem-card-prob-1');
+      expect(prob1Card).toBeInTheDocument();
+      expect(screen.getByTestId('problem-card-prob-2')).toBeInTheDocument();
     });
 
-    it('shows "Started" badge for problems with student_work', async () => {
+    it('shows "Solved" badge for problems with last_run_all_passed=true', async () => {
       mockUser('instructor');
       mockApiSuccess();
 
       render(<StudentDetailPage />);
 
-      await screen.findByText('FizzBuzz');
+      // prob-1 has last_run_all_passed=true → "Solved" badge in the problem card
+      // "Solved" also appears in the session result pill, so use getAllByText
+      await screen.findByTestId('problem-card-prob-1');
+      const solvedElements = screen.getAllByText('Solved');
+      expect(solvedElements.length).toBeGreaterThan(0);
+    });
+
+    it('shows "Started" badge for in-progress problems', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      // prob-3 has last_run_all_passed=false → "Started" badge in the problem card
+      await screen.findByTestId('problem-card-prob-3');
       const startedBadges = screen.getAllByText('Started');
       expect(startedBadges.length).toBeGreaterThan(0);
     });
@@ -199,6 +413,7 @@ describe('StudentDetailPage', () => {
 
       render(<StudentDetailPage />);
 
+      // Binary Search only appears in the problem table (not in session rows)
       await screen.findByText('Binary Search');
       expect(screen.getByText('Not started')).toBeInTheDocument();
     });
@@ -209,15 +424,10 @@ describe('StudentDetailPage', () => {
 
       render(<StudentDetailPage />);
 
-      await screen.findByText('FizzBuzz');
-      const fizzBuzzItem = screen.getByText('FizzBuzz').closest('[data-testid="problem-card"]') ||
-        screen.getByText('FizzBuzz').closest('div[role="button"]') ||
-        screen.getByText('FizzBuzz').parentElement?.closest('[class*="cursor-pointer"]');
-
-      // Click on FizzBuzz problem card
-      const problemCard = screen.getByText('FizzBuzz').closest('[class*="cursor-pointer"]') ||
-        screen.getByTestId('problem-card-prob-1');
-      await userEvent.click(problemCard!);
+      // Click on problem-card-prob-1 (FizzBuzz in the All Problems section)
+      await screen.findByTestId('problem-card-prob-1');
+      const problemCard = screen.getByTestId('problem-card-prob-1');
+      await userEvent.click(problemCard);
 
       expect(await screen.findByText('for i in range(1, 101): print(i)')).toBeInTheDocument();
     });
@@ -228,11 +438,33 @@ describe('StudentDetailPage', () => {
 
       render(<StudentDetailPage />);
 
-      await screen.findByText('Hello World');
+      // Click on problem-card-prob-3 (Hello World — in All Problems section)
+      await screen.findByTestId('problem-card-prob-3');
       const helloWorldCard = screen.getByTestId('problem-card-prob-3');
       await userEvent.click(helloWorldCard);
 
       expect(await screen.findByText('No code yet')).toBeInTheDocument();
+    });
+
+    it('renders last_update via formatShortDateTime in the problem card', async () => {
+      /**
+       * Contract: the per-problem table shows the last-update timestamp for
+       * started problems, formatted by formatShortDateTime. Catches regressions
+       * where the date is missing, raw ISO, or formatted differently.
+       */
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      // prob-1 (FizzBuzz) has last_update: '2026-02-20T10:00:00Z'
+      await screen.findByTestId('problem-card-prob-1');
+
+      // formatShortDateTime('2026-02-20T10:00:00Z') produces a locale string
+      // containing the month and day. We match partially to avoid locale variance.
+      const { formatShortDateTime } = await import('@/lib/format');
+      const expectedText = formatShortDateTime('2026-02-20T10:00:00Z');
+      expect(screen.getByText(expectedText)).toBeInTheDocument();
     });
 
     it('does not expand "Not started" problems when clicked', async () => {
@@ -241,12 +473,24 @@ describe('StudentDetailPage', () => {
 
       render(<StudentDetailPage />);
 
+      // Binary Search only in the problem table (not started, not clickable)
       await screen.findByText('Binary Search');
       const binarySearchCard = screen.getByTestId('problem-card-prob-2');
       await userEvent.click(binarySearchCard);
 
       // Code block should not appear
       expect(screen.queryByRole('code')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('student name and header', () => {
+    it('renders student name from progress data', async () => {
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      expect(await screen.findByText('Alice Smith')).toBeInTheDocument();
     });
 
     it('back button links to the section page', async () => {
@@ -259,18 +503,6 @@ describe('StudentDetailPage', () => {
 
       const backLink = screen.getByText('Back to Section').closest('a');
       expect(backLink).toHaveAttribute('href', `/sections/${SECTION_ID}`);
-    });
-
-    it('shows last_update time on problems with student_work', async () => {
-      mockUser('instructor');
-      mockApiSuccess();
-
-      render(<StudentDetailPage />);
-
-      await screen.findByText('FizzBuzz');
-      // Should render some time string related to last_update
-      const timeElements = screen.getAllByText(/\d{4}|\d+:\d+|ago|Feb|Jan|Mar/i);
-      expect(timeElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -288,9 +520,6 @@ describe('StudentDetailPage', () => {
         expect(mockPush).toHaveBeenCalledWith('/sections');
       });
     });
-
-    // Note: unauthenticated redirect (to /auth/signin) is handled by the layout,
-    // not by this page. The layout prevents rendering children when user is null.
   });
 
   describe('loading state', () => {
