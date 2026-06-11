@@ -9,7 +9,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { createClass, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
+import { createClass, createSection, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem, registerStudent } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Public View Feature', () => {
@@ -184,14 +184,22 @@ test.describe('Public Problem Page (A3)', () => {
    * and the page MUST NOT render any solution content regardless of what the
    * problem record stores. If this test fails, solution data is leaking to
    * anonymous (unauthenticated) visitors — a privacy regression.
+   *
+   * Also verifies:
+   *   - Test cases created with the problem appear as test rows (name + kind pill)
+   *     on the public page (A3 tests list).
+   *   - A signed-in student visiting the same public page also sees no solution
+   *     sentinel (leak-guard persona pass — both visible check and raw HTML check).
    */
-  test('A3 hero visible; solution content never appears on public page', async ({ page, setupInstructor }) => {
-    test.setTimeout(30000);
+  test('A3 hero visible; solution content never appears on public page', async ({ page, browser, setupInstructor, setupStudent, logCollector }) => {
+    test.setTimeout(45000);
 
     const instructor = await setupInstructor();
     const cls = await createClass(instructor.token, `Public Page Class`);
 
-    // Create a problem WITH a solution so we can verify it never leaks publicly
+    // Create a problem WITH a solution AND test cases so we can verify:
+    //   1. Solution never leaks publicly (eval-e81 / A1 / A3 regression guard)
+    //   2. Test rows render on the public page (A3 tests list — item 5)
     const problem = await createProblem(instructor.token, cls.id, {
       title: 'Public Hero Test Problem',
       description: 'A problem for public page testing',
@@ -199,8 +207,18 @@ test.describe('Public Problem Page (A3)', () => {
       starterCode: 'print("hello")\n',
       solution: 'SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW',
       tags: ['e2e', 'public'],
+      testCases: [
+        {
+          kind: 'io' as const,
+          name: 'hello test',
+          input: '',
+          expected_output: 'hello\n',
+          order: 0,
+        },
+      ],
     });
 
+    // ── ANONYMOUS VISIT ────────────────────────────────────────────────────
     // Visit the public problem page as an anonymous user (no sign-in)
     await page.goto(`/problems/${problem.id}`);
 
@@ -217,18 +235,63 @@ test.describe('Public Problem Page (A3)', () => {
     await expect(page.locator(':text-is("e2e")').first()).toBeVisible();
     await expect(page.locator(':text-is("public")').first()).toBeVisible();
 
-    // ── REGRESSION GUARD: solution sentinel text must NOT appear anywhere ──
+    // ── Tests list: at least one test row renders (name + kind pill) ────────
+    // The public page renders a TestRow per test case — name and kind pill ("io").
+    // This is the A3 tests-list assertion (item 5): test rows must appear when
+    // the problem was created with test cases.
+    await expect(page.locator('text=hello test')).toBeVisible({ timeout: 10000 });
+    // Kind pill renders the kind value as text ("io" for IOTestCaseIO)
+    await expect(page.locator(':text-is("io")').first()).toBeVisible();
+
+    // ── REGRESSION GUARD (anonymous): solution sentinel text must NOT appear ─
     // This assertion is the primary regression guard for eval-e81 / A1 / A3.
-    // Any text containing the sentinel string would indicate a solution leak.
     await expect(page.locator('text=SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')).not.toBeVisible();
 
     // Also verify the page HTML does not contain the sentinel in any form
     // (guards against server-side rendering leaking it in a non-visible element)
-    const pageContent = await page.content();
-    if (pageContent.includes('SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')) {
+    const anonPageContent = await page.content();
+    if (anonPageContent.includes('SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')) {
       throw new Error(
-        'REGRESSION: Solution sentinel text found in page HTML — solution is leaking publicly!'
+        'REGRESSION (anonymous): Solution sentinel text found in page HTML — solution is leaking publicly!'
       );
+    }
+
+    // ── SIGNED-IN STUDENT PERSONA PASS (leak-guard) ─────────────────────────
+    // A signed-in student visiting the same public problem page must also see
+    // no sentinel solution text — neither rendered visibly nor in raw HTML.
+    // This is the B5 item 3 leak-guard persona pass.
+    const section = await createSection(instructor.token, cls.id, `Public Page Section`);
+    const student = await setupStudent(section.join_code);
+
+    const studentContext = await browser.newContext();
+    const studentPage = await studentContext.newPage();
+    logCollector.attachPage(studentPage, 'student-page');
+
+    try {
+      await signInAs(studentPage, student.email);
+
+      // Navigate to the same public problem URL as the anonymous visit
+      await studentPage.goto(`/problems/${problem.id}`);
+
+      // Title must still be visible (page loads for signed-in users too)
+      await expect(studentPage.locator('text=Public Hero Test Problem')).toBeVisible({ timeout: 15000 });
+
+      // REGRESSION GUARD (signed-in student): solution must not be visible
+      await expect(studentPage.locator('text=SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')).not.toBeVisible();
+
+      // Also check the raw HTML for the sentinel
+      const studentPageContent = await studentPage.content();
+      if (studentPageContent.includes('SOLUTION_SENTINEL_TEXT_DO_NOT_SHOW')) {
+        throw new Error(
+          'REGRESSION (signed-in student): Solution sentinel text found in page HTML — solution is leaking to authenticated users!'
+        );
+      }
+    } finally {
+      try {
+        await studentContext.close();
+      } catch {
+        /* ignore cleanup errors */
+      }
     }
   });
 });
